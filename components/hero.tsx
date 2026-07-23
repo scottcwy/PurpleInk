@@ -1,21 +1,23 @@
 "use client";
 
-import { useScroll, useTransform, useSpring, motion } from "motion/react";
 import {
-  Paperclip,
-  Lightbulb,
-  PenTool,
-  Layout,
-  Mic,
-  ArrowRight,
-  ArrowDown,
-} from "lucide-react";
+  AnimatePresence,
+  motion,
+  useReducedMotion,
+  useScroll,
+  useSpring,
+  useTransform,
+} from "motion/react";
+import { ArrowRight, ArrowDown, LoaderCircle } from "lucide-react";
 import Image from "next/image";
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { FluidCursor } from "./fluid-cursor";
 
 export function Hero(): ReactNode {
   const sectionRef = useRef<HTMLElement>(null);
+  const [isLaunching, setIsLaunching] = useState(false);
+  const [showPreparing, setShowPreparing] = useState(false);
+  const prefersReducedMotion = useReducedMotion();
 
   const { scrollY, scrollYProgress } = useScroll({
     target: sectionRef,
@@ -26,6 +28,26 @@ export function Hero(): ReactNode {
   const scaleY = useSpring(scaleYRaw, { stiffness: 100, damping: 30 });
 
   const y = useTransform(scrollY, (value) => value * 0.7);
+
+  useEffect(() => {
+    if (!isLaunching) return;
+
+    const labelTimer = window.setTimeout(() => setShowPreparing(true), 180);
+    const resetTimer = window.setTimeout(() => {
+      setIsLaunching(false);
+      setShowPreparing(false);
+    }, 1600);
+
+    return () => {
+      window.clearTimeout(labelTimer);
+      window.clearTimeout(resetTimer);
+    };
+  }, [isLaunching]);
+
+  const handleLaunchClick = () => {
+    if (isLaunching) return;
+    setIsLaunching(true);
+  };
 
   return (
     <section ref={sectionRef} className="relative min-h-dvh w-full">
@@ -48,19 +70,13 @@ export function Hero(): ReactNode {
 
       <div className="mx-auto flex min-h-dvh max-w-4xl flex-col items-start justify-center gap-6 px-4 py-20 sm:justify-start sm:gap-0 sm:py-0 sm:pt-40 lg:px-8 lg:pt-68">
         <motion.h1
-          className="text-background dark:text-background text-4xl font-medium tracking-tight sm:text-5xl md:text-6xl lg:text-7xl"
+          className="mix-blend-difference text-4xl font-medium tracking-tight text-white sm:text-5xl md:text-6xl lg:text-7xl"
           initial={{ opacity: 0, y: 20, filter: "blur(8px)" }}
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
         >
-          <span className="block">Design with AI —</span>
-          <span className="block">
-            the{" "}
-            <em className="text-background/80 dark:text-background/80 italic">
-              future
-            </em>{" "}
-            of creativity
-          </span>
+          <span className="block">Launch your products</span>
+          <span className="block">with Purple Ink</span>
         </motion.h1>
 
         <motion.div
@@ -73,78 +89,147 @@ export function Hero(): ReactNode {
             ease: [0.25, 0.46, 0.45, 0.94],
           }}
         >
-          <div
-            className="relative rounded-4xl rounded-b-[2.3rem] border border-black/5 bg-[#f8f8fa] p-3"
-            style={{
-              boxShadow:
-                "0 8px 32px rgba(0, 0, 0, 0.1), 0 4px 16px rgba(124, 58, 237, 0.08)",
+          <motion.button
+            type="button"
+            onClick={handleLaunchClick}
+            disabled={isLaunching}
+            aria-busy={isLaunching}
+            className="focus-ring group bg-background text-foreground relative isolate inline-flex h-16 w-full max-w-sm items-center justify-between overflow-hidden rounded-full py-2 pr-2 pl-7 text-base font-medium shadow-[0_8px_32px_rgba(0,0,0,0.12)] sm:w-auto sm:min-w-88"
+            whileHover={{ y: isLaunching ? 0 : -2 }}
+            whileTap={{ scale: 0.98, y: 1 }}
+            animate={{
+              boxShadow: isLaunching
+                ? [
+                    "0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(255,255,255,0)",
+                    "0 8px 32px rgba(0,0,0,0.12), 0 0 20px rgba(255,255,255,0.28), 0 0 0 1px rgba(255,255,255,0.72)",
+                    "0 8px 32px rgba(0,0,0,0.12), 0 0 14px rgba(255,255,255,0.18), 0 0 0 1px rgba(255,255,255,0.48)",
+                  ]
+                : "0 8px 32px rgba(0,0,0,0.12)",
+            }}
+            transition={{
+              type: "spring",
+              stiffness: 520,
+              damping: 32,
+              boxShadow: prefersReducedMotion
+                ? { duration: 0 }
+                : {
+                    duration: 0.72,
+                    times: [0, 0.35, 1],
+                    ease: "easeOut",
+                  },
             }}
           >
-            <div className="flex items-start gap-3">
-              <textarea
-                placeholder="Ask Kraft anything..."
-                className="no-focus-ring mx-4 my-2 min-h-15 w-full resize-none bg-transparent text-gray-800 placeholder:text-gray-400"
-                rows={2}
-              />
-            </div>
+            <AnimatePresence initial={false}>
+              {isLaunching && (
+                <motion.span
+                  key="purple-ink"
+                  aria-hidden="true"
+                  className="absolute top-2 right-2 z-0 h-12 w-12 rounded-full bg-[#352e82]"
+                  initial={{ opacity: 1, scale: 1 }}
+                  animate={
+                    prefersReducedMotion
+                      ? { opacity: 1, scale: 15 }
+                      : { opacity: 1, scale: [1, 1, 15] }
+                  }
+                  exit={{ opacity: 0 }}
+                  transition={
+                    prefersReducedMotion
+                      ? { duration: 0 }
+                      : {
+                          scale: {
+                            duration: 0.68,
+                            times: [0, 0.18, 1],
+                            ease: [0.4, 0, 0.2, 1],
+                          },
+                          opacity: { duration: 0.18 },
+                        }
+                  }
+                />
+              )}
+            </AnimatePresence>
 
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  className="focus-ring isolate flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full bg-white text-gray-400 transition-colors hover:border-gray-300 hover:text-gray-600"
-                  aria-label="Attach file"
+            <span
+              className={`relative z-10 whitespace-nowrap transition-colors duration-200 ${
+                showPreparing ? "text-white" : "text-foreground"
+              }`}
+            >
+              <AnimatePresence initial={false} mode="wait">
+                <motion.span
+                  key={showPreparing ? "preparing" : "create"}
+                  className="block"
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  {...(prefersReducedMotion
+                    ? {}
+                    : { exit: { opacity: 0, y: -5 } })}
+                  transition={{ duration: prefersReducedMotion ? 0 : 0.16 }}
                 >
-                  <Paperclip className="h-4 w-4" />
-                </button>
+                  {showPreparing
+                    ? "Preparing your Launch..."
+                    : "创建你的首个Launch Video"}
+                </motion.span>
+              </AnimatePresence>
+            </span>
 
-                <button
-                  type="button"
-                  className="focus-ring isolate flex h-12 shrink-0 cursor-pointer items-center gap-2 rounded-full bg-white px-5 text-sm text-gray-500 transition-colors hover:border-gray-300 hover:text-gray-700"
-                >
-                  <Lightbulb className="h-4 w-4 shrink-0" />
-                  <span className="xs:inline hidden">Reasoning</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="focus-ring isolate hidden h-12 shrink-0 cursor-pointer items-center gap-2 rounded-full bg-white px-5 text-sm text-gray-500 transition-colors hover:border-gray-300 hover:text-gray-700 sm:flex"
-                >
-                  <PenTool className="h-4 w-4 shrink-0" />
-                  <span>Create Design</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="focus-ring isolate hidden h-12 shrink-0 cursor-pointer items-center gap-2 rounded-full bg-white px-5 text-sm text-gray-500 transition-colors hover:border-gray-300 hover:text-gray-700 md:flex"
-                >
-                  <Layout className="h-4 w-4 shrink-0" />
-                  <span>Wireframe</span>
-                </button>
-              </div>
-
-              <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  className="focus-ring isolate hidden h-12 w-12 cursor-pointer items-center justify-center rounded-full bg-white text-gray-500 transition-colors hover:bg-gray-300 hover:text-gray-700 sm:flex"
-                  aria-label="Voice input"
-                >
-                  <Mic className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  className="focus-ring bg-foreground dark:bg-background hover:bg-foreground/90 dark:hover:bg-background/90 isolate flex h-12 w-12 cursor-pointer items-center justify-center rounded-full text-white transition-colors"
-                  aria-label="Send message"
-                >
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <p className="text-background/60 mt-6 text-center text-xs">
-            Kraft can make mistakes, but learns from them.
-          </p>
+            <motion.span
+              className="relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
+              animate={{
+                backgroundColor: showPreparing
+                  ? "rgba(255,255,255,0.16)"
+                  : isLaunching
+                    ? "#352e82"
+                    : "var(--foreground)",
+                color: isLaunching ? "#ffffff" : "var(--background)",
+              }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
+            >
+              <AnimatePresence initial={false} mode="wait">
+                {showPreparing ? (
+                  <motion.span
+                    key="loading"
+                    className="flex"
+                    initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.8 }}
+                    animate={
+                      prefersReducedMotion
+                        ? { opacity: 1 }
+                        : { opacity: 1, scale: 1, rotate: 360 }
+                    }
+                    {...(prefersReducedMotion
+                      ? {}
+                      : { exit: { opacity: 0, scale: 0.8 } })}
+                    transition={
+                      prefersReducedMotion
+                        ? { duration: 0 }
+                        : {
+                            opacity: { duration: 0.16 },
+                            scale: { duration: 0.16 },
+                            rotate: {
+                              duration: 0.8,
+                              ease: "linear",
+                              repeat: Infinity,
+                            },
+                          }
+                    }
+                  >
+                    <LoaderCircle className="h-5 w-5" />
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="arrow"
+                    className="flex transition-transform duration-200 group-hover:translate-x-0.5"
+                    initial={prefersReducedMotion ? false : { opacity: 0, x: -3 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    {...(prefersReducedMotion
+                      ? {}
+                      : { exit: { opacity: 0, x: 4 } })}
+                    transition={{ duration: prefersReducedMotion ? 0 : 0.16 }}
+                  >
+                    <ArrowRight className="h-5 w-5" />
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </motion.span>
+          </motion.button>
         </motion.div>
       </div>
 
@@ -159,8 +244,8 @@ export function Hero(): ReactNode {
         }}
       >
         <p className="text-foreground/60 dark:text-foreground/50 max-w-sm text-sm">
-          Kraft uses advanced AI to transform your ideas into stunning designs.
-          Just describe what you need.
+          PurpleInk turns verified product flows into reviewable, repeatable
+          launch videos.
         </p>
 
         <ArrowDown

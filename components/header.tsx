@@ -13,13 +13,12 @@ import { useState, type ReactNode } from "react";
 const navLinks = [
   { href: "#features", label: "Features" },
   { href: "#templates", label: "Templates" },
-  { href: "#pricing", label: "Pricing" },
   { href: "#resources", label: "Resources" },
 ];
 
 const authLinks = [
   { href: "", label: "Contact" },
-  { href: "", label: "Join" },
+  { href: "", label: "Join\u00A0waitlist" },
 ];
 
 export function Header(): ReactNode {
@@ -78,11 +77,11 @@ export function Header(): ReactNode {
             <Link
               href="/"
               className="focus-ring flex items-center"
-              aria-label="Kraft home"
+              aria-label="PurpleInk home"
             >
               <Image
                 src="/svg/logo.svg"
-                alt="Kraft"
+                alt="PurpleInk"
                 width={120}
                 height={34}
                 priority

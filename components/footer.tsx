@@ -8,7 +8,6 @@ import { Facebook, Twitter, Linkedin } from "lucide-react";
 const footerLinks = {
   Product: [
     { label: "Features", href: "#" },
-    { label: "Pricing", href: "#" },
     { label: "Changelog", href: "#" },
     { label: "Roadmap", href: "#" },
   ],
@@ -33,7 +32,7 @@ const socialLinks = [
 
 export function Footer(): ReactNode {
   return (
-    <footer className="relative overflow-hidden bg-background px-4 text-foreground sm:px-6 lg:px-8">
+    <footer className="bg-background text-foreground relative overflow-hidden px-4 sm:px-6 lg:px-8">
       <div
         className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 opacity-60"
         style={{
@@ -51,13 +50,13 @@ export function Footer(): ReactNode {
           <div className="grid flex-1 gap-8 sm:grid-cols-3">
             {Object.entries(footerLinks).map(([category, links]) => (
               <div key={category}>
-                <h3 className="text-sm text-muted-foreground">{category}</h3>
+                <h3 className="text-muted-foreground text-sm">{category}</h3>
                 <ul className="mt-4 space-y-3">
                   {links.map((link) => (
                     <li key={link.label}>
                       <Link
                         href={link.href}
-                        className="text-lg text-foreground transition-colors hover:text-foreground/70"
+                        className="text-foreground hover:text-foreground/70 text-lg transition-colors"
                       >
                         {link.label}
                       </Link>
@@ -69,16 +68,19 @@ export function Footer(): ReactNode {
           </div>
 
           <div className="lg:text-right">
-            <h3 className="text-sm text-muted-foreground">Social</h3>
+            <h3 className="text-muted-foreground text-sm">Social</h3>
             <div className="mt-4 flex gap-3 lg:justify-end">
               {socialLinks.map((social) => (
                 <Link
                   key={social.label}
                   href={social.href}
-                  className="flex h-11 w-11 items-center justify-center rounded-full bg-foreground/10 text-foreground transition-colors hover:bg-foreground/20"
+                  className="bg-foreground/10 text-foreground hover:bg-foreground/20 flex h-11 w-11 items-center justify-center rounded-full transition-colors"
                   aria-label={social.label}
                 >
-                  <social.icon className="h-5 w-5 fill-foreground/40 text-foreground/40" strokeWidth={1} />
+                  <social.icon
+                    className="fill-foreground/40 text-foreground/40 h-5 w-5"
+                    strokeWidth={1}
+                  />
                 </Link>
               ))}
             </div>
@@ -88,25 +90,25 @@ export function Footer(): ReactNode {
 
       <div className="relative mx-auto max-w-7xl py-8">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-          <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Kraft, Inc. All rights reserved.
+          <p className="text-muted-foreground text-sm">
+            © {new Date().getFullYear()} PurpleInk. All rights reserved.
           </p>
           <div className="flex gap-6">
             <Link
               href="#"
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground text-sm transition-colors"
             >
               Terms
             </Link>
             <Link
               href="#"
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground text-sm transition-colors"
             >
               Privacy
             </Link>
             <Link
               href="#"
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground text-sm transition-colors"
             >
               Cookies
             </Link>
@@ -114,7 +116,7 @@ export function Footer(): ReactNode {
         </div>
       </div>
 
-      <div className="relative mx-auto max-w-338 select-none h-44 pb-12">
+      <div className="relative mx-auto h-44 max-w-338 pb-12 select-none">
         <Image
           src="/svg/logo-text.svg"
           alt=""

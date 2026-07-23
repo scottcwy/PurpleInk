@@ -18,20 +18,20 @@ interface ImageRevealProps {
 
 const defaultImages = [
   // Column 0
-  { src: "/img/mock1_compressed.webp", alt: "Kraft design 1" },
-  { src: "/img/mock2_compressed.webp", alt: "Kraft design 2" },
-  { src: "/img/mock3_compressed.webp", alt: "Kraft design 3" },
-  { src: "/img/mock4_compressed.webp", alt: "Kraft design 4" },
+  { src: "/img/mock1_compressed.webp", alt: "PurpleInk launch video 1" },
+  { src: "/img/mock2_compressed.webp", alt: "PurpleInk launch video 2" },
+  { src: "/img/mock3_compressed.webp", alt: "PurpleInk launch video 3" },
+  { src: "/img/mock4_compressed.webp", alt: "PurpleInk launch video 4" },
   // Column 1
-  { src: "/img/mock5_compressed.webp", alt: "Kraft design 5" },
-  { src: "/img/mock6_compressed.webp", alt: "Kraft design 6" },
-  { src: "/img/mock7_compressed.webp", alt: "Kraft design 7" },
-  { src: "/img/mock8_compressed.webp", alt: "Kraft design 8" },
+  { src: "/img/mock5_compressed.webp", alt: "PurpleInk launch video 5" },
+  { src: "/img/mock6_compressed.webp", alt: "PurpleInk launch video 6" },
+  { src: "/img/mock7_compressed.webp", alt: "PurpleInk launch video 7" },
+  { src: "/img/mock8_compressed.webp", alt: "PurpleInk launch video 8" },
   // Column 2
-  { src: "/img/mock9_compressed.webp", alt: "Kraft design 9" },
-  { src: "/img/mock10_compressed.webp", alt: "Kraft design 10" },
-  { src: "/img/mock11_compressed.webp", alt: "Kraft design 11" },
-  { src: "/img/mock12_compressed.webp", alt: "Kraft design 12" },
+  { src: "/img/mock9_compressed.webp", alt: "PurpleInk launch video 9" },
+  { src: "/img/mock10_compressed.webp", alt: "PurpleInk launch video 10" },
+  { src: "/img/mock11_compressed.webp", alt: "PurpleInk launch video 11" },
+  { src: "/img/mock12_compressed.webp", alt: "PurpleInk launch video 12" },
 ];
 
 export function ImageReveal({
@@ -131,7 +131,7 @@ export function ImageReveal({
   }, []);
 
   return (
-    <section className={`overflow-hidden -mt-24 ${className}`}>
+    <section className={`-mt-24 overflow-hidden ${className}`}>
       <div
         ref={containerRef}
         className="columns mx-auto grid max-w-7xl grid-cols-3 gap-4 px-4 sm:px-6 md:gap-6 lg:gap-8 lg:px-8"

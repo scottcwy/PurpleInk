@@ -12,27 +12,27 @@ interface Tool {
 
 const tools: Tool[] = [
   {
-    title: "Describe",
+    title: "Capture",
     description:
-      "Tell Kraft what you need. A logo, a landing page, an entire brand—just say it.",
+      "Bring an approved screen recording or verified product flow into PurpleInk.",
     image: "/img/describe.webp",
   },
   {
-    title: "Generate",
+    title: "Shape",
     description:
-      "Watch as Kraft creates multiple design options, each one production-ready.",
+      "Turn real product moments into a clear launch narrative with scenes, voiceover, and pacing.",
     image: "/img/generate.webp",
   },
   {
-    title: "Refine",
+    title: "Review",
     description:
-      "Tweak colors, fonts, adjust layouts—Kraft understands natural language edits.",
+      "Approve the script, product proof, timing, and brand treatment scene by scene.",
     image: "/img/refine.webp",
   },
   {
-    title: "Ship",
+    title: "Publish",
     description:
-      "Export to Figma, download assets, or push directly to your codebase. Done.",
+      "Export channel-ready 16:9 and 9:16 Launch Video variants for every release.",
     image: "/img/ship.webp",
   },
 ];
@@ -93,14 +93,12 @@ export function ToolsCarousel(): ReactNode {
     x.set(targetX);
   };
 
-
-
   return (
     <section className="relative overflow-hidden py-20 md:py-28">
       <div className="px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
-          <h2 className="mb-12 text-2xl font-medium tracking-tight text-foreground md:text-3xl lg:text-4xl">
-            From idea to finished design in four simple steps
+          <h2 className="text-foreground mb-12 text-2xl font-medium tracking-tight md:text-3xl lg:text-4xl">
+            From product proof to launch video in four simple steps
           </h2>
         </div>
       </div>
@@ -114,7 +112,7 @@ export function ToolsCarousel(): ReactNode {
       >
         <motion.div
           ref={containerRef}
-          className="flex cursor-grab gap-2.5 pr-48 active:cursor-grabbing pl-4 sm:pl-6 lg:pl-[max(2rem,calc((100vw-85rem)/2+2rem))]"
+          className="flex cursor-grab gap-2.5 pr-48 pl-4 active:cursor-grabbing sm:pl-6 lg:pl-[max(2rem,calc((100vw-85rem)/2+2rem))]"
           style={{ x }}
           drag="x"
           dragConstraints={constraints}
@@ -132,25 +130,25 @@ export function ToolsCarousel(): ReactNode {
           {tools.map((tool, index) => (
             <motion.div
               key={tool.title}
-              className="group flex w-80 shrink-0 flex-col rounded-xl bg-muted/50 px-6 pt-6 transition-colors duration-300 hover:bg-foreground sm:w-96 md:w-105"
+              className="group bg-muted/50 hover:bg-foreground flex w-80 shrink-0 flex-col rounded-xl px-6 pt-6 transition-colors duration-300 sm:w-96 md:w-105"
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: index * 0.1 }}
               viewport={{ once: true }}
             >
-              <h3 className="text-2xl tracking-tight text-foreground mb-2 transition-colors duration-300 group-hover:text-background">
+              <h3 className="text-foreground group-hover:text-background mb-2 text-2xl tracking-tight transition-colors duration-300">
                 {tool.title}
               </h3>
-              <p className="mt-2 text-lg tracking-tight leading-snug text-muted-foreground transition-colors duration-300 group-hover:text-background/70">
+              <p className="text-muted-foreground group-hover:text-background/70 mt-2 text-lg leading-snug tracking-tight transition-colors duration-300">
                 {tool.description}
               </p>
 
-              <div className="relative mt-6 aspect-3/4 w-full h-80 overflow-hidden">
+              <div className="relative mt-6 aspect-3/4 h-80 w-full overflow-hidden">
                 <Image
                   src={tool.image}
                   alt={tool.title}
                   fill
-                  className="object-contain object-top scale-90 grayscale"
+                  className="scale-90 object-contain object-top grayscale"
                   sizes="(max-width: 640px) 320px, (max-width: 768px) 384px, 420px"
                   draggable={false}
                 />
@@ -160,12 +158,12 @@ export function ToolsCarousel(): ReactNode {
         </motion.div>
 
         <div
-          className="pointer-events-none absolute inset-y-0 right-0 w-32 bg-linear-to-l from-background to-transparent md:w-48"
+          className="from-background pointer-events-none absolute inset-y-0 right-0 w-32 bg-linear-to-l to-transparent md:w-48"
           aria-hidden="true"
         />
 
         <motion.div
-          className="pointer-events-none absolute left-0 top-0 z-50 flex items-center justify-center rounded-full border border-foreground/10 bg-background/20 px-4 py-2 text-xs font-medium tracking-tight text-white dark:text-foreground backdrop-blur-md"
+          className="border-foreground/10 bg-background/20 dark:text-foreground pointer-events-none absolute top-0 left-0 z-50 flex items-center justify-center rounded-full border px-4 py-2 text-xs font-medium tracking-tight text-white backdrop-blur-md"
           style={{ x: springX, y: springY }}
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{

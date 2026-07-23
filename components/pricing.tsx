@@ -31,7 +31,7 @@ const plans: PricingPlan[] = [
       "Email support",
       "1 workspace",
     ],
-    cta: "Get started",
+    cta: "Join waitlist",
   },
   {
     name: "Pro",
@@ -48,7 +48,7 @@ const plans: PricingPlan[] = [
       "5 team members",
       "API access",
     ],
-    cta: "Upgrade plan",
+    cta: "Join waitlist",
     popular: true,
   },
   {
@@ -74,45 +74,45 @@ function PricingCard({ plan }: { plan: PricingPlan }) {
 
   const cardContent = (
     <div
-      className={`relative flex h-full flex-col rounded-3xl bg-background p-3 ${
-        plan.popular ? "" : "border border-foreground/10"
+      className={`bg-background relative flex h-full flex-col rounded-3xl p-3 ${
+        plan.popular ? "" : "border-foreground/10 border"
       }`}
     >
       <div className="mb-6 flex items-start justify-between">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted">
-          <Icon className="h-5 w-5 text-foreground" />
+        <div className="bg-muted flex h-12 w-12 items-center justify-center rounded-2xl">
+          <Icon className="text-foreground h-5 w-5" />
         </div>
         {plan.popular && (
-          <span className="rounded-full border border-accent/50 bg-accent/20 px-4 py-1.5 text-sm font-medium text-accent">
+          <span className="border-accent/50 bg-accent/20 text-accent rounded-full border px-4 py-1.5 text-sm font-medium">
             Most popular
           </span>
         )}
       </div>
 
-      <h3 className="text-xl font-semibold text-foreground">{plan.name}</h3>
-      <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
+      <h3 className="text-foreground text-xl font-semibold">{plan.name}</h3>
+      <p className="text-muted-foreground mt-1 text-sm">{plan.description}</p>
 
       <div className="mt-6 flex items-baseline gap-1">
-        <span className="text-5xl font-semibold tracking-tight text-foreground">
+        <span className="text-foreground text-5xl font-semibold tracking-tight">
           {plan.price}
         </span>
         {plan.period && (
-          <span className="text-lg text-muted-foreground">{plan.period}</span>
+          <span className="text-muted-foreground text-lg">{plan.period}</span>
         )}
         {plan.note && (
-          <span className="ml-auto text-right text-sm text-muted-foreground">
+          <span className="text-muted-foreground ml-auto text-right text-sm">
             {plan.note}
           </span>
         )}
       </div>
 
       <div className="mt-8 flex-1">
-        <div className="flex h-full flex-col rounded-xl bg-muted/50 p-6">
+        <div className="bg-muted/50 flex h-full flex-col rounded-xl p-6">
           <ul className="flex-1 space-y-4">
             {plan.features.map((feature) => (
               <li key={feature} className="flex items-start gap-3">
-                <Check className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
-                <span className="text-sm text-foreground">{feature}</span>
+                <Check className="text-accent mt-0.5 h-5 w-5 shrink-0" />
+                <span className="text-foreground text-sm">{feature}</span>
               </li>
             ))}
           </ul>
@@ -136,7 +136,7 @@ function PricingCard({ plan }: { plan: PricingPlan }) {
     return (
       <div className="relative">
         <motion.div
-          className="pointer-events-none absolute left-1/2 top-1/2 h-[70%] w-[70%] rounded-full bg-accent-light opacity-50 blur-3xl"
+          className="bg-accent-light pointer-events-none absolute top-1/2 left-1/2 h-[70%] w-[70%] rounded-full opacity-50 blur-3xl"
           animate={{
             x: ["-50%", "-30%", "-70%", "-40%", "-60%", "-50%"],
             y: ["-50%", "-70%", "-30%", "-60%", "-40%", "-50%"],
@@ -150,7 +150,7 @@ function PricingCard({ plan }: { plan: PricingPlan }) {
           }}
         />
         <motion.div
-          className="pointer-events-none absolute left-1/2 top-1/2 h-[50%] w-[50%] rounded-full bg-accent opacity-40 blur-3xl"
+          className="bg-accent pointer-events-none absolute top-1/2 left-1/2 h-[50%] w-[50%] rounded-full opacity-40 blur-3xl"
           animate={{
             x: ["-50%", "-70%", "-30%", "-60%", "-40%", "-50%"],
             y: ["-50%", "-30%", "-70%", "-40%", "-60%", "-50%"],
@@ -163,7 +163,7 @@ function PricingCard({ plan }: { plan: PricingPlan }) {
             times: [0, 0.2, 0.4, 0.6, 0.8, 1],
           }}
         />
-        <div className="absolute -inset-px rounded-[1.52rem] bg-linear-to-br from-accent to-accent-light opacity-25" />
+        <div className="from-accent to-accent-light absolute -inset-px rounded-[1.52rem] bg-linear-to-br opacity-25" />
         <div className="relative">{cardContent}</div>
       </div>
     );
@@ -174,10 +174,10 @@ function PricingCard({ plan }: { plan: PricingPlan }) {
 
 export function Pricing(): ReactNode {
   return (
-    <section className="px-4 py-20 sm:px-6 md:py-28 lg:px-8">
+    <section id="pricing" className="px-4 py-20 sm:px-6 md:py-28 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-16">
-          <p className="text-4xl font-medium tracking-tight text-foreground">
+          <p className="text-foreground text-4xl font-medium tracking-tight">
             Simple, transparent pricing
           </p>
         </div>
@@ -188,7 +188,7 @@ export function Pricing(): ReactNode {
           ))}
         </div>
 
-        <p className="mx-auto mt-12 max-w-2xl text-center text-lg text-muted-foreground">
+        <p className="text-muted-foreground mx-auto mt-12 max-w-2xl text-center text-lg">
           Start free and scale as you grow. No hidden fees, no surprises.
         </p>
       </div>
