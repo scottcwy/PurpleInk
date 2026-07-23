@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CompositionBundleV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "releaseId", "durationMs", "compilerVersion", "hyperframesVersion", "templateVersion", "inputHashes", "variants", "assetMap", "generatedFiles", "bundleHash"],
+  "properties": {
+    "schemaVersion": { "const": "composition-bundle/v1" }, "releaseId": { "type": "string", "minLength": 1 },
+    "durationMs": { "type": "integer", "minimum": 15000, "maximum": 30000 }, "compilerVersion": { "type": "string" }, "hyperframesVersion": { "type": "string" }, "templateVersion": { "type": "string" },
+    "inputHashes": { "type": "object", "additionalProperties": { "$ref": "#/definitions/hash" }, "required": ["plan", "brandKit", "assetPackage", "outputVariants"] },
+    "variants": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/definitions/variant" } },
+    "assetMap": { "type": "object", "additionalProperties": { "type": "object", "required": ["nodeEvidenceId", "path", "mimeType", "bytes", "sha256"] } },
+    "generatedFiles": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": false, "required": ["bytes", "sha256"], "properties": { "bytes": { "type": "integer", "minimum": 1 }, "sha256": { "$ref": "#/definitions/hash" } } } },
+    "bundleHash": { "$ref": "#/definitions/hash" }
+  },
+  "definitions": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "variant": { "type": "object", "additionalProperties": false, "required": ["id", "width", "height", "fps", "rootComposition"], "properties": { "id": { "enum": ["landscape", "portrait"] }, "width": { "enum": [1920, 1080] }, "height": { "enum": [1080, 1920] }, "fps": { "enum": [30, 60] }, "rootComposition": { "type": "string" } } }
+  }
+}

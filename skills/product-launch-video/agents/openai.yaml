@@ -1,0 +1,4 @@
+interface:
+  display_name: "Product Launch Video"
+  short_description: "Direct approved evidence into a launch video plan"
+  default_prompt: "Create a validated LaunchVideoPlanV1 from approved PurpleInk release evidence."

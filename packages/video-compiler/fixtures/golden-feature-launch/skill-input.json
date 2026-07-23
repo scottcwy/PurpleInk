@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "launch-video-skill-input/v1",
+  "workspaceId": "workspace-golden", "productId": "product-golden", "releaseId": "release-golden-001",
+  "releaseBriefVersionId": "brief-golden-001", "storyboardVersionId": "storyboard-golden-001", "productFlowVersionId": "flow-golden-001", "captureRunId": "capture-golden-001", "brandKitVersionId": "brand-golden-001", "evidencePackageId": "evidence-package-golden-001",
+  "templateVersion": "feature-launch@1.0.0", "targetDurationMs": 18000,
+  "storyboard": {
+    "id": "storyboard-golden-001", "workspaceId": "workspace-golden", "productId": "product-golden", "releaseId": "release-golden-001", "approvalStatus": "approved", "immutable": true,
+    "scenes": [
+      { "id": "scene-result", "releaseId": "release-golden-001", "capabilityIds": ["feature.result"], "factual": true, "headline": "Every release, ready to prove", "body": "Approved product evidence becomes the first frame, not an afterthought." },
+      { "id": "scene-workflow", "releaseId": "release-golden-001", "capabilityIds": ["feature.workflow"], "factual": true, "headline": "One approved flow", "body": "Capture, direct, and review from the same immutable release context." },
+      { "id": "scene-proof", "releaseId": "release-golden-001", "capabilityIds": ["feature.proof"], "factual": true, "headline": "Proof stays attached", "body": "Every factual scene resolves to approved evidence from this release." }
+    ]
+  },
+  "brandKit": {
+    "id": "brand-golden-001", "workspaceId": "workspace-golden", "productId": "product-golden", "releaseId": "release-golden-001", "approvalStatus": "approved", "immutable": true,
+    "colors": { "paper": "#FAF9FE", "ink": "#12101C", "purple": "#7D3DF3", "proof": "#00C37A" },
+    "fonts": { "display": "Manrope", "body": "Manrope", "mono": "Azeret Mono" }
+  },
+  "evidencePackage": {
+    "id": "evidence-package-golden-001", "workspaceId": "workspace-golden", "productId": "product-golden", "releaseId": "release-golden-001", "approvalStatus": "approved", "immutable": true, "sha256": "a6640322806987e72a89d3f8594a4e5ccb24e087dea00a1eca6074f1a717b5ff",
+    "entries": [
+      {
+        "nodeEvidenceId": "evidence-result", "assetVersionId": "asset-result-v1", "sceneIds": ["scene-result"], "workspaceId": "workspace-golden", "productId": "product-golden", "releaseId": "release-golden-001", "approvalStatus": "approved", "redactionStatus": "passed", "immutable": true, "kind": "result_screenshot", "mimeType": "image/svg+xml", "bytes": 785, "sha256": "285dc65921c19aad9372c9c84684461a12bbedf2472661cfad05f49c709e9f77", "bundlePath": "assets/result.svg",
+        "contentBase64": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNjAwIiBoZWlnaHQ9IjkwMCIgdmlld0JveD0iMCAwIDE2MDAgOTAwIj48cmVjdCB3aWR0aD0iMTYwMCIgaGVpZ2h0PSI5MDAiIGZpbGw9IiNGQUY5RkUiLz48cmVjdCB4PSI4MCIgeT0iNzAiIHdpZHRoPSIxNDQwIiBoZWlnaHQ9Ijc2MCIgcng9IjIwIiBmaWxsPSIjMEIwOTE0Ii8+PHJlY3QgeD0iMTIwIiB5PSIxMjAiIHdpZHRoPSIzMzAiIGhlaWdodD0iNjYwIiByeD0iMTIiIGZpbGw9IiMxNjEzMjUiLz48cmVjdCB4PSI0OTAiIHk9IjEyMCIgd2lkdGg9Ijk5MCIgaGVpZ2h0PSIxMjAiIHJ4PSIxMiIgZmlsbD0iIzdEM0RGMyIvPjxyZWN0IHg9IjQ5MCIgeT0iMjgwIiB3aWR0aD0iNDYwIiBoZWlnaHQ9IjUwMCIgcng9IjEyIiBmaWxsPSIjRjBFRkY4Ii8+PHJlY3QgeD0iOTkwIiB5PSIyODAiIHdpZHRoPSI0OTAiIGhlaWdodD0iMjMwIiByeD0iMTIiIGZpbGw9IiNFMURGRjEiLz48cmVjdCB4PSI5OTAiIHk9IjU1MCIgd2lkdGg9IjQ5MCIgaGVpZ2h0PSIyMzAiIHJ4PSIxMiIgZmlsbD0iIzAwQzM3QSIvPjx0ZXh0IHg9IjUzNSIgeT0iMTk3IiBmaWxsPSIjRkNGQkZGIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iNDQiIGZvbnQtd2VpZ2h0PSI3MDAiPlJlbGVhc2UgcmVhZHk8L3RleHQ+PHRleHQgeD0iMTAzMCIgeT0iNjgwIiBmaWxsPSIjMDAyQzEzIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iNDAiIGZvbnQtd2VpZ2h0PSI3MDAiPlZlcmlmaWVkPC90ZXh0Pjwvc3ZnPgo="
+      },
+      {
+        "nodeEvidenceId": "evidence-workflow", "assetVersionId": "asset-workflow-v1", "sceneIds": ["scene-workflow"], "workspaceId": "workspace-golden", "productId": "product-golden", "releaseId": "release-golden-001", "approvalStatus": "approved", "redactionStatus": "passed", "immutable": true, "kind": "result_screenshot", "mimeType": "image/svg+xml", "bytes": 760, "sha256": "ead53b7499ac42cba5c07c51dbd0cc584cf1c2736de85c2ba67d35c5bedc06d6", "bundlePath": "assets/workflow.svg",
+        "contentBase64": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNjAwIiBoZWlnaHQ9IjkwMCIgdmlld0JveD0iMCAwIDE2MDAgOTAwIj48cmVjdCB3aWR0aD0iMTYwMCIgaGVpZ2h0PSI5MDAiIGZpbGw9IiMxMjEwMUMiLz48cmVjdCB4PSI5MCIgeT0iODAiIHdpZHRoPSIxNDIwIiBoZWlnaHQ9Ijc0MCIgcng9IjE4IiBmaWxsPSIjRkFGOUZFIi8+PGNpcmNsZSBjeD0iMjcwIiBjeT0iMzEwIiByPSI5MiIgZmlsbD0iIzdEM0RGMyIvPjxjaXJjbGUgY3g9IjgwMCIgY3k9IjMxMCIgcj0iOTIiIGZpbGw9IiNGOTZDNEEiLz48Y2lyY2xlIGN4PSIxMzMwIiBjeT0iMzEwIiByPSI5MiIgZmlsbD0iIzAwQzM3QSIvPjxwYXRoIGQ9Ik0zNzAgMzEwSDY5ME05MTAgMzEwSDEyMjAiIHN0cm9rZT0iIzU1NTI2NiIgc3Ryb2tlLXdpZHRoPSIxNiIvPjxyZWN0IHg9IjE4MCIgeT0iNTI1IiB3aWR0aD0iMTI0MCIgaGVpZ2h0PSIxNTAiIHJ4PSIxMiIgZmlsbD0iI0YwRUZGOCIvPjxyZWN0IHg9IjIyMCIgeT0iNTcwIiB3aWR0aD0iNzgwIiBoZWlnaHQ9IjI4IiByeD0iMTQiIGZpbGw9IiNDRUNCREUiLz48cmVjdCB4PSIyMjAiIHk9IjYyMCIgd2lkdGg9IjEwNjAiIGhlaWdodD0iMTgiIHJ4PSI5IiBmaWxsPSIjRTFERkYxIi8+PHRleHQgeD0iNjkwIiB5PSI3NTAiIGZpbGw9IiMxMjEwMUMiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIzOCIgZm9udC13ZWlnaHQ9IjcwMCI+T25lIGFwcHJvdmVkIGZsb3c8L3RleHQ+PC9zdmc+Cg=="
+      },
+      {
+        "nodeEvidenceId": "evidence-proof", "assetVersionId": "asset-proof-v1", "sceneIds": ["scene-proof"], "workspaceId": "workspace-golden", "productId": "product-golden", "releaseId": "release-golden-001", "approvalStatus": "approved", "redactionStatus": "passed", "immutable": true, "kind": "result_screenshot", "mimeType": "image/svg+xml", "bytes": 874, "sha256": "6e0777d1de3d7150dc5c74dd7929ebdc0a393cbaceecc51b5f2c791a89958e19", "bundlePath": "assets/proof.svg",
+        "contentBase64": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNjAwIiBoZWlnaHQ9IjkwMCIgdmlld0JveD0iMCAwIDE2MDAgOTAwIj48cmVjdCB3aWR0aD0iMTYwMCIgaGVpZ2h0PSI5MDAiIGZpbGw9IiMwQjA5MTQiLz48cmVjdCB4PSIxMDAiIHk9IjgwIiB3aWR0aD0iMTQwMCIgaGVpZ2h0PSI3NDAiIHJ4PSIxOCIgZmlsbD0iI0YwRUZGOCIvPjxyZWN0IHg9IjE1MCIgeT0iMTMwIiB3aWR0aD0iMTMwMCIgaGVpZ2h0PSI5MCIgcng9IjEwIiBmaWxsPSIjRTFERkYxIi8+PHJlY3QgeD0iMTUwIiB5PSIyNzAiIHdpZHRoPSI4MjAiIGhlaWdodD0iNDkwIiByeD0iMTIiIGZpbGw9IiNGQUY5RkUiLz48cmVjdCB4PSIxMDIwIiB5PSIyNzAiIHdpZHRoPSI0MzAiIGhlaWdodD0iNDkwIiByeD0iMTIiIGZpbGw9IiMwMEMzN0EiLz48cGF0aCBkPSJtMTExMCA1MTAgOTAgOTAgMTc1LTIxMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAyQzEzIiBzdHJva2Utd2lkdGg9IjM4IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48cmVjdCB4PSIyMTAiIHk9IjM0NSIgd2lkdGg9IjYyMCIgaGVpZ2h0PSIzNCIgcng9IjE3IiBmaWxsPSIjN0QzREYzIi8+PHJlY3QgeD0iMjEwIiB5PSI0MzAiIHdpZHRoPSI1MDAiIGhlaWdodD0iMjQiIHJ4PSIxMiIgZmlsbD0iI0NFQ0JERSIvPjxyZWN0IHg9IjIxMCIgeT0iNDkwIiB3aWR0aD0iNjUwIiBoZWlnaHQ9IjI0IiByeD0iMTIiIGZpbGw9IiNDRUNCREUiLz48dGV4dCB4PSIxMDYwIiB5PSI3MDAiIGZpbGw9IiMwMDJDMTMiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIzNCIgZm9udC13ZWlnaHQ9IjcwMCI+QVBQUk9WRUQ8L3RleHQ+PC9zdmc+Cg=="
+      }
+    ]
+  },
+  "templateCapabilities": {
+    "templateVersion": "feature-launch@1.0.0", "capabilityIds": ["feature.result", "feature.workflow", "feature.proof", "feature.close"], "layoutIds": ["evidence-full", "evidence-split", "evidence-detail"], "motionPresetIds": ["settle-up", "focus-push", "proof-pop"], "transitionIds": ["continuity-cut", "soft-wipe"], "copyLimits": { "headlineMaxChars": 54, "bodyMaxChars": 110 }
+  }
+}

@@ -1,0 +1,219 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-23T09:50:04Z",
+  "title": "Design System: PurpleInk",
+  "extensions": {
+    "colorMeta": {
+      "purple": {
+        "role": "primary",
+        "displayName": "Directed Purple",
+        "canonical": "oklch(55% 0.25 292)",
+        "tonalRamp": [
+          "oklch(98.0% 0.008 292.0)",
+          "oklch(90.2% 0.051 292.0)",
+          "oklch(82.4% 0.096 292.0)",
+          "oklch(74.6% 0.142 292.0)",
+          "oklch(59.0% 0.244 292.0)",
+          "oklch(43.4% 0.242 292.0)",
+          "oklch(27.8% 0.154 292.0)",
+          "oklch(20.0% 0.111 292.0)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Review Paper",
+        "canonical": "oklch(98.5% 0.006 292)",
+        "tonalRamp": [
+          "oklch(99.0% 0.004 292.0)",
+          "oklch(90.1% 0.009 292.0)",
+          "oklch(81.2% 0.014 292.0)",
+          "oklch(72.3% 0.018 292.0)",
+          "oklch(54.5% 0.024 292.0)",
+          "oklch(36.7% 0.028 292.0)",
+          "oklch(18.9% 0.030 292.0)",
+          "oklch(10.0% 0.030 292.0)"
+        ]
+      },
+      "proof": {
+        "role": "secondary",
+        "displayName": "Verified Green",
+        "canonical": "oklch(72% 0.17 158)",
+        "tonalRamp": [
+          "oklch(96.0% 0.035 158.0)",
+          "oklch(88.4% 0.088 158.0)",
+          "oklch(80.8% 0.140 158.0)",
+          "oklch(73.2% 0.170 158.0)",
+          "oklch(58.0% 0.135 158.0)",
+          "oklch(42.8% 0.100 158.0)",
+          "oklch(27.6% 0.064 158.0)",
+          "oklch(20.0% 0.046 158.0)"
+        ]
+      },
+      "signal": {
+        "role": "tertiary",
+        "displayName": "Review Coral",
+        "canonical": "oklch(70% 0.18 35)",
+        "tonalRamp": [
+          "oklch(96.0% 0.020 35.0)",
+          "oklch(89.2% 0.057 35.0)",
+          "oklch(82.4% 0.100 35.0)",
+          "oklch(75.6% 0.148 35.0)",
+          "oklch(62.0% 0.217 35.0)",
+          "oklch(48.4% 0.170 35.0)",
+          "oklch(34.8% 0.121 35.0)",
+          "oklch(28.0% 0.097 35.0)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Release Statement",
+        "purpose": "One decisive hero statement per page."
+      },
+      "headline": {
+        "displayName": "Narrative Turn",
+        "purpose": "Major full-width section headings."
+      },
+      "body": {
+        "displayName": "Review Copy",
+        "purpose": "Explanatory copy capped at 65-75 characters."
+      },
+      "label": {
+        "displayName": "Source Metadata",
+        "purpose": "Source IDs, aspect ratios, timestamps, runs, and checkpoints only."
+      }
+    },
+    "shadows": [
+      {
+        "name": "review-board-base",
+        "value": "0 8px 0 color-mix(in oklch, black 28%, transparent)",
+        "purpose": "Hard structural base under the hero release board only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "160ms ease-out",
+        "purpose": "Color and visibility state changes."
+      },
+      {
+        "name": "physical-fast",
+        "value": "180ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Button and compact control movement."
+      },
+      {
+        "name": "artifact-enter",
+        "value": "720ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Single hero release-board entrance."
+      }
+    ],
+    "breakpoints": [
+      { "name": "mobile", "value": "640px" },
+      { "name": "stack", "value": "860px" },
+      { "name": "navigation", "value": "1080px" },
+      { "name": "shell", "value": "1180px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Hero Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary conversion action on the committed purple hero field.",
+      "html": "<button class=\"ds-btn-primary\">Join the pilot</button>",
+      "css": ".ds-btn-primary { min-height: 48px; border: 0; border-radius: 10px; background: var(--accent-foreground, #fcfbff); color: var(--accent-strong, #6113cb); padding: 12px 18px; font: 750 15px/1.5 Manrope, sans-serif; transition: transform 180ms cubic-bezier(0.16,1,0.3,1), background 180ms ease-out; } .ds-btn-primary:hover { transform: translateY(-2px); background: #f0eff8; } .ds-btn-primary:focus-visible { outline: 3px solid var(--accent, #7d3df3); outline-offset: 3px; }"
+    },
+    {
+      "name": "Accent Action Button",
+      "kind": "button",
+      "refersTo": "button-accent",
+      "description": "Primary action on light neutral surfaces.",
+      "html": "<button class=\"ds-btn-accent\">Prepare application</button>",
+      "css": ".ds-btn-accent { min-height: 48px; border: 0; border-radius: 10px; background: var(--accent, #7d3df3); color: var(--accent-foreground, #fcfbff); padding: 12px 18px; font: 750 15px/1.5 Manrope, sans-serif; transition: transform 180ms cubic-bezier(0.16,1,0.3,1); } .ds-btn-accent:hover { transform: translateY(-2px); } .ds-btn-accent:focus-visible { outline: 3px solid var(--accent, #7d3df3); outline-offset: 3px; }"
+    },
+    {
+      "name": "Dark Pilot Input",
+      "kind": "input",
+      "refersTo": "input-dark",
+      "description": "Review-safe text field on the pilot form's ink surface.",
+      "html": "<label class=\"ds-field\"><span>Work email</span><input placeholder=\"you@company.com\" /></label>",
+      "css": ".ds-field { display: grid; gap: 6px; color: var(--ink-muted, #b1aec2); font: 650 12px/1.5 Manrope, sans-serif; } .ds-field input { min-height: 48px; border: 1px solid #555266; border-radius: 9px; background: var(--ink-panel-soft, #161325); color: var(--ink-text, #f5f4fa); padding: 12px 14px; font: 400 16px/1.5 Manrope, sans-serif; } .ds-field input::placeholder { color: #a4a2b6; } .ds-field input:focus-visible { border-color: var(--accent-strong, #6113cb); outline: 2px solid var(--accent, #7d3df3); outline-offset: 1px; }"
+    },
+    {
+      "name": "Verified Badge",
+      "kind": "chip",
+      "refersTo": "proof-badge",
+      "description": "Textual, color-independent approval state.",
+      "html": "<span class=\"ds-proof-badge\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"m5 12 4 4L19 6\" /></svg>Approved</span>",
+      "css": ".ds-proof-badge { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; background: var(--proof, #00c37a); color: var(--proof-ink, #002c13); padding: 6px 10px; font: 750 12px/1.2 Manrope, sans-serif; } .ds-proof-badge svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.5; }"
+    },
+    {
+      "name": "Header Navigation",
+      "kind": "nav",
+      "description": "Quiet fixed navigation with a compact conversion action.",
+      "html": "<nav class=\"ds-nav\"><strong>PurpleInk</strong><div><a href=\"#\">Proof</a><a href=\"#\">Templates</a><button>Join the pilot</button></div></nav>",
+      "css": ".ds-nav { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--border, #cecbde); background: var(--background, #faf9fe); color: var(--foreground, #12101c); padding: 0 24px; font: 650 14px/1.5 Manrope, sans-serif; } .ds-nav div { display: flex; align-items: center; gap: 24px; } .ds-nav a { color: var(--muted-foreground, #555266); text-decoration: none; } .ds-nav a:hover, .ds-nav a:focus-visible { color: var(--foreground, #12101c); } .ds-nav button { min-height: 42px; border: 0; border-radius: 10px; background: var(--accent, #7d3df3); color: var(--accent-foreground, #fcfbff); padding: 0 14px; font-weight: 750; }"
+    },
+    {
+      "name": "Release Board",
+      "kind": "custom",
+      "description": "Signature product-proof artifact used in the hero.",
+      "html": "<section class=\"ds-release-board\"><header><span></span><strong>Atlas Billing / Release 2.4</strong><small>Workflow prototype</small></header><main><p>Scene 02</p><h3>Create invoice</h3><div>Verified source · checkpoint 04</div></main></section>",
+      "css": ".ds-release-board { overflow: hidden; border-radius: 16px; background: #faf9fe; color: #12101c; box-shadow: 0 8px 0 rgba(0,0,0,.28); font-family: Manrope, sans-serif; } .ds-release-board header { min-height: 54px; display: flex; align-items: center; gap: 9px; border-bottom: 1px solid #cecbde; padding: 0 16px; } .ds-release-board header span { width: 10px; height: 10px; border-radius: 50%; background: #7d3df3; } .ds-release-board header small { margin-left: auto; border-radius: 999px; background: #d8ceff; color: #6113cb; padding: 5px 8px; font: 700 10px/1.2 Azeret Mono, monospace; text-transform: uppercase; } .ds-release-board main { padding: 24px; } .ds-release-board main p { color: #555266; font: 650 11px/1.5 Azeret Mono, monospace; text-transform: uppercase; } .ds-release-board main h3 { margin: 8px 0 24px; font-size: 24px; } .ds-release-board main div { border-radius: 10px; background: #dff9e9; color: #002c13; padding: 12px; font-weight: 700; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Release Room",
+    "overview": "PurpleInk should feel like a release team reviewing the final cut on calibrated screens: focused, authored, factual, and ready to publish. The visual language combines a decisive purple field with near-black review surfaces, pale product canvases, and explicit proof states.",
+    "keyCharacteristics": [
+      "Committed purple, disciplined by ink, paper, proof green, and signal coral.",
+      "Product evidence is the primary imagery; decorative effects never replace proof.",
+      "Flat narrative bands and tonal layering; shadows are rare and structural.",
+      "Manrope carries the message; Azeret Mono is metadata-only.",
+      "Compact controls, moderate corners, explicit focus, and no nested cards."
+    ],
+    "rules": [
+      {
+        "name": "Proof Before Promise",
+        "body": "Every visual claim must point to a visible product frame, source record, checkpoint, or clearly labeled prototype.",
+        "section": "overview"
+      },
+      {
+        "name": "Three-Voice",
+        "body": "On ordinary screens, use one brand color, one semantic color only when state requires it, and the neutral system.",
+        "section": "colors"
+      },
+      {
+        "name": "Color Is Not Evidence",
+        "body": "Verified, warning, and blocked states always include text or an icon in addition to color.",
+        "section": "colors"
+      },
+      {
+        "name": "Tracking Floor",
+        "body": "Display tracking never goes below -0.04em. Body and controls always use zero letter spacing.",
+        "section": "typography"
+      },
+      {
+        "name": "Metadata Boundary",
+        "body": "Mono type is reserved for machine-readable context.",
+        "section": "typography"
+      },
+      {
+        "name": "Flat By Default",
+        "body": "Surfaces remain flat at rest. Never combine a decorative border with a large diffuse shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Lead with product proof, attached sources, approval state, and reproducible workflow.",
+      "Use Directed Purple for brand/action, Verified Green for proof, and Review Coral for intervention only.",
+      "Pair every semantic color with an icon or text label."
+    ],
+    "donts": [
+      "Do not present PurpleInk as a generic prompt-to-video or AI design generator.",
+      "Do not build a purple-gradient SaaS template or invent product evidence.",
+      "Do not use gradient text, decorative color orbs, glass cards, or nested cards.",
+      "Do not use white normal-sized text on dark-purple; use ink-panel text instead."
+    ]
+  }
+}

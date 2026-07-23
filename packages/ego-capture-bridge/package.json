@@ -1,0 +1,25 @@
+{
+  "name": "@purpleink/ego-capture-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local macOS Ego Capture Bridge boundary",
+  "exports": {
+    ".": "./src/index.ts",
+    "./protocol": "./src/protocol.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src tests --ext .ts"
+  },
+  "dependencies": {
+    "@purpleink/product-flow": "0.1.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
+  }
+}

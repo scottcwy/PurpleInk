@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "video-quality-report/v1",
+  "bundleHash": "d4365e81a524ef5bbe250be3f31157701e6f213aaa142d3644ae05252ee0013f",
+  "variants": {
+    "landscape": {
+      "lint": "passed",
+      "validate": "passed",
+      "contrastFailures": 0,
+      "inspect": {
+        "schemaVersion": 1,
+        "duration": 18,
+        "samples": [
+          1,
+          3,
+          5,
+          7,
+          9,
+          11,
+          13,
+          15,
+          17
+        ],
+        "tolerance": 2,
+        "strict": false,
+        "collapseStatic": true,
+        "ok": true,
+        "errorCount": 0,
+        "warningCount": 0,
+        "infoCount": 0,
+        "issueCount": 0,
+        "totalIssueCount": 0,
+        "truncated": false,
+        "issues": [],
+        "_meta": {
+          "version": "0.7.68",
+          "latestVersion": "0.7.68",
+          "updateAvailable": false,
+          "deprecated": true
+        }
+      },
+      "mediaProbe": {
+        "width": 1920,
+        "height": 1080,
+        "durationMs": 18000,
+        "frameRate": "30/1"
+      },
+      "sampledFrame": {
+        "atMs": 9000,
+        "ymin": 7,
+        "ymax": 244,
+        "nonBlank": true
+      }
+    },
+    "portrait": {
+      "lint": "passed",
+      "validate": "passed",
+      "contrastFailures": 0,
+      "inspect": {
+        "schemaVersion": 1,
+        "duration": 18,
+        "samples": [
+          1,
+          3,
+          5,
+          7,
+          9,
+          11,
+          13,
+          15,
+          17
+        ],
+        "tolerance": 2,
+        "strict": false,
+        "collapseStatic": true,
+        "ok": true,
+        "errorCount": 0,
+        "warningCount": 0,
+        "infoCount": 0,
+        "issueCount": 0,
+        "totalIssueCount": 0,
+        "truncated": false,
+        "issues": [],
+        "_meta": {
+          "version": "0.7.68",
+          "latestVersion": "0.7.68",
+          "updateAvailable": false,
+          "deprecated": true
+        }
+      },
+      "mediaProbe": {
+        "width": 1080,
+        "height": 1920,
+        "durationMs": 18000,
+        "frameRate": "30/1"
+      },
+      "sampledFrame": {
+        "atMs": 9000,
+        "ymin": 5,
+        "ymax": 244,
+        "nonBlank": true
+      }
+    }
+  }
+}

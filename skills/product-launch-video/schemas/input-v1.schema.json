@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://purpleink.local/schemas/product-launch-video-input-v1.json",
+  "title": "LaunchVideoSkillInputV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "workspaceId", "productId", "releaseId", "releaseBriefVersionId", "storyboardVersionId", "productFlowVersionId", "captureRunId", "brandKitVersionId", "evidencePackageId", "templateVersion", "targetDurationMs", "storyboard", "brandKit", "evidencePackage", "templateCapabilities"],
+  "properties": {
+    "schemaVersion": { "const": "launch-video-skill-input/v1" },
+    "workspaceId": { "$ref": "#/definitions/id" },
+    "productId": { "$ref": "#/definitions/id" },
+    "releaseId": { "$ref": "#/definitions/id" },
+    "releaseBriefVersionId": { "$ref": "#/definitions/id" },
+    "storyboardVersionId": { "$ref": "#/definitions/id" },
+    "productFlowVersionId": { "$ref": "#/definitions/id" },
+    "captureRunId": { "$ref": "#/definitions/id" },
+    "brandKitVersionId": { "$ref": "#/definitions/id" },
+    "evidencePackageId": { "$ref": "#/definitions/id" },
+    "templateVersion": { "type": "string", "pattern": "^feature-launch@[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "targetDurationMs": { "type": "integer", "minimum": 15000, "maximum": 30000 },
+    "storyboard": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "workspaceId", "productId", "releaseId", "approvalStatus", "immutable", "scenes"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" }, "workspaceId": { "$ref": "#/definitions/id" }, "productId": { "$ref": "#/definitions/id" }, "releaseId": { "$ref": "#/definitions/id" },
+        "approvalStatus": { "const": "approved" }, "immutable": { "const": true },
+        "scenes": { "type": "array", "minItems": 3, "maxItems": 5, "items": { "$ref": "#/definitions/scene" } }
+      }
+    },
+    "brandKit": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "workspaceId", "productId", "releaseId", "approvalStatus", "immutable", "colors", "fonts"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" }, "workspaceId": { "$ref": "#/definitions/id" }, "productId": { "$ref": "#/definitions/id" }, "releaseId": { "$ref": "#/definitions/id" },
+        "approvalStatus": { "const": "approved" }, "immutable": { "const": true },
+        "colors": { "type": "object", "minProperties": 3, "additionalProperties": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" } },
+        "fonts": { "type": "object", "additionalProperties": false, "required": ["display", "body", "mono"], "properties": { "display": { "type": "string", "minLength": 1 }, "body": { "type": "string", "minLength": 1 }, "mono": { "type": "string", "minLength": 1 } } }
+      }
+    },
+    "evidencePackage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "workspaceId", "productId", "releaseId", "approvalStatus", "immutable", "sha256", "entries"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" }, "workspaceId": { "$ref": "#/definitions/id" }, "productId": { "$ref": "#/definitions/id" }, "releaseId": { "$ref": "#/definitions/id" },
+        "approvalStatus": { "const": "approved" }, "immutable": { "const": true }, "sha256": { "$ref": "#/definitions/hash" },
+        "entries": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/evidence" } }
+      }
+    },
+    "templateCapabilities": {
+      "type": "object", "additionalProperties": false,
+      "required": ["templateVersion", "capabilityIds", "layoutIds", "motionPresetIds", "transitionIds", "copyLimits"],
+      "properties": {
+        "templateVersion": { "type": "string" },
+        "capabilityIds": { "$ref": "#/definitions/idList" }, "layoutIds": { "$ref": "#/definitions/idList" }, "motionPresetIds": { "$ref": "#/definitions/idList" }, "transitionIds": { "$ref": "#/definitions/idList" },
+        "copyLimits": { "type": "object", "additionalProperties": false, "required": ["headlineMaxChars", "bodyMaxChars"], "properties": { "headlineMaxChars": { "type": "integer", "minimum": 1, "maximum": 120 }, "bodyMaxChars": { "type": "integer", "minimum": 1, "maximum": 240 } } }
+      }
+    }
+  },
+  "definitions": {
+    "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "idList": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/definitions/id" } },
+    "scene": {
+      "type": "object", "additionalProperties": false, "required": ["id", "releaseId", "capabilityIds", "factual", "headline", "body"],
+      "properties": { "id": { "$ref": "#/definitions/id" }, "releaseId": { "$ref": "#/definitions/id" }, "capabilityIds": { "$ref": "#/definitions/idList" }, "factual": { "type": "boolean" }, "headline": { "type": "string", "minLength": 1 }, "body": { "type": "string" } }
+    },
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["nodeEvidenceId", "assetVersionId", "sceneIds", "workspaceId", "productId", "releaseId", "approvalStatus", "redactionStatus", "immutable", "kind", "mimeType", "bytes", "sha256", "bundlePath", "contentBase64"],
+      "properties": {
+        "nodeEvidenceId": { "$ref": "#/definitions/id" }, "assetVersionId": { "$ref": "#/definitions/id" }, "sceneIds": { "$ref": "#/definitions/idList" },
+        "workspaceId": { "$ref": "#/definitions/id" }, "productId": { "$ref": "#/definitions/id" }, "releaseId": { "$ref": "#/definitions/id" },
+        "approvalStatus": { "const": "approved" }, "redactionStatus": { "const": "passed" }, "immutable": { "const": true },
+        "kind": { "enum": ["result_screenshot", "node_clip", "uploaded_source"] }, "mimeType": { "enum": ["image/png", "image/jpeg", "image/webp", "image/svg+xml", "video/mp4", "video/webm"] },
+        "bytes": { "type": "integer", "minimum": 1 }, "sha256": { "$ref": "#/definitions/hash" },
+        "bundlePath": { "type": "string", "pattern": "^assets/[A-Za-z0-9._/-]+$", "not": { "pattern": "(^|/)\\.\\.(/|$)" } },
+        "contentBase64": { "type": "string", "minLength": 4 }
+      }
+    }
+  }
+}

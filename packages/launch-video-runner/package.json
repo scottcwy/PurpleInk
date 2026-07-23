@@ -1,0 +1,22 @@
+{
+  "name": "@purpleink/launch-video-runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Isolated LaunchVideoRunner execution boundary",
+  "exports": "./src/index.mjs",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "node --check src/index.mjs && node --check src/runner.mjs && node --check src/hyperframes-quality.mjs",
+    "lint": "node --check src/index.mjs && node --check src/runner.mjs && node --check src/hyperframes-quality.mjs"
+  },
+  "dependencies": {
+    "@purpleink/ego-capture-bridge": "0.1.0",
+    "@purpleink/product-flow": "0.1.0",
+    "@purpleink/r2-store": "0.1.0",
+    "@purpleink/video-compiler": "0.1.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
+  }
+}

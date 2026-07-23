@@ -36,8 +36,7 @@ export function Footer(): ReactNode {
       <div
         className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 opacity-60"
         style={{
-          background:
-            "linear-gradient(to top, rgba(51,61,167,0.8) 0%, rgba(81,96,195,0.5) 20%, rgba(115,136,223,0.3) 40%, rgba(140,158,230,0.15) 60%, rgba(165,180,240,0.05) 80%, transparent 100%)",
+          background: "var(--gradient-footer-spectrum)",
           maskImage:
             "linear-gradient(to top, black 0%, black 20%, transparent 100%)",
           WebkitMaskImage:

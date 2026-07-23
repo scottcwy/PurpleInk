@@ -1,0 +1,99 @@
+{
+  "schemaVersion": "product-flow/v1",
+  "productId": "10000000-0000-4000-8000-000000000001",
+  "startUrl": "https://app.example.com/projects",
+  "allowedOrigins": ["https://app.example.com"],
+  "viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 2
+  },
+  "locale": "en-US",
+  "timezone": "Asia/Tokyo",
+  "nodes": [
+    {
+      "id": "20000000-0000-4000-8000-000000000001",
+      "order": 0,
+      "title": "Open project list",
+      "intent": "Show the user's existing projects",
+      "capabilityIds": ["30000000-0000-4000-8000-000000000001"],
+      "actions": [
+        {
+          "id": "40000000-0000-4000-8000-000000000001",
+          "kind": "navigate",
+          "expectedUrl": "https://app.example.com/projects",
+          "timeoutMs": 10000,
+          "effect": "read"
+        }
+      ],
+      "checkpoints": [
+        {
+          "id": "50000000-0000-4000-8000-000000000001",
+          "kind": "visible",
+          "target": { "by": "role", "value": "main", "role": "main" },
+          "timeoutMs": 5000
+        }
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000002",
+      "order": 1,
+      "title": "Create a draft",
+      "intent": "Create a deterministic fixture-backed draft",
+      "capabilityIds": ["30000000-0000-4000-8000-000000000002"],
+      "actions": [
+        {
+          "id": "40000000-0000-4000-8000-000000000002",
+          "kind": "fill",
+          "target": { "by": "label", "value": "Project name", "exact": true },
+          "value": { "kind": "fixture", "key": "draft-project-name" },
+          "timeoutMs": 5000,
+          "effect": "idempotent_write"
+        }
+      ],
+      "checkpoints": [
+        {
+          "id": "50000000-0000-4000-8000-000000000002",
+          "kind": "value_equals",
+          "target": { "by": "test_id", "value": "project-name" },
+          "expected": "PurpleInk fixture",
+          "timeoutMs": 5000
+        }
+      ]
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000003",
+      "order": 2,
+      "title": "Save the project",
+      "intent": "Prove that a project can be created",
+      "capabilityIds": ["30000000-0000-4000-8000-000000000002"],
+      "actions": [
+        {
+          "id": "40000000-0000-4000-8000-000000000003",
+          "kind": "click",
+          "target": { "by": "role", "value": "Save", "role": "button", "exact": true },
+          "timeoutMs": 5000,
+          "effect": "non_idempotent_write"
+        }
+      ],
+      "checkpoints": [
+        {
+          "id": "50000000-0000-4000-8000-000000000003",
+          "kind": "url_matches",
+          "expected": "^https://app\\.example\\.com/projects/[a-z0-9-]+$",
+          "timeoutMs": 10000
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "20000000-0000-4000-8000-000000000001",
+      "to": "20000000-0000-4000-8000-000000000002"
+    },
+    {
+      "from": "20000000-0000-4000-8000-000000000002",
+      "to": "20000000-0000-4000-8000-000000000003"
+    }
+  ]
+}

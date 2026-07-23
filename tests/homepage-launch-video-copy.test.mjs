@@ -77,7 +77,8 @@ test("gives the launch CTA branded, accessible click feedback", () => {
   assert.match(hero, /disabled=\{isLaunching\}/);
   assert.match(hero, /aria-busy=\{isLaunching\}/);
   assert.match(hero, /whileTap=\{\{ scale: 0\.98, y: 1 \}\}/);
-  assert.match(hero, /bg-\[#352e82\]/);
+  assert.match(hero, /bg-brand-launch-ink/);
+  assert.match(hero, /var\(--brand-launch-ink\)/);
   assert.doesNotMatch(hero, /#6d28d9/);
   assert.match(hero, /scale: \[1, 1, 15\]/);
   assert.match(hero, /duration: 0\.68/);
@@ -87,14 +88,31 @@ test("gives the launch CTA branded, accessible click feedback", () => {
   assert.match(hero, /LoaderCircle/);
 });
 
-test("adds a refined outer white glow without an inner border", () => {
+test("expands and fades a dedicated outer ring with the launch ink", () => {
   assert.doesNotMatch(hero, /key="white-glow-border"/);
   assert.doesNotMatch(hero, /inset-px[^"]*border-white\/60/);
-  assert.match(hero, /0 0 20px rgba\(255,255,255,0\.28\)/);
-  assert.match(hero, /boxShadow:/);
+  assert.match(hero, /key="launch-border-ring"/);
+  assert.match(hero, /scale: \[0\.985, 1\.012, 1\.035\]/);
+  assert.match(hero, /opacity: \[0, 0\.82, 0\]/);
+  assert.match(hero, /duration: 0\.52/);
+  assert.match(hero, /var\(--shadow-launch-ring\)/);
 });
 
-test("uses Geist with stable Chinese fallbacks", () => {
+test("uses Geist as the production typography system", () => {
+  for (const token of [
+    "--pi-white: #ffffff",
+    "--pi-black: #0a0a0a",
+    "--pi-night: #03040a",
+    "--pi-indigo-900: #352e82",
+    "--pi-indigo-700: #333da7",
+    "--pi-indigo-500: #6366f1",
+    "--pi-indigo-400: #7388df",
+    "--pi-mark-green: #00c37a",
+    "--gradient-brand-spectrum",
+  ]) {
+    assert.match(globalStyles, new RegExp(token));
+  }
+
   assert.match(
     rootLayout,
     /import \{ Geist, Geist_Mono \} from "next\/font\/google"/
@@ -105,7 +123,9 @@ test("uses Geist with stable Chinese fallbacks", () => {
     rootLayout,
     /className=\{`\$\{geistSans\.variable\} \$\{geistMono\.variable\}`\}/
   );
-  assert.match(globalStyles, /--font-sans:\s*var\(--font-geist-sans\)/);
-  assert.match(globalStyles, /--font-mono:\s*var\(--font-geist-mono\)/);
+  assert.match(globalStyles, /--type-sans:\s*var\(--font-geist-sans\)/);
+  assert.match(globalStyles, /--type-mono:\s*var\(--font-geist-mono\)/);
   assert.match(globalStyles, /"PingFang SC", "Microsoft YaHei"/);
+  assert.match(globalStyles, /--font-sans: var\(--type-sans\)/);
+  assert.match(globalStyles, /--font-mono: var\(--type-mono\)/);
 });

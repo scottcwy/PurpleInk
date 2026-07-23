@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://purpleink.local/schemas/launch-video-plan-v1.json",
+  "title": "LaunchVideoPlanV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "releaseId", "storyboardVersionId", "brandKitVersionId", "templateVersion", "durationMs", "beats"],
+  "properties": {
+    "schemaVersion": { "const": "launch-video-plan/v1" },
+    "releaseId": { "$ref": "#/definitions/id" }, "storyboardVersionId": { "$ref": "#/definitions/id" }, "brandKitVersionId": { "$ref": "#/definitions/id" },
+    "templateVersion": { "type": "string", "pattern": "^feature-launch@[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "durationMs": { "type": "integer", "minimum": 15000, "maximum": 30000 },
+    "beats": { "type": "array", "minItems": 3, "maxItems": 5, "items": { "$ref": "#/definitions/beat" } },
+    "audio": {
+      "type": "object", "additionalProperties": false, "minProperties": 1,
+      "properties": { "narrationAssetVersionId": { "$ref": "#/definitions/id" }, "musicAssetVersionId": { "$ref": "#/definitions/id" } }
+    }
+  },
+  "definitions": {
+    "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+    "rect": { "type": "object", "additionalProperties": false, "required": ["x", "y", "width", "height"], "properties": { "x": { "type": "number", "minimum": 0, "maximum": 1 }, "y": { "type": "number", "minimum": 0, "maximum": 1 }, "width": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }, "height": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 } } },
+    "evidenceRef": {
+      "type": "object", "additionalProperties": false, "required": ["nodeEvidenceId", "assetVersionId"],
+      "properties": {
+        "nodeEvidenceId": { "$ref": "#/definitions/id" }, "assetVersionId": { "$ref": "#/definitions/id" },
+        "trim": { "type": "object", "additionalProperties": false, "required": ["inMs", "outMs"], "properties": { "inMs": { "type": "integer", "minimum": 0 }, "outMs": { "type": "integer", "minimum": 1 } } },
+        "crop": { "$ref": "#/definitions/rect" }, "focus": { "$ref": "#/definitions/rect" }
+      }
+    },
+    "beat": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "sceneId", "capabilityIds", "startMs", "durationMs", "layoutId", "motionPresetId", "transitionId", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" }, "sceneId": { "$ref": "#/definitions/id" },
+        "capabilityIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/definitions/id" } },
+        "startMs": { "type": "integer", "minimum": 0 }, "durationMs": { "type": "integer", "minimum": 2500, "maximum": 10000 },
+        "layoutId": { "$ref": "#/definitions/id" }, "motionPresetId": { "$ref": "#/definitions/id" }, "transitionId": { "$ref": "#/definitions/id" },
+        "headline": { "type": "string", "minLength": 1 }, "body": { "type": "string" },
+        "evidence": { "type": "array", "minItems": 1, "maxItems": 2, "items": { "$ref": "#/definitions/evidenceRef" } }
+      }
+    }
+  }
+}

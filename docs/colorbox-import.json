@@ -1,0 +1,118 @@
+[
+  {
+    "properties": {
+      "steps": 11,
+      "hue": { "start": 273, "end": 281, "curve": "linear" },
+      "saturation": {
+        "start": 0.08,
+        "end": 1,
+        "rate": 1,
+        "curve": "easeOutQuad"
+      },
+      "brightness": { "start": 1, "end": 0.2, "curve": "easeInQuart" },
+      "mode": "oklch",
+      "lightness": { "start": 98, "end": 28, "curve": "linear" },
+      "chroma": {
+        "start": 0.015,
+        "end": 0.14,
+        "rate": 1,
+        "curve": "easeOutQuad"
+      },
+      "oklchHue": { "start": 273, "end": 281, "curve": "linear" }
+    },
+    "options": {
+      "minorSteps": [0, 1],
+      "name": "Spectral Indigo",
+      "lockHex": "#6366F1",
+      "provideInverted": false,
+      "rotation": "clockwise"
+    }
+  },
+  {
+    "properties": {
+      "steps": 11,
+      "hue": { "start": 286, "end": 286, "curve": "linear" },
+      "saturation": {
+        "start": 0,
+        "end": 0.04,
+        "rate": 1,
+        "curve": "easeOutQuad"
+      },
+      "brightness": { "start": 1, "end": 0.06, "curve": "easeInQuart" },
+      "mode": "oklch",
+      "lightness": { "start": 100, "end": 14.5, "curve": "linear" },
+      "chroma": {
+        "start": 0,
+        "end": 0.006,
+        "rate": 1,
+        "curve": "easeOutQuad"
+      },
+      "oklchHue": { "start": 286, "end": 286, "curve": "linear" }
+    },
+    "options": {
+      "minorSteps": [0, 1],
+      "name": "Neutral",
+      "lockHex": "#737373",
+      "provideInverted": false,
+      "rotation": "clockwise"
+    }
+  },
+  {
+    "properties": {
+      "steps": 11,
+      "hue": { "start": 286, "end": 273, "curve": "linear" },
+      "saturation": {
+        "start": 0.05,
+        "end": 0.22,
+        "rate": 1,
+        "curve": "easeOutQuad"
+      },
+      "brightness": { "start": 0.72, "end": 0.03, "curve": "easeInQuart" },
+      "mode": "oklch",
+      "lightness": { "start": 72, "end": 10.9, "curve": "linear" },
+      "chroma": {
+        "start": 0.013,
+        "end": 0.018,
+        "rate": 1,
+        "curve": "easeOutQuad"
+      },
+      "oklchHue": { "start": 286, "end": 273, "curve": "linear" }
+    },
+    "options": {
+      "minorSteps": [0, 1],
+      "name": "Night Ink",
+      "lockHex": "#03040A",
+      "provideInverted": false,
+      "rotation": "counterclockwise"
+    }
+  },
+  {
+    "properties": {
+      "steps": 11,
+      "hue": { "start": 158, "end": 158, "curve": "linear" },
+      "saturation": {
+        "start": 0.04,
+        "end": 0.95,
+        "rate": 1,
+        "curve": "easeOutQuad"
+      },
+      "brightness": { "start": 1, "end": 0.18, "curve": "easeInQuart" },
+      "mode": "oklch",
+      "lightness": { "start": 97, "end": 24, "curve": "linear" },
+      "chroma": {
+        "start": 0.012,
+        "end": 0.18,
+        "rate": 1,
+        "curve": "easeOutQuad"
+      },
+      "oklchHue": { "start": 158, "end": 158, "curve": "linear" }
+    },
+    "options": {
+      "minorSteps": [0, 1],
+      "name": "Proof Green",
+      "lockHex": "#00C37A",
+      "provideInverted": false,
+      "rotation": "clockwise"
+    }
+  }
+]

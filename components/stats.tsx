@@ -57,7 +57,7 @@ function BarChart({ benchmark }: { benchmark: Benchmark }) {
   return (
     <div ref={ref} className="space-y-4">
       <div className="mb-6">
-        <h3 className="text-lg font-medium text-foreground">
+        <h3 className="text-foreground text-lg font-medium">
           {benchmark.category}
         </h3>
         {/* <p className="text-sm text-muted-foreground">( {benchmark.metric} )</p> */}
@@ -73,7 +73,7 @@ function BarChart({ benchmark }: { benchmark: Benchmark }) {
                 <span
                   className={`text-sm ${
                     competitor.isKraft
-                      ? "font-medium text-foreground"
+                      ? "text-foreground font-medium"
                       : "text-muted-foreground"
                   }`}
                 >
@@ -82,15 +82,17 @@ function BarChart({ benchmark }: { benchmark: Benchmark }) {
               </div>
 
               <div className="flex flex-1 items-center gap-0">
-                <div className="relative h-6 flex-1 overflow-hidden rounded-sm bg-muted/30">
+                <div className="bg-muted/30 relative h-6 flex-1 overflow-hidden rounded-sm">
                   <motion.div
                     className={`absolute inset-y-0 left-0 rounded-sm ${
                       competitor.isKraft
-                        ? "bg-linear-to-r from-[#333DA7] to-[#7388DF]"
+                        ? "from-brand-spectrum-start to-brand-spectrum-end bg-linear-to-r"
                         : "bg-muted/75"
                     }`}
                     initial={{ width: 0 }}
-                    animate={isInView ? { width: `${percentage}%` } : { width: 0 }}
+                    animate={
+                      isInView ? { width: `${percentage}%` } : { width: 0 }
+                    }
                     transition={{
                       duration: 0.8,
                       delay: index * 0.1,
@@ -103,7 +105,7 @@ function BarChart({ benchmark }: { benchmark: Benchmark }) {
                   <motion.span
                     className={`text-sm tabular-nums ${
                       competitor.isKraft
-                        ? "font-medium text-foreground"
+                        ? "text-foreground font-medium"
                         : "text-muted-foreground"
                     }`}
                     initial={{ opacity: 0 }}
@@ -127,10 +129,10 @@ export function Stats(): ReactNode {
     <section className="px-4 py-20 sm:px-6 md:py-28 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-16 max-w-2xl">
-          <h2 className="text-2xl font-medium tracking-tight text-foreground md:text-3xl lg:text-4xl">
+          <h2 className="text-foreground text-2xl font-medium tracking-tight md:text-3xl lg:text-4xl">
             Performance that stands out
           </h2>
-          <p className="mt-4 text-lg text-muted-foreground">
+          <p className="text-muted-foreground mt-4 text-lg">
             We benchmark Kraft against leading design tools across speed,
             quality, and consistency. The results speak for themselves.
           </p>

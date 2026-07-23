@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "product-flow/v1",
+  "productId": "10000000-0000-4000-8000-000000000001",
+  "startUrl": "https://app.example.com",
+  "allowedOrigins": ["https://app.example.com"],
+  "viewport": { "width": 1440, "height": 900, "deviceScaleFactor": 2 },
+  "locale": "en-US",
+  "timezone": "Asia/Tokyo",
+  "nodes": [
+    {
+      "id": "temp-node-1",
+      "order": 0,
+      "title": "Temporary step",
+      "intent": "Must not persist discovery identifiers",
+      "capabilityIds": [],
+      "actions": [
+        {
+          "id": "40000000-0000-4000-8000-000000000001",
+          "kind": "click",
+          "target": { "by": "css", "value": "@ref=e12", "x": 40, "y": 20 },
+          "timeoutMs": 5000,
+          "effect": "read"
+        }
+      ],
+      "checkpoints": []
+    }
+  ],
+  "edges": []
+}
