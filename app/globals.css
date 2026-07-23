@@ -12,8 +12,11 @@
   --accent: #6366F1;
   --accent-light: #A5B4FC;
   --accent-foreground: #ffffff;
-  --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-sans:
+    var(--font-geist-sans), "PingFang SC", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+  --font-mono:
+    var(--font-geist-mono), "Noto Sans Mono CJK SC", ui-monospace, monospace;
 }
 
 .dark {

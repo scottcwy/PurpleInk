@@ -26,6 +26,14 @@ const footer = await readFile(
   new URL("../components/footer.tsx", import.meta.url),
   "utf8"
 );
+const globalStyles = await readFile(
+  new URL("../app/globals.css", import.meta.url),
+  "utf8"
+);
+const rootLayout = await readFile(
+  new URL("../app/layout.tsx", import.meta.url),
+  "utf8"
+);
 
 test("describes the four-step Launch Video workflow", () => {
   assert.match(
@@ -84,4 +92,20 @@ test("adds a refined outer white glow without an inner border", () => {
   assert.doesNotMatch(hero, /inset-px[^"]*border-white\/60/);
   assert.match(hero, /0 0 20px rgba\(255,255,255,0\.28\)/);
   assert.match(hero, /boxShadow:/);
+});
+
+test("uses Geist with stable Chinese fallbacks", () => {
+  assert.match(
+    rootLayout,
+    /import \{ Geist, Geist_Mono \} from "next\/font\/google"/
+  );
+  assert.match(rootLayout, /variable: "--font-geist-sans"/);
+  assert.match(rootLayout, /variable: "--font-geist-mono"/);
+  assert.match(
+    rootLayout,
+    /className=\{`\$\{geistSans\.variable\} \$\{geistMono\.variable\}`\}/
+  );
+  assert.match(globalStyles, /--font-sans:\s*var\(--font-geist-sans\)/);
+  assert.match(globalStyles, /--font-mono:\s*var\(--font-geist-mono\)/);
+  assert.match(globalStyles, /"PingFang SC", "Microsoft YaHei"/);
 });
