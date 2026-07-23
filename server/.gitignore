@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+.env.local
+*.log
+
+# 生成产物（可复现，不入库）：渲染输出/采集缓存/采集样本
+out/
+capture/

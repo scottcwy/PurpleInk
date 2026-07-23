@@ -1,23 +1,19 @@
 "use client";
 
 import {
-  AnimatePresence,
   motion,
-  useReducedMotion,
   useScroll,
   useSpring,
   useTransform,
 } from "motion/react";
-import { ArrowRight, ArrowDown, LoaderCircle } from "lucide-react";
+import { ArrowDown } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { FluidCursor } from "./fluid-cursor";
+import { LaunchComposer } from "./launch-composer";
 
 export function Hero(): ReactNode {
   const sectionRef = useRef<HTMLElement>(null);
-  const [isLaunching, setIsLaunching] = useState(false);
-  const [showPreparing, setShowPreparing] = useState(false);
-  const prefersReducedMotion = useReducedMotion();
 
   const { scrollY, scrollYProgress } = useScroll({
     target: sectionRef,
@@ -28,26 +24,6 @@ export function Hero(): ReactNode {
   const scaleY = useSpring(scaleYRaw, { stiffness: 100, damping: 30 });
 
   const y = useTransform(scrollY, (value) => value * 0.7);
-
-  useEffect(() => {
-    if (!isLaunching) return;
-
-    const labelTimer = window.setTimeout(() => setShowPreparing(true), 180);
-    const resetTimer = window.setTimeout(() => {
-      setIsLaunching(false);
-      setShowPreparing(false);
-    }, 1600);
-
-    return () => {
-      window.clearTimeout(labelTimer);
-      window.clearTimeout(resetTimer);
-    };
-  }, [isLaunching]);
-
-  const handleLaunchClick = () => {
-    if (isLaunching) return;
-    setIsLaunching(true);
-  };
 
   return (
     <section ref={sectionRef} className="relative min-h-dvh w-full">
@@ -89,147 +65,7 @@ export function Hero(): ReactNode {
             ease: [0.25, 0.46, 0.45, 0.94],
           }}
         >
-          <motion.button
-            type="button"
-            onClick={handleLaunchClick}
-            disabled={isLaunching}
-            aria-busy={isLaunching}
-            className="focus-ring group bg-background text-foreground relative isolate inline-flex h-16 w-full max-w-sm items-center justify-between overflow-hidden rounded-full py-2 pr-2 pl-7 text-base font-medium shadow-[0_8px_32px_rgba(0,0,0,0.12)] sm:w-auto sm:min-w-88"
-            whileHover={{ y: isLaunching ? 0 : -2 }}
-            whileTap={{ scale: 0.98, y: 1 }}
-            animate={{
-              boxShadow: isLaunching
-                ? [
-                    "0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(255,255,255,0)",
-                    "0 8px 32px rgba(0,0,0,0.12), 0 0 20px rgba(255,255,255,0.28), 0 0 0 1px rgba(255,255,255,0.72)",
-                    "0 8px 32px rgba(0,0,0,0.12), 0 0 14px rgba(255,255,255,0.18), 0 0 0 1px rgba(255,255,255,0.48)",
-                  ]
-                : "0 8px 32px rgba(0,0,0,0.12)",
-            }}
-            transition={{
-              type: "spring",
-              stiffness: 520,
-              damping: 32,
-              boxShadow: prefersReducedMotion
-                ? { duration: 0 }
-                : {
-                    duration: 0.72,
-                    times: [0, 0.35, 1],
-                    ease: "easeOut",
-                  },
-            }}
-          >
-            <AnimatePresence initial={false}>
-              {isLaunching && (
-                <motion.span
-                  key="purple-ink"
-                  aria-hidden="true"
-                  className="absolute top-2 right-2 z-0 h-12 w-12 rounded-full bg-[#352e82]"
-                  initial={{ opacity: 1, scale: 1 }}
-                  animate={
-                    prefersReducedMotion
-                      ? { opacity: 1, scale: 15 }
-                      : { opacity: 1, scale: [1, 1, 15] }
-                  }
-                  exit={{ opacity: 0 }}
-                  transition={
-                    prefersReducedMotion
-                      ? { duration: 0 }
-                      : {
-                          scale: {
-                            duration: 0.68,
-                            times: [0, 0.18, 1],
-                            ease: [0.4, 0, 0.2, 1],
-                          },
-                          opacity: { duration: 0.18 },
-                        }
-                  }
-                />
-              )}
-            </AnimatePresence>
-
-            <span
-              className={`relative z-10 whitespace-nowrap transition-colors duration-200 ${
-                showPreparing ? "text-white" : "text-foreground"
-              }`}
-            >
-              <AnimatePresence initial={false} mode="wait">
-                <motion.span
-                  key={showPreparing ? "preparing" : "create"}
-                  className="block"
-                  initial={prefersReducedMotion ? false : { opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  {...(prefersReducedMotion
-                    ? {}
-                    : { exit: { opacity: 0, y: -5 } })}
-                  transition={{ duration: prefersReducedMotion ? 0 : 0.16 }}
-                >
-                  {showPreparing
-                    ? "Preparing your Launch..."
-                    : "创建你的首个Launch Video"}
-                </motion.span>
-              </AnimatePresence>
-            </span>
-
-            <motion.span
-              className="relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
-              animate={{
-                backgroundColor: showPreparing
-                  ? "rgba(255,255,255,0.16)"
-                  : isLaunching
-                    ? "#352e82"
-                    : "var(--foreground)",
-                color: isLaunching ? "#ffffff" : "var(--background)",
-              }}
-              transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
-            >
-              <AnimatePresence initial={false} mode="wait">
-                {showPreparing ? (
-                  <motion.span
-                    key="loading"
-                    className="flex"
-                    initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.8 }}
-                    animate={
-                      prefersReducedMotion
-                        ? { opacity: 1 }
-                        : { opacity: 1, scale: 1, rotate: 360 }
-                    }
-                    {...(prefersReducedMotion
-                      ? {}
-                      : { exit: { opacity: 0, scale: 0.8 } })}
-                    transition={
-                      prefersReducedMotion
-                        ? { duration: 0 }
-                        : {
-                            opacity: { duration: 0.16 },
-                            scale: { duration: 0.16 },
-                            rotate: {
-                              duration: 0.8,
-                              ease: "linear",
-                              repeat: Infinity,
-                            },
-                          }
-                    }
-                  >
-                    <LoaderCircle className="h-5 w-5" />
-                  </motion.span>
-                ) : (
-                  <motion.span
-                    key="arrow"
-                    className="flex transition-transform duration-200 group-hover:translate-x-0.5"
-                    initial={prefersReducedMotion ? false : { opacity: 0, x: -3 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    {...(prefersReducedMotion
-                      ? {}
-                      : { exit: { opacity: 0, x: 4 } })}
-                    transition={{ duration: prefersReducedMotion ? 0 : 0.16 }}
-                  >
-                    <ArrowRight className="h-5 w-5" />
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </motion.span>
-          </motion.button>
+          <LaunchComposer />
         </motion.div>
       </div>
 

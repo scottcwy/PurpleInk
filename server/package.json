@@ -1,0 +1,26 @@
+{
+  "name": "purpleink-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Purple Ink 后端编排服务 —— Firenze 采集 → Capture 适配器 → HyperFrames 管线",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "capture": "tsx scripts/capture-url.ts",
+    "render": "tsx scripts/render-capture.ts",
+    "verify:golden": "tsx scripts/verify-golden.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "imapflow": "^1.0.171",
+    "mailparser": "^3.7.1",
+    "playwright": "^1.49.0"
+  },
+  "devDependencies": {
+    "@types/mailparser": "^3.4.5",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
