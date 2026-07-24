@@ -20,6 +20,26 @@ import { validateHyperFramesHtml } from "./validate"
 import { renderTemplateChapter } from "./template-fallback"
 
 /**
+ * Ensure chapter HTML has a <template> or <body> wrapper.
+ * LLM sometimes returns bare <div data-composition-id="..."> without
+ * the required wrapper, causing the renderer to fail.
+ */
+function ensureHtmlWrapper(html: string, _chapterId: string): string {
+  // Already has <template> or <body> wrapping the composition element
+  if (/<(?:template|body)[^>]*>[\s\S]*data-composition-id/.test(html)) {
+    return html
+  }
+  // Wrap in a minimal HTML document
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body>
+${html}
+</body>
+</html>`
+}
+
+/**
  * Generate all 5 chapters via LLM with per-chapter validation and fallback.
  *
  * Strategy (4 LLM calls total):
@@ -55,8 +75,9 @@ export async function generateChapters(
     logger.info("generate:batch_response", { responseLen: response?.length || 0, hasContent: !!response })
     const parsed = parseBatchResponse(response)
     for (const id of batchIds) {
-      const html = parsed.get(id)
-      if (html) {
+      const rawHtml = parsed.get(id)
+      if (rawHtml) {
+        const html = ensureHtmlWrapper(rawHtml, id)
         const validation = validateHyperFramesHtml(html, id, assetFiles, join(captureDir, "assets"))
         if (validation.valid) {
           results.set(id, { id, html, source: "llm" })
@@ -109,10 +130,11 @@ export async function generateChapters(
       model: "step-explore",
     })
     logger.info("generate:ch2_response", { responseLen: response?.length || 0 })
-    const html = extractHtmlFromResponse(response)
-    const validation = validateHyperFramesHtml(html, "ch2-hero", assetFiles, join(captureDir, "assets"))
+    const rawHtml2 = extractHtmlFromResponse(response)
+    const html2 = ensureHtmlWrapper(rawHtml2, "ch2-hero")
+    const validation = validateHyperFramesHtml(html2, "ch2-hero", assetFiles, join(captureDir, "assets"))
     if (validation.valid) {
-      results.set("ch2-hero", { id: "ch2-hero", html, source: "llm" })
+      results.set("ch2-hero", { id: "ch2-hero", html: html2, source: "llm" })
       logger.info("generate:chapter_ok", { chapter: "ch2-hero", source: "llm" })
     } else {
       logger.warn("generate:chapter_invalid", { chapter: "ch2-hero", errors: validation.errors })
@@ -155,10 +177,11 @@ export async function generateChapters(
       model: "step-explore",
     })
     logger.info("generate:ch3_response", { responseLen: response?.length || 0 })
-    const html = extractHtmlFromResponse(response)
-    const validation = validateHyperFramesHtml(html, "ch3-showcase", assetFiles, join(captureDir, "assets"))
+    const rawHtml3 = extractHtmlFromResponse(response)
+    const html3 = ensureHtmlWrapper(rawHtml3, "ch3-showcase")
+    const validation = validateHyperFramesHtml(html3, "ch3-showcase", assetFiles, join(captureDir, "assets"))
     if (validation.valid) {
-      results.set("ch3-showcase", { id: "ch3-showcase", html, source: "llm" })
+      results.set("ch3-showcase", { id: "ch3-showcase", html: html3, source: "llm" })
       logger.info("generate:chapter_ok", { chapter: "ch3-showcase", source: "llm" })
     } else {
       logger.warn("generate:chapter_invalid", { chapter: "ch3-showcase", errors: validation.errors })
@@ -182,10 +205,11 @@ export async function generateChapters(
       model: "step-explore",
     })
     logger.info("generate:ch4_response", { responseLen: response?.length || 0 })
-    const html = extractHtmlFromResponse(response)
-    const validation = validateHyperFramesHtml(html, "ch4-proof", assetFiles, join(captureDir, "assets"))
+    const rawHtml4 = extractHtmlFromResponse(response)
+    const html4 = ensureHtmlWrapper(rawHtml4, "ch4-proof")
+    const validation = validateHyperFramesHtml(html4, "ch4-proof", assetFiles, join(captureDir, "assets"))
     if (validation.valid) {
-      results.set("ch4-proof", { id: "ch4-proof", html, source: "llm" })
+      results.set("ch4-proof", { id: "ch4-proof", html: html4, source: "llm" })
       logger.info("generate:chapter_ok", { chapter: "ch4-proof", source: "llm" })
     } else {
       logger.warn("generate:chapter_invalid", { chapter: "ch4-proof", errors: validation.errors })

@@ -27,7 +27,7 @@ export interface StepMessageOptions {
 }
 
 const MODEL = process.env.STEP_MODEL || "step-explore"
-const MIN_INTERVAL_MS = Number(process.env.STEP_MIN_INTERVAL_MS) || 7000
+const MIN_INTERVAL_MS = Number(process.env.STEP_MIN_INTERVAL_MS) || 5000
 const MAX_RETRIES = Number(process.env.STEP_MAX_RETRIES) || 4
 
 function getConfig() {

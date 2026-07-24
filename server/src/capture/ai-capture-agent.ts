@@ -17,14 +17,13 @@ import type {
 import type { AgentCredentials } from "./credentials"
 import { callStepMessages } from "../lib/step-client"
 
-/** 动作延迟配置常量（毫秒）。轻度削减：每步固定间隔/滚动等待取更小值提速，
- * 导航/点击等待保守以免截到未渲染完的页面。 */
+/** 动作延迟配置常量（毫秒）。速度优化：削减固定等待，导航/点击保留足够时间。 */
 const TIMING = {
-  NAVIGATE_WAIT: 2000,
-  STEP_INTERVAL: 1000,
-  CLICK_WAIT: 1500,
-  KEY_WAIT: 1500,
-  SCROLL_WAIT: 500,
+  NAVIGATE_WAIT: 1500,
+  STEP_INTERVAL: 500,
+  CLICK_WAIT: 1000,
+  KEY_WAIT: 1000,
+  SCROLL_WAIT: 300,
 } as const
 
 /** CAPTURE 阶段最多主动关几次全屏遮罩（shadcn 类 sheet/dialog 挡点击的兜底），防死循环。
@@ -219,6 +218,9 @@ export class AiCaptureAgent {
         snapshot = { title: "", elements: [], textContent: "" }
       }
 
+      // 记录每步 URL（无条件），供强制导航和提前终止判断
+      stepUrls.push(stripUrl(snapshot.url || ""))
+
       // ---- 外层状态机：根据客观信号派生当前 mode ----
       const wallKind = this.authWallKind(snapshot)
       const authWall = wallKind !== "none"
@@ -316,23 +318,74 @@ export class AiCaptureAgent {
         return true
       }
 
+      // ---- 强制导航：同一 URL 连续停留 2 步且有未访问链接时，强制跳转 ----
+      let forcedNavAction: AiAction | null = null
+      if (mode === "capture" && stepUrls.length > 0) {
+        const currentUrl = stripUrl(snapshot.url || "")
+        let sameUrlStreak = 0
+        for (let i = stepUrls.length - 1; i >= 0; i--) {
+          if (stepUrls[i] === currentUrl) sameUrlStreak++
+          else break
+        }
+        if (sameUrlStreak >= 2) {
+          // 从快照中找导航链接（nav/header 中的 link 角色元素）
+          const navLinks = snapshot.elements.filter(
+            (el) =>
+              (el.role === "link" || el.tag === "a") &&
+              el.text && el.text.trim().length > 0
+          )
+          const unvisitedLinks = navLinks.filter((el) => {
+            const href = el.name || "" // name 字段可能存 href
+            return href && !this.visitedUrls.has(stripUrl(href))
+          })
+          if (unvisitedLinks.length > 0) {
+            const target = unvisitedLinks[0]
+            forcedNavAction = {
+              action: "click",
+              ref: target.ref,
+              label: `跳转${(target.text || "").slice(0, 10)}`,
+              reason: "强制导航到未访问页面",
+            }
+            logger.info("ai_capture:forced_navigation", {
+              step, sameUrlStreak, targetRef: target.ref, targetText: target.text,
+            })
+          } else if (navLinks.length > 0) {
+            // 所有链接都访问过，但仍强制选第一个导航链接（可能页面已更新）
+            const target = navLinks[0]
+            forcedNavAction = {
+              action: "click",
+              ref: target.ref,
+              label: `跳转${(target.text || "").slice(0, 10)}`,
+              reason: "强制导航换页面",
+            }
+            logger.info("ai_capture:forced_navigation_fallback", {
+              step, sameUrlStreak, targetRef: target.ref,
+            })
+          }
+        }
+      }
+
       let decision: AiAction
-      try {
-        decision = await this.askAI(screenshotBuffer, snapshot, {
-          mode,
-          screenshotsTaken: screenshots.length,
-          previousActions: actions,
-        })
-      } catch (err) {
-        logger.warn("ai_capture:ai_decision_failed", { step, error: String(err) })
-        if (mode === "capture" && screenshots.length < this.minScreenshots) {
-          decision = { action: "scroll", value: "down", label: "向下滚动", reason: "AI 调用失败，降级滚动" }
-        } else if (mode === "auth") {
-          decision = { action: "scroll", value: "down", label: "向下滚动", reason: "AI 调用失败，降级滚动" }
-          this.authSteps++
-        } else {
-          await shootCurrent(neutralLabel(snapshot))
-          break
+      if (forcedNavAction) {
+        decision = forcedNavAction
+      } else {
+        try {
+          decision = await this.askAI(screenshotBuffer, snapshot, {
+            mode,
+            screenshotsTaken: screenshots.length,
+            previousActions: actions,
+          })
+        } catch (err) {
+          logger.warn("ai_capture:ai_decision_failed", { step, error: String(err) })
+          if (mode === "capture" && screenshots.length < this.minScreenshots) {
+            decision = { action: "scroll", value: "down", label: "向下滚动", reason: "AI 调用失败，降级滚动" }
+          } else if (mode === "auth") {
+            decision = { action: "scroll", value: "down", label: "向下滚动", reason: "AI 调用失败，降级滚动" }
+            this.authSteps++
+          } else {
+            await shootCurrent(neutralLabel(snapshot))
+            break
+          }
         }
       }
 
@@ -416,13 +469,14 @@ export class AiCaptureAgent {
 
       if (mode === "auth") { this.authSteps++; if (isCodePage) this.codeSteps++ }
 
-      // ---- 提前终止：截图已够 + 连续 3 步停留同一 URL → 认为已采集完毕 ----
+      // ---- 提前终止：截图已够 + 连续 3 步停留同一 URL + 已访问≥2 个不同 URL → 认为已采集完毕 ----
       if (mode === "capture" && screenshots.length >= this.minScreenshots) {
-        stepUrls.push(stripUrl(snapshot.url || ""))
         const last3 = stepUrls.slice(-3)
-        if (last3.length >= 3 && new Set(last3).size === 1) {
+        const uniqueUrls = new Set(stepUrls).size
+        if (last3.length >= 3 && new Set(last3).size === 1 && uniqueUrls >= 2) {
           logger.info("ai_capture:early_terminate", {
             step, screenshots: screenshots.length, url: snapshot.url,
+            uniqueUrls,
           })
           break
         }
@@ -748,7 +802,18 @@ ${passwordlessLine}${codeLine}逐个字段 fill，填完后点击提交按钮或
 4. **screenshot 时尽量给出正在展示核心功能的主内容容器 [ref]**（如编辑器/画布/数据面板/结果区），系统会对该元素做紧裁；别停在文档侧栏/页脚/导航 logo/cookie 条。
 5. 需进入功能时用 "click"（给出目标 [ref]）或 "navigate"；内容不全时 "scroll" value="down"。
 6. 已采集足够多**不同功能页面**（≥${this.minScreenshots}）时选 "done"。
-7. 不要重复访问已看过的页面，不要重复相同操作。`
+7. 不要重复访问已看过的页面，不要重复相同操作。
+
+## 强制导航规则（最高优先级）
+- 你必须在采集过程中访问至少 2 个不同的 URL 页面
+- 如果当前页面已截取 2 张截图，你必须点击导航栏链接跳转到其他页面
+- 优先点击：Features、Pricing、Docs、Products 等产品功能页面
+- 不要只在首页反复滚动
+
+## 导航建议
+- 如果当前停留在首页或某个页面较久，点击导航栏链接探索子页面
+- 优先访问能展示产品核心功能的页面：功能介绍 > 定价 > 文档 > 博客
+- 不要访问：登录页、注册页、外部链接`
 
     const actionEnum = ACTION_ENUM.CAPTURE
     return { phaseGoal: "采集核心功能截图", guidance, rules, actionEnum }
