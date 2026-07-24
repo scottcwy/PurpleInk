@@ -112,7 +112,12 @@ export class CaptureControlPlaneClient {
       }),
     });
     if (!response.ok) {
-      throw new CaptureProtocolError("CONTROL_PLANE_REJECTED", `${path} returned ${response.status}`);
+      const body = await response.json().catch(() => undefined);
+      const rejection = body?.error;
+      const detail = typeof rejection?.code === "string" && typeof rejection?.message === "string"
+        ? ` (${rejection.code}: ${rejection.message})`
+        : "";
+      throw new CaptureProtocolError("CONTROL_PLANE_REJECTED", `${path} returned ${response.status}${detail}`);
     }
     return response.json();
   }

@@ -63,7 +63,14 @@ const sceneIds = [
   "b2000000-0000-4000-8000-000000000011",
   "b3000000-0000-4000-8000-000000000011",
 ] as const;
-const headlines = ["See the product", "Create with confidence", "Finish the workflow"] as const;
+const externalTargetUrl = process.env.PURPLEINK_GOLDEN_TARGET_URL
+  ? new URL(process.env.PURPLEINK_GOLDEN_TARGET_URL).toString()
+  : undefined;
+const targetName = externalTargetUrl ? "shadcn/ui" : "Golden Product";
+const artifactDirectory = externalTargetUrl ? "shadcn-ui" : "golden-product";
+const headlines = externalTargetUrl
+  ? ["Explore shadcn/ui", "Browse the component library", "Inspect the Button component"] as const
+  : ["See the product", "Create with confidence", "Finish the workflow"] as const;
 const layouts = ["evidence-full", "evidence-split", "evidence-detail"] as const;
 const motions = ["settle-up", "focus-push", "proof-pop"] as const;
 const digest = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
@@ -88,6 +95,19 @@ function productHtml() {
 }
 
 function flowPayload() {
+  if (externalTargetUrl) {
+    const targetOrigin = new URL(externalTargetUrl).origin;
+    return {
+      schemaVersion: "product-flow/v1", productId, startUrl: externalTargetUrl,
+      allowedOrigins: [targetOrigin], viewport: { width: 1280, height: 720, deviceScaleFactor: 1 }, locale: "en-US", timezone: "UTC",
+      nodes: [
+        { id: nodeIds[0], order: 1, title: "Open shadcn/ui", intent: "Show the shadcn/ui home page", capabilityIds: [capabilityIds[0]], actions: [{ id: "d1000000-0000-4000-8000-000000000011", kind: "navigate", expectedUrl: externalTargetUrl, timeoutMs: 30_000, effect: "read" }], checkpoints: [{ id: "e1000000-0000-4000-8000-000000000011", kind: "visible", target: { by: "role", role: "heading", value: "The Foundation for your Design System", exact: true }, timeoutMs: 10_000 }] },
+        { id: nodeIds[1], order: 2, title: "Browse components", intent: "Show the component catalog", capabilityIds: [capabilityIds[1]], actions: [{ id: "d2000000-0000-4000-8000-000000000011", kind: "navigate", expectedUrl: `${targetOrigin}/docs/components`, timeoutMs: 30_000, effect: "read" }], checkpoints: [{ id: "e2000000-0000-4000-8000-000000000011", kind: "visible", target: { by: "role", role: "heading", value: "Components", exact: true }, timeoutMs: 10_000 }] },
+        { id: nodeIds[2], order: 3, title: "Inspect Button", intent: "Show the Button component", capabilityIds: [capabilityIds[2]], actions: [{ id: "d3000000-0000-4000-8000-000000000011", kind: "navigate", expectedUrl: `${targetOrigin}/docs/components/base/button`, timeoutMs: 30_000, effect: "read" }], checkpoints: [{ id: "e3000000-0000-4000-8000-000000000011", kind: "visible", target: { by: "css", value: "h1" }, timeoutMs: 10_000 }] },
+      ],
+      edges: [{ from: nodeIds[0], to: nodeIds[1] }, { from: nodeIds[1], to: nodeIds[2] }],
+    };
+  }
   return {
     schemaVersion: "product-flow/v1", productId, startUrl: origin,
     allowedOrigins: [origin], viewport: { width: 1280, height: 720, deviceScaleFactor: 1 }, locale: "en-US", timezone: "UTC",
@@ -168,7 +188,7 @@ beforeAll(async () => {
   server = createServer({ key: await readFile(key), cert: await readFile(cert) }, (_request, response) => { response.writeHead(200, { "content-type": "text/html; charset=utf-8" }); response.end(productHtml()); });
   await new Promise<void>((resolveListen) => server.listen(0, "0.0.0.0", resolveListen));
   const address = server.address(); if (!address || typeof address === "string") throw new Error("HTTPS server did not bind");
-  origin = `https://host.docker.internal:${address.port}`;
+  origin = externalTargetUrl ?? `https://host.docker.internal:${address.port}`;
   await Promise.all([
     exec("docker", ["run", "-d", "--rm", "--name", pgContainer, "-e", "POSTGRES_PASSWORD=purpleink", "-e", "POSTGRES_USER=purpleink", "-e", "POSTGRES_DB=purpleink", "-p", "127.0.0.1::5432", "postgres:16"]),
     exec("docker", ["run", "-d", "--rm", "--name", minioContainer, "-e", "MINIO_ROOT_USER=purpleinktest", "-e", "MINIO_ROOT_PASSWORD=purpleinktestsecret", "-p", "127.0.0.1::9000", minioImage, "server", "/data"]),
@@ -236,15 +256,17 @@ afterAll(async () => {
   await new Promise<void>((resolveClose) => apiServer?.close(() => resolveClose()));
   if (temp) await rm(temp, { recursive: true, force: true });
 });
-
 describe("Golden Product real vertical pipeline", () => {
   it("publishes a provenance-locked 16:9 MP4 from real Linux Playwright evidence", async () => {
+    if (process.env.PURPLEINK_GOLDEN_TARGET_URL) {
+      expect(flowPayload().startUrl).toBe(new URL(process.env.PURPLEINK_GOLDEN_TARGET_URL).toString());
+    }
     const briefPayload = { audience: "Product teams", message: "Complete work visibly", proofPoints: ["Real browser capture"], cta: "Start now" };
     const brandKit = { colors: { paper: "#FAF9FE", ink: "#12101C", purple: "#7D3DF3", proof: "#00C37A" }, fonts: { display: "Arial", body: "Arial", mono: "Courier New" } };
     await sql`insert into workspaces(id,name,slug) values(${workspaceId},'Golden','golden-real')`;
     await sql`insert into users(id,email,name) values(${userId},'golden@example.com','Golden Owner')`;
     await sql`insert into memberships(workspace_id,user_id,role) values(${workspaceId},${userId},'owner')`;
-    await sql`insert into products(id,workspace_id,name,canonical_url) values(${productId},${workspaceId},'Golden Product',${origin})`;
+    await sql`insert into products(id,workspace_id,name,canonical_url) values(${productId},${workspaceId},${targetName},${origin})`;
     await sql`insert into releases(id,workspace_id,product_id,name) values(${releaseId},${workspaceId},${productId},'Golden release')`;
     await sql`insert into release_brief_versions(id,workspace_id,release_id,version,schema_version,payload,content_hash) values(${briefVersionId},${workspaceId},${releaseId},1,'release-brief/v1',${sql.json(briefPayload)},${await contentHash(briefPayload)})`;
     await sql`insert into brand_kits(id,workspace_id,product_id) values(${brandKitId},${workspaceId},${productId})`;
@@ -253,11 +275,11 @@ describe("Golden Product real vertical pipeline", () => {
     await releases.approveBrief({ workspaceId, releaseId, candidateId: briefVersionId, expectedRevision: 1, idempotencyKey: "golden-brief", actorId: userId });
 
     await sql`insert into product_flows(id,workspace_id,product_id,name) values(${flowId},${workspaceId},${productId},'Golden flow')`;
-    await releases.startDiscovery({ workspaceId, releaseId, productFlowId: flowId, captureSessionId: discoverySessionId, discoveryRunId, expectedRevision: 2, idempotencyKey: "golden-start-discovery", actorId: userId, allowedOrigins: [origin] });
+    await releases.startDiscovery({ workspaceId, releaseId, productFlowId: flowId, captureSessionId: discoverySessionId, discoveryRunId, expectedRevision: 2, idempotencyKey: "golden-start-discovery", actorId: userId, allowedOrigins: flowPayload().allowedOrigins });
     await runWorker({ kind: "discovery", sessionId: discoverySessionId, jobId: discoveryJobId, runId: discoveryRunId });
     await releases.approveFlow({ workspaceId, releaseId, candidateId: flowVersionId, discoveryRunId, expectedRevision: 4, idempotencyKey: "golden-flow", actorId: userId });
 
-    await releases.startCapture({ workspaceId, releaseId, captureSessionId, captureRunId, expectedRevision: 5, idempotencyKey: "golden-start-capture", actorId: userId, allowedOrigins: [origin] });
+    await releases.startCapture({ workspaceId, releaseId, captureSessionId, captureRunId, expectedRevision: 5, idempotencyKey: "golden-start-capture", actorId: userId, allowedOrigins: flowPayload().allowedOrigins });
     const captureOutput = await runWorker({ kind: "capture", sessionId: captureSessionId, jobId: captureJobId, runId: captureRunId });
     const [captureReceipt] = await sql`select manifest_hash from capture_sessions where workspace_id=${workspaceId} and id=${captureSessionId}`;
     const capturedEvidence = await sql`select ne.id from node_evidence ne join node_executions nx on nx.workspace_id=ne.workspace_id and nx.id=ne.node_execution_id where ne.workspace_id=${workspaceId} and nx.capture_run_id=${captureRunId} order by ne.id`;
@@ -323,8 +345,8 @@ describe("Golden Product real vertical pipeline", () => {
     const previewBytes = await store.get(video.preview.r2Key);
     expect(previewBytes).not.toBeNull();
     expect(digest(previewBytes as Buffer)).toBe(video.preview.sha256);
-    const outputPath = resolve(root, ".artifacts/golden-product/preview-landscape.mp4");
-    await mkdir(resolve(root, ".artifacts/golden-product"), { recursive: true });
+    const outputPath = resolve(root, `.artifacts/${artifactDirectory}/preview-landscape.mp4`);
+    await mkdir(resolve(root, `.artifacts/${artifactDirectory}`), { recursive: true });
     await writeFile(outputPath, previewBytes as Buffer);
     const probe = JSON.parse((await exec("ffprobe", ["-v", "error", "-show_entries", "stream=width,height:format=duration", "-of", "json", outputPath])).stdout);
     expect(probe.streams[0]).toMatchObject({ width: 1920, height: 1080 });
@@ -366,7 +388,7 @@ describe("Golden Product real vertical pipeline", () => {
       evidence_count: 3,
       all_evidence_approved: true,
     });
-    await writeFile(resolve(root, ".artifacts/golden-product/provenance.json"), `${JSON.stringify({
+    await writeFile(resolve(root, `.artifacts/${artifactDirectory}/provenance.json`), `${JSON.stringify({
       schemaVersion: "golden-preview-provenance/v1",
       workspaceId,
       productId,

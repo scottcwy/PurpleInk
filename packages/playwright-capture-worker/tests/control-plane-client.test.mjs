@@ -45,7 +45,6 @@ test("worker drives the persisted lease, event, upload, and completion protocol"
   ]);
   assert.equal(calls.at(-1).body.status, "completed");
 });
-
 test("worker reports a stable failure through the current lease", async () => {
   const calls = [];
   const fetcher = async (url, init) => {
@@ -71,6 +70,23 @@ test("worker reports a stable failure through the current lease", async () => {
   assert.equal(calls.at(-1).url, "https://control.test/api/internal/capture/jobs/job-1/callback");
   assert.equal(calls.at(-1).body.status, "failed");
   assert.equal(calls.at(-1).body.errorCode, "ASSERTION_FAILED");
+});
+
+test("worker surfaces a structured control-plane rejection", async () => {
+  const client = new CaptureControlPlaneClient({
+    baseUrl: "https://control.test/api/internal/capture",
+    workloadToken: "task-token",
+    workspaceId: "workspace-1",
+    jobId: "job-1",
+    attempt: 2,
+    fetcher: async () => response({ error: { code: "ASSET_METADATA_MISMATCH", message: "asset metadata differs" } }, 400),
+    publisher: async () => undefined,
+  });
+
+  await assert.rejects(
+    () => client.run({ outputDir: "/output", adapter: { run: async () => ({}) } }),
+    /ASSET_METADATA_MISMATCH: asset metadata differs/
+  );
 });
 
 test("worker pauses for a handoff until the same attempt is explicitly resumed", async () => {
