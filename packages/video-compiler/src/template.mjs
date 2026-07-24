@@ -12,7 +12,7 @@ function evidenceElement(beat, entry, index, beatIndex, isLast) {
   const className = `clip evidence ${escapeHtml(beat.layoutId)} evidence-${index}`;
   const common = `id="media-${escapeHtml(beat.id)}-${index}" class="${className}" data-start="${seconds(beat.startMs)}" data-duration="${seconds(duration)}" data-track-index="${10 + beatIndex * 2 + index}" data-evidence-id="${escapeHtml(evidenceRefId(entry.ref))}"`;
   const source = escapeHtml(entry.bundlePath);
-  if (entry.mimeType.startsWith("video/")) return `<video ${common} src="${source}" muted playsinline crossorigin="anonymous"></video>`;
+  if (entry.mimeType.startsWith("video/")) return `<video ${common} src="${source}" muted playsinline></video>`;
   return `<img ${common} src="${source}" alt="Approved product evidence" crossorigin="anonymous" />`;
 }
 

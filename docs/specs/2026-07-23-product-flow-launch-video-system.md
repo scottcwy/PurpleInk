@@ -121,11 +121,11 @@ NodeExecution、Evidence Manifest、运行幂等和断线恢复合同见 Enginee
 
 - 唯一运行单元是 Linux `PlaywrightCaptureWorker`，内部浏览器实现为 `PlaywrightBrowserAdapter`。每个 attempt 使用独立容器、独立 BrowserContext、固定 Playwright/Chromium 镜像 digest、只读根文件系统和临时 workspace；完成后销毁，不跨 Workspace 或 Product 复用 context。
 - 云端凭据只以 workspace-scoped secret reference 持久化；worker 在运行时从 KMS/Vault 解密到内存或 tmpfs，不能把明文、Cookie、Token、storage state 或完整 Profile 写入 job payload、日志、Evidence 或 Composition。
-- 允许访问的 origin 来自 Product 配置；Worker 在浏览器导航前和 DNS 解析后双重执行 allowlist/SSRF 检查。跳出 allowlist 立即暂停。
+- 允许访问的 origin 来自 Product 配置；Worker 在浏览器导航前执行 allowlist/SSRF 检查，首次 DNS 解析通过后将公开地址集合固定到当前 attempt，并由 egress proxy 只连接该集合。document 导航跳出 allowlist 会使当前 attempt 失败；越界的非 document 子资源会被阻断，但不会使已通过显式 checkpoint 的节点失败。
 - 登录、验证码和敏感确认可以 handoff 给用户；Worker 依次调用同一签名 endpoint 的 `create/status/close`，暂停自动化并轮询状态，只有用户明确 Resume 后才继续同一个 BrowserContext。生产 job 必须提供 remote-control provider URL；缺失时稳定失败。支付、删除、发布、权限变更和其他外部副作用始终禁止，遇到时 Flow 候选不能批准。
 - Worker 产生 Evidence 资产；Agent 只能创建 Flow 草稿，并建议 Evidence 的节点归属、摘要和选择，不能创建、修改或批准 ProductFlowVersion、NodeEvidence、SourceAsset、Storyboard 或 Artifact。
 - DiscoveryRun 允许有界试错；正式 CaptureRun 只能确定性执行固定版本，不做开放式探索。
-- BrowserContext video、trace 和 action journal 是运行诊断源；每个成功节点仍必须生成独立 result screenshot、node clip、assertion report 和 sanitized DOM summary。
+- `navigate` 只等待 `DOMContentLoaded`，节点就绪由 ProductFlow 的显式 checkpoint 判定；不能用 `networkidle` 代替业务 checkpoint。BrowserContext video、trace 和 action journal 是运行诊断源；每个成功节点仍必须生成独立 result screenshot、node clip、assertion report 和只含当前 viewport 可见元素的 sanitized DOM summary。
 - Worker job、回调 fencing、远程 handoff、凭据生命周期和 Evidence 上传以 Engineering Contracts 第 4 节为准。
 
 ## 3. `product-launch-video` Skill 后端部署 Spec

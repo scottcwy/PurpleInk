@@ -28,9 +28,13 @@ describe("authentication route shells", () => {
 
 describe("control-plane route shells", () => {
   it.each([
-    [DashboardPage, "Release control room", "No active releases"],
-    [ProductsPage, "Products", "No products yet"],
-    [ReleasesPage, "Releases", "No releases yet"],
+    [DashboardPage, "What are you launching?", "Workspace service required"],
+    [
+      ProductsPage,
+      "Which product belongs in your library?",
+      "Product service required",
+    ],
+    [ReleasesPage, "What are you releasing?", "Release service required"],
   ])("renders shared navigation for %s", (Page, title, emptyState) => {
     const html = renderToStaticMarkup(<Page />);
 

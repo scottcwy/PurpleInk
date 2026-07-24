@@ -46,6 +46,7 @@ type EvidenceManifest = {
 
 const hash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
+const CAPTURE_LEASE_RENEWAL_MS = 120_000;
 
 export class CaptureControlError extends Error {
   constructor(
@@ -311,17 +312,24 @@ export class PostgresCaptureControlPlane {
     leaseToken: string;
   }) {
     const job = await this.requireCurrentLease(input);
+    const leaseExpiresAt = new Date(Date.now() + CAPTURE_LEASE_RENEWAL_MS);
     await this.sql.begin(async (tx) => {
       const updated = await tx`
-        update capture_worker_jobs set status='running'
-        where workspace_id=${input.workspaceId} and id=${input.jobId}
-          and attempt=${input.attempt} and lease_token_hash=${hash(input.leaseToken)}
-          and lease_expires_at > now() and status in ('leased','running','uploading')
-        returning id
+        update capture_worker_jobs j set status='running',
+          lease_expires_at=least(s.hard_expires_at,${leaseExpiresAt})
+        from capture_sessions s
+        where j.workspace_id=${input.workspaceId} and j.id=${input.jobId}
+          and j.attempt=${input.attempt} and j.lease_token_hash=${hash(input.leaseToken)}
+          and j.lease_expires_at > now() and j.status in ('leased','running','uploading')
+          and s.workspace_id=j.workspace_id and s.id=j.capture_session_id
+          and s.current_job_id=j.id and s.current_attempt=j.attempt
+          and s.hard_expires_at > now()
+        returning j.id
       `;
       if (!updated[0]) throw new CaptureControlError("STALE_ATTEMPT", "attempt lost its lease");
       await tx`
         update capture_sessions set state='running',connectivity='connected',
+          expires_at=least(hard_expires_at,now()+interval '30 minutes'),
           last_heartbeat_at=now(),updated_at=now()
         where workspace_id=${input.workspaceId} and id=${job.capture_session_id}
           and current_job_id=${input.jobId} and current_attempt=${input.attempt}

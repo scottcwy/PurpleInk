@@ -3,9 +3,12 @@ import { describe, expect, it } from "vitest";
 
 import LoginPage from "@/app/login/page";
 import SignupPage from "@/app/signup/page";
+import DashboardPage from "@/app/dashboard/page";
+import ProductsPage from "@/app/products/page";
 import ProductOverviewPage from "@/app/products/[productId]/page";
 import ProductFlowsPage from "@/app/products/[productId]/flows/page";
 import ProductFlowPage from "@/app/products/[productId]/flows/[flowId]/page";
+import ReleasesPage from "@/app/releases/page";
 import { AppShell } from "@/components/control-plane/app-shell";
 import { renderReleasePage } from "@/components/releases/release-page";
 import type { ReleaseStepSlug } from "@/lib/releases/domain";
@@ -32,9 +35,39 @@ describe("frontend-only route boundaries", () => {
     expect(html).toContain("Workspace data unavailable");
     expect(html).not.toContain(">Settings<");
   });
+
+  it("presents the dashboard as a switcher and release canvas without faking an agent", () => {
+    const html = renderToStaticMarkup(<DashboardPage />);
+
+    expect(html).toContain("What are you launching?");
+    expect(html).toContain('aria-label="Workspace switcher"');
+    expect(html).toContain('data-dashboard-canvas="true"');
+    expect(html).toContain("Workspace service required");
+    expect(html).toMatch(/<textarea[^>]*disabled/);
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>[\s\S]*Create release/);
+    expect(html).not.toContain("New Chat");
+    expect(html).not.toContain("Creative Agent");
+  });
 });
 
 describe("product route UI", () => {
+  it("presents the product collection as an honest workspace canvas", () => {
+    const html = renderToStaticMarkup(<ProductsPage />);
+
+    expect(html).toContain("Which product belongs in your library?");
+    expect(html).toContain('aria-label="Workspace switcher"');
+    expect(html).toContain('data-collection-canvas="products"');
+    expect(html).toContain("Product service required");
+    expect(html).toMatch(
+      /<input(?=[^>]*name="productName")(?=[^>]*disabled)[^>]*>/
+    );
+    expect(html).toMatch(/<input[^>]*type="url"[^>]*disabled/);
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>[\s\S]*Add product/);
+    expect(html).toContain("Brand kit readiness");
+    expect(html).toContain("Approved flows");
+    expect(html).not.toContain("Acme");
+  });
+
   it("renders the product detail anatomy without inventing a product", async () => {
     const page = await ProductOverviewPage({
       params: Promise.resolve({ productId: "product-123" }),
@@ -95,6 +128,22 @@ describe("release route UI", () => {
       ["Render status", "Artifact delivery"],
     ],
   ];
+
+  it("presents the release collection as an honest workspace canvas", () => {
+    const html = renderToStaticMarkup(<ReleasesPage />);
+
+    expect(html).toContain("What are you releasing?");
+    expect(html).toContain('aria-label="Workspace switcher"');
+    expect(html).toContain('data-collection-canvas="releases"');
+    expect(html).toContain("Release service required");
+    expect(html).toContain("Product selection unavailable");
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>[\s\S]*Create release/);
+    expect(html).toContain("Current stage");
+    expect(html).toContain("Pending approvals");
+    expect(html).not.toContain('name="releaseIntent"');
+    expect(html).not.toContain("approved claim");
+    expect(html).not.toContain("Acme");
+  });
 
   it.each(routes)(
     "renders the %s stage contract",

@@ -37,7 +37,7 @@ describe("CaptureNetworkPolicy", () => {
     });
   });
 
-  it("rejects DNS rebinding when a hostname changes resolved addresses", async () => {
+  it("pins the first public DNS result for the capture attempt", async () => {
     let call = 0;
     const policy = new CaptureNetworkPolicy({
       allowedOrigins: ["https://product.example.com"],
@@ -47,9 +47,27 @@ describe("CaptureNetworkPolicy", () => {
     });
 
     await policy.assertUrl("https://product.example.com/first");
-    await expect(policy.assertUrl("https://product.example.com/second")).rejects.toMatchObject({
-      code: "DNS_REBINDING_BLOCKED",
+    await expect(policy.resolveUrl("https://product.example.com/second")).resolves.toMatchObject({
+      addresses: ["93.184.216.34"],
     });
+    expect(call).toBe(1);
+  });
+
+  it("retries a transient DNS resolution failure before pinning", async () => {
+    let call = 0;
+    const policy = new CaptureNetworkPolicy({
+      allowedOrigins: ["https://product.example.com"],
+      resolve: async () => {
+        call += 1;
+        if (call === 1) throw new Error("EAI_AGAIN");
+        return [{ address: "93.184.216.34", family: 4 }];
+      },
+    });
+
+    await expect(policy.resolveUrl("https://product.example.com/path")).resolves.toMatchObject({
+      addresses: ["93.184.216.34"],
+    });
+    expect(call).toBe(2);
   });
 
   it("allows a private address only for an explicitly enabled test origin", async () => {

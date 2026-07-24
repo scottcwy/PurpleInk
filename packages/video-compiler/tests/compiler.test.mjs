@@ -31,6 +31,22 @@ test("bundle contains independent 16:9 and 9:16 root compositions", async () => 
   assert.deepEqual(bundle.manifest.variants.map((variant) => variant.id), ["landscape", "portrait"]);
 });
 
+test("video evidence omits crossorigin so Hyperframes preview can load bundled media", async () => {
+  const input = await fixtureInput();
+  const video = Buffer.from("deterministic video evidence");
+  const entry = input.assetPackage.entries[0];
+  entry.mimeType = "video/mp4";
+  entry.bundlePath = "assets/result.mp4";
+  entry.contentBase64 = video.toString("base64");
+  entry.bytes = video.length;
+  entry.sha256 = sha256(video);
+
+  const html = compile(input).files["variants/landscape/index.html"].content;
+
+  assert.match(html, /<video[^>]+src="assets\/result\.mp4"/);
+  assert.doesNotMatch(html, /<video[^>]+crossorigin/);
+});
+
 test("bundle locks locale and approved EvidencePackageVersion provenance", async () => {
   const input = await fixtureInput();
   input.plan.locale = "en-US";

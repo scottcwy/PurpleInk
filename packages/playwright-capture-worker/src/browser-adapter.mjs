@@ -61,7 +61,7 @@ async function executeAction(page, action, fixtures, networkPolicy, networkState
     case "navigate":
       await networkPolicy.assertUrl(action.expectedUrl);
       try {
-        await page.goto(action.expectedUrl, { waitUntil: "networkidle", timeout: action.timeoutMs });
+        await page.goto(action.expectedUrl, { waitUntil: "domcontentloaded", timeout: action.timeoutMs });
       } catch (error) {
         throw networkState.violation ?? error;
       }
@@ -114,8 +114,14 @@ async function executeAssertion(page, assertion) {
 async function sanitizedDomSummary(page) {
   return page.locator("body").evaluate((body) => {
     const allowed = new Set(["A", "BUTTON", "H1", "H2", "H3", "INPUT", "LABEL", "LI", "MAIN", "NAV", "P", "SECTION", "SELECT", "TEXTAREA"]);
+    const viewportWidth = document.documentElement.clientWidth;
+    const viewportHeight = document.documentElement.clientHeight;
     return [...body.querySelectorAll("*")]
       .filter((element) => allowed.has(element.tagName))
+      .filter((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0 && rect.left < viewportWidth && rect.top < viewportHeight;
+      })
       .slice(0, 200)
       .map((element) => {
         const record = { tag: element.tagName.toLowerCase() };
@@ -195,11 +201,12 @@ export class PlaywrightBrowserAdapter {
     });
     const networkState = { violation: undefined };
     await context.route("**/*", async (route) => {
+      const request = route.request();
       try {
-        await networkPolicy.assertUrl(route.request().url());
+        await networkPolicy.assertUrl(request.url());
         await route.continue();
       } catch (error) {
-        networkState.violation ??= error;
+        if (request.isNavigationRequest()) networkState.violation ??= error;
         await route.abort("blockedbyclient");
       }
     });

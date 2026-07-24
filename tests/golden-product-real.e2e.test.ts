@@ -15,6 +15,7 @@ import {
   hyperframesQualityGate,
 } from "@purpleink/launch-video-runner";
 import { R2ObjectStore } from "@purpleink/r2-store";
+import { writeBundle } from "@purpleink/video-compiler";
 
 import { PostgresCaptureControlPlane } from "@/lib/capture/control-plane";
 import { authorizeCaptureTask, authorizeCaptureWorker, captureJsonRoute, issueCaptureTaskToken } from "@/lib/capture/http";
@@ -66,11 +67,17 @@ const sceneIds = [
 const externalTargetUrl = process.env.PURPLEINK_GOLDEN_TARGET_URL
   ? new URL(process.env.PURPLEINK_GOLDEN_TARGET_URL).toString()
   : undefined;
-const targetName = externalTargetUrl ? "shadcn/ui" : "Golden Product";
-const artifactDirectory = externalTargetUrl ? "shadcn-ui" : "golden-product";
-const headlines = externalTargetUrl
-  ? ["Explore shadcn/ui", "Browse the component library", "Inspect the Button component"] as const
-  : ["See the product", "Create with confidence", "Finish the workflow"] as const;
+const isQoderTarget = externalTargetUrl ? new URL(externalTargetUrl).hostname === "qoder.com" : false;
+const targetName = isQoderTarget ? "Qoder" : externalTargetUrl ? "shadcn/ui" : "Golden Product";
+const artifactDirectory = isQoderTarget ? "qoder" : externalTargetUrl ? "shadcn-ui" : "golden-product";
+const headlines = isQoderTarget
+  ? ["Agentic platform for real work", "Autonomous development desktop", "Terminal-native, AI-powered"] as const
+  : externalTargetUrl
+    ? ["Explore shadcn/ui", "Browse the component library", "Inspect the Button component"] as const
+    : ["See the product", "Create with confidence", "Finish the workflow"] as const;
+const bodies = isQoderTarget
+  ? ["Think deeper, build better.", "Built for real software development.", "Work with Qoder around your codebase."] as const
+  : ["Captured and verified in a real browser.", "Captured and verified in a real browser.", "Captured and verified in a real browser."] as const;
 const layouts = ["evidence-full", "evidence-split", "evidence-detail"] as const;
 const motions = ["settle-up", "focus-push", "proof-pop"] as const;
 const digest = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
@@ -95,6 +102,27 @@ function productHtml() {
 }
 
 function flowPayload() {
+  if (isQoderTarget && externalTargetUrl) {
+    const targetOrigin = new URL(externalTargetUrl).origin;
+    return {
+      schemaVersion: "product-flow/v1", productId, startUrl: externalTargetUrl,
+      allowedOrigins: [
+        targetOrigin,
+        "https://img.alicdn.com",
+        "https://g.alicdn.com",
+        "https://fonts.googleapis.com",
+        "https://fonts.gstatic.com",
+        "https://cloud.video.taobao.com",
+      ],
+      viewport: { width: 1280, height: 720, deviceScaleFactor: 1 }, locale: "en-US", timezone: "UTC",
+      nodes: [
+        { id: nodeIds[0], order: 1, title: "Open Qoder", intent: "Show Qoder's agentic platform", capabilityIds: [capabilityIds[0]], actions: [{ id: "d1000000-0000-4000-8000-000000000011", kind: "navigate", expectedUrl: externalTargetUrl, timeoutMs: 30_000, effect: "read" }], checkpoints: [{ id: "e1000000-0000-4000-8000-000000000011", kind: "visible", target: { by: "role", role: "heading", value: "Qoder, Agentic Platform for Real Work", exact: true }, timeoutMs: 10_000 }] },
+        { id: nodeIds[1], order: 2, title: "Open Qoder Desktop", intent: "Show the autonomous development desktop", capabilityIds: [capabilityIds[1]], actions: [{ id: "d2000000-0000-4000-8000-000000000011", kind: "navigate", expectedUrl: `${targetOrigin}/desktop`, timeoutMs: 30_000, effect: "read" }], checkpoints: [{ id: "e2000000-0000-4000-8000-000000000011", kind: "visible", target: { by: "role", role: "heading", value: "Qoder Desktop", exact: true }, timeoutMs: 10_000 }] },
+        { id: nodeIds[2], order: 3, title: "Open Qoder CLI", intent: "Show the terminal-native coding agent", capabilityIds: [capabilityIds[2]], actions: [{ id: "d3000000-0000-4000-8000-000000000011", kind: "navigate", expectedUrl: `${targetOrigin}/cli`, timeoutMs: 30_000, effect: "read" }], checkpoints: [{ id: "e3000000-0000-4000-8000-000000000011", kind: "visible", target: { by: "role", role: "heading", value: "Qoder CLI", exact: true }, timeoutMs: 10_000 }] },
+      ],
+      edges: [{ from: nodeIds[0], to: nodeIds[1] }, { from: nodeIds[1], to: nodeIds[2] }],
+    };
+  }
   if (externalTargetUrl) {
     const targetOrigin = new URL(externalTargetUrl).origin;
     return {
@@ -261,7 +289,9 @@ describe("Golden Product real vertical pipeline", () => {
     if (process.env.PURPLEINK_GOLDEN_TARGET_URL) {
       expect(flowPayload().startUrl).toBe(new URL(process.env.PURPLEINK_GOLDEN_TARGET_URL).toString());
     }
-    const briefPayload = { audience: "Product teams", message: "Complete work visibly", proofPoints: ["Real browser capture"], cta: "Start now" };
+    const briefPayload = isQoderTarget
+      ? { audience: "Software teams", message: "Think deeper, build better", proofPoints: ["Agentic platform", "Autonomous development desktop", "Terminal-native workflow"], cta: "Download Qoder" }
+      : { audience: "Product teams", message: "Complete work visibly", proofPoints: ["Real browser capture"], cta: "Start now" };
     const brandKit = { colors: { paper: "#FAF9FE", ink: "#12101C", purple: "#7D3DF3", proof: "#00C37A" }, fonts: { display: "Arial", body: "Arial", mono: "Courier New" } };
     await sql`insert into workspaces(id,name,slug) values(${workspaceId},'Golden','golden-real')`;
     await sql`insert into users(id,email,name) values(${userId},'golden@example.com','Golden Owner')`;
@@ -271,7 +301,7 @@ describe("Golden Product real vertical pipeline", () => {
     await sql`insert into release_brief_versions(id,workspace_id,release_id,version,schema_version,payload,content_hash) values(${briefVersionId},${workspaceId},${releaseId},1,'release-brief/v1',${sql.json(briefPayload)},${await contentHash(briefPayload)})`;
     await sql`insert into brand_kits(id,workspace_id,product_id) values(${brandKitId},${workspaceId},${productId})`;
     await sql`insert into brand_kit_versions(id,workspace_id,brand_kit_id,version,schema_version,payload,content_hash,status,approved_at) values(${brandKitVersionId},${workspaceId},${brandKitId},1,'brand-kit/v1',${sql.json(brandKit)},${await contentHash(brandKit)},'approved',now())`;
-    for (const [index, capabilityId] of capabilityIds.entries()) await sql`insert into product_capabilities(id,workspace_id,product_id,name,description) values(${capabilityId},${workspaceId},${productId},${`Capability ${index + 1}`},'Verified browser behavior')`;
+    for (const [index, capabilityId] of capabilityIds.entries()) await sql`insert into product_capabilities(id,workspace_id,product_id,name,description) values(${capabilityId},${workspaceId},${productId},${headlines[index]!},'Verified browser behavior')`;
     await releases.approveBrief({ workspaceId, releaseId, candidateId: briefVersionId, expectedRevision: 1, idempotencyKey: "golden-brief", actorId: userId });
 
     await sql`insert into product_flows(id,workspace_id,product_id,name) values(${flowId},${workspaceId},${productId},'Golden flow')`;
@@ -307,7 +337,7 @@ describe("Golden Product real vertical pipeline", () => {
     const evidenceApproved = await releases.approveEvidence({ workspaceId, releaseId, candidateId: evidencePackageVersionId, brandKitVersionId, expectedRevision: revision, idempotencyKey: "golden-package", actorId: userId });
     revision = evidenceApproved.release.revision;
 
-    const storyboardPayload = { schemaVersion: "storyboard/v1", releaseId, evidencePackageVersionId, scenes: refs.map((ref, index) => ({ id: sceneIds[index]!, order: index + 1, capabilityId: capabilityIds[index]!, claimType: "browser_behavior", headline: headlines[index]!, body: "Captured and verified in a real browser.", evidence: [ref] })) };
+    const storyboardPayload = { schemaVersion: "storyboard/v1", releaseId, evidencePackageVersionId, scenes: refs.map((ref, index) => ({ id: sceneIds[index]!, order: index + 1, capabilityId: capabilityIds[index]!, claimType: "browser_behavior", headline: headlines[index]!, body: bodies[index]!, evidence: [ref] })) };
     await sql`insert into storyboards(id,workspace_id,release_id) values(${storyboardId},${workspaceId},${releaseId})`;
     await sql`insert into storyboard_versions(id,workspace_id,storyboard_id,version,schema_version,payload,content_hash) values(${storyboardVersionId},${workspaceId},${storyboardId},1,'storyboard/v1',${sql.json(storyboardPayload)},${await contentHash(storyboardPayload)})`;
     const generated = await releases.storyboardGenerated({ workspaceId, releaseId, candidateId: storyboardVersionId, expectedRevision: revision, idempotencyKey: "golden-storyboard-generated", actorId: userId });
@@ -327,12 +357,12 @@ describe("Golden Product real vertical pipeline", () => {
       releaseBriefVersionId: briefVersionId, storyboardVersionId, productFlowVersionId: flowVersionId,
       captureRunId, brandKitVersionId, evidencePackageVersionId, templateVersion: "feature-launch@1.0.0",
       locale: "en-US", targetDurationMs: 18_000,
-      storyboard: { id: storyboardVersionId, workspaceId, productId, releaseId, approvalStatus: "approved", immutable: true, scenes: sceneIds.map((id, index) => ({ id, order: index + 1, releaseId, capabilityId: capabilityIds[index]!, claimType: "browser_behavior", headline: headlines[index]!, body: "Captured and verified in a real browser.", evidence: [refs[index]!] })) },
+      storyboard: { id: storyboardVersionId, workspaceId, productId, releaseId, approvalStatus: "approved", immutable: true, scenes: sceneIds.map((id, index) => ({ id, order: index + 1, releaseId, capabilityId: capabilityIds[index]!, claimType: "browser_behavior", headline: headlines[index]!, body: bodies[index]!, evidence: [refs[index]!] })) },
       brandKit: { id: brandKitVersionId, workspaceId, productId, releaseId, approvalStatus: "approved", immutable: true, ...brandKit },
       evidencePackage: { schemaVersion: "evidence-package/v1", id: evidencePackageVersionId, workspaceId, productId, releaseId, captureRunId, approvalStatus: "approved", immutable: true, refs, provenance: packagePayload.provenance, sha256: evidencePackageDigest(evidenceEntries), entries: evidenceEntries },
       templateCapabilities: { templateVersion: "feature-launch@1.0.0", layoutIds: ["evidence-full", "evidence-split", "evidence-detail"], motionPresetIds: ["settle-up", "focus-push", "proof-pop"], transitionIds: ["continuity-cut", "soft-wipe"], copyLimits: { headlineMaxChars: 54, bodyMaxChars: 110 } },
     };
-    const plan = { schemaVersion: "launch-video-plan/v1", releaseId, storyboardVersionId, evidencePackageVersionId, brandKitVersionId, templateVersion: "feature-launch@1.0.0", locale: "en-US", durationMs: 18_000, beats: sceneIds.map((sceneId, index) => ({ id: `beat-${index + 1}`, sceneId, capabilityId: capabilityIds[index]!, startMs: index * 6_000, durationMs: 6_000, layoutId: layouts[index]!, motionPresetId: motions[index]!, transitionId: index === 1 ? "continuity-cut" : "soft-wipe", headline: headlines[index]!, body: "Captured and verified in a real browser.", evidence: [refs[index]!] })) };
+    const plan = { schemaVersion: "launch-video-plan/v1", releaseId, storyboardVersionId, evidencePackageVersionId, brandKitVersionId, templateVersion: "feature-launch@1.0.0", locale: "en-US", durationMs: 18_000, beats: sceneIds.map((sceneId, index) => ({ id: `beat-${index + 1}`, sceneId, capabilityId: capabilityIds[index]!, startMs: index * 6_000, durationMs: 6_000, layoutId: layouts[index]!, motionPresetId: motions[index]!, transitionId: index === 1 ? "continuity-cut" : "soft-wipe", headline: headlines[index]!, body: bodies[index]!, evidence: [refs[index]!] })) };
     const runner = new LaunchVideoRunner({ repository: new PostgresLaunchVideoJobRepository(sql), objectStore: store, direct: async () => plan, qualityGate: hyperframesQualityGate });
     launchController = new LaunchVideoHttpController({ runner, secret: launchSecret });
     const launchRequest = { jobId: launchVideoJobId, attempt: 1, workspaceId, idempotencyKey: "golden-video", skillInput };
@@ -345,9 +375,19 @@ describe("Golden Product real vertical pipeline", () => {
     const previewBytes = await store.get(video.preview.r2Key);
     expect(previewBytes).not.toBeNull();
     expect(digest(previewBytes as Buffer)).toBe(video.preview.sha256);
-    const outputPath = resolve(root, `.artifacts/${artifactDirectory}/preview-landscape.mp4`);
-    await mkdir(resolve(root, `.artifacts/${artifactDirectory}`), { recursive: true });
+    const artifactRoot = resolve(root, `.artifacts/${artifactDirectory}`);
+    const outputPath = resolve(artifactRoot, "preview-landscape.mp4");
+    await mkdir(artifactRoot, { recursive: true });
+    await mkdir(resolve(artifactRoot, "evidence"), { recursive: true });
     await writeFile(outputPath, previewBytes as Buffer);
+    await Promise.all([
+      writeFile(resolve(artifactRoot, "capture-manifest.json"), `${JSON.stringify(captureOutput.manifest, null, 2)}\n`),
+      writeFile(resolve(artifactRoot, "skill-input.json"), `${JSON.stringify(skillInput, null, 2)}\n`),
+      writeFile(resolve(artifactRoot, "launch-video-plan.json"), `${JSON.stringify(plan, null, 2)}\n`),
+      writeFile(resolve(artifactRoot, "quality-report.json"), `${JSON.stringify(video.qualityReport, null, 2)}\n`),
+      ...evidenceEntries.map((entry, index) => writeFile(resolve(artifactRoot, `evidence/scene-${index + 1}.png`), Buffer.from(entry.contentBase64, "base64"))),
+    ]);
+    await writeBundle(video.bundle, resolve(artifactRoot, "bundle"));
     const probe = JSON.parse((await exec("ffprobe", ["-v", "error", "-show_entries", "stream=width,height:format=duration", "-of", "json", outputPath])).stdout);
     expect(probe.streams[0]).toMatchObject({ width: 1920, height: 1080 });
     expect(Math.round(Number(probe.format.duration) * 1000)).toBe(18_000);
@@ -388,7 +428,7 @@ describe("Golden Product real vertical pipeline", () => {
       evidence_count: 3,
       all_evidence_approved: true,
     });
-    await writeFile(resolve(root, `.artifacts/${artifactDirectory}/provenance.json`), `${JSON.stringify({
+    await writeFile(resolve(artifactRoot, "provenance.json"), `${JSON.stringify({
       schemaVersion: "golden-preview-provenance/v1",
       workspaceId,
       productId,

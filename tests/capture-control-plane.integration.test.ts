@@ -112,7 +112,10 @@ describe("PostgreSQL Playwright capture control plane", () => {
     const firstLease = await control.lease({ workspaceId, jobId: firstJob, attempt: 1, ttlMs: 30_000 });
     await control.createAttempt({ id: secondJob, workspaceId, captureSessionId: sessionId, attempt: 2, imageDigest, region: "test", payload: {} });
     const secondLease = await control.lease({ workspaceId, jobId: secondJob, attempt: 2, ttlMs: 30_000 });
+    const leaseBeforeHeartbeat = (await sql`select lease_expires_at from capture_worker_jobs where workspace_id=${workspaceId} and id=${secondJob}`)[0]?.lease_expires_at;
     await control.heartbeat({ workspaceId, jobId: secondJob, attempt: 2, leaseToken: secondLease.leaseToken });
+    const leaseAfterHeartbeat = (await sql`select lease_expires_at from capture_worker_jobs where workspace_id=${workspaceId} and id=${secondJob}`)[0]?.lease_expires_at;
+    expect(new Date(leaseAfterHeartbeat).getTime()).toBeGreaterThan(new Date(leaseBeforeHeartbeat).getTime());
     const event = { workspaceId, jobId: secondJob, attempt: 2, leaseToken: secondLease.leaseToken, seq: 1, eventType: "node_started", payload: { nodeId: "result" } };
     expect(await control.appendEvent(event)).toEqual({ accepted: true, duplicate: false, seq: 1 });
     expect(await control.appendEvent(event)).toEqual({ accepted: true, duplicate: true, seq: 1 });

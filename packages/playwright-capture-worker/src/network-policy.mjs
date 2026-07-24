@@ -94,27 +94,43 @@ export class CaptureNetworkPolicy {
     if (!this.allowedOrigins.has(url.origin)) {
       throw new CaptureProtocolError("ORIGIN_NOT_ALLOWED", `${url.origin} is not allowed`);
     }
-    let records;
+    let resolution = this.#resolved.get(url.hostname);
+    if (!resolution) {
+      resolution = (async () => {
+        let records;
+        if (isIP(url.hostname)) {
+          records = [{ address: url.hostname, family: isIP(url.hostname) }];
+        } else {
+          for (let attempt = 1; attempt <= 3; attempt += 1) {
+            try {
+              records = await this.resolve(url.hostname, { all: true, verbatim: true });
+              break;
+            } catch {
+              if (attempt === 3) {
+                throw new CaptureProtocolError("DNS_RESOLUTION_FAILED", `cannot resolve ${url.hostname}`);
+              }
+              await new Promise((retry) => setTimeout(retry, attempt * 50));
+            }
+          }
+        }
+        if (!Array.isArray(records) || records.length === 0) {
+          throw new CaptureProtocolError("DNS_RESOLUTION_FAILED", `cannot resolve ${url.hostname}`);
+        }
+        const addresses = [...new Set(records.map((record) => record.address.toLowerCase()))].sort();
+        if (!this.allowPrivateTestOrigins && addresses.some((address) => !isPublicAddress(address))) {
+          throw new CaptureProtocolError("SSRF_ADDRESS_BLOCKED", `${url.hostname} resolved to a non-public address`);
+        }
+        return addresses;
+      })();
+      this.#resolved.set(url.hostname, resolution);
+    }
+    let addresses;
     try {
-      records = isIP(url.hostname)
-        ? [{ address: url.hostname, family: isIP(url.hostname) }]
-        : await this.resolve(url.hostname, { all: true, verbatim: true });
-    } catch {
-      throw new CaptureProtocolError("DNS_RESOLUTION_FAILED", `cannot resolve ${url.hostname}`);
+      addresses = await resolution;
+    } catch (error) {
+      if (this.#resolved.get(url.hostname) === resolution) this.#resolved.delete(url.hostname);
+      throw error;
     }
-    if (!Array.isArray(records) || records.length === 0) {
-      throw new CaptureProtocolError("DNS_RESOLUTION_FAILED", `cannot resolve ${url.hostname}`);
-    }
-    const addresses = [...new Set(records.map((record) => record.address.toLowerCase()))].sort();
-    if (!this.allowPrivateTestOrigins && addresses.some((address) => !isPublicAddress(address))) {
-      throw new CaptureProtocolError("SSRF_ADDRESS_BLOCKED", `${url.hostname} resolved to a non-public address`);
-    }
-    const previous = this.#resolved.get(url.hostname);
-    const fingerprint = addresses.join(",");
-    if (previous && previous !== fingerprint) {
-      throw new CaptureProtocolError("DNS_REBINDING_BLOCKED", `${url.hostname} changed resolved addresses`);
-    }
-    this.#resolved.set(url.hostname, fingerprint);
     return { url, addresses };
   }
 

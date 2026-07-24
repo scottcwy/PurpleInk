@@ -1,8 +1,14 @@
 #!/usr/bin/env node
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { spawn } from "node:child_process";
+
+const require = createRequire(import.meta.url);
+const hyperframesPackagePath = require.resolve("hyperframes/package.json");
+const hyperframesPackage = require(hyperframesPackagePath);
+const hyperframesCli = resolve(dirname(hyperframesPackagePath), hyperframesPackage.bin.hyperframes);
 
 function run(command, args, cwd) {
   return new Promise((resolvePromise, reject) => {
@@ -24,17 +30,17 @@ const temp = await mkdtemp(join(tmpdir(), "purpleink-quality-"));
 try {
   for (const variant of manifest.variants) {
     const project = join(bundleRoot, "variants", variant.id);
-    const linted = await run("npx", ["hyperframes", "lint", project, "--json"], bundleRoot);
+    const linted = await run(process.execPath, [hyperframesCli, "lint", project, "--json"], bundleRoot);
     const lint = JSON.parse(linted.stdout);
     if (!lint.ok || lint.errorCount > 0 || lint.warningCount > 0) throw new Error(`${variant.id} Hyperframes lint reported findings`);
-    const validated = await run("npx", ["hyperframes", "validate", project, "--json"], bundleRoot);
+    const validated = await run(process.execPath, [hyperframesCli, "validate", project, "--json"], bundleRoot);
     const validation = JSON.parse(validated.stdout);
     if (!validation.ok || validation.contrastFailures > 0 || validation.errors?.length || validation.warnings?.length) throw new Error(`${variant.id} Hyperframes validation reported quality failures`);
-    const inspected = await run("npx", ["hyperframes", "inspect", project, "--json", "--samples", "9"], bundleRoot);
+    const inspected = await run(process.execPath, [hyperframesCli, "inspect", project, "--json", "--samples", "9"], bundleRoot);
     const inspection = JSON.parse(inspected.stdout);
     if (!inspection.ok || inspection.errorCount > 0 || inspection.warningCount > 0) throw new Error(`${variant.id} Hyperframes inspect reported layout findings`);
     const renderPath = join(temp, `${variant.id}.mp4`);
-    await run("npx", ["hyperframes", "render", project, "--output", renderPath, "--fps", String(variant.fps), "--quality", "draft", "--strict"], bundleRoot);
+    await run(process.execPath, [hyperframesCli, "render", project, "--output", renderPath, "--fps", String(variant.fps), "--quality", "draft", "--strict"], bundleRoot);
     if (renderOutputDirectory) {
       await mkdir(renderOutputDirectory, { recursive: true });
       await copyFile(renderPath, join(renderOutputDirectory, `${variant.id}.mp4`));

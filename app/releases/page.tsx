@@ -1,19 +1,16 @@
 import { AppShell } from "@/components/control-plane/app-shell";
-import { ServiceBoundary } from "@/components/control-plane/service-boundary";
+import { CollectionCanvas } from "@/components/control-plane/collection-canvas";
 import type { ReactNode } from "react";
 
 export default function ReleasesPage(): ReactNode {
   return (
     <AppShell
       currentPath="/releases"
-      title="Releases"
+      title="Release library"
       description="Version-pinned launch work across every product."
+      variant="canvas"
     >
-      <ServiceBoundary
-        title="Release service unavailable"
-        description="No releases yet can be determined until release queries and commands are connected."
-        regions={["Search and filters", "Release results", "Pagination"]}
-      />
+      <CollectionCanvas kind="releases" />
     </AppShell>
   );
 }

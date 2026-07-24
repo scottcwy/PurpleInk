@@ -195,7 +195,8 @@ type FlowEdgeV1 = { from: string; to: string };
 
 - Playwright Capture Worker 是唯一浏览器执行器。每个 attempt 启动一个 Linux 容器和一个 BrowserContext；当前生产镜像固定为 `mcr.microsoft.com/playwright:v1.55.1-noble@sha256:d8e0bdf35da90942fc8f97a65fa7f1969200ccd916ec0fd78780d80d9b81e07b`，以非 root 用户运行，根文件系统只读，仅开放 tmpfs workspace。
 - Capture Worker 只能读取一个 workspace、一个 CaptureSession、一个 approved ProductFlowVersion 和该 session 的 secret references；不能读取 Storyboard、Composition 或其他 Product 的浏览器状态。
-- Capture Worker 通过受限 egress proxy 访问 `allowedOrigins`。导航前校验 URL，DNS 解析后再次拒绝 loopback、link-local、RFC1918、ULA、cloud metadata 和 DNS rebinding。
+- Capture Worker 通过受限 egress proxy 访问 `allowedOrigins`。导航前校验 URL；每个 hostname 首次解析最多尝试三次，解析结果中出现 loopback、link-local、RFC1918、ULA 或 cloud metadata 地址即拒绝。通过校验的地址集合在当前 attempt 内固定复用，proxy 只连接该集合中的地址，不能在后续请求中重新解析并接受 DNS rebinding。
+- 浏览器拦截对越过 `allowedOrigins` 的 document 导航执行稳定失败；第三方图片、字体、埋点等非 document 子资源则在 proxy 前直接阻断，但不会把已满足 checkpoint 的当前 ProductFlow 节点误判为失败。
 - Worker 容器设置 CPU、内存、磁盘、进程数和运行时限；同一容器、BrowserContext、临时目录、service account 或 R2 写前缀不得跨 attempt 复用。
 - 部署配置必须给出资源默认值、硬上限和稳定的超限错误码；具体云厂商实例规格不进入领域合同。
 
@@ -216,8 +217,8 @@ created -> claimed -> running -> uploading -> completed
                     -> failed | cancelled | expired
 ```
 
-- Session 默认 TTL 30 分钟，heartbeat 可续期但总时长不超过 60 分钟。
-- Worker 每 10 秒 heartbeat；30 秒无 heartbeat 将独立 `connectivity` 标记为 `disconnected`，Session state 保持原值且不立即重复 action。
+- Session 默认 TTL 30 分钟，heartbeat 将滚动 expiry 续到 `now + 30 minutes`，但总时长不超过 60 分钟的 `hard_expires_at`。
+- Worker 首次领取 120 秒 lease，并每 10 秒 heartbeat；服务端在同一事务中把当前 job lease 续到 `now + 120 seconds`、刷新 Session expiry 与 connectivity，二者都受 `hard_expires_at` 限制。30 秒无 heartbeat 将独立 `connectivity` 标记为 `disconnected`，Session state 保持原值且不立即重复 action。
 - CaptureSession 通过 `capture_session_id + attempt` 原子 lease；同一 attempt 重复领取返回同一 job，不创建第二个 run。每个 Release 最多一个 active CaptureRun，每个 ProductFlow 最多一个 active DiscoveryRun；不同 Release 可以并行。
 - Event 带单调递增 `seq`；服务端以 `(session_id, seq)` 幂等去重。
 - `awaiting_user` 时自动化输入必须停止。用户通过一次性、短期 remote-control URL 接管同一个 cloud BrowserContext；只有显式 Resume 事件才能恢复，系统不得自动接管。
@@ -270,8 +271,9 @@ type EvidenceManifestV1 = {
 
 ### 4.6 Evidence 生成、Handoff 与安全
 
+- `navigate` action 以 `DOMContentLoaded` 作为浏览器导航完成边界；页面是否达到可采集状态只由该 node 的显式 checkpoint 判定，不能等待会被轮询、流式请求或埋点无限延长的 `networkidle`。
 - 每个 node 完成 checkpoint 后使用 `page.screenshot` 生成 result screenshot；BrowserContext 全程录制 video，按 action journal 时间戳用固定 FFmpeg 版本切出 node clip。
-- Assertion executor 输出结构化 assertion report；DOM sanitizer 只保留 allowlisted tag、role、accessible name、稳定属性和文本摘要，移除表单值、脚本、样式、Cookie、Token 与跨域内容。
+- Assertion executor 输出结构化 assertion report；DOM sanitizer 只保留当前 viewport 内可见元素的 allowlisted tag、role、accessible name、稳定属性和文本摘要，移除表单值、脚本、样式、Cookie、Token、离屏内容与跨域内容。
 - Playwright trace 是诊断资产，不自动成为 approved Evidence；trace 必须清洗网络 headers、请求体、响应体和输入值。
 - Worker 遇到登录、验证码、敏感确认或 origin 跳转时发出 `user_action_required` 并停止自动化。Agent 只有在用户从 handoff UI 明确 Resume 后才能恢复，禁止定时或自动 takeover。
 - 下载、扩展安装、权限弹窗、支付、发布、删除和权限变更默认拒绝；`external_side_effect` 永远不能由 Playwright Worker 执行。

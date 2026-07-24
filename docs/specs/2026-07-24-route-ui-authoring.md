@@ -40,15 +40,15 @@ BLOCKED: PRODUCT DECISION REQUIRED
 
 每个新路由或完整重写必须独立通过以下流程。局部修复可缩小 target，但不得跳过与改动风险相关的阶段。
 
-| 阶段 | 强制动作 | 必须产出 | 完成门槛 |
-| --- | --- | --- | --- |
-| Context | 运行 Impeccable context，读取 `PRODUCT.md`、`DESIGN.md`、相关产品 Spec、route guide、Token 和相邻页面 | 事实源清单 | 未读取事实源不得设计 |
-| Shape | 使用 Impeccable `shape` 明确用户、任务、真实数据、页面结构、状态判断、响应式和边界 | Route Brief | Brief 与产品合同无冲突 |
-| Implementation | 按已确认 Route Brief 编写完整页面；自然语言实现请求或兼容的 `craft` alias 均可触发 | 可运行页面与必要测试 | 不保留假交互或未解释占位 |
-| Audit | 使用 Impeccable `audit` 做 a11y、性能、theming、responsive 和 implementation integrity 检查 | 分级 Audit Report | 每条 finding 已验证，不报未经核实的 detector 命中 |
-| Fix | 按 P0、P1、P2 顺序修复 Audit finding | 修复后的完整路径 | P0/P1 清零；P2 要么修复，要么记录窄范围理由 |
-| Polish | 使用 Impeccable `polish` 检查整条真实路径，而不是单张截图 | 完整交互与视觉收尾 | 不以 polish 偷渡重设计 |
-| Re-audit | 重跑 audit，并执行仓库 lint、typecheck、测试、build 和浏览器验证 | 验收证据 | 满足 UI Platform Spec 的完成条件 |
+| 阶段           | 强制动作                                                                                              | 必须产出             | 完成门槛                                          |
+| -------------- | ----------------------------------------------------------------------------------------------------- | -------------------- | ------------------------------------------------- |
+| Context        | 运行 Impeccable context，读取 `PRODUCT.md`、`DESIGN.md`、相关产品 Spec、route guide、Token 和相邻页面 | 事实源清单           | 未读取事实源不得设计                              |
+| Shape          | 使用 Impeccable `shape` 明确用户、任务、真实数据、页面结构、状态判断、响应式和边界                    | Route Brief          | Brief 与产品合同无冲突                            |
+| Implementation | 按已确认 Route Brief 编写完整页面；自然语言实现请求或兼容的 `craft` alias 均可触发                    | 可运行页面与必要测试 | 不保留假交互或未解释占位                          |
+| Audit          | 使用 Impeccable `audit` 做 a11y、性能、theming、responsive 和 implementation integrity 检查           | 分级 Audit Report    | 每条 finding 已验证，不报未经核实的 detector 命中 |
+| Fix            | 按 P0、P1、P2 顺序修复 Audit finding                                                                  | 修复后的完整路径     | P0/P1 清零；P2 要么修复，要么记录窄范围理由       |
+| Polish         | 使用 Impeccable `polish` 检查整条真实路径，而不是单张截图                                             | 完整交互与视觉收尾   | 不以 polish 偷渡重设计                            |
+| Re-audit       | 重跑 audit，并执行仓库 lint、typecheck、测试、build 和浏览器验证                                      | 验收证据             | 满足 UI Platform Spec 的完成条件                  |
 
 `craft` 在当前 Impeccable 中是 deprecated alias，不拥有独立质量语义。流程的硬要求是先完成 `shape`，再执行实现；不得依赖 alias 名称本身保证质量。
 
@@ -66,15 +66,15 @@ Route Brief 至少记录：
 
 产品控制台的物理场景是 **calm release room**：用户在发布期限下长时间检查事实、版本、运行状态和交付结果。界面必须冷静、精确、可扫描，品牌表达服务于任务，不把操作面变成营销展示。
 
-| 角色 | 规则 |
-| --- | --- |
-| 普通工作面 | 纯白背景、近黑正文、Neutral 边界，承载表单、列表、详情和审批 |
-| Night 表面 | 只用于固定 Sidebar、媒体检查区和 Workbench 等需要视觉隔离的工作空间 |
-| Indigo | 只表达主操作、选择、焦点、品牌能量和受控 motion |
-| Green | 只表达可追溯的 Verified / approved proof，并始终配文字或图标 |
-| Signal | 使用既有语义 Token 表达变化、阻塞、警告和待审阅；不得另造状态色 |
+| 角色       | 规则                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------- |
+| 普通工作面 | 纯白背景、近黑正文、Neutral 边界，承载表单、列表、详情和审批                                |
+| Night 表面 | 只用于固定 Sidebar、媒体检查区和 Workbench 等需要视觉隔离的工作空间                         |
+| Indigo     | 只表达主操作、选择、焦点、品牌能量和受控 motion                                             |
+| Green      | 只表达可追溯的 Verified / approved proof，并始终配文字或图标                                |
+| Signal     | 使用既有语义 Token 表达变化、阻塞、警告和待审阅；不得另造状态色                             |
 | Typography | Geist 用于标题、正文和控件；Geist Mono 只用于 ID、版本、时间、尺寸、hash、run 和 checkpoint |
-| Imagery | Evidence、Preview、Artifact 和真实产品截图是产品内容，不得用装饰图或渐变占位代替 |
+| Imagery    | Evidence、Preview、Artifact 和真实产品截图是产品内容，不得用装饰图或渐变占位代替            |
 
 禁止把控制台做成全紫渐变 SaaS、统一全深色后台、营销 Hero 拼盘、卡片瀑布流或装饰性 dashboard。禁止 gradient text、重复 eyebrow、编号 section 脚手架、嵌套 Card、玻璃拟态和无业务含义的大指标。
 
@@ -92,58 +92,58 @@ Route Brief 至少记录：
 
 除 Auth 和 Workbench 外，页面自上而下固定为：
 
-| 顺序 | 区域 | 约束 |
-| ---: | --- | --- |
-| 1 | Breadcrumb / Entity context | 表达真实位置；不使用装饰性 eyebrow |
-| 2 | Page header | 标题、简短说明、一个页面级主操作 |
-| 3 | Secondary navigation | 只在实体或工作流内部出现 |
-| 4 | Blocking status | 阻塞、失效和权限问题必须持续可见 |
-| 5 | Main content | 直接承载任务；不额外包页面级浮动 Card |
-| 6 | Contextual actions | 靠近受影响对象，不与页面主操作竞争 |
+| 顺序 | 区域                        | 约束                                  |
+| ---: | --------------------------- | ------------------------------------- |
+|    1 | Breadcrumb / Entity context | 表达真实位置；不使用装饰性 eyebrow    |
+|    2 | Page header                 | 标题、简短说明、一个页面级主操作      |
+|    3 | Secondary navigation        | 只在实体或工作流内部出现              |
+|    4 | Blocking status             | 阻塞、失效和权限问题必须持续可见      |
+|    5 | Main content                | 直接承载任务；不额外包页面级浮动 Card |
+|    6 | Contextual actions          | 靠近受影响对象，不与页面主操作竞争    |
 
 Empty content 替换 Main content，不再嵌套空白 Card。持久错误放在受影响区域上方；Toast 只反馈短暂操作结果。Auth 省略 Breadcrumb 和二级导航。Workbench 使用 Toolbar、Canvas、Inspector 取代标准纵向页面流。
 
 ## 6. 页面 archetype
 
-| Archetype | 路由职责 | 固定结构 | 默认密度 |
-| --- | --- | --- | --- |
-| Auth | 建立或恢复身份与 Workspace | 品牌上下文 + 单一表单 + 账号切换入口 | Focused |
-| Overview | 回答当前需要关注什么 | 工作摘要 + 待处理项 + 最近对象 + 失败/阻塞入口 | Operational |
-| Collection | 扫描、筛选、创建和进入同类对象 | 查询控制 + 列表/表格 + 分页或连续结果 | Operational |
-| Entity Detail | 理解和维护一个持久对象 | 实体摘要 + 二级导航 + 领域区块 | Operational |
-| Guided Workflow | 完成 Release 的一个有守卫步骤 | Release context + 六步导航 + 当前任务 + 审批/推进动作 | Focused 或 Operational，由任务决定 |
-| Workbench | 操作高密度画板或媒体工作区 | 稳定 Toolbar + 主工作区 + Inspector | Immersive |
+| Archetype       | 路由职责                       | 固定结构                                              | 默认密度                           |
+| --------------- | ------------------------------ | ----------------------------------------------------- | ---------------------------------- |
+| Auth            | 建立或恢复身份与 Workspace     | 品牌上下文 + 单一表单 + 账号切换入口                  | Focused                            |
+| Overview        | 回答当前需要关注什么           | 工作摘要 + 待处理项 + 最近对象 + 失败/阻塞入口        | Operational                        |
+| Collection      | 扫描、筛选、创建和进入同类对象 | 查询控制 + 列表/表格 + 分页或连续结果                 | Operational                        |
+| Entity Detail   | 理解和维护一个持久对象         | 实体摘要 + 二级导航 + 领域区块                        | Operational                        |
+| Guided Workflow | 完成 Release 的一个有守卫步骤  | Release context + 六步导航 + 当前任务 + 审批/推进动作 | Focused 或 Operational，由任务决定 |
+| Workbench       | 操作高密度画板或媒体工作区     | 稳定 Toolbar + 主工作区 + Inspector                   | Immersive                          |
 
 每个路由只能声明一个主 archetype。允许嵌入共享区块，禁止混合两个完整页面骨架。新增第七种 archetype 必须先修改本 Spec。
 
 ### 6.1 密度合同
 
-| 密度 | 使用方式 |
-| --- | --- |
-| Focused | 单一输入或审阅任务；正文列通常保持约 `640-720px`，不得把表单拉满宽屏 |
-| Operational | 使用内容区可用宽度，以表格、列表和扫描层级组织信息；不得退化成同尺寸 Card 网格 |
-| Immersive | 尽量占满剩余 viewport；Toolbar、Canvas、媒体和 Inspector 使用稳定尺寸约束，不因动态内容跳动 |
+| 密度        | 使用方式                                                                                    |
+| ----------- | ------------------------------------------------------------------------------------------- |
+| Focused     | 单一输入或审阅任务；正文列通常保持约 `640-720px`，不得把表单拉满宽屏                        |
+| Operational | 使用内容区可用宽度，以表格、列表和扫描层级组织信息；不得退化成同尺寸 Card 网格              |
+| Immersive   | 尽量占满剩余 viewport；Toolbar、Canvas、媒体和 Inspector 使用稳定尺寸约束，不因动态内容跳动 |
 
 ## 7. 路由清单
 
 以下清单决定每个现有路由的主 archetype、密度和页面构成。详细业务内容、守卫和状态以引用的事实源为准。
 
-| 路由 | Archetype / 密度 | 页面必须围绕的任务 | 主要构成 | 业务事实源 |
-| --- | --- | --- | --- | --- |
-| `/login` | Auth / Focused | 登录并进入合法 Workspace 或原受保护位置 | 登录表单、会话反馈、注册链接 | route guide 3.1 |
-| `/signup` | Auth / Focused | 创建 User、Workspace 和成员关系 | 注册表单、校验反馈、登录入口 | route guide 3.2 |
-| `/dashboard` | Overview / Operational | 判断最近工作、待审批、失败与阻塞 | 最近 Product/Release、待处理项、失败任务、创建入口 | route guide 4.1 |
-| `/products` | Collection / Operational | 扫描和管理长期 Product | 查询/筛选、Product 列表、创建与归档入口 | route guide 4.2；product-flow Spec 1.1 |
-| `/products/:productId` | Entity Detail / Operational | 理解 Product 及其可复用资产 | Product 摘要、URL、BrandKit、Capabilities、Release 与 Flow 入口 | product-flow Spec 1.1 |
-| `/products/:productId/flows` | Collection / Operational | 管理 Product 级 ProductFlow 资产库 | Flow 查询、版本/批准状态、验证时间、创建入口 | product-flow Spec 1.1-1.2 |
-| `/products/:productId/flows/:flowId` | Workbench / Immersive | 探索、编辑、验证并批准 ProductFlowVersion | Flow toolbar、线性 canvas、node inspector、run/version context | product-flow Spec 1.2-1.4；engineering Spec 3-4 |
-| `/releases` | Collection / Operational | 跨 Product 管理 Release | 查询/筛选、Release 列表、阶段/状态、创建入口 | route guide 4.3 |
-| `/releases/:releaseId/brief` | Guided Workflow / Focused | 冻结受众、主张、渠道和 CTA | Release context、六步导航、结构化 Brief、审批动作 | route guide 5.1；engineering Spec 5 |
-| `/releases/:releaseId/flow` | Guided Workflow / Operational | 选择或建立 Flow 并固定批准版本 | 六步导航、可复用 Flow、版本/节点证据、探索与批准入口 | route guide 5.3；product-flow Spec 1.2 |
-| `/releases/:releaseId/evidence` | Guided Workflow / Immersive | 执行 Flow 并审阅可追溯证据 | Run context、node execution、媒体证据、checkpoint、redaction 与批准 | route guide 5.4；engineering Spec 4.5-4.7 |
-| `/releases/:releaseId/storyboard` | Guided Workflow / Operational | 将 Brief 与 Evidence 编排成结构化叙事 | Scene 序列、copy、EvidenceRef、时长、事实与审批状态 | route guide 5.5；engineering Spec 5-6 |
-| `/releases/:releaseId/review` | Guided Workflow / Immersive | 审阅 Preview、反馈并批准终稿 | 播放器、Scene 定位、分类反馈、版本和批准动作 | route guide 5.6；engineering Spec 5-6 |
-| `/releases/:releaseId/artifacts` | Guided Workflow / Operational | 观察终稿任务并取得可发布交付物 | Render status、Artifact 列表、provenance、下载与合法重试 | route guide 5.8；engineering Spec 5-6 |
+| 路由                                 | Archetype / 密度              | 页面必须围绕的任务                        | 主要构成                                                            | 业务事实源                                      |
+| ------------------------------------ | ----------------------------- | ----------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------- |
+| `/login`                             | Auth / Focused                | 登录并进入合法 Workspace 或原受保护位置   | 登录表单、会话反馈、注册链接                                        | route guide 3.1                                 |
+| `/signup`                            | Auth / Focused                | 创建 User、Workspace 和成员关系           | 注册表单、校验反馈、登录入口                                        | route guide 3.2                                 |
+| `/dashboard`                         | Overview / Operational        | 判断最近工作、待审批、失败与阻塞          | 最近 Product/Release、待处理项、失败任务、创建入口                  | route guide 4.1                                 |
+| `/products`                          | Collection / Operational      | 扫描和管理长期 Product                    | 查询/筛选、Product 列表、创建与归档入口                             | route guide 4.2；product-flow Spec 1.1          |
+| `/products/:productId`               | Entity Detail / Operational   | 理解 Product 及其可复用资产               | Product 摘要、URL、BrandKit、Capabilities、Release 与 Flow 入口     | product-flow Spec 1.1                           |
+| `/products/:productId/flows`         | Collection / Operational      | 管理 Product 级 ProductFlow 资产库        | Flow 查询、版本/批准状态、验证时间、创建入口                        | product-flow Spec 1.1-1.2                       |
+| `/products/:productId/flows/:flowId` | Workbench / Immersive         | 探索、编辑、验证并批准 ProductFlowVersion | Flow toolbar、线性 canvas、node inspector、run/version context      | product-flow Spec 1.2-1.4；engineering Spec 3-4 |
+| `/releases`                          | Collection / Operational      | 跨 Product 管理 Release                   | 查询/筛选、Release 列表、阶段/状态、创建入口                        | route guide 4.3                                 |
+| `/releases/:releaseId/brief`         | Guided Workflow / Focused     | 冻结受众、主张、渠道和 CTA                | Release context、六步导航、结构化 Brief、审批动作                   | route guide 5.1；engineering Spec 5             |
+| `/releases/:releaseId/flow`          | Guided Workflow / Operational | 选择或建立 Flow 并固定批准版本            | 六步导航、可复用 Flow、版本/节点证据、探索与批准入口                | route guide 5.3；product-flow Spec 1.2          |
+| `/releases/:releaseId/evidence`      | Guided Workflow / Immersive   | 执行 Flow 并审阅可追溯证据                | Run context、node execution、媒体证据、checkpoint、redaction 与批准 | route guide 5.4；engineering Spec 4.5-4.7       |
+| `/releases/:releaseId/storyboard`    | Guided Workflow / Operational | 将 Brief 与 Evidence 编排成结构化叙事     | Scene 序列、copy、EvidenceRef、时长、事实与审批状态                 | route guide 5.5；engineering Spec 5-6           |
+| `/releases/:releaseId/review`        | Guided Workflow / Immersive   | 审阅 Preview、反馈并批准终稿              | 播放器、Scene 定位、分类反馈、版本和批准动作                        | route guide 5.6；engineering Spec 5-6           |
+| `/releases/:releaseId/artifacts`     | Guided Workflow / Operational | 观察终稿任务并取得可发布交付物            | Render status、Artifact 列表、provenance、下载与合法重试            | route guide 5.8；engineering Spec 5-6           |
 
 `/releases/:releaseId/sources` 和 `/releases/:releaseId/render` 不是正式页面，不得实现新 UI；按产品合同重定向或展示迁移结果。
 
