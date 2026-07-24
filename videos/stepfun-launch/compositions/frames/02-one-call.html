@@ -1,0 +1,495 @@
+<template>
+  <style>
+    @font-face {
+      font-family: "MiSans";
+      font-weight: 700;
+      font-style: normal;
+      font-display: block;
+      src: url("assets/fonts/MiSans-Bold.woff2") format("woff2");
+    }
+
+    @font-face {
+      font-family: "MiSans";
+      font-weight: 600;
+      font-style: normal;
+      font-display: block;
+      src: url("assets/fonts/MiSans-SemiBold.woff2") format("woff2");
+    }
+
+    @font-face {
+      font-family: "MiSans";
+      font-weight: 500;
+      font-style: normal;
+      font-display: block;
+      src: url("assets/fonts/MiSans-Medium.woff2") format("woff2");
+    }
+
+    @font-face {
+      font-family: "MiSans";
+      font-weight: 400;
+      font-style: normal;
+      font-display: block;
+      src: url("assets/fonts/MiSans-Regular.woff2") format("woff2");
+    }
+
+    #root {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      container-type: size;
+      color: #000000;
+      font-family: "MiSans";
+      isolation: isolate;
+    }
+
+    [class~="02-one-call-bg"] {
+      position: absolute;
+      inset: 0;
+      background: #ffffff;
+      overflow: hidden;
+    }
+
+    [class~="02-one-call-scene"] {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      perspective: 1500px;
+    }
+
+    [class~="02-one-call-code"] {
+      position: absolute;
+      top: 70px;
+      left: 810px;
+      width: 300px;
+      min-height: 64px;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+      padding: 14px 26px;
+      border: 1.5px solid rgba(80, 176, 240, 0.2);
+      border-radius: 100px;
+      background: rgba(80, 176, 240, 0.04);
+      color: #000000;
+      font-size: 27px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0;
+      transform-origin: 50% 50%;
+      will-change: transform, opacity;
+    }
+
+    [class~="02-one-call-code-mark"] {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 35px;
+      height: 35px;
+      border-radius: 50%;
+      background: #50b0f0;
+      color: #ffffff;
+      font-size: 21px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    [class~="02-one-call-stage"] {
+      position: absolute;
+      top: 120px;
+      left: 60px;
+      width: 1800px;
+      height: 650px;
+      transform-style: preserve-3d;
+      perspective: 1500px;
+      will-change: transform;
+    }
+
+    [class~="02-one-call-center-disc"] {
+      position: absolute;
+      top: 197px;
+      left: 667px;
+      width: 466px;
+      height: 466px;
+      box-sizing: border-box;
+      border: 1.5px solid rgba(80, 176, 240, 0.15);
+      border-radius: 50%;
+      background: rgba(80, 176, 240, 0.04);
+      transform-origin: 50% 50%;
+      will-change: transform, opacity;
+    }
+
+    [class~="02-one-call-center-disc"]::after {
+      content: "";
+      position: absolute;
+      inset: 38px;
+      border: 1px solid rgba(80, 176, 240, 0.2);
+      border-radius: 50%;
+    }
+
+    [class~="02-one-call-module"] {
+      position: absolute;
+      top: 325px;
+      left: 900px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform-style: preserve-3d;
+      backface-visibility: hidden;
+      transform-origin: 50% 50%;
+      will-change: transform, opacity;
+    }
+
+    [class~="02-one-call-platform"] {
+      width: 455px;
+      height: 468px;
+    }
+
+    [class~="02-one-call-studio"] {
+      width: 440px;
+      height: 317px;
+    }
+
+    [class~="02-one-call-module"] img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      user-select: none;
+    }
+
+    [class~="02-one-call-capability"] {
+      min-width: 168px;
+      min-height: 62px;
+      box-sizing: border-box;
+      padding: 14px 28px;
+      border: 1.5px solid rgba(80, 176, 240, 0.2);
+      border-radius: 100px;
+      background: rgba(80, 176, 240, 0.08);
+      color: #000000;
+      font-size: 28px;
+      font-weight: 600;
+      line-height: 1.15;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+
+    [class~="02-one-call-capability"]::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      margin-right: 12px;
+      border-radius: 50%;
+      background: #50b0f0;
+    }
+
+    [class~="02-one-call-logo-lockup"] {
+      position: absolute;
+      top: 290px;
+      left: 0;
+      width: 1920px;
+      min-height: 300px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform-origin: 50% 35%;
+      will-change: transform, opacity;
+    }
+
+    [class~="02-one-call-logo"] {
+      display: block;
+      width: 520px;
+      height: auto;
+      user-select: none;
+    }
+
+    [class~="02-one-call-promise"] {
+      width: 1120px;
+      min-height: 92px;
+      margin-top: 56px;
+      color: #000000;
+      font-size: 64px;
+      font-weight: 600;
+      line-height: 1.1;
+      letter-spacing: 0;
+      text-align: center;
+      white-space: nowrap;
+      will-change: transform, opacity;
+    }
+
+    [class~="02-one-call-progress"] {
+      position: absolute;
+      top: 880px;
+      left: 96px;
+      width: 1728px;
+      height: 3px;
+      overflow: hidden;
+      border-radius: 0;
+      background: rgba(80, 176, 240, 0.08);
+    }
+
+    [class~="02-one-call-progress-fill"] {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #50b0f0;
+      transform-origin: 0% 50%;
+      will-change: transform;
+    }
+  </style>
+
+  <div data-hf-id="hf-074c" id="root" data-composition-id="02-one-call" data-duration="5.4" data-width="1920" data-height="1080">
+    <div data-hf-id="hf-psjj" class="clip 02-one-call-bg" data-start="0" data-duration="5.4" data-track-index="0"></div>
+
+    <div data-hf-id="hf-ukml" class="clip 02-one-call-scene" data-start="0" data-duration="5.4" data-track-index="1">
+      <div data-hf-id="hf-0p1a" class="02-one-call-code" id="02-one-call-code">
+        <span data-hf-id="hf-g66x" class="02-one-call-code-mark">&gt;</span>
+        <span data-hf-id="hf-gww7">1 行调用</span>
+      </div>
+
+      <div data-hf-id="hf-ngmc" class="02-one-call-stage" id="02-one-call-stage">
+        <div data-hf-id="hf-8fwy" class="02-one-call-center-disc" id="02-one-call-center-disc"></div>
+
+        <div data-hf-id="hf-uwdu" class="02-one-call-module 02-one-call-platform" data-target-x="-350" data-target-y="48" data-target-z="120">
+          <img data-hf-id="hf-eamv" src="assets/platform-cta-crystal-btq-eknp.png" alt="">
+        </div>
+
+        <div data-hf-id="hf-me94" class="02-one-call-module 02-one-call-studio" data-target-x="385" data-target-y="108" data-target-z="-90">
+          <img data-hf-id="hf-sy9d" src="assets/studio-crystal-d1fgegvt.png" alt="">
+        </div>
+
+        <div data-hf-id="hf-25hh" class="02-one-call-module 02-one-call-capability" data-target-x="-475" data-target-y="-245" data-target-z="65">模型</div>
+
+        <div data-hf-id="hf-985z" class="02-one-call-module 02-one-call-capability" data-target-x="0" data-target-y="-275" data-target-z="10">API</div>
+
+        <div data-hf-id="hf-nk9g" class="02-one-call-module 02-one-call-capability" data-target-x="480" data-target-y="-225" data-target-z="-60">Studio</div>
+      </div>
+
+      <div data-hf-id="hf-yukg" class="02-one-call-logo-lockup" id="02-one-call-logo-lockup">
+        <img data-hf-id="hf-jy7o" class="02-one-call-logo" src="assets/logo-e1eaeba0.svg" alt="StepFun">
+        <div data-hf-id="hf-rc3m" class="02-one-call-promise" id="02-one-call-promise"></div>
+      </div>
+
+      <div data-hf-id="hf-6rcr" class="02-one-call-progress" aria-hidden="true">
+        <span data-hf-id="hf-bzxf" class="02-one-call-progress-fill" id="02-one-call-progress-fill"></span>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script>
+    (() => {
+      const frameId = "02-one-call";
+      const root = document.querySelector('[data-composition-id="02-one-call"]');
+      const code = document.getElementById("02-one-call-code");
+      const stage = document.getElementById("02-one-call-stage");
+      const centerDisc = document.getElementById("02-one-call-center-disc");
+      const lockup = document.getElementById("02-one-call-logo-lockup");
+      const promise = document.getElementById("02-one-call-promise");
+      const progressFill = document.getElementById("02-one-call-progress-fill");
+      const modules = Array.from(root.querySelectorAll('[class~="02-one-call-module"]'));
+      const platform = root.querySelector('[class~="02-one-call-platform"]');
+      const studio = root.querySelector('[class~="02-one-call-studio"]');
+      const capabilityTags = Array.from(root.querySelectorAll('[class~="02-one-call-capability"]'));
+
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      window.__timelines[frameId] = tl;
+
+      const GOLDEN = Math.PI * (3 - Math.sqrt(5));
+      const cloud = modules.map((element, index) => {
+        const angle = index * GOLDEN;
+        const depthProgress = modules.length > 1 ? index / (modules.length - 1) : 0;
+        return {
+          x: Math.cos(angle) * 205,
+          y: Math.sin(angle) * 132,
+          z: 220 - depthProgress * 440,
+          rotationX: Math.sin(angle) * 68,
+          rotationY: Math.cos(angle) * 68,
+        };
+      });
+
+      modules.forEach((element, index) => {
+        gsap.set(element, {
+          xPercent: -50,
+          yPercent: -50,
+          ...cloud[index],
+          opacity: 0,
+          transformPerspective: 1500,
+        });
+      });
+      gsap.set(lockup, { opacity: 0, scale: 0.72 });
+      gsap.set(promise, { opacity: 0, y: 14 });
+      gsap.set(progressFill, { scaleX: 0 });
+
+      tl.fromTo(
+        centerDisc,
+        { scale: 0.72, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.62, ease: "power3.out" },
+        0.02,
+      );
+      tl.fromTo(
+        platform,
+        { xPercent: -50, yPercent: -50, x: 0, y: 16, z: 0, scale: 0, opacity: 0 },
+        { xPercent: -50, yPercent: -50, x: 0, y: 0, z: 0, scale: 0.94, opacity: 1, duration: 0.66, ease: "power3.out" },
+        0.04,
+      );
+      tl.fromTo(
+        code,
+        { scale: 0, y: 10, opacity: 0 },
+        { scale: 1, y: 0, opacity: 1, duration: 0.58, ease: "power3.out" },
+        0.08,
+      );
+
+      tl.to(code, { y: -10, opacity: 0.72, duration: 0.7, ease: "power2.out" }, 1.15);
+      tl.to(centerDisc, { scale: 0.62, opacity: 0.38, duration: 1.05, ease: "power3.out" }, 1.15);
+
+      tl.to(
+        platform,
+        {
+          x: Number(platform.dataset.targetX),
+          y: Number(platform.dataset.targetY),
+          z: Number(platform.dataset.targetZ),
+          scale: 0.96,
+          rotationX: -4,
+          rotationY: 8,
+          opacity: 1,
+          duration: 1.22,
+          ease: "power3.out",
+        },
+        1.15,
+      );
+      tl.fromTo(
+        studio,
+        { xPercent: -50, yPercent: -50, x: 0, y: 0, z: 0, scale: 0.6, opacity: 0 },
+        {
+          xPercent: -50,
+          yPercent: -50,
+          x: Number(studio.dataset.targetX),
+          y: Number(studio.dataset.targetY),
+          z: Number(studio.dataset.targetZ),
+          scale: 1,
+          rotationX: 5,
+          rotationY: -7,
+          opacity: 1,
+          duration: 1.26,
+          ease: "power3.out",
+        },
+        1.2,
+      );
+
+      capabilityTags.forEach((element, index) => {
+        tl.fromTo(
+          element,
+          { xPercent: -50, yPercent: -50, x: 0, y: 0, z: 0, scale: 0.6, opacity: 0 },
+          {
+            xPercent: -50,
+            yPercent: -50,
+            x: Number(element.dataset.targetX),
+            y: Number(element.dataset.targetY),
+            z: Number(element.dataset.targetZ),
+            scale: 1,
+            opacity: 1,
+            duration: 1.12,
+            ease: "power3.out",
+          },
+          1.25 + index * 0.14,
+        );
+      });
+
+      modules.forEach((element, index) => {
+        const point = cloud[index];
+        tl.to(
+          element,
+          {
+            x: point.x,
+            y: point.y,
+            z: point.z,
+            rotationX: point.rotationX,
+            rotationY: point.rotationY,
+            scale: element === platform ? 0.72 : element === studio ? 0.78 : 0.88,
+            opacity: 0.76,
+            duration: 0.38,
+            ease: "power1.inOut",
+          },
+          2.75 + index * 0.025,
+        );
+        tl.to(
+          element,
+          {
+            x: 0,
+            y: 0,
+            z: 0,
+            rotationX: 0,
+            rotationY: 0,
+            scale: element === platform ? 0.28 : element === studio ? 0.32 : 0.5,
+            opacity: 0.1,
+            duration: 0.84,
+            ease: "power3.out",
+          },
+          3.05 + index * 0.045,
+        );
+      });
+      tl.to(stage, { rotationY: 24, duration: 0.46, ease: "power1.out" }, 2.75);
+      tl.to(stage, { rotationY: 0, duration: 0.72, ease: "power3.out" }, 3.16);
+      tl.to(centerDisc, { scale: 0.42, opacity: 0.22, duration: 0.86, ease: "power3.out" }, 2.96);
+      tl.to(code, { y: -14, opacity: 0.16, duration: 0.68, ease: "power2.out" }, 3.02);
+
+      tl.fromTo(
+        lockup,
+        { scale: 0.72, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.86, ease: "power3.out" },
+        3.18,
+      );
+
+      const PROMISE_CONTENT = [
+        { key: "first", text: "真正", hold: 0.14 },
+        { key: "second", text: "真正工作的", hold: 0.12 },
+        { key: "final", text: "真正工作的 Agent", hold: 0.24 },
+      ];
+      const BASE_DURATION = 0.08;
+      const SEC_PER_CHAR = 0.018;
+      let cumulative = 0;
+      const PROMISE_TIMELINE = PROMISE_CONTENT.map((entry) => {
+        const duration = BASE_DURATION + entry.text.length * SEC_PER_CHAR + entry.hold;
+        const start = cumulative;
+        cumulative += duration;
+        return { ...entry, start, end: cumulative };
+      });
+      const promiseEntryAt = (time) => {
+        for (let index = PROMISE_TIMELINE.length - 1; index >= 0; index -= 1) {
+          if (time >= PROMISE_TIMELINE[index].start) return PROMISE_TIMELINE[index];
+        }
+        return PROMISE_TIMELINE[0];
+      };
+      const promiseDriver = { time: 0 };
+      let lastPromiseKey = "";
+
+      tl.fromTo(
+        promise,
+        { y: 14, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.46, ease: "power3.out" },
+        4.18,
+      );
+      tl.to(
+        promiseDriver,
+        {
+          time: cumulative,
+          duration: 0.58,
+          ease: "none",
+          onUpdate: () => {
+            const entry = promiseEntryAt(promiseDriver.time);
+            if (entry.key !== lastPromiseKey) {
+              promise.textContent = entry.text;
+              lastPromiseKey = entry.key;
+            }
+          },
+        },
+        4.2,
+      );
+
+      tl.fromTo(progressFill, { scaleX: 0 }, { scaleX: 1, duration: 5, ease: "none" }, 0);
+    })();
+  </script>
+</template>

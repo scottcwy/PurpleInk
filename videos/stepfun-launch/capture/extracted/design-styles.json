@@ -1,0 +1,296 @@
+{
+  "typography": [
+    {
+      "role": "display",
+      "fontFamily": "Proxima Nova",
+      "fontSize": "60px",
+      "fontWeight": "700",
+      "lineHeight": "63px",
+      "letterSpacing": "normal",
+      "color": "#000000",
+      "sampleText": "Scale-up possibilities"
+    },
+    {
+      "role": "heading",
+      "fontFamily": "Proxima Nova",
+      "fontSize": "52px",
+      "fontWeight": "700",
+      "lineHeight": "78px",
+      "letterSpacing": "normal",
+      "color": "#000000",
+      "sampleText": "Step 3.7 Flash"
+    },
+    {
+      "role": "heading-2",
+      "fontFamily": "Proxima Nova",
+      "fontSize": "32px",
+      "fontWeight": "600",
+      "lineHeight": "normal",
+      "letterSpacing": "normal",
+      "color": "#000000",
+      "sampleText": "构建 AI 应用的强大平台"
+    },
+    {
+      "role": "heading-2",
+      "fontFamily": "MiSans",
+      "fontSize": "32px",
+      "fontWeight": "600",
+      "lineHeight": "48px",
+      "letterSpacing": "normal",
+      "color": "#000000",
+      "sampleText": "阶跃 AI · 随你定义的工作伙伴"
+    },
+    {
+      "role": "heading-3",
+      "fontFamily": "Proxima Nova",
+      "fontSize": "24px",
+      "fontWeight": "630",
+      "lineHeight": "normal",
+      "letterSpacing": "normal",
+      "color": "#000000",
+      "sampleText": "Step 3.5 Flash"
+    },
+    {
+      "role": "heading-2",
+      "fontFamily": "MiSans",
+      "fontSize": "16px",
+      "fontWeight": "600",
+      "lineHeight": "normal",
+      "letterSpacing": "normal",
+      "color": "#000000",
+      "sampleText": "从 Coding 到 Agent，皆可构建"
+    },
+    {
+      "role": "body",
+      "fontFamily": "MiSans",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "lineHeight": "24px",
+      "letterSpacing": "normal",
+      "color": "#000000",
+      "sampleText": "智能阶跃，十倍每个人的可能"
+    },
+    {
+      "role": "link",
+      "fontFamily": "MiSans",
+      "fontSize": "16px",
+      "fontWeight": "450",
+      "lineHeight": "24px",
+      "letterSpacing": "normal",
+      "color": "#000000",
+      "sampleText": "了解更多"
+    },
+    {
+      "role": "heading-4",
+      "fontFamily": "MiSans",
+      "fontSize": "14px",
+      "fontWeight": "450",
+      "lineHeight": "21px",
+      "letterSpacing": "normal",
+      "color": "#000000",
+      "sampleText": "真实业务 稳定执行"
+    },
+    {
+      "role": "label",
+      "fontFamily": "MiSans",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "lineHeight": "24px",
+      "letterSpacing": "normal",
+      "color": "#000000",
+      "sampleText": "Step Plan"
+    }
+  ],
+  "spacing": {
+    "observed": [
+      4,
+      8,
+      10,
+      12,
+      16,
+      19,
+      20,
+      24,
+      28,
+      32,
+      40,
+      56,
+      60,
+      76,
+      80
+    ],
+    "baseUnit": 4
+  },
+  "radius": [
+    "16px",
+    "60px"
+  ],
+  "shadows": [],
+  "buttons": [
+    {
+      "label": "立即购买",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#000000",
+      "padding": "0px 28px",
+      "borderRadius": "60px",
+      "border": "1px solid rgba(0, 0, 0, 0.12)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "600",
+      "height": "52px"
+    },
+    {
+      "label": "语言模型",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#000000",
+      "padding": "12px 0px",
+      "borderRadius": "0px",
+      "border": "0px none rgb(0, 0, 0)",
+      "boxShadow": "none",
+      "fontSize": "13.3333px",
+      "fontWeight": "400",
+      "height": "43.1875px"
+    },
+    {
+      "label": "构建 AI 应用的强大平台Step API 稳定 · 高性能 · 易集成，领先的",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#000000",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "314px"
+    }
+  ],
+  "cards": [
+    {
+      "label": "card",
+      "background": "#E6E8EC",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#000000",
+      "padding": "0px",
+      "borderRadius": "16px",
+      "border": "0px none rgb(0, 0, 0)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "570px"
+    },
+    {
+      "label": "card",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#000000",
+      "padding": "40px 0px 40px 40px",
+      "borderRadius": "0px",
+      "border": "0px none rgb(0, 0, 0)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "570px"
+    }
+  ],
+  "nav": {
+    "label": "navigation",
+    "background": "#FFFFFF",
+    "backgroundImage": "",
+    "backdropFilter": "",
+    "color": "#000000",
+    "padding": "0px",
+    "borderRadius": "0px",
+    "border": "",
+    "boxShadow": "none",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "height": "80px"
+  },
+  "chips": [
+    {
+      "label": "立即购买",
+      "background": "transparent",
+      "color": "#000000",
+      "padding": "0px 28px",
+      "borderRadius": "60px",
+      "border": "1px solid rgba(0, 0, 0, 0.12)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "600",
+      "height": "52px"
+    },
+    {
+      "label": "语言大模型",
+      "background": "transparent",
+      "color": "#000000",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "0px none rgba(0, 0, 0, 0.48)",
+      "boxShadow": "none",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "height": "14px"
+    }
+  ],
+  "statCells": [],
+  "tabs": [
+    {
+      "label": "语言模型语音模型多模态/GUI 模型",
+      "background": "transparent",
+      "color": "#000000",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "0px none rgb(0, 0, 0)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "43.1875px"
+    },
+    {
+      "label": "语言模型",
+      "background": "transparent",
+      "color": "#000000",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "0px none rgba(0, 0, 0, 0.88)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "600",
+      "height": "19.1875px"
+    },
+    {
+      "label": "语音模型",
+      "background": "transparent",
+      "color": "#000000",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "0px none rgba(0, 0, 0, 0.64)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "19.1875px"
+    },
+    {
+      "label": "Mac",
+      "background": "transparent",
+      "color": "#000000",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "0px none rgba(0, 0, 0, 0.48)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "auto"
+    }
+  ],
+  "backgrounds": [],
+  "glass": []
+}

@@ -1,0 +1,113 @@
+{
+  "files": [
+    {
+      "file": "MiSans-Bold.woff2",
+      "family": "MiSans",
+      "rawFamily": "MiSans",
+      "subfamily": "Bold",
+      "postscript": "MiSans-Bold",
+      "weight": 630,
+      "style": "normal",
+      "variationAxes": [],
+      "identified": true,
+      "isIcon": false
+    },
+    {
+      "file": "MiSans-Demibold.woff2",
+      "family": "MiSans",
+      "rawFamily": "MiSans Demibold",
+      "subfamily": "Regular",
+      "postscript": "MiSans-Demibold",
+      "weight": 450,
+      "style": "normal",
+      "variationAxes": [],
+      "identified": true,
+      "isIcon": false
+    },
+    {
+      "file": "MiSans-Medium.woff2",
+      "family": "MiSans",
+      "rawFamily": "MiSans Medium",
+      "subfamily": "Regular",
+      "postscript": "MiSans-Medium",
+      "weight": 380,
+      "style": "normal",
+      "variationAxes": [],
+      "identified": true,
+      "isIcon": false
+    },
+    {
+      "file": "MiSans-Regular.woff2",
+      "family": "MiSans",
+      "rawFamily": "MiSans",
+      "subfamily": "Regular",
+      "postscript": "MiSans-Regular",
+      "weight": 330,
+      "style": "normal",
+      "variationAxes": [],
+      "identified": true,
+      "isIcon": false
+    },
+    {
+      "file": "proxima-nova-latin-400-normal.woff2",
+      "family": "Proxima Nova Rg",
+      "rawFamily": "Proxima Nova Rg",
+      "subfamily": "Regular",
+      "postscript": "ProximaNova-Regular",
+      "weight": 400,
+      "style": "normal",
+      "variationAxes": [],
+      "identified": true,
+      "isIcon": false
+    },
+    {
+      "file": "proxima-nova-latin-700-normal.woff2",
+      "family": "Proxima Nova Rg",
+      "rawFamily": "Proxima Nova Rg",
+      "subfamily": "Bold",
+      "postscript": "ProximaNova-Bold",
+      "weight": 700,
+      "style": "normal",
+      "variationAxes": [],
+      "identified": true,
+      "isIcon": false
+    }
+  ],
+  "families": [
+    {
+      "family": "MiSans",
+      "weights": [
+        330,
+        380,
+        450,
+        630
+      ],
+      "variable": false,
+      "fileCount": 4,
+      "files": [
+        "MiSans-Bold.woff2",
+        "MiSans-Demibold.woff2",
+        "MiSans-Medium.woff2",
+        "MiSans-Regular.woff2"
+      ]
+    },
+    {
+      "family": "Proxima Nova Rg",
+      "weights": [
+        400,
+        700
+      ],
+      "variable": false,
+      "fileCount": 2,
+      "files": [
+        "proxima-nova-latin-400-normal.woff2",
+        "proxima-nova-latin-700-normal.woff2"
+      ]
+    }
+  ],
+  "unidentified": [],
+  "meta": {
+    "generatedAt": "2026-07-24T08:34:33.227Z",
+    "tool": "fontkit"
+  }
+}

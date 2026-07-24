@@ -1,0 +1,290 @@
+<template>
+  <style>
+    @font-face {
+      font-family: "MiSans";
+      font-style: normal;
+      font-weight: 700;
+      font-display: block;
+      src: url("assets/fonts/MiSans-Bold.woff2") format("woff2");
+    }
+
+    @font-face {
+      font-family: "MiSans";
+      font-style: normal;
+      font-weight: 600;
+      font-display: block;
+      src: url("assets/fonts/MiSans-SemiBold.woff2") format("woff2");
+    }
+
+    @font-face {
+      font-family: "MiSans";
+      font-style: normal;
+      font-weight: 500;
+      font-display: block;
+      src: url("assets/fonts/MiSans-Medium.woff2") format("woff2");
+    }
+
+    @font-face {
+      font-family: "MiSans";
+      font-style: normal;
+      font-weight: 400;
+      font-display: block;
+      src: url("assets/fonts/MiSans-Regular.woff2") format("woff2");
+    }
+
+    #root {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      container-type: size;
+      color: #000000;
+      font-family: "MiSans";
+    }
+
+    #root * {
+      box-sizing: border-box;
+    }
+
+    #root > .clip {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    [data-layer="01-one-idea-video"] {
+      z-index: 0;
+      object-fit: cover;
+    }
+
+    #f01-one-idea-veil {
+      z-index: 1;
+      pointer-events: none;
+      background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.58) 0%,
+        rgba(255, 255, 255, 0.12) 43%,
+        rgba(255, 255, 255, 0) 69%
+      );
+    }
+
+    #f01-one-idea-content {
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    [data-frame-el="01-one-idea-headline"] {
+      position: absolute;
+      top: 166px;
+      left: 96px;
+      right: 96px;
+      min-height: 178px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 81px;
+      font-weight: 700;
+      line-height: 1.08;
+      letter-spacing: 0;
+      color: #000000;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    [data-frame-el="01-one-idea-text-wrap"] {
+      position: relative;
+      display: inline-flex;
+      min-width: 1300px;
+      min-height: 160px;
+      align-items: center;
+      justify-content: center;
+      white-space: nowrap;
+    }
+
+    [data-frame-el="01-one-idea-text"] {
+      display: inline-block;
+      transform-origin: 50% 50%;
+      text-shadow: 0 0 0 rgba(80, 176, 240, 0);
+    }
+
+    [data-frame-el="01-one-idea-mark"] {
+      display: inline-block;
+      width: 0;
+      overflow: visible;
+      margin-left: 8px;
+      color: #50b0f0;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    [data-frame-el="01-one-idea-accent"] {
+      position: absolute;
+      top: 354px;
+      left: 930px;
+      width: 60px;
+      height: 4px;
+      border-radius: 6px;
+      background: #50b0f0;
+    }
+  </style>
+
+  <div data-hf-id="hf-nzlm" id="root" data-composition-id="01-one-idea" data-duration="4.45" data-width="1920" data-height="1080">
+    <!-- approved frame video hoisted by assemble-index -->
+
+    <div data-hf-id="hf-a4if" id="f01-one-idea-veil" class="clip" data-start="0" data-duration="4.45" data-track-index="1"></div>
+
+    <div data-hf-id="hf-nedl" id="f01-one-idea-content" class="clip" data-start="0" data-duration="4.45" data-track-index="2">
+      <div data-hf-id="hf-xc3s" id="01-one-idea-headline" data-frame-el="01-one-idea-headline">
+        <div data-hf-id="hf-80xd" data-frame-el="01-one-idea-text-wrap">
+          <span data-hf-id="hf-e8ft" id="01-one-idea-text" data-frame-el="01-one-idea-text" data-word="01-one-idea-distance">一</span><span data-hf-id="hf-uhdp" id="01-one-idea-mark" data-frame-el="01-one-idea-mark"></span>
+        </div>
+      </div>
+      <div data-hf-id="hf-icio" id="01-one-idea-accent" data-frame-el="01-one-idea-accent"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script>
+    (() => {
+      const frameRoot = document.querySelector('[data-composition-id="01-one-idea"]');
+      const headlineEl = frameRoot.querySelector('[id="01-one-idea-headline"]');
+      const textEl = frameRoot.querySelector('[id="01-one-idea-text"]');
+      const markEl = frameRoot.querySelector('[id="01-one-idea-mark"]');
+      const accentEl = frameRoot.querySelector('[id="01-one-idea-accent"]');
+
+      const DYNAMIC_CONTENT = [
+        { key: "idea-1", text: "一", hold: 0.155 },
+        { key: "idea-2", text: "一个", hold: 0.12 },
+        { key: "idea-3", text: "一个想法", hold: 0.16 },
+      ];
+      const DYNAMIC_BASE_DURATION = 0.19;
+      const DYNAMIC_SEC_PER_CHAR = 0.035;
+      let dynamicCumulative = 0;
+      const DYNAMIC_TIMELINE = DYNAMIC_CONTENT.map((entry) => {
+        const duration =
+          DYNAMIC_BASE_DURATION + entry.text.length * DYNAMIC_SEC_PER_CHAR + entry.hold;
+        const start = dynamicCumulative;
+        dynamicCumulative += duration;
+        return { ...entry, start, end: dynamicCumulative };
+      });
+
+      const DISCRETE_SEQUENCE = [
+        { key: "question", t: 0, text: "能走多远", mark: "", fontSize: "124px" },
+        { key: "question-lock", t: 1.5, text: "能走多远", mark: "？", fontSize: "124px" },
+      ];
+
+      function dynamicEntryAt(time) {
+        for (let i = DYNAMIC_TIMELINE.length - 1; i >= 0; i -= 1) {
+          if (time >= DYNAMIC_TIMELINE[i].start) return DYNAMIC_TIMELINE[i];
+        }
+        return DYNAMIC_TIMELINE[0];
+      }
+
+      function discreteEntryAt(time) {
+        for (let i = DISCRETE_SEQUENCE.length - 1; i >= 0; i -= 1) {
+          if (time >= DISCRETE_SEQUENCE[i].t) return DISCRETE_SEQUENCE[i];
+        }
+        return DISCRETE_SEQUENCE[0];
+      }
+
+      function stateAt(time) {
+        if (time < 1.25) {
+          const entry = dynamicEntryAt(time);
+          return {
+            key: entry.key,
+            text: entry.text,
+            mark: "",
+            fontSize: "81px",
+          };
+        }
+        return discreteEntryAt(time - 1.25);
+      }
+
+      let lastStateKey = "";
+      function renderState(state) {
+        if (state.key === lastStateKey) return;
+        textEl.textContent = state.text;
+        markEl.textContent = state.mark;
+        headlineEl.style.fontSize = state.fontSize;
+        lastStateKey = state.key;
+      }
+
+      renderState(stateAt(0));
+
+      const ATTACK_DUR = 0.1;
+      const RELEASE = 0.26;
+      const REST_LEVEL = 0.18;
+      const MAX_BLUR = 18;
+      const MAX_SCALE_BOOST = 0.045;
+      const GLOW_TIMINGS = {
+        "01-one-idea-distance": { start: 2.77, end: 3.0 },
+      };
+
+      function envelope(time, start, end) {
+        if (time < start) return 0;
+        if (time < end) return Math.min((time - start) / ATTACK_DUR, 1);
+        const releaseEnd = end + RELEASE;
+        if (time < releaseEnd) {
+          return 1 - ((time - end) / RELEASE) * (1 - REST_LEVEL);
+        }
+        return REST_LEVEL;
+      }
+
+      function glowColorRgba(value) {
+        return `rgba(80, 176, 240, ${0.34 * value})`;
+      }
+
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines["01-one-idea"] = tl;
+
+      tl.fromTo(
+        headlineEl,
+        { opacity: 0, y: 26 },
+        { opacity: 1, y: 0, duration: 0.42, ease: "power3.out" },
+        0.04,
+      );
+
+      const stateDriver = { t: 0 };
+      tl.to(
+        stateDriver,
+        {
+          t: 4,
+          duration: 4,
+          ease: "none",
+          onUpdate: () => renderState(stateAt(stateDriver.t)),
+        },
+        0,
+      );
+
+      const glowDriver = { t: 0 };
+      const glowWords = frameRoot.querySelectorAll('[data-word^="01-one-idea-"]');
+      tl.to(
+        glowDriver,
+        {
+          t: 4,
+          duration: 4,
+          ease: "none",
+          onUpdate: () => {
+            glowWords.forEach((wordEl) => {
+              const timing = GLOW_TIMINGS[wordEl.dataset.word];
+              if (!timing) return;
+              const value = envelope(glowDriver.t, timing.start, timing.end);
+              wordEl.style.textShadow = `0 0 ${MAX_BLUR * value}px ${glowColorRgba(value)}`;
+              wordEl.style.transform = `scale(${1 + MAX_SCALE_BOOST * value})`;
+            });
+          },
+        },
+        0,
+      );
+
+      tl.fromTo(
+        accentEl,
+        { width: 0, opacity: 0 },
+        { width: 60, opacity: 1, duration: 0.22, ease: "power2.out" },
+        2.75,
+      );
+    })();
+  </script>
+</template>

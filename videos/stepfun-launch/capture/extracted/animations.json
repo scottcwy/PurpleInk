@@ -1,0 +1,12 @@
+{
+  "summary": {
+    "webAnimations": 0,
+    "cssDeclarations": 58,
+    "scrollTargets": 1,
+    "cdpAnimations": 3,
+    "canvases": 0
+  },
+  "namedAnimations": [],
+  "scrollTriggeredElements": 1,
+  "representativeAnimations": []
+}

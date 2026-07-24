@@ -1,0 +1,625 @@
+<template>
+  <style>
+    @font-face {
+      font-family: "MiSans";
+      font-weight: 700;
+      font-style: normal;
+      font-display: block;
+      src: url("assets/fonts/MiSans-Bold.woff2") format("woff2");
+    }
+
+    @font-face {
+      font-family: "MiSans";
+      font-weight: 600;
+      font-style: normal;
+      font-display: block;
+      src: url("assets/fonts/MiSans-SemiBold.woff2") format("woff2");
+    }
+
+    @font-face {
+      font-family: "MiSans";
+      font-weight: 500;
+      font-style: normal;
+      font-display: block;
+      src: url("assets/fonts/MiSans-Medium.woff2") format("woff2");
+    }
+
+    @font-face {
+      font-family: "MiSans";
+      font-weight: 400;
+      font-style: normal;
+      font-display: block;
+      src: url("assets/fonts/MiSans-Regular.woff2") format("woff2");
+    }
+
+    #root {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      container-type: size;
+      color: #000000;
+      font-family: "MiSans", sans-serif;
+    }
+
+    #root,
+    #root * {
+      box-sizing: border-box;
+    }
+
+    [class~="05-ten-x-background"],
+    [class~="05-ten-x-content"] {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    [class~="05-ten-x-background"] {
+      overflow: hidden;
+      background: #ffffff;
+    }
+
+    [class~="05-ten-x-content"] {
+      overflow: hidden;
+      perspective: 1400px;
+    }
+
+    [class~="05-ten-x-ring-field"] {
+      position: absolute;
+      left: 600px;
+      top: 44px;
+      width: 720px;
+      height: 720px;
+      transform-origin: 50% 50%;
+      will-change: transform, opacity;
+    }
+
+    [class~="05-ten-x-ring"] {
+      position: absolute;
+      border: 1.5px solid rgba(80, 176, 240, 0.15);
+      border-radius: 50%;
+    }
+
+    [class~="05-ten-x-ring-a"] {
+      inset: 0;
+    }
+
+    [class~="05-ten-x-ring-b"] {
+      inset: 92px;
+      border-color: rgba(80, 176, 240, 0.12);
+    }
+
+    [class~="05-ten-x-ring-c"] {
+      inset: 188px;
+      border-color: rgba(80, 176, 240, 0.1);
+    }
+
+    [class~="05-ten-x-dot-grid"] {
+      position: absolute;
+      top: 92px;
+      right: 116px;
+      display: grid;
+      grid-template-columns: repeat(3, 7px);
+      grid-auto-rows: 7px;
+      gap: 14px;
+      opacity: 0.34;
+    }
+
+    [class~="05-ten-x-dot"] {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #50b0f0;
+    }
+
+    [class~="05-ten-x-handoff"] {
+      position: absolute;
+      top: 72px;
+      left: 460px;
+      width: 1000px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      transform-origin: 50% 0%;
+      will-change: transform, opacity;
+    }
+
+    [class~="05-ten-x-accent-line"] {
+      width: 60px;
+      height: 4px;
+      border-radius: 2px;
+      background: #50b0f0;
+    }
+
+    [class~="05-ten-x-handoff-copy"] {
+      font-size: 56px;
+      font-weight: 600;
+      line-height: 1.1;
+      letter-spacing: 0;
+      color: #000000;
+      white-space: nowrap;
+    }
+
+    [class~="05-ten-x-crystal"] {
+      position: absolute;
+      top: 190px;
+      left: 630px;
+      width: 660px;
+      height: 393px;
+      object-fit: contain;
+      transform-origin: 50% 50%;
+      will-change: transform, opacity;
+    }
+
+    [class~="05-ten-x-cloud-stage"] {
+      position: absolute;
+      inset: 0 auto auto 0;
+      width: 1920px;
+      height: 760px;
+      transform-style: preserve-3d;
+      perspective: 1400px;
+      will-change: transform, opacity;
+    }
+
+    [class~="05-ten-x-frag"] {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 132px;
+      height: 50px;
+      display: grid;
+      place-items: center;
+      border: 1.5px solid rgba(80, 176, 240, 0.2);
+      border-radius: 10px;
+      background: rgba(80, 176, 240, 0.08);
+      color: #50b0f0;
+      font-size: 18px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0;
+      transform-style: preserve-3d;
+      backface-visibility: hidden;
+      will-change: transform, opacity;
+    }
+
+    [class~="05-ten-x-brick"] {
+      position: absolute;
+      top: 252px;
+      left: 730px;
+      width: 460px;
+      height: 282px;
+      border: 2px solid rgba(80, 176, 240, 0.44);
+      border-radius: 14px;
+      background: rgba(80, 176, 240, 0.04);
+      transform-origin: 50% 50%;
+      will-change: transform, opacity;
+    }
+
+    [class~="05-ten-x-brick"]::before,
+    [class~="05-ten-x-brick"]::after {
+      content: "";
+      position: absolute;
+      border: 1.5px solid rgba(80, 176, 240, 0.24);
+      border-radius: 12px;
+      pointer-events: none;
+    }
+
+    [class~="05-ten-x-brick"]::before {
+      inset: 20px 24px 22px;
+    }
+
+    [class~="05-ten-x-brick"]::after {
+      left: 52px;
+      right: 52px;
+      top: 88px;
+      height: 1px;
+      border-width: 1.5px 0 0;
+      border-radius: 0;
+    }
+
+    [class~="05-ten-x-brick-name"] {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      width: 160px;
+      margin-left: -80px;
+      color: #50b0f0;
+      font-size: 20px;
+      font-weight: 600;
+      line-height: 1;
+      text-align: center;
+      letter-spacing: 0;
+      will-change: transform, opacity;
+    }
+
+    [class~="05-ten-x-logo"] {
+      position: absolute;
+      top: 305px;
+      left: 720px;
+      width: 480px;
+      height: 128px;
+      object-fit: contain;
+      transform-origin: 50% 50%;
+      will-change: transform, opacity;
+    }
+
+    [class~="05-ten-x-mission"] {
+      position: absolute;
+      top: 466px;
+      left: 410px;
+      width: 1100px;
+      min-height: 92px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 18px;
+      text-align: center;
+      will-change: transform, opacity;
+    }
+
+    [class~="05-ten-x-mission-body"] {
+      width: 100%;
+      min-height: 50px;
+      color: #000000;
+      font-size: 40px;
+      font-weight: 600;
+      line-height: 1.24;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+
+    [class~="05-ten-x-mission-rule"] {
+      width: 160px;
+      height: 3px;
+      overflow: hidden;
+      border-radius: 6px;
+      background: rgba(80, 176, 240, 0.08);
+    }
+
+    [class~="05-ten-x-mission-fill"] {
+      width: 100%;
+      height: 100%;
+      border-radius: 6px;
+      background: #50b0f0;
+      transform-origin: 0% 50%;
+      will-change: transform;
+    }
+
+    [class~="05-ten-x-actions"] {
+      position: absolute;
+      top: 600px;
+      left: 516px;
+      width: 888px;
+      height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+    }
+
+    [class~="05-ten-x-url-mask"],
+    [class~="05-ten-x-cta-mask"] {
+      position: relative;
+      height: 62px;
+      overflow: hidden;
+      border-radius: 100px;
+    }
+
+    [class~="05-ten-x-url-mask"] {
+      width: 320px;
+    }
+
+    [class~="05-ten-x-cta-mask"] {
+      width: 220px;
+    }
+
+    [class~="05-ten-x-url-pill"],
+    [class~="05-ten-x-cta"] {
+      width: 100%;
+      height: 62px;
+      display: grid;
+      place-items: center;
+      border-radius: 100px;
+      font-size: 28px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0;
+      white-space: nowrap;
+      will-change: transform, opacity;
+    }
+
+    [class~="05-ten-x-url-pill"] {
+      border: 1.5px solid rgba(80, 176, 240, 0.2);
+      background: rgba(80, 176, 240, 0.08);
+      color: #000000;
+    }
+
+    [class~="05-ten-x-cta"] {
+      background: #50b0f0;
+      color: #ffffff;
+    }
+
+    [class~="05-ten-x-url-line"] {
+      width: 92px;
+      height: 3px;
+      border-radius: 2px;
+      background: #50b0f0;
+      transform-origin: 0% 50%;
+      will-change: transform, opacity;
+    }
+  </style>
+
+  <div data-hf-id="hf-qqz4" id="root" data-composition-id="05-ten-x" data-duration="7" data-width="1920" data-height="1080">
+    <div data-hf-id="hf-tj0w" class="clip 05-ten-x-background" data-start="0" data-duration="7" data-track-index="0">
+      <div data-hf-id="hf-ty93" class="05-ten-x-ring-field" id="05-ten-x-ring-field" aria-hidden="true">
+        <div data-hf-id="hf-3sle" class="05-ten-x-ring 05-ten-x-ring-a"></div>
+        <div data-hf-id="hf-zuhd" class="05-ten-x-ring 05-ten-x-ring-b"></div>
+        <div data-hf-id="hf-z2tk" class="05-ten-x-ring 05-ten-x-ring-c"></div>
+      </div>
+      <div data-hf-id="hf-9qu0" class="05-ten-x-dot-grid" aria-hidden="true">
+        <span data-hf-id="hf-75jf" class="05-ten-x-dot"></span><span data-hf-id="hf-7297" class="05-ten-x-dot"></span><span data-hf-id="hf-6ny6" class="05-ten-x-dot"></span>
+        <span data-hf-id="hf-69n5" class="05-ten-x-dot"></span><span data-hf-id="hf-5vc4" class="05-ten-x-dot"></span><span data-hf-id="hf-5h13" class="05-ten-x-dot"></span>
+        <span data-hf-id="hf-52q2" class="05-ten-x-dot"></span><span data-hf-id="hf-4of1" class="05-ten-x-dot"></span><span data-hf-id="hf-an0g" class="05-ten-x-dot"></span>
+      </div>
+    </div>
+
+    <div data-hf-id="hf-qpt8" class="clip 05-ten-x-content" data-start="0" data-duration="7" data-track-index="1">
+      <div data-hf-id="hf-tfou" class="05-ten-x-handoff" id="05-ten-x-handoff">
+        <div data-hf-id="hf-bip2" class="05-ten-x-accent-line"></div>
+        <div data-hf-id="hf-q0oc" class="05-ten-x-handoff-copy">从 Coding 到 Agent</div>
+      </div>
+
+      <img data-hf-id="hf-6p09" class="05-ten-x-crystal" id="05-ten-x-crystal" src="assets/mobile-studio-crystal-k99o-jwr.png" alt="">
+
+      <div data-hf-id="hf-ej3v" class="05-ten-x-cloud-stage" id="05-ten-x-cloud-stage" aria-hidden="true">
+        <div data-hf-id="hf-758l" class="05-ten-x-frag" data-target-x="-142" data-target-y="-88">CODING</div>
+        <div data-hf-id="hf-apnj" class="05-ten-x-frag" data-target-x="0" data-target-y="-88">BUILD</div>
+        <div data-hf-id="hf-m1dj" class="05-ten-x-frag" data-target-x="142" data-target-y="-88">AGENT</div>
+        <div data-hf-id="hf-wdol" class="05-ten-x-frag" data-target-x="-142" data-target-y="28">AI APP</div>
+        <div data-hf-id="hf-m7qf" class="05-ten-x-frag" data-target-x="0" data-target-y="28">智能</div>
+        <div data-hf-id="hf-elr3" class="05-ten-x-frag" data-target-x="142" data-target-y="28">可能</div>
+      </div>
+
+      <div data-hf-id="hf-2vlz" class="05-ten-x-brick" id="05-ten-x-brick" aria-hidden="true">
+        <div data-hf-id="hf-iong" class="05-ten-x-brick-name" id="05-ten-x-brick-name">一块积木</div>
+      </div>
+
+      <img data-hf-id="hf-1fs0" class="05-ten-x-logo" id="05-ten-x-logo" src="assets/logo-e1eaeba0.svg" alt="StepFun">
+
+      <div data-hf-id="hf-6wbe" class="05-ten-x-mission" id="05-ten-x-mission">
+        <div data-hf-id="hf-okgi" class="05-ten-x-mission-body" id="05-ten-x-mission-body"></div>
+        <div data-hf-id="hf-wk03" class="05-ten-x-mission-rule" aria-hidden="true">
+          <div data-hf-id="hf-wseg" class="05-ten-x-mission-fill" id="05-ten-x-mission-fill"></div>
+        </div>
+      </div>
+
+      <div data-hf-id="hf-q4si" class="05-ten-x-actions" id="05-ten-x-actions">
+        <div data-hf-id="hf-j6sp" class="05-ten-x-url-mask">
+          <div data-hf-id="hf-pnye" class="05-ten-x-url-pill" id="05-ten-x-url-pill">stepfun.com</div>
+        </div>
+        <div data-hf-id="hf-5nkh" class="05-ten-x-url-line" id="05-ten-x-url-line" aria-hidden="true"></div>
+        <div data-hf-id="hf-sija" class="05-ten-x-cta-mask">
+          <div data-hf-id="hf-zk0x" class="05-ten-x-cta" id="05-ten-x-cta">开始构建</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const root = document.querySelector('[data-composition-id="05-ten-x"]');
+      const tl = gsap.timeline({ paused: true });
+
+      const handoff = root.querySelector('[id="05-ten-x-handoff"]');
+      const crystal = root.querySelector('[id="05-ten-x-crystal"]');
+      const cloudStage = root.querySelector('[id="05-ten-x-cloud-stage"]');
+      const brick = root.querySelector('[id="05-ten-x-brick"]');
+      const brickName = root.querySelector('[id="05-ten-x-brick-name"]');
+      const logo = root.querySelector('[id="05-ten-x-logo"]');
+      const mission = root.querySelector('[id="05-ten-x-mission"]');
+      const missionBody = root.querySelector('[id="05-ten-x-mission-body"]');
+      const missionFill = root.querySelector('[id="05-ten-x-mission-fill"]');
+      const ringField = root.querySelector('[id="05-ten-x-ring-field"]');
+      const urlPill = root.querySelector('[id="05-ten-x-url-pill"]');
+      const urlLine = root.querySelector('[id="05-ten-x-url-line"]');
+      const cta = root.querySelector('[id="05-ten-x-cta"]');
+      const fragments = Array.from(root.querySelectorAll('[class~="05-ten-x-frag"]'));
+
+      const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+      const radius = 410;
+      const zNear = 260;
+      const zFar = -300;
+      const tumble = 68;
+
+      const scatter = fragments.map((element, index) => {
+        const angle = index * goldenAngle;
+        const depthT = fragments.length > 1 ? index / (fragments.length - 1) : 0;
+        return {
+          x: Math.cos(angle) * radius,
+          y: Math.sin(angle) * radius,
+          z: zNear - depthT * (zNear - zFar),
+          rotationX: Math.sin(angle) * tumble,
+          rotationY: Math.cos(angle) * tumble,
+        };
+      });
+
+      fragments.forEach((element, index) => {
+        gsap.set(element, {
+          xPercent: -50,
+          yPercent: -50,
+          ...scatter[index],
+          opacity: 0,
+        });
+      });
+
+      gsap.set(brick, { scale: 0.9, opacity: 0 });
+      gsap.set(brickName, { scale: 0.9, opacity: 0 });
+      gsap.set(missionFill, { scaleX: 0 });
+
+      tl.fromTo(
+        crystal,
+        { scale: 0.08, y: 24, opacity: 0 },
+        { scale: 1, y: 0, opacity: 1, duration: 0.66, ease: "power3.out" },
+        0,
+      );
+      tl.fromTo(
+        handoff,
+        { y: -12, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.48, ease: "power3.out" },
+        0.04,
+      );
+      tl.fromTo(
+        ringField,
+        { scale: 0.88, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 1.3, ease: "power2.out" },
+        0.22,
+      );
+
+      tl.to(
+        crystal,
+        { scale: 0.88, opacity: 0.7, duration: 1.25, ease: "power2.out" },
+        1.65,
+      );
+      tl.to(
+        cloudStage,
+        { rotationY: 26, duration: 1.28, ease: "power1.out" },
+        1.65,
+      );
+
+      fragments.forEach((element, index) => {
+        tl.to(
+          element,
+          {
+            x: Number(element.dataset.targetX),
+            y: Number(element.dataset.targetY),
+            z: 0,
+            rotationX: 0,
+            rotationY: 0,
+            opacity: 1,
+            duration: 1.02,
+            ease: "power3.out",
+          },
+          1.65 + index * 0.055,
+        );
+      });
+
+      tl.to(
+        brick,
+        { scale: 1, opacity: 1, duration: 0.4, ease: "power3.out" },
+        2.7,
+      );
+      tl.fromTo(
+        brickName,
+        { scale: 0.9, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.24, ease: "power3.out" },
+        2.94,
+      );
+      tl.to(
+        cloudStage,
+        { rotationY: 0, duration: 0.25, ease: "power2.out" },
+        2.9,
+      );
+
+      tl.to(
+        cloudStage,
+        { scale: 0.88, y: -18, opacity: 0.16, duration: 0.72, ease: "power2.out" },
+        3.15,
+      );
+      tl.to(
+        brick,
+        { scale: 0.86, y: -18, opacity: 0.22, duration: 0.72, ease: "power2.out" },
+        3.15,
+      );
+      tl.to(
+        crystal,
+        { scale: 0.72, y: -18, opacity: 0.18, duration: 0.72, ease: "power2.out" },
+        3.15,
+      );
+      tl.to(
+        handoff,
+        { scale: 0.74, y: -18, opacity: 0.5, duration: 0.65, ease: "power2.out" },
+        3.15,
+      );
+      tl.fromTo(
+        logo,
+        { scale: 0.64, y: 18, opacity: 0 },
+        { scale: 1, y: 0, opacity: 1, duration: 0.72, ease: "power3.out" },
+        3.15,
+      );
+      tl.fromTo(
+        mission,
+        { y: 12, opacity: 0 },
+        { y: 0, opacity: 1, duration: 0.38, ease: "power3.out" },
+        3.42,
+      );
+
+      const missionContent = [
+        { key: "step", body: "智能阶跃", hold: 0.08 },
+        { key: "ten", body: "智能阶跃 · 十倍", hold: 0.1 },
+        { key: "possibility", body: "智能阶跃 · 十倍每个人的可能", hold: 0.22 },
+      ];
+      const baseDuration = 0.08;
+      const secondsPerCharacter = 0.01;
+      let cumulative = 0;
+      const missionTimeline = missionContent.map((entry) => {
+        const duration = baseDuration + entry.body.length * secondsPerCharacter + entry.hold;
+        const start = cumulative;
+        cumulative += duration;
+        return { ...entry, start, end: cumulative };
+      });
+
+      const missionAt = (time) => {
+        for (let index = missionTimeline.length - 1; index >= 0; index -= 1) {
+          if (time >= missionTimeline[index].start) return missionTimeline[index];
+        }
+        return missionTimeline[0];
+      };
+
+      const missionDriver = { time: 0 };
+      let lastMissionKey = "";
+      tl.to(
+        missionDriver,
+        {
+          time: cumulative,
+          duration: 1.36,
+          ease: "none",
+          onUpdate: () => {
+            const entry = missionAt(missionDriver.time);
+            if (entry.key !== lastMissionKey) {
+              missionBody.textContent = entry.body;
+              lastMissionKey = entry.key;
+            }
+            const progress = cumulative ? missionDriver.time / cumulative : 1;
+            missionFill.style.transform = `scaleX(${progress})`;
+          },
+        },
+        3.58,
+      );
+
+      tl.fromTo(
+        urlPill,
+        { xPercent: -105, opacity: 0 },
+        { xPercent: 0, opacity: 1, duration: 0.32, ease: "power3.out" },
+        5.05,
+      );
+      tl.fromTo(
+        urlLine,
+        { scaleX: 0, opacity: 0 },
+        { scaleX: 1, opacity: 1, duration: 0.4, ease: "power2.out" },
+        5.08,
+      );
+      tl.fromTo(
+        cta,
+        { xPercent: -105, opacity: 0 },
+        { xPercent: 0, opacity: 1, duration: 0.34, ease: "power3.out" },
+        5.14,
+      );
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["05-ten-x"] = tl;
+    })();
+  </script>
+</template>

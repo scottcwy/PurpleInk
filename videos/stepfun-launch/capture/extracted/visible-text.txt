@@ -1,0 +1,68 @@
+[span] Step 系列模型
+[h1] Scale-up possibilities
+[h1] for everyone
+[p] 智能阶跃，十倍每个人的可能
+[span] Step Plan
+[span] 从 Coding 到 Agent，皆可构建
+[a] 立即购买
+[span] 阶跃·开放平台
+[span] 构建你的下一个 AI 应用
+[span] Step API 稳定 · 高性能 · 易集成
+[a] 立即注册
+[span] 语言模型
+[span] 语音模型
+[span] 多模态/GUI 模型
+[span] 语言大模型
+[h3] Step 3.7 Flash
+[p] 为真实 Agent 工作流而生的高效多模态 Flash 模型 —— 看得见，想得清，做得到。
+[a] 了解更多
+[a] 马上开始
+[h4] 真实业务 稳定执行
+[p] 办公 / 代码 / Agent 工作流全胜任；稳定工具调用 主流 Agent 框架深度兼容
+[h4] 旗舰能力，全面开源
+[p] 旗舰级研究、文档解析与代码能力；开放权重 可部署可定制可微调
+[h4] 原生多模态视觉理解
+[p] PDF、表格、图表、UI 截图一次解析；无需视觉 MCP 中转 节省调用与延迟
+[span] 语言大模型
+[h3] Step 3.5 Flash
+[span] 为 Agent 而生的语言大模型！快，很快，还能更快
+[span] 语言大模型
+[h3] Step 2
+[span] 万亿参数自研底座；深度推理对标前沿；精准多层指令跟随
+[span] 语言大模型
+[h3] Step 1
+[span] 单卡低比特长文本推理；千万级用户产品稳定验证；高效多轮指令跟随能力
+[h2] 构建 AI 应用的强大平台
+[p] Step API 稳定 · 高性能 · 易集成，领先的模型和工具，加速你的下一个AI 应用落地
+[span] 开放平台
+[h2] 让 AI 应用更容易构建
+[p] 连接模型、工具与工作流，探索下一代 AI 应用。
+[span] Studio
+[h2] 阶跃 AI · 随你定义的工作伙伴
+[p] 前往各端下载或体验阶跃AI
+[span] Mac
+[span] 适用于
+macOS 11.3 及以上
+[span] Windows
+[span] 适用于
+Windows 10 及以上
+[span] iOS
+[span] 扫码下载
+[span] Android
+[span] 扫码下载
+[span] Web
+[span] 前往体验
+[h4] Step 系列模型
+[a] Step 3.5 flash
+[a] Step TTS
+[a] 阶跃AI 桌面伙伴
+[a] 阶跃AI App
+[a] Step Plan
+[p] Scale-up possibilities
+[p] for everyone
+[span] 模型名称：阶跃大模型
+[span] 沪公网安备31010402333581
+[span] 备案号：Shanghai-JieYue-20231106
+[a] 沪ICP备2023019222号-3
+[span] Copyright © 2023 上海阶跃星辰智能科技股份有限公司
+[span] 地址：上海市徐汇区云锦路701号30层

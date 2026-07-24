@@ -1,0 +1,894 @@
+<template>
+  <style>
+    @font-face {
+      font-family: "MiSans";
+      font-weight: 700;
+      font-style: normal;
+      font-display: block;
+      src: url("assets/fonts/MiSans-Bold.woff2") format("woff2");
+    }
+
+    @font-face {
+      font-family: "MiSans";
+      font-weight: 600;
+      font-style: normal;
+      font-display: block;
+      src: url("assets/fonts/MiSans-SemiBold.woff2") format("woff2");
+    }
+
+    @font-face {
+      font-family: "MiSans";
+      font-weight: 500;
+      font-style: normal;
+      font-display: block;
+      src: url("assets/fonts/MiSans-Medium.woff2") format("woff2");
+    }
+
+    @font-face {
+      font-family: "MiSans";
+      font-weight: 400;
+      font-style: normal;
+      font-display: block;
+      src: url("assets/fonts/MiSans-Regular.woff2") format("woff2");
+    }
+
+    #root {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      container-type: size;
+      font-family: "MiSans";
+      color: #000000;
+    }
+
+    #root *,
+    #root *::before,
+    #root *::after {
+      box-sizing: border-box;
+    }
+
+    .f04-api-to-agent-ground,
+    .f04-api-to-agent-content {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    .f04-api-to-agent-ground {
+      background: #ffffff;
+    }
+
+    .f04-api-to-agent-content {
+      z-index: 1;
+    }
+
+    .f04-api-to-agent-divider {
+      position: absolute;
+      left: 700px;
+      top: 88px;
+      width: 1.5px;
+      height: 720px;
+      background: rgba(80, 176, 240, 0.15);
+    }
+
+    .f04-api-to-agent-origin {
+      position: absolute;
+      left: 64px;
+      top: 122px;
+      width: 610px;
+      height: 650px;
+      overflow: hidden;
+    }
+
+    .f04-api-to-agent-origin-glow {
+      position: absolute;
+      left: 52px;
+      top: 44px;
+      z-index: 0;
+      width: 510px;
+      height: 510px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(80, 176, 240, 0.32) 0%, rgba(80, 176, 240, 0.13) 42%, rgba(80, 176, 240, 0) 72%);
+      transform-origin: 50% 50%;
+    }
+
+    .f04-api-to-agent-platform-image {
+      position: absolute;
+      left: 46px;
+      top: 18px;
+      z-index: 2;
+      width: 520px;
+      height: 536px;
+      object-fit: contain;
+    }
+
+    .f04-api-to-agent-crystal-mask {
+      position: absolute;
+      left: 46px;
+      top: 18px;
+      z-index: 3;
+      width: 520px;
+      height: 536px;
+      overflow: hidden;
+      pointer-events: none;
+      -webkit-mask-image: url("assets/platform-cta-crystal-btq-eknp.png");
+      -webkit-mask-repeat: no-repeat;
+      -webkit-mask-position: center;
+      -webkit-mask-size: contain;
+      mask-image: url("assets/platform-cta-crystal-btq-eknp.png");
+      mask-repeat: no-repeat;
+      mask-position: center;
+      mask-size: contain;
+    }
+
+    .f04-api-to-agent-crystal-sweep {
+      position: absolute;
+      left: 0;
+      top: -40px;
+      width: 128px;
+      height: 620px;
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0));
+    }
+
+    .f04-api-to-agent-origin-label {
+      position: absolute;
+      left: 176px;
+      top: 558px;
+      z-index: 4;
+      min-width: 260px;
+      padding: 16px 32px;
+      border: 1.5px solid rgba(80, 176, 240, 0.2);
+      border-radius: 100px;
+      background: rgba(80, 176, 240, 0.08);
+      color: #000000;
+      font-size: 31px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0;
+      text-align: center;
+    }
+
+    .f04-api-to-agent-origin-label::before {
+      content: "";
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin-right: 14px;
+      border-radius: 50%;
+      background: #50b0f0;
+      vertical-align: 2px;
+    }
+
+    .f04-api-to-agent-bridge {
+      position: absolute;
+      left: 598px;
+      top: 363px;
+      z-index: 2;
+      width: 180px;
+      height: 190px;
+      overflow: visible;
+    }
+
+    .f04-api-to-agent-bridge path,
+    .f04-api-to-agent-pipeline-paths path {
+      fill: none;
+      stroke: #50b0f0;
+      stroke-width: 5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .f04-api-to-agent-work-zone {
+      position: absolute;
+      left: 730px;
+      top: 64px;
+      width: 1110px;
+      height: 760px;
+    }
+
+    .f04-api-to-agent-traits {
+      position: absolute;
+      left: 0;
+      top: 6px;
+      z-index: 12;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      height: 48px;
+    }
+
+    .f04-api-to-agent-trait {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 148px;
+      height: 44px;
+      padding: 0 26px;
+      border: 1.5px solid rgba(80, 176, 240, 0.2);
+      border-radius: 100px;
+      background: rgba(80, 176, 240, 0.08);
+      color: #50b0f0;
+      font-size: 25px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+
+    .f04-api-to-agent-result-stack {
+      position: absolute;
+      left: 0;
+      top: 72px;
+      z-index: 10;
+      width: 1110px;
+    }
+
+    .f04-api-to-agent-receipt-head {
+      position: relative;
+      z-index: 3;
+      width: 100%;
+      height: 92px;
+    }
+
+    .f04-api-to-agent-status-card,
+    .f04-api-to-agent-ready-receipt {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      width: 100%;
+      height: 100%;
+      border: 1.5px solid rgba(80, 176, 240, 0.2);
+      border-radius: 14px;
+      background: rgba(80, 176, 240, 0.04);
+      transform-origin: 50% 50%;
+    }
+
+    .f04-api-to-agent-status-card {
+      z-index: 1;
+      padding: 0 36px;
+      opacity: 0;
+    }
+
+    .f04-api-to-agent-ready-receipt {
+      z-index: 2;
+      justify-content: space-between;
+      padding: 0 30px 0 28px;
+      opacity: 0;
+      background: #ffffff;
+    }
+
+    .f04-api-to-agent-status-dot {
+      flex: 0 0 auto;
+      width: 15px;
+      height: 15px;
+      margin-right: 22px;
+      border-radius: 50%;
+      background: #50b0f0;
+    }
+
+    .f04-api-to-agent-status-wrap {
+      display: inline-flex;
+      align-items: baseline;
+      min-width: 430px;
+      white-space: nowrap;
+    }
+
+    .f04-api-to-agent-status-text {
+      color: transparent;
+      background: linear-gradient(90deg, #50c0c0 20%, #50b0f0 44%, #000000 50%, #50b0f0 56%, #50c0c0 80%);
+      background-size: 300% 100%;
+      background-position: 100% 50%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      font-size: 38px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .f04-api-to-agent-status-cursor {
+      display: inline-block;
+      width: 13px;
+      margin-left: 8px;
+      color: #50b0f0;
+      font-size: 35px;
+      font-weight: 500;
+      line-height: 1;
+    }
+
+    .f04-api-to-agent-ready-left {
+      display: flex;
+      align-items: center;
+      min-width: 340px;
+    }
+
+    .f04-api-to-agent-ready-icon {
+      width: 46px;
+      height: 46px;
+      margin-right: 18px;
+      overflow: visible;
+    }
+
+    .f04-api-to-agent-ready-icon circle {
+      fill: rgba(80, 176, 240, 0.08);
+      stroke: rgba(80, 176, 240, 0.2);
+      stroke-width: 1.5;
+    }
+
+    .f04-api-to-agent-ready-icon path,
+    .f04-api-to-agent-check-icon path {
+      fill: none;
+      stroke: #50b0f0;
+      stroke-width: 4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .f04-api-to-agent-ready-title {
+      color: #000000;
+      font-size: 34px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .f04-api-to-agent-final-tagline {
+      display: inline-flex;
+      align-items: center;
+      min-height: 54px;
+      padding: 0 28px;
+      border-radius: 100px;
+      background: #50b0f0;
+      color: #ffffff;
+      font-size: 30px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+
+    .f04-api-to-agent-expand-mask {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      height: 500px;
+      overflow: hidden;
+    }
+
+    .f04-api-to-agent-product-sheet {
+      width: 100%;
+      height: 500px;
+      padding-top: 12px;
+      transform-origin: 50% 0%;
+      will-change: transform;
+    }
+
+    .f04-api-to-agent-product-image {
+      display: block;
+      width: 1110px;
+      height: 475px;
+      object-fit: contain;
+      object-position: top center;
+      border-radius: 14px;
+    }
+
+    .f04-api-to-agent-below {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      height: 34px;
+      padding-top: 15px;
+      will-change: transform;
+    }
+
+    .f04-api-to-agent-progress-track {
+      width: 100%;
+      height: 10px;
+      overflow: hidden;
+      border-radius: 6px;
+      background: rgba(80, 176, 240, 0.08);
+    }
+
+    .f04-api-to-agent-progress-fill {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border-radius: 6px;
+      background: #50b0f0;
+      transform-origin: 0% 50%;
+    }
+
+    .f04-api-to-agent-pipeline {
+      position: absolute;
+      left: 0;
+      top: 206px;
+      z-index: 7;
+      width: 1110px;
+      height: 350px;
+    }
+
+    .f04-api-to-agent-pipeline-paths {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      width: 1110px;
+      height: 350px;
+      overflow: visible;
+    }
+
+    .f04-api-to-agent-pipeline-paths .f04-api-to-agent-guide-path {
+      stroke: rgba(80, 176, 240, 0.12);
+      stroke-width: 3;
+    }
+
+    .f04-api-to-agent-step {
+      position: absolute;
+      top: 132px;
+      z-index: 2;
+      width: 220px;
+      height: 152px;
+      border: 1.5px solid rgba(80, 176, 240, 0.2);
+      border-radius: 14px;
+      background: #ffffff;
+      transform-origin: 50% 50%;
+    }
+
+    .f04-api-to-agent-step-model {
+      left: 40px;
+    }
+
+    .f04-api-to-agent-step-tool {
+      left: 310px;
+    }
+
+    .f04-api-to-agent-step-flow {
+      left: 580px;
+    }
+
+    .f04-api-to-agent-step-outgoing,
+    .f04-api-to-agent-step-incoming {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      transform-origin: 50% 50%;
+    }
+
+    .f04-api-to-agent-step-outgoing {
+      z-index: 1;
+    }
+
+    .f04-api-to-agent-step-incoming {
+      z-index: 2;
+      background: rgba(80, 176, 240, 0.08);
+    }
+
+    .f04-api-to-agent-step-glyph {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 54px;
+      height: 54px;
+      margin-bottom: 13px;
+      border: 1.5px solid rgba(80, 176, 240, 0.2);
+      border-radius: 50%;
+      background: rgba(80, 176, 240, 0.04);
+      color: #50b0f0;
+      font-size: 25px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .f04-api-to-agent-step-label,
+    .f04-api-to-agent-step-done {
+      color: #000000;
+      font-size: 27px;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .f04-api-to-agent-check-icon {
+      width: 52px;
+      height: 52px;
+      margin-bottom: 13px;
+      overflow: visible;
+    }
+
+    .f04-api-to-agent-studio {
+      position: absolute;
+      left: 842px;
+      top: 6px;
+      z-index: 3;
+      width: 254px;
+      height: 190px;
+      object-fit: contain;
+      transform-origin: 50% 50%;
+    }
+  </style>
+
+  <div data-hf-id="hf-xw8o" id="root" data-composition-id="04-api-to-agent" data-duration="8.4" data-width="1920" data-height="1080">
+    <div data-hf-id="hf-iprr" class="clip f04-api-to-agent-ground" data-start="0" data-duration="8.4" data-track-index="0"></div>
+
+    <div data-hf-id="hf-88ms" class="clip f04-api-to-agent-content" data-start="0" data-duration="8.4" data-track-index="1">
+      <div data-hf-id="hf-0br1" class="f04-api-to-agent-divider"></div>
+
+      <div data-hf-id="hf-h804" class="f04-api-to-agent-origin">
+        <div data-hf-id="hf-v8oy" class="f04-api-to-agent-origin-glow" id="f04-api-to-agent-origin-glow"></div>
+        <img data-hf-id="hf-dok2" class="f04-api-to-agent-platform-image" id="f04-api-to-agent-platform-image" src="assets/platform-cta-crystal-btq-eknp.png" alt="">
+        <div data-hf-id="hf-gzw2" class="f04-api-to-agent-crystal-mask" aria-hidden="true">
+          <div data-hf-id="hf-x81a" class="f04-api-to-agent-crystal-sweep" id="f04-api-to-agent-crystal-sweep"></div>
+        </div>
+        <div data-hf-id="hf-i1tq" class="f04-api-to-agent-origin-label" id="f04-api-to-agent-origin-label">Step API</div>
+      </div>
+
+      <svg data-hf-id="hf-cw2d" class="f04-api-to-agent-bridge" viewBox="0 0 180 190" aria-hidden="true">
+        <path data-hf-id="hf-qk1i" id="f04-api-to-agent-bridge-path" d="M 0 95 C 62 95 118 95 180 95" />
+      </svg>
+
+      <div data-hf-id="hf-dmeo" class="f04-api-to-agent-work-zone">
+        <div data-hf-id="hf-90r0" class="f04-api-to-agent-traits" id="f04-api-to-agent-traits">
+          <div data-hf-id="hf-429j" class="f04-api-to-agent-trait" id="f04-api-to-agent-trait-stable">稳定</div>
+          <div data-hf-id="hf-8s4j" class="f04-api-to-agent-trait" id="f04-api-to-agent-trait-fast">高性能</div>
+          <div data-hf-id="hf-96z8" class="f04-api-to-agent-trait" id="f04-api-to-agent-trait-easy">易集成</div>
+        </div>
+
+        <div data-hf-id="hf-spry" class="f04-api-to-agent-result-stack">
+          <div data-hf-id="hf-128x" class="f04-api-to-agent-receipt-head">
+            <div data-hf-id="hf-c9b6" class="f04-api-to-agent-status-card" id="f04-api-to-agent-status-card">
+              <span data-hf-id="hf-kh9d" class="f04-api-to-agent-status-dot"></span>
+              <span data-hf-id="hf-86ko" class="f04-api-to-agent-status-wrap">
+                <span data-hf-id="hf-wqwu" class="f04-api-to-agent-status-text" id="f04-api-to-agent-status-text">连接模型</span>
+                <span data-hf-id="hf-m1et" class="f04-api-to-agent-status-cursor" id="f04-api-to-agent-status-cursor">|</span>
+              </span>
+            </div>
+
+            <div data-hf-id="hf-lotu" class="f04-api-to-agent-ready-receipt" id="f04-api-to-agent-ready-receipt">
+              <div data-hf-id="hf-0v67" class="f04-api-to-agent-ready-left">
+                <svg data-hf-id="hf-4blo" class="f04-api-to-agent-ready-icon" viewBox="0 0 48 48" aria-hidden="true">
+                  <circle data-hf-id="hf-u15q" cx="24" cy="24" r="22" />
+                  <path data-hf-id="hf-g82y" id="f04-api-to-agent-ready-check" d="M 14 24 L 21 31 L 35 16" />
+                </svg>
+                <div data-hf-id="hf-oqmo" class="f04-api-to-agent-ready-title">Agent ready</div>
+              </div>
+              <div data-hf-id="hf-wuby" class="f04-api-to-agent-final-tagline" id="f04-api-to-agent-final-tagline">更快落地</div>
+            </div>
+          </div>
+
+          <div data-hf-id="hf-xa8z" class="f04-api-to-agent-expand-mask" id="f04-api-to-agent-expand-mask" data-layout-allow-overflow="">
+            <div data-hf-id="hf-sunq" class="f04-api-to-agent-product-sheet" id="f04-api-to-agent-product-sheet">
+              <img data-hf-id="hf-5hb9" class="f04-api-to-agent-product-image" src="assets/product-cn-xhvucdg.webp" alt="">
+            </div>
+          </div>
+
+          <div data-hf-id="hf-xskq" class="f04-api-to-agent-below" id="f04-api-to-agent-below">
+            <div data-hf-id="hf-wris" class="f04-api-to-agent-progress-track" id="f04-api-to-agent-progress-track">
+              <span data-hf-id="hf-5yfv" class="f04-api-to-agent-progress-fill" id="f04-api-to-agent-progress-fill"></span>
+            </div>
+          </div>
+        </div>
+
+        <div data-hf-id="hf-wrty" class="f04-api-to-agent-pipeline" id="f04-api-to-agent-pipeline">
+          <svg data-hf-id="hf-ubqx" class="f04-api-to-agent-pipeline-paths" viewBox="0 0 1110 350" aria-hidden="true">
+            <path data-hf-id="hf-i9sq" class="f04-api-to-agent-guide-path" d="M 0 208 L 1065 208" />
+            <path data-hf-id="hf-qg7x" id="f04-api-to-agent-path-model" d="M 0 208 C 48 208 86 208 150 208" />
+            <path data-hf-id="hf-1mj8" id="f04-api-to-agent-path-tool" d="M 150 208 C 250 208 320 208 420 208" />
+            <path data-hf-id="hf-s4cc" id="f04-api-to-agent-path-flow" d="M 420 208 C 520 208 590 208 690 208" />
+            <path data-hf-id="hf-aqqk" id="f04-api-to-agent-path-studio" d="M 690 208 C 790 208 880 208 965 180" />
+          </svg>
+
+          <div data-hf-id="hf-kg7m" class="f04-api-to-agent-step f04-api-to-agent-step-model" id="f04-api-to-agent-step-model">
+            <div data-hf-id="hf-2aov" class="f04-api-to-agent-step-outgoing" id="f04-api-to-agent-model-outgoing">
+              <div data-hf-id="hf-hths" class="f04-api-to-agent-step-glyph">M</div>
+              <div data-hf-id="hf-9ifh" class="f04-api-to-agent-step-label">模型</div>
+            </div>
+            <div data-hf-id="hf-sxsv" class="f04-api-to-agent-step-incoming" id="f04-api-to-agent-model-incoming">
+              <svg data-hf-id="hf-xqzl" class="f04-api-to-agent-check-icon" viewBox="0 0 56 56" aria-hidden="true">
+                <path data-hf-id="hf-ni36" id="f04-api-to-agent-model-check" d="M 12 29 L 23 40 L 45 16" />
+              </svg>
+              <div data-hf-id="hf-l4ls" class="f04-api-to-agent-step-done">已连接</div>
+            </div>
+          </div>
+
+          <div data-hf-id="hf-eq3a" class="f04-api-to-agent-step f04-api-to-agent-step-tool" id="f04-api-to-agent-step-tool">
+            <div data-hf-id="hf-v8p2" class="f04-api-to-agent-step-outgoing" id="f04-api-to-agent-tool-outgoing">
+              <div data-hf-id="hf-klmz" class="f04-api-to-agent-step-glyph">T</div>
+              <div data-hf-id="hf-ysrx" class="f04-api-to-agent-step-label">工具</div>
+            </div>
+            <div data-hf-id="hf-gdau" class="f04-api-to-agent-step-incoming" id="f04-api-to-agent-tool-incoming">
+              <svg data-hf-id="hf-ffud" class="f04-api-to-agent-check-icon" viewBox="0 0 56 56" aria-hidden="true">
+                <path data-hf-id="hf-423j" id="f04-api-to-agent-tool-check" d="M 12 29 L 23 40 L 45 16" />
+              </svg>
+              <div data-hf-id="hf-v42w" class="f04-api-to-agent-step-done">已连接</div>
+            </div>
+          </div>
+
+          <div data-hf-id="hf-iy5y" class="f04-api-to-agent-step f04-api-to-agent-step-flow" id="f04-api-to-agent-step-flow">
+            <div data-hf-id="hf-rsxw" class="f04-api-to-agent-step-outgoing" id="f04-api-to-agent-flow-outgoing">
+              <div data-hf-id="hf-k7by" class="f04-api-to-agent-step-glyph">W</div>
+              <div data-hf-id="hf-h9tz" class="f04-api-to-agent-step-label">工作流</div>
+            </div>
+            <div data-hf-id="hf-n9fk" class="f04-api-to-agent-step-incoming" id="f04-api-to-agent-flow-incoming">
+              <svg data-hf-id="hf-gmrg" class="f04-api-to-agent-check-icon" viewBox="0 0 56 56" aria-hidden="true">
+                <path data-hf-id="hf-n1qh" id="f04-api-to-agent-flow-check" d="M 12 29 L 23 40 L 45 16" />
+              </svg>
+              <div data-hf-id="hf-tx5t" class="f04-api-to-agent-step-done">已连接</div>
+            </div>
+          </div>
+
+          <img data-hf-id="hf-bjqu" class="f04-api-to-agent-studio" id="f04-api-to-agent-studio" src="assets/studio-crystal-d1fgegvt.png" alt="">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script>
+    (() => {
+      const root = document.querySelector('[data-composition-id="04-api-to-agent"]');
+      const q = (selector) => root.querySelector(selector);
+      const qa = (selector) => Array.from(root.querySelectorAll(selector));
+      const tl = gsap.timeline({ paused: true });
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["04-api-to-agent"] = tl;
+
+      const drawnPaths = qa(
+        "#f04-api-to-agent-bridge-path, #f04-api-to-agent-path-model, #f04-api-to-agent-path-tool, #f04-api-to-agent-path-flow, #f04-api-to-agent-path-studio, #f04-api-to-agent-model-check, #f04-api-to-agent-tool-check, #f04-api-to-agent-flow-check, #f04-api-to-agent-ready-check",
+      );
+
+      drawnPaths.forEach((path) => {
+        const length = path.getTotalLength();
+        path.style.strokeDasharray = String(length);
+        path.style.strokeDashoffset = String(length);
+      });
+
+      tl.fromTo(
+        "#f04-api-to-agent-platform-image",
+        { opacity: 0.42, scale: 0.94 },
+        { opacity: 1, scale: 1, duration: 0.62, ease: "power2.out" },
+        0,
+      );
+      tl.fromTo(
+        "#f04-api-to-agent-origin-label",
+        { opacity: 0, y: 16 },
+        { opacity: 1, y: 0, duration: 0.42, ease: "power3.out" },
+        0.18,
+      );
+      tl.fromTo(
+        "#f04-api-to-agent-origin-glow",
+        { opacity: 0, scale: 0.86 },
+        { opacity: 0.26, scale: 1, duration: 0.72, ease: "power2.out" },
+        0,
+      );
+      tl.fromTo(
+        "#f04-api-to-agent-crystal-sweep",
+        { x: -160, opacity: 0 },
+        { x: 560, opacity: 0.3, duration: 0.92, ease: "none" },
+        0.14,
+      );
+      tl.to(
+        "#f04-api-to-agent-crystal-sweep",
+        { opacity: 0, duration: 0.16, ease: "power1.in" },
+        0.95,
+      );
+
+      tl.to(
+        "#f04-api-to-agent-bridge-path",
+        { strokeDashoffset: 0, duration: 0.62, ease: "power2.out" },
+        1.08,
+      );
+      tl.fromTo(
+        "#f04-api-to-agent-status-card",
+        { opacity: 0, y: 18 },
+        { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" },
+        1.22,
+      );
+      tl.fromTo(
+        "#f04-api-to-agent-trait-stable",
+        { opacity: 0, y: 14 },
+        { opacity: 1, y: 0, duration: 0.36, ease: "power3.out" },
+        1.28,
+      );
+      tl.fromTo(
+        "#f04-api-to-agent-trait-fast",
+        { opacity: 0, y: 14 },
+        { opacity: 1, y: 0, duration: 0.36, ease: "power3.out" },
+        1.62,
+      );
+      tl.fromTo(
+        "#f04-api-to-agent-trait-easy",
+        { opacity: 0, y: 14 },
+        { opacity: 1, y: 0, duration: 0.36, ease: "power3.out" },
+        1.96,
+      );
+
+      const states = [
+        { t: 0, text: "连接模型" },
+        { t: 0.82, text: "调用工具" },
+        { t: 1.62, text: "编排工作流" },
+      ];
+      const statusText = q("#f04-api-to-agent-status-text");
+      const statusCursor = q("#f04-api-to-agent-status-cursor");
+      const stateAt = (time) => {
+        for (let index = states.length - 1; index >= 0; index -= 1) {
+          if (time >= states[index].t) return states[index].text;
+        }
+        return states[0].text;
+      };
+      const stateDriver = { t: 0 };
+      const blinkDriver = { p: 0 };
+      const shimmerDriver = { p: 0 };
+
+      tl.to(
+        stateDriver,
+        {
+          t: 4.35,
+          duration: 4.35,
+          ease: "none",
+          onUpdate: () => {
+            statusText.textContent = stateAt(stateDriver.t);
+          },
+        },
+        1.25,
+      );
+      tl.to(
+        blinkDriver,
+        {
+          p: Math.PI * 2 * 7,
+          duration: 4.35,
+          ease: "none",
+          onUpdate: () => {
+            statusCursor.style.opacity = Math.sin(blinkDriver.p) > 0 ? "1" : "0";
+          },
+        },
+        1.25,
+      );
+      tl.to(
+        shimmerDriver,
+        {
+          p: 3,
+          duration: 4.35,
+          ease: "none",
+          onUpdate: () => {
+            const pass = shimmerDriver.p % 1;
+            statusText.style.backgroundPosition = `${(1 - pass) * 100}% 50%`;
+          },
+        },
+        1.25,
+      );
+      tl.set("#f04-api-to-agent-status-text", { backgroundPosition: "100% 50%" }, 5.6);
+
+      tl.to("#f04-api-to-agent-path-model", { strokeDashoffset: 0, duration: 0.52, ease: "power2.out" }, 1.3);
+      tl.fromTo(
+        "#f04-api-to-agent-step-model",
+        { opacity: 0, y: 18 },
+        { opacity: 1, y: 0, duration: 0.42, ease: "power3.out" },
+        1.44,
+      );
+      tl.to("#f04-api-to-agent-path-tool", { strokeDashoffset: 0, duration: 0.58, ease: "power2.out" }, 1.72);
+      tl.fromTo(
+        "#f04-api-to-agent-step-tool",
+        { opacity: 0, y: 18 },
+        { opacity: 1, y: 0, duration: 0.42, ease: "power3.out" },
+        2.02,
+      );
+      tl.to("#f04-api-to-agent-path-flow", { strokeDashoffset: 0, duration: 0.58, ease: "power2.out" }, 2.26);
+      tl.fromTo(
+        "#f04-api-to-agent-step-flow",
+        { opacity: 0, y: 18 },
+        { opacity: 1, y: 0, duration: 0.42, ease: "power3.out" },
+        2.56,
+      );
+      tl.to("#f04-api-to-agent-path-studio", { strokeDashoffset: 0, duration: 0.64, ease: "power2.out" }, 2.72);
+      tl.fromTo(
+        "#f04-api-to-agent-studio",
+        { opacity: 0, scale: 0.9 },
+        { opacity: 1, scale: 1, duration: 0.55, ease: "power3.out" },
+        3.02,
+      );
+
+      const completeStep = (name, at) => {
+        tl.to(
+          `#f04-api-to-agent-${name}-outgoing`,
+          { opacity: 0, scale: 0.72, duration: 0.36, ease: "power2.in" },
+          at,
+        );
+        tl.fromTo(
+          `#f04-api-to-agent-${name}-incoming`,
+          { opacity: 0, scale: 0.72 },
+          { opacity: 1, scale: 1, duration: 0.52, ease: "back.out(1.4)" },
+          at + 0.22,
+        );
+        tl.to(
+          `#f04-api-to-agent-${name}-check`,
+          { strokeDashoffset: 0, duration: 0.44, ease: "power2.out" },
+          at + 0.3,
+        );
+      };
+
+      completeStep("model", 3.62);
+      completeStep("tool", 4.28);
+      completeStep("flow", 4.94);
+
+      tl.to(
+        "#f04-api-to-agent-step-model",
+        { x: 270, y: -168, scale: 0.18, opacity: 0, duration: 0.42, ease: "power2.in" },
+        5.5,
+      );
+      tl.to(
+        "#f04-api-to-agent-step-tool",
+        { y: -168, scale: 0.18, opacity: 0, duration: 0.42, ease: "power2.in" },
+        5.54,
+      );
+      tl.to(
+        "#f04-api-to-agent-step-flow",
+        { x: -270, y: -168, scale: 0.18, opacity: 0, duration: 0.42, ease: "power2.in" },
+        5.58,
+      );
+      tl.to(
+        "#f04-api-to-agent-studio",
+        { opacity: 0, scale: 0.82, duration: 0.34, ease: "power2.in" },
+        5.58,
+      );
+      tl.to(
+        "#f04-api-to-agent-pipeline-paths",
+        { opacity: 0, duration: 0.3, ease: "power1.in" },
+        5.58,
+      );
+      tl.to(
+        "#f04-api-to-agent-traits",
+        { opacity: 0, y: -12, duration: 0.34, ease: "power2.in" },
+        5.6,
+      );
+
+      tl.to(
+        "#f04-api-to-agent-status-card",
+        { opacity: 0, scale: 0.72, duration: 0.4, ease: "power2.in" },
+        5.67,
+      );
+      tl.fromTo(
+        "#f04-api-to-agent-ready-receipt",
+        { opacity: 0, scale: 0.72 },
+        { opacity: 1, scale: 1, duration: 0.58, ease: "back.out(1.4)" },
+        5.93,
+      );
+      tl.to(
+        "#f04-api-to-agent-ready-check",
+        { strokeDashoffset: 0, duration: 0.42, ease: "power2.out" },
+        6.08,
+      );
+
+      tl.fromTo(
+        ["#f04-api-to-agent-product-sheet", "#f04-api-to-agent-below"],
+        { y: -500 },
+        { y: 0, duration: 0.58, ease: "power3.out" },
+        6.24,
+      );
+
+      tl.fromTo(
+        "#f04-api-to-agent-final-tagline",
+        { opacity: 0, y: 12 },
+        { opacity: 1, y: 0, duration: 0.42, ease: "power3.out" },
+        7.15,
+      );
+      tl.fromTo(
+        "#f04-api-to-agent-progress-track",
+        { opacity: 0 },
+        { opacity: 1, duration: 0.22, ease: "power1.out" },
+        7.12,
+      );
+      tl.fromTo(
+        "#f04-api-to-agent-progress-fill",
+        { scaleX: 0 },
+        { scaleX: 1, duration: 0.66, ease: "power2.out" },
+        7.15,
+      );
+    })();
+  </script>
+</template>
