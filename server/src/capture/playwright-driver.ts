@@ -312,6 +312,17 @@ export class PlaywrightDriver implements BrowserDriver {
     }
   }
 
+  async extractVideoUrls(): Promise<Array<{ url: string; poster?: string }>> {
+    return this.getPage().evaluate(() => {
+      const videos = document.querySelectorAll('video')
+      return Array.from(videos).map(v => {
+        const src = v.src || v.querySelector('source')?.src || ''
+        const poster = v.getAttribute('poster') || undefined
+        return { url: src, poster }
+      }).filter(v => v.url && !v.url.startsWith('blob:'))
+    })
+  }
+
   async close(): Promise<void> {
     try {
       if (this.browser) {

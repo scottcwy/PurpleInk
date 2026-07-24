@@ -27,6 +27,11 @@ export type ShotType =
   | "pricing"
   | "cta-push"
   | "cta-fullbleed"
+  | "data-chart"
+  | "terminal-demo"
+  | "typing-effect"
+  | "scroll-demo"
+  | "video-shot"
 
 /** 兼容旧命名 */
 export type SceneKind = ShotType

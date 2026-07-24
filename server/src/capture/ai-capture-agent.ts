@@ -136,6 +136,7 @@ export class AiCaptureAgent {
   private onStep?: AiCaptureOptions["onStep"]
 
   private visitedUrls = new Set<string>()
+  private entryUrl = ""
   private authSteps = 0
   // 验证码页专用步数：即使 authBudget 耗尽，也允许在验证码页再花几步回填码（临门一脚）。
   private codeSteps = 0
@@ -165,6 +166,7 @@ export class AiCaptureAgent {
   async capture(url: string): Promise<CaptureResult> {
     await this.driver.navigate(url)
     await new Promise((r) => setTimeout(r, TIMING.NAVIGATE_WAIT))
+    this.entryUrl = url
 
     const screenshots: CapturedScreenshot[] = []
     const actions: AiAction[] = []
@@ -521,6 +523,55 @@ export class AiCaptureAgent {
           }
           await saveShot(sweepBuf, neutralLabel(sweepSnap), meta, sweepSnap)
         }
+
+        // 每 2 次截图尝试导航到未访问的页面区域（包括锚点链接），避免始终在同一位置打转
+        if (i > 0 && i % 2 === 0 && screenshots.length < this.minScreenshots && sweepSnap) {
+          // 查找所有可点击的导航元素（链接、按钮等）
+          const navElements = sweepSnap.elements.filter(
+            (el) => (el.role === "link" || el.role === "button") && (el.text?.trim() || el.name?.trim())
+          )
+          
+          // 按优先级排序：高价值页面/区域优先，低价值靠后
+          const HIGH_PRIORITY = ["features", "pricing", "docs", "products", "demo", "showcase", "solutions", "templates"]
+          const LOW_PRIORITY = ["blog", "about", "login", "signin", "signup", "register", "contact"]
+          
+          const prioritize = (el: typeof navElements[0]) => {
+            const label = (el.text || el.name || "").toLowerCase()
+            if (HIGH_PRIORITY.some(k => label.includes(k))) return 0  // 高优先级
+            if (LOW_PRIORITY.some(k => label.includes(k))) return 2   // 低优先级
+            return 1  // 普通
+          }
+          
+          navElements.sort((a, b) => prioritize(a) - prioritize(b))
+          
+          if (navElements.length > 0) {
+            // 尝试点击优先级最高的元素，失败则尝试下一个
+            let navigated = false
+            for (const target of navElements.slice(0, 3)) {  // 最多尝试3个
+              logger.info("ai_capture:fallback_navigate_attempt", { text: target.text, role: target.role, selector: target.selector })
+              try {
+                // 使用元素的 selector 字段进行点击
+                await this.driver.click(target.selector)
+                await new Promise((r) => setTimeout(r, TIMING.NAVIGATE_WAIT))
+                // 检查是否真的导航/滚动成功了（URL或位置应该变化）
+                const newSnap = await this.driver.snapshot().catch(() => null)
+                if (newSnap) {
+                  // 对于锚点链接，检查页面是否有滚动（通过比较快照内容）
+                  // 对于真实页面跳转，检查 URL 是否变化
+                  const urlChanged = newSnap.url && stripUrl(newSnap.url) !== stripUrl(sweepSnap.url || "")
+                  const contentChanged = newSnap.textContent !== sweepSnap.textContent
+                  if (urlChanged || contentChanged) {
+                    logger.info("ai_capture:fallback_navigate_success", { text: target.text })
+                    navigated = true
+                    break
+                  }
+                }
+              } catch { /* ignore, try next */ }
+            }
+            if (navigated) continue  // 跳过滚动，进入下一轮截图
+          }
+        }
+
         try { await this.driver.scroll("down") } catch { /* ignore */ }
         await new Promise((r) => setTimeout(r, TIMING.SCROLL_WAIT))
       }

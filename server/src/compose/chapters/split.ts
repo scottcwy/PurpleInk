@@ -5,13 +5,14 @@ import type { ChapterId, ChapterPlan } from "./types"
 
 /** Map a shot type to its chapter ID */
 function shotToChapter(kind: ShotType): ChapterId {
-  if (kind === "brand-center" || kind === "brand-side") return "ch1-opening"
-  if (kind === "hero-split" || kind === "hero-stack") return "ch2-hero"
-  if (kind === "shot-window" || kind === "shot-tilt" || kind === "shot-zoom" || kind === "shot-split") return "ch3-showcase"
+  if (kind === "brand-center" || kind === "brand-side" || kind === "typing-effect") return "ch1-opening"
+  if (kind === "hero-split" || kind === "hero-stack" || kind === "terminal-demo") return "ch2-hero"
+  if (kind === "shot-window" || kind === "shot-tilt" || kind === "shot-zoom" || kind === "shot-split" || kind === "scroll-demo" || kind === "video-shot") return "ch3-showcase"
   if (
     kind === "feature-row" || kind === "feature-stack" ||
     kind === "data-counter" || kind === "chips-marquee" ||
-    kind === "logo-wall" || kind === "pricing"
+    kind === "logo-wall" || kind === "pricing" ||
+    kind === "data-chart"
   ) return "ch4-proof"
   // cta-push, cta-fullbleed
   return "ch5-cta"

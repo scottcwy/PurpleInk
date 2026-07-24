@@ -11,6 +11,7 @@ import { resolveCredentials } from "./credentials"
 import { logger } from "../lib/logger"
 import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
+import { writeFileSync } from "node:fs"
 
 export interface RunCaptureOptions {
   /** 项目 id（写进 meta.json）；缺省从 URL 主机名派生 */
@@ -162,6 +163,40 @@ export async function runCapture(url: string, options: RunCaptureOptions = {}): 
       }
     } catch (err) {
       logger.warn("run_capture:extra_write_failed", { error: String(err) })
+    }
+
+    // 5c. 提取并下载视频资源
+    if (driver.extractVideoUrls) {
+      try {
+        const videoUrls = await driver.extractVideoUrls()
+        const assetsDir = join(captureOutDir, "assets")
+        await mkdir(assetsDir, { recursive: true })
+        for (let i = 0; i < videoUrls.length; i++) {
+          const v = videoUrls[i]
+          if (!v.url) continue
+          try {
+            const ext = v.url.includes(".webm") ? "webm" : "mp4"
+            const filename = `video-${i}.${ext}`
+            const filepath = join(assetsDir, filename)
+
+            // 下载视频（限制 10MB）
+            const res = await fetch(v.url)
+            if (res.ok) {
+              const buffer = Buffer.from(await res.arrayBuffer())
+              if (buffer.length <= 10 * 1024 * 1024) {
+                writeFileSync(filepath, buffer)
+                logger.info("capture:video_saved", { filename, size: buffer.length })
+              } else {
+                logger.warn("capture:video_too_large", { filename, size: buffer.length })
+              }
+            }
+          } catch (err) {
+            logger.warn("capture:video_download_failed", { url: v.url, error: String(err) })
+          }
+        }
+      } catch (err) {
+        logger.warn("run_capture:video_extract_failed", { error: String(err) })
+      }
     }
 
     logger.info("run_capture:done", {

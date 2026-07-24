@@ -36,6 +36,8 @@ export interface BrowserDriver {
   waitFor(selector: string, timeout?: number): Promise<void>
   /** 在页面上下文中执行脚本（用于品牌数据提取 extractPageTokensInBrowser） */
   evaluate<T>(fn: string | (() => T)): Promise<T>
+  /** 提取页面中的视频 URL */
+  extractVideoUrls?(): Promise<Array<{ url: string; poster?: string }>>
   /** 关闭浏览器 */
   close(): Promise<void>
 }

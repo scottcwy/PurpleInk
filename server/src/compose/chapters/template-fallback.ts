@@ -21,13 +21,14 @@ function esc(s: string): string {
 
 /** Map a shot type to its chapter */
 function shotToChapter(kind: ShotType): ChapterId {
-  if (kind === "brand-center" || kind === "brand-side") return "ch1-opening"
-  if (kind === "hero-split" || kind === "hero-stack") return "ch2-hero"
-  if (kind === "shot-window" || kind === "shot-tilt" || kind === "shot-zoom" || kind === "shot-split") return "ch3-showcase"
+  if (kind === "brand-center" || kind === "brand-side" || kind === "typing-effect") return "ch1-opening"
+  if (kind === "hero-split" || kind === "hero-stack" || kind === "terminal-demo") return "ch2-hero"
+  if (kind === "shot-window" || kind === "shot-tilt" || kind === "shot-zoom" || kind === "shot-split" || kind === "scroll-demo" || kind === "video-shot") return "ch3-showcase"
   if (
     kind === "feature-row" || kind === "feature-stack" ||
     kind === "data-counter" || kind === "chips-marquee" ||
-    kind === "logo-wall" || kind === "pricing"
+    kind === "logo-wall" || kind === "pricing" ||
+    kind === "data-chart"
   ) return "ch4-proof"
   return "ch5-cta"
 }
@@ -156,6 +157,11 @@ function clipClass(kind: ShotType): string {
     "pricing": "sc-pricing",
     "cta-push": "sc-cta-push",
     "cta-fullbleed": "sc-cta-full",
+    "data-chart": "sc-chart",
+    "terminal-demo": "sc-terminal",
+    "typing-effect": "sc-typing",
+    "scroll-demo": "sc-scroll",
+    "video-shot": "sc-video",
   }
   return map[kind] || "sc-window"
 }
@@ -306,6 +312,58 @@ ${cells}
     case "cta-fullbleed":
       return `          <div class="cta-h">${esc(m.cta.headline)}</div>
           ${m.cta.command ? `<div class="cmd mono"><span class="p">↗</span> ${esc(m.cta.command)}</div>` : ""}`
+    case "data-chart": {
+      const stats = scene.stats || []
+      const bars = stats.slice(0, 6).map((s, i) => {
+        const h = 40 + (i * 10)
+        return `          <div class="chart-bar"><div class="bar-fill" style="--target-h:${h}%"></div><span class="bar-value mono">${esc(s.value)}</span><span class="bar-label">${esc(s.label)}</span></div>`
+      }).join("\n")
+      return `          <div class="chart-eyebrow">KEY METRICS</div>
+          <div class="chart-title">Metrics</div>
+          <div class="chart-bars">${bars}</div>`
+    }
+    case "terminal-demo": {
+      const brand = m.brand?.title || "app"
+      const cmd = m.cta?.command || `npx ${brand}`
+      const lines = [
+        { type: "prompt", text: `$ npm install ${brand.toLowerCase().replace(/\s+/g, "-")}` },
+        { type: "success", text: "+ installed 142 packages in 3.2s" },
+        { type: "prompt", text: `$ ${cmd}` },
+        { type: "info", text: "  Creating project structure..." },
+        { type: "success", text: "  ✓ Project ready." },
+      ]
+      const linesHtml = lines.map(l => `          <div class="term-line term-${l.type}">${esc(l.text)}</div>`).join("\n")
+      return `          <div class="terminal">
+            <div class="term-bar"><span class="term-title mono">Terminal</span></div>
+            <div class="term-body mono">${linesHtml}<span class="term-cursor">█</span></div>
+          </div>`
+    }
+    case "typing-effect": {
+      const headline = m.hero?.headline || ""
+      return `          <div class="typing-wrap">
+            <div class="typing-text">${esc(headline)}</div>
+            <div class="typing-cursor">|</div>
+          </div>`
+    }
+    case "scroll-demo": {
+      const imgSrc = scene.shots?.[0]?.src || ""
+      return `          <div class="scroll-window">
+            <div class="scroll-window-bar">
+              <span class="shot-window-dot r"></span>
+              <span class="shot-window-dot y"></span>
+              <span class="shot-window-dot g"></span>
+            </div>
+            <div class="scroll-viewport">
+              <img src="${esc(imgSrc)}" class="scroll-content" />
+            </div>
+          </div>`
+    }
+    case "video-shot": {
+      const videoSrc = scene.shots?.[0]?.src || ""
+      return `          <div class="video-window">
+            <video class="video-element" src="${esc(videoSrc)}" muted playsinline></video>
+          </div>`
+    }
     default:
       return ""
   }
@@ -414,6 +472,27 @@ function renderTimeline(m: VideoModel): string {
         lines.push(`      tl.set("${sel}", { opacity: 0 }, 0);`)
         lines.push(`      tl.to("${sel}", { opacity: 1, duration: 0.5, ease: "power1.out" }, ${at(0)});`)
         lines.push(`      tl.from("${sel} .cta-h", { opacity: 0, y: 48, scale: 0.96, duration: 0.8, ease: "${enterEase}" }, ${at(0.25)});`)
+        break
+      case "data-chart":
+        lines.push(`      tl.from("${sel} .chart-title", { clipPath: "inset(0 100% 0 0)", duration: 0.6, ease: "power3.out" }, ${at(0.1)});`)
+        lines.push(`      tl.from("${sel} .bar-fill", { height: 0, duration: 0.8, ease: "power2.out", stagger: 0.15 }, ${at(0.3)});`)
+        lines.push(`      tl.from("${sel} .bar-value", { opacity: 0, y: 10, duration: 0.5, stagger: 0.15 }, ${at(0.5)});`)
+        break
+      case "terminal-demo":
+        lines.push(`      tl.from("${sel} .terminal", { y: 30, opacity: 0, duration: 0.6, ease: "power3.out" }, ${at(0.1)});`)
+        lines.push(`      tl.from("${sel} .term-line", { opacity: 0, x: -10, duration: 0.4, ease: "power2.out", stagger: 0.3 }, ${at(0.3)});`)
+        lines.push(`      tl.to("${sel} .term-cursor", { opacity: 0, duration: 0.6, ease: "sine.inOut", yoyo: true, repeat: -1 }, ${at(0.3)});`)
+        break
+      case "typing-effect":
+        lines.push(`      tl.from("${sel} .typing-text", { clipPath: "inset(0 100% 0 0)", duration: 1.5, ease: "steps(20)" }, ${at(0.2)});`)
+        lines.push(`      tl.to("${sel} .typing-cursor", { opacity: 0, duration: 0.5, ease: "sine.inOut", yoyo: true, repeat: -1 }, ${at(0.2)});`)
+        break
+      case "scroll-demo":
+        lines.push(`      tl.from("${sel} .scroll-window", { opacity: 0, scale: 0.95, duration: 0.8, ease: "power3.out" }, ${at(0.1)});`)
+        lines.push(`      tl.to("${sel} .scroll-content", { y: "-40%", duration: ${round(scene.duration - 1)}, ease: "sine.inOut" }, ${at(0.5)});`)
+        break
+      case "video-shot":
+        lines.push(`      tl.from("${sel} .video-window", { opacity: 0, y: 40, scale: 0.96, duration: 0.9, ease: "power3.out" }, ${at(0.2)});`)
         break
     }
 
@@ -541,5 +620,45 @@ function renderCss(m: VideoModel): string {
       .sc-cta-full { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 40px; background: var(--accent); color: var(--accent-fg); }
       .cta-h { font-size: 96px; font-weight: 800; letter-spacing: -0.04em; text-align: center; padding: 0 80px; max-width: 1640px; overflow-wrap: break-word; }
       .sc-cta-push .cmd { display: inline-flex; align-items: center; gap: 16px; height: 84px; padding: 0 40px; background: var(--secondary); border: 1px solid var(--border); border-radius: 14px; font-size: 34px; color: var(--fg); }
-      .sc-cta-full .cmd { display: inline-flex; align-items: center; gap: 16px; height: 84px; padding: 0 40px; background: transparent; border: 1px solid var(--accent-fg); border-radius: 14px; font-size: 34px; color: var(--accent-fg); }`
+      .sc-cta-full .cmd { display: inline-flex; align-items: center; gap: 16px; height: 84px; padding: 0 40px; background: transparent; border: 1px solid var(--accent-fg); border-radius: 14px; font-size: 34px; color: var(--accent-fg); }
+
+      /* data-chart */
+      .sc-chart { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 32px; padding: 0 80px; }
+      .chart-eyebrow { font-size: 14px; text-transform: uppercase; letter-spacing: 3px; color: var(--accent); }
+      .chart-title { font-size: 36px; font-weight: 800; letter-spacing: -1px; }
+      .chart-bars { display: flex; align-items: flex-end; gap: 32px; height: 400px; width: 100%; max-width: 1200px; }
+      .chart-bar { display: flex; flex-direction: column; align-items: center; flex: 1; height: 100%; justify-content: flex-end; }
+      .bar-fill { width: 100%; background: var(--accent); border-radius: 8px 8px 0 0; height: var(--target-h, 50%); }
+      .bar-value { font-size: 36px; font-weight: 800; color: var(--accent); margin-bottom: 8px; }
+      .bar-label { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+
+      /* terminal-demo */
+      .sc-terminal { display: flex; align-items: center; justify-content: center; height: 100%; }
+      .terminal { width: 960px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); background: #1a1a1a; }
+      .term-bar { height: 40px; background: #2a2a2a; display: flex; align-items: center; padding: 0 16px; }
+      .term-title { color: #999; font-size: 14px; }
+      .term-body { padding: 24px; font-size: 18px; line-height: 1.8; }
+      .term-line { opacity: 1; }
+      .term-line.term-prompt { color: #e0e0e0; }
+      .term-line.term-success { color: #4ade80; }
+      .term-line.term-info { color: #94a3b8; }
+      .term-cursor { display: inline-block; color: var(--accent); }
+
+      /* typing-effect */
+      .sc-typing { display: flex; align-items: center; justify-content: center; height: 100%; }
+      .typing-wrap { display: flex; align-items: center; gap: 4px; }
+      .typing-text { font-size: 64px; font-weight: 800; letter-spacing: -2px; clip-path: inset(0 0 0 0); }
+      .typing-cursor { font-size: 64px; font-weight: 300; color: var(--accent); }
+
+      /* scroll-demo */
+      .sc-scroll { display: flex; align-items: center; justify-content: center; height: 100%; }
+      .scroll-window { width: 1000px; height: 600px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+      .scroll-window-bar { height: 32px; background: var(--secondary); display: flex; align-items: center; padding: 0 12px; gap: 6px; }
+      .scroll-viewport { height: calc(100% - 32px); overflow: hidden; }
+      .scroll-content { width: 100%; object-fit: cover; }
+
+      /* video-shot */
+      .sc-video { display: flex; align-items: center; justify-content: center; height: 100%; }
+      .video-window { width: 1200px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+      .video-element { width: 100%; display: block; }`
 }
