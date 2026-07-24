@@ -65,7 +65,8 @@ interface ShotDef {
   timeline: ShotTimeline
 }
 
-/** 统一 clip 外壳（占位 start/duration 由 renderScene 注入真实值） */
+/** 统一 clip 外壳（占位 start/duration 由 renderScene 注入真实值）
+ *  内含四层深度结构：depth-bg / depth-mid / depth-content / depth-fg */
 function clip(sid: string, cls: string, inner: string, extraAttr = ""): string {
   return `      <div id="${sid}" class="clip ${cls}" data-start="0" data-duration="1" data-track-index="1"${extraAttr ? " " + extraAttr : ""}>
         <div class="depth-bg"></div>
@@ -702,6 +703,12 @@ function buildTimeline(m: VideoModel): string {
       lines.push(`      tl.from("${sel}", { opacity: 0, duration: 0.6, ease: "power1.inOut" }, ${start});`)
     }
     lines.push(...def.timeline(m, sel, scene, scene.start))
+    // 深度层视差动画
+    const sceneDur = round(scene.duration)
+    const tStart = round(scene.start)
+    lines.push(`      tl.fromTo("${sel} .depth-bg", { x: -8, y: -4 }, { x: 8, y: 4, duration: ${sceneDur}, ease: "sine.inOut" }, ${tStart});`)
+    lines.push(`      tl.fromTo("${sel} .depth-mid", { x: 4, y: 2 }, { x: -4, y: -2, duration: ${sceneDur}, ease: "sine.inOut" }, ${tStart});`)
+    lines.push(`      tl.to("${sel} .depth-fg .geo", { y: "+=3", duration: 2, ease: "sine.inOut", yoyo: true, repeat: -1 }, ${tStart});`)
     // 闪白硬切：非首镜，在切点前后一次白闪脉冲(kinetic 的高能量硬切)
     if (trans === "flash" && index > 0) {
       lines.push(`      tl.to(".fx-flash", { opacity: 0.92, duration: 0.09, ease: "power1.in" }, ${round(start - 0.09)});`)
@@ -712,18 +719,6 @@ function buildTimeline(m: VideoModel): string {
       lines.push(`      tl.from("${sel}", { x: 120, opacity: 0, duration: 0.7, ease: "power3.inOut" }, ${start});`)
     }
     // cut：不加任何转场，clip 窗口化天然硬切(technical 的紧凑硬切)
-  })
-  // 深度层视差动画（统一追加到所有 shot）
-  m.scenes.forEach((scene, index) => {
-    const sel = `#s${index}`
-    const sceneDur = round(scene.duration)
-    const tStart = round(scene.start)
-    // 背景层: 极缓慢漂移(视差最远)
-    lines.push(`      tl.fromTo("${sel} .depth-bg", { x: -8, y: -4 }, { x: 8, y: 4, duration: ${sceneDur}, ease: "sine.inOut" }, ${tStart});`)
-    // 拓扑层: 缓慢反向漂移
-    lines.push(`      tl.fromTo("${sel} .depth-mid", { x: 4, y: 2 }, { x: -4, y: -2, duration: ${sceneDur}, ease: "sine.inOut" }, ${tStart});`)
-    // 前景装饰: 浮动 + 脉冲
-    lines.push(`      tl.to("${sel} .depth-fg .geo", { y: "+=3", duration: 2, ease: "sine.inOut", yoyo: true, repeat: -1 }, ${tStart});`)
   })
   return lines.join("\n")
 }
@@ -1111,10 +1106,7 @@ export function renderChapterHtml(
     if (trans === "wipe" && index > 0) {
       timelineLines.push(`      tl.from("${sel}", { x: 120, opacity: 0, duration: 0.7, ease: "power3.inOut" }, ${start});`)
     }
-  })
-  // 深度层视差动画（统一追加到所有 shot）
-  reTimedScenes.forEach((scene, index) => {
-    const sel = `#s${index}`
+    // 深度层视差动画
     const sceneDur = round(scene.duration)
     const tStart = round(scene.start)
     timelineLines.push(`      tl.fromTo("${sel} .depth-bg", { x: -8, y: -4 }, { x: 8, y: 4, duration: ${sceneDur}, ease: "sine.inOut" }, ${tStart});`)
