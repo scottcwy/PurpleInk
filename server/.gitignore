@@ -4,6 +4,7 @@ dist/
 .env.local
 *.log
 
-# 生成产物（可复现，不入库）：渲染输出/采集缓存/采集样本
-out/
-capture/
+# 生成产物（可复现，不入库）：渲染输出/采集缓存/采集样本。
+# 必须用前导 / 锚定到 server/ 根，否则会误伤 src/capture/ 源码目录。
+/out/
+/capture/
