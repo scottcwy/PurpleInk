@@ -1,5 +1,7 @@
 export type R2ObjectStoreOptions = {
-  accountId: string;
+  accountId?: string;
+  endpoint?: string;
+  region?: string;
   bucket: string;
   accessKeyId: string;
   secretAccessKey: string;
@@ -9,6 +11,7 @@ export type R2ObjectStoreOptions = {
 
 export class R2ObjectStore {
   constructor(options: R2ObjectStoreOptions);
+  createBucket(): Promise<void>;
   signPut(input: { key: string; bytes: number; sha256: string; mimeType: string; expiresInSeconds: number }): Promise<{ url: string; headers: Record<string, string>; expiresAt: string }>;
   put(key: string, bytes: Uint8Array, metadata?: { contentType?: string; bundleHash?: string }): Promise<void>;
   get(key: string): Promise<Buffer | null>;

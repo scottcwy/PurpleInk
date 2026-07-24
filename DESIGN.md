@@ -1,186 +1,213 @@
 ---
 name: PurpleInk
 description: A monochrome creative-technology system animated by spectral indigo.
-sourceOfTruth: app/globals.css
-referenceSurface: app/page.tsx
-fonts:
-  sans: "Geist, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif"
-  mono: "Geist Mono, Noto Sans Mono CJK SC, ui-monospace, monospace"
 colors:
   white: "#FFFFFF"
   black: "#0A0A0A"
-  night: "#03040A"
-  night-asset: "#030409"
-  night-glow: "#0C0E21"
   neutral-50: "#FAFAFA"
   neutral-100: "#F5F5F5"
   neutral-300: "#E5E5E5"
   neutral-600: "#737373"
+  night: "#03040A"
   night-surface: "#18181B"
   night-border: "#27272A"
   night-muted: "#A1A1AA"
-  indigo-900: "#352E82"
-  indigo-700: "#333DA7"
-  indigo-600: "#5160C3"
-  indigo-500: "#6366F1"
-  indigo-400: "#7388DF"
-  indigo-300: "#8C9EE6"
-  indigo-200: "#A5B4F0"
-  indigo-150: "#A5B4FC"
-  mark-green: "#00C37A"
+  indigo-deep: "#352E82"
+  indigo-spectrum-start: "#333DA7"
+  indigo: "#6366F1"
+  indigo-spectrum-end: "#7388DF"
+  indigo-light: "#A5B4FC"
+  verified-green: "#00C37A"
   icon-violet: "#7D3DF3"
+typography:
+  display:
+    fontFamily: "Geist, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif"
+    fontSize: "clamp(2.25rem, 6vw, 4.5rem)"
+    fontWeight: 500
+    lineHeight: 1
+    letterSpacing: "normal"
+  headline:
+    fontFamily: "Geist, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif"
+    fontSize: "clamp(1.65rem, 3vw, 2.35rem)"
+    fontWeight: 750
+    lineHeight: 1.15
+    letterSpacing: "-0.035em"
+  body:
+    fontFamily: "Geist, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif"
+    fontSize: "1rem"
+    fontWeight: 400
+    lineHeight: 1.65
+    letterSpacing: "normal"
+  label:
+    fontFamily: "Geist Mono, Noto Sans Mono CJK SC, ui-monospace, monospace"
+    fontSize: "0.6875rem"
+    fontWeight: 650
+    lineHeight: 1.25
+    letterSpacing: "normal"
+rounded:
+  control-sm: "6px"
+  control: "10px"
+  media: "12px"
+  panel: "14px"
+  pill: "999px"
+spacing:
+  xs: "4px"
+  sm: "8px"
+  md: "12px"
+  lg: "16px"
+  xl: "24px"
+  2xl: "32px"
+components:
+  button-primary:
+    backgroundColor: "{colors.indigo}"
+    textColor: "{colors.white}"
+    typography: "{typography.label}"
+    rounded: "{rounded.control}"
+    padding: "10px 16px"
+    height: "44px"
+  button-secondary:
+    backgroundColor: "{colors.neutral-100}"
+    textColor: "{colors.black}"
+    typography: "{typography.label}"
+    rounded: "{rounded.control}"
+    padding: "10px 16px"
+    height: "44px"
+  proof-badge:
+    backgroundColor: "{colors.verified-green}"
+    textColor: "{colors.night}"
+    typography: "{typography.label}"
+    rounded: "{rounded.pill}"
+    padding: "5px 9px"
+  media-card:
+    backgroundColor: "{colors.neutral-100}"
+    textColor: "{colors.black}"
+    rounded: "{rounded.media}"
 ---
 
-# PurpleInk Design System
+# Design System: PurpleInk
 
-## 1. System authority
+## Overview
 
-PurpleInk's homepage is the visual source of truth. The design system is extracted from the shipped homepage; it does not redesign or normalize the homepage into a different aesthetic.
+**Creative North Star: "Spectral Ink"**
 
-The normative implementation lives in `app/globals.css`. This document explains the intent and usage of those tokens. If documentation and the rendered homepage disagree, inspect the homepage implementation first and update the documentation or tokens without changing the rendered result.
+PurpleInk combines a near-monochrome interface with indigo imagery that behaves like digital ink, light, or moving photographic emulsion. The system is minimal and spatial rather than card-heavy, with restrained typography allowing product evidence, imagery, and interaction to carry the identity.
 
-## 2. Creative direction: Spectral Ink
+The shipped homepage is the visual reference surface, and `app/globals.css` is the normative implementation. If documentation and the rendered product disagree, inspect the implementation first and update the documentation or tokens without changing the rendered result.
 
-PurpleInk combines a near-monochrome interface with indigo imagery that behaves like digital ink, light, or a moving photographic emulsion.
+**Key Characteristics:**
 
-The visual character is:
+- Monochrome structure with spectral indigo at expressive moments.
+- Creative-technology character without generic SaaS decoration.
+- Product evidence remains inspectable; effects never obscure factual content.
+- Flat, bounded operational surfaces and more expressive marketing interactions.
+- Motion is tactile but never required to access content.
 
-- minimal and spatial rather than card-heavy;
-- creative-technology rather than conventional SaaS;
-- monochrome at the structural level;
-- spectral indigo at expressive moments;
-- tactile through blur, deformation, drag, parallax, and responsive motion;
-- restrained in typography so imagery and interaction can carry the identity.
+## Colors
 
-Black, white, and neutral gray create structure. Indigo is the dominant expressive hue family. The logo's green registration dot and the app icon's violet field are extracted brand-asset exceptions with deliberately narrow roles. New hues must not be introduced without first appearing on the reference homepage.
+Black, white, and neutral gray build the structure. Indigo carries brand, focus, selection, motion energy, and primary action. Verified green is reserved for the logo registration mark and confirmed proof states; icon violet is reserved for the static app-icon field.
 
-## 3. Token architecture
+### Primary
 
-### Primitive tokens
+- **Spectral Indigo:** the `indigo`, `indigo-deep`, `indigo-spectrum-start`, `indigo-spectrum-end`, and `indigo-light` tokens form the extracted brand sequence. Do not replace them with a generic purple scale.
 
-Primitive tokens record exact colors extracted from the homepage. Components must not use primitive tokens directly unless they render a brand asset, gradient stop, or other value whose exact color is the intent.
+### Secondary
 
-| Family  | Tokens                                       | Purpose                                                         |
-| ------- | -------------------------------------------- | --------------------------------------------------------------- |
-| Neutral | `--pi-white`, `--pi-black`, `--pi-neutral-*` | Light surfaces, typography, borders, quiet grouping             |
-| Night   | `--pi-night`, `--pi-night-*`                 | Dark theme, media stages, dark product surfaces                 |
-| Indigo  | `--pi-indigo-*`                              | Brand spectrum, focus, actions, selected and highlighted states |
-| Mark    | `--pi-mark-green`                            | Logo registration dot and verified state                        |
-| Icon    | `--pi-icon-violet`                           | Static app-icon field only                                      |
+- **Verified Green:** use only for the registration mark and verified or approved states, always with a label or icon.
 
-The indigo sequence is intentionally extracted rather than mathematically regenerated. Do not replace it with a generic purple scale.
+### Neutral
 
-### Semantic tokens
+- **Paper:** `white`, `neutral-50`, `neutral-100`, and `neutral-300` support light surfaces, grouping, and borders.
+- **Ink:** `black` is the light-theme foreground.
+- **Night:** `night`, `night-surface`, `night-border`, and `night-muted` define the dark theme and dark media stages.
 
-Components consume semantic roles:
+**The Evidence Rule.** Color never constitutes evidence by itself. Verification and intervention states always include text or an icon.
 
-- `background` / `foreground`
-- `muted` / `muted-foreground`
-- `surface-strong`
-- `border`
-- `accent` / `accent-strong` / `accent-light` / `accent-foreground`
-- `ink-panel` / `ink-panel-soft` / `ink-panel-text` / `ink-panel-muted`
-- `proof` / `proof-ink`
-- `signal` / `signal-soft` / `signal-ink`
+**The One-Emphasis Rule.** Ordinary layouts use one neutral surface system and, when needed, one indigo emphasis. New hues require an established brand asset or a new semantic need.
 
-`proof` and `signal` are product-state roles, not independent brand palettes. `proof` reuses the homepage logo green; `signal` is derived from indigo and neutral primitives. Both must always be accompanied by a label or icon.
+**The Semantic Consumption Rule.** Product components consume semantic CSS roles such as `background`, `foreground`, `accent`, `proof`, and `signal`; exact primitives are reserved for brand assets, gradient stops, and static assets that cannot use CSS variables.
 
-### Brand-effect tokens
+## Typography
 
-The homepage's effects are reusable brand assets:
+**Display Font:** Geist with system CJK sans-serif fallbacks
 
-- `--gradient-brand-spectrum`: the primary `#333DA7 → #7388DF` image treatment;
-- `--gradient-footer-spectrum`: the multi-stop footer glow;
-- `--gradient-edge-spectrum`: a directional edge fade;
-- `--brand-launch-ink`: the deep indigo used by the launch interaction;
-- `--mask-header-fade`: the fixed-navigation blur mask;
-- `--shadow-launch-cta`: the homepage CTA elevation;
-- overlay tokens for the existing hover and launch animation states.
+**Body Font:** Geist with system CJK sans-serif fallbacks
 
-Do not approximate these effects with new gradients or arbitrary opacity values inside components.
+**Label/Mono Font:** Geist Mono with Noto Sans Mono CJK SC and platform monospace fallbacks
 
-## 4. Color rules
+**Character:** The type system is quiet, direct, and operational. Sans-serif type carries all messages and controls; mono type marks compact machine-readable context rather than acting as decoration.
 
-1. Ordinary layouts use one neutral surface system and, when necessary, one indigo emphasis.
-2. Indigo communicates brand, selection, focus, motion energy, and primary action.
-3. Abstract imagery uses the shared spectral gradient so unrelated source images belong to one visual family.
-4. Dark sections use the Night primitives rather than generic Tailwind zinc or slate colors.
-5. Verified states may reuse the logo green. Other status differences use label, icon, weight, indigo, and surface treatment rather than introducing another hue family.
-6. Business components use semantic classes such as `bg-accent` and `text-muted-foreground`; they do not reference hex values.
-7. Static assets such as favicons may embed exact primitive hex values because CSS custom properties are unavailable there.
+### Hierarchy
 
-## 5. Typography
+- **Display** (500, `clamp(2.25rem, 6vw, 4.5rem)`, 1): one hero or section statement where the surface genuinely supports it.
+- **Headline** (750, `clamp(1.65rem, 3vw, 2.35rem)`, 1.15): major product-stage and section headings.
+- **Title** (650-750, 1.05-1.5rem): panel, card, and workbench titles.
+- **Body** (400-500, 0.875-1.125rem, 1.5-1.65): explanatory and review copy, generally capped near 72 characters per line.
+- **Label** (650, 0.6875rem, normal tracking): identifiers, versions, timestamps, dimensions, hashes, execution states, and operational metadata.
 
-### Geist sans
+**The Metadata Boundary Rule.** Mono type is reserved for machine-readable context. Body copy, navigation, and commands remain in Geist sans.
 
-Geist is the production family for headings, body copy, navigation, controls, and marketing text. Next.js self-hosts the font files and exposes them through `--font-geist-sans`. Chinese text falls back to PingFang SC, Microsoft YaHei, or Noto Sans CJK SC because Geist does not include complete CJK glyph coverage.
+**The Tracking Floor Rule.** Body text, labels, and controls use normal letter spacing. Tight tracking is limited to large headings and never goes below `-0.04em`.
 
-Use the existing Tailwind type scale and weights from the homepage as the starting hierarchy:
+## Layout
 
-- Hero: responsive `text-4xl` through `text-7xl`, medium weight, tight tracking;
-- Section statement: responsive `text-4xl` through `text-7xl`, medium weight;
-- Section heading: `text-2xl` through `text-4xl`, medium weight;
-- Body: `text-sm` through `text-lg`, normal or medium weight;
-- Navigation and controls: medium weight with normal casing.
+Marketing surfaces use wide, spatial sections with constrained content columns and enough open space for imagery and interaction. Product surfaces use dense but orderly workbenches: bounded toolbars, split canvas-and-inspector layouts, and a six-stage release navigator. The main workbench changes from two columns to a single stacked flow below its layout breakpoint; horizontal process navigation remains scrollable instead of compressing labels.
 
-### Geist Mono
+Use the 4px-based spacing scale from the frontmatter and prefer stable grid tracks, explicit minimum heights, and constrained line lengths. Marketing media commonly uses a 4:5 portrait ratio; operational panels size to their task rather than adopting decorative card grids.
 
-Geist Mono is reserved for compact technical information: identifiers, versions, timestamps, dimensions, hashes, machine states, and operational labels. It is not a decorative substitute for body copy. Chinese technical content falls back to Noto Sans Mono CJK SC or the platform monospace.
+## Elevation & Depth
 
-## 6. Component expression
+The system is flat by default. Borders, tonal layers, blur, and spectral imagery establish depth; shadows are reserved for signature interactions and focus response. The homepage launch CTA uses a soft `0 8px 32px rgb(0 0 0 / 12%)` shadow, while fields may use a restrained 20px focus halo. Ordinary workbench panels do not receive diffuse elevation.
 
-### Launch CTA
+**The Flat-by-Default Rule.** A resting surface uses a boundary or tonal shift, not a decorative border plus a large shadow.
 
-The homepage launch CTA is a signature brand component:
+## Shapes
 
-- 64px height;
-- full pill geometry;
-- neutral foreground/background inversion;
-- a circular trailing action area;
-- `--shadow-launch-cta` at rest;
-- deep-indigo ink expansion during launch.
+Operational controls use compact 6-10px corners, media uses 12px corners, and framed workbench panels use 14px corners. Pills are reserved for status chips, compact metadata, circular icon actions, and the signature launch CTA. The full-pill hero control is a branded exception, not the default geometry for every button.
 
-This component does not define the geometry of every product button. Product controls may remain more compact while using the same color and type tokens.
+## Components
 
-### Media cards
+### Buttons
 
-- 12px corner radius;
-- portrait-oriented imagery where appropriate;
-- shared spectral color treatment;
-- flat containment with subtle boundaries;
-- WebGL or CSS deformation may enhance interaction without hiding content.
+- **Primary:** compact product actions use spectral indigo, white text, a 10px radius, 44px minimum height, and 10px by 16px padding.
+- **Secondary:** neutral-surface actions use the same geometry and type weight to avoid layout movement between variants.
+- **Hover / Focus / Disabled:** hover translates upward by 2px over 180ms; focus uses a visible 3px indigo outline; disabled controls remain stationary at 52% opacity.
+- **Launch CTA:** the homepage signature action is 64px tall, fully pill-shaped, inverted against its context, and ends in a 48px circular action area. Deep-indigo ink expansion and its soft shadow belong only to this interaction.
+
+### Chips
+
+- **Status badges:** fully pill-shaped, compact, and set in Geist Mono. Proof uses verified green; signal and neutral states reuse indigo and neutral semantic roles. Every state includes readable text or an icon.
+
+### Cards / Containers
+
+- **Media cards:** use 12px corners, portrait imagery when appropriate, the shared spectral treatment, and a subtle boundary.
+- **Workbench panels:** use 14px corners, a 1px semantic border, flat paper or muted surfaces, and task-scaled internal padding.
+- **Flow nodes:** use a 12px radius and compact row layout; hover and selection change boundary, tone, and at most 1px of vertical position without resizing.
+
+### Inputs / Fields
+
+- **Style:** fields use a semantic border, paper background, compact 8-10px corner radius, and at least 44px control height.
+- **Focus:** border or outline shifts to the indigo ring and may add a restrained focus halo. Placeholder and disabled text remain legible in both themes.
 
 ### Navigation
 
-The marketing navigation uses a fixed, blend-aware treatment with a fading backdrop mask. Product navigation may use conventional surfaces, but it must consume the same neutral, indigo, and typography tokens.
+- **Marketing:** fixed and blend-aware, with a fading backdrop mask and compact white links over the homepage opening scene.
+- **Product:** conventional dark side navigation and neutral content surfaces, using the same Geist, Night, neutral, and indigo tokens.
+- **Release stages:** a horizontal six-step navigator identifies the current stage with indigo and keeps locked or unavailable stages visibly distinct without relying on color alone.
 
-## 7. Light and dark themes
+## Do's and Don'ts
 
-Light mode is pure white with near-black text. Dark mode is the homepage Night system, not a color-inverted purple theme.
+### Do:
 
-Theme changes remap semantic tokens. Brand spectrum primitives stay stable across themes so imagery retains its identity.
+- **Do** lead with real product frames, attached sources, approval state, and reproducible workflow.
+- **Do** use the shared spectral gradient for expressive imagery so disparate source assets belong to one family.
+- **Do** use Night primitives for dark surfaces and semantic tokens inside product components.
+- **Do** preserve keyboard focus, reduced-motion behavior, and readable content in both themes.
+- **Do** reuse existing motion timing and easing before introducing another motion vocabulary.
 
-Avoid hardcoded `text-white`, `bg-black`, or zinc/slate values when a semantic token expresses the same intent. Blend-mode marketing elements are the exception when their behavior specifically depends on black or white compositing.
+### Don't:
 
-## 8. Motion and accessibility
-
-Motion is part of PurpleInk's identity, but content remains available without it.
-
-- Preserve the existing blur-to-focus entrance, scroll reveal, draggable rails, fluid cursor, and WebGL hover behavior.
-- New motion should reuse existing timing and easing patterns before adding another motion vocabulary.
-- Reduced-motion mode must remove or simplify motion without leaving content invisible or displaced.
-- Focus remains visible and uses the semantic ring token.
-- Body text and controls target WCAG 2.1 AA contrast.
-
-## 9. Governance
-
-When adding or changing a color or font:
-
-1. Confirm the value already exists on the homepage or is required as a semantic mapping.
-2. Add or reuse a primitive token.
-3. Map it to a semantic or brand-effect token.
-4. Use the semantic token in components.
-5. Verify light mode, dark mode, focus, reduced motion, and responsive layouts.
-6. Run a homepage screenshot comparison. A token-only refactor must produce no intentional visual difference.
-
-The homepage remains the reference surface until a deliberate brand redesign explicitly replaces it.
+- **Don't** present PurpleInk as a generic prompt-to-video or AI design generator.
+- **Don't** invent product evidence, customer logos, metrics, or testimonials.
+- **Don't** use gradient text, decorative color orbs, glass cards, nested cards, or generic purple SaaS styling.
+- **Don't** approximate the spectral effects with arbitrary gradients or one-off opacity values inside components.
+- **Don't** use hardcoded white, black, zinc, or slate values when a semantic token already expresses the role.

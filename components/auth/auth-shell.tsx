@@ -39,12 +39,12 @@ export function AuthShell({
             <br />
             Release video out.
           </p>
-          <p className="mt-5 max-w-xs text-sm leading-6 text-zinc-400">
+          <p className="text-ink-panel-muted mt-5 max-w-xs text-sm leading-6">
             Keep every launch tied to approved product truth.
           </p>
         </div>
 
-        <p className="font-mono text-[11px] tracking-widest text-zinc-500 uppercase">
+        <p className="text-ink-panel-muted font-mono text-xs uppercase">
           Continuous release video
         </p>
       </aside>
@@ -58,22 +58,20 @@ export function AuthShell({
             <Image src="/svg/logo.svg" alt="" width={28} height={28} />
             <span className="text-sm font-semibold">PurpleInk</span>
           </Link>
-          <p className="text-accent-strong font-mono text-[11px] tracking-widest uppercase">
+          <p className="text-accent-strong font-mono text-xs uppercase">
             {eyebrow}
           </p>
           <h1 className="mt-3 text-3xl font-semibold tracking-normal sm:text-4xl">
             {title}
           </h1>
           <div className="mt-9">{children}</div>
-          <div className="mt-8 text-sm text-zinc-600">{footer}</div>
+          <div className="text-muted-foreground mt-8 text-sm">{footer}</div>
         </div>
       </section>
     </main>
   );
 }
 
-export const authInputClassName =
-  "mt-2 h-11 w-full border border-border bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-accent";
+export const authInputClassName = "h-12 rounded-[var(--radius-control)]";
 
-export const authButtonClassName =
-  "focus-ring mt-2 inline-flex h-11 w-full items-center justify-center gap-2 bg-foreground px-4 text-sm font-semibold text-background transition-colors hover:bg-accent hover:text-accent-foreground";
+export const authButtonClassName = "mt-1 h-12 w-full";

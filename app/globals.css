@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -31,15 +33,25 @@
   --background: var(--pi-white);
   --paper: var(--pi-white);
   --foreground: var(--pi-black);
+  --card: var(--pi-white);
+  --card-foreground: var(--pi-black);
+  --popover: var(--pi-white);
+  --popover-foreground: var(--pi-black);
+  --primary: var(--pi-indigo-500);
+  --primary-foreground: var(--pi-white);
+  --secondary: var(--pi-neutral-100);
+  --secondary-foreground: var(--pi-black);
   --muted: var(--pi-neutral-100);
   --surface-strong: var(--pi-neutral-300);
   --muted-foreground: var(--pi-neutral-600);
   --border: var(--pi-neutral-300);
+  --input: var(--pi-neutral-300);
   --ring: var(--pi-indigo-500);
-  --accent: var(--pi-indigo-500);
+  --accent: var(--pi-indigo-150);
   --accent-strong: var(--pi-indigo-900);
   --accent-light: var(--pi-indigo-150);
-  --accent-foreground: var(--pi-white);
+  --accent-foreground: var(--pi-indigo-900);
+  --destructive: var(--pi-indigo-900);
   --proof: var(--pi-mark-green);
   --proof-ink: var(--pi-night);
   --signal: var(--pi-indigo-200);
@@ -98,21 +110,53 @@
     "Noto Sans CJK SC", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
   --type-mono:
     var(--font-geist-mono), "Noto Sans Mono CJK SC", ui-monospace, monospace;
+  --radius-compact: 8px;
+  --radius-control: 10px;
+  --radius-media: 12px;
+  --radius-surface: 14px;
+  --radius-feature: 16px;
+  --radius: var(--radius-control);
+  --sidebar: var(--pi-night);
+  --sidebar-foreground: var(--pi-neutral-50);
+  --sidebar-primary: var(--pi-indigo-500);
+  --sidebar-primary-foreground: var(--pi-white);
+  --sidebar-accent: var(--pi-night-surface);
+  --sidebar-accent-foreground: var(--pi-neutral-50);
+  --sidebar-border: var(--pi-night-border);
+  --sidebar-ring: var(--pi-indigo-400);
 }
 
 .dark {
   --background: var(--pi-night);
   --paper: var(--pi-night);
   --foreground: var(--pi-neutral-50);
+  --card: var(--pi-night-surface);
+  --card-foreground: var(--pi-neutral-50);
+  --popover: var(--pi-night-surface);
+  --popover-foreground: var(--pi-neutral-50);
+  --primary: var(--pi-indigo-500);
+  --primary-foreground: var(--pi-white);
+  --secondary: var(--pi-night-surface);
+  --secondary-foreground: var(--pi-neutral-50);
   --muted: var(--pi-night-surface);
   --surface-strong: var(--pi-night-border);
   --muted-foreground: var(--pi-night-muted);
   --border: var(--pi-night-border);
+  --input: var(--pi-night-border);
   --ring: var(--pi-indigo-500);
-  --accent: var(--pi-indigo-500);
+  --accent: var(--pi-indigo-700);
   --accent-strong: var(--pi-indigo-150);
   --accent-light: var(--pi-indigo-700);
   --accent-foreground: var(--pi-white);
+  --destructive: var(--pi-indigo-200);
+  --sidebar: var(--pi-night);
+  --sidebar-foreground: var(--pi-neutral-50);
+  --sidebar-primary: var(--pi-indigo-500);
+  --sidebar-primary-foreground: var(--pi-white);
+  --sidebar-accent: var(--pi-night-surface);
+  --sidebar-accent-foreground: var(--pi-neutral-50);
+  --sidebar-border: var(--pi-night-border);
+  --sidebar-ring: var(--pi-indigo-400);
 }
 
 @theme inline {
@@ -141,6 +185,35 @@
   --color-brand-spectrum-end: var(--brand-spectrum-end);
   --font-sans: var(--type-sans);
   --font-mono: var(--type-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-input: var(--input);
+  --color-destructive: var(--destructive);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: var(--radius-compact);
+  --radius-md: var(--radius-control);
+  --radius-lg: var(--radius-media);
+  --radius-xl: var(--radius-surface);
+  --radius-2xl: var(--radius-feature);
 }
 
 html {
@@ -164,19 +237,22 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+  html {
+    scroll-behavior: auto;
+  }
+
+  .spin,
+  [data-slot="sheet-overlay"],
+  [data-slot="sheet-content"],
+  [data-slot="tooltip-content"] {
+    animation: none !important;
+    transition: none !important;
   }
 }
 
 body {
   overflow-x: hidden;
   background-color: var(--background);
-  color: var(--foreground);
   font-family: var(--type-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -1521,5 +1597,17 @@ textarea:focus-visible {
   }
   .flow-library .status-badge {
     margin-left: 56px;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
   }
 }

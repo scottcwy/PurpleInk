@@ -1,12 +1,16 @@
 const ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" };
 const escapeHtml = (value = "") => value.replace(/[&<>"']/g, (char) => ESCAPES[char]);
 const seconds = (milliseconds) => Number((milliseconds / 1000).toFixed(3)).toString();
+const evidenceRefKey = (ref) => ref.kind === "node_evidence"
+  ? `node_evidence:${ref.nodeEvidenceId}:${ref.assetVersionId}`
+  : `source_asset:${ref.sourceAssetId}:${ref.assetVersionId}`;
+const evidenceRefId = (ref) => ref.kind === "node_evidence" ? ref.nodeEvidenceId : ref.sourceAssetId;
 
 function evidenceElement(beat, entry, index, beatIndex, isLast) {
   const transitionTail = isLast ? 0 : 450;
   const duration = beat.durationMs + transitionTail;
   const className = `clip evidence ${escapeHtml(beat.layoutId)} evidence-${index}`;
-  const common = `id="media-${escapeHtml(beat.id)}-${index}" class="${className}" data-start="${seconds(beat.startMs)}" data-duration="${seconds(duration)}" data-track-index="${10 + beatIndex * 2 + index}" data-evidence-id="${escapeHtml(entry.nodeEvidenceId)}"`;
+  const common = `id="media-${escapeHtml(beat.id)}-${index}" class="${className}" data-start="${seconds(beat.startMs)}" data-duration="${seconds(duration)}" data-track-index="${10 + beatIndex * 2 + index}" data-evidence-id="${escapeHtml(evidenceRefId(entry.ref))}"`;
   const source = escapeHtml(entry.bundlePath);
   if (entry.mimeType.startsWith("video/")) return `<video ${common} src="${source}" muted playsinline crossorigin="anonymous"></video>`;
   return `<img ${common} src="${source}" alt="Approved product evidence" crossorigin="anonymous" />`;
@@ -35,7 +39,7 @@ export function renderFeatureLaunch({ plan, variant, evidenceByReference, brandK
   const media = [];
   const copy = [];
   plan.beats.forEach((beat, beatIndex) => {
-    beat.evidence.forEach((reference, evidenceIndex) => media.push(evidenceElement(beat, evidenceByReference.get(`${reference.nodeEvidenceId}:${reference.assetVersionId}`), evidenceIndex, beatIndex, beatIndex === plan.beats.length - 1)));
+    beat.evidence.forEach((use, evidenceIndex) => media.push(evidenceElement(beat, evidenceByReference.get(evidenceRefKey(use)), evidenceIndex, beatIndex, beatIndex === plan.beats.length - 1)));
     copy.push(beatElement(beat, beatIndex));
   });
   const colors = {

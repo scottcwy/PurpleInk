@@ -11,10 +11,10 @@
     "lint": "node --check src/index.mjs && node --check src/runner.mjs && node --check src/hyperframes-quality.mjs"
   },
   "dependencies": {
-    "@purpleink/ego-capture-bridge": "0.1.0",
     "@purpleink/product-flow": "0.1.0",
     "@purpleink/r2-store": "0.1.0",
-    "@purpleink/video-compiler": "0.1.0"
+    "@purpleink/video-compiler": "0.1.0",
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
     "vitest": "^4.1.10"

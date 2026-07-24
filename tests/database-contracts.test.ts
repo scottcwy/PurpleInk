@@ -1,6 +1,8 @@
 import { readdir, readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
+import { getTableConfig, type PgTable } from "drizzle-orm/pg-core";
 import { beforeAll, describe, expect, it } from "vitest";
+import { engineeringSchema } from "@/db/schema";
 
 const migrationsUrl = new URL("../db/migrations/", import.meta.url);
 
@@ -41,6 +43,31 @@ beforeAll(async () => {
 });
 
 describe("database constraints", () => {
+  it("exports only the Accepted v3 capture and evidence schema", () => {
+    expect(Object.keys(engineeringSchema)).toEqual(
+      expect.arrayContaining([
+        "browserProfiles",
+        "productCapabilities",
+        "captureWorkerJobs",
+        "evidencePackages",
+        "evidencePackageVersions",
+        "commandReceipts",
+      ])
+    );
+    expect(Object.keys(engineeringSchema)).not.toEqual(
+      expect.arrayContaining(["bridgePairingCodes", "captureDevices"])
+    );
+  });
+
+  it("declares workspace-scoped primary keys in the canonical Drizzle schema", () => {
+    for (const table of Object.values(engineeringSchema)) {
+      const config = getTableConfig(table as PgTable);
+      if (!config.columns.some((column) => column.name === "workspace_id")) continue;
+      const primaryColumns = config.primaryKeys.flatMap((key) => key.columns.map((column) => column.name));
+      expect(primaryColumns, config.name).toContain("workspace_id");
+    }
+  });
+
   it("creates the engineering foundation tables", async () => {
     const result = await database.query<{ table_name: string }>(`
       select table_name
@@ -55,6 +82,7 @@ describe("database constraints", () => {
         "users",
         "memberships",
         "products",
+        "product_capabilities",
         "releases",
         "brand_kits",
         "brand_kit_versions",
@@ -65,9 +93,10 @@ describe("database constraints", () => {
         "storyboards",
         "storyboard_versions",
         "audit_events",
-        "bridge_pairing_codes",
-        "capture_devices",
+        "browser_profiles",
         "capture_sessions",
+        "capture_worker_jobs",
+        "capture_handoffs",
         "capture_session_events",
         "capture_upload_intents",
         "evidence_manifests",
@@ -77,10 +106,34 @@ describe("database constraints", () => {
         "source_assets",
         "asset_versions",
         "node_evidence",
+        "evidence_packages",
+        "evidence_package_versions",
+        "command_receipts",
+        "launch_video_jobs",
+        "launch_video_plans",
+        "render_job_receipts",
+        "release_invalidations",
         "composition_bundles",
         "render_jobs",
         "render_attempts",
         "artifacts",
+      ])
+    );
+    expect(result.rows.map(({ table_name }) => table_name)).not.toEqual(
+      expect.arrayContaining(["bridge_pairing_codes", "capture_devices"])
+    );
+  });
+
+  it("persists clean replay provenance on DiscoveryRun", async () => {
+    const result = await database.query<{ column_name: string }>(`
+      select column_name from information_schema.columns
+      where table_schema='public' and table_name='discovery_runs'
+    `);
+    expect(result.rows.map(({ column_name }) => column_name)).toEqual(
+      expect.arrayContaining([
+        "clean_replay_manifest_hash",
+        "clean_replay_worker_image_digest",
+        "clean_replay_passed_at",
       ])
     );
   });
@@ -99,26 +152,37 @@ describe("database constraints", () => {
     ).rejects.toThrow();
   });
 
+  it("allows the same business ID in two workspaces without cross-reading", async () => {
+    const sharedId = "21000000-0000-4000-8000-000000000001";
+    await database.exec(`
+      insert into products (id, workspace_id, name, canonical_url) values
+        ('${sharedId}', '${workspaceA}', 'Scoped A', 'https://a.example.com'),
+        ('${sharedId}', '${workspaceB}', 'Scoped B', 'https://b.example.com');
+    `);
+    const result = await database.query<{ name: string }>(`
+      select name from products
+      where workspace_id = '${workspaceA}' and id = '${sharedId}'
+    `);
+    expect(result.rows).toEqual([{ name: "Scoped A" }]);
+  });
+
   it("deduplicates capture events by session and seq", async () => {
-    const deviceId = "70000000-0000-4000-8000-000000000001";
+    const profileId = "70000000-0000-4000-8000-000000000001";
     const sessionId = "71000000-0000-4000-8000-000000000001";
     await database.exec(`
-      insert into capture_devices (
-        id, workspace_id, user_id, public_key, credential_hash, label,
-        bridge_version, ego_version
+      insert into browser_profiles (
+        id, workspace_id, product_id, encrypted_state_ref, status, revision
       ) values (
-        '${deviceId}', '${workspaceA}', '${userA}', 'public-key', repeat('c', 64),
-        'Test Mac', '0.1.0', '0.4.4.17'
+        '${profileId}', '${workspaceA}', '${productA}', 'kms://test/profile',
+        'active', 1
       );
       insert into capture_sessions (
-        id, workspace_id, product_id, release_id, device_id, kind, state,
-        connectivity, attempt, run_id, flow_version_id, allowed_origins,
+        id, workspace_id, product_id, release_id, browser_profile_id, kind, state,
+        connectivity, allowed_origins,
         expires_at, hard_expires_at
       ) values (
-        '${sessionId}', '${workspaceA}', '${productA}', '${releaseA}', '${deviceId}',
-        'capture', 'running', 'connected', 1,
-        '72000000-0000-4000-8000-000000000001',
-        '73000000-0000-4000-8000-000000000001',
+        '${sessionId}', '${workspaceA}', '${productA}', '${releaseA}', '${profileId}',
+        'capture', 'running', 'connected',
         '["https://product.example.com"]', now() + interval '30 minutes',
         now() + interval '60 minutes'
       );
@@ -133,6 +197,19 @@ describe("database constraints", () => {
         ) values ('${workspaceA}', '${sessionId}', 1, 'different', '{}')
       `)
     ).rejects.toThrow();
+  });
+
+  it("requires every release invalidation to reference a workspace-owned command receipt", async () => {
+    await expect(database.exec(`
+      insert into release_invalidations(
+        workspace_id,release_id,command_receipt_id,changed_ref,
+        replacement_version_id,stale_object_type,stale_object_id
+      ) values(
+        '${workspaceA}','${releaseA}','99000000-0000-4000-8000-000000000099',
+        'storyboard_version','99000000-0000-4000-8000-000000000001',
+        'composition_bundle','99000000-0000-4000-8000-000000000002'
+      )
+    `)).rejects.toThrow();
   });
 
   it("requires HTTPS product URLs", async () => {

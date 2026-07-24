@@ -10,6 +10,11 @@ const DEFAULT_VARIANTS = Object.freeze([
 function fail(message) { throw new TypeError(message); }
 function requireEqual(actual, expected, message) { if (actual !== expected) fail(message); }
 function checkAllowed(value, list, label) { if (!list.includes(value)) fail(`illegal ${label}: ${value}`); }
+function evidenceRefKey(ref) {
+  if (ref?.kind === "node_evidence") return `node_evidence:${ref.nodeEvidenceId}:${ref.assetVersionId}`;
+  if (ref?.kind === "source_asset") return `source_asset:${ref.sourceAssetId}:${ref.assetVersionId}`;
+  fail("invalid EvidenceRef discriminant");
+}
 
 function validateVariants(variants) {
   if (!Array.isArray(variants) || variants.length !== 2) fail("exactly landscape and portrait variants are required");
@@ -33,6 +38,8 @@ function validateInputs(input) {
   requireEqual(plan.releaseId, brandKit.releaseId, "brand kit belongs to another release");
   requireEqual(plan.releaseId, assetPackage.releaseId, "asset package belongs to another release");
   requireEqual(plan.brandKitVersionId, brandKit.id, "brand kit version mismatch");
+  requireEqual(plan.evidencePackageVersionId, assetPackage.id, "evidence package version mismatch");
+  if (typeof plan.locale !== "string" || !plan.locale) fail("plan locale is required");
   if (brandKit.approvalStatus !== "approved" || brandKit.immutable !== true) fail("brand kit must be approved and immutable");
   if (assetPackage.approvalStatus !== "approved" || assetPackage.immutable !== true) fail("asset package must be approved and immutable");
   for (const [name, color] of Object.entries(brandKit.colors ?? {})) if (!/^#[0-9A-Fa-f]{6}$/.test(color)) fail(`brand color ${name} must be a six-digit hex value`);
@@ -50,7 +57,8 @@ function validateInputs(input) {
     requireEqual(bytes.length, entry.bytes, `asset ${entry.assetVersionId} byte count mismatch`);
     requireEqual(sha256(bytes), entry.sha256, `asset ${entry.assetVersionId} hash mismatch`);
     if (!/^assets\/[A-Za-z0-9._/-]+$/.test(entry.bundlePath) || entry.bundlePath.split("/").includes("..")) fail(`asset ${entry.assetVersionId} has illegal bundle path`);
-    const key = `${entry.nodeEvidenceId}:${entry.assetVersionId}`;
+    requireEqual(entry.ref?.assetVersionId, entry.assetVersionId, `asset ${entry.assetVersionId} EvidenceRef mismatch`);
+    const key = evidenceRefKey(entry.ref);
     if (evidence.has(key)) fail(`duplicate asset reference ${key}`);
     if (assetVersionIds.has(entry.assetVersionId)) fail(`duplicate asset version ${entry.assetVersionId}`);
     assetVersionIds.add(entry.assetVersionId);
@@ -64,13 +72,13 @@ function validateInputs(input) {
     checkAllowed(beat.layoutId, capabilities.layoutIds, "layoutId");
     checkAllowed(beat.motionPresetId, capabilities.motionPresetIds, "motionPresetId");
     checkAllowed(beat.transitionId, capabilities.transitionIds, "transitionId");
-    for (const id of beat.capabilityIds ?? []) checkAllowed(id, capabilities.capabilityIds, "capabilityId");
+    if (typeof beat.capabilityId !== "string" || !beat.capabilityId) fail("capabilityId must be a non-empty ProductCapability ID");
     if ((beat.headline?.length ?? 0) > capabilities.copyLimits.headlineMaxChars || (beat.body?.length ?? 0) > capabilities.copyLimits.bodyMaxChars) fail(`beat ${beat.id} exceeds template copy limits`);
     if (!Array.isArray(beat.evidence) || beat.evidence.length === 0) fail(`beat ${beat.id} requires approved evidence`);
-    for (const reference of beat.evidence) {
-      const entry = evidence.get(`${reference.nodeEvidenceId}:${reference.assetVersionId}`);
+    for (const use of beat.evidence) {
+      const entry = evidence.get(evidenceRefKey(use));
       if (!entry) fail(`beat ${beat.id} references missing or mismatched evidence`);
-      if (!entry.sceneIds.includes(beat.sceneId)) fail(`evidence ${entry.nodeEvidenceId} is not approved for scene ${beat.sceneId}`);
+      if (!entry.sceneIds.includes(beat.sceneId)) fail(`evidence ${evidenceRefKey(entry.ref)} is not approved for scene ${beat.sceneId}`);
     }
   }
   requireEqual(cursor, plan.durationMs, "beat timeline must exactly fill plan duration");
@@ -83,7 +91,7 @@ export function compile(input) {
   const assetMap = {};
   for (const entry of input.assetPackage.entries) {
     files[entry.bundlePath] = { encoding: "base64", content: entry.contentBase64 };
-    assetMap[entry.assetVersionId] = { nodeEvidenceId: entry.nodeEvidenceId, path: entry.bundlePath, mimeType: entry.mimeType, bytes: entry.bytes, sha256: entry.sha256 };
+    assetMap[entry.assetVersionId] = { evidenceRef: entry.ref, path: entry.bundlePath, mimeType: entry.mimeType, bytes: entry.bytes, sha256: entry.sha256 };
   }
   for (const variant of [...input.outputVariants].sort((a, b) => a.id.localeCompare(b.id))) {
     for (const entry of input.assetPackage.entries) files[`variants/${variant.id}/${entry.bundlePath}`] = { encoding: "base64", content: entry.contentBase64 };
@@ -98,6 +106,10 @@ export function compile(input) {
   const manifestCore = {
     schemaVersion: "composition-bundle/v1",
     releaseId: input.plan.releaseId,
+    storyboardVersionId: input.plan.storyboardVersionId,
+    evidencePackageVersionId: input.plan.evidencePackageVersionId,
+    brandKitVersionId: input.plan.brandKitVersionId,
+    locale: input.plan.locale,
     durationMs: input.plan.durationMs,
     compilerVersion: input.compilerVersion,
     hyperframesVersion: input.hyperframesVersion,

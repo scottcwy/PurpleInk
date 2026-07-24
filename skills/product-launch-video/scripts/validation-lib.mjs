@@ -1,16 +1,16 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import Ajv from "ajv";
+import inputSchema from "../schemas/input-v1.schema.json" with { type: "json" };
+import planSchema from "../schemas/launch-video-plan-v1.schema.json" with { type: "json" };
 
-const skillRoot = fileURLToPath(new URL("..", import.meta.url));
-
-export async function readJson(path) {
-  return JSON.parse(await readFile(path, "utf8"));
-}
+const schemas = new Map([
+  ["input-v1.schema.json", inputSchema],
+  ["launch-video-plan-v1.schema.json", planSchema],
+]);
 
 export async function validateSchema(value, schemaName) {
-  const schema = await readJson(`${skillRoot}/schemas/${schemaName}`);
+  const schema = schemas.get(schemaName);
+  if (!schema) throw new Error(`unknown product-launch-video schema: ${schemaName}`);
   const ajv = new Ajv({ allErrors: true, jsonPointers: true });
   const validate = ajv.compile(schema);
   if (validate(value)) return [];
@@ -27,8 +27,14 @@ function canonicalJson(value) {
   return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
 }
 
+function evidenceRefKey(ref) {
+  if (ref?.kind === "node_evidence") return `node_evidence:${ref.nodeEvidenceId}:${ref.assetVersionId}`;
+  if (ref?.kind === "source_asset") return `source_asset:${ref.sourceAssetId}:${ref.assetVersionId}`;
+  return "invalid_evidence_ref";
+}
+
 export function evidencePackageDigest(entries) {
-  const lockedEntries = entries.map(({ contentBase64: _content, ...entry }) => entry).sort((a, b) => a.nodeEvidenceId.localeCompare(b.nodeEvidenceId));
+  const lockedEntries = entries.map(({ contentBase64: _content, ...entry }) => entry).sort((a, b) => evidenceRefKey(a.ref).localeCompare(evidenceRefKey(b.ref)));
   return sha256(canonicalJson(lockedEntries));
 }
 
@@ -40,7 +46,7 @@ export function provenanceErrors(input) {
   }
   if (input.storyboard?.id !== input.storyboardVersionId) errors.push("storyboard.id must equal storyboardVersionId");
   if (input.brandKit?.id !== input.brandKitVersionId) errors.push("brandKit.id must equal brandKitVersionId");
-  if (input.evidencePackage?.id !== input.evidencePackageId) errors.push("evidencePackage.id must equal evidencePackageId");
+  if (input.evidencePackage?.id !== input.evidencePackageVersionId) errors.push("evidencePackage.id must equal evidencePackageVersionId");
   if (input.templateCapabilities?.templateVersion !== input.templateVersion) errors.push("templateCapabilities.templateVersion must equal templateVersion");
 
   const sceneIds = new Set();
@@ -53,21 +59,33 @@ export function provenanceErrors(input) {
   const evidenceIds = new Set();
   const assetIds = new Set();
   for (const entry of input.evidencePackage?.entries ?? []) {
-    if (evidenceIds.has(entry.nodeEvidenceId)) errors.push(`duplicate evidence id: ${entry.nodeEvidenceId}`);
+    const refKey = evidenceRefKey(entry.ref);
+    if (evidenceIds.has(refKey)) errors.push(`duplicate evidence ref: ${refKey}`);
     if (assetIds.has(entry.assetVersionId)) errors.push(`duplicate asset version id: ${entry.assetVersionId}`);
-    evidenceIds.add(entry.nodeEvidenceId);
+    evidenceIds.add(refKey);
     assetIds.add(entry.assetVersionId);
-    for (const key of ownerKeys) if (entry[key] !== input[key]) errors.push(`evidence ${entry.nodeEvidenceId}.${key} must equal input.${key}`);
-    for (const sceneId of entry.sceneIds ?? []) if (!sceneIds.has(sceneId)) errors.push(`evidence ${entry.nodeEvidenceId} references unknown scene ${sceneId}`);
+    if (entry.ref?.assetVersionId !== entry.assetVersionId) errors.push(`evidence ${refKey} assetVersionId mismatch`);
+    for (const key of ownerKeys) if (entry[key] !== input[key]) errors.push(`evidence ${refKey}.${key} must equal input.${key}`);
+    for (const sceneId of entry.sceneIds ?? []) if (!sceneIds.has(sceneId)) errors.push(`evidence ${refKey} references unknown scene ${sceneId}`);
     try {
       if (!/^[A-Za-z0-9+/]+={0,2}$/.test(entry.contentBase64) || entry.contentBase64.length % 4 !== 0) throw new Error("invalid base64");
       const bytes = Buffer.from(entry.contentBase64, "base64");
-      if (bytes.length !== entry.bytes) errors.push(`evidence ${entry.nodeEvidenceId} byte count does not match content`);
-      if (sha256(bytes) !== entry.sha256) errors.push(`evidence ${entry.nodeEvidenceId} sha256 does not match content`);
+      if (bytes.length !== entry.bytes) errors.push(`evidence ${refKey} byte count does not match content`);
+      if (sha256(bytes) !== entry.sha256) errors.push(`evidence ${refKey} sha256 does not match content`);
     } catch {
-      errors.push(`evidence ${entry.nodeEvidenceId} has invalid base64 content`);
+      errors.push(`evidence ${refKey} has invalid base64 content`);
     }
   }
+  const packageRefs = new Set((input.evidencePackage?.refs ?? []).map(evidenceRefKey));
+  for (const key of evidenceIds) if (!packageRefs.has(key)) errors.push(`materialized evidence ${key} is not frozen in EvidencePackageVersion`);
+  for (const scene of input.storyboard?.scenes ?? []) {
+    if (scene.claimType === "browser_behavior" && !(scene.evidence ?? []).some((ref) => ref.kind === "node_evidence")) {
+      errors.push(`browser behavior scene ${scene.id} requires NodeEvidence`);
+    }
+    for (const ref of scene.evidence ?? []) if (!packageRefs.has(evidenceRefKey(ref))) errors.push(`scene ${scene.id} references evidence outside EvidencePackageVersion`);
+  }
+  if (input.evidencePackage?.captureRunId !== input.captureRunId) errors.push("evidencePackage.captureRunId must equal input.captureRunId");
+  if (input.evidencePackage?.provenance?.flowVersionId !== input.productFlowVersionId) errors.push("evidencePackage.provenance.flowVersionId must equal input.productFlowVersionId");
   if (input.evidencePackage?.entries && evidencePackageDigest(input.evidencePackage.entries) !== input.evidencePackage.sha256) errors.push("evidencePackage.sha256 does not match its locked entry manifest");
   return errors;
 }
@@ -83,13 +101,13 @@ export function planErrors(plan, input) {
     if (beat.startMs !== cursor) errors.push(`beat ${beat.id} must start at ${cursor}ms`);
     cursor = beat.startMs + beat.durationMs;
     for (const rectName of ["crop", "focus"]) {
-      for (const reference of beat.evidence ?? []) {
-        const rect = reference[rectName];
+      for (const use of beat.evidence ?? []) {
+        const rect = use[rectName];
         if (rect && (rect.x + rect.width > 1 || rect.y + rect.height > 1)) errors.push(`beat ${beat.id} ${rectName} must stay inside normalized bounds`);
       }
     }
-    for (const reference of beat.evidence ?? []) {
-      if (reference.trim && reference.trim.outMs <= reference.trim.inMs) errors.push(`beat ${beat.id} trim.outMs must be greater than trim.inMs`);
+    for (const use of beat.evidence ?? []) {
+      if (use.trim && use.trim.outMs <= use.trim.inMs) errors.push(`beat ${beat.id} trim.outMs must be greater than trim.inMs`);
     }
     for (const value of [beat.headline, beat.body]) {
       if (typeof value === "string" && (/<\/?[a-z][^>]*>/i.test(value) || /https?:\/\//i.test(value) || /```|javascript:/i.test(value))) errors.push(`beat ${beat.id} copy contains prohibited code, markup, or URL content`);
@@ -98,12 +116,11 @@ export function planErrors(plan, input) {
   if (cursor !== plan.durationMs) errors.push(`timeline ends at ${cursor}ms, expected ${plan.durationMs}ms`);
   if (!input) return errors;
 
-  for (const key of ["releaseId", "storyboardVersionId", "brandKitVersionId", "templateVersion"]) if (plan[key] !== input[key]) errors.push(`plan.${key} must equal input.${key}`);
+  for (const key of ["releaseId", "storyboardVersionId", "evidencePackageVersionId", "brandKitVersionId", "templateVersion", "locale"]) if (plan[key] !== input[key]) errors.push(`plan.${key} must equal input.${key}`);
   if (plan.durationMs !== input.targetDurationMs) errors.push("plan.durationMs must equal input.targetDurationMs");
   const scenes = new Map(input.storyboard.scenes.map((scene) => [scene.id, scene]));
-  const evidence = new Map(input.evidencePackage.entries.map((entry) => [`${entry.nodeEvidenceId}:${entry.assetVersionId}`, entry]));
+  const evidence = new Map(input.evidencePackage.entries.map((entry) => [evidenceRefKey(entry.ref), entry]));
   const allowed = {
-    capabilityIds: new Set(input.templateCapabilities.capabilityIds),
     layoutId: new Set(input.templateCapabilities.layoutIds),
     motionPresetId: new Set(input.templateCapabilities.motionPresetIds),
     transitionId: new Set(input.templateCapabilities.transitionIds)
@@ -111,19 +128,17 @@ export function planErrors(plan, input) {
   for (const beat of beats) {
     const scene = scenes.get(beat.sceneId);
     if (!scene) errors.push(`beat ${beat.id} references unknown scene ${beat.sceneId}`);
-    for (const id of beat.capabilityIds ?? []) {
-      if (!allowed.capabilityIds.has(id)) errors.push(`beat ${beat.id} uses unapproved capability ${id}`);
-      if (scene && !scene.capabilityIds.includes(id)) errors.push(`beat ${beat.id} capability ${id} is not in scene ${scene.id}`);
-    }
+    if (scene && beat.capabilityId !== scene.capabilityId) errors.push(`beat ${beat.id} capability ${beat.capabilityId} does not match scene ${scene.id}`);
     for (const field of ["layoutId", "motionPresetId", "transitionId"]) if (!allowed[field].has(beat[field])) errors.push(`beat ${beat.id} uses illegal ${field} ${beat[field]}`);
     if ((beat.headline?.length ?? 0) > input.templateCapabilities.copyLimits.headlineMaxChars) errors.push(`beat ${beat.id} headline exceeds copy limit`);
     if ((beat.body?.length ?? 0) > input.templateCapabilities.copyLimits.bodyMaxChars) errors.push(`beat ${beat.id} body exceeds copy limit`);
-    for (const reference of beat.evidence ?? []) {
-      const entry = evidence.get(`${reference.nodeEvidenceId}:${reference.assetVersionId}`);
-      if (!entry) errors.push(`beat ${beat.id} references missing or mismatched evidence ${reference.nodeEvidenceId}/${reference.assetVersionId}`);
-      else if (!entry.sceneIds.includes(beat.sceneId)) errors.push(`evidence ${entry.nodeEvidenceId} is not approved for scene ${beat.sceneId}`);
+    for (const use of beat.evidence ?? []) {
+      const refKey = evidenceRefKey(use);
+      const entry = evidence.get(refKey);
+      if (!entry) errors.push(`beat ${beat.id} references missing or mismatched evidence ${refKey}`);
+      else if (!entry.sceneIds.includes(beat.sceneId)) errors.push(`evidence ${refKey} is not approved for scene ${beat.sceneId}`);
     }
-    if (scene?.factual && !(beat.evidence?.length > 0)) errors.push(`factual scene ${scene.id} requires evidence`);
+    if (scene?.claimType !== "non_factual" && !(beat.evidence?.length > 0)) errors.push(`factual scene ${scene.id} requires evidence`);
   }
   return errors;
 }

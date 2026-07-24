@@ -1,5 +1,6 @@
 import { Providers } from "@/components/providers";
 import { SkipToContent } from "@/components/skip-to-content";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { baseMetadata } from "@/lib/metadata";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
@@ -43,8 +44,10 @@ export default function RootLayout({
     >
       <body className="bg-background text-foreground min-h-screen font-sans antialiased">
         <Providers>
-          <SkipToContent />
-          {children}
+          <TooltipProvider>
+            <SkipToContent />
+            {children}
+          </TooltipProvider>
         </Providers>
       </body>
     </html>

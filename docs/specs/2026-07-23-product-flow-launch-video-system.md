@@ -74,10 +74,10 @@ Release 使用独立的 `lifecycle` 与 `stage`，失败不覆盖失败前阶段
 
 1. 用户输入产品 URL、探索目标和需要证明的 ProductCapabilities。
 2. PlaywrightCaptureWorker 在隔离容器中根据当前 Release 固定的 approved ReleaseBriefVersion 探索产品；登录、验证码或敏感确认通过受审计的远程 handoff 交给用户。
-3. Agent 将连续底层操作归纳为 3-8 个语义 FlowNodes。
-4. 用户可重命名、排序、删除、重跑节点，并确认每个节点证明的 Capability。
-5. 全部必需 Checkpoint 通过后，用户批准并生成不可变 ProductFlowVersion。
-6. Release 固定该版本并执行干净的 CaptureRun；用户在 Evidence 页面逐项审阅结果，系统冻结 EvidencePackageVersion 后才能生成 Storyboard。
+3. Agent 将连续底层操作归纳为 3-8 个语义 FlowNodes；DiscoveryRun 启动时尚不存在 candidate version。
+4. Worker 在同一固定镜像的干净 BrowserContext 中完成 clean replay；完成 DiscoveryRun 的事务校验候选 Flow、分配版本号、创建 draft ProductFlowVersion，并把 `proposed_version_id` 回填到 run。
+5. 用户可重命名、排序、删除或重跑 draft，并确认每个节点证明的 Capability；批准 command 原子冻结该 candidate、更新 Release 引用并推进 stage。
+6. Release 使用批准并固定的版本执行 CaptureRun；用户在 Evidence 页面逐项审阅结果，系统冻结 EvidencePackageVersion 后才能生成 Storyboard。
 
 节点卡片默认只显示标题、Capability、结果缩略图和状态；点击后在 Inspector 中显示 Actions、Checkpoint、Evidence 和错误。底层每次 click 不单独占据画布节点。
 
@@ -122,7 +122,7 @@ NodeExecution、Evidence Manifest、运行幂等和断线恢复合同见 Enginee
 - 唯一运行单元是 Linux `PlaywrightCaptureWorker`，内部浏览器实现为 `PlaywrightBrowserAdapter`。每个 attempt 使用独立容器、独立 BrowserContext、固定 Playwright/Chromium 镜像 digest、只读根文件系统和临时 workspace；完成后销毁，不跨 Workspace 或 Product 复用 context。
 - 云端凭据只以 workspace-scoped secret reference 持久化；worker 在运行时从 KMS/Vault 解密到内存或 tmpfs，不能把明文、Cookie、Token、storage state 或完整 Profile 写入 job payload、日志、Evidence 或 Composition。
 - 允许访问的 origin 来自 Product 配置；Worker 在浏览器导航前和 DNS 解析后双重执行 allowlist/SSRF 检查。跳出 allowlist 立即暂停。
-- 登录、验证码和敏感确认可以 handoff 给用户；支付、删除、发布、权限变更和其他外部副作用始终禁止，遇到时 Flow 候选不能批准。
+- 登录、验证码和敏感确认可以 handoff 给用户；Worker 依次调用同一签名 endpoint 的 `create/status/close`，暂停自动化并轮询状态，只有用户明确 Resume 后才继续同一个 BrowserContext。生产 job 必须提供 remote-control provider URL；缺失时稳定失败。支付、删除、发布、权限变更和其他外部副作用始终禁止，遇到时 Flow 候选不能批准。
 - Worker 产生 Evidence 资产；Agent 只能创建 Flow 草稿，并建议 Evidence 的节点归属、摘要和选择，不能创建、修改或批准 ProductFlowVersion、NodeEvidence、SourceAsset、Storyboard 或 Artifact。
 - DiscoveryRun 允许有界试错；正式 CaptureRun 只能确定性执行固定版本，不做开放式探索。
 - BrowserContext video、trace 和 action journal 是运行诊断源；每个成功节点仍必须生成独立 result screenshot、node clip、assertion report 和 sanitized DOM summary。
@@ -224,8 +224,9 @@ Preview 与 Final Render 之间禁止再次调用模型；只有用户修改 Sto
 
 ### 3.7 任务可靠性与安全
 
-- `render_key = hash(input versions + evidence hashes + skill + template + hyperframes + output config)`；成功结果可直接复用。
+- `render_key = hash(input versions + evidence hashes + skill + template + hyperframes + output config)`；成功结果可直接复用。Runner 另对 canonical skill input 计算 SHA-256 并持久化；retry 只能使用完全相同输入和 Release pins。
 - 每个 job 使用 `job_id + attempt` fencing，旧 attempt 不能发布结果。
+- Control Plane 通过 `POST /api/internal/launch-video/jobs` 签发绑定 workspace、job、attempt 与 expiry 的短期 token；Runner 只通过 `/execute` 执行，并通过 `/callback` 发布，两个 endpoint 都必须验证 path、body 与 token claims 完全一致。
 - Preview 和 Final 分别设置 CPU、内存、磁盘、时长和重试上限；重试复用相同不可变输入。
 - workspace 完成后销毁；日志不得包含用户输入值、Cookie、签名 URL 或源资产内容。
 - Composition 只允许本地资产、固定依赖和 allowlisted components；禁止任意脚本下载及运行用户上传的 JavaScript。

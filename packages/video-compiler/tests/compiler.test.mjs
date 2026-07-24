@@ -31,6 +31,22 @@ test("bundle contains independent 16:9 and 9:16 root compositions", async () => 
   assert.deepEqual(bundle.manifest.variants.map((variant) => variant.id), ["landscape", "portrait"]);
 });
 
+test("bundle locks locale and approved EvidencePackageVersion provenance", async () => {
+  const input = await fixtureInput();
+  input.plan.locale = "en-US";
+  input.plan.evidencePackageVersionId = input.assetPackage.id;
+  const bundle = compile(input);
+
+  assert.equal(bundle.manifest.locale, "en-US");
+  assert.equal(
+    bundle.manifest.evidencePackageVersionId,
+    input.assetPackage.id
+  );
+  const anotherLocale = structuredClone(input);
+  anotherLocale.plan.locale = "ja-JP";
+  assert.notEqual(compile(anotherLocale).bundleHash, bundle.bundleHash);
+});
+
 test("rejects corrupted evidence", async () => {
   const input = await fixtureInput(); input.assetPackage.entries[0].contentBase64 = Buffer.from("wrong evidence").toString("base64");
   assert.throws(() => compile(input), /byte count mismatch|hash mismatch/);

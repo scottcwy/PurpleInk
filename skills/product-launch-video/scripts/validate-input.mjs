@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { printResult, provenanceErrors, readJson, validateSchema } from "./validation-lib.mjs";
+import { readJson } from "./read-json.mjs";
+import { printResult, provenanceErrors, validateSchema } from "./validation-lib.mjs";
 
 const path = process.argv[2];
 if (!path) throw new Error("usage: validate-input.mjs <input.json>");

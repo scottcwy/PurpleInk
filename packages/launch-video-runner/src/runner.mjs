@@ -1,4 +1,5 @@
 import { compile, OUTPUT_VARIANTS_V1 } from "@purpleink/video-compiler";
+import { createHash } from "node:crypto";
 import {
   planErrors,
   provenanceErrors,
@@ -6,6 +7,17 @@ import {
 } from "../../../skills/product-launch-video/scripts/validation-lib.mjs";
 
 const clone = (value) => structuredClone(value);
+const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+export const skillInputFingerprint = (skillInput) => sha256(Buffer.from(canonicalJson(skillInput)));
 
 export class RunnerContractError extends Error {
   constructor(errors) {
@@ -34,7 +46,7 @@ function fingerprint(request) {
     jobId: request.jobId,
     attempt: request.attempt,
     workspaceId: request.workspaceId,
-    skillInput: request.skillInput,
+    skillInputFingerprint: skillInputFingerprint(request.skillInput),
   });
 }
 
@@ -81,21 +93,25 @@ export class InMemoryLaunchVideoJobRepository {
     this.#receipts.set(`${workspaceId}:${key}`, clone(value));
   }
 
-  begin({ jobId, workspaceId, releaseId, attempt }) {
+  begin({ jobId, workspaceId, releaseId, attempt, inputFingerprint }) {
     const existing = this.#jobs.get(jobId);
     if (existing && existing.workspaceId !== workspaceId) {
       throw new RunnerContractError(["job belongs to another workspace"]);
     }
-    if (existing && attempt < existing.currentAttempt) {
+    if (existing && existing.inputFingerprint !== inputFingerprint) {
+      throw new RunnerContractError(["retry changed the immutable skill input"]);
+    }
+    if (existing && attempt <= existing.currentAttempt) {
       throw new StaleAttemptError(jobId, attempt, existing.currentAttempt);
     }
-    if (existing && attempt === existing.currentAttempt && existing.status === "running") {
-      throw new RunnerContractError(["attempt is already running"]);
+    if (existing && existing.status !== "failed") {
+      throw new RunnerContractError(["retry requires a failed launch video job"]);
     }
     const job = {
       jobId,
       workspaceId,
       releaseId,
+      inputFingerprint,
       currentAttempt: attempt,
       status: "running",
       publishedAttempt: existing?.publishedAttempt,
@@ -112,12 +128,18 @@ export class InMemoryLaunchVideoJobRepository {
     job.error = error;
   }
 
-  publish(jobId, attempt, bundleHash) {
+  publish(jobId, attempt, publication) {
     const job = this.#requireCurrent(jobId, attempt);
     job.status = "succeeded";
     job.publishedAttempt = attempt;
-    job.publishedBundleHash = bundleHash;
+    job.publishedBundleHash = typeof publication === "string" ? publication : publication.bundleHash;
     job.error = undefined;
+    if (typeof publication === "object" && publication.receipt) {
+      this.saveReceipt(job.workspaceId, publication.receipt.key, {
+        fingerprint: publication.receipt.fingerprint,
+        result: publication.receipt.result,
+      });
+    }
   }
 
   #requireCurrent(jobId, attempt) {
@@ -143,18 +165,20 @@ export class LaunchVideoRunner {
     const errors = await this.#inputErrors(request);
     if (errors.length) throw new RunnerContractError(errors);
     const requestFingerprint = fingerprint(request);
-    const receipt = this.repository.receipt(request.workspaceId, request.idempotencyKey);
+    const receipt = await this.repository.receipt(request.workspaceId, request.idempotencyKey);
     if (receipt) {
       if (receipt.fingerprint !== requestFingerprint) {
         throw new IdempotencyConflictError(request.idempotencyKey);
       }
       return clone(receipt.result);
     }
-    this.repository.begin({
+    await this.repository.begin({
       jobId: request.jobId,
       workspaceId: request.workspaceId,
       releaseId: request.skillInput.releaseId,
       attempt: request.attempt,
+      skillInput: request.skillInput,
+      inputFingerprint: skillInputFingerprint(request.skillInput),
     });
     try {
       const plan = await this.direct(clone(request.skillInput));
@@ -180,30 +204,59 @@ export class LaunchVideoRunner {
           bundleHash: bundle.bundleHash,
         });
       }
-      const qualityReport = await this.qualityGate({ bundle, prefix, workspaceId: request.workspaceId });
+      const qualityOutput = await this.qualityGate({ bundle, prefix, workspaceId: request.workspaceId });
+      const qualityReport = qualityOutput.report ?? qualityOutput;
       if (qualityReport.bundleHash !== bundle.bundleHash) {
         throw new RunnerContractError(["quality report bundle hash mismatch"]);
       }
-      await this.publishCallback({ jobId: request.jobId, attempt: request.attempt, bundleHash: bundle.bundleHash });
+      if (!qualityOutput.previewBytes) {
+        throw new RunnerContractError(["quality gate did not produce a landscape preview MP4"]);
+      }
+      const previewBytes = Buffer.from(qualityOutput.previewBytes);
+      const previewKey = `${prefix}/artifacts/preview-landscape.mp4`;
+      await this.objectStore.put(previewKey, previewBytes, {
+        contentType: "video/mp4",
+        bundleHash: bundle.bundleHash,
+        sha256: sha256(previewBytes),
+      });
+      await this.objectStore.put(
+        `${prefix}/artifacts/quality-report.json`,
+        Buffer.from(`${JSON.stringify(qualityReport, null, 2)}\n`),
+        { contentType: "application/json", bundleHash: bundle.bundleHash }
+      );
       const result = {
         status: "succeeded",
         bundle,
         qualityReport,
-        preview: { variantId: "landscape", r2Key: `${prefix}/variants/landscape/index.html` },
+        preview: {
+          variantId: "landscape",
+          r2Key: previewKey,
+          mimeType: "video/mp4",
+          bytes: previewBytes.length,
+          sha256: sha256(previewBytes),
+        },
       };
-      this.repository.saveReceipt(request.workspaceId, request.idempotencyKey, {
-        fingerprint: requestFingerprint,
-        result,
+      await this.publishCallback({
+        jobId: request.jobId,
+        attempt: request.attempt,
+        workspaceId: request.workspaceId,
+        bundleHash: bundle.bundleHash,
+        plan,
+        bundle,
+        prefix,
+        preview: result.preview,
+        qualityReport,
+        receipt: { key: request.idempotencyKey, fingerprint: requestFingerprint, result },
       });
       return clone(result);
     } catch (error) {
-      this.repository.fail(request.jobId, request.attempt, error instanceof Error ? error.message : String(error));
+      await this.repository.fail(request.jobId, request.attempt, error instanceof Error ? error.message : String(error), request.workspaceId);
       throw error;
     }
   }
 
-  async publishCallback({ jobId, attempt, bundleHash }) {
-    this.repository.publish(jobId, attempt, bundleHash);
+  async publishCallback(publication) {
+    await this.repository.publish(publication.jobId, publication.attempt, publication);
   }
 
   async #inputErrors(request) {

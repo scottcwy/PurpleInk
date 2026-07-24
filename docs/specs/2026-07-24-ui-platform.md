@@ -4,7 +4,8 @@
 > 日期：2026-07-24  
 > 范围：仓库根目录的营销站、认证页与产品控制台  
 > 品牌事实源：`DESIGN.md`  
-> 产品行为事实源：`docs/specs/2026-07-23-product-flow-launch-video-system.md`
+> 产品行为事实源：`docs/specs/2026-07-23-product-flow-launch-video-system.md`  
+> 路由页面编写合同：`docs/specs/2026-07-24-route-ui-authoring.md`
 
 ## 1. 冻结结论
 

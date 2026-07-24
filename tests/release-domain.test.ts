@@ -52,6 +52,9 @@ function command(name: ReleaseCommandName, expectedRevision = 1) {
     expectedRevision,
     idempotencyKey: `key-${name}-${expectedRevision}`,
     subjectId: `subject-${name}`,
+    ...(name === "approve_evidence"
+      ? { brandKitVersionId: "brand-kit-version-1" }
+      : {}),
   } as const;
 }
 
@@ -95,6 +98,22 @@ describe("Release transition table", () => {
     const result = await service.execute(admin, command(name));
 
     expect(result.release.refs[refName]).toBe(`subject-${name}`);
+  });
+
+  it("pins the frozen evidence package and BrandKit in approve_evidence", async () => {
+    const { service } = serviceFor(release("evidence_review"));
+
+    const result = await service.execute(admin, {
+      ...command("approve_evidence"),
+      subjectId: "evidence-package-version-2",
+      brandKitVersionId: "brand-kit-version-4",
+    });
+
+    expect(result.release.refs.evidencePackageVersionId).toBe(
+      "evidence-package-version-2"
+    );
+    expect(result.release.refs.brandKitVersionId).toBe("brand-kit-version-4");
+    expect(result.approval?.subjectType).toBe("evidence_package_version");
   });
 
   it.each(TRANSITION_TABLE)("rejects $command outside $from", async (row) => {

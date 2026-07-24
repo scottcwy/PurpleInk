@@ -70,7 +70,7 @@ export const memberships = pgTable(
 export const products = pgTable(
   "products",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").notNull().defaultRandom(),
     workspaceId: uuid("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "restrict" }),
@@ -83,7 +83,7 @@ export const products = pgTable(
     updatedAt,
   },
   (table) => [
-    unique("products_workspace_id_id_unique").on(table.workspaceId, table.id),
+    primaryKey({ columns: [table.workspaceId, table.id] }),
     index("products_workspace_id_idx").on(table.workspaceId),
     check(
       "products_canonical_url_https_check",
@@ -97,17 +97,46 @@ export const products = pgTable(
   ]
 );
 
+export const productCapabilities = pgTable(
+  "product_capabilities",
+  {
+    id: uuid("id").notNull().defaultRandom(),
+    workspaceId: uuid("workspace_id").notNull(),
+    productId: uuid("product_id").notNull(),
+    name: text("name").notNull(),
+    description: text("description").notNull(),
+    status: text("status").notNull().default("active"),
+    createdAt,
+    updatedAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.workspaceId, table.id] }),
+    uniqueIndex("product_capabilities_active_name_unique")
+      .on(table.workspaceId, table.productId, table.name)
+      .where(sql`${table.status} = 'active'`),
+    foreignKey({
+      columns: [table.workspaceId, table.productId],
+      foreignColumns: [products.workspaceId, products.id],
+      name: "product_capabilities_workspace_product_fk",
+    }).onDelete("restrict"),
+    check(
+      "product_capabilities_status_check",
+      sql`${table.status} in ('active', 'archived')`
+    ),
+  ]
+);
+
 export const brandKits = pgTable(
   "brand_kits",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").notNull().defaultRandom(),
     workspaceId: uuid("workspace_id").notNull(),
     productId: uuid("product_id").notNull(),
     createdAt,
     updatedAt,
   },
   (table) => [
-    unique("brand_kits_workspace_id_id_unique").on(table.workspaceId, table.id),
+    primaryKey({ columns: [table.workspaceId, table.id] }),
     unique("brand_kits_workspace_product_unique").on(
       table.workspaceId,
       table.productId
@@ -123,7 +152,7 @@ export const brandKits = pgTable(
 export const productFlows = pgTable(
   "product_flows",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").notNull().defaultRandom(),
     workspaceId: uuid("workspace_id").notNull(),
     productId: uuid("product_id").notNull(),
     name: text("name").notNull(),
@@ -133,10 +162,7 @@ export const productFlows = pgTable(
     updatedAt,
   },
   (table) => [
-    unique("product_flows_workspace_id_id_unique").on(
-      table.workspaceId,
-      table.id
-    ),
+    primaryKey({ columns: [table.workspaceId, table.id] }),
     foreignKey({
       columns: [table.workspaceId, table.productId],
       foreignColumns: [products.workspaceId, products.id],
@@ -157,7 +183,7 @@ const releaseStages = sql`(
 export const releases = pgTable(
   "releases",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").notNull().defaultRandom(),
     workspaceId: uuid("workspace_id").notNull(),
     productId: uuid("product_id").notNull(),
     name: text("name").notNull(),
@@ -168,13 +194,15 @@ export const releases = pgTable(
     briefVersionId: uuid("brief_version_id"),
     productFlowVersionId: uuid("product_flow_version_id"),
     captureRunId: uuid("capture_run_id"),
+    evidencePackageVersionId: uuid("evidence_package_version_id"),
     storyboardVersionId: uuid("storyboard_version_id"),
+    brandKitVersionId: uuid("brand_kit_version_id"),
     previewBundleId: uuid("preview_bundle_id"),
     createdAt,
     updatedAt,
   },
   (table) => [
-    unique("releases_workspace_id_id_unique").on(table.workspaceId, table.id),
+    primaryKey({ columns: [table.workspaceId, table.id] }),
     foreignKey({
       columns: [table.workspaceId, table.productId],
       foreignColumns: [products.workspaceId, products.id],
@@ -205,17 +233,14 @@ export const releases = pgTable(
 export const storyboards = pgTable(
   "storyboards",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").notNull().defaultRandom(),
     workspaceId: uuid("workspace_id").notNull(),
     releaseId: uuid("release_id").notNull(),
     createdAt,
     updatedAt,
   },
   (table) => [
-    unique("storyboards_workspace_id_id_unique").on(
-      table.workspaceId,
-      table.id
-    ),
+    primaryKey({ columns: [table.workspaceId, table.id] }),
     unique("storyboards_workspace_release_unique").on(
       table.workspaceId,
       table.releaseId
@@ -231,7 +256,7 @@ export const storyboards = pgTable(
 export const brandKitVersions = pgTable(
   "brand_kit_versions",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").notNull().defaultRandom(),
     workspaceId: uuid("workspace_id").notNull(),
     brandKitId: uuid("brand_kit_id").notNull(),
     version: integer("version").notNull(),
@@ -243,7 +268,9 @@ export const brandKitVersions = pgTable(
     createdAt,
   },
   (table) => [
-    unique("brand_kit_versions_aggregate_version_unique").on(
+    primaryKey({ columns: [table.workspaceId, table.id] }),
+    unique("brand_kit_versions_workspace_aggregate_version_unique").on(
+      table.workspaceId,
       table.brandKitId,
       table.version
     ),
@@ -271,7 +298,7 @@ export const brandKitVersions = pgTable(
 export const productFlowVersions = pgTable(
   "product_flow_versions",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").notNull().defaultRandom(),
     workspaceId: uuid("workspace_id").notNull(),
     productFlowId: uuid("product_flow_id").notNull(),
     version: integer("version").notNull(),
@@ -283,8 +310,9 @@ export const productFlowVersions = pgTable(
     createdAt,
   },
   (table) => [
-    unique("product_flow_versions_workspace_id_id_unique").on(table.workspaceId, table.id),
-    unique("product_flow_versions_aggregate_version_unique").on(
+    primaryKey({ columns: [table.workspaceId, table.id] }),
+    unique("product_flow_versions_workspace_aggregate_version_unique").on(
+      table.workspaceId,
       table.productFlowId,
       table.version
     ),
@@ -312,7 +340,7 @@ export const productFlowVersions = pgTable(
 export const releaseBriefVersions = pgTable(
   "release_brief_versions",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").notNull().defaultRandom(),
     workspaceId: uuid("workspace_id").notNull(),
     releaseId: uuid("release_id").notNull(),
     version: integer("version").notNull(),
@@ -324,7 +352,9 @@ export const releaseBriefVersions = pgTable(
     createdAt,
   },
   (table) => [
-    unique("release_brief_versions_aggregate_version_unique").on(
+    primaryKey({ columns: [table.workspaceId, table.id] }),
+    unique("release_brief_versions_workspace_aggregate_version_unique").on(
+      table.workspaceId,
       table.releaseId,
       table.version
     ),
@@ -352,7 +382,7 @@ export const releaseBriefVersions = pgTable(
 export const storyboardVersions = pgTable(
   "storyboard_versions",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").notNull().defaultRandom(),
     workspaceId: uuid("workspace_id").notNull(),
     storyboardId: uuid("storyboard_id").notNull(),
     version: integer("version").notNull(),
@@ -364,8 +394,9 @@ export const storyboardVersions = pgTable(
     createdAt,
   },
   (table) => [
-    unique("storyboard_versions_workspace_id_id_unique").on(table.workspaceId, table.id),
-    unique("storyboard_versions_aggregate_version_unique").on(
+    primaryKey({ columns: [table.workspaceId, table.id] }),
+    unique("storyboard_versions_workspace_aggregate_version_unique").on(
+      table.workspaceId,
       table.storyboardId,
       table.version
     ),
@@ -390,84 +421,44 @@ export const storyboardVersions = pgTable(
   ]
 );
 
-export const bridgePairingCodes = pgTable(
-  "bridge_pairing_codes",
+export const browserProfiles = pgTable(
+  "browser_profiles",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    workspaceId: uuid("workspace_id")
-      .notNull()
-      .references(() => workspaces.id, { onDelete: "restrict" }),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "restrict" }),
-    codeHash: text("code_hash").notNull(),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    consumedAt: timestamp("consumed_at", { withTimezone: true }),
-    createdAt,
-  },
-  (table) => [
-    uniqueIndex("bridge_pairing_codes_hash_unique").on(table.codeHash),
-    index("bridge_pairing_codes_workspace_expiry_idx").on(
-      table.workspaceId,
-      table.expiresAt
-    ),
-    check(
-      "bridge_pairing_codes_hash_check",
-      sql`${table.codeHash} ~ '^[0-9a-f]{64}$'`
-    ),
-  ]
-);
-
-export const captureDevices = pgTable(
-  "capture_devices",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").notNull().defaultRandom(),
     workspaceId: uuid("workspace_id").notNull(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "restrict" }),
-    publicKey: text("public_key").notNull(),
-    credentialHash: text("credential_hash").notNull(),
-    label: text("label").notNull(),
-    bridgeVersion: text("bridge_version").notNull(),
-    egoVersion: text("ego_version").notNull(),
-    revokedAt: timestamp("revoked_at", { withTimezone: true }),
-    lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    productId: uuid("product_id").notNull(),
+    encryptedStateRef: text("encrypted_state_ref").notNull(),
+    status: text("status").notNull().default("active"),
+    revision: integer("revision").notNull().default(1),
     createdAt,
+    updatedAt,
   },
   (table) => [
-    unique("capture_devices_workspace_id_id_unique").on(
-      table.workspaceId,
-      table.id
-    ),
+    primaryKey({ columns: [table.workspaceId, table.id] }),
     foreignKey({
-      columns: [table.workspaceId],
-      foreignColumns: [workspaces.id],
-      name: "capture_devices_workspace_fk",
+      columns: [table.workspaceId, table.productId],
+      foreignColumns: [products.workspaceId, products.id],
+      name: "browser_profiles_workspace_product_fk",
     }).onDelete("restrict"),
     check(
-      "capture_devices_credential_hash_check",
-      sql`${table.credentialHash} ~ '^[0-9a-f]{64}$'`
+      "browser_profiles_status_check",
+      sql`${table.status} in ('active', 'revoked')`
     ),
+    check("browser_profiles_revision_check", sql`${table.revision} > 0`),
   ]
 );
 
 export const captureSessions = pgTable(
   "capture_sessions",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").notNull().defaultRandom(),
     workspaceId: uuid("workspace_id").notNull(),
     productId: uuid("product_id").notNull(),
     releaseId: uuid("release_id"),
-    deviceId: uuid("device_id").notNull(),
+    browserProfileId: uuid("browser_profile_id"),
     kind: text("kind").notNull(),
     state: text("state").notNull().default("created"),
     connectivity: text("connectivity").notNull().default("disconnected"),
-    attempt: integer("attempt").notNull(),
-    runId: uuid("run_id").notNull(),
-    flowVersionId: uuid("flow_version_id").notNull(),
     allowedOrigins: jsonb("allowed_origins").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     hardExpiresAt: timestamp("hard_expires_at", { withTimezone: true }).notNull(),
@@ -479,14 +470,13 @@ export const captureSessions = pgTable(
     manifestHash: text("manifest_hash"),
     errorCode: text("error_code"),
     diagnostic: text("diagnostic"),
+    currentJobId: uuid("current_job_id"),
+    currentAttempt: integer("current_attempt").notNull().default(0),
     createdAt,
     updatedAt,
   },
   (table) => [
-    unique("capture_sessions_workspace_id_id_unique").on(
-      table.workspaceId,
-      table.id
-    ),
+    primaryKey({ columns: [table.workspaceId, table.id] }),
     foreignKey({
       columns: [table.workspaceId, table.productId],
       foreignColumns: [products.workspaceId, products.id],
@@ -498,13 +488,12 @@ export const captureSessions = pgTable(
       name: "capture_sessions_workspace_release_fk",
     }).onDelete("restrict"),
     foreignKey({
-      columns: [table.workspaceId, table.deviceId],
-      foreignColumns: [captureDevices.workspaceId, captureDevices.id],
-      name: "capture_sessions_workspace_device_fk",
+      columns: [table.workspaceId, table.browserProfileId],
+      foreignColumns: [browserProfiles.workspaceId, browserProfiles.id],
+      name: "capture_sessions_workspace_profile_fk",
     }).onDelete("restrict"),
-    index("capture_sessions_device_state_idx").on(table.deviceId, table.state),
-    check("capture_sessions_attempt_check", sql`${table.attempt} > 0`),
     check("capture_sessions_event_seq_check", sql`${table.lastEventSeq} >= 0`),
+    check("capture_sessions_current_attempt_check", sql`${table.currentAttempt} >= 0`),
     check(
       "capture_sessions_kind_check",
       sql`${table.kind} in ('discovery', 'capture')`
@@ -524,6 +513,86 @@ export const captureSessions = pgTable(
   ]
 );
 
+export const captureWorkerJobs = pgTable(
+  "capture_worker_jobs",
+  {
+    id: uuid("id").notNull().defaultRandom(),
+    workspaceId: uuid("workspace_id").notNull(),
+    captureSessionId: uuid("capture_session_id").notNull(),
+    attempt: integer("attempt").notNull(),
+    browserProfileId: uuid("browser_profile_id"),
+    browserProfileRevision: integer("browser_profile_revision"),
+    imageDigest: text("image_digest").notNull(),
+    region: text("region").notNull(),
+    status: text("status").notNull().default("created"),
+    leaseTokenHash: text("lease_token_hash"),
+    leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    errorCode: text("error_code"),
+    payload: jsonb("payload").notNull().default({}),
+    createdAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.workspaceId, table.id] }),
+    unique("capture_worker_jobs_session_attempt_unique").on(
+      table.workspaceId,
+      table.captureSessionId,
+      table.attempt
+    ),
+    foreignKey({
+      columns: [table.workspaceId, table.captureSessionId],
+      foreignColumns: [captureSessions.workspaceId, captureSessions.id],
+      name: "capture_worker_jobs_workspace_session_fk",
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [table.workspaceId, table.browserProfileId],
+      foreignColumns: [browserProfiles.workspaceId, browserProfiles.id],
+      name: "capture_worker_jobs_workspace_profile_fk",
+    }).onDelete("restrict"),
+    check("capture_worker_jobs_attempt_check", sql`${table.attempt} > 0`),
+    check(
+      "capture_worker_jobs_image_digest_check",
+      sql`${table.imageDigest} ~ '^sha256:[0-9a-f]{64}$'`
+    ),
+    check(
+      "capture_worker_jobs_status_check",
+      sql`${table.status} in ('created','leased','running','uploading','completed','failed','expired')`
+    ),
+  ]
+);
+
+export const captureHandoffs = pgTable(
+  "capture_handoffs",
+  {
+    id: uuid("id").notNull().defaultRandom(),
+    workspaceId: uuid("workspace_id").notNull(),
+    jobId: uuid("job_id").notNull(),
+    attempt: integer("attempt").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    remoteControlUrl: text("remote_control_url").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    createdAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.workspaceId, table.id] }),
+    uniqueIndex("capture_handoffs_one_open_per_job")
+      .on(table.workspaceId, table.jobId)
+      .where(sql`${table.closedAt} is null`),
+    foreignKey({
+      columns: [table.workspaceId, table.jobId],
+      foreignColumns: [captureWorkerJobs.workspaceId, captureWorkerJobs.id],
+      name: "capture_handoffs_workspace_job_fk",
+    }).onDelete("restrict"),
+    check("capture_handoffs_attempt_check", sql`${table.attempt} > 0`),
+    check("capture_handoffs_token_hash_check", sql`${table.tokenHash} ~ '^[0-9a-f]{64}$'`),
+    check("capture_handoffs_expiry_check", sql`${table.expiresAt} > ${table.createdAt}`),
+    check("capture_handoffs_close_check", sql`${table.closedAt} is null or ${table.closedAt} >= ${table.createdAt}`),
+  ]
+);
+
 export const captureSessionEvents = pgTable(
   "capture_session_events",
   {
@@ -535,7 +604,7 @@ export const captureSessionEvents = pgTable(
     createdAt,
   },
   (table) => [
-    primaryKey({ columns: [table.sessionId, table.seq] }),
+    primaryKey({ columns: [table.workspaceId, table.sessionId, table.seq] }),
     foreignKey({
       columns: [table.workspaceId, table.sessionId],
       foreignColumns: [captureSessions.workspaceId, captureSessions.id],
@@ -548,7 +617,7 @@ export const captureSessionEvents = pgTable(
 export const captureUploadIntents = pgTable(
   "capture_upload_intents",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").notNull().defaultRandom(),
     workspaceId: uuid("workspace_id").notNull(),
     sessionId: uuid("session_id").notNull(),
     attempt: integer("attempt").notNull(),
@@ -560,7 +629,9 @@ export const captureUploadIntents = pgTable(
     createdAt,
   },
   (table) => [
-    unique("capture_upload_intents_session_key_unique").on(
+    primaryKey({ columns: [table.workspaceId, table.id] }),
+    unique("capture_upload_intents_workspace_session_key_unique").on(
+      table.workspaceId,
       table.sessionId,
       table.r2Key
     ),
@@ -580,7 +651,7 @@ export const captureUploadIntents = pgTable(
 export const evidenceManifests = pgTable(
   "evidence_manifests",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").notNull().defaultRandom(),
     workspaceId: uuid("workspace_id").notNull(),
     sessionId: uuid("session_id").notNull(),
     attempt: integer("attempt").notNull(),
@@ -591,7 +662,9 @@ export const evidenceManifests = pgTable(
     createdAt,
   },
   (table) => [
-    unique("evidence_manifests_session_attempt_unique").on(
+    primaryKey({ columns: [table.workspaceId, table.id] }),
+    unique("evidence_manifests_workspace_session_attempt_unique").on(
+      table.workspaceId,
       table.sessionId,
       table.attempt
     ),
@@ -612,24 +685,39 @@ export const evidenceManifests = pgTable(
 );
 
 export const discoveryRuns = pgTable("discovery_runs", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: uuid("id").notNull().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull(),
+  releaseId: uuid("release_id").notNull(),
+  releaseBriefVersionId: uuid("release_brief_version_id").notNull(),
   productFlowId: uuid("product_flow_id").notNull(),
   captureSessionId: uuid("capture_session_id").notNull(),
   status: text("status").notNull().default("pending"),
   proposedVersionId: uuid("proposed_version_id"),
+  cleanReplayManifestHash: text("clean_replay_manifest_hash"),
+  cleanReplayWorkerImageDigest: text("clean_replay_worker_image_digest"),
+  cleanReplayPassedAt: timestamp("clean_replay_passed_at", { withTimezone: true }),
   createdAt,
   updatedAt,
 }, (table) => [
-  unique("discovery_runs_workspace_id_id_unique").on(table.workspaceId, table.id),
+  primaryKey({ columns: [table.workspaceId, table.id] }),
+  foreignKey({ columns: [table.workspaceId, table.releaseId], foreignColumns: [releases.workspaceId, releases.id], name: "discovery_runs_workspace_release_fk" }).onDelete("restrict"),
+  foreignKey({ columns: [table.workspaceId, table.releaseBriefVersionId], foreignColumns: [releaseBriefVersions.workspaceId, releaseBriefVersions.id], name: "discovery_runs_workspace_brief_fk" }).onDelete("restrict"),
   foreignKey({ columns: [table.workspaceId, table.productFlowId], foreignColumns: [productFlows.workspaceId, productFlows.id], name: "discovery_runs_workspace_flow_fk" }).onDelete("restrict"),
   foreignKey({ columns: [table.workspaceId, table.captureSessionId], foreignColumns: [captureSessions.workspaceId, captureSessions.id], name: "discovery_runs_workspace_session_fk" }).onDelete("restrict"),
   foreignKey({ columns: [table.workspaceId, table.proposedVersionId], foreignColumns: [productFlowVersions.workspaceId, productFlowVersions.id], name: "discovery_runs_workspace_version_fk" }).onDelete("restrict"),
   check("discovery_runs_status_check", sql`${table.status} in ('pending', 'running', 'completed', 'failed', 'cancelled')`),
+  check(
+    "discovery_runs_clean_replay_presence_check",
+    sql`(
+      (${table.cleanReplayManifestHash} is null and ${table.cleanReplayWorkerImageDigest} is null and ${table.cleanReplayPassedAt} is null)
+      or
+      (${table.cleanReplayManifestHash} ~ '^[0-9a-f]{64}$' and ${table.cleanReplayWorkerImageDigest} ~ '^sha256:[0-9a-f]{64}$' and ${table.cleanReplayPassedAt} is not null)
+    )`
+  ),
 ]);
 
 export const captureRuns = pgTable("capture_runs", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: uuid("id").notNull().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull(),
   releaseId: uuid("release_id").notNull(),
   flowVersionId: uuid("flow_version_id").notNull(),
@@ -639,7 +727,7 @@ export const captureRuns = pgTable("capture_runs", {
   finishedAt: timestamp("finished_at", { withTimezone: true }),
   createdAt,
 }, (table) => [
-  unique("capture_runs_workspace_id_id_unique").on(table.workspaceId, table.id),
+  primaryKey({ columns: [table.workspaceId, table.id] }),
   foreignKey({ columns: [table.workspaceId, table.releaseId], foreignColumns: [releases.workspaceId, releases.id], name: "capture_runs_workspace_release_fk" }).onDelete("restrict"),
   foreignKey({ columns: [table.workspaceId, table.flowVersionId], foreignColumns: [productFlowVersions.workspaceId, productFlowVersions.id], name: "capture_runs_workspace_flow_version_fk" }).onDelete("restrict"),
   foreignKey({ columns: [table.workspaceId, table.captureSessionId], foreignColumns: [captureSessions.workspaceId, captureSessions.id], name: "capture_runs_workspace_session_fk" }).onDelete("restrict"),
@@ -647,7 +735,7 @@ export const captureRuns = pgTable("capture_runs", {
 ]);
 
 export const nodeExecutions = pgTable("node_executions", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: uuid("id").notNull().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull(),
   captureRunId: uuid("capture_run_id").notNull(),
   nodeId: text("node_id").notNull(),
@@ -657,25 +745,25 @@ export const nodeExecutions = pgTable("node_executions", {
   errorCode: text("error_code"),
   createdAt,
 }, (table) => [
-  unique("node_executions_workspace_id_id_unique").on(table.workspaceId, table.id),
-  unique("node_executions_run_node_unique").on(table.captureRunId, table.nodeId),
+  primaryKey({ columns: [table.workspaceId, table.id] }),
+  unique("node_executions_workspace_run_node_unique").on(table.workspaceId, table.captureRunId, table.nodeId),
   foreignKey({ columns: [table.workspaceId, table.captureRunId], foreignColumns: [captureRuns.workspaceId, captureRuns.id], name: "node_executions_workspace_run_fk" }).onDelete("restrict"),
   check("node_executions_status_check", sql`${table.status} in ('pending', 'running', 'passed', 'failed')`),
 ]);
 
 export const sourceAssets = pgTable("source_assets", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: uuid("id").notNull().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull(),
   productId: uuid("product_id").notNull(),
   kind: text("kind").notNull(),
   createdAt,
 }, (table) => [
-  unique("source_assets_workspace_id_id_unique").on(table.workspaceId, table.id),
+  primaryKey({ columns: [table.workspaceId, table.id] }),
   foreignKey({ columns: [table.workspaceId, table.productId], foreignColumns: [products.workspaceId, products.id], name: "source_assets_workspace_product_fk" }).onDelete("restrict"),
 ]);
 
 export const assetVersions = pgTable("asset_versions", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: uuid("id").notNull().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull(),
   sourceAssetId: uuid("source_asset_id").notNull(),
   r2Key: text("r2_key").notNull(),
@@ -685,15 +773,15 @@ export const assetVersions = pgTable("asset_versions", {
   metadata: jsonb("metadata").notNull(),
   createdAt,
 }, (table) => [
-  unique("asset_versions_workspace_id_id_unique").on(table.workspaceId, table.id),
-  unique("asset_versions_source_hash_unique").on(table.sourceAssetId, table.sha256),
+  primaryKey({ columns: [table.workspaceId, table.id] }),
+  unique("asset_versions_workspace_source_hash_unique").on(table.workspaceId, table.sourceAssetId, table.sha256),
   foreignKey({ columns: [table.workspaceId, table.sourceAssetId], foreignColumns: [sourceAssets.workspaceId, sourceAssets.id], name: "asset_versions_workspace_source_fk" }).onDelete("restrict"),
   check("asset_versions_hash_check", sql`${table.sha256} ~ '^[0-9a-f]{64}$'`),
   check("asset_versions_bytes_check", sql`${table.bytes} > 0`),
 ]);
 
 export const nodeEvidence = pgTable("node_evidence", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: uuid("id").notNull().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull(),
   nodeExecutionId: uuid("node_execution_id").notNull(),
   kind: text("kind").notNull(),
@@ -702,34 +790,131 @@ export const nodeEvidence = pgTable("node_evidence", {
   approvedAt: timestamp("approved_at", { withTimezone: true }),
   createdAt,
 }, (table) => [
-  unique("node_evidence_workspace_id_id_unique").on(table.workspaceId, table.id),
+  primaryKey({ columns: [table.workspaceId, table.id] }),
   foreignKey({ columns: [table.workspaceId, table.nodeExecutionId], foreignColumns: [nodeExecutions.workspaceId, nodeExecutions.id], name: "node_evidence_workspace_execution_fk" }).onDelete("restrict"),
   foreignKey({ columns: [table.workspaceId, table.assetVersionId], foreignColumns: [assetVersions.workspaceId, assetVersions.id], name: "node_evidence_workspace_asset_fk" }).onDelete("restrict"),
 ]);
 
-export const compositionBundles = pgTable("composition_bundles", {
-  id: uuid("id").primaryKey().defaultRandom(),
+export const evidencePackages = pgTable("evidence_packages", {
+  id: uuid("id").notNull().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull(),
+  releaseId: uuid("release_id").notNull(),
+  createdAt,
+}, (table) => [
+  primaryKey({ columns: [table.workspaceId, table.id] }),
+  unique("evidence_packages_workspace_release_unique").on(table.workspaceId, table.releaseId),
+  foreignKey({ columns: [table.workspaceId, table.releaseId], foreignColumns: [releases.workspaceId, releases.id], name: "evidence_packages_workspace_release_fk" }).onDelete("restrict"),
+]);
+
+export const evidencePackageVersions = pgTable("evidence_package_versions", {
+  id: uuid("id").notNull().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull(),
+  evidencePackageId: uuid("evidence_package_id").notNull(),
+  version: integer("version").notNull(),
+  captureRunId: uuid("capture_run_id").notNull(),
+  schemaVersion: text("schema_version").notNull().default("evidence-package/v1"),
+  payload: jsonb("payload").notNull(),
+  contentHash: text("content_hash").notNull(),
+  status: text("status").notNull().default("draft"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  createdAt,
+}, (table) => [
+  primaryKey({ columns: [table.workspaceId, table.id] }),
+  unique("evidence_package_versions_aggregate_version_unique").on(table.workspaceId, table.evidencePackageId, table.version),
+  foreignKey({ columns: [table.workspaceId, table.evidencePackageId], foreignColumns: [evidencePackages.workspaceId, evidencePackages.id], name: "evidence_package_versions_workspace_package_fk" }).onDelete("restrict"),
+  foreignKey({ columns: [table.workspaceId, table.captureRunId], foreignColumns: [captureRuns.workspaceId, captureRuns.id], name: "evidence_package_versions_workspace_capture_fk" }).onDelete("restrict"),
+  check("evidence_package_versions_version_check", sql`${table.version} > 0`),
+  check("evidence_package_versions_hash_check", sql`${table.contentHash} ~ '^[0-9a-f]{64}$'`),
+  check("evidence_package_versions_status_check", sql`${table.status} in ('draft','approved','rejected')`),
+  check("evidence_package_versions_approval_check", sql`(${table.status} = 'approved') = (${table.approvedAt} is not null)`),
+]);
+
+export const launchVideoJobs = pgTable("launch_video_jobs", {
+  id: uuid("id").notNull().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull(),
   releaseId: uuid("release_id").notNull(),
   storyboardVersionId: uuid("storyboard_version_id").notNull(),
+  evidencePackageVersionId: uuid("evidence_package_version_id").notNull(),
+  brandKitVersionId: uuid("brand_kit_version_id").notNull(),
+  locale: text("locale").notNull(),
+  templateVersion: text("template_version").notNull(),
+  inputFingerprint: text("input_fingerprint").notNull(),
+  status: text("status").notNull().default("queued"),
+  currentAttempt: integer("current_attempt").notNull().default(0),
+  errorCode: text("error_code"),
+  createdAt,
+  updatedAt,
+}, (table) => [
+  primaryKey({ columns: [table.workspaceId, table.id] }),
+  foreignKey({ columns: [table.workspaceId, table.releaseId], foreignColumns: [releases.workspaceId, releases.id], name: "launch_video_jobs_workspace_release_fk" }).onDelete("restrict"),
+  foreignKey({ columns: [table.workspaceId, table.storyboardVersionId], foreignColumns: [storyboardVersions.workspaceId, storyboardVersions.id], name: "launch_video_jobs_workspace_storyboard_fk" }).onDelete("restrict"),
+  foreignKey({ columns: [table.workspaceId, table.evidencePackageVersionId], foreignColumns: [evidencePackageVersions.workspaceId, evidencePackageVersions.id], name: "launch_video_jobs_workspace_evidence_fk" }).onDelete("restrict"),
+  foreignKey({ columns: [table.workspaceId, table.brandKitVersionId], foreignColumns: [brandKitVersions.workspaceId, brandKitVersions.id], name: "launch_video_jobs_workspace_brand_fk" }).onDelete("restrict"),
+  check("launch_video_jobs_status_check", sql`${table.status} in ('queued','running','succeeded','failed','stale')`),
+  check("launch_video_jobs_attempt_check", sql`${table.currentAttempt} >= 0`),
+  check("launch_video_jobs_input_fingerprint_check", sql`${table.inputFingerprint} ~ '^[0-9a-f]{64}$'`),
+]);
+
+export const launchVideoPlans = pgTable("launch_video_plans", {
+  id: uuid("id").notNull().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull(),
+  launchVideoJobId: uuid("launch_video_job_id").notNull(),
+  attempt: integer("attempt").notNull(),
+  releaseId: uuid("release_id").notNull(),
+  storyboardVersionId: uuid("storyboard_version_id").notNull(),
+  evidencePackageVersionId: uuid("evidence_package_version_id").notNull(),
+  brandKitVersionId: uuid("brand_kit_version_id").notNull(),
+  locale: text("locale").notNull(),
+  schemaVersion: text("schema_version").notNull().default("launch-video-plan/v1"),
+  payload: jsonb("payload").notNull(),
+  planHash: text("plan_hash").notNull(),
+  createdAt,
+}, (table) => [
+  primaryKey({ columns: [table.workspaceId, table.id] }),
+  unique("launch_video_plans_job_attempt_unique").on(table.workspaceId, table.launchVideoJobId, table.attempt),
+  foreignKey({ columns: [table.workspaceId, table.launchVideoJobId], foreignColumns: [launchVideoJobs.workspaceId, launchVideoJobs.id], name: "launch_video_plans_workspace_job_fk" }).onDelete("restrict"),
+  foreignKey({ columns: [table.workspaceId, table.releaseId], foreignColumns: [releases.workspaceId, releases.id], name: "launch_video_plans_workspace_release_fk" }).onDelete("restrict"),
+  foreignKey({ columns: [table.workspaceId, table.storyboardVersionId], foreignColumns: [storyboardVersions.workspaceId, storyboardVersions.id], name: "launch_video_plans_workspace_storyboard_fk" }).onDelete("restrict"),
+  foreignKey({ columns: [table.workspaceId, table.evidencePackageVersionId], foreignColumns: [evidencePackageVersions.workspaceId, evidencePackageVersions.id], name: "launch_video_plans_workspace_evidence_fk" }).onDelete("restrict"),
+  foreignKey({ columns: [table.workspaceId, table.brandKitVersionId], foreignColumns: [brandKitVersions.workspaceId, brandKitVersions.id], name: "launch_video_plans_workspace_brand_fk" }).onDelete("restrict"),
+  check("launch_video_plans_attempt_check", sql`${table.attempt} > 0`),
+  check("launch_video_plans_hash_check", sql`${table.planHash} ~ '^[0-9a-f]{64}$'`),
+]);
+
+export const compositionBundles = pgTable("composition_bundles", {
+  id: uuid("id").notNull().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull(),
+  releaseId: uuid("release_id").notNull(),
+  storyboardVersionId: uuid("storyboard_version_id").notNull(),
+  evidencePackageVersionId: uuid("evidence_package_version_id"),
+  brandKitVersionId: uuid("brand_kit_version_id"),
+  locale: text("locale").notNull().default("en-US"),
+  launchVideoJobId: uuid("launch_video_job_id"),
+  launchVideoPlanId: uuid("launch_video_plan_id"),
+  qualityReportR2Key: text("quality_report_r2_key"),
   planHash: text("plan_hash").notNull(),
   bundleHash: text("bundle_hash").notNull(),
   r2Key: text("r2_key").notNull(),
   status: text("status").notNull().default("created"),
   createdAt,
 }, (table) => [
-  unique("composition_bundles_workspace_id_id_unique").on(table.workspaceId, table.id),
-  unique("composition_bundles_release_plan_unique").on(table.releaseId, table.planHash),
+  primaryKey({ columns: [table.workspaceId, table.id] }),
+  unique("composition_bundles_workspace_release_locale_plan_unique").on(table.workspaceId, table.releaseId, table.locale, table.planHash),
   foreignKey({ columns: [table.workspaceId, table.releaseId], foreignColumns: [releases.workspaceId, releases.id], name: "composition_bundles_workspace_release_fk" }).onDelete("restrict"),
   foreignKey({ columns: [table.workspaceId, table.storyboardVersionId], foreignColumns: [storyboardVersions.workspaceId, storyboardVersions.id], name: "composition_bundles_workspace_storyboard_fk" }).onDelete("restrict"),
+  foreignKey({ columns: [table.workspaceId, table.evidencePackageVersionId], foreignColumns: [evidencePackageVersions.workspaceId, evidencePackageVersions.id], name: "composition_bundles_workspace_evidence_fk" }).onDelete("restrict"),
+  foreignKey({ columns: [table.workspaceId, table.brandKitVersionId], foreignColumns: [brandKitVersions.workspaceId, brandKitVersions.id], name: "composition_bundles_workspace_brand_fk" }).onDelete("restrict"),
+  foreignKey({ columns: [table.workspaceId, table.launchVideoJobId], foreignColumns: [launchVideoJobs.workspaceId, launchVideoJobs.id], name: "composition_bundles_workspace_launch_job_fk" }).onDelete("restrict"),
+  foreignKey({ columns: [table.workspaceId, table.launchVideoPlanId], foreignColumns: [launchVideoPlans.workspaceId, launchVideoPlans.id], name: "composition_bundles_workspace_plan_fk" }).onDelete("restrict"),
   check("composition_bundles_hashes_check", sql`${table.planHash} ~ '^[0-9a-f]{64}$' and ${table.bundleHash} ~ '^[0-9a-f]{64}$'`),
 ]);
 
 export const renderJobs = pgTable("render_jobs", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: uuid("id").notNull().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull(),
   releaseId: uuid("release_id").notNull(),
   bundleId: uuid("bundle_id").notNull(),
+  launchVideoJobId: uuid("launch_video_job_id"),
   kind: text("kind").notNull(),
   status: text("status").notNull().default("queued"),
   renderKey: text("render_key").notNull(),
@@ -738,14 +923,15 @@ export const renderJobs = pgTable("render_jobs", {
   createdAt,
   updatedAt,
 }, (table) => [
-  unique("render_jobs_workspace_id_id_unique").on(table.workspaceId, table.id),
+  primaryKey({ columns: [table.workspaceId, table.id] }),
   foreignKey({ columns: [table.workspaceId, table.releaseId], foreignColumns: [releases.workspaceId, releases.id], name: "render_jobs_workspace_release_fk" }).onDelete("restrict"),
   foreignKey({ columns: [table.workspaceId, table.bundleId], foreignColumns: [compositionBundles.workspaceId, compositionBundles.id], name: "render_jobs_workspace_bundle_fk" }).onDelete("restrict"),
+  foreignKey({ columns: [table.workspaceId, table.launchVideoJobId], foreignColumns: [launchVideoJobs.workspaceId, launchVideoJobs.id], name: "render_jobs_workspace_launch_job_fk" }).onDelete("restrict"),
   check("render_jobs_attempt_check", sql`${table.currentAttempt} >= 0`),
 ]);
 
 export const renderAttempts = pgTable("render_attempts", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: uuid("id").notNull().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull(),
   renderJobId: uuid("render_job_id").notNull(),
   attempt: integer("attempt").notNull(),
@@ -754,33 +940,51 @@ export const renderAttempts = pgTable("render_attempts", {
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
 }, (table) => [
-  unique("render_attempts_workspace_id_id_unique").on(table.workspaceId, table.id),
-  unique("render_attempts_job_attempt_unique").on(table.renderJobId, table.attempt),
+  primaryKey({ columns: [table.workspaceId, table.id] }),
+  unique("render_attempts_workspace_job_attempt_unique").on(table.workspaceId, table.renderJobId, table.attempt),
   foreignKey({ columns: [table.workspaceId, table.renderJobId], foreignColumns: [renderJobs.workspaceId, renderJobs.id], name: "render_attempts_workspace_job_fk" }).onDelete("restrict"),
   check("render_attempts_attempt_check", sql`${table.attempt} > 0`),
 ]);
 
 export const artifacts = pgTable("artifacts", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: uuid("id").notNull().defaultRandom(),
   workspaceId: uuid("workspace_id").notNull(),
   renderJobId: uuid("render_job_id").notNull(),
   attemptId: uuid("attempt_id").notNull(),
   kind: text("kind").notNull(),
   r2Key: text("r2_key").notNull(),
   sha256: text("sha256").notNull(),
+  bytes: integer("bytes"),
+  mimeType: text("mime_type"),
   metadata: jsonb("metadata").notNull(),
   publishedAt: timestamp("published_at", { withTimezone: true }),
   createdAt,
 }, (table) => [
+  primaryKey({ columns: [table.workspaceId, table.id] }),
   foreignKey({ columns: [table.workspaceId, table.renderJobId], foreignColumns: [renderJobs.workspaceId, renderJobs.id], name: "artifacts_workspace_job_fk" }).onDelete("restrict"),
   foreignKey({ columns: [table.workspaceId, table.attemptId], foreignColumns: [renderAttempts.workspaceId, renderAttempts.id], name: "artifacts_workspace_attempt_fk" }).onDelete("restrict"),
   check("artifacts_hash_check", sql`${table.sha256} ~ '^[0-9a-f]{64}$'`),
+  check("artifacts_bytes_check", sql`${table.bytes} is null or ${table.bytes} > 0`),
+]);
+
+export const renderJobReceipts = pgTable("render_job_receipts", {
+  id: uuid("id").notNull().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull(),
+  launchVideoJobId: uuid("launch_video_job_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  fingerprint: text("fingerprint").notNull(),
+  result: jsonb("result").notNull(),
+  createdAt,
+}, (table) => [
+  primaryKey({ columns: [table.workspaceId, table.id] }),
+  unique("render_job_receipts_workspace_key_unique").on(table.workspaceId, table.idempotencyKey),
+  foreignKey({ columns: [table.workspaceId, table.launchVideoJobId], foreignColumns: [launchVideoJobs.workspaceId, launchVideoJobs.id], name: "render_job_receipts_workspace_job_fk" }).onDelete("restrict"),
 ]);
 
 export const approvals = pgTable(
   "approvals",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").notNull().defaultRandom(),
     workspaceId: uuid("workspace_id").notNull(),
     releaseId: uuid("release_id").notNull(),
     subjectType: text("subject_type").notNull(),
@@ -792,6 +996,7 @@ export const approvals = pgTable(
     createdAt,
   },
   (table) => [
+    primaryKey({ columns: [table.workspaceId, table.id] }),
     foreignKey({
       columns: [table.workspaceId, table.releaseId],
       foreignColumns: [releases.workspaceId, releases.id],
@@ -809,10 +1014,55 @@ export const approvals = pgTable(
   ]
 );
 
+export const commandReceipts = pgTable(
+  "command_receipts",
+  {
+    id: uuid("id").notNull().defaultRandom(),
+    workspaceId: uuid("workspace_id").notNull(),
+    releaseId: uuid("release_id").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    result: jsonb("result").notNull(),
+    createdAt,
+  },
+  (table) => [
+    primaryKey({ columns: [table.workspaceId, table.id] }),
+    unique("command_receipts_workspace_key_unique").on(
+      table.workspaceId,
+      table.idempotencyKey
+    ),
+    foreignKey({
+      columns: [table.workspaceId, table.releaseId],
+      foreignColumns: [releases.workspaceId, releases.id],
+      name: "command_receipts_workspace_release_fk",
+    }).onDelete("restrict"),
+  ]
+);
+
+export const releaseInvalidations = pgTable("release_invalidations", {
+  id: uuid("id").notNull().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull(),
+  releaseId: uuid("release_id").notNull(),
+  commandReceiptId: uuid("command_receipt_id").notNull(),
+  changedRef: text("changed_ref").notNull(),
+  previousVersionId: uuid("previous_version_id"),
+  replacementVersionId: uuid("replacement_version_id").notNull(),
+  staleObjectType: text("stale_object_type").notNull(),
+  staleObjectId: uuid("stale_object_id").notNull(),
+  createdAt,
+}, (table) => [
+  primaryKey({ columns: [table.workspaceId, table.id] }),
+  unique("release_invalidations_object_unique").on(table.workspaceId, table.commandReceiptId, table.staleObjectType, table.staleObjectId),
+  foreignKey({ columns: [table.workspaceId, table.releaseId], foreignColumns: [releases.workspaceId, releases.id], name: "release_invalidations_workspace_release_fk" }).onDelete("restrict"),
+  foreignKey({ columns: [table.workspaceId, table.commandReceiptId], foreignColumns: [commandReceipts.workspaceId, commandReceipts.id], name: "release_invalidations_workspace_receipt_fk" }).onDelete("restrict"),
+  check("release_invalidations_changed_ref_check", sql`${table.changedRef} in ('brief_version','product_flow_version','evidence_package_version','storyboard_version','brand_kit_version')`),
+  check("release_invalidations_object_type_check", sql`${table.staleObjectType} in ('product_flow_version','capture_run','evidence_package_version','storyboard_version','composition_bundle','render_job')`),
+]);
+
 export const auditEvents = pgTable(
   "audit_events",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").notNull().defaultRandom(),
     workspaceId: uuid("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "restrict" }),
@@ -825,6 +1075,7 @@ export const auditEvents = pgTable(
     createdAt,
   },
   (table) => [
+    primaryKey({ columns: [table.workspaceId, table.id] }),
     index("audit_events_workspace_created_idx").on(
       table.workspaceId,
       table.createdAt
@@ -837,6 +1088,7 @@ export const engineeringSchema = {
   users,
   memberships,
   products,
+  productCapabilities,
   brandKits,
   brandKitVersions,
   productFlows,
@@ -845,9 +1097,10 @@ export const engineeringSchema = {
   releaseBriefVersions,
   storyboards,
   storyboardVersions,
-  bridgePairingCodes,
-  captureDevices,
+  browserProfiles,
   captureSessions,
+  captureWorkerJobs,
+  captureHandoffs,
   captureSessionEvents,
   captureUploadIntents,
   evidenceManifests,
@@ -857,10 +1110,17 @@ export const engineeringSchema = {
   sourceAssets,
   assetVersions,
   nodeEvidence,
+  evidencePackages,
+  evidencePackageVersions,
+  launchVideoJobs,
+  launchVideoPlans,
   compositionBundles,
   renderJobs,
   renderAttempts,
   artifacts,
+  renderJobReceipts,
+  releaseInvalidations,
   approvals,
+  commandReceipts,
   auditEvents,
 };

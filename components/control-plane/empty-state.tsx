@@ -21,7 +21,7 @@ export function EmptyState({
           <Icon size={20} strokeWidth={1.7} />
         </span>
         <h2 className="mt-5 text-lg font-semibold">{title}</h2>
-        <p className="mt-2 text-sm leading-6 text-zinc-500">{detail}</p>
+        <p className="text-muted-foreground mt-2 text-sm leading-6">{detail}</p>
         {action ? <div className="mt-6">{action}</div> : null}
       </div>
     </section>
@@ -29,4 +29,4 @@ export function EmptyState({
 }
 
 export const primaryActionClassName =
-  "focus-ring inline-flex h-10 items-center justify-center gap-2 bg-foreground px-4 text-sm font-semibold text-background transition-colors hover:bg-accent";
+  "focus-ring inline-flex h-12 items-center justify-center gap-2 bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/80";

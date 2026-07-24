@@ -1,0 +1,22 @@
+{
+  "name": "@purpleink/playwright-capture-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./protocol": "./src/protocol.mjs"
+  },
+  "scripts": {
+    "test": "vitest run && node --test tests/control-plane-client.test.mjs",
+    "typecheck": "node --check src/index.mjs && node --check src/protocol.mjs && node --check src/network-policy.mjs && node --check src/egress-proxy.mjs && node --check src/redaction.mjs && node --check src/trace-redaction.mjs && node --check src/browser-adapter.mjs",
+    "lint": "node --check src/index.mjs && node --check src/protocol.mjs && node --check src/network-policy.mjs && node --check src/egress-proxy.mjs && node --check src/redaction.mjs && node --check src/trace-redaction.mjs && node --check src/browser-adapter.mjs"
+  },
+  "dependencies": {
+    "adm-zip": "^0.6.0",
+    "playwright": "1.55.1"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
+  }
+}

@@ -3,11 +3,13 @@
   "releaseId": "release-golden-001",
   "storyboardVersionId": "storyboard-golden-001",
   "brandKitVersionId": "brand-golden-001",
+  "evidencePackageVersionId": "evidence-package-golden-001",
+  "locale": "en-US",
   "templateVersion": "feature-launch@1.0.0",
   "durationMs": 18000,
   "beats": [
-    { "id": "beat-result", "sceneId": "scene-result", "capabilityIds": ["feature.result"], "startMs": 0, "durationMs": 6000, "layoutId": "evidence-full", "motionPresetId": "settle-up", "transitionId": "soft-wipe", "headline": "Every release, ready to prove", "body": "Approved product evidence becomes the first frame, not an afterthought.", "evidence": [{ "nodeEvidenceId": "evidence-result", "assetVersionId": "asset-result-v1" }] },
-    { "id": "beat-workflow", "sceneId": "scene-workflow", "capabilityIds": ["feature.workflow"], "startMs": 6000, "durationMs": 6000, "layoutId": "evidence-split", "motionPresetId": "focus-push", "transitionId": "continuity-cut", "headline": "One approved flow", "body": "Capture, direct, and review from the same immutable release context.", "evidence": [{ "nodeEvidenceId": "evidence-workflow", "assetVersionId": "asset-workflow-v1" }] },
-    { "id": "beat-proof", "sceneId": "scene-proof", "capabilityIds": ["feature.proof"], "startMs": 12000, "durationMs": 6000, "layoutId": "evidence-detail", "motionPresetId": "proof-pop", "transitionId": "soft-wipe", "headline": "Proof stays attached", "body": "Every factual scene resolves to approved evidence from this release.", "evidence": [{ "nodeEvidenceId": "evidence-proof", "assetVersionId": "asset-proof-v1" }] }
+    { "id": "beat-result", "sceneId": "scene-result", "capabilityId": "feature.result", "startMs": 0, "durationMs": 6000, "layoutId": "evidence-full", "motionPresetId": "settle-up", "transitionId": "soft-wipe", "headline": "Every release, ready to prove", "body": "Approved product evidence becomes the first frame, not an afterthought.", "evidence": [{ "kind": "node_evidence", "nodeEvidenceId": "evidence-result", "assetVersionId": "asset-result-v1" }] },
+    { "id": "beat-workflow", "sceneId": "scene-workflow", "capabilityId": "feature.workflow", "startMs": 6000, "durationMs": 6000, "layoutId": "evidence-split", "motionPresetId": "focus-push", "transitionId": "continuity-cut", "headline": "One approved flow", "body": "Capture, direct, and review from the same immutable release context.", "evidence": [{ "kind": "node_evidence", "nodeEvidenceId": "evidence-workflow", "assetVersionId": "asset-workflow-v1" }] },
+    { "id": "beat-proof", "sceneId": "scene-proof", "capabilityId": "feature.proof", "startMs": 12000, "durationMs": 6000, "layoutId": "evidence-detail", "motionPresetId": "proof-pop", "transitionId": "soft-wipe", "headline": "Proof stays attached", "body": "Every factual scene resolves to approved evidence from this release.", "evidence": [{ "kind": "node_evidence", "nodeEvidenceId": "evidence-proof", "assetVersionId": "asset-proof-v1" }] }
   ]
 }

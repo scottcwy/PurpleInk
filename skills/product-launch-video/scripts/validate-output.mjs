@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { planErrors, printResult, provenanceErrors, readJson, validateSchema } from "./validation-lib.mjs";
+import { readJson } from "./read-json.mjs";
+import { planErrors, printResult, provenanceErrors, validateSchema } from "./validation-lib.mjs";
 
 const planPath = process.argv[2];
 if (!planPath) throw new Error("usage: validate-output.mjs <plan.json> [--input <input.json>]");

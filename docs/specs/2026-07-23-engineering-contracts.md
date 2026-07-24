@@ -57,8 +57,9 @@ Linux Playwright Capture Worker 是 DiscoveryRun 与 CaptureRun 的唯一浏览�
 | `release_brief_versions` | `id, workspace_id, release_id, version, payload, content_hash, status` | approved 不可变 |
 | `browser_profiles` | `id, workspace_id, product_id, encrypted_state_ref, status, revision` | Playwright storage state 只保存 KMS envelope-encrypted reference；明文不可进入数据库或 job payload |
 | `capture_sessions` | `id, workspace_id, product_id, release_id?, browser_profile_id?, kind, state, expires_at, last_event_seq` | 只由 PlaywrightCaptureWorker 执行；active 并发由对应 DiscoveryRun/CaptureRun 约束 |
-| `capture_worker_jobs` | `id, workspace_id, capture_session_id, attempt, browser_profile_id?, browser_profile_revision?, image_digest, region, status, lease_expires_at` | `unique(workspace_id, capture_session_id, attempt)`；profile revision 启动后冻结；旧 attempt 不能完成 session 或发布 Evidence |
-| `discovery_runs` | `id, workspace_id, release_id, release_brief_version_id, product_flow_id, capture_session_id, status, proposed_version_id` | MVP 必须追溯到 approved ReleaseBriefVersion；每个 ProductFlow 最多一个 active run |
+| `capture_worker_jobs` | `id, workspace_id, capture_session_id, attempt, browser_profile_id?, browser_profile_revision?, image_digest, region, status, lease_expires_at` | `unique(workspace_id, capture_session_id, attempt)`；profile revision 启动后冻结；旧 attempt 不能完成 session 或发布 Evidence；生产镜像固定为 `mcr.microsoft.com/playwright:v1.55.1-noble@sha256:d8e0bdf35da90942fc8f97a65fa7f1969200ccd916ec0fd78780d80d9b81e07b` |
+| `discovery_runs` | `id, workspace_id, release_id, release_brief_version_id, product_flow_id, capture_session_id, status, proposed_version_id?, clean_replay_manifest_hash?, clean_replay_worker_image_digest?, clean_replay_passed_at?` | 启动时 `proposed_version_id` 必须为空；clean replay 成功后在完成事务中创建 draft ProductFlowVersion 并回填；MVP 必须追溯到 approved ReleaseBriefVersion；每个 ProductFlow 最多一个 active run |
+| `capture_handoffs` | `id, workspace_id, job_id, attempt, token_hash, remote_control_url, expires_at, claimed_at?, closed_at?, resumed` | 同一 job 最多一个 open handoff；claim token 一次性；只有当前 attempt 可查询或关闭，显式 Resume 才设置 `resumed` |
 | `capture_runs` | `id, workspace_id, release_id, flow_version_id, capture_session_id, status, started_at, finished_at` | 每个 Release 同时最多一个 active run |
 | `node_executions` | `id, workspace_id, capture_run_id, node_id, status, started_at, finished_at, error_code` | `unique(workspace_id, capture_run_id, node_id)` |
 | `source_assets` | `id, workspace_id, product_id, kind` | 只保存归属，不保存二进制 |
@@ -69,6 +70,7 @@ Linux Playwright Capture Worker 是 DiscoveryRun 与 CaptureRun 的唯一浏览�
 | `storyboards` | `id, workspace_id, release_id` | 一个 Release 一个聚合根 |
 | `storyboard_versions` | `id, workspace_id, storyboard_id, version, payload, content_hash, status` | approved 不可变 |
 | `approvals` | `id, workspace_id, release_id, subject_type, subject_id, decision, actor_id, created_at` | 每次决定追加记录，不覆盖历史 |
+| `launch_video_jobs` | `id, workspace_id, release_id, current_attempt, status, input_fingerprint, published_attempt?, published_bundle_hash?` | canonical skill input 的 SHA-256 在首次执行时冻结；retry 仅允许 failed job、完全相同输入和递增 attempt |
 | `composition_bundles` | `id, workspace_id, release_id, storyboard_version_id, evidence_package_version_id, brand_kit_version_id, locale, plan_hash, bundle_hash, r2_key, status` | 每个 locale 独立 Bundle；输入 hash 相同则复用 |
 | `render_jobs` | `id, workspace_id, release_id, bundle_id, kind, status, render_key, requested_outputs` | 只能选择 Bundle 已包含的 variant 与质量档；成功 `render_key` 唯一 |
 | `render_attempts` | `id, workspace_id, render_job_id, attempt, status, error_code, started_at, finished_at` | `unique(workspace_id, render_job_id, attempt)` |
@@ -191,7 +193,7 @@ type FlowEdgeV1 = { from: string; to: string };
 
 ### 4.1 执行器与隔离
 
-- Playwright Capture Worker 是唯一浏览器执行器。每个 attempt 启动一个 Linux 容器和一个 BrowserContext；容器固定 Playwright/Chromium image digest，以非 root 用户运行，根文件系统只读，仅开放 tmpfs workspace。
+- Playwright Capture Worker 是唯一浏览器执行器。每个 attempt 启动一个 Linux 容器和一个 BrowserContext；当前生产镜像固定为 `mcr.microsoft.com/playwright:v1.55.1-noble@sha256:d8e0bdf35da90942fc8f97a65fa7f1969200ccd916ec0fd78780d80d9b81e07b`，以非 root 用户运行，根文件系统只读，仅开放 tmpfs workspace。
 - Capture Worker 只能读取一个 workspace、一个 CaptureSession、一个 approved ProductFlowVersion 和该 session 的 secret references；不能读取 Storyboard、Composition 或其他 Product 的浏览器状态。
 - Capture Worker 通过受限 egress proxy 访问 `allowedOrigins`。导航前校验 URL，DNS 解析后再次拒绝 loopback、link-local、RFC1918、ULA、cloud metadata 和 DNS rebinding。
 - Worker 容器设置 CPU、内存、磁盘、进程数和运行时限；同一容器、BrowserContext、临时目录、service account 或 R2 写前缀不得跨 attempt 复用。
@@ -228,7 +230,7 @@ created -> claimed -> running -> uploading -> completed
 | `POST` | `/api/internal/capture/jobs/:id/lease` | Worker 原子领取指定 attempt |
 | `POST` | `/api/internal/capture/jobs/:id/heartbeat` | 上报 session、node、action、connectivity 与 lease |
 | `POST` | `/api/internal/capture/jobs/:id/events` | 批量追加有序 action/assertion 事件 |
-| `POST` | `/api/internal/capture/jobs/:id/handoff` | 创建或关闭短期 remote-control handoff |
+| `POST` | `/api/internal/capture/jobs/:id/handoff` | 以 `action=create/status/close` 创建、轮询或关闭短期 remote-control handoff；`close` 必须明确携带 Resume 决定 |
 | `POST` | `/api/internal/capture/jobs/:id/uploads/sign` | 为 attempt 隔离的 Evidence 条目签名 |
 | `POST` | `/api/internal/capture/jobs/:id/callback` | 提交完成 manifest 或稳定失败代码 |
 
@@ -262,7 +264,7 @@ type EvidenceManifestV1 = {
 };
 ```
 
-只有 manifest 全部对象 hash、大小、归属和 provenance 验证通过，且所有候选 Evidence 条目 redaction 为 `passed` 后，CaptureRun 才能进入 evidence review。
+只有 manifest 全部对象 hash、大小、归属和 provenance 验证通过，且所有候选 Evidence 条目 redaction 为 `passed` 后，CaptureRun 才能进入 evidence review。批准单条 NodeEvidence 和冻结 EvidencePackageVersion 时必须再次对每个对象执行 R2 `HEAD`，重新核对 key、SHA-256、bytes 和 MIME；对象缺失或 metadata 漂移时审批事务必须失败。
 
 `blocked` 与 `needs_review` 对象只能写入当前 attempt 的 quarantine prefix，不能创建候选 NodeEvidence 或进入 EvidencePackageVersion。人工处理必须生成新的 AssetVersion，重新扫描并得到 `passed`；原对象和 hash 永不原地改写。
 
@@ -439,9 +441,12 @@ Preview 与 Final Render 都只消费 CompositionBundle；两者之间不调用 
 
 | Method | Path | 用途 |
 | --- | --- | --- |
-| `POST` | `/api/internal/launch-video/jobs` | 工作流创建 fenced job |
-| `POST` | `/api/internal/launch-video/jobs/:id/callback` | attempt 状态与输出 manifest |
+| `POST` | `/api/internal/launch-video/jobs` | 工作流使用 control-plane workload secret 换取绑定 workspace、job、attempt 和 expiry 的短期签名 token |
+| `POST` | `/api/internal/launch-video/jobs/:id/execute` | 使用任务 token 执行当前 fenced attempt；校验 immutable skill-input fingerprint |
+| `POST` | `/api/internal/launch-video/jobs/:id/callback` | 使用同一任务 token 发布当前 attempt 状态与输出 manifest |
 | `GET` | `/api/jobs/:id/events?cursor=` | Web SSE/轮询读取进度 |
+
+Runner 对 skill input 执行 canonical JSON SHA-256 并持久化为 `input_fingerprint`。失败重试必须沿用同一 `job_id`、完全相同的 skill input 和 Release pins，使用严格递增 attempt；输入、pin 或已成功 job 的重试一律拒绝。`execute` 与 `callback` 的 token claims 必须同时匹配 request body 和 path 中的 workspace、job、attempt，并在过期后拒绝。
 
 内部接口使用任务级签名、`job_id + attempt` fencing 和 idempotency key。旧 attempt 可以上传隔离对象，但不能更新 bundle/artifact 的 published pointer。
 

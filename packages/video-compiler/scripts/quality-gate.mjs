@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn } from "node:child_process";
@@ -17,6 +17,7 @@ function run(command, args, cwd) {
 
 const bundleRoot = resolve(process.argv[2]);
 const reportPath = process.argv[3] ? resolve(process.argv[3]) : undefined;
+const renderOutputDirectory = process.argv[4] ? resolve(process.argv[4]) : undefined;
 const manifest = JSON.parse(await readFile(join(bundleRoot, "manifest.json"), "utf8"));
 const report = { schemaVersion: "video-quality-report/v1", bundleHash: manifest.bundleHash, variants: {} };
 const temp = await mkdtemp(join(tmpdir(), "purpleink-quality-"));
@@ -34,6 +35,10 @@ try {
     if (!inspection.ok || inspection.errorCount > 0 || inspection.warningCount > 0) throw new Error(`${variant.id} Hyperframes inspect reported layout findings`);
     const renderPath = join(temp, `${variant.id}.mp4`);
     await run("npx", ["hyperframes", "render", project, "--output", renderPath, "--fps", String(variant.fps), "--quality", "draft", "--strict"], bundleRoot);
+    if (renderOutputDirectory) {
+      await mkdir(renderOutputDirectory, { recursive: true });
+      await copyFile(renderPath, join(renderOutputDirectory, `${variant.id}.mp4`));
+    }
     const probed = await run("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,r_frame_rate:format=duration", "-of", "json", renderPath], bundleRoot);
     const probe = JSON.parse(probed.stdout); const stream = probe.streams?.[0]; const duration = Number(probe.format?.duration);
     if (stream?.width !== variant.width || stream?.height !== variant.height || Math.abs(duration * 1000 - manifest.durationMs) > 100) throw new Error(`${variant.id} media probe does not match manifest dimensions or duration`);

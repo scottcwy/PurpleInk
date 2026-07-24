@@ -4,7 +4,7 @@
   "title": "LaunchVideoSkillInputV1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "workspaceId", "productId", "releaseId", "releaseBriefVersionId", "storyboardVersionId", "productFlowVersionId", "captureRunId", "brandKitVersionId", "evidencePackageId", "templateVersion", "targetDurationMs", "storyboard", "brandKit", "evidencePackage", "templateCapabilities"],
+  "required": ["schemaVersion", "workspaceId", "productId", "releaseId", "releaseBriefVersionId", "storyboardVersionId", "productFlowVersionId", "captureRunId", "brandKitVersionId", "evidencePackageVersionId", "templateVersion", "locale", "targetDurationMs", "storyboard", "brandKit", "evidencePackage", "templateCapabilities"],
   "properties": {
     "schemaVersion": { "const": "launch-video-skill-input/v1" },
     "workspaceId": { "$ref": "#/definitions/id" },
@@ -15,8 +15,9 @@
     "productFlowVersionId": { "$ref": "#/definitions/id" },
     "captureRunId": { "$ref": "#/definitions/id" },
     "brandKitVersionId": { "$ref": "#/definitions/id" },
-    "evidencePackageId": { "$ref": "#/definitions/id" },
+    "evidencePackageVersionId": { "$ref": "#/definitions/id" },
     "templateVersion": { "type": "string", "pattern": "^feature-launch@[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "locale": { "type": "string", "minLength": 2, "maxLength": 35 },
     "targetDurationMs": { "type": "integer", "minimum": 15000, "maximum": 30000 },
     "storyboard": {
       "type": "object", "additionalProperties": false,
@@ -24,7 +25,7 @@
       "properties": {
         "id": { "$ref": "#/definitions/id" }, "workspaceId": { "$ref": "#/definitions/id" }, "productId": { "$ref": "#/definitions/id" }, "releaseId": { "$ref": "#/definitions/id" },
         "approvalStatus": { "const": "approved" }, "immutable": { "const": true },
-        "scenes": { "type": "array", "minItems": 3, "maxItems": 5, "items": { "$ref": "#/definitions/scene" } }
+        "scenes": { "type": "array", "minItems": 3, "maxItems": 5, "items": { "$ref": "#/definitions/storyboardScene" } }
       }
     },
     "brandKit": {
@@ -39,19 +40,31 @@
     },
     "evidencePackage": {
       "type": "object", "additionalProperties": false,
-      "required": ["id", "workspaceId", "productId", "releaseId", "approvalStatus", "immutable", "sha256", "entries"],
+      "required": ["schemaVersion", "id", "workspaceId", "productId", "releaseId", "captureRunId", "approvalStatus", "immutable", "refs", "provenance", "sha256", "entries"],
       "properties": {
+        "schemaVersion": { "const": "evidence-package/v1" },
         "id": { "$ref": "#/definitions/id" }, "workspaceId": { "$ref": "#/definitions/id" }, "productId": { "$ref": "#/definitions/id" }, "releaseId": { "$ref": "#/definitions/id" },
+        "captureRunId": { "$ref": "#/definitions/id" },
         "approvalStatus": { "const": "approved" }, "immutable": { "const": true }, "sha256": { "$ref": "#/definitions/hash" },
+        "refs": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/evidenceRef" } },
+        "provenance": {
+          "type": "object", "additionalProperties": false,
+          "required": ["flowVersionId", "manifestHash", "workerImageDigest"],
+          "properties": {
+            "flowVersionId": { "$ref": "#/definitions/id" },
+            "manifestHash": { "$ref": "#/definitions/hash" },
+            "workerImageDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
+          }
+        },
         "entries": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/evidence" } }
       }
     },
     "templateCapabilities": {
       "type": "object", "additionalProperties": false,
-      "required": ["templateVersion", "capabilityIds", "layoutIds", "motionPresetIds", "transitionIds", "copyLimits"],
+      "required": ["templateVersion", "layoutIds", "motionPresetIds", "transitionIds", "copyLimits"],
       "properties": {
         "templateVersion": { "type": "string" },
-        "capabilityIds": { "$ref": "#/definitions/idList" }, "layoutIds": { "$ref": "#/definitions/idList" }, "motionPresetIds": { "$ref": "#/definitions/idList" }, "transitionIds": { "$ref": "#/definitions/idList" },
+        "layoutIds": { "$ref": "#/definitions/idList" }, "motionPresetIds": { "$ref": "#/definitions/idList" }, "transitionIds": { "$ref": "#/definitions/idList" },
         "copyLimits": { "type": "object", "additionalProperties": false, "required": ["headlineMaxChars", "bodyMaxChars"], "properties": { "headlineMaxChars": { "type": "integer", "minimum": 1, "maximum": 120 }, "bodyMaxChars": { "type": "integer", "minimum": 1, "maximum": 240 } } }
       }
     }
@@ -60,18 +73,35 @@
     "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$" },
     "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "idList": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/definitions/id" } },
-    "scene": {
-      "type": "object", "additionalProperties": false, "required": ["id", "releaseId", "capabilityIds", "factual", "headline", "body"],
-      "properties": { "id": { "$ref": "#/definitions/id" }, "releaseId": { "$ref": "#/definitions/id" }, "capabilityIds": { "$ref": "#/definitions/idList" }, "factual": { "type": "boolean" }, "headline": { "type": "string", "minLength": 1 }, "body": { "type": "string" } }
+    "nodeEvidenceRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "nodeEvidenceId", "assetVersionId"],
+      "properties": { "kind": { "const": "node_evidence" }, "nodeEvidenceId": { "$ref": "#/definitions/id" }, "assetVersionId": { "$ref": "#/definitions/id" } }
+    },
+    "sourceAssetRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "sourceAssetId", "assetVersionId"],
+      "properties": { "kind": { "const": "source_asset" }, "sourceAssetId": { "$ref": "#/definitions/id" }, "assetVersionId": { "$ref": "#/definitions/id" } }
+    },
+    "evidenceRef": { "oneOf": [{ "$ref": "#/definitions/nodeEvidenceRef" }, { "$ref": "#/definitions/sourceAssetRef" }] },
+    "storyboardScene": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "order", "releaseId", "capabilityId", "claimType", "headline", "body", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" }, "order": { "type": "integer", "minimum": 1 }, "releaseId": { "$ref": "#/definitions/id" },
+        "capabilityId": { "$ref": "#/definitions/id" }, "claimType": { "enum": ["browser_behavior", "static_media", "non_factual"] },
+        "headline": { "type": "string", "minLength": 1, "maxLength": 120 }, "body": { "type": "string", "maxLength": 240 },
+        "evidence": { "type": "array", "items": { "$ref": "#/definitions/evidenceRef" } }
+      }
     },
     "evidence": {
       "type": "object", "additionalProperties": false,
-      "required": ["nodeEvidenceId", "assetVersionId", "sceneIds", "workspaceId", "productId", "releaseId", "approvalStatus", "redactionStatus", "immutable", "kind", "mimeType", "bytes", "sha256", "bundlePath", "contentBase64"],
+      "required": ["ref", "assetVersionId", "sceneIds", "workspaceId", "productId", "releaseId", "approvalStatus", "redactionStatus", "immutable", "assetKind", "mimeType", "bytes", "sha256", "bundlePath", "contentBase64"],
       "properties": {
-        "nodeEvidenceId": { "$ref": "#/definitions/id" }, "assetVersionId": { "$ref": "#/definitions/id" }, "sceneIds": { "$ref": "#/definitions/idList" },
+        "ref": { "$ref": "#/definitions/evidenceRef" }, "assetVersionId": { "$ref": "#/definitions/id" }, "sceneIds": { "$ref": "#/definitions/idList" },
         "workspaceId": { "$ref": "#/definitions/id" }, "productId": { "$ref": "#/definitions/id" }, "releaseId": { "$ref": "#/definitions/id" },
         "approvalStatus": { "const": "approved" }, "redactionStatus": { "const": "passed" }, "immutable": { "const": true },
-        "kind": { "enum": ["result_screenshot", "node_clip", "uploaded_source"] }, "mimeType": { "enum": ["image/png", "image/jpeg", "image/webp", "image/svg+xml", "video/mp4", "video/webm"] },
+        "assetKind": { "enum": ["result_screenshot", "node_clip", "uploaded_source"] }, "mimeType": { "enum": ["image/png", "image/jpeg", "image/webp", "image/svg+xml", "video/mp4", "video/webm"] },
         "bytes": { "type": "integer", "minimum": 1 }, "sha256": { "$ref": "#/definitions/hash" },
         "bundlePath": { "type": "string", "pattern": "^assets/[A-Za-z0-9._/-]+$", "not": { "pattern": "(^|/)\\.\\.(/|$)" } },
         "contentBase64": { "type": "string", "minLength": 4 }

@@ -3,13 +3,14 @@
   "title": "CompositionBundleV1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "releaseId", "durationMs", "compilerVersion", "hyperframesVersion", "templateVersion", "inputHashes", "variants", "assetMap", "generatedFiles", "bundleHash"],
+  "required": ["schemaVersion", "releaseId", "storyboardVersionId", "evidencePackageVersionId", "brandKitVersionId", "locale", "durationMs", "compilerVersion", "hyperframesVersion", "templateVersion", "inputHashes", "variants", "assetMap", "generatedFiles", "bundleHash"],
   "properties": {
     "schemaVersion": { "const": "composition-bundle/v1" }, "releaseId": { "type": "string", "minLength": 1 },
+    "storyboardVersionId": { "type": "string", "minLength": 1 }, "evidencePackageVersionId": { "type": "string", "minLength": 1 }, "brandKitVersionId": { "type": "string", "minLength": 1 }, "locale": { "type": "string", "minLength": 2 },
     "durationMs": { "type": "integer", "minimum": 15000, "maximum": 30000 }, "compilerVersion": { "type": "string" }, "hyperframesVersion": { "type": "string" }, "templateVersion": { "type": "string" },
     "inputHashes": { "type": "object", "additionalProperties": { "$ref": "#/definitions/hash" }, "required": ["plan", "brandKit", "assetPackage", "outputVariants"] },
     "variants": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/definitions/variant" } },
-    "assetMap": { "type": "object", "additionalProperties": { "type": "object", "required": ["nodeEvidenceId", "path", "mimeType", "bytes", "sha256"] } },
+    "assetMap": { "type": "object", "additionalProperties": { "type": "object", "required": ["evidenceRef", "path", "mimeType", "bytes", "sha256"] } },
     "generatedFiles": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": false, "required": ["bytes", "sha256"], "properties": { "bytes": { "type": "integer", "minimum": 1 }, "sha256": { "$ref": "#/definitions/hash" } } } },
     "bundleHash": { "$ref": "#/definitions/hash" }
   },

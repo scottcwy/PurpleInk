@@ -111,7 +111,7 @@ export const TRANSITION_TABLE = [
     command: "start_discovery",
     from: "flow_selecting",
     to: "flow_discovering",
-    guard: "paired Bridge and valid Product URL",
+    guard: "available Playwright Capture Worker and valid Product URL",
   },
   {
     command: "discovery_completed",
@@ -233,7 +233,9 @@ export interface ReleaseRefsV1 {
   briefVersionId?: string;
   productFlowVersionId?: string;
   captureRunId?: string;
+  evidencePackageVersionId?: string;
   storyboardVersionId?: string;
+  brandKitVersionId?: string;
   previewBundleId?: string;
 }
 
@@ -268,6 +270,7 @@ interface MutationEnvelope {
 export interface ReleaseCommand extends MutationEnvelope {
   name: ReleaseCommandName;
   subjectId?: string;
+  brandKitVersionId?: string;
 }
 
 export interface FailReleaseCommand extends MutationEnvelope {
@@ -295,6 +298,7 @@ export type ApprovalSubjectType =
   | "release_brief_version"
   | "product_flow_version"
   | "node_evidence"
+  | "evidence_package_version"
   | "storyboard_version"
   | "composition_bundle";
 
@@ -366,7 +370,7 @@ const approvalSubjects: Partial<
 > = {
   approve_brief: "release_brief_version",
   approve_flow: "product_flow_version",
-  approve_evidence: "node_evidence",
+  approve_evidence: "evidence_package_version",
   approve_storyboard: "storyboard_version",
   approve_preview: "composition_bundle",
 };
@@ -574,6 +578,7 @@ export class ReleaseDomainService {
           release_brief_version: "brief_draft",
           product_flow_version: "flow_review",
           node_evidence: "evidence_review",
+          evidence_package_version: "evidence_review",
           storyboard_version: "storyboard_review",
           composition_bundle: "preview_review",
         };
@@ -667,6 +672,7 @@ export class ReleaseDomainService {
       approve_flow: "productFlowVersionId",
       select_flow_version: "productFlowVersionId",
       start_capture: "captureRunId",
+      approve_evidence: "evidencePackageVersionId",
       approve_storyboard: "storyboardVersionId",
       approve_preview: "previewBundleId",
     };
@@ -676,6 +682,14 @@ export class ReleaseDomainService {
       throw new ReleaseGuardError(`${command.name} requires subjectId`);
     }
     release.refs[field] = command.subjectId;
+    if (command.name === "approve_evidence") {
+      if (!command.brandKitVersionId) {
+        throw new ReleaseGuardError(
+          "approve_evidence requires brandKitVersionId"
+        );
+      }
+      release.refs.brandKitVersionId = command.brandKitVersionId;
+    }
   }
 
   private cancel(release: Release): ReleaseCommandResult {

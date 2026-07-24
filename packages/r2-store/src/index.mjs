@@ -13,6 +13,16 @@ export class R2ObjectStore {
     this.fetcher = options.fetch ?? fetch;
   }
 
+  async createBucket() {
+    const response = await this.fetcher(
+      this.presign({ method: "PUT", key: "", expiresInSeconds: 60, headers: {} }),
+      { method: "PUT" }
+    );
+    if (!response.ok && response.status !== 409) {
+      throw new Error(`S3 create bucket failed with status ${response.status}`);
+    }
+  }
+
   async signPut(input) {
     const headers = {
       "content-length": String(input.bytes),
@@ -62,8 +72,12 @@ export class R2ObjectStore {
   presign(input) {
     const timestamp = amzTimestamp(this.now());
     const date = timestamp.slice(0, 8);
-    const host = `${this.options.accountId}.r2.cloudflarestorage.com`;
-    const scope = `${date}/auto/s3/aws4_request`;
+    const endpoint = this.options.endpoint
+      ? new URL(this.options.endpoint)
+      : new URL(`https://${this.options.accountId}.r2.cloudflarestorage.com`);
+    const host = endpoint.host;
+    const region = this.options.region ?? "auto";
+    const scope = `${date}/${region}/s3/aws4_request`;
     const headers = { host, ...input.headers };
     const headerNames = Object.keys(headers).sort();
     const signedHeaders = headerNames.join(";");
@@ -80,10 +94,10 @@ export class R2ObjectStore {
     const canonicalRequest = [input.method, path, canonicalQuery, canonicalHeaders, signedHeaders, "UNSIGNED-PAYLOAD"].join("\n");
     const stringToSign = ["AWS4-HMAC-SHA256", timestamp, scope, hash(canonicalRequest)].join("\n");
     const dateKey = hmac(`AWS4${this.options.secretAccessKey}`, date);
-    const regionKey = hmac(dateKey, "auto");
+    const regionKey = hmac(dateKey, region);
     const serviceKey = hmac(regionKey, "s3");
     const signingKey = hmac(serviceKey, "aws4_request");
     const signature = createHmac("sha256", signingKey).update(stringToSign).digest("hex");
-    return `https://${host}${path}?${canonicalQuery}&X-Amz-Signature=${signature}`;
+    return `${endpoint.protocol}//${host}${path}?${canonicalQuery}&X-Amz-Signature=${signature}`;
   }
 }

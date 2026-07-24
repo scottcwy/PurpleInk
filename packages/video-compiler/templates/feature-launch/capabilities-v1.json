@@ -1,6 +1,5 @@
 {
   "templateVersion": "feature-launch@1.0.0",
-  "capabilityIds": ["feature.result", "feature.workflow", "feature.proof", "feature.close"],
   "layoutIds": ["evidence-full", "evidence-split", "evidence-detail"],
   "motionPresetIds": ["settle-up", "focus-push", "proof-pop"],
   "transitionIds": ["continuity-cut", "soft-wipe"],

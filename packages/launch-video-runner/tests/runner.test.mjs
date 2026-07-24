@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -27,9 +27,12 @@ function harness(plan, overrides = {}) {
     objectStore,
     direct: overrides.direct ?? (async () => plan),
     qualityGate: overrides.qualityGate ?? (async ({ bundle }) => ({
-      schemaVersion: "video-quality-report/v1",
-      bundleHash: bundle.bundleHash,
-      variants: { landscape: { status: "passed" } },
+      report: {
+        schemaVersion: "video-quality-report/v1",
+        bundleHash: bundle.bundleHash,
+        variants: { landscape: { status: "passed" } },
+      },
+      previewBytes: Buffer.from("00000018667479706d703432", "hex"),
     })),
   });
   return { repository, objectStore, runner };
@@ -41,14 +44,17 @@ describe("LaunchVideoRunner", () => {
     const { runner } = harness(plan);
     const compiled = await runner.run({ jobId: "job-quality", attempt: 1, workspaceId: skillInput.workspaceId, idempotencyKey: "quality", skillInput });
     let sawManifest = false;
-    const report = await hyperframesQualityGate({ bundle: compiled.bundle }, {
-      run: async (bundleRoot) => {
+    const output = await hyperframesQualityGate({ bundle: compiled.bundle }, {
+      run: async (bundleRoot, _reportPath, renderDirectory) => {
         sawManifest = JSON.parse(await readFile(resolve(bundleRoot, "manifest.json"), "utf8")).bundleHash === compiled.bundle.bundleHash;
+        await mkdir(renderDirectory, { recursive: true });
+        await writeFile(resolve(renderDirectory, "landscape.mp4"), Buffer.from("00000018667479706d703432", "hex"));
         return { schemaVersion: "video-quality-report/v1", bundleHash: compiled.bundle.bundleHash, variants: { landscape: { status: "passed" } } };
       },
     });
     expect(sawManifest).toBe(true);
-    expect(report.bundleHash).toBe(compiled.bundle.bundleHash);
+    expect(output.report.bundleHash).toBe(compiled.bundle.bundleHash);
+    expect(output.previewBytes).toEqual(Buffer.from("00000018667479706d703432", "hex"));
   });
 
   it("publishes an immutable 16:9 preview bundle and reuses an identical idempotent request", async () => {
@@ -71,8 +77,9 @@ describe("LaunchVideoRunner", () => {
       id: "landscape", width: 1920, height: 1080,
     }));
     expect(first.preview.variantId).toBe("landscape");
-    expect(first.preview.r2Key).toContain(`/attempt-1/${first.bundle.bundleHash}/variants/landscape/index.html`);
-    expect(objectStore.objects.get(first.preview.r2Key)?.toString()).toContain("feature-launch-landscape");
+    expect(first.preview.r2Key).toContain(`/attempt-1/${first.bundle.bundleHash}/artifacts/preview-landscape.mp4`);
+    expect(first.preview).toMatchObject({ mimeType: "video/mp4", bytes: 12 });
+    expect(objectStore.objects.get(first.preview.r2Key)).toEqual(Buffer.from("00000018667479706d703432", "hex"));
     expect(repository.get("job-golden-1")?.publishedBundleHash).toBe(first.bundle.bundleHash);
   });
 
@@ -97,7 +104,10 @@ describe("LaunchVideoRunner", () => {
     const { runner, repository } = harness(plan, {
       qualityGate: async ({ bundle }) => {
         if (failQuality) throw new Error("hyperframes inspect failed");
-        return { schemaVersion: "video-quality-report/v1", bundleHash: bundle.bundleHash, variants: { landscape: { status: "passed" } } };
+        return {
+          report: { schemaVersion: "video-quality-report/v1", bundleHash: bundle.bundleHash, variants: { landscape: { status: "passed" } } },
+          previewBytes: Buffer.from("00000018667479706d703432", "hex"),
+        };
       },
     });
     const base = { jobId: "job-retry", workspaceId: skillInput.workspaceId, skillInput };
@@ -111,5 +121,26 @@ describe("LaunchVideoRunner", () => {
       jobId: "job-retry", attempt: 1, bundleHash: recovered.bundle.bundleHash,
     })).rejects.toBeInstanceOf(StaleAttemptError);
     expect(repository.get("job-retry")?.publishedAttempt).toBe(2);
+  });
+
+  it("rejects a retry that changes the immutable skill input", async () => {
+    const { skillInput, plan } = await fixture();
+    let failQuality = true;
+    const { runner, repository } = harness(plan, {
+      qualityGate: async ({ bundle }) => {
+        if (failQuality) throw new Error("first attempt failed");
+        return {
+          report: { schemaVersion: "video-quality-report/v1", bundleHash: bundle.bundleHash, variants: { landscape: { status: "passed" } } },
+          previewBytes: Buffer.from("00000018667479706d703432", "hex"),
+        };
+      },
+    });
+    await expect(runner.run({ jobId: "job-input-binding", attempt: 1, workspaceId: skillInput.workspaceId, idempotencyKey: "binding-1", skillInput })).rejects.toThrow("first attempt failed");
+    failQuality = false;
+    const changedInput = structuredClone(skillInput);
+    changedInput.brandKit.colors.purple = "#6B2FE8";
+
+    await expect(runner.run({ jobId: "job-input-binding", attempt: 2, workspaceId: skillInput.workspaceId, idempotencyKey: "binding-2", skillInput: changedInput })).rejects.toThrow("immutable skill input");
+    expect(repository.get("job-input-binding")?.currentAttempt).toBe(1);
   });
 });

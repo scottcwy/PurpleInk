@@ -1,9 +1,5 @@
 import { AppShell } from "@/components/control-plane/app-shell";
-import {
-  EmptyState,
-  primaryActionClassName,
-} from "@/components/control-plane/empty-state";
-import { Package, Plus } from "lucide-react";
+import { ServiceBoundary } from "@/components/control-plane/service-boundary";
 import type { ReactNode } from "react";
 
 export default function ProductsPage(): ReactNode {
@@ -12,23 +8,11 @@ export default function ProductsPage(): ReactNode {
       currentPath="/products"
       title="Products"
       description="Persistent product records and their approved release evidence."
-      action={
-        <button className={primaryActionClassName} type="button">
-          <Plus size={16} />
-          <span className="hidden sm:inline">Add product</span>
-        </button>
-      }
     >
-      <EmptyState
-        icon={Package}
-        title="No products yet"
-        detail="Add the browser product you want to launch from."
-        action={
-          <button className={primaryActionClassName} type="button">
-            <Plus size={16} />
-            Add product
-          </button>
-        }
+      <ServiceBoundary
+        title="Product service unavailable"
+        description="No products yet can be determined until product queries and creation commands are connected."
+        regions={["Search and filters", "Product results", "Pagination"]}
       />
     </AppShell>
   );

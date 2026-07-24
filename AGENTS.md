@@ -39,6 +39,18 @@ PurpleInk 唯一有效的 Git 仓库和 npm workspace 根目录是：
 - 避免魔法数字、重复逻辑、循环依赖、过度抽象和为未来需求预留的空架子。
 </existing_patterns>
 
+<frontend_route_ui>
+创建或完整重写认证路由、现有产品路由或未来产品路由时，必须先阅读
+`docs/specs/2026-07-24-route-ui-authoring.md`，并按其中规定执行 Impeccable 的
+`shape -> implementation -> audit -> fix -> polish -> re-audit` 流程。
+
+- 路由业务事实来自已接受的产品与工程 Spec；UI 不得发明产品行为。
+- 页面骨架、archetype、密度、App Shell 和 anatomy 服从 Route UI Authoring Spec。
+- 组件技术栈和 Token 服从 `docs/specs/2026-07-24-ui-platform.md`、`DESIGN.md` 与 `app/globals.css`。
+- 营销首页 `/` 不套用产品页面骨架，继续以 `DESIGN.md` 和已交付首页为视觉事实源。
+- Impeccable 与仓库 Spec 冲突时必须显式提出，不得静默覆盖仓库合同。
+</frontend_route_ui>
+
 <scope_control>
 保持改动克制：
 - 只修改完成当前任务所必需的文件。

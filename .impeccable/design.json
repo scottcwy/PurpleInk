@@ -1,219 +1,430 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-07-23T09:50:04Z",
+  "generatedAt": "2026-07-24T03:19:49Z",
   "title": "Design System: PurpleInk",
   "extensions": {
     "colorMeta": {
-      "purple": {
-        "role": "primary",
-        "displayName": "Directed Purple",
-        "canonical": "oklch(55% 0.25 292)",
-        "tonalRamp": [
-          "oklch(98.0% 0.008 292.0)",
-          "oklch(90.2% 0.051 292.0)",
-          "oklch(82.4% 0.096 292.0)",
-          "oklch(74.6% 0.142 292.0)",
-          "oklch(59.0% 0.244 292.0)",
-          "oklch(43.4% 0.242 292.0)",
-          "oklch(27.8% 0.154 292.0)",
-          "oklch(20.0% 0.111 292.0)"
-        ]
-      },
-      "paper": {
+      "white": {
         "role": "neutral",
-        "displayName": "Review Paper",
-        "canonical": "oklch(98.5% 0.006 292)",
+        "displayName": "Pure Paper",
+        "canonical": "#FFFFFF",
         "tonalRamp": [
-          "oklch(99.0% 0.004 292.0)",
-          "oklch(90.1% 0.009 292.0)",
-          "oklch(81.2% 0.014 292.0)",
-          "oklch(72.3% 0.018 292.0)",
-          "oklch(54.5% 0.024 292.0)",
-          "oklch(36.7% 0.028 292.0)",
-          "oklch(18.9% 0.030 292.0)",
-          "oklch(10.0% 0.030 292.0)"
+          "#262626",
+          "#4D4D4D",
+          "#737373",
+          "#999999",
+          "#BFBFBF",
+          "#D9D9D9",
+          "#F2F2F2",
+          "#FFFFFF"
         ]
       },
-      "proof": {
+      "black": {
+        "role": "neutral",
+        "displayName": "Near Black Ink",
+        "canonical": "#0A0A0A",
+        "tonalRamp": [
+          "#0A0A0A",
+          "#262626",
+          "#4D4D4D",
+          "#737373",
+          "#999999",
+          "#BFBFBF",
+          "#D9D9D9",
+          "#F2F2F2"
+        ]
+      },
+      "neutral-50": {
+        "role": "neutral",
+        "displayName": "Soft Paper",
+        "canonical": "#FAFAFA",
+        "tonalRamp": [
+          "#262626",
+          "#4D4D4D",
+          "#737373",
+          "#999999",
+          "#BFBFBF",
+          "#D9D9D9",
+          "#F2F2F2",
+          "#FAFAFA"
+        ]
+      },
+      "neutral-100": {
+        "role": "neutral",
+        "displayName": "Quiet Surface",
+        "canonical": "#F5F5F5",
+        "tonalRamp": [
+          "#262626",
+          "#4D4D4D",
+          "#737373",
+          "#999999",
+          "#BFBFBF",
+          "#D9D9D9",
+          "#E8E8E8",
+          "#F5F5F5"
+        ]
+      },
+      "neutral-300": {
+        "role": "neutral",
+        "displayName": "Soft Boundary",
+        "canonical": "#E5E5E5",
+        "tonalRamp": [
+          "#262626",
+          "#4D4D4D",
+          "#737373",
+          "#999999",
+          "#B3B3B3",
+          "#CCCCCC",
+          "#D9D9D9",
+          "#E5E5E5"
+        ]
+      },
+      "neutral-600": {
+        "role": "neutral",
+        "displayName": "Muted Graphite",
+        "canonical": "#737373",
+        "tonalRamp": [
+          "#262626",
+          "#333333",
+          "#404040",
+          "#4D4D4D",
+          "#595959",
+          "#666666",
+          "#737373",
+          "#BFBFBF"
+        ]
+      },
+      "night": {
+        "role": "neutral",
+        "displayName": "Night Ink",
+        "canonical": "#03040A",
+        "tonalRamp": [
+          "#03040A",
+          "#0C0E21",
+          "#18181B",
+          "#27272A",
+          "#3F3F46",
+          "#71717A",
+          "#A1A1AA",
+          "#F4F4F5"
+        ]
+      },
+      "night-surface": {
+        "role": "neutral",
+        "displayName": "Night Surface",
+        "canonical": "#18181B",
+        "tonalRamp": [
+          "#03040A",
+          "#0C0E21",
+          "#18181B",
+          "#27272A",
+          "#3F3F46",
+          "#71717A",
+          "#A1A1AA",
+          "#F4F4F5"
+        ]
+      },
+      "night-border": {
+        "role": "neutral",
+        "displayName": "Night Boundary",
+        "canonical": "#27272A",
+        "tonalRamp": [
+          "#03040A",
+          "#0C0E21",
+          "#18181B",
+          "#27272A",
+          "#3F3F46",
+          "#71717A",
+          "#A1A1AA",
+          "#F4F4F5"
+        ]
+      },
+      "night-muted": {
+        "role": "neutral",
+        "displayName": "Night Muted",
+        "canonical": "#A1A1AA",
+        "tonalRamp": [
+          "#03040A",
+          "#0C0E21",
+          "#18181B",
+          "#27272A",
+          "#3F3F46",
+          "#71717A",
+          "#A1A1AA",
+          "#F4F4F5"
+        ]
+      },
+      "indigo-deep": {
+        "role": "primary",
+        "displayName": "Deep Launch Ink",
+        "canonical": "#352E82",
+        "tonalRamp": [
+          "#17143A",
+          "#231E57",
+          "#352E82",
+          "#333DA7",
+          "#5160C3",
+          "#7388DF",
+          "#8C9EE6",
+          "#A5B4FC"
+        ]
+      },
+      "indigo-spectrum-start": {
+        "role": "primary",
+        "displayName": "Spectrum Start",
+        "canonical": "#333DA7",
+        "tonalRamp": [
+          "#17143A",
+          "#231E57",
+          "#352E82",
+          "#333DA7",
+          "#5160C3",
+          "#7388DF",
+          "#8C9EE6",
+          "#A5B4FC"
+        ]
+      },
+      "indigo": {
+        "role": "primary",
+        "displayName": "Spectral Indigo",
+        "canonical": "#6366F1",
+        "tonalRamp": [
+          "#17143A",
+          "#231E57",
+          "#352E82",
+          "#333DA7",
+          "#5160C3",
+          "#6366F1",
+          "#8C9EE6",
+          "#A5B4FC"
+        ]
+      },
+      "indigo-spectrum-end": {
+        "role": "primary",
+        "displayName": "Spectrum End",
+        "canonical": "#7388DF",
+        "tonalRamp": [
+          "#17143A",
+          "#231E57",
+          "#352E82",
+          "#333DA7",
+          "#5160C3",
+          "#7388DF",
+          "#8C9EE6",
+          "#A5B4FC"
+        ]
+      },
+      "indigo-light": {
+        "role": "primary",
+        "displayName": "Spectral Highlight",
+        "canonical": "#A5B4FC",
+        "tonalRamp": [
+          "#17143A",
+          "#231E57",
+          "#352E82",
+          "#333DA7",
+          "#5160C3",
+          "#7388DF",
+          "#8C9EE6",
+          "#A5B4FC"
+        ]
+      },
+      "verified-green": {
         "role": "secondary",
         "displayName": "Verified Green",
-        "canonical": "oklch(72% 0.17 158)",
+        "canonical": "#00C37A",
         "tonalRamp": [
-          "oklch(96.0% 0.035 158.0)",
-          "oklch(88.4% 0.088 158.0)",
-          "oklch(80.8% 0.140 158.0)",
-          "oklch(73.2% 0.170 158.0)",
-          "oklch(58.0% 0.135 158.0)",
-          "oklch(42.8% 0.100 158.0)",
-          "oklch(27.6% 0.064 158.0)",
-          "oklch(20.0% 0.046 158.0)"
+          "#003522",
+          "#00583A",
+          "#007C50",
+          "#009F65",
+          "#00C37A",
+          "#42D79D",
+          "#85E8BE",
+          "#D1F8E6"
         ]
       },
-      "signal": {
+      "icon-violet": {
         "role": "tertiary",
-        "displayName": "Review Coral",
-        "canonical": "oklch(70% 0.18 35)",
+        "displayName": "Icon Violet",
+        "canonical": "#7D3DF3",
         "tonalRamp": [
-          "oklch(96.0% 0.020 35.0)",
-          "oklch(89.2% 0.057 35.0)",
-          "oklch(82.4% 0.100 35.0)",
-          "oklch(75.6% 0.148 35.0)",
-          "oklch(62.0% 0.217 35.0)",
-          "oklch(48.4% 0.170 35.0)",
-          "oklch(34.8% 0.121 35.0)",
-          "oklch(28.0% 0.097 35.0)"
+          "#241044",
+          "#381868",
+          "#53269A",
+          "#6A32C9",
+          "#7D3DF3",
+          "#9D70F6",
+          "#BFA5F9",
+          "#E7DDFC"
         ]
       }
     },
     "typographyMeta": {
       "display": {
-        "displayName": "Release Statement",
-        "purpose": "One decisive hero statement per page."
+        "displayName": "Hero Statement",
+        "purpose": "One genuine hero or large section statement."
       },
       "headline": {
-        "displayName": "Narrative Turn",
-        "purpose": "Major full-width section headings."
+        "displayName": "Stage Heading",
+        "purpose": "Major product-stage and section headings."
       },
       "body": {
         "displayName": "Review Copy",
-        "purpose": "Explanatory copy capped at 65-75 characters."
+        "purpose": "Explanatory and review text with restrained line length."
       },
       "label": {
-        "displayName": "Source Metadata",
-        "purpose": "Source IDs, aspect ratios, timestamps, runs, and checkpoints only."
+        "displayName": "Machine Context",
+        "purpose": "Identifiers, versions, timestamps, dimensions, hashes, and execution states."
       }
     },
     "shadows": [
       {
-        "name": "review-board-base",
-        "value": "0 8px 0 color-mix(in oklch, black 28%, transparent)",
-        "purpose": "Hard structural base under the hero release board only."
+        "name": "launch-cta",
+        "value": "0 8px 32px rgb(0 0 0 / 12%)",
+        "purpose": "Soft elevation under the homepage signature launch action."
+      },
+      {
+        "name": "launch-ring",
+        "value": "0 0 0 1px rgb(255 255 255 / 72%), 0 0 24px rgb(255 255 255 / 28%)",
+        "purpose": "Transient ring during the launch interaction."
+      },
+      {
+        "name": "field-focus-light",
+        "value": "0 0 20px rgb(0 0 0 / 8%)",
+        "purpose": "Restrained field focus response on light surfaces."
+      },
+      {
+        "name": "field-focus-dark",
+        "value": "0 0 20px rgb(255 255 255 / 10%)",
+        "purpose": "Restrained field focus response on dark surfaces."
       }
     ],
     "motion": [
       {
         "name": "state-fast",
-        "value": "160ms ease-out",
-        "purpose": "Color and visibility state changes."
+        "value": "160ms ease",
+        "purpose": "Border, background, and visibility state changes."
       },
       {
         "name": "physical-fast",
         "value": "180ms cubic-bezier(0.16, 1, 0.3, 1)",
-        "purpose": "Button and compact control movement."
+        "purpose": "Compact button and control movement."
       },
       {
-        "name": "artifact-enter",
-        "value": "720ms cubic-bezier(0.16, 1, 0.3, 1)",
-        "purpose": "Single hero release-board entrance."
+        "name": "blur-reveal",
+        "value": "600ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Homepage blur-to-focus and scroll-reveal transitions."
       }
     ],
     "breakpoints": [
       { "name": "mobile", "value": "640px" },
-      { "name": "stack", "value": "860px" },
-      { "name": "navigation", "value": "1080px" },
-      { "name": "shell", "value": "1180px" }
+      { "name": "workbench-stack", "value": "860px" },
+      { "name": "navigation", "value": "1080px" }
     ]
   },
   "components": [
     {
-      "name": "Hero Primary Button",
+      "name": "Primary Product Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Primary conversion action on the committed purple hero field.",
-      "html": "<button class=\"ds-btn-primary\">Join the pilot</button>",
-      "css": ".ds-btn-primary { min-height: 48px; border: 0; border-radius: 10px; background: var(--accent-foreground, #fcfbff); color: var(--accent-strong, #6113cb); padding: 12px 18px; font: 750 15px/1.5 Manrope, sans-serif; transition: transform 180ms cubic-bezier(0.16,1,0.3,1), background 180ms ease-out; } .ds-btn-primary:hover { transform: translateY(-2px); background: #f0eff8; } .ds-btn-primary:focus-visible { outline: 3px solid var(--accent, #7d3df3); outline-offset: 3px; }"
+      "description": "Compact primary action on product and release surfaces.",
+      "html": "<button class=\"ds-button-primary\">Approve flow</button>",
+      "css": ".ds-button-primary { display:inline-flex; min-height:44px; align-items:center; justify-content:center; gap:8px; border:0; border-radius:10px; padding:10px 16px; background:var(--accent,#6366f1); color:var(--accent-foreground,#fff); font:700 14px/1 Geist,sans-serif; transition:transform 180ms cubic-bezier(0.16,1,0.3,1),background-color 180ms ease; } .ds-button-primary:hover { transform:translateY(-2px); } .ds-button-primary:focus-visible { outline:3px solid var(--ring,#6366f1); outline-offset:3px; } .ds-button-primary:active { transform:translateY(0); } .ds-button-primary:disabled { cursor:not-allowed; opacity:.52; transform:none; }"
     },
     {
-      "name": "Accent Action Button",
+      "name": "Secondary Product Button",
       "kind": "button",
-      "refersTo": "button-accent",
-      "description": "Primary action on light neutral surfaces.",
-      "html": "<button class=\"ds-btn-accent\">Prepare application</button>",
-      "css": ".ds-btn-accent { min-height: 48px; border: 0; border-radius: 10px; background: var(--accent, #7d3df3); color: var(--accent-foreground, #fcfbff); padding: 12px 18px; font: 750 15px/1.5 Manrope, sans-serif; transition: transform 180ms cubic-bezier(0.16,1,0.3,1); } .ds-btn-accent:hover { transform: translateY(-2px); } .ds-btn-accent:focus-visible { outline: 3px solid var(--accent, #7d3df3); outline-offset: 3px; }"
+      "refersTo": "button-secondary",
+      "description": "Equal-geometry secondary action on neutral product surfaces.",
+      "html": "<button class=\"ds-button-secondary\">Save draft</button>",
+      "css": ".ds-button-secondary { display:inline-flex; min-height:44px; align-items:center; justify-content:center; gap:8px; border:0; border-radius:10px; padding:10px 16px; background:var(--muted,#f5f5f5); color:var(--foreground,#0a0a0a); font:700 14px/1 Geist,sans-serif; transition:transform 180ms cubic-bezier(0.16,1,0.3,1),background-color 180ms ease; } .ds-button-secondary:hover { transform:translateY(-2px); background:var(--surface-strong,#e5e5e5); } .ds-button-secondary:focus-visible { outline:3px solid var(--ring,#6366f1); outline-offset:3px; } .ds-button-secondary:active { transform:translateY(0); } .ds-button-secondary:disabled { cursor:not-allowed; opacity:.52; transform:none; }"
     },
     {
-      "name": "Dark Pilot Input",
-      "kind": "input",
-      "refersTo": "input-dark",
-      "description": "Review-safe text field on the pilot form's ink surface.",
-      "html": "<label class=\"ds-field\"><span>Work email</span><input placeholder=\"you@company.com\" /></label>",
-      "css": ".ds-field { display: grid; gap: 6px; color: var(--ink-muted, #b1aec2); font: 650 12px/1.5 Manrope, sans-serif; } .ds-field input { min-height: 48px; border: 1px solid #555266; border-radius: 9px; background: var(--ink-panel-soft, #161325); color: var(--ink-text, #f5f4fa); padding: 12px 14px; font: 400 16px/1.5 Manrope, sans-serif; } .ds-field input::placeholder { color: #a4a2b6; } .ds-field input:focus-visible { border-color: var(--accent-strong, #6113cb); outline: 2px solid var(--accent, #7d3df3); outline-offset: 1px; }"
-    },
-    {
-      "name": "Verified Badge",
+      "name": "Verified Status Badge",
       "kind": "chip",
       "refersTo": "proof-badge",
-      "description": "Textual, color-independent approval state.",
+      "description": "Color-independent approved or verified state.",
       "html": "<span class=\"ds-proof-badge\"><svg aria-hidden=\"true\" viewBox=\"0 0 24 24\"><path d=\"m5 12 4 4L19 6\" /></svg>Approved</span>",
-      "css": ".ds-proof-badge { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; background: var(--proof, #00c37a); color: var(--proof-ink, #002c13); padding: 6px 10px; font: 750 12px/1.2 Manrope, sans-serif; } .ds-proof-badge svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.5; }"
+      "css": ".ds-proof-badge { display:inline-flex; width:max-content; align-items:center; gap:5px; border-radius:999px; padding:5px 9px; background:var(--proof,#00c37a); color:var(--proof-ink,#03040a); font:650 11px/1.25 'Geist Mono',monospace; white-space:nowrap; } .ds-proof-badge svg { width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:2.5; } .ds-proof-badge:focus-visible { outline:3px solid var(--ring,#6366f1); outline-offset:3px; }"
     },
     {
-      "name": "Header Navigation",
+      "name": "Launch CTA",
+      "kind": "button",
+      "description": "Signature 64px homepage action with trailing circular control.",
+      "html": "<button class=\"ds-launch-cta\"><span>Create your first Launch Video</span><span class=\"ds-launch-icon\" aria-hidden=\"true\">&#8599;</span></button>",
+      "css": ".ds-launch-cta { display:inline-flex; min-width:352px; height:64px; align-items:center; justify-content:space-between; gap:20px; overflow:hidden; border:0; border-radius:999px; padding:8px 8px 8px 28px; background:var(--background,#fff); color:var(--foreground,#0a0a0a); box-shadow:0 8px 32px rgb(0 0 0 / 12%); font:500 16px/1 Geist,sans-serif; transition:transform 180ms cubic-bezier(0.16,1,0.3,1); } .ds-launch-cta:hover { transform:translateY(-2px); } .ds-launch-cta:focus-visible { outline:3px solid var(--ring,#6366f1); outline-offset:3px; } .ds-launch-cta:active { transform:translateY(0); } .ds-launch-icon { display:flex; width:48px; height:48px; flex:0 0 48px; align-items:center; justify-content:center; border-radius:999px; background:var(--brand-launch-ink,#352e82); color:#fff; font-size:20px; }"
+    },
+    {
+      "name": "ProductFlow Node",
+      "kind": "card",
+      "description": "Compact semantic flow step with an order marker and explicit execution state.",
+      "html": "<button class=\"ds-flow-node\"><span class=\"ds-node-order\">03</span><span class=\"ds-node-copy\"><strong>Create invoice</strong><small>Proves automated billing</small></span><span class=\"ds-node-state\">Passed</span></button>",
+      "css": ".ds-flow-node { display:flex; width:100%; min-height:72px; align-items:center; gap:12px; border:1px solid var(--border,#e5e5e5); border-radius:12px; padding:12px 14px; background:var(--paper,#fff); color:var(--foreground,#0a0a0a); text-align:left; transition:border-color 160ms ease,background-color 160ms ease,transform 160ms cubic-bezier(0.16,1,0.3,1); } .ds-flow-node:hover { border-color:var(--accent,#6366f1); transform:translateY(-1px); } .ds-flow-node:focus-visible { outline:3px solid var(--ring,#6366f1); outline-offset:3px; } .ds-flow-node:active { background:var(--muted,#f5f5f5); transform:translateY(0); } .ds-node-order { display:flex; width:36px; height:36px; flex:0 0 36px; align-items:center; justify-content:center; border-radius:9px; background:var(--foreground,#0a0a0a); color:var(--paper,#fff); font:650 11px/1 'Geist Mono',monospace; } .ds-node-copy { min-width:0; flex:1; } .ds-node-copy strong,.ds-node-copy small { display:block; } .ds-node-copy strong { font:700 14px/1.3 Geist,sans-serif; } .ds-node-copy small { margin-top:5px; overflow:hidden; color:var(--muted-foreground,#737373); font:400 12px/1.3 Geist,sans-serif; text-overflow:ellipsis; white-space:nowrap; } .ds-node-state { color:var(--accent-strong,#352e82); font:650 10px/1.2 'Geist Mono',monospace; }"
+    },
+    {
+      "name": "Release Stage Navigation",
       "kind": "nav",
-      "description": "Quiet fixed navigation with a compact conversion action.",
-      "html": "<nav class=\"ds-nav\"><strong>PurpleInk</strong><div><a href=\"#\">Proof</a><a href=\"#\">Templates</a><button>Join the pilot</button></div></nav>",
-      "css": ".ds-nav { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--border, #cecbde); background: var(--background, #faf9fe); color: var(--foreground, #12101c); padding: 0 24px; font: 650 14px/1.5 Manrope, sans-serif; } .ds-nav div { display: flex; align-items: center; gap: 24px; } .ds-nav a { color: var(--muted-foreground, #555266); text-decoration: none; } .ds-nav a:hover, .ds-nav a:focus-visible { color: var(--foreground, #12101c); } .ds-nav button { min-height: 42px; border: 0; border-radius: 10px; background: var(--accent, #7d3df3); color: var(--accent-foreground, #fcfbff); padding: 0 14px; font-weight: 750; }"
-    },
-    {
-      "name": "Release Board",
-      "kind": "custom",
-      "description": "Signature product-proof artifact used in the hero.",
-      "html": "<section class=\"ds-release-board\"><header><span></span><strong>Atlas Billing / Release 2.4</strong><small>Workflow prototype</small></header><main><p>Scene 02</p><h3>Create invoice</h3><div>Verified source · checkpoint 04</div></main></section>",
-      "css": ".ds-release-board { overflow: hidden; border-radius: 16px; background: #faf9fe; color: #12101c; box-shadow: 0 8px 0 rgba(0,0,0,.28); font-family: Manrope, sans-serif; } .ds-release-board header { min-height: 54px; display: flex; align-items: center; gap: 9px; border-bottom: 1px solid #cecbde; padding: 0 16px; } .ds-release-board header span { width: 10px; height: 10px; border-radius: 50%; background: #7d3df3; } .ds-release-board header small { margin-left: auto; border-radius: 999px; background: #d8ceff; color: #6113cb; padding: 5px 8px; font: 700 10px/1.2 Azeret Mono, monospace; text-transform: uppercase; } .ds-release-board main { padding: 24px; } .ds-release-board main p { color: #555266; font: 650 11px/1.5 Azeret Mono, monospace; text-transform: uppercase; } .ds-release-board main h3 { margin: 8px 0 24px; font-size: 24px; } .ds-release-board main div { border-radius: 10px; background: #dff9e9; color: #002c13; padding: 12px; font-weight: 700; }"
+      "description": "Horizontal release workflow with a clear current stage.",
+      "html": "<nav class=\"ds-release-nav\" aria-label=\"Release stages\"><a href=\"#\" class=\"ds-release-step\"><span>01</span><strong>Brief</strong></a><a href=\"#\" class=\"ds-release-step ds-current\"><span>02</span><strong>Flow</strong></a><a href=\"#\" class=\"ds-release-step\"><span>03</span><strong>Evidence</strong></a></nav>",
+      "css": ".ds-release-nav { display:flex; min-width:540px; overflow-x:auto; border-bottom:1px solid var(--border,#e5e5e5); background:var(--paper,#fff); } .ds-release-step { display:flex; min-height:76px; flex:1; align-items:center; gap:10px; border-bottom:3px solid transparent; padding:12px 10px; color:var(--muted-foreground,#737373); text-decoration:none; } .ds-release-step:hover { background:var(--muted,#f5f5f5); color:var(--foreground,#0a0a0a); } .ds-release-step:focus-visible { outline:3px solid var(--ring,#6366f1); outline-offset:-3px; } .ds-release-step span { display:flex; width:25px; height:25px; flex:0 0 25px; align-items:center; justify-content:center; border-radius:999px; background:var(--muted,#f5f5f5); font:650 11px/1 'Geist Mono',monospace; } .ds-release-step strong { font:700 12px/1 Geist,sans-serif; } .ds-release-step.ds-current { border-bottom-color:var(--accent,#6366f1); color:var(--foreground,#0a0a0a); } .ds-release-step.ds-current span { background:var(--accent,#6366f1); color:var(--accent-foreground,#fff); }"
     }
   ],
   "narrative": {
-    "northStar": "The Release Room",
-    "overview": "PurpleInk should feel like a release team reviewing the final cut on calibrated screens: focused, authored, factual, and ready to publish. The visual language combines a decisive purple field with near-black review surfaces, pale product canvases, and explicit proof states.",
+    "northStar": "Spectral Ink",
+    "overview": "PurpleInk combines a near-monochrome interface with indigo imagery that behaves like digital ink, light, or moving photographic emulsion. The system is minimal and spatial rather than card-heavy, with restrained typography allowing product evidence, imagery, and interaction to carry the identity.\n\nThe shipped homepage is the visual reference surface, and app/globals.css is the normative implementation. If documentation and the rendered product disagree, inspect the implementation first and update the documentation or tokens without changing the rendered result.",
     "keyCharacteristics": [
-      "Committed purple, disciplined by ink, paper, proof green, and signal coral.",
-      "Product evidence is the primary imagery; decorative effects never replace proof.",
-      "Flat narrative bands and tonal layering; shadows are rare and structural.",
-      "Manrope carries the message; Azeret Mono is metadata-only.",
-      "Compact controls, moderate corners, explicit focus, and no nested cards."
+      "Monochrome structure with spectral indigo at expressive moments.",
+      "Creative-technology character without generic SaaS decoration.",
+      "Product evidence remains inspectable; effects never obscure factual content.",
+      "Flat, bounded operational surfaces and more expressive marketing interactions.",
+      "Motion is tactile but never required to access content."
     ],
     "rules": [
       {
-        "name": "Proof Before Promise",
-        "body": "Every visual claim must point to a visible product frame, source record, checkpoint, or clearly labeled prototype.",
-        "section": "overview"
-      },
-      {
-        "name": "Three-Voice",
-        "body": "On ordinary screens, use one brand color, one semantic color only when state requires it, and the neutral system.",
+        "name": "Evidence",
+        "body": "Color never constitutes evidence by itself. Verification and intervention states always include text or an icon.",
         "section": "colors"
       },
       {
-        "name": "Color Is Not Evidence",
-        "body": "Verified, warning, and blocked states always include text or an icon in addition to color.",
+        "name": "One-Emphasis",
+        "body": "Ordinary layouts use one neutral surface system and, when needed, one indigo emphasis. New hues require an established brand asset or a new semantic need.",
         "section": "colors"
       },
       {
-        "name": "Tracking Floor",
-        "body": "Display tracking never goes below -0.04em. Body and controls always use zero letter spacing.",
-        "section": "typography"
+        "name": "Semantic Consumption",
+        "body": "Product components consume semantic CSS roles such as background, foreground, accent, proof, and signal; exact primitives are reserved for brand assets, gradient stops, and static assets that cannot use CSS variables.",
+        "section": "colors"
       },
       {
         "name": "Metadata Boundary",
-        "body": "Mono type is reserved for machine-readable context.",
+        "body": "Mono type is reserved for machine-readable context. Body copy, navigation, and commands remain in Geist sans.",
         "section": "typography"
       },
       {
-        "name": "Flat By Default",
-        "body": "Surfaces remain flat at rest. Never combine a decorative border with a large diffuse shadow.",
+        "name": "Tracking Floor",
+        "body": "Body text, labels, and controls use normal letter spacing. Tight tracking is limited to large headings and never goes below -0.04em.",
+        "section": "typography"
+      },
+      {
+        "name": "Flat-by-Default",
+        "body": "A resting surface uses a boundary or tonal shift, not a decorative border plus a large shadow.",
         "section": "elevation"
       }
     ],
     "dos": [
-      "Lead with product proof, attached sources, approval state, and reproducible workflow.",
-      "Use Directed Purple for brand/action, Verified Green for proof, and Review Coral for intervention only.",
-      "Pair every semantic color with an icon or text label."
+      "Do lead with real product frames, attached sources, approval state, and reproducible workflow.",
+      "Do use the shared spectral gradient for expressive imagery so disparate source assets belong to one family.",
+      "Do use Night primitives for dark surfaces and semantic tokens inside product components.",
+      "Do preserve keyboard focus, reduced-motion behavior, and readable content in both themes.",
+      "Do reuse existing motion timing and easing before introducing another motion vocabulary."
     ],
     "donts": [
-      "Do not present PurpleInk as a generic prompt-to-video or AI design generator.",
-      "Do not build a purple-gradient SaaS template or invent product evidence.",
-      "Do not use gradient text, decorative color orbs, glass cards, or nested cards.",
-      "Do not use white normal-sized text on dark-purple; use ink-panel text instead."
+      "Don't present PurpleInk as a generic prompt-to-video or AI design generator.",
+      "Don't invent product evidence, customer logos, metrics, or testimonials.",
+      "Don't use gradient text, decorative color orbs, glass cards, nested cards, or generic purple SaaS styling.",
+      "Don't approximate the spectral effects with arbitrary gradients or one-off opacity values inside components.",
+      "Don't use hardcoded white, black, zinc, or slate values when a semantic token already expresses the role."
     ]
   }
 }
