@@ -4,7 +4,18 @@ import { randomUUID } from "node:crypto"
 
 export type JobStatus = "queued" | "running" | "done" | "failed"
 /** 阶段：与 run-pipeline 的 onPhase 对齐 */
-export type JobPhase = "queued" | "capturing" | "composing" | "rendering" | "verifying" | "done" | "failed"
+export type JobPhase =
+  | "queued"
+  | "capturing"
+  | "scripting"
+  | "synthesizing"
+  | "timing"
+  | "composing"
+  | "rendering"
+  | "verifying"
+  | "muxing"
+  | "done"
+  | "failed"
 
 export interface Job {
   id: string

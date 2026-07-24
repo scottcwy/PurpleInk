@@ -16,7 +16,8 @@
     "imapflow": "^1.0.171",
     "mailparser": "^3.7.1",
     "playwright": "^1.49.0",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.3",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/mailparser": "^3.4.5",

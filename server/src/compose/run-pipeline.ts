@@ -1,7 +1,7 @@
 // 编排层：把 compose 的各步串起来。
 // - renderFromCapture: 已有 capture/ 目录 → video.mp4
 // - urlToVideo:        URL → (M3 采集) → capture/ → video.mp4（端到端）
-import { join } from "node:path"
+import { basename, dirname, extname, join } from "node:path"
 import { access, readdir, rm } from "node:fs/promises"
 import { buildVideoModel } from "./model"
 import { writeProject, writeProjectDirect } from "./project"
@@ -11,6 +11,15 @@ import { logger } from "../lib/logger"
 import { buildRootHtml } from "./chapters/root-html"
 import { splitScenesToChapters } from "./chapters/split"
 import { generateChapters, buildComposeContext } from "./chapters/generate"
+import { getTtsEnv } from "../../../lib/tts/config"
+import { prepareNarrationAssets } from "../tts/orchestrate"
+import {
+  buildNarrationTrack,
+  measureAudioDuration,
+  muxNarration,
+  runProcess,
+  type ProcessRunner,
+} from "../tts/media"
 
 export interface PipelineResult {
   captureDir: string
@@ -40,18 +49,33 @@ export async function renderFromCapture(
   captureDir: string,
   options: RenderFromCaptureOptions = {}
 ): Promise<PipelineResult> {
-  options.onPhase?.("composing")
-  const model = await buildVideoModel(captureDir, {
+  const visualModel = await buildVideoModel(captureDir, {
     ...(options.durationSec != null ? { durationSec: options.durationSec } : {}),
     ...(options.name != null ? { name: options.name } : {}),
   })
   logger.info("pipeline:model_built", {
-    scenes: model.scenes.length,
-    durationSec: model.durationSec,
-    palette: model.palette,
+    scenes: visualModel.scenes.length,
+    durationSec: visualModel.durationSec,
+    palette: visualModel.palette,
   })
 
-  const projectDir = options.projectDir || join(captureDir, "..", `${model.id}-video`)
+  const projectDir = options.projectDir || join(captureDir, "..", `${visualModel.id}-video`)
+  const mediaRunner = createMediaRunner(options.ffmpegDir)
+  const narration = await prepareNarrationAssets(visualModel, projectDir, getTtsEnv(), {
+    onPhase: (phase) => options.onPhase?.(phase),
+    measureDuration: (path) => measureAudioDuration(path, mediaRunner),
+    buildTrack: (paths, durations, outputPath, buildOptions) =>
+      buildNarrationTrack(paths, durations, outputPath, {
+        ...buildOptions,
+        runner: mediaRunner,
+      }),
+  })
+  logger.info("pipeline:narration_ready", {
+    segments: narration.plan.segments.length,
+    durationSec: visualModel.durationSec,
+  })
+
+  options.onPhase?.("composing")
 
   // Compose mode: llm / template / auto
   const composeMode = options.generation || (process.env.PURPLEINK_COMPOSE_MODE as "llm" | "template" | "auto") || "auto"
@@ -63,21 +87,21 @@ export async function renderFromCapture(
     logger.info("pipeline:compose_llm_start", {
       composeMode,
       envKey: !!process.env.STEP_API_KEY,
-      scenesCount: model.scenes.length,
-      valueProps: model.valueProps.length,
-      logos: model.logos.length,
+      scenesCount: visualModel.scenes.length,
+      valueProps: visualModel.valueProps.length,
+      logos: visualModel.logos.length,
     })
     try {
-      const ctx = await buildComposeContext(captureDir, model)
+      const ctx = await buildComposeContext(captureDir, visualModel)
       logger.info("pipeline:compose_context_built", {
         screenshots: ctx.screenshots.length,
         brand: ctx.brand.title,
         palette: ctx.palette,
         features: ctx.copy.features.length,
       })
-      const chapterPlans = splitScenesToChapters(model)
+      const chapterPlans = splitScenesToChapters(visualModel)
       logger.info("pipeline:chapter_plans", { chapters: chapterPlans.map((c) => c.id) })
-      const chapters = await generateChapters(ctx, captureDir, model)
+      const chapters = await generateChapters(ctx, captureDir, visualModel)
       const llmCount = chapters.filter((c) => c.source === "llm").length
       const templateCount = chapters.filter((c) => c.source === "template").length
       logger.info("pipeline:chapters_generated", {
@@ -86,7 +110,12 @@ export async function renderFromCapture(
         template: templateCount,
         sources: chapters.map((c) => ({ id: c.id, source: c.source })),
       })
-      const rootHtml = buildRootHtml(chapterPlans, model.palette, model.skin, model.durationSec)
+      const rootHtml = buildRootHtml(
+        chapterPlans,
+        visualModel.palette,
+        visualModel.skin,
+        visualModel.durationSec,
+      )
       written = await writeProjectDirect(projectDir, rootHtml, chapters, captureDir)
       logger.info("pipeline:compose_llm_done", { projectDir: written.projectDir, assets: written.assetCount })
     } catch (err) {
@@ -95,12 +124,12 @@ export async function renderFromCapture(
       logger.error("pipeline:compose_llm_failed", { error: errMsg, stack: errStack?.slice(0, 500) })
       // Fall back to template path on catastrophic failure
       logger.info("pipeline:fallback_template", { reason: errMsg })
-      written = await writeProject(model, projectDir, captureDir)
+      written = await writeProject(visualModel, projectDir, captureDir)
     }
   } else {
     // Existing template path
     logger.info("pipeline:compose_template", {})
-    written = await writeProject(model, projectDir, captureDir)
+    written = await writeProject(visualModel, projectDir, captureDir)
   }
 
   logger.info("pipeline:project_written", { projectDir: written.projectDir, assets: written.assetCount })
@@ -119,14 +148,35 @@ export async function renderFromCapture(
     console.log(line)
   }
 
+  let videoPath = rendered.videoPath
+  if (videoPath) {
+    options.onPhase?.("muxing")
+    const extension = extname(videoPath) || ".mp4"
+    const narratedPath = join(
+      dirname(videoPath),
+      `${basename(videoPath, extension)}-narrated${extension}`,
+    )
+    await muxNarration(videoPath, narration.narrationPath, narratedPath, mediaRunner)
+    videoPath = narratedPath
+    logger.info("pipeline:narration_muxed", { videoPath })
+  }
+
   return {
     captureDir,
     projectDir: written.projectDir,
-    videoPath: rendered.videoPath,
+    videoPath,
     checkPassed: rendered.checkPassed,
-    durationSec: model.durationSec,
+    durationSec: visualModel.durationSec,
     goldenVerified: golden.passed,
     goldenDetails: golden.details,
+  }
+}
+
+function createMediaRunner(ffmpegDir?: string): ProcessRunner {
+  return (command, args) => {
+    if (!ffmpegDir) return runProcess(command, args)
+    const executable = process.platform === "win32" ? `${command}.exe` : command
+    return runProcess(join(ffmpegDir, executable), args)
   }
 }
 

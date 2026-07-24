@@ -26,13 +26,27 @@ ignored `.env.local` file. Application code must read the configuration through
 
 ## Runtime Boundary
 
-`POST /v1/tts` accepts one voice and returns binary audio. A narration worker
-must check the HTTP status and `Content-Type`, download the bytes immediately,
-normalize them with FFmpeg, and persist the resulting immutable asset in R2.
-The Director and browser must not call ListenHub directly.
+Server render tasks generate one independent narration segment per visual
+scene. The narration prompt uses structured product copy and scene kinds; it
+does not use screenshot captions or asset paths. The synchronous render flow
+is:
 
-This change defines and validates the configuration boundary only. The
-narration worker and long-video orchestration are separate implementation work.
+```text
+VideoModel -> duration-budgeted narration script -> FlowSpeech
+           -> ffprobe duration -> pad/tempo-fit fixed scene windows
+           -> unchanged visual composition/render -> FFmpeg narration mux
+```
+
+The generated project stores `narration-plan.json`, `audio_meta.json`, segment
+audio under `audio/segments/`, and the normalized `audio/narration.wav` track.
+The visual `VideoModel`, scene timing, Agent/template input, and final video
+duration remain unchanged. Short narration is padded with silence; narration
+that exceeds its scene window is tempo-fitted in the audio layer before muxing.
+
+The server and render CLI load the ignored root `.env.local`; ordinary web
+routes do not parse TTS configuration. The browser never calls ListenHub and no
+TTS secret is written to generated artifacts. A separate narration worker, R2
+persistence, and long-video orchestration remain out of scope.
 
 ## Commit Boundary
 

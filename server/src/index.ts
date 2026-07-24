@@ -6,9 +6,11 @@ import { startServer } from "./server/api"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SERVER_ROOT = join(HERE, "..")
+const REPO_ROOT = join(SERVER_ROOT, "..")
 
 async function main(): Promise<void> {
   await loadEnv(join(SERVER_ROOT, ".env"))
+  await loadEnv(join(REPO_ROOT, ".env.local"))
   const port = Number(process.env.PORT) || 8787
   startServer(port)
 }

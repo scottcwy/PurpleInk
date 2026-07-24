@@ -31,6 +31,7 @@ import type { DriverType } from "../src/capture/browser-driver"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SERVER_ROOT = join(HERE, "..")
+const REPO_ROOT = join(SERVER_ROOT, "..")
 
 interface ParsedArgs {
   target?: string
@@ -80,6 +81,7 @@ function isUrl(s: string): boolean {
 
 async function main(): Promise<void> {
   await loadEnv(join(SERVER_ROOT, ".env"))
+  await loadEnv(join(REPO_ROOT, ".env.local"))
 
   const { target, opts } = parseArgs(process.argv.slice(2))
   if (!target) {
