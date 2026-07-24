@@ -10,11 +10,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
-const navLinks = [
-  { href: "#features", label: "Features" },
-  { href: "#templates", label: "Templates" },
-  { href: "#resources", label: "Resources" },
-];
+const navLinks = [{ href: "#community", label: "Community" }];
 
 const authLinks = [
   { href: "", label: "Contact" },

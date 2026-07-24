@@ -26,6 +26,10 @@ const footer = await readFile(
   new URL("../components/footer.tsx", import.meta.url),
   "utf8"
 );
+const logoText = await readFile(
+  new URL("../public/svg/logo-text.svg", import.meta.url),
+  "utf8"
+);
 
 test("describes the four-step Launch Video workflow", () => {
   assert.match(
@@ -61,6 +65,32 @@ test("removes pricing entry points while keeping the launch CTA", () => {
     hero,
     /<motion\.button[\s\S]*创建你的首个Launch Video[\s\S]*<\/motion\.button>/
   );
+});
+
+test("shows Community as the only primary navigation item", () => {
+  assert.match(
+    header,
+    /const navLinks = \[\s*\{ href: "#community", label: "Community" \},?\s*\];/
+  );
+
+  for (const removedLabel of ["Features", "Templates", "Resources"]) {
+    assert.doesNotMatch(header, new RegExp(`label: "${removedLabel}"`));
+  }
+});
+
+test("removes the homepage product-flow tagline", () => {
+  assert.doesNotMatch(
+    hero,
+    /PurpleInk turns verified product flows into reviewable, repeatable/
+  );
+  assert.match(hero, /bottom-24[^\"]*justify-end/);
+});
+
+test("keeps the footer wordmark clear of its right edge", () => {
+  assert.match(footer, /h-44 max-w-338/);
+  assert.match(footer, /className="w-full opacity-5/);
+  assert.match(logoText, /width="120"/);
+  assert.match(logoText, /viewBox="0 0 120 25"/);
 });
 
 test("gives the launch CTA branded, accessible click feedback", () => {

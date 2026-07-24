@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  motion,
-  useScroll,
-  useSpring,
-  useTransform,
-} from "motion/react";
+import { motion, useScroll, useSpring, useTransform } from "motion/react";
 import { ArrowDown } from "lucide-react";
 import Image from "next/image";
 import { useRef, type ReactNode } from "react";
@@ -46,7 +41,7 @@ export function Hero(): ReactNode {
 
       <div className="mx-auto flex min-h-dvh max-w-4xl flex-col items-start justify-center gap-6 px-4 py-20 sm:justify-start sm:gap-0 sm:py-0 sm:pt-40 lg:px-8 lg:pt-68">
         <motion.h1
-          className="mix-blend-difference text-4xl font-medium tracking-tight text-white sm:text-5xl md:text-6xl lg:text-7xl"
+          className="text-4xl font-medium tracking-tight text-white mix-blend-difference sm:text-5xl md:text-6xl lg:text-7xl"
           initial={{ opacity: 0, y: 20, filter: "blur(8px)" }}
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
           transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
@@ -70,7 +65,7 @@ export function Hero(): ReactNode {
       </div>
 
       <motion.div
-        className="absolute inset-x-0 bottom-24 mx-auto flex max-w-4xl items-center justify-between px-4 sm:px-6 lg:px-8"
+        className="absolute inset-x-0 bottom-24 mx-auto flex max-w-4xl items-center justify-end px-4 sm:px-6 lg:px-8"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{
@@ -79,11 +74,6 @@ export function Hero(): ReactNode {
           ease: [0.25, 0.46, 0.45, 0.94],
         }}
       >
-        <p className="text-foreground/60 dark:text-foreground/50 max-w-sm text-sm">
-          PurpleInk turns verified product flows into reviewable, repeatable
-          launch videos.
-        </p>
-
         <ArrowDown
           className="text-foreground/60 dark:text-foreground/50 h-12 w-12"
           strokeWidth={1}
