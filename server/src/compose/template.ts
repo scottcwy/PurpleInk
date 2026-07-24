@@ -3,7 +3,9 @@
 // 故事板（model.ts 的 selectStoryboard）决定用哪些镜头、什么顺序、各多长；
 // 本文件只负责把每个镜头渲染出来。所有动画只用 transform/opacity（防抖动，GPU 合成，
 // 不触发 reflow），文字对 bg 恒达 AA（accent 上的文字统一用 accentFg），保证 hyperframes check 通过。
+import type { ChapterId } from "./chapters/types"
 import type { Scene, ShotMaterial, ShotType, VideoModel } from "./model"
+import { buildPageCamAnimation, getPreset, presetForShot } from "./chapters/page-cam"
 
 const GSAP_CDN = "https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"
 
@@ -20,9 +22,37 @@ function round(n: number): number {
   return Math.round(n * 100) / 100
 }
 
-/** 皮肤运镜签名：主入场缓动(editorial=power2.out 缓 / kinetic=expo.out 快 / technical=power4.out 硬) */
+/** 皮肤运镜签名：主入场缓动(editorial=power2.out 缓 / kinetic=expo.out 快 / technical=power4.out 硬)
+ *  优先使用 MotionProfile 的 enterEase（品牌动效推导），否则回落皮肤默认。 */
 function enterEase(m: VideoModel): string {
-  return m.skin.motion.enter
+  return m.motionProfile?.enterEase || m.skin.motion.enter
+}
+
+/** 获取 MotionProfile 的 stagger 间隔，无则回落默认值 */
+function mpStagger(m: VideoModel, fallback: number = 0.12): number {
+  return m.motionProfile?.stagger ?? fallback
+}
+
+/** 获取 MotionProfile 的 overshoot，用于 back.out 缓动参数 */
+function mpOvershoot(m: VideoModel): number {
+  return m.motionProfile?.overshoot ?? 0
+}
+
+/** 生成带 overshoot 的 back.out ease 字符串 */
+function backEase(m: VideoModel, defaultStrength: number = 1.6): string {
+  const os = mpOvershoot(m)
+  if (os > 0) return `back.out(${(1 + os).toFixed(1)})`
+  return `back.out(${defaultStrength})`
+}
+
+/** 获取 MotionProfile 的入场时长，无则回落默认值 */
+function mpEnterDur(m: VideoModel, fallback: number = 0.9): number {
+  return m.motionProfile?.enterDuration ?? fallback
+}
+
+/** 解析有效转场类型：MotionProfile 优先，否则回落皮肤默认 */
+function effectiveTransition(m: VideoModel): string {
+  return m.motionProfile?.transition || m.skin.motion.transition
 }
 
 /** 一个镜头的产物：HTML 片段（clip 外壳，含占位 data-start/duration） */
@@ -57,12 +87,13 @@ const brandCenter: ShotDef = {
     ),
   timeline: (m, sel, _s, t) => {
     const at = (d: number) => round(t + d)
+    const dur = mpEnterDur(m, 1)
     const l = [
-      `      tl.from("${sel} .brand", { opacity: 0, y: 42, scale: 0.96, duration: 1, ease: "${enterEase(m)}" }, ${at(0.2)});`,
-      `      tl.fromTo("${sel} .rule", { scaleX: 0 }, { scaleX: 1, duration: 0.9, ease: "power2.inOut" }, ${at(1.0)});`,
+      `      tl.from("${sel} .brand", { opacity: 0, y: 42, scale: 0.96, duration: ${dur}, ease: "${enterEase(m)}" }, ${at(0.2)});`,
+      `      tl.fromTo("${sel} .rule", { scaleX: 0 }, { scaleX: 1, duration: ${round(dur * 0.9)}, ease: "power2.inOut" }, ${at(0.2 + dur * 0.8)});`,
     ]
     if (m.brand.tagline)
-      l.push(`      tl.from("${sel} .brand-sub", { opacity: 0, y: 18, duration: 0.8, ease: "power2.out" }, ${at(1.4)});`)
+      l.push(`      tl.from("${sel} .brand-sub", { opacity: 0, y: 18, duration: ${round(dur * 0.8)}, ease: "power2.out" }, ${at(0.2 + dur * 1.2)});`)
     return l
   },
 }
@@ -80,12 +111,13 @@ const brandSide: ShotDef = {
     ),
   timeline: (m, sel, _s, t) => {
     const at = (d: number) => round(t + d)
+    const dur = mpEnterDur(m, 0.9)
     const l = [
-      `      tl.fromTo("${sel} .bs-bar", { scaleY: 0 }, { scaleY: 1, duration: 0.8, ease: "power2.inOut" }, ${at(0.2)});`,
-      `      tl.from("${sel} .brand", { opacity: 0, x: 60, duration: 0.9, ease: "power3.out" }, ${at(0.5)});`,
+      `      tl.fromTo("${sel} .bs-bar", { scaleY: 0 }, { scaleY: 1, duration: ${round(dur * 0.88)}, ease: "power2.inOut" }, ${at(0.2)});`,
+      `      tl.from("${sel} .brand", { opacity: 0, x: 60, duration: ${dur}, ease: "${enterEase(m)}" }, ${at(0.5)});`,
     ]
     if (m.brand.tagline)
-      l.push(`      tl.from("${sel} .brand-sub", { opacity: 0, x: 40, duration: 0.8, ease: "power2.out" }, ${at(0.9)});`)
+      l.push(`      tl.from("${sel} .brand-sub", { opacity: 0, x: 40, duration: ${round(dur * 0.88)}, ease: "power2.out" }, ${at(0.9)});`)
     return l
   },
 }
@@ -117,12 +149,14 @@ const heroSplit: ShotDef = {
   },
   timeline: (m, sel, _s, t) => {
     const at = (d: number) => round(t + d)
-    const l = [`      tl.from("${sel} .h1", { opacity: 0, y: 50, duration: 0.9, ease: "${enterEase(m)}" }, ${at(0.2)});`]
-    if (m.hero.lede) l.push(`      tl.from("${sel} .lede", { opacity: 0, y: 30, duration: 0.8, ease: "power2.out" }, ${at(0.6)});`)
+    const dur = mpEnterDur(m, 0.9)
+    const stag = mpStagger(m, 0.12)
+    const l = [`      tl.from("${sel} .h1", { opacity: 0, y: 50, duration: ${dur}, ease: "${enterEase(m)}" }, ${at(0.2)});`]
+    if (m.hero.lede) l.push(`      tl.from("${sel} .lede", { opacity: 0, y: 30, duration: ${round(dur * 0.88)}, ease: "power2.out" }, ${at(0.6)});`)
     if (m.hero.ctas.length)
-      l.push(`      tl.from("${sel} .btn", { opacity: 0, y: 24, duration: 0.6, stagger: 0.12, ease: "back.out(1.6)" }, ${at(1.1)});`)
+      l.push(`      tl.from("${sel} .btn", { opacity: 0, y: 24, duration: ${round(dur * 0.66)}, stagger: ${stag}, ease: "${backEase(m, 1.6)}" }, ${at(1.1)});`)
     if (m.hero.chips.length)
-      l.push(`      tl.from("${sel} .chip", { opacity: 0, y: 30, scale: 0.9, duration: 0.55, stagger: 0.1, ease: "back.out(1.7)" }, ${at(1.0)});`)
+      l.push(`      tl.from("${sel} .chip", { opacity: 0, y: 30, scale: 0.9, duration: ${round(dur * 0.6)}, stagger: ${round(stag * 0.85)}, ease: "${backEase(m, 1.7)}" }, ${at(1.0)});`)
     return l
   },
 }
@@ -140,10 +174,12 @@ const heroStack: ShotDef = {
   },
   timeline: (m, sel, _s, t) => {
     const at = (d: number) => round(t + d)
-    const l = [`      tl.from("${sel} .h1", { opacity: 0, y: 56, duration: 0.9, ease: "${enterEase(m)}" }, ${at(0.2)});`]
-    if (m.hero.lede) l.push(`      tl.from("${sel} .lede", { opacity: 0, y: 30, duration: 0.8, ease: "power2.out" }, ${at(0.6)});`)
+    const dur = mpEnterDur(m, 0.9)
+    const stag = mpStagger(m, 0.12)
+    const l = [`      tl.from("${sel} .h1", { opacity: 0, y: 56, duration: ${dur}, ease: "${enterEase(m)}" }, ${at(0.2)});`]
+    if (m.hero.lede) l.push(`      tl.from("${sel} .lede", { opacity: 0, y: 30, duration: ${round(dur * 0.88)}, ease: "power2.out" }, ${at(0.6)});`)
     if (m.hero.ctas.length)
-      l.push(`      tl.from("${sel} .btn", { opacity: 0, y: 26, scale: 0.94, duration: 0.6, stagger: 0.12, ease: "back.out(1.6)" }, ${at(1.0)});`)
+      l.push(`      tl.from("${sel} .btn", { opacity: 0, y: 26, scale: 0.94, duration: ${round(dur * 0.66)}, stagger: ${stag}, ease: "${backEase(m, 1.6)}" }, ${at(1.0)});`)
     return l
   },
 }
@@ -156,17 +192,10 @@ function firstShot(scene: Scene): ShotMaterial {
   return scene.shots?.[0] || { src: "", caption: "", tall: true }
 }
 
-function windowChrome(m: VideoModel, shot: ShotMaterial, imgCls: string): string {
-  const url = m.cta.command || m.brand.title.toLowerCase()
+function windowChrome(_m: VideoModel, shot: ShotMaterial, imgCls: string): string {
   return `        <div class="window">
-          <div class="titlebar">
-            <span class="dot" style="background:#ff5f57"></span>
-            <span class="dot" style="background:#febc2e"></span>
-            <span class="dot" style="background:#28c840"></span>
-            <span class="url mono">${esc(url)}</span>
-          </div>
           <div class="viewport">
-            <img class="${imgCls}" src="${esc(shot.src)}" alt="${esc(shot.caption)}" data-layout-allow-overflow />
+            <img class="${imgCls} shot-visual" src="${esc(shot.src)}" alt="${esc(shot.caption)}" data-layout-allow-overflow />
           </div>
         </div>`
 }
@@ -176,19 +205,26 @@ const shotWindow: ShotDef = {
     const shot = firstShot(scene)
     return clip(sid, "sc-window", `${windowChrome(m, shot, "shot")}\n        <div class="cap">${esc(shot.caption)}</div>`)
   },
-  timeline: (_m, sel, scene, t) => {
+  timeline: (m, sel, scene, t) => {
     const at = (d: number) => round(t + d)
-    const panDur = Math.max(1.6, round(scene.duration - 2.2))
+    // PageCam 2.5D 相机替代简单 scale 推拉
+    const presetName = presetForShot("shot-window")
+    const camDur = Math.max(2, round(scene.duration - 1.2))
+    const keys = getPreset(presetName, camDur)
+    const ease = m.motionProfile?.enterEase || "power2.inOut"
+    const cam = buildPageCamAnimation(keys, `${sel} .shot`, ease)
     return [
-      `      tl.from("${sel} .window", { opacity: 0, y: 56, scale: 0.96, duration: 0.9, ease: "power3.out" }, ${at(0.2)});`,
+      `      tl.from("${sel} .window", { opacity: 0, y: 56, scale: 0.96, duration: ${mpEnterDur(m, 0.9)}, ease: "${enterEase(m)}" }, ${at(0.2)});`,
+      `      tl.from("${sel} .shot-visual", { opacity: 0, duration: 0.6, ease: "power2.out" }, ${at(0.5)});`,
       `      tl.from("${sel} .cap", { opacity: 0, y: 20, duration: 0.7, ease: "power2.out" }, ${at(0.8)});`,
-      `      tl.fromTo("${sel} .shot", { scale: 1.0 }, { scale: 1.07, duration: ${panDur}, ease: "none" }, ${at(1.2)});`,
+      cam.css,
+      cam.gsap,
     ]
   },
 }
 
 const shotTilt: ShotDef = {
-  render: (m, sid, scene) => {
+  render: (_m, sid, scene) => {
     const shot = firstShot(scene)
     return clip(
       sid,
@@ -201,13 +237,20 @@ const shotTilt: ShotDef = {
         <div class="cap">${esc(shot.caption)}</div>`
     )
   },
-  timeline: (_m, sel, scene, t) => {
+  timeline: (m, sel, scene, t) => {
     const at = (d: number) => round(t + d)
-    const panDur = Math.max(1.4, round(scene.duration - 2.4))
+    // PageCam 2.5D 相机：tilt-to-front 预设，3D 倾斜入场 → 正面
+    const presetName = presetForShot("shot-tilt")
+    const camDur = Math.max(2, round(scene.duration - 1.6))
+    const keys = getPreset(presetName, camDur)
+    const ease = m.motionProfile?.enterEase || "power2.inOut"
+    const cam = buildPageCamAnimation(keys, `${sel} .tilt-img`, ease)
     return [
-      `      tl.from("${sel} .tilt-card", { opacity: 0, rotationY: -22, rotationX: 8, y: 70, transformPerspective: 1600, duration: 1.1, ease: "power3.out" }, ${at(0.2)});`,
-      `      tl.from("${sel} .cap", { opacity: 0, y: 20, duration: 0.7, ease: "power2.out" }, ${at(0.9)});`,
-      `      tl.fromTo("${sel} .tilt-img", { scale: 1.0 }, { scale: 1.06, duration: ${panDur}, ease: "none" }, ${at(1.3)});`,
+      `      tl.from("${sel} .tilt-card", { opacity: 0, rotationY: -22, rotationX: 8, y: 70, transformPerspective: 1600, duration: ${mpEnterDur(m, 1.1)}, ease: "${enterEase(m)}" }, ${at(0.2)});`,
+      `      tl.from("${sel} .tilt-img", { opacity: 0, duration: 0.6, ease: "power2.out" }, ${at(0.5)});`,
+      `      tl.from("${sel} .cap", { opacity: 0, y: 20, duration: 0.7, ease: "power2.out" }, ${at(0.8)});`,
+      cam.css,
+      cam.gsap,
     ]
   },
 }
@@ -217,19 +260,26 @@ const shotZoom: ShotDef = {
     const shot = firstShot(scene)
     return clip(sid, "sc-zoom", `${windowChrome(m, shot, "zoom-img")}\n        <div class="cap">${esc(shot.caption)}</div>`)
   },
-  timeline: (_m, sel, scene, t) => {
+  timeline: (m, sel, scene, t) => {
     const at = (d: number) => round(t + d)
-    const zoomDur = Math.max(1.6, round(scene.duration - 1.4))
+    // PageCam 2.5D 相机：slow-zoom 预设，缓慢 zoom in + 微旋转
+    const presetName = presetForShot("shot-zoom")
+    const camDur = Math.max(2, round(scene.duration - 1.0))
+    const keys = getPreset(presetName, camDur)
+    const ease = m.motionProfile?.enterEase || "power2.inOut"
+    const cam = buildPageCamAnimation(keys, `${sel} .zoom-img`, ease)
     return [
-      `      tl.from("${sel} .window", { opacity: 0, scale: 0.94, duration: 0.9, ease: "power3.out" }, ${at(0.2)});`,
+      `      tl.from("${sel} .window", { opacity: 0, scale: 0.94, duration: ${mpEnterDur(m, 0.9)}, ease: "${enterEase(m)}" }, ${at(0.2)});`,
+      `      tl.from("${sel} .shot-visual", { opacity: 0, duration: 0.6, ease: "power2.out" }, ${at(0.5)});`,
       `      tl.from("${sel} .cap", { opacity: 0, y: 20, duration: 0.7, ease: "power2.out" }, ${at(0.8)});`,
-      `      tl.fromTo("${sel} .zoom-img", { scale: 1.0 }, { scale: 1.12, duration: ${zoomDur}, ease: "power1.inOut" }, ${at(1.0)});`,
+      cam.css,
+      cam.gsap,
     ]
   },
 }
 
 const shotSplit: ShotDef = {
-  render: (m, sid, scene) => {
+  render: (_m, sid, scene) => {
     const a = scene.shots?.[0] || firstShot(scene)
     const b = scene.shots?.[1] || a
     const pane = (s: ShotMaterial, badge: string, side: string) =>
@@ -246,12 +296,13 @@ ${pane(b, "After", "b")}
         </div>`
     )
   },
-  timeline: (_m, sel, _s, t) => {
+  timeline: (m, sel, _s, t) => {
     const at = (d: number) => round(t + d)
+    const stag = mpStagger(m, 0.1)
     return [
-      `      tl.from("${sel} .sp-a", { opacity: 0, x: -110, duration: 0.85, ease: "power3.out" }, ${at(0.2)});`,
-      `      tl.from("${sel} .sp-b", { opacity: 0, x: 110, duration: 0.85, ease: "power3.out" }, ${at(0.5)});`,
-      `      tl.from("${sel} .sp-badge", { opacity: 0, y: -18, duration: 0.5, stagger: 0.1, ease: "back.out(1.7)" }, ${at(0.9)});`,
+      `      tl.from("${sel} .sp-a", { opacity: 0, x: -110, duration: ${mpEnterDur(m, 0.85)}, ease: "${enterEase(m)}" }, ${at(0.2)});`,
+      `      tl.from("${sel} .sp-b", { opacity: 0, x: 110, duration: ${mpEnterDur(m, 0.85)}, ease: "${enterEase(m)}" }, ${at(0.5)});`,
+      `      tl.from("${sel} .sp-badge", { opacity: 0, y: -18, duration: 0.5, stagger: ${stag}, ease: "${backEase(m, 1.7)}" }, ${at(0.9)});`,
     ]
   },
 }
@@ -273,9 +324,12 @@ const featureRow: ShotDef = {
       .join("\n")
     return clip(sid, "sc-frow", cards)
   },
-  timeline: (_m, sel, _s, t) => [
-    `      tl.from("${sel} .vcard", { opacity: 0, y: 50, duration: 0.7, stagger: 0.15, ease: "power3.out" }, ${round(t + 0.2)});`,
-  ],
+  timeline: (m, sel, _s, t) => {
+    const stag = mpStagger(m, 0.15)
+    return [
+      `      tl.from("${sel} .vcard", { opacity: 0, y: 50, duration: ${mpEnterDur(m, 0.7)}, stagger: ${stag}, ease: "${enterEase(m)}" }, ${round(t + 0.2)});`,
+    ]
+  },
 }
 
 const featureStack: ShotDef = {
@@ -293,16 +347,19 @@ const featureStack: ShotDef = {
       .join("\n")
     return clip(sid, "sc-fstack", rows)
   },
-  timeline: (_m, sel, _s, t) => [
-    `      tl.from("${sel} .frow", { opacity: 0, x: -70, duration: 0.7, stagger: 0.16, ease: "power3.out" }, ${round(t + 0.2)});`,
-  ],
+  timeline: (m, sel, _s, t) => {
+    const stag = mpStagger(m, 0.16)
+    return [
+      `      tl.from("${sel} .frow", { opacity: 0, x: -70, duration: ${mpEnterDur(m, 0.7)}, stagger: ${stag}, ease: "${enterEase(m)}" }, ${round(t + 0.2)});`,
+    ]
+  },
 }
 
 /** 把 "106.8K" / "100%" 拆成数值 + 后缀 + 小数位，供计数动画格式化 */
 function parseStatValue(value: string): { num: number; suffix: string; decimals: number } {
   const m = value.match(/^([\d.,]+)\s*(.*)$/)
   if (!m) return { num: 0, suffix: value, decimals: 0 }
-  const numRaw = m[1].replace(/,/g, "")
+  const numRaw = m[1]!.replace(/,/g, "")
   const num = parseFloat(numRaw)
   const dot = numRaw.indexOf(".")
   const decimals = dot >= 0 ? numRaw.length - dot - 1 : 0
@@ -321,10 +378,11 @@ const dataCounter: ShotDef = {
       .join("\n")
     return clip(sid, "sc-data", cards)
   },
-  timeline: (_m, sel, scene, t) => {
+  timeline: (m, sel, scene, t) => {
     const at = (d: number) => round(t + d)
+    const stag = mpStagger(m, 0.14)
     const lines: string[] = [
-      `      tl.from("${sel} .dcard", { opacity: 0, y: 46, scale: 0.95, duration: 0.7, stagger: 0.14, ease: "power3.out" }, ${at(0.2)});`,
+      `      tl.from("${sel} .dcard", { opacity: 0, y: 46, scale: 0.95, duration: ${mpEnterDur(m, 0.7)}, stagger: ${stag}, ease: "${enterEase(m)}" }, ${at(0.2)});`,
     ]
     ;(scene.stats || []).forEach((s, i) => {
       const { num, suffix, decimals } = parseStatValue(s.value)
@@ -353,11 +411,12 @@ const chipsMarquee: ShotDef = {
         </div>`
     )
   },
-  timeline: (_m, sel, scene, t) => {
+  timeline: (m, sel, scene, t) => {
     const at = (d: number) => round(t + d)
     const dur = Math.max(2, round(scene.duration))
+    const stag = mpStagger(m, 0.05)
     return [
-      `      tl.from("${sel} .chip", { opacity: 0, y: 24, scale: 0.9, duration: 0.5, stagger: 0.05, ease: "back.out(1.7)" }, ${at(0.1)});`,
+      `      tl.from("${sel} .chip", { opacity: 0, y: 24, scale: 0.9, duration: 0.5, stagger: ${stag}, ease: "${backEase(m, 1.7)}" }, ${at(0.1)});`,
       `      tl.fromTo("${sel} .mq-track", { x: 0 }, { x: -760, duration: ${dur}, ease: "none" }, ${at(0.2)});`,
     ]
   },
@@ -381,9 +440,10 @@ ${cells}
   },
   timeline: (m, sel, _s, t) => {
     const at = (d: number) => round(t + d)
+    const stag = mpStagger(m, 0.08)
     return [
-      `      tl.from("${sel} .logos-title", { opacity: 0, y: 30, duration: 0.7, ease: "${enterEase(m)}" }, ${at(0.2)});`,
-      `      tl.from("${sel} .logo-cell", { opacity: 0, y: 34, scale: 0.9, duration: 0.6, stagger: 0.08, ease: "back.out(1.6)" }, ${at(0.6)});`,
+      `      tl.from("${sel} .logos-title", { opacity: 0, y: 30, duration: ${mpEnterDur(m, 0.7)}, ease: "${enterEase(m)}" }, ${at(0.2)});`,
+      `      tl.from("${sel} .logo-cell", { opacity: 0, y: 34, scale: 0.9, duration: 0.6, stagger: ${stag}, ease: "${backEase(m, 1.6)}" }, ${at(0.6)});`,
     ]
   },
 }
@@ -400,9 +460,12 @@ const pricingTable: ShotDef = {
       .join("\n")
     return clip(sid, "sc-pricing", cards)
   },
-  timeline: (_m, sel, _s, t) => [
-    `      tl.from("${sel} .price-card", { opacity: 0, y: 48, scale: 0.95, duration: 0.7, stagger: 0.14, ease: "power3.out" }, ${round(t + 0.2)});`,
-  ],
+  timeline: (m, sel, _s, t) => {
+    const stag = mpStagger(m, 0.14)
+    return [
+      `      tl.from("${sel} .price-card", { opacity: 0, y: 48, scale: 0.95, duration: ${mpEnterDur(m, 0.7)}, stagger: ${stag}, ease: "${enterEase(m)}" }, ${round(t + 0.2)});`,
+    ]
+  },
 }
 
 // ============================================================
@@ -419,8 +482,9 @@ const ctaPush: ShotDef = {
     ),
   timeline: (m, sel, _s, t) => {
     const at = (d: number) => round(t + d)
-    const l = [`      tl.from("${sel} .cta-h", { opacity: 0, y: 44, duration: 0.7, ease: "${enterEase(m)}" }, ${at(0.2)});`]
-    if (m.cta.command) l.push(`      tl.from("${sel} .cmd", { opacity: 0, y: 24, duration: 0.6, ease: "back.out(1.6)" }, ${at(0.6)});`)
+    const dur = mpEnterDur(m, 0.7)
+    const l = [`      tl.from("${sel} .cta-h", { opacity: 0, y: 44, duration: ${dur}, ease: "${enterEase(m)}" }, ${at(0.2)});`]
+    if (m.cta.command) l.push(`      tl.from("${sel} .cmd", { opacity: 0, y: 24, duration: ${round(dur * 0.85)}, ease: "${backEase(m, 1.6)}" }, ${at(0.6)});`)
     return l
   },
 }
@@ -435,13 +499,14 @@ const ctaFullbleed: ShotDef = {
     ),
   timeline: (m, sel, _s, t) => {
     const at = (d: number) => round(t + d)
+    const dur = mpEnterDur(m, 0.8)
     // 满屏纯色镜头：先在 t=0 隐藏，避免遮盖前序帧（check: gsap_fullscreen_overlay_starts_visible），再于本镜起点淡入
     const l = [
       `      tl.set("${sel}", { opacity: 0 }, 0);`,
       `      tl.to("${sel}", { opacity: 1, duration: 0.5, ease: "power1.out" }, ${at(0)});`,
-      `      tl.from("${sel} .cta-h", { opacity: 0, y: 48, scale: 0.96, duration: 0.8, ease: "${enterEase(m)}" }, ${at(0.25)});`,
+      `      tl.from("${sel} .cta-h", { opacity: 0, y: 48, scale: 0.96, duration: ${dur}, ease: "${enterEase(m)}" }, ${at(0.25)});`,
     ]
-    if (m.cta.command) l.push(`      tl.from("${sel} .cmd", { opacity: 0, y: 24, duration: 0.6, ease: "back.out(1.6)" }, ${at(0.7)});`)
+    if (m.cta.command) l.push(`      tl.from("${sel} .cmd", { opacity: 0, y: 24, duration: ${round(dur * 0.75)}, ease: "${backEase(m, 1.6)}" }, ${at(0.7)});`)
     return l
   },
 }
@@ -483,7 +548,7 @@ function renderScene(m: VideoModel, scene: Scene, index: number): string {
 /** 皮肤级转场签名：crossfade 软叠化 / flash 闪白硬切 / cut 纯硬切；并守护满屏纯色镜头首帧不可见 */
 function buildTimeline(m: VideoModel): string {
   const lines: string[] = []
-  const trans = m.skin.motion.transition
+  const trans = effectiveTransition(m)
   // 满屏纯色镜头(会遮盖前序帧)：cta-fullbleed 恒是；kinetic 皮肤下 brand 亦满屏强调色
   const isSolidFull = (kind: ShotType) =>
     kind === "cta-fullbleed" || (m.skin.id === "kinetic" && (kind === "brand-center" || kind === "brand-side"))
@@ -506,6 +571,10 @@ function buildTimeline(m: VideoModel): string {
     if (trans === "flash" && index > 0) {
       lines.push(`      tl.to(".fx-flash", { opacity: 0.92, duration: 0.09, ease: "power1.in" }, ${round(start - 0.09)});`)
       lines.push(`      tl.to(".fx-flash", { opacity: 0, duration: 0.2, ease: "power1.out" }, ${start});`)
+    }
+    // wipe 转场：从左侧滑入遮罩 + 淡入
+    if (trans === "wipe" && index > 0 && !isSolidFull(scene.kind)) {
+      lines.push(`      tl.from("${sel}", { x: 120, opacity: 0, duration: 0.7, ease: "power3.inOut" }, ${start});`)
     }
     // cut：不加任何转场，clip 窗口化天然硬切(technical 的紧凑硬切)
   })
@@ -582,26 +651,23 @@ function buildCss(m: VideoModel): string {
 
       /* --- 截图窗口（window / zoom 共用） --- */
       .sc-window, .sc-zoom { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 40px; }
-      .window { width: 1180px; border-radius: 16px; border: 1px solid var(--border); box-shadow: 0 40px 90px rgba(0,0,0,0.14); overflow: hidden; background: var(--bg); }
-      .titlebar { height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 22px; background: var(--secondary); border-bottom: 1px solid var(--border); }
-      .dot { width: 14px; height: 14px; border-radius: 999px; }
-      .url { margin-left: 22px; font-size: 20px; color: var(--muted); }
+      .window { width: 1180px; border-radius: 16px; overflow: hidden; background: var(--bg); box-shadow: 0 0 0 1px rgba(255,255,255,0.05), 0 8px 40px rgba(0,0,0,0.3), 0 2px 8px rgba(0,0,0,0.2); }
       /* 16:9 内容帧：object-fit cover 填满，绝不露白边；品牌次色兑底 */
-      .viewport { width: 100%; height: 664px; overflow: hidden; position: relative; background: var(--secondary); }
-      .viewport img, .shot, .zoom-img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; transform-origin: center center; will-change: transform; }
+      .viewport { width: 100%; height: 692px; overflow: hidden; position: relative; background: var(--secondary); }
+      .viewport img, .shot, .zoom-img, .shot-visual { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; transform-origin: center center; will-change: transform; }
       /* 字幕：max-width + title-safe 安全边距 + 自动换行 + 字号自适应 + 2 行截断，永不切到画面边缘 */
       .cap { font-size: clamp(24px, 2.4vw, 34px); font-weight: 500; text-align: center; padding: 0 160px; max-width: 1520px; margin-left: auto; margin-right: auto; line-height: 1.28; overflow-wrap: break-word; word-break: break-word; hyphens: auto; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
       /* --- 2.5D 倾斜截图 --- */
       .sc-tilt { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 44px; }
       .tilt-stage { perspective: 1600px; }
-      .tilt-card { width: 1200px; height: 675px; border-radius: 16px; overflow: hidden; border: 1px solid var(--border); box-shadow: 0 50px 110px rgba(0,0,0,0.22); background: var(--secondary); }
+      .tilt-card { width: 1200px; height: 675px; border-radius: 16px; overflow: hidden; box-shadow: 0 0 0 1px rgba(255,255,255,0.05), 0 8px 40px rgba(0,0,0,0.3), 0 2px 8px rgba(0,0,0,0.2); background: var(--secondary); }
       .tilt-img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; transform-origin: center center; will-change: transform; }
 
       /* --- before/after 分屏 --- */
       .sc-split { display: flex; align-items: center; justify-content: center; padding: 0 90px; }
       .split-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; width: 100%; }
-      .sp-pane { position: relative; height: 720px; border-radius: 14px; overflow: hidden; border: 1px solid var(--border); box-shadow: 0 30px 70px rgba(0,0,0,0.14); background: var(--secondary); }
+      .sp-pane { position: relative; height: 720px; border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 1px rgba(255,255,255,0.05), 0 8px 40px rgba(0,0,0,0.3), 0 2px 8px rgba(0,0,0,0.2); background: var(--secondary); }
       .sp-img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
       .sp-badge { position: absolute; top: 22px; left: 22px; z-index: 2; height: 46px; padding: 0 22px; display: inline-flex; align-items: center; border-radius: 999px; font-size: 22px; font-weight: 600; background: var(--accent); color: var(--accent-fg); }
 
@@ -663,7 +729,7 @@ function buildCss(m: VideoModel): string {
       #root[data-skin="editorial"] .btn { height: 74px; border-radius: 999px; font-size: 25px; padding: 0 44px; }
       #root[data-skin="editorial"] .chip { border-radius: 999px; height: 64px; }
       #root[data-skin="editorial"] .window,
-      #root[data-skin="editorial"] .tilt-card { border-radius: 22px; box-shadow: 0 60px 130px rgba(0,0,0,0.16); }
+      #root[data-skin="editorial"] .tilt-card { border-radius: 22px; box-shadow: 0 0 0 1px rgba(255,255,255,0.08), 0 60px 130px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.1); }
       #root[data-skin="editorial"] .cap { font-weight: 400; color: var(--muted); font-size: 32px; }
       #root[data-skin="editorial"] .cta-h { font-weight: 600; }
 
@@ -690,7 +756,7 @@ function buildCss(m: VideoModel): string {
       #root[data-skin="kinetic"] .chip { border-radius: 4px; font-weight: 700; }
       #root[data-skin="kinetic"] .window,
       #root[data-skin="kinetic"] .tilt-card,
-      #root[data-skin="kinetic"] .sp-pane { border-radius: 6px; border-width: 3px; box-shadow: 0 40px 80px rgba(0,0,0,0.28); }
+      #root[data-skin="kinetic"] .sp-pane { border-radius: 6px; box-shadow: 0 0 0 2px rgba(255,255,255,0.06), 0 40px 80px rgba(0,0,0,0.32), 0 2px 8px rgba(0,0,0,0.2); }
       #root[data-skin="kinetic"] .cap { font-weight: 800; text-transform: uppercase; font-size: 32px; letter-spacing: 0.02em; }
 
       /* ===== 皮肤 C：Technical / Grid——等宽标题、网格底纹、方角描边、双色调 ===== */
@@ -717,9 +783,116 @@ function buildCss(m: VideoModel): string {
       #root[data-skin="technical"] .chip { border-radius: 2px; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 20px; }
       #root[data-skin="technical"] .window,
       #root[data-skin="technical"] .tilt-card,
-      #root[data-skin="technical"] .sp-pane { border-radius: 2px; border: 2px solid var(--fg); box-shadow: none; }
+      #root[data-skin="technical"] .sp-pane { border-radius: 2px; border: 2px solid var(--fg); box-shadow: 0 0 0 1px rgba(255,255,255,0.03), 0 4px 20px rgba(0,0,0,0.12); }
       #root[data-skin="technical"] .rule,
       #root[data-skin="technical"] .bs-bar { background: var(--accent); }`
+}
+
+/** Map a shot type to its chapter ID */
+function shotToChapter(kind: ShotType): ChapterId {
+  if (kind === "brand-center" || kind === "brand-side") return "ch1-opening"
+  if (kind === "hero-split" || kind === "hero-stack") return "ch2-hero"
+  if (kind === "shot-window" || kind === "shot-tilt" || kind === "shot-zoom" || kind === "shot-split") return "ch3-showcase"
+  if (
+    kind === "feature-row" || kind === "feature-stack" ||
+    kind === "data-counter" || kind === "chips-marquee" ||
+    kind === "logo-wall" || kind === "pricing"
+  ) return "ch4-proof"
+  return "ch5-cta"
+}
+
+/**
+ * Render a single chapter as a sub-composition HTML string.
+ * Reuses the existing shot rendering logic but outputs in <template> wrapped
+ * sub-composition format with its own GSAP timeline.
+ *
+ * Does NOT modify the existing renderIndexHtml behavior.
+ */
+export function renderChapterHtml(
+  chapterId: ChapterId,
+  model: VideoModel,
+  _palette: unknown,
+  _skin: unknown,
+): string {
+  // Filter scenes belonging to this chapter
+  const chapterScenes = model.scenes.filter((s) => shotToChapter(s.kind) === chapterId)
+
+  if (chapterScenes.length === 0) {
+    // Empty chapter: minimal template
+    return `<template id="${chapterId}-template">
+      <div data-composition-id="${chapterId}" data-width="1920" data-height="1080">
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          html, body { width: 1920px; height: 1080px; overflow: hidden; }
+        </style>
+        <script src="${GSAP_CDN}"></script>
+        <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines["${chapterId}"] = tl;
+        </script>
+      </div>
+    </template>`
+  }
+
+  // Re-time scenes so the first one starts at 0
+  const firstStart = chapterScenes[0]!.start
+  const reTimedScenes = chapterScenes.map((s) => ({
+    ...s,
+    start: round(s.start - firstStart),
+  }))
+  const chapterDuration = reTimedScenes.reduce((sum, s) => sum + s.duration, 0)
+
+  // Build a sub-model for rendering
+  const subModel: VideoModel = {
+    ...model,
+    scenes: reTimedScenes,
+    durationSec: round(chapterDuration),
+  }
+
+  // Render clips using existing renderScene logic
+  const scenesHtml = reTimedScenes.map((s, i) => {
+    const html = renderScene(subModel, s, i)
+    return html
+  }).join("\n\n")
+
+  // Build chapter-local timeline
+  const timelineLines: string[] = []
+  const trans = effectiveTransition(model)
+  reTimedScenes.forEach((scene, index) => {
+    const def = SHOTS[scene.kind] || shotWindow
+    const sel = `#s${index}`
+    const start = round(scene.start)
+    timelineLines.push(...def.timeline(subModel, sel, scene, scene.start))
+    if (trans === "crossfade" && index > 0) {
+      timelineLines.push(`      tl.from("${sel}", { opacity: 0, duration: 0.6, ease: "power1.inOut" }, ${start});`)
+    }
+    if (trans === "flash" && index > 0) {
+      timelineLines.push(`      tl.to(".fx-flash", { opacity: 0.92, duration: 0.09, ease: "power1.in" }, ${round(start - 0.09)});`)
+      timelineLines.push(`      tl.to(".fx-flash", { opacity: 0, duration: 0.2, ease: "power1.out" }, ${start});`)
+    }
+    if (trans === "wipe" && index > 0) {
+      timelineLines.push(`      tl.from("${sel}", { x: 120, opacity: 0, duration: 0.7, ease: "power3.inOut" }, ${start});`)
+    }
+  })
+  const timelineJs = timelineLines.join("\n")
+  const css = buildCss(subModel)
+
+  return `<template id="${chapterId}-template">
+      <div data-composition-id="${chapterId}" data-width="1920" data-height="1080">
+        <style>
+${css}
+        </style>
+${scenesHtml}
+        <script src="${GSAP_CDN}"></script>
+        <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+${timelineJs}
+      window.__timelines["${chapterId}"] = tl;
+        </script>
+      </div>
+    </template>`
 }
 
 /** 生成完整的 index.html 字符串 */

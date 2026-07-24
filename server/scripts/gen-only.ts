@@ -1,9 +1,9 @@
 // 临时：只 buildModel + writeProject（不渲染），用于快速跑 hyperframes check。
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import { loadEnv } from "../src/lib/load-env.ts"
-import { buildVideoModel } from "../src/compose/model.ts"
-import { writeProject } from "../src/compose/project.ts"
+import { loadEnv } from "../src/lib/load-env"
+import { buildVideoModel } from "../src/compose/model"
+import { writeProject } from "../src/compose/project"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SERVER_ROOT = join(HERE, "..")

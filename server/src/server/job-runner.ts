@@ -19,6 +19,10 @@ export interface RenderRequest {
   refresh?: boolean
   /** URL 模式透传给采集层 */
   capture?: UrlToVideoOptions["capture"]
+  /** 渲染帧率 */
+  fps?: number
+  /** 生成模式：llm / template / auto */
+  generation?: "llm" | "template" | "auto"
 }
 
 /** 在后台跑一个 Job（fire-and-forget），异常吞进任务表不外抛。 */
@@ -31,13 +35,15 @@ export function runJob(job: Job, req: RenderRequest): void {
   }
 
   const options: UrlToVideoOptions = {
-    durationSec: req.duration,
-    name: req.name,
-    quality: req.quality,
-    skipCheck: req.skipCheck,
-    ffmpegDir: req.ffmpegDir,
-    refresh: req.refresh,
-    capture: req.capture,
+    ...(req.duration != null ? { durationSec: req.duration } : {}),
+    ...(req.name != null ? { name: req.name } : {}),
+    ...(req.quality != null ? { quality: req.quality } : {}),
+    ...(req.skipCheck != null ? { skipCheck: req.skipCheck } : {}),
+    ...(req.ffmpegDir != null ? { ffmpegDir: req.ffmpegDir } : {}),
+    ...(req.refresh != null ? { refresh: req.refresh } : {}),
+    ...(req.capture != null ? { capture: req.capture } : {}),
+    ...(req.fps != null ? { fps: req.fps } : {}),
+    ...(req.generation != null ? { generation: req.generation } : {}),
     onPhase,
   }
 
@@ -56,6 +62,8 @@ export function runJob(job: Job, req: RenderRequest): void {
         videoPath: result.videoPath,
         checkPassed: result.checkPassed,
         durationSec: result.durationSec,
+        goldenVerified: result.goldenVerified,
+        goldenDetails: result.goldenDetails,
         elapsedSec: Number(((Date.now() - startedAt) / 1000).toFixed(1)),
       })
       logger.info("job:done", { id: job.id, videoPath: result.videoPath, checkPassed: result.checkPassed })

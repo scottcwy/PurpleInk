@@ -100,6 +100,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       sendJson(res, 400, { error: "need `url`(http/https) or `captureDir`" })
       return
     }
+    // 规范化可选字段
+    if (body.fps !== undefined) {
+      const fpsNum = Number(body.fps)
+      if (fpsNum) body.fps = fpsNum
+      else delete body.fps
+    }
+    if (body.generation && !["llm", "template", "auto"].includes(body.generation)) body.generation = "auto"
     const kind = hasUrl ? "url" : "capture"
     const input = (hasUrl ? body.url : body.captureDir) as string
     const job = createJob(kind, input)
@@ -118,7 +125,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   // GET /jobs/:id  和 GET /jobs/:id/video
   const jobMatch = /^\/jobs\/([^/]+)(\/video)?$/.exec(path)
   if (method === "GET" && jobMatch) {
-    const job = getJob(jobMatch[1])
+    const job = getJob(jobMatch[1]!)
     if (!job) {
       sendJson(res, 404, { error: "job not found" })
       return

@@ -87,6 +87,104 @@ export interface Motion {
   transition: "crossfade" | "flash" | "cut"
 }
 
+/**
+ * 品牌动效预设：从品牌调性(能量轴 × 调性轴)推导出的完整动效参数。
+ * 控制入场/退场缓动、过冲量、Squash & Stretch、转场类型、Stagger 间隔等。
+ */
+export interface MotionProfile {
+  /** 入场缓动 (GSAP ease) */
+  enterEase: string
+  /** 基础入场时长 (秒) */
+  enterDuration: number
+  /** 退场缓动 */
+  exitEase: string
+  /** 退场时长 (秒) */
+  exitDuration: number
+  /** 过冲量 (back ease 的 overshoot): 0 = 无, 1.5 = 明显 */
+  overshoot: number
+  /** Squash & Stretch 幅度: 0 = 无, 0.15 = 明显 */
+  squash: number
+  /** 转场类型 */
+  transition: "crossfade" | "flash" | "cut" | "wipe"
+  /** 子元素逐个入场的间隔 (秒) */
+  stagger: number
+}
+
+/** 品牌调性轴 */
+export type BrandTone = "bold" | "calm" | "technical"
+/** 品牌能量轴 */
+export type BrandEnergy = "low" | "medium" | "high"
+
+/**
+ * 根据品牌调性推导动效参数。
+ * 6 种预设 = 能量(low/medium/high) × 调性(technical/editorial/kinetic)。
+ */
+export function deriveMotionProfile(tone: BrandTone, energy: BrandEnergy): MotionProfile {
+  // 技术/严肃调性
+  if (tone === "technical") {
+    if (energy === "low") {
+      return { enterEase: "expo.out", enterDuration: 1.0, exitEase: "expo.in", exitDuration: 0.6, overshoot: 0, squash: 0, transition: "crossfade", stagger: 0.18 }
+    }
+    if (energy === "medium") {
+      return { enterEase: "power3.out", enterDuration: 0.85, exitEase: "power3.in", exitDuration: 0.5, overshoot: 0.4, squash: 0, transition: "crossfade", stagger: 0.14 }
+    }
+    // high
+    return { enterEase: "power4.out", enterDuration: 0.7, exitEase: "power4.in", exitDuration: 0.4, overshoot: 0.8, squash: 0.05, transition: "flash", stagger: 0.1 }
+  }
+  // 中性/editorial 调性
+  if (tone === "calm") {
+    if (energy === "low") {
+      return { enterEase: "power2.out", enterDuration: 1.1, exitEase: "power2.in", exitDuration: 0.7, overshoot: 0, squash: 0, transition: "crossfade", stagger: 0.2 }
+    }
+    if (energy === "medium") {
+      return { enterEase: "power2.out", enterDuration: 0.9, exitEase: "power2.in", exitDuration: 0.55, overshoot: 0.3, squash: 0, transition: "crossfade", stagger: 0.15 }
+    }
+    // high
+    return { enterEase: "back.out(1.2)", enterDuration: 0.75, exitEase: "back.in(1.2)", exitDuration: 0.45, overshoot: 0.8, squash: 0.08, transition: "wipe", stagger: 0.12 }
+  }
+  // 活泼/kinetic 调性
+  if (energy === "low") {
+    return { enterEase: "power2.out", enterDuration: 0.95, exitEase: "power2.in", exitDuration: 0.55, overshoot: 0.3, squash: 0.05, transition: "crossfade", stagger: 0.16 }
+  }
+  if (energy === "medium") {
+    return { enterEase: "back.out(1.5)", enterDuration: 0.8, exitEase: "back.in(1.5)", exitDuration: 0.45, overshoot: 1.0, squash: 0.1, transition: "wipe", stagger: 0.1 }
+  }
+  // high
+  return { enterEase: "back.out(2)", enterDuration: 0.65, exitEase: "back.in(2)", exitDuration: 0.35, overshoot: 1.5, squash: 0.15, transition: "flash", stagger: 0.08 }
+}
+
+/**
+ * 从品牌域名/产品名自动推导 energy 和 tone。
+ * 基于关键词匹配：
+ * - enterprise/cloud/data → technical + low
+ * - design/creative/art → kinetic + medium
+ * - startup/social/fun → kinetic + high
+ * - 默认 → calm + medium
+ */
+export function detectBrandProfile(nameOrDomain: string): { tone: BrandTone; energy: BrandEnergy } {
+  const t = (nameOrDomain || "").toLowerCase()
+  const has = (words: string[]) => words.some((w) => t.includes(w))
+
+  // 严肃/技术类
+  if (has(["enterprise", "cloud", "data", "infra", "backend", "devops", "api", "server", "database"])) {
+    return { tone: "technical", energy: "low" }
+  }
+  // 设计/创意类
+  if (has(["design", "creative", "art", "studio", "figma", "sketch", "motion"])) {
+    return { tone: "bold", energy: "medium" }
+  }
+  // 社交/活泼类
+  if (has(["startup", "social", "fun", "play", "game", "party", "community"])) {
+    return { tone: "bold", energy: "high" }
+  }
+  // 组件/UI工具类 → 技术 + 中能量
+  if (has(["component", "ui", "kit", "library", "framework", "registry"])) {
+    return { tone: "technical", energy: "medium" }
+  }
+  // 默认
+  return { tone: "calm", energy: "medium" }
+}
+
 export interface VisualSystem {
   id: VisualSystemId
   motion: Motion
@@ -111,6 +209,8 @@ export interface VideoModel {
   palette: Palette
   /** 本站选中的视觉系统(异站分化到"皮肤"层，不只镜头顺序) */
   skin: VisualSystem
+  /** 品牌动效预设：从品牌调性推导的完整动效参数（向后兼容，可选） */
+  motionProfile?: MotionProfile
   scenes: Scene[]
   durationSec: number
 }
@@ -141,14 +241,14 @@ function normalizeHex(input: string | undefined): string | null {
   let v = input.trim().toLowerCase()
   const m = v.match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/)
   if (!m) return null
-  v = m[1]
+  v = m[1]!
   if (v.length === 3) v = v.split("").map((c) => c + c).join("")
   return "#" + v
 }
 
 function rgb(hex: string): [number, number, number] {
   const h = hex.slice(1)
-  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)] as [number, number, number]
 }
 
 /** 相对亮度（WCAG） */
@@ -156,7 +256,7 @@ function luminance(hex: string): number {
   const [r, g, b] = rgb(hex).map((c) => {
     const s = c / 255
     return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
-  })
+  }) as [number, number, number]
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
@@ -169,7 +269,7 @@ function contrast(a: string, b: string): number {
 
 /** 饱和度粗估（0..1），用于挑「品牌强调色」 */
 function saturation(hex: string): number {
-  const [r, g, b] = rgb(hex).map((c) => c / 255)
+  const [r, g, b] = rgb(hex).map((c) => c / 255) as [number, number, number]
   const max = Math.max(r, g, b)
   const min = Math.min(r, g, b)
   return max === 0 ? 0 : (max - min) / max
@@ -183,6 +283,9 @@ function readableOn(bg: string): string {
 /**
  * 从 tokens 派生调色板：优先站点主色，但强制保证对比达 AA，
  * 否则渲染的 check(对比度 gate)会挂。缺色则回落到 shadcn 中性色。
+ *
+ * 扩展：支持自定义 CSS 变量（如通义千问的 --C50: #625cf6），
+ * 扫描所有 --[A-Z][0-9]+ 格式变量，按色相分组提取品牌色。
  */
 function derivePalette(tokens: PageTokens | null): Palette {
   if (!tokens) return DEFAULT_PALETTE
@@ -195,7 +298,17 @@ function derivePalette(tokens: PageTokens | null): Palette {
   const vars = tokens.cssVariables || {}
   const varHex = (k: string) => normalizeHex(vars[k])
 
-  const uniq = Array.from(new Set(hexes))
+  // --- 扫描自定义 CSS 变量（--[A-Z][0-9]+ 格式，如 --C50, --N100）---
+  const customHexes: string[] = []
+  const customVarPattern = /^--[A-Z][0-9]+$/
+  for (const [key, val] of Object.entries(vars)) {
+    if (customVarPattern.test(key)) {
+      const h = normalizeHex(val)
+      if (h) customHexes.push(h)
+    }
+  }
+
+  const uniq = Array.from(new Set([...hexes, ...customHexes]))
   const lightest = uniq.slice().sort((a, b) => luminance(b) - luminance(a))[0]
   const darkest = uniq.slice().sort((a, b) => luminance(a) - luminance(b))[0]
   // 频次表：colorStats 里每个 hex 的出现次数。品牌强调色一定是高频色，
@@ -216,6 +329,7 @@ function derivePalette(tokens: PageTokens | null): Palette {
   // 强调色：优先 --primary；否则在「够饱和 + 在 bg 上够醒目(对比≥3)」的候选里，
   // 选出现频次最高的（品牌色必然高频；蓝/紫等罕见图标色会被频次与对比双重过滤掉），
   // 频次相同再比饱和度。这样 supabase 会落到品牌绿 #15593B 而非罕见蓝 #0070F3。
+  // 自定义变量（--C50 等）也纳入候选。
   let accent = varHex("--primary") || ""
   if (!accent) {
     const candidates = uniq
@@ -228,7 +342,15 @@ function derivePalette(tokens: PageTokens | null): Palette {
       })
     accent = candidates[0] || fg
   }
+  // 确保 accent 与 bg 有足够对比度（WCAG AA 4.5:1 for text）
   if (contrast(accent, bg) < 3) accent = fg
+  if (contrast(accent, bg) < 4.5 && accent !== fg) {
+    // 尝试加深/减淡 accent 以满足 AA
+    const bgLum = luminance(bg)
+    // 如果背景亮，accent 需要更暗；反之更亮
+    const adjusted = bgLum > 0.5 ? darkenUntilContrast(accent, bg, 4.5) : lightenUntilContrast(accent, bg, 4.5)
+    if (adjusted && contrast(adjusted, bg) >= 4.5) accent = adjusted
+  }
   const accentFg = readableOn(accent)
 
   const family = tokens.fonts?.[0]?.family
@@ -254,6 +376,32 @@ function derivePalette(tokens: PageTokens | null): Palette {
   }
 }
 
+/** 逐步加深颜色直到与背景对比度达标 */
+function darkenUntilContrast(hex: string, bg: string, target: number): string | null {
+  const [r, g, b] = rgb(hex)
+  for (let factor = 0.9; factor >= 0.1; factor -= 0.1) {
+    const nr = Math.round(r * factor)
+    const ng = Math.round(g * factor)
+    const nb = Math.round(b * factor)
+    const candidate = `#${nr.toString(16).padStart(2, "0")}${ng.toString(16).padStart(2, "0")}${nb.toString(16).padStart(2, "0")}`
+    if (contrast(candidate, bg) >= target) return candidate
+  }
+  return null
+}
+
+/** 逐步减淡颜色直到与背景对比度达标 */
+function lightenUntilContrast(hex: string, bg: string, target: number): string | null {
+  const [r, g, b] = rgb(hex)
+  for (let factor = 1.1; factor <= 3.0; factor += 0.1) {
+    const nr = Math.min(255, Math.round(r * factor))
+    const ng = Math.min(255, Math.round(g * factor))
+    const nb = Math.min(255, Math.round(b * factor))
+    const candidate = `#${nr.toString(16).padStart(2, "0")}${ng.toString(16).padStart(2, "0")}${nb.toString(16).padStart(2, "0")}`
+    if (contrast(candidate, bg) >= target) return candidate
+  }
+  return null
+}
+
 // ---------- 文本解析 ----------
 
 interface TextBuckets {
@@ -271,8 +419,8 @@ function parseVisibleText(raw: string): TextBuckets {
   for (const line of raw.split(/\r?\n/)) {
     const m = line.match(/^\[([a-z0-9]+)\]\s*(.+)$/i)
     if (!m) continue
-    const tag = m[1].toLowerCase()
-    const text = m[2].trim()
+    const tag = m[1]!.toLowerCase()
+    const text = m[2]!.trim()
     if (!text) continue
     if (tag === "h1") b.h1.push(text)
     else if (tag === "h2") b.h2.push(text)
@@ -286,7 +434,7 @@ function parseVisibleText(raw: string): TextBuckets {
 
 /** 去掉站点标题里的 " | xxx" / " - xxx" 后缀，取主名 */
 function primaryTitle(title: string): string {
-  return title.split(/[|·–—-]/)[0].trim() || title.trim()
+  return title.split(/[|·–—-]/)[0]!.trim() || title.trim()
 }
 
 function dedupe(list: string[]): string[] {
@@ -329,7 +477,7 @@ function parseAssetDescriptions(raw: string): Map<string, string> {
   const map = new Map<string, string>()
   for (const line of raw.split(/\r?\n/)) {
     const m = line.match(/^-\s*(\S+)\s*[—-]\s*(.+)$/)
-    if (m) map.set(m[1].trim(), m[2].trim())
+    if (m) map.set(m[1]!.trim(), m[2]!.trim())
   }
   return map
 }
@@ -414,27 +562,27 @@ interface StoryEntry {
 function layoutScenes(entries: StoryEntry[], total: number, minShot: number = MIN_SHOT_SEC): Scene[] {
   const sum = entries.reduce((a, k) => a + k.weight, 0) || 1
   const durs = entries.map((k) => (k.weight / sum) * total)
-  for (let i = 0; i < durs.length; i++) if (durs[i] < minShot) durs[i] = minShot
+  for (let i = 0; i < durs.length; i++) if (durs[i]! < minShot) durs[i] = minShot
   let over = durs.reduce((a, d) => a + d, 0) - total
   let guard = 0
   while (over > 0.01 && guard++ < 100) {
     const flex = durs.map((d) => Math.max(0, d - minShot))
     const flexSum = flex.reduce((a, d) => a + d, 0)
     if (flexSum <= 0.01) break
-    for (let i = 0; i < durs.length; i++) durs[i] -= (flex[i] / flexSum) * over
+    for (let i = 0; i < durs.length; i++) durs[i]! -= (flex[i]! / flexSum) * over
     over = durs.reduce((a, d) => a + d, 0) - total
   }
   const scenes: Scene[] = []
   let cursor = 0
   for (let i = 0; i < entries.length; i++) {
     // 最后一个镜头吃掉剩余时长，避免累计误差
-    const dur = i === entries.length - 1 ? Math.max(minShot, total - cursor) : Math.round(durs[i] * 10) / 10
+    const dur = i === entries.length - 1 ? Math.max(minShot, total - cursor) : Math.round(durs[i]! * 10) / 10
     scenes.push({
-      kind: entries[i].kind,
+      kind: entries[i]!.kind,
       start: Math.round(cursor * 10) / 10,
       duration: Math.round(dur * 10) / 10,
-      shots: entries[i].shots,
-      stats: entries[i].stats,
+      ...(entries[i]!.shots ? { shots: entries[i]!.shots } : {}),
+      ...(entries[i]!.stats ? { stats: entries[i]!.stats } : {}),
     })
     cursor = Math.round((cursor + dur) * 10) / 10
   }
@@ -473,11 +621,11 @@ function extractStats(b: TextBuckets): Stat[] {
   for (const line of lines) {
     const m = line.match(re)
     if (!m) continue
-    const value = (m[1] + (m[2] || "")).replace(/\s+/g, "")
+    const value = (m[1]! + (m[2]! || "")).replace(/\s+/g, "")
     if (seen.has(value)) continue
     // label：去掉数值片段后取相邻短语（首个分隔符前），空则跳过——不硬凑
     let label = line.replace(m[0], " ").replace(/\s+/g, " ").trim()
-    label = label.split(/[.,;:—-]/)[0].trim().slice(0, 22)
+    label = label.split(/[.,;:—-]/)[0]!.trim().slice(0, 22)
     if (!label) continue
     seen.add(value)
     out.push({ value, label })
@@ -526,12 +674,12 @@ function selectVisualSystem(sig: ToneSignals, seed: number): VisualSystem {
     "component", "registry", "copy", "paste", "cli", "npm", "tailwind",
     "primitive", "headless", "snippet", "terminal", "monorepo", "classname", "open source",
   ])
-  if (kinetic >= 2) return VISUAL_SYSTEMS.kinetic
-  if (sig.accentNeutral || sig.monoFont || techUI >= 2) return VISUAL_SYSTEMS.technical
-  if (sig.accentSat >= 0.25) return VISUAL_SYSTEMS.editorial
+  if (kinetic >= 2) return VISUAL_SYSTEMS.kinetic!
+  if (sig.accentNeutral || sig.monoFont || techUI >= 2) return VISUAL_SYSTEMS.technical!
+  if (sig.accentSat >= 0.25) return VISUAL_SYSTEMS.editorial!
   const pool = [VISUAL_SYSTEMS.editorial, VISUAL_SYSTEMS.kinetic, VISUAL_SYSTEMS.technical]
   const rng = makeRng((seed ^ 0x9e3779b9) >>> 0)
-  return pool[Math.floor(rng() * pool.length) % pool.length]
+  return pool[Math.floor(rng() * pool.length) % pool.length]!
 }
 
 interface StoryboardInput {
@@ -553,7 +701,7 @@ interface StoryboardInput {
 function selectStoryboard(input: StoryboardInput, total: number, skin: VisualSystem): StoryEntry[] {
   const seed = hashSeed(input.seedKey)
   const rng = makeRng(seed)
-  const pick = <T>(arr: T[]): T => arr[Math.floor(rng() * arr.length) % arr.length]
+  const pick = <T>(arr: T[]): T => arr[Math.floor(rng() * arr.length) % arr.length]!
 
   // 1) 开场品牌 + 2) 英雄：按皮肤偏置构图
   //    kinetic 走居中大字(brand-center/hero-stack)；technical 走带栏侧栏(brand-side/hero-split)；editorial 随 seed。
@@ -589,7 +737,7 @@ function selectStoryboard(input: StoryboardInput, total: number, skin: VisualSys
   // seed 驱动的 Fisher-Yates 洗牌：同站稳定、异站不同
   for (let i = body.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1))
-    ;[body[i], body[j]] = [body[j], body[i]]
+    ;[body[i]!, body[j]!] = [body[j]!, body[i]!]
   }
 
   // 4) 结尾 CTA：kinetic 满屏收束(cta-fullbleed)；editorial 留白命令(cta-push)；technical 随 seed。
@@ -639,25 +787,42 @@ export async function buildVideoModel(captureDir: string, options: BuildModelOpt
   const contentFeatures = (c?.features || [])
     .filter((f) => f.title && f.desc)
     .map((f) => ({ title: f.title.slice(0, 28), desc: f.desc.slice(0, 120) }))
-  const propTitles = dedupe([...visible.h2, ...visible.h3]).filter((t) => t.length <= 28).slice(0, 3)
-  const fallbackProps = [
-    { title: "Fast", desc: "Built for speed and a smooth experience end to end." },
-    { title: "Reliable", desc: "Consistent, production-ready quality every run." },
-    { title: "Simple", desc: "Clear, focused, and easy to get started with." },
-  ]
+  // 当 content.features 不足时，从 visible-text.txt 的 h2/h3 标题提取功能描述
+  // 不使用 "Fast/Reliable/Simple" 这种通用占位文字
+  const headingFeatures: Array<{ title: string; desc: string }> = []
+  if (contentFeatures.length < 2) {
+    const h2h3 = dedupe([...visible.h2, ...visible.h3])
+      .filter((t) => t.length >= 3 && t.length <= 28)
+      .slice(0, 3)
+    for (const title of h2h3) {
+      // 找一段与标题不同的描述文本（优先 h3 下方的 p，否则全局 p）
+      const desc = visible.p.find((p) => p !== title && p.length > 20)?.slice(0, 110) || ""
+      if (desc) {
+        headingFeatures.push({ title: title.slice(0, 24), desc })
+      }
+    }
+  }
   const valueProps =
     contentFeatures.length >= 2
       ? contentFeatures.slice(0, 3)
-      : [0, 1, 2].map((i) => {
-          const t = propTitles[i]
-          if (!t) return fallbackProps[i]
-          // 找一段与标题不同的描述文本
-          const desc = visible.p.find((p) => p !== t && p.length > 20)?.slice(0, 110) || fallbackProps[i].desc
-          return { title: t.slice(0, 24), desc }
-        })
+      : headingFeatures.length >= 1
+        ? headingFeatures.slice(0, 3)
+        : [] // 没有真实数据则不展示功能卡片
 
   // logo 墙 / 定价：采集到的结构化内容块，供 HTML 原生重绘镜头(logo-wall / pricing)
-  const logos = dedupe(c?.logos || []).filter((l) => l.length >= 2 && l.length <= 24).slice(0, 8)
+  // 过滤规则：去掉 "Image N" 等 alt-text 占位、太短/太长、不像品牌名的文本
+  const logos = dedupe(c?.logos || [])
+    .filter((l) => {
+      if (l.length < 2 || l.length > 30) return false
+      // 过滤掉 "Image 1", "Image 2" 等 alt-text 占位
+      if (/^image\s*\d+$/i.test(l)) return false
+      // 过滤掉纯数字或纯符号
+      if (/^[\d\s!@#$%^&*()+=\-\[\]{}|\\/:;"'<>,.?/~`]+$/i.test(l)) return false
+      // 只保留看起来像品牌名的文本（包含大写字母、中文字符、或至少一个字母）
+      if (/[A-Z]/.test(l) || /[\u4e00-\u9fff]/.test(l) || /[a-z]/.test(l)) return true
+      return false
+    })
+    .slice(0, 8)
   const pricing: PricingTier[] = (c?.pricing || [])
     .filter((p) => p.name && p.price)
     .slice(0, 4)
@@ -673,7 +838,7 @@ export async function buildVideoModel(captureDir: string, options: BuildModelOpt
   void descs
   const captionPool = buildCaptionPool(visible, chips)
   const captionFallback = (i: number): string =>
-    [`${title} in action`, "See it in action", "A closer look", `Inside ${title}`][i % 4]
+    [`${title} in action`, "See it in action", "A closer look", `Inside ${title}`][i % 4]!
   const shots: ShotMaterial[] = assetPaths.slice(0, 8).map((src, i) => ({
     src,
     caption: captionPool[i % captionPool.length] || captionFallback(i),
@@ -696,7 +861,7 @@ export async function buildVideoModel(captureDir: string, options: BuildModelOpt
     headline,
     lede,
     ...chips,
-    ...valueProps.map((v) => `${v.title} ${v.desc}`),
+    ...valueProps.map((v) => `${v!.title} ${v!.desc}`),
     ...ctas,
   ].join(" ")
   const skin = selectVisualSystem(
@@ -711,6 +876,10 @@ export async function buildVideoModel(captureDir: string, options: BuildModelOpt
   )
   const scenes = layoutScenes(entries, durationSec, skin.minShot)
 
+  // 品牌动效预设：从品牌名/域名推导调性 → 推导动效参数
+  const brandProfile = detectBrandProfile(`${name} ${seedKey}`)
+  const motionProfile = deriveMotionProfile(brandProfile.tone, brandProfile.energy)
+
   return {
     id: meta.id || "video",
     name,
@@ -722,6 +891,7 @@ export async function buildVideoModel(captureDir: string, options: BuildModelOpt
     cta: { headline: ctaHeadline, command },
     palette,
     skin,
+    motionProfile,
     scenes,
     durationSec,
   }

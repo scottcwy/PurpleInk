@@ -24,10 +24,10 @@
 //   npx tsx scripts/render-capture.ts https://example.com --mock --duration 20 --quality draft
 import { dirname, join, isAbsolute, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { loadEnv } from "../src/lib/load-env.ts"
-import { renderFromCapture, urlToVideo, type UrlToVideoOptions } from "../src/compose/run-pipeline.ts"
-import type { RunCaptureOptions } from "../src/capture/run-capture.ts"
-import type { DriverType } from "../src/capture/browser-driver.ts"
+import { loadEnv } from "../src/lib/load-env"
+import { renderFromCapture, urlToVideo, type UrlToVideoOptions } from "../src/compose/run-pipeline"
+import type { RunCaptureOptions } from "../src/capture/run-capture"
+import type { DriverType } from "../src/capture/browser-driver"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SERVER_ROOT = join(HERE, "..")
@@ -48,30 +48,30 @@ function parseArgs(argv: string[]): ParsedArgs {
     const next = () => argv[++i]
     switch (a) {
       // 通用
-      case "--out": opts.projectDir = next(); break
+      case "--out": { const v = next(); if (v) opts.projectDir = v; break }
       case "--duration": opts.durationSec = Number(next()); break
-      case "--name": opts.name = next(); break
-      case "--quality": opts.quality = next(); break
+      case "--name": { const v = next(); if (v) opts.name = v; break }
+      case "--quality": { const v = next(); if (v) opts.quality = v; break }
       case "--skip-check": opts.skipCheck = true; break
-      case "--ffmpeg": opts.ffmpegDir = next(); break
+      case "--ffmpeg": { const v = next(); if (v) opts.ffmpegDir = v; break }
       // 采集透传（仅 URL 模式生效）
-      case "--driver": capture.driver = next() as DriverType; usedCapture = true; break
+      case "--driver": { const v = next(); if (v) capture.driver = v as DriverType; usedCapture = true; break }
       case "--mock": capture.driver = "mock"; usedCapture = true; break
       case "--no-vision": capture.useVision = false; usedCapture = true; break
-      case "--email": capture.testEmail = next(); usedCapture = true; break
-      case "--password": capture.testPassword = next(); usedCapture = true; break
-      case "--desc": capture.description = next(); usedCapture = true; break
+      case "--email": { const v = next(); if (v) capture.testEmail = v; usedCapture = true; break }
+      case "--password": { const v = next(); if (v) capture.testPassword = v; usedCapture = true; break }
+      case "--desc": { const v = next(); if (v) capture.description = v; usedCapture = true; break }
       case "--min": capture.minScreenshots = Number(next()); usedCapture = true; break
       case "--max": capture.maxScreenshots = Number(next()); usedCapture = true; break
       case "--steps": capture.maxSteps = Number(next()); usedCapture = true; break
       case "--headful": capture.headful = true; usedCapture = true; break
       default:
-        if (!a.startsWith("--") && !target) target = a
+        if (a && !a.startsWith("--") && !target) target = a
         else console.warn(`[render-capture] 忽略未知参数：${a}`)
     }
   }
   if (usedCapture) opts.capture = capture
-  return { target, opts }
+  return { ...(target != null ? { target } : {}), opts }
 }
 
 function isUrl(s: string): boolean {

@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto"
 
 export type JobStatus = "queued" | "running" | "done" | "failed"
 /** 阶段：与 run-pipeline 的 onPhase 对齐 */
-export type JobPhase = "queued" | "capturing" | "composing" | "rendering" | "done" | "failed"
+export type JobPhase = "queued" | "capturing" | "composing" | "rendering" | "verifying" | "done" | "failed"
 
 export interface Job {
   id: string
@@ -23,6 +23,8 @@ export interface Job {
   videoPath?: string | null
   checkPassed?: boolean
   durationSec?: number
+  goldenVerified?: boolean
+  goldenDetails?: string[]
   error?: string
   /** 最近若干条阶段日志（含时间戳），便于前端展示 */
   logs: { at: number; msg: string }[]
@@ -77,6 +79,8 @@ export function toPublicJob(job: Job) {
     checkPassed: job.checkPassed,
     durationSec: job.durationSec,
     elapsedSec: job.elapsedSec,
+    goldenVerified: job.goldenVerified,
+    goldenDetails: job.goldenDetails,
     hasVideo: Boolean(job.videoPath),
     videoUrl: job.videoPath ? `/jobs/${job.id}/video` : null,
     error: job.error,

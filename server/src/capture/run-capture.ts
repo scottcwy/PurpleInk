@@ -9,6 +9,8 @@ import { createDriver, type DriverType } from "./browser-driver"
 import { AiCaptureAgent } from "./ai-capture-agent"
 import { resolveCredentials } from "./credentials"
 import { logger } from "../lib/logger"
+import { mkdir, writeFile } from "node:fs/promises"
+import { join } from "node:path"
 
 export interface RunCaptureOptions {
   /** 项目 id（写进 meta.json）；缺省从 URL 主机名派生 */
@@ -67,21 +69,47 @@ export async function runCapture(url: string, options: RunCaptureOptions = {}): 
 
     // 2. 解析凭据（提供账号→登录优先；配了 IMAP→自助注册；都没有→仅采集公开内容）
     const credentials = await resolveCredentials({
-      testEmail: options.testEmail,
-      testPassword: options.testPassword,
+      ...(options.testEmail != null ? { testEmail: options.testEmail } : {}),
+      ...(options.testPassword != null ? { testPassword: options.testPassword } : {}),
     })
 
-    // 3. 实时采集
+    // 3. 根据页面导航项数量推断复杂度，动态调整最大步数
+    let effectiveMaxSteps = options.maxSteps ?? 14
+    if (!options.maxSteps) {
+      try {
+        const navCount = await driver.evaluate(() => {
+          const nav = document.querySelectorAll(
+            'nav a, header a, [role="navigation"] a, [role="menubar"] a'
+          )
+          // 去重（同一 href 只算一个）
+          const seen = new Set<string>()
+          nav.forEach((a) => {
+            const href = (a as HTMLAnchorElement).href
+            if (href) seen.add(href)
+          })
+          return seen.size
+        })
+        if (navCount < 5) effectiveMaxSteps = 8
+        else if (navCount <= 15) effectiveMaxSteps = 14
+        else effectiveMaxSteps = 18
+        logger.info("run_capture:complexity", { navCount, maxSteps: effectiveMaxSteps })
+      } catch {
+        // 评估失败时保持默认
+        logger.warn("run_capture:complexity_detect_failed", { fallback: effectiveMaxSteps })
+      }
+    }
+
+    // 4. 实时采集
     const agent = new AiCaptureAgent(driver, {
-      credentials: credentials ?? undefined,
-      description: options.description,
-      minScreenshots: options.minScreenshots,
-      maxScreenshots: options.maxScreenshots,
-      maxSteps: options.maxSteps,
+      ...(credentials ? { credentials } : {}),
+      ...(options.description != null ? { description: options.description } : {}),
+      ...(options.minScreenshots != null ? { minScreenshots: options.minScreenshots } : {}),
+      ...(options.maxScreenshots != null ? { maxScreenshots: options.maxScreenshots } : {}),
+      maxSteps: effectiveMaxSteps,
       onSnapshot: (snap, index) => {
         snapshots[index] = {
           title: snap.title,
-          url: snap.url,
+          url: snap.url || "",
           elements: snap.elements,
           textContent: snap.textContent,
         }
@@ -89,17 +117,52 @@ export async function runCapture(url: string, options: RunCaptureOptions = {}): 
     })
     const capture = await agent.capture(url)
 
-    // 4. 适配器写盘
+    // 4b. 提取关键元素坐标布局
+    let layoutData: Array<{ selector: string; x: number; y: number; w: number; h: number }> | undefined
+    if (driver.extractLayout) {
+      try {
+        layoutData = await driver.extractLayout()
+        logger.info("run_capture:layout_extracted", { elements: layoutData.length })
+      } catch (err) {
+        logger.warn("run_capture:layout_extract_failed", { error: String(err) })
+      }
+    }
+
+    // 5. 适配器写盘
     const manifest = await runCaptureAdapter(
       {
         id: options.id ?? slugFromUrl(url),
         name: options.name ?? pageTokens?.title ?? url,
         capture,
         snapshots: snapshots.filter(Boolean),
-        pageTokens,
+        ...(pageTokens ? { pageTokens } : {}),
       },
-      { outDir: options.outDir, useVision: options.useVision }
+      {
+        ...(options.outDir != null ? { outDir: options.outDir } : {}),
+        ...(options.useVision != null ? { useVision: options.useVision } : {}),
+      }
     )
+
+    // 5b. 写 layout.json + cutouts 到磁盘（不经过适配器，避免与 task #7 冲突）
+    const captureOutDir = manifest.outDir
+    try {
+      if (layoutData && layoutData.length > 0) {
+        const extractedDir = join(captureOutDir, "extracted")
+        await mkdir(extractedDir, { recursive: true })
+        await writeFile(join(extractedDir, "layout.json"), JSON.stringify(layoutData, null, 2), "utf8")
+        logger.info("run_capture:layout_written")
+      }
+      if (capture.cutouts && capture.cutouts.length > 0) {
+        const cutoutsDir = join(captureOutDir, "assets", "cutouts")
+        await mkdir(cutoutsDir, { recursive: true })
+        for (const cutout of capture.cutouts) {
+          await writeFile(join(cutoutsDir, `${cutout.name}.png`), cutout.buffer)
+        }
+        logger.info("run_capture:cutouts_written", { count: capture.cutouts.length })
+      }
+    } catch (err) {
+      logger.warn("run_capture:extra_write_failed", { error: String(err) })
+    }
 
     logger.info("run_capture:done", {
       outDir: manifest.outDir,

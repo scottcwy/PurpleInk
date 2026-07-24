@@ -23,9 +23,9 @@
 //   npx tsx scripts/capture-url.ts https://myapp.dev --desc "AI 笔记工具" --min 5
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { loadEnv } from "../src/lib/load-env.ts"
-import { runCapture, type RunCaptureOptions } from "../src/capture/run-capture.ts"
-import type { DriverType } from "../src/capture/browser-driver.ts"
+import { loadEnv } from "../src/lib/load-env"
+import { runCapture, type RunCaptureOptions } from "../src/capture/run-capture"
+import type { DriverType } from "../src/capture/browser-driver"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SERVER_ROOT = join(HERE, "..")
@@ -38,25 +38,25 @@ function parseArgs(argv: string[]): { url?: string; opts: RunCaptureOptions } {
     const a = argv[i]
     const next = () => argv[++i]
     switch (a) {
-      case "--out": opts.outDir = next(); break
-      case "--driver": opts.driver = next() as DriverType; break
+      case "--out": { const v = next(); if (v) opts.outDir = v; break }
+      case "--driver": { const v = next(); if (v) opts.driver = v as DriverType; break }
       case "--mock": opts.driver = "mock"; break
       case "--no-vision": opts.useVision = false; break
-      case "--name": opts.name = next(); break
-      case "--id": opts.id = next(); break
-      case "--desc": opts.description = next(); break
-      case "--email": opts.testEmail = next(); break
-      case "--password": opts.testPassword = next(); break
+      case "--name": { const v = next(); if (v) opts.name = v; break }
+      case "--id": { const v = next(); if (v) opts.id = v; break }
+      case "--desc": { const v = next(); if (v) opts.description = v; break }
+      case "--email": { const v = next(); if (v) opts.testEmail = v; break }
+      case "--password": { const v = next(); if (v) opts.testPassword = v; break }
       case "--min": opts.minScreenshots = Number(next()); break
       case "--max": opts.maxScreenshots = Number(next()); break
       case "--steps": opts.maxSteps = Number(next()); break
       case "--headful": opts.headful = true; break
       default:
-        if (!a.startsWith("--") && !url) url = a
+        if (a && !a.startsWith("--") && !url) url = a
         else console.warn(`[capture-url] 忽略未知参数：${a}`)
     }
   }
-  return { url, opts }
+  return { ...(url != null ? { url } : {}), opts }
 }
 
 async function main(): Promise<void> {

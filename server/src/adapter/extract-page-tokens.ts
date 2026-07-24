@@ -13,8 +13,8 @@ export function extractPageTokensInBrowser(): PageTokens {
   const rgbToHex = (rgb: string): string | null => {
     const m = rgb.match(/rgba?\(([^)]+)\)/)
     if (!m) return null
-    const parts = m[1].split(",").map((s) => parseFloat(s.trim()))
-    const [r, g, b, a] = parts
+    const parts = m[1]!.split(",").map((s) => parseFloat(s.trim()))
+    const [r, g, b, a] = parts as [number, number, number, number | undefined]
     if (a === 0) return null // 完全透明忽略
     const hex = (n: number) => Math.round(n).toString(16).padStart(2, "0")
     return `#${hex(r)}${hex(g)}${hex(b)}`.toUpperCase()
@@ -43,7 +43,7 @@ export function extractPageTokensInBrowser(): PageTokens {
         const style = rule.style
         for (let i = 0; i < style.length; i++) {
           const prop = style[i]
-          if (prop.startsWith("--")) cssVariables[prop] = style.getPropertyValue(prop).trim()
+          if (prop && prop.startsWith("--")) cssVariables[prop] = style.getPropertyValue(prop).trim()
         }
       }
     }
@@ -123,10 +123,13 @@ export function extractPageTokensInBrowser(): PageTokens {
 
   // --- CTA（按钮/链接文案 + href）---
   const ctas = Array.from(document.querySelectorAll("a,button"))
-    .map((el) => ({
-      text: (el.textContent || "").replace(/\s+/g, " ").trim(),
-      href: el.getAttribute("href") || undefined,
-    }))
+    .map((el) => {
+      const href = el.getAttribute("href")
+      return {
+        text: (el.textContent || "").replace(/\s+/g, " ").trim(),
+        ...(href != null ? { href } : {}),
+      }
+    })
     .filter((c) => c.text)
     .slice(0, 24)
 
@@ -234,7 +237,7 @@ export function extractPageTokensInBrowser(): PageTokens {
       if (!label && el.parentElement) {
         label = clean(el.parentElement.innerText).replace(value, " ").replace(/\s+/g, " ").trim()
       }
-      label = label.split(/[.,;:\u2014-]/)[0].trim().slice(0, 24)
+      label = label.split(/[.,;:\u2014-]/)[0]!.trim().slice(0, 24)
       if (label.length < 2) continue
       seen.add(value)
       stats.push({ value, label })
@@ -249,10 +252,13 @@ export function extractPageTokensInBrowser(): PageTokens {
   if (sectionTitles.length) content.sections = sectionTitles
   if (stats.length) content.stats = stats
 
+  const description = meta("description")
+  const ogImage = meta("og:image")
+
   return {
     title: document.title || "",
-    description: meta("description"),
-    ogImage: meta("og:image"),
+    ...(description != null ? { description } : {}),
+    ...(ogImage != null ? { ogImage } : {}),
     colors,
     fonts,
     cssVariables,

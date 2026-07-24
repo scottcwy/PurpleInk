@@ -22,6 +22,7 @@ export class PlaywrightDriver implements BrowserDriver {
       })
       const context = await this.browser.newContext({
         viewport: options?.viewport ?? { width: 1280, height: 720 },
+        deviceScaleFactor: 2,
       })
       // tsx(esbuild) 的 keepNames 会给注入浏览器的具名函数包一层 __name(...)，
       // 而页面上下文没有 __name → page.evaluate 抛 ReferenceError（品牌色/字体抓取
@@ -173,6 +174,64 @@ export class PlaywrightDriver implements BrowserDriver {
     } catch (err) {
       console.warn("[PlaywrightDriver] screenshotElement failed:", String(err))
       return null
+    }
+  }
+
+  /** 元素级抠图：透明底 PNG，用于素材提取；元素不存在或太小(< 20px)返回 null */
+  async elementScreenshot(selector: string): Promise<Buffer | null> {
+    const page = this.getPage()
+    try {
+      const loc = page.locator(selector).first()
+      await loc.waitFor({ state: "visible", timeout: 5_000 })
+      const box = await loc.boundingBox()
+      if (!box || box.width < 20 || box.height < 20) return null
+      const buf = await loc.screenshot({ omitBackground: true, type: "png", timeout: 8_000 })
+      return Buffer.from(buf)
+    } catch (err) {
+      console.warn("[PlaywrightDriver] elementScreenshot failed:", String(err))
+      return null
+    }
+  }
+
+  /** 提取关键元素坐标布局；缺省选择器时自动提取常见元素 */
+  async extractLayout(selectors?: string[]): Promise<Array<{ selector: string; x: number; y: number; w: number; h: number }>> {
+    const page = this.getPage()
+    const defaultSelectors = [
+      "nav", "header", "main", "footer", "h1", "h2",
+      "[class*='hero']", "[class*='card']", "button",
+      "[class*='btn']", "[class*='cta']", "[class*='logo']",
+    ]
+    const sels = selectors ?? defaultSelectors
+    try {
+      const results = await page.evaluate((selectorList: string[]) => {
+        const out: Array<{ selector: string; x: number; y: number; w: number; h: number }> = []
+        for (const sel of selectorList) {
+          try {
+            const els = document.querySelectorAll(sel)
+            els.forEach((el) => {
+              const rect = el.getBoundingClientRect()
+              const style = window.getComputedStyle(el)
+              // 跳过不可见或太小的元素
+              if (style.display === "none" || style.visibility === "hidden") return
+              if (rect.width < 20 || rect.height < 20) return
+              out.push({
+                selector: sel,
+                x: Math.round(rect.x),
+                y: Math.round(rect.y),
+                w: Math.round(rect.width),
+                h: Math.round(rect.height),
+              })
+            })
+          } catch {
+            // 单个选择器失败不影响整体
+          }
+        }
+        return out
+      }, sels)
+      return results
+    } catch (err) {
+      console.warn("[PlaywrightDriver] extractLayout failed:", String(err))
+      return []
     }
   }
 

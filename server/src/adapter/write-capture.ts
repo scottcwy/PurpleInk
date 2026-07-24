@@ -43,7 +43,7 @@ export async function runCaptureAdapter(
   // 1. 规划截图落盘路径（NN-slug.png），写入 assets/
   const toDescribe: AssetToDescribe[] = []
   for (let i = 0; i < input.capture.screenshots.length; i++) {
-    const shot = input.capture.screenshots[i]
+    const shot = input.capture.screenshots[i]!
     const slug = slugify(shot.label) || shot.metadata.pageType || "shot"
     const filename = `${pad2(i)}-${slug}.png`
     const relPath = `assets/${filename}`

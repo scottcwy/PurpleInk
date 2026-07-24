@@ -4,10 +4,13 @@
 import { join } from "node:path"
 import { access, readdir, rm } from "node:fs/promises"
 import { buildVideoModel } from "./model"
-import { writeProject } from "./project"
-import { renderProject, type RenderOptions } from "./render"
+import { writeProject, writeProjectDirect } from "./project"
+import { renderProject, verifyGolden, type RenderOptions } from "./render"
 import { runCapture, type RunCaptureOptions } from "../capture/run-capture"
 import { logger } from "../lib/logger"
+import { buildRootHtml } from "./chapters/root-html"
+import { splitScenesToChapters } from "./chapters/split"
+import { generateChapters, buildComposeContext } from "./chapters/generate"
 
 export interface PipelineResult {
   captureDir: string
@@ -15,6 +18,8 @@ export interface PipelineResult {
   videoPath: string | null
   checkPassed: boolean
   durationSec: number
+  goldenVerified: boolean
+  goldenDetails: string[]
 }
 
 export interface RenderFromCaptureOptions extends RenderOptions {
@@ -26,6 +31,8 @@ export interface RenderFromCaptureOptions extends RenderOptions {
   name?: string
   /** 进度回调：在各阶段边界上报 phase（queued/capturing/composing/rendering/done） */
   onPhase?: (phase: string) => void
+  /** 生成模式: llm / template / auto（默认 auto） */
+  generation?: "llm" | "template" | "auto"
 }
 
 /** 从一个 capture/ 目录生成 video.mp4 */
@@ -34,7 +41,10 @@ export async function renderFromCapture(
   options: RenderFromCaptureOptions = {}
 ): Promise<PipelineResult> {
   options.onPhase?.("composing")
-  const model = await buildVideoModel(captureDir, { durationSec: options.durationSec, name: options.name })
+  const model = await buildVideoModel(captureDir, {
+    ...(options.durationSec != null ? { durationSec: options.durationSec } : {}),
+    ...(options.name != null ? { name: options.name } : {}),
+  })
   logger.info("pipeline:model_built", {
     scenes: model.scenes.length,
     durationSec: model.durationSec,
@@ -42,7 +52,57 @@ export async function renderFromCapture(
   })
 
   const projectDir = options.projectDir || join(captureDir, "..", `${model.id}-video`)
-  const written = await writeProject(model, projectDir, captureDir)
+
+  // Compose mode: llm / template / auto
+  const composeMode = options.generation || (process.env.PURPLEINK_COMPOSE_MODE as "llm" | "template" | "auto") || "auto"
+
+  let written: { projectDir: string; assetCount: number }
+
+  if (composeMode === "llm" || composeMode === "auto") {
+    // LLM path: generate chapters via LLM with template fallback
+    logger.info("pipeline:compose_llm_start", {
+      composeMode,
+      envKey: !!process.env.STEP_API_KEY,
+      scenesCount: model.scenes.length,
+      valueProps: model.valueProps.length,
+      logos: model.logos.length,
+    })
+    try {
+      const ctx = await buildComposeContext(captureDir, model)
+      logger.info("pipeline:compose_context_built", {
+        screenshots: ctx.screenshots.length,
+        brand: ctx.brand.title,
+        palette: ctx.palette,
+        features: ctx.copy.features.length,
+      })
+      const chapterPlans = splitScenesToChapters(model)
+      logger.info("pipeline:chapter_plans", { chapters: chapterPlans.map((c) => c.id) })
+      const chapters = await generateChapters(ctx, captureDir, model)
+      const llmCount = chapters.filter((c) => c.source === "llm").length
+      const templateCount = chapters.filter((c) => c.source === "template").length
+      logger.info("pipeline:chapters_generated", {
+        total: chapters.length,
+        llm: llmCount,
+        template: templateCount,
+        sources: chapters.map((c) => ({ id: c.id, source: c.source })),
+      })
+      const rootHtml = buildRootHtml(chapterPlans, model.palette, model.skin, model.durationSec)
+      written = await writeProjectDirect(projectDir, rootHtml, chapters, captureDir)
+      logger.info("pipeline:compose_llm_done", { projectDir: written.projectDir, assets: written.assetCount })
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err)
+      const errStack = err instanceof Error ? err.stack : undefined
+      logger.error("pipeline:compose_llm_failed", { error: errMsg, stack: errStack?.slice(0, 500) })
+      // Fall back to template path on catastrophic failure
+      logger.info("pipeline:fallback_template", { reason: errMsg })
+      written = await writeProject(model, projectDir, captureDir)
+    }
+  } else {
+    // Existing template path
+    logger.info("pipeline:compose_template", {})
+    written = await writeProject(model, projectDir, captureDir)
+  }
+
   logger.info("pipeline:project_written", { projectDir: written.projectDir, assets: written.assetCount })
 
   options.onPhase?.("rendering")
@@ -51,12 +111,22 @@ export async function renderFromCapture(
     logger.error("pipeline:no_video", { renderTail: rendered.renderOutput.slice(-800) })
   }
 
+  // 渲染后金样本校验：验证生成的 index.html 结构与金样本对齐
+  options.onPhase?.("verifying")
+  const golden = await verifyGolden(written.projectDir)
+  logger.info("pipeline:golden_verify", { passed: golden.passed, passedCount: golden.passedCount, failedCount: golden.failedCount })
+  for (const line of golden.details) {
+    console.log(line)
+  }
+
   return {
     captureDir,
     projectDir: written.projectDir,
     videoPath: rendered.videoPath,
     checkPassed: rendered.checkPassed,
     durationSec: model.durationSec,
+    goldenVerified: golden.passed,
+    goldenDetails: golden.details,
   }
 }
 

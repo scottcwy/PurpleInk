@@ -1,7 +1,7 @@
 // 封装 hyperframes check + render 两步 CLI。
 // 关键：ffmpeg 由 winget 用户作用域安装、不在默认 PATH，这里自动定位并前置到子进程 PATH。
 import { spawn } from "node:child_process"
-import { readdir, stat } from "node:fs/promises"
+import { readdir, stat, readFile } from "node:fs/promises"
 import { existsSync } from "node:fs"
 import { join, delimiter } from "node:path"
 import { logger } from "../lib/logger"
@@ -9,7 +9,7 @@ import { logger } from "../lib/logger"
 const HF_VERSION = "0.7.68"
 
 export interface RenderOptions {
-  /** hyperframes render --quality（默认 high） */
+  /** hyperframes render --quality（默认 standard） */
   quality?: string
   /** 跳过 check（默认 false） */
   skipCheck?: boolean
@@ -17,6 +17,8 @@ export interface RenderOptions {
   ffmpegDir?: string
   /** 单步超时 ms（默认 20 分钟，覆盖 60–120s 正片） */
   timeoutMs?: number
+  /** 渲染帧率（可选，追加 --fps 参数） */
+  fps?: number
 }
 
 export interface RenderResult {
@@ -24,6 +26,8 @@ export interface RenderResult {
   checkOutput: string
   videoPath: string | null
   renderOutput: string
+  goldenVerified: boolean
+  goldenDetails: string[]
 }
 
 /** 探测 ffmpeg 所在 bin 目录：显式 > 环境变量 > 已在 PATH > winget 包目录 */
@@ -136,16 +140,74 @@ export async function renderProject(projectDir: string, options: RenderOptions =
     logger.info("render:check_done", { checkPassed })
   }
 
-  const quality = options.quality || "high"
-  logger.info("render:render_start", { projectDir, quality })
-  const render = await runCommand(
-    `npx --yes hyperframes@${HF_VERSION} render --quality ${quality}`,
-    projectDir,
-    env,
-    timeoutMs
-  )
+  const quality = options.quality || "standard"
+  logger.info("render:render_start", { projectDir, quality, fps: options.fps })
+  let renderCmd = `npx --yes hyperframes@${HF_VERSION} render --quality ${quality}`
+  if (options.fps) renderCmd += ` --fps ${options.fps}`
+  const render = await runCommand(renderCmd, projectDir, env, timeoutMs)
   const videoPath = await findNewestMp4(projectDir)
   logger.info("render:render_done", { code: render.code, videoPath })
 
-  return { checkPassed, checkOutput, videoPath, renderOutput: render.output }
+  return { checkPassed, checkOutput, videoPath, renderOutput: render.output, goldenVerified: false, goldenDetails: [] }
+}
+
+/**
+ * 渲染后金样本校验：验证生成的 index.html 结构与金样本对齐。
+ * 采用与 verify-golden.ts 相同的 check() 断言风格：计数 passed/failed，逐条打印。
+ */
+export async function verifyGolden(projectDir: string): Promise<{ passed: boolean; details: string[]; passedCount: number; failedCount: number }> {
+  const details: string[] = []
+  let passedCount = 0
+  let failedCount = 0
+
+  function check(name: string, cond: boolean, detail = ""): void {
+    if (cond) {
+      passedCount++
+      details.push(`  ✅ ${name}`)
+    } else {
+      failedCount++
+      details.push(`  ❌ ${name}${detail ? ` — ${detail}` : ""}`)
+    }
+  }
+
+  const htmlPath = join(projectDir, "index.html")
+  check("index.html 存在", existsSync(htmlPath))
+  if (!existsSync(htmlPath)) {
+    return { passed: false, details, passedCount, failedCount }
+  }
+
+  const html = await readFile(htmlPath, "utf8")
+
+  // 基础结构
+  check("包含 GSAP CDN", html.includes("gsap@3"))
+  check("包含 gsap.timeline", html.includes("gsap.timeline"))
+  check("包含 data-skin", /data-skin="(editorial|kinetic|technical)"/.test(html))
+
+  // 截图镜头容器
+  check("包含 .window 容器", html.includes('class="window"'))
+  check("包含 .viewport", html.includes('class="viewport"'))
+  check("包含 shot-visual 类", html.includes("shot-visual"))
+
+  // 无红绿黄圆点（已移除 macOS titlebar）
+  check("无红绿黄圆点", !html.includes("#ff5f57") && !html.includes("#febc2e") && !html.includes("#28c840"), "titlebar dots should be removed")
+  check("无 .titlebar 元素", !html.includes('class="titlebar"'))
+
+  // 光晕 box-shadow
+  check("window 有多层 box-shadow", html.includes("0 0 0 1px rgba(255,255,255") && html.includes("0 8px 40px rgba(0,0,0,0.3)"))
+
+  // Ken Burns: x/y 偏移
+  check("Ken Burns x 偏移", /x:\s*-?\d+/.test(html), "shot timeline should have x offset")
+  check("Ken Burns y 偏移", /y:\s*-?\d+/.test(html), "shot timeline should have y offset")
+  check("Ken Burns power1.inOut 缓动", html.includes("power1.inOut"))
+
+  // 分层入场: shot-visual opacity 动画
+  check("分层入场 shot-visual 淡入", html.includes(".shot-visual") && html.includes("opacity"))
+
+  // 视频产物
+  const videoPath = await findNewestMp4(projectDir)
+  check("视频产物存在", videoPath !== null, videoPath || "no mp4 found")
+
+  details.push(`\n==== 金样本校验：${passedCount} 通过 / ${failedCount} 失败 ====`)
+
+  return { passed: failedCount === 0, details, passedCount, failedCount }
 }

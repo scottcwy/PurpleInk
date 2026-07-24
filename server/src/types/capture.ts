@@ -71,4 +71,6 @@ export interface CapturedScreenshot {
 export interface CaptureResult {
   screenshots: CapturedScreenshot[]
   actions: AiAction[]
+  /** 元素级抠图：透明底 PNG，用于素材提取 */
+  cutouts?: Array<{ name: string; buffer: Buffer }>
 }

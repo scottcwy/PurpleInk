@@ -16,6 +16,10 @@ export interface BrowserDriver {
   screenshot(): Promise<Buffer>
   /** ④ 元素级紧裁截图：把某个内容容器单独截出(scrollIntoView + 等可见)；太小/失败返回 null */
   screenshotElement?(selector: string): Promise<Buffer | null>
+  /** 元素级抠图：透明底 PNG，用于素材提取；元素不存在或太小返回 null */
+  elementScreenshot?(selector: string): Promise<Buffer | null>
+  /** 提取关键元素坐标布局；缺省选择器时自动提取常见元素 */
+  extractLayout?(selectors?: string[]): Promise<Array<{ selector: string; x: number; y: number; w: number; h: number }>>
   /** ④ 截图前静置：等字体/入场动画/懒加载(marquee 等异步组件)渲染完，避免截到空白 */
   settle?(ms?: number): Promise<void>
   /** 点击元素 */

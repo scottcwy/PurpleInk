@@ -11,6 +11,7 @@ export type JobPhase =
   | "capturing"
   | "composing"
   | "rendering"
+  | "verifying"
   | "done"
   | "failed";
 
@@ -23,6 +24,8 @@ export interface JobView {
   checkPassed?: boolean;
   durationSec?: number;
   elapsedSec?: number;
+  goldenVerified?: boolean;
+  goldenDetails?: string[];
   hasVideo: boolean;
   videoUrl: string | null;
   error?: string;

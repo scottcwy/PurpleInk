@@ -45,6 +45,16 @@ export class MockDriver implements BrowserDriver {
     return Buffer.from(TINY_PNG_BASE64, "base64")
   }
 
+  async elementScreenshot(_selector: string): Promise<Buffer | null> {
+    await delay(10)
+    return null
+  }
+
+  async extractLayout(_selectors?: string[]): Promise<Array<{ selector: string; x: number; y: number; w: number; h: number }>> {
+    await delay(10)
+    return []
+  }
+
   async click(selector: string): Promise<void> {
     await delay(20)
     console.log(`[MockDriver] Clicked: ${selector}`)

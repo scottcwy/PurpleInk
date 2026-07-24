@@ -6,6 +6,7 @@ import { join } from "node:path"
 import sharp from "sharp"
 import { renderIndexHtml } from "./template"
 import type { VideoModel } from "./model"
+import type { ChapterHtml } from "./chapters/types"
 
 const HF_VERSION = "0.7.68"
 
@@ -108,4 +109,59 @@ export async function writeProject(
   const assetCount = await copyAssets(join(captureDir, "assets"), join(projectDir, "assets"))
 
   return { projectDir, indexHtml: html, assetCount }
+}
+
+/**
+ * Write a multi-file chapter-based HyperFrames project directory.
+ *
+ * Layout:
+ *   <dir>/
+ *     index.html              (root composition referencing chapters)
+ *     hyperframes.json
+ *     meta.json
+ *     package.json
+ *     compositions/
+ *       ch1-opening.html
+ *       ch2-hero.html
+ *       ch3-showcase.html
+ *       ch4-proof.html
+ *       ch5-cta.html
+ *     assets/                 (screenshots copied from captureDir)
+ *
+ * @param dir         Target project directory (will be created)
+ * @param rootHtml    The root index.html content
+ * @param chapters    Array of rendered chapter HTML objects
+ * @param captureDir  Source capture/ directory for copying assets
+ */
+export async function writeProjectDirect(
+  dir: string,
+  rootHtml: string,
+  chapters: ChapterHtml[],
+  captureDir: string,
+): Promise<{ projectDir: string; assetCount: number }> {
+  await mkdir(dir, { recursive: true })
+
+  // Write root index.html
+  await writeFile(join(dir, "index.html"), rootHtml, "utf8")
+
+  // Write hyperframes.json, meta.json, package.json
+  await writeFile(join(dir, "hyperframes.json"), JSON.stringify(HYPERFRAMES_JSON, null, 2) + "\n", "utf8")
+  await writeFile(
+    join(dir, "meta.json"),
+    JSON.stringify({ createdAt: new Date().toISOString(), chapters: chapters.map((c) => ({ id: c.id, source: c.source })) }, null, 2) + "\n",
+    "utf8"
+  )
+  await writeFile(join(dir, "package.json"), packageJson("purpleink-chapters"), "utf8")
+
+  // Write chapter HTML files to compositions/
+  const compositionsDir = join(dir, "compositions")
+  await mkdir(compositionsDir, { recursive: true })
+  for (const ch of chapters) {
+    await writeFile(join(compositionsDir, `${ch.id}.html`), ch.html, "utf8")
+  }
+
+  // Copy assets from capture directory
+  const assetCount = await copyAssets(join(captureDir, "assets"), join(dir, "assets"))
+
+  return { projectDir: dir, assetCount }
 }

@@ -25,6 +25,7 @@ const PHASE_LABEL: Record<JobPhase, string> = {
   capturing: "正在采集网站…",
   composing: "正在合成分镜…",
   rendering: "正在渲染视频…",
+  verifying: "正在校验金样本…",
   done: "完成",
   failed: "失败",
 };
@@ -34,7 +35,8 @@ const PHASE_BAND: Record<JobPhase, [number, number, number]> = {
   queued: [2, 8, 4],
   capturing: [8, 62, 150],
   composing: [62, 70, 8],
-  rendering: [70, 96, 70],
+  rendering: [70, 93, 70],
+  verifying: [93, 98, 4],
   done: [100, 100, 1],
   failed: [0, 0, 1],
 };
@@ -192,9 +194,9 @@ export function LaunchComposer(): ReactNode {
       const host = safeHost(target);
       await downloadVideo(job.id, `purpleink-${host}.mp4`);
       setStage("done");
-      setMessage(
-        job.checkPassed === false ? "已生成（check 有告警）" : "已生成，正在下载",
-      );
+      const checkWarn = job.checkPassed === false ? "（check 有告警）" : "";
+      const goldenOk = job.goldenVerified ? " · 金样本校验通过" : "";
+      setMessage(`已生成${checkWarn}${goldenOk}，正在下载`);
     } catch (err) {
       if ((err as Error)?.name === "AbortError") return;
       setStage("error");

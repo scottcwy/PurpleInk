@@ -113,7 +113,7 @@ async function pollOnce(since: Date): Promise<{ code?: string; link?: string } |
 function mask(email: string): string {
   const [local, domain] = email.split("@")
   if (!domain) return "***"
-  return `${local.slice(0, 2)}***@${domain}`
+  return `${local!.slice(0, 2)}***@${domain}`
 }
 
 /**

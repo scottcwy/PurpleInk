@@ -52,7 +52,7 @@ async function contentDensity(buffer: Buffer): Promise<number> {
 
 /** ④ 中性截图标签：取页面真实标题，避免「补充截图 N / 页面截图 N」内部占位汄入产物 */
 function neutralLabel(snapshot: SemanticSnapshot | null): string {
-  const t = (snapshot?.title || "").split(/[|·–—-]/)[0].trim()
+  const t = (snapshot?.title || "").split(/[|·–—-]/)[0]!.trim()
   return t ? t.slice(0, 40) : "Product view"
 }
 
@@ -155,8 +155,8 @@ export class AiCaptureAgent {
     this.minScreenshots = options?.minScreenshots ?? 4
     this.maxScreenshots = options?.maxScreenshots ?? 6
     this.authBudget = options?.authBudget ?? 10
-    this.credentials = options?.credentials
-    this.description = options?.description
+    if (options?.credentials) this.credentials = options.credentials
+    if (options?.description) this.description = options.description
     this.visionModel = options?.visionModel || process.env.STEP_VISION_MODEL || "step-3.7-flash"
     this.onScreenshot = options?.onScreenshot
     this.onSnapshot = options?.onSnapshot
@@ -171,6 +171,8 @@ export class AiCaptureAgent {
     const actions: AiAction[] = []
     // 记录最近几步动作签名，防止死循环
     const recentSignatures: string[] = []
+    // 记录每步所在 URL，供提前终止判断（连续多步停留同一 URL 且截图已够 → 结束）
+    const stepUrls: string[] = []
     let lastSnapshot: SemanticSnapshot | null = null
 
     const saveShot = async (
@@ -304,11 +306,11 @@ export class AiCaptureAgent {
           return false
         }
         const metadata: ScreenshotMetadata = {
-          pageUrl: snapshot.url,
+          ...(snapshot.url ? { pageUrl: snapshot.url } : {}),
           captureMode: mode,
           authWallSeen: authWall,
-          aiDecision: decision ? `${decision.action} ${decision.label || ""}`.trim() : undefined,
-          pageType: this.inferPageType(snapshot, authWall, loggedIn),
+          ...(decision ? { aiDecision: `${decision.action} ${decision.label || ""}`.trim() } : {}),
+          ...(() => { const pt = this.inferPageType(snapshot, authWall, loggedIn); return pt != null ? { pageType: pt } : {} })(),
         }
         await saveShot(buf, label, metadata, snapshot)
         return true
@@ -414,6 +416,18 @@ export class AiCaptureAgent {
 
       if (mode === "auth") { this.authSteps++; if (isCodePage) this.codeSteps++ }
 
+      // ---- 提前终止：截图已够 + 连续 3 步停留同一 URL → 认为已采集完毕 ----
+      if (mode === "capture" && screenshots.length >= this.minScreenshots) {
+        stepUrls.push(stripUrl(snapshot.url || ""))
+        const last3 = stepUrls.slice(-3)
+        if (last3.length >= 3 && new Set(last3).size === 1) {
+          logger.info("ai_capture:early_terminate", {
+            step, screenshots: screenshots.length, url: snapshot.url,
+          })
+          break
+        }
+      }
+
       await new Promise((r) => setTimeout(r, TIMING.STEP_INTERVAL))
     }
 
@@ -444,11 +458,12 @@ export class AiCaptureAgent {
           // ④ 近空白帧不拿来凑镜头
           logger.info("ai_capture:skip_blank_screenshot_final", { url: sweepSnap?.url })
         } else {
+          const pt = sweepSnap ? this.inferPageType(sweepSnap, false, false) : "marketing"
           const meta: ScreenshotMetadata = {
-            pageUrl: sweepSnap?.url,
+            ...(sweepSnap?.url ? { pageUrl: sweepSnap.url } : {}),
             captureMode: "capture",
             authWallSeen: false,
-            pageType: sweepSnap ? this.inferPageType(sweepSnap, false, false) : "marketing",
+            ...(pt != null ? { pageType: pt } : {}),
           }
           await saveShot(sweepBuf, neutralLabel(sweepSnap), meta, sweepSnap)
         }
@@ -457,11 +472,33 @@ export class AiCaptureAgent {
       }
     }
 
+    // ---- 元素级抠图：采集关键 UI 组件的透明底 PNG ----
+    const cutouts: Array<{ name: string; buffer: Buffer }> = []
+    const cutoutSelectors = [
+      "nav", "header h1", "[class*='hero']", "[class*='card']",
+      "button, [class*='btn']", "[class*='cta']", "[class*='logo']",
+    ]
+    if (this.driver.elementScreenshot) {
+      for (let ci = 0; ci < cutoutSelectors.length; ci++) {
+        const sel = cutoutSelectors[ci]
+        try {
+          const buf = await this.driver.elementScreenshot(sel!)
+          if (buf) {
+            const safeName = sel!.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 30) || `el-${ci}`
+            cutouts.push({ name: `${ci}-${safeName}`, buffer: buf })
+          }
+        } catch (err) {
+          logger.warn("ai_capture:cutout_failed", { selector: sel, error: String(err) })
+        }
+      }
+      logger.info("ai_capture:cutouts", { count: cutouts.length })
+    }
+
     logger.info("ai_capture:completed", {
       totalScreenshots: screenshots.length, totalActions: actions.length,
-      authCompleted: this.authCompleted,
+      authCompleted: this.authCompleted, cutouts: cutouts.length,
     })
-    return { screenshots, actions }
+    return { screenshots, actions, cutouts }
   }
 
   /**

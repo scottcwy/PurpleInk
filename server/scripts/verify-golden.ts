@@ -11,9 +11,9 @@ import { existsSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import { runCaptureAdapter } from "../src/adapter/index.ts"
-import { describeAssets, type AssetToDescribe } from "../src/adapter/describe-assets.ts"
-import type { AdapterInput, PageTokens, StepSnapshot } from "../src/adapter/types.ts"
+import { runCaptureAdapter } from "../src/adapter/index"
+import { describeAssets, type AssetToDescribe } from "../src/adapter/describe-assets"
+import type { AdapterInput, PageTokens, StepSnapshot } from "../src/adapter/types"
 import type { CapturedScreenshot } from "../src/types/capture.ts"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -145,7 +145,7 @@ async function main(): Promise<void> {
   check("tokens.json 以换行结尾", outTokensRaw.endsWith("}\n"))
   check("tokens.json 用 2 空格缩进", outTokensRaw.includes('\n  "title"'))
   const outTokens = JSON.parse(outTokensRaw) as Record<string, unknown>
-  const goldenKeys = new Set(Object.keys(goldenTokens as Record<string, unknown>))
+  const goldenKeys = new Set(Object.keys(goldenTokens as unknown as Record<string, unknown>))
   const outKeys = Object.keys(outTokens)
   check("tokens.json 无金样本之外的多余键", outKeys.every((k) => goldenKeys.has(k)), outKeys.filter((k) => !goldenKeys.has(k)).join(","))
   for (const core of ["title", "description", "cssVariables", "fonts", "colors"]) {
