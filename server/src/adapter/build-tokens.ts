@@ -41,6 +41,7 @@ export function buildTokens(pageTokens: PageTokens): Record<string, unknown> {
     tokens.colorStats = pageTokens.colorStats
   }
   if (pageTokens.sections && pageTokens.sections.length > 0) tokens.sections = pageTokens.sections
+  if (pageTokens.content && Object.keys(pageTokens.content).length > 0) tokens.content = pageTokens.content
   if (pageTokens.page) tokens.page = pageTokens.page
 
   return tokens

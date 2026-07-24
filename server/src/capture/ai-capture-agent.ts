@@ -5,6 +5,7 @@
 //   3. 新增 onSnapshot 回调：每保存一张截图时把对应语义快照回传，供适配器拼 visible-text。
 import { logger } from "../lib/logger"
 import { parseLlmJson } from "../lib/llm-response-parser"
+import sharp from "sharp"
 import type { BrowserDriver } from "./browser-driver"
 import type {
   SemanticSnapshot,
@@ -25,6 +26,35 @@ const TIMING = {
   KEY_WAIT: 1500,
   SCROLL_WAIT: 500,
 } as const
+
+/** CAPTURE 阶段最多主动关几次全屏遮罩（shadcn 类 sheet/dialog 挡点击的兜底），防死循环。
+ * 略宽松一点：有些站（如 shadcn /create 主题编辑器）每次交互都会重开一个弹窗，
+ * 5 次给 AI 多几次“关掉→换目标”的机会。 */
+const MAX_OVERLAY_ESCAPES = 5
+
+/** ④ 内容密度门限：像素通道平均标准差低于此值视作「近空白」，不入选(不拿来凑镜头) */
+const MIN_CONTENT_DENSITY = 8
+
+/**
+ * ④ 内容密度评分：用像素通道平均标准差衡量「非空白」程度。
+ * 纯色/空白(如未渲染完的 marquee)≈ 0；文字/UI 密集的页面显著更高。
+ * 读不了(解码失败)返回 999，不因密度误丢。
+ */
+async function contentDensity(buffer: Buffer): Promise<number> {
+  try {
+    const { channels } = await sharp(buffer).stats()
+    if (!channels.length) return 0
+    return channels.reduce((a, c) => a + c.stdev, 0) / channels.length
+  } catch {
+    return 999
+  }
+}
+
+/** ④ 中性截图标签：取页面真实标题，避免「补充截图 N / 页面截图 N」内部占位汄入产物 */
+function neutralLabel(snapshot: SemanticSnapshot | null): string {
+  const t = (snapshot?.title || "").split(/[|·–—-]/)[0].trim()
+  return t ? t.slice(0, 40) : "Product view"
+}
 
 /** 共享 actionEnum 定义 */
 const ACTION_ENUM = {
@@ -113,6 +143,8 @@ export class AiCaptureAgent {
   // LLM 看图判定的登录状态（上一步回传），与关键词启发式合并，作为更可靠的已登录信号。
   private llmLoggedIn = false
   private authCompleted = false
+  // CAPTURE 阶段已主动按 Escape 关遮罩的次数（shadcn 类 modal 挡点击兜底，封顶防死循环）。
+  private overlayEscapes = 0
 
   constructor(driver: BrowserDriver, options?: AiCaptureOptions) {
     const apiKey = process.env.STEP_API_KEY
@@ -223,12 +255,52 @@ export class AiCaptureAgent {
         authWall, wallKind, hasAuthEntry, loggedIn, authSteps: this.authSteps,
       })
 
+      // ---- shadcn 类 sheet/dialog 遮罩兜底（与登录墙无关）----
+      // 部分站点（如 ui.shadcn.com）会弹出全屏模态（command 面板 / sheet / cookie 遮罩），
+      // 它以 pointer-events 挡住背后所有点击 → AI 点不动、截图数被封在四张。
+      // 这类遮罩不是登录墙（authWall 已单独处理），按 Escape 即可关。
+      // 只在 CAPTURE 阶段、非登录墙、且未超封顶时主动探测并关遮罩，关后重新取快照。
+      if (mode === "capture" && !authWall && this.overlayEscapes < MAX_OVERLAY_ESCAPES) {
+        let blocked = false
+        try { blocked = await this.detectBlockingOverlay() } catch { /* ignore */ }
+        if (blocked) {
+          this.overlayEscapes++
+          logger.info("ai_capture:overlay_escape", { step, attempt: this.overlayEscapes, url: snapshot.url })
+          try { await this.driver.pressKey("Escape") } catch { /* ignore */ }
+          await new Promise((r) => setTimeout(r, TIMING.KEY_WAIT))
+          continue
+        }
+      }
+
       // 登录框 / 注册框一律不截图：无论 LLM 决策还是兆底逻辑想保存当前帧，
       // 只要此刻正对着登录墙（有密码框 + 认证关键词）就拦掉，宁可少一张也不
       // 让登录/注册页混进演示视频。返回是否真的保存了。
       const shootCurrent = async (label: string, decision?: AiAction): Promise<boolean> => {
         if (authWall) {
           logger.info("ai_capture:skip_auth_screenshot", { step, url: snapshot.url })
+          return false
+        }
+        // ④ 截图前静置：等字体/入场动画/懒加载(marquee 等)渲染完，避免截到空白
+        if (this.driver.settle) {
+          try { await this.driver.settle() } catch { /* ignore */ }
+        }
+        // ④ 优先元素级紧裁：AI 指定了目标容器 ref 时单独截该元素(整帧留白由 compose 层兑底)
+        let buf: Buffer | null = null
+        if (decision && typeof decision.ref === "number" && this.driver.screenshotElement) {
+          const sel = this.resolveSelector(decision, snapshot)
+          if (sel) {
+            try { buf = await this.driver.screenshotElement(sel) } catch { buf = null }
+          }
+        }
+        // 元素级不可用则静置后重抓一帧整帧(比循环顶部的旧帧更新)
+        if (!buf) {
+          try { buf = await this.driver.screenshot() } catch { buf = null }
+        }
+        if (!buf) buf = screenshotBuffer
+        // ④ 内容密度门：近空白帧不入选，不拿来凑镜头
+        const density = await contentDensity(buf)
+        if (density < MIN_CONTENT_DENSITY) {
+          logger.info("ai_capture:skip_blank_screenshot", { step, density: Math.round(density), url: snapshot.url })
           return false
         }
         const metadata: ScreenshotMetadata = {
@@ -238,7 +310,7 @@ export class AiCaptureAgent {
           aiDecision: decision ? `${decision.action} ${decision.label || ""}`.trim() : undefined,
           pageType: this.inferPageType(snapshot, authWall, loggedIn),
         }
-        await saveShot(screenshotBuffer, label, metadata, snapshot)
+        await saveShot(buf, label, metadata, snapshot)
         return true
       }
 
@@ -257,7 +329,7 @@ export class AiCaptureAgent {
           decision = { action: "scroll", value: "down", label: "向下滚动", reason: "AI 调用失败，降级滚动" }
           this.authSteps++
         } else {
-          await shootCurrent(`页面截图 ${screenshots.length + 1}`)
+          await shootCurrent(neutralLabel(snapshot))
           break
         }
       }
@@ -282,14 +354,14 @@ export class AiCaptureAgent {
 
       // ---- 完成条件（仅 CAPTURE 阶段生效）----
       if (mode === "capture" && (decision.action === "done" || screenshots.length >= this.maxScreenshots)) {
-        await shootCurrent(decision.label || `页面截图 ${screenshots.length + 1}`, decision)
+        await shootCurrent(decision.label || neutralLabel(snapshot), decision)
         break
       }
 
       // ---- 显式截图（AUTH 阶段不采集登录页，仅计步）----
       if (decision.action === "screenshot") {
         if (mode === "capture") {
-          const saved = await shootCurrent(decision.label || `页面截图 ${screenshots.length + 1}`, decision)
+          const saved = await shootCurrent(decision.label || neutralLabel(snapshot), decision)
           if (saved) {
             actions.push(decision)
             if (screenshots.length >= this.maxScreenshots || step >= this.maxSteps - 2) break
@@ -303,7 +375,7 @@ export class AiCaptureAgent {
 
       // 导航前先留存当前功能页（仅 CAPTURE，且非登录墙）
       if (decision.action === "navigate" && mode === "capture" && screenshots.length < this.maxScreenshots) {
-        await shootCurrent(decision.label || `页面截图 ${screenshots.length + 1}`, decision)
+        await shootCurrent(decision.label || neutralLabel(snapshot), decision)
       }
 
       // 死循环保护：连续重复同一动作则强制换策略
@@ -312,6 +384,10 @@ export class AiCaptureAgent {
       if (recentSignatures.length > 3) recentSignatures.shift()
       if (recentSignatures.length === 3 && recentSignatures.every((s) => s === sig)) {
         logger.warn("ai_capture:loop_detected", { step, mode, sig })
+        // 卡死兜底：先按 Escape 关掉可能的模态遮罩（shadcn sheet/dialog 挡点击），
+        // 再滚动换一屏内容，促使 AI 换目标（而不是在同一个被挡元素上反复点击）。
+        try { await this.driver.pressKey("Escape") } catch { /* ignore */ }
+        await new Promise((r) => setTimeout(r, TIMING.KEY_WAIT))
         try { await this.driver.scroll("down") } catch { /* ignore */ }
         recentSignatures.length = 0
         if (mode === "auth") { this.authSteps++; if (isCodePage) this.codeSteps++ }
@@ -322,7 +398,18 @@ export class AiCaptureAgent {
         await this.executeAction(decision, lastSnapshot)
         actions.push(decision)
       } catch (err) {
-        logger.warn("ai_capture:action_failed", { step, action: decision.action, error: String(err) })
+        const msg = String(err)
+        logger.warn("ai_capture:action_failed", { step, action: decision.action, error: msg })
+        // 遮罩兜底（模态无关）：点击因「intercepts pointer events」超时失败，
+        // 说明有个全屏遮罩（如 shadcn/base-ui 的 dialog-overlay 命令面板）挡在前面。
+        // 这是比主动探测更硬的信号（真正挡住才会报），按 Escape 关遮罩，
+        // 下一步 AI 就能换目标。仅在未超封顶时做，避免死循环。
+        if (/intercepts pointer events/i.test(msg) && this.overlayEscapes < MAX_OVERLAY_ESCAPES) {
+          this.overlayEscapes++
+          logger.info("ai_capture:overlay_escape_on_block", { step, attempt: this.overlayEscapes })
+          try { await this.driver.pressKey("Escape") } catch { /* ignore */ }
+          await new Promise((r) => setTimeout(r, TIMING.KEY_WAIT))
+        }
       }
 
       if (mode === "auth") { this.authSteps++; if (isCodePage) this.codeSteps++ }
@@ -341,16 +428,21 @@ export class AiCaptureAgent {
         await new Promise((r) => setTimeout(r, TIMING.NAVIGATE_WAIT))
       } catch { /* ignore */ }
 
-      const sweepMax = 5
+      const sweepMax = Math.max(5, this.minScreenshots)
       for (let i = 0; i < sweepMax && screenshots.length < this.minScreenshots; i++) {
         let sweepSnap: SemanticSnapshot | null = lastSnapshot
         try { sweepSnap = await this.driver.snapshot() } catch { /* keep last */ }
+        // ④ 静置后再截，避免抓到未渲染完的空帧
+        if (this.driver.settle) { try { await this.driver.settle() } catch { /* ignore */ } }
         let sweepBuf: Buffer | null = null
         try { sweepBuf = await this.driver.screenshot() } catch { /* ignore */ }
         if (!sweepBuf) break
 
         if (sweepSnap && this.isAuthWall(sweepSnap)) {
           logger.info("ai_capture:skip_auth_screenshot_final", { url: sweepSnap.url })
+        } else if ((await contentDensity(sweepBuf)) < MIN_CONTENT_DENSITY) {
+          // ④ 近空白帧不拿来凑镜头
+          logger.info("ai_capture:skip_blank_screenshot_final", { url: sweepSnap?.url })
         } else {
           const meta: ScreenshotMetadata = {
             pageUrl: sweepSnap?.url,
@@ -358,7 +450,7 @@ export class AiCaptureAgent {
             authWallSeen: false,
             pageType: sweepSnap ? this.inferPageType(sweepSnap, false, false) : "marketing",
           }
-          await saveShot(sweepBuf, `补充截图 ${screenshots.length + 1}`, meta, sweepSnap)
+          await saveShot(sweepBuf, neutralLabel(sweepSnap), meta, sweepSnap)
         }
         try { await this.driver.scroll("down") } catch { /* ignore */ }
         await new Promise((r) => setTimeout(r, TIMING.SCROLL_WAIT))
@@ -615,10 +707,11 @@ ${passwordlessLine}${codeLine}逐个字段 fill，填完后点击提交按钮或
 `
     const rules = `1. **绝对不要对登录页 / 注册页 / 密码输入页截图**；若当前处于这类页面，改为 click 进入功能或 navigate 离开，不要选 screenshot。
 2. 只有页面确实展示了产品**核心功能的真实使用效果**时才选 "screenshot"；空白表单、纯营销首页都不算。
-3. 要让功能「呈现」出来：可先 fill 示例内容 / click 生成或运行按钮 / 展开区域，再截图。
-4. 需进入功能时用 "click"（给出目标 [ref]）或 "navigate"；内容不全时 "scroll" value="down"。
-5. 已采集足够多**不同功能页面**（≥${this.minScreenshots}）时选 "done"。
-6. 不要重复访问已看过的页面，不要重复相同操作。`
+3. 要让功能「呈现」出来：可先 fill 示例内容 / click 生成或运行按钮 / 展开区域，等界面真正渲染出内容再截图。
+4. **screenshot 时尽量给出正在展示核心功能的主内容容器 [ref]**（如编辑器/画布/数据面板/结果区），系统会对该元素做紧裁；别停在文档侧栏/页脚/导航 logo/cookie 条。
+5. 需进入功能时用 "click"（给出目标 [ref]）或 "navigate"；内容不全时 "scroll" value="down"。
+6. 已采集足够多**不同功能页面**（≥${this.minScreenshots}）时选 "done"。
+7. 不要重复访问已看过的页面，不要重复相同操作。`
 
     const actionEnum = ACTION_ENUM.CAPTURE
     return { phaseGoal: "采集核心功能截图", guidance, rules, actionEnum }
@@ -682,6 +775,36 @@ ${passwordlessLine}${codeLine}逐个字段 fill，填完后点击提交按钮或
       case "done":
         break
     }
+  }
+
+  /**
+   * 在页面上下文探测是否存在「全屏固定定位 + 高 z-index」的模态遮罩（shadcn/Radix
+   * 类 sheet/dialog、命令面板、cookie 遮罩），它会以 pointer-events 挡住背后点击。
+   * 判据：Radix 显式标记（[role=dialog][data-state=open] 等）或任意 position:fixed
+   * 且覆盖 ≥60% 视口、z-index≥20 的可见层。以字符串 IIFE 传入 evaluate（避开
+   * esbuild keepNames 对具名函数的包裹），异常一律视为无遮罩。
+   */
+  private async detectBlockingOverlay(): Promise<boolean> {
+    const script = `(() => {
+  try {
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var blocking = function (el) {
+      var s = getComputedStyle(el);
+      if (s.display === 'none' || s.visibility === 'hidden' || parseFloat(s.opacity) === 0) return false;
+      if (s.pointerEvents === 'none') return false;
+      var r = el.getBoundingClientRect();
+      var coversMost = r.width >= vw * 0.6 && r.height >= vh * 0.6;
+      var z = parseInt(s.zIndex, 10) || 0;
+      return coversMost && s.position === 'fixed' && z >= 20;
+    };
+    var markers = document.querySelectorAll('[role=\\'dialog\\'][data-state=\\'open\\'],[role=\\'alertdialog\\'][data-state=\\'open\\'],[data-radix-popper-content-wrapper],[data-state=\\'open\\'][class*=\\'overlay\\']');
+    for (var i = 0; i < markers.length; i++) { if (blocking(markers[i])) return true; }
+    var all = document.querySelectorAll('div,section,aside');
+    for (var j = 0; j < all.length; j++) { if (blocking(all[j])) return true; }
+    return false;
+  } catch (e) { return false; }
+})()`
+    return await this.driver.evaluate<boolean>(script)
   }
 
   /** 将 ref 或 selector 解析为可用于 driver 的选择器 */

@@ -4,6 +4,8 @@ import type { LaunchOptions, SemanticSnapshot } from "../types/capture"
 import type { BrowserDriver } from "./browser-driver"
 
 const DEFAULT_TIMEOUT = 30_000
+/** 首屏导航单独放宽：重站/慢网下 domcontentloaded 常 >30s（浏览器导航比裸 curl 开销大）。 */
+const NAV_TIMEOUT = 60_000
 
 /**
  * PlaywrightDriver — 生产环境主力浏览器驱动
@@ -40,7 +42,7 @@ export class PlaywrightDriver implements BrowserDriver {
     try {
       await this.getPage().goto(url, {
         waitUntil: "domcontentloaded",
-        timeout: DEFAULT_TIMEOUT,
+        timeout: NAV_TIMEOUT,
       })
       // Extra wait for dynamic content (avoids networkidle timeout on WS/SSE connections)
       await this.getPage().waitForTimeout(2000)
@@ -140,6 +142,37 @@ export class PlaywrightDriver implements BrowserDriver {
         console.error("[PlaywrightDriver] CDP screenshot failed:", cdpErr)
         throw cdpErr
       }
+    }
+  }
+
+  /** ④ 截图前静置：等字体 + 两帧 rAF + 固定延时，给 marquee/懒加载/入场动画渲染时间 */
+  async settle(ms = 900): Promise<void> {
+    const page = this.getPage()
+    try {
+      await page.evaluate(() => (document.fonts ? document.fonts.ready.then(() => true) : true)).catch(() => {})
+      await page
+        .evaluate(() => new Promise<void>((res) => requestAnimationFrame(() => requestAnimationFrame(() => res()))))
+        .catch(() => {})
+    } catch {
+      /* ignore */
+    }
+    await page.waitForTimeout(ms).catch(() => {})
+  }
+
+  /** ④ 元素级紧裁截图：单独截出目标容器；太小(< 200×120)或失败则返回 null 让上层回退整帧 */
+  async screenshotElement(selector: string): Promise<Buffer | null> {
+    const page = this.getPage()
+    try {
+      const loc = page.locator(selector).first()
+      await loc.scrollIntoViewIfNeeded({ timeout: 5_000 })
+      await loc.waitFor({ state: "visible", timeout: 5_000 })
+      const box = await loc.boundingBox()
+      if (!box || box.width < 200 || box.height < 120) return null
+      const buf = await loc.screenshot({ type: "png", timeout: 8_000 })
+      return Buffer.from(buf)
+    } catch (err) {
+      console.warn("[PlaywrightDriver] screenshotElement failed:", String(err))
+      return null
     }
   }
 

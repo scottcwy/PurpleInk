@@ -3,18 +3,62 @@
 // template.ts 消费本模型生成 index.html；不依赖任何 LLM。
 import { readFile, readdir } from "node:fs/promises"
 import { join } from "node:path"
+import sharp from "sharp"
 import type { PageTokens } from "../adapter/types"
 
-/** 场景类型 */
-export type SceneKind = "brand" | "hero" | "showcase" | "value" | "cta"
+/**
+ * 镜头（shot）类型：每种是 template.ts 的 SHOTS 注册表里一段独立的 HTML+GSAP 片段。
+ * 故事板选择器（selectStoryboard）按素材 + 域名 seed 从中选 8-12 个拼成一支视频。
+ */
+export type ShotType =
+  | "brand-center"
+  | "brand-side"
+  | "hero-split"
+  | "hero-stack"
+  | "shot-window"
+  | "shot-tilt"
+  | "shot-zoom"
+  | "shot-split"
+  | "feature-row"
+  | "feature-stack"
+  | "data-counter"
+  | "chips-marquee"
+  | "logo-wall"
+  | "pricing"
+  | "cta-push"
+  | "cta-fullbleed"
 
-/** 单个场景（含在时间线上的起点/时长，单位秒） */
+/** 兼容旧命名 */
+export type SceneKind = ShotType
+
+/** 截图素材（一张 showcase 截图 + 说明） */
+export interface ShotMaterial {
+  src: string
+  caption: string
+  tall: boolean
+}
+
+/** data-counter 镜头的单条统计（value 直接来自采集文本，绝不编造） */
+export interface Stat {
+  value: string
+  label: string
+}
+
+/** 定价套餐（name + price 直接来自采集，绝不编造） */
+export interface PricingTier {
+  name: string
+  price: string
+}
+
+/** 单个场景/镜头（含在时间线上的起点/时长，单位秒） */
 export interface Scene {
-  kind: SceneKind
+  kind: ShotType
   start: number
   duration: number
-  /** showcase 专用：截图相对路径 + 说明 */
-  shot?: { src: string; caption: string; tall: boolean }
+  /** 截图镜头使用的素材：window/tilt/zoom 用 1 张，split 用 2 张 */
+  shots?: ShotMaterial[]
+  /** data-counter 专用统计 */
+  stats?: Stat[]
 }
 
 /** 品牌调色板（全部 hex，保证前景/背景对比达 AA） */
@@ -29,6 +73,29 @@ export interface Palette {
   fontFamily: string
 }
 
+/**
+ * 视觉系统(皮肤)：决定一支视频的整体"长相"——不只是镜头顺序。
+ * 每套 = 布局网格 + 背景处理 + 字体尺度/字重 + 配色应用 + 运镜签名(ease/转场)。
+ * 三套差异拉满：editorial(大留白/缓)、kinetic(满屏强调色/大字/闪白硬切)、technical(等宽/网格线/紧凑)。
+ */
+export type VisualSystemId = "editorial" | "kinetic" | "technical"
+
+export interface Motion {
+  /** 主入场缓动(GSAP ease 名) */
+  enter: string
+  /** 皮肤级转场签名：crossfade 软叠化 / flash 闪白硬切 / cut 纯硬切 */
+  transition: "crossfade" | "flash" | "cut"
+}
+
+export interface VisualSystem {
+  id: VisualSystemId
+  motion: Motion
+  /** 每镜最短时长(秒)：越大越"少剪、慢"；越小越"多剪、快" */
+  minShot: number
+  /** 镜头数上限 */
+  maxShots: number
+}
+
 /** 视频模型：模板渲染所需的一切 */
 export interface VideoModel {
   id: string
@@ -36,8 +103,14 @@ export interface VideoModel {
   brand: { title: string; tagline: string }
   hero: { headline: string; lede: string; ctas: string[]; chips: string[] }
   valueProps: Array<{ title: string; desc: string }>
+  /** logo 墙品牌名（HTML 原生重绘，无则该镜头不出现） */
+  logos: string[]
+  /** 定价套餐（HTML 原生重绘，<2 条则该镜头不出现） */
+  pricing: PricingTier[]
   cta: { headline: string; command: string }
   palette: Palette
+  /** 本站选中的视觉系统(异站分化到"皮肤"层，不只镜头顺序) */
+  skin: VisualSystem
   scenes: Scene[]
   durationSec: number
 }
@@ -220,6 +293,37 @@ function dedupe(list: string[]): string[] {
   return Array.from(new Set(list.map((s) => s.trim()).filter(Boolean)))
 }
 
+// ---------- 字幕来源清洗（禁内部占位/泛描述进入成品） ----------
+
+/** 内部占位标签(补充截图 N / 页面截图 N)与视觉模型泛描述开头，绝不允许进字幕 */
+const BANNED_CAPTION =
+  /(补充截图|页面截图|documentation page|this (?:screenshot|image|page)\b|the (?:screenshot|image|page)\b|displays? the|showcas|screenshot (?:shows|displays)|preview of|marketing$)/i
+
+/** 清洗一条候选字幕：折叠空白、去首尾标点/引号/项目符号 */
+function cleanCaption(s: string): string {
+  return (s || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^["'“”\-–—•·]+|["'“”\-–—•·]+$/g, "")
+    .trim()
+}
+
+/** 是否内部占位/泛描述 —— 命中即拒 */
+function isBannedCaption(s: string): boolean {
+  return !s || BANNED_CAPTION.test(s)
+}
+
+/**
+ * 字幕换源：只从页面真实标题/卖点(h2/h3/标签)派生短句，短、利益导向。
+ * 绝不使用 asset 描述（会带 "补充截图 N — marketing" 内部标签或
+ * "A documentation page displaying…" 泛描述）。
+ */
+function buildCaptionPool(b: TextBuckets, chips: string[]): string[] {
+  return dedupe([...b.h2, ...b.h3, ...chips])
+    .map(cleanCaption)
+    .filter((t) => t.length >= 6 && t.length <= 42 && !isBannedCaption(t))
+}
+
 /** 从 asset-descriptions.md 解析 `- path — 描述` */
 function parseAssetDescriptions(raw: string): Map<string, string> {
   const map = new Map<string, string>()
@@ -260,21 +364,243 @@ async function listAssets(assetsDir: string): Promise<string[]> {
   }
 }
 
+/**
+ * ④ 内容密度筛选：丢弃近空白截图(不拿来凑镜头)，并按密度降序——
+ * 让内容最丰富的真·产品 UI 优先入选（取前 MAX_SHOT_SCENES 张）。
+ * 纯色/空白图的通道标准差≈ 0；stats 读不了则不因密度误丢。结果确定性(同站稳定)。
+ */
+async function filterDenseAssets(captureDir: string, rels: string[]): Promise<string[]> {
+  const DENSITY_MIN = 8
+  const scored = await Promise.all(
+    rels.map(async (rel) => {
+      try {
+        const { channels } = await sharp(join(captureDir, rel)).stats()
+        const d = channels.length ? channels.reduce((a, c) => a + c.stdev, 0) / channels.length : 0
+        return { rel, d }
+      } catch {
+        return { rel, d: 999 }
+      }
+    })
+  )
+  const dense = scored.filter((s) => s.d >= DENSITY_MIN)
+  // 全都被判空白时不砸手（保留原集），避免空产物；否则只留密集帧
+  const use = dense.length ? dense : scored
+  return use.sort((a, b) => b.d - a.d).map((s) => s.rel)
+}
+
 // ---------- 场景时序 ----------
 
-/** 按权重把总时长分配给一组场景 */
-function layoutScenes(kinds: Array<{ kind: SceneKind; weight: number; shot?: Scene["shot"] }>, total: number): Scene[] {
-  const sum = kinds.reduce((a, k) => a + k.weight, 0) || 1
+/** 每镜最短时长（秒）：镜头数受 floor(total/MIN) 约束，避免一闪而过 */
+const MIN_SHOT_SEC = 2.2
+
+/**
+ * ③ 截图镜头上限：截图只作「真·产品 UI 证据」，限量 + 降权，避免纯缩放/平移刷屏；
+ * 其余叙事优先用 HTML 重绘镜头（大字卡/数字滚动/列表揭示/标签跑马灯）。
+ */
+const MAX_SHOT_SCENES = 3
+
+/** 故事板一条目：镜头类型 + 权重 + 可选素材 */
+interface StoryEntry {
+  kind: ShotType
+  weight: number
+  shots?: ShotMaterial[]
+  stats?: Stat[]
+}
+
+/**
+ * 按权重把总时长分配给一组镜头，并强制每镜 >= MIN_SHOT_SEC：
+ * 先按权重初分，把不足 MIN 的补到 MIN，再从可压缩(>MIN)的镜头按比例回收超出量。
+ */
+function layoutScenes(entries: StoryEntry[], total: number, minShot: number = MIN_SHOT_SEC): Scene[] {
+  const sum = entries.reduce((a, k) => a + k.weight, 0) || 1
+  const durs = entries.map((k) => (k.weight / sum) * total)
+  for (let i = 0; i < durs.length; i++) if (durs[i] < minShot) durs[i] = minShot
+  let over = durs.reduce((a, d) => a + d, 0) - total
+  let guard = 0
+  while (over > 0.01 && guard++ < 100) {
+    const flex = durs.map((d) => Math.max(0, d - minShot))
+    const flexSum = flex.reduce((a, d) => a + d, 0)
+    if (flexSum <= 0.01) break
+    for (let i = 0; i < durs.length; i++) durs[i] -= (flex[i] / flexSum) * over
+    over = durs.reduce((a, d) => a + d, 0) - total
+  }
   const scenes: Scene[] = []
   let cursor = 0
-  for (let i = 0; i < kinds.length; i++) {
-    const k = kinds[i]
-    // 最后一个场景吃掉剩余时长，避免累计误差
-    const dur = i === kinds.length - 1 ? Math.max(1, total - cursor) : Math.round((k.weight / sum) * total * 10) / 10
-    scenes.push({ kind: k.kind, start: Math.round(cursor * 10) / 10, duration: dur, shot: k.shot })
-    cursor += dur
+  for (let i = 0; i < entries.length; i++) {
+    // 最后一个镜头吃掉剩余时长，避免累计误差
+    const dur = i === entries.length - 1 ? Math.max(minShot, total - cursor) : Math.round(durs[i] * 10) / 10
+    scenes.push({
+      kind: entries[i].kind,
+      start: Math.round(cursor * 10) / 10,
+      duration: Math.round(dur * 10) / 10,
+      shots: entries[i].shots,
+      stats: entries[i].stats,
+    })
+    cursor = Math.round((cursor + dur) * 10) / 10
   }
   return scenes
+}
+
+// ---------- 故事板选择器 ----------
+
+/** 32-bit FNV 域名哈希 → 稳定 seed（同站同 seed，异站不同） */
+function hashSeed(s: string): number {
+  let h = 2166136261 >>> 0
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+/** mulberry32：由 seed 产生确定性伪随机序列（不用 Math.random，保证同站稳定） */
+function makeRng(seed: number): () => number {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/** 从可见文本里提取「真实统计数字」（形如 106.8K / 100% / 10x），无则返回空（绝不编造） */
+function extractStats(b: TextBuckets): Stat[] {
+  const lines = [...b.h1, ...b.h2, ...b.h3, ...b.p, ...b.link, ...b.button]
+  const out: Stat[] = []
+  const seen = new Set<string>()
+  const re = /(\d[\d.,]*)\s?(%|x|K|M|B|\+|million|billion)/i
+  for (const line of lines) {
+    const m = line.match(re)
+    if (!m) continue
+    const value = (m[1] + (m[2] || "")).replace(/\s+/g, "")
+    if (seen.has(value)) continue
+    // label：去掉数值片段后取相邻短语（首个分隔符前），空则跳过——不硬凑
+    let label = line.replace(m[0], " ").replace(/\s+/g, " ").trim()
+    label = label.split(/[.,;:—-]/)[0].trim().slice(0, 22)
+    if (!label) continue
+    seen.add(value)
+    out.push({ value, label })
+    if (out.length >= 3) break
+  }
+  return out
+}
+
+// ---------- 视觉系统(皮肤)选择 ----------
+
+/** 三套差异拉满的视觉系统预设 */
+const VISUAL_SYSTEMS: Record<VisualSystemId, VisualSystem> = {
+  // 大留白、大图 UI、缓慢推拉、少剪、软叠化转场
+  editorial: { id: "editorial", motion: { enter: "power2.out", transition: "crossfade" }, minShot: 3.0, maxShots: 7 },
+  // 满屏强调色、大字、快剪 + 闪白转场、高能量
+  kinetic: { id: "kinetic", motion: { enter: "expo.out", transition: "flash" }, minShot: 2.0, maxShots: 12 },
+  // 等宽字/网格线/终端感、紧凑硬切、双色调
+  technical: { id: "technical", motion: { enter: "power4.out", transition: "cut" }, minShot: 2.4, maxShots: 9 },
+}
+
+/** 从采集文案 + 配色 + 字体派生的调性信号 */
+interface ToneSignals {
+  text: string
+  accentSat: number
+  accentNeutral: boolean
+  monoFont: boolean
+}
+
+/**
+ * 按「产品调性(采集文案+配色) + 域名 seed」为一个站选一套视觉系统：
+ * - kinetic：动效/交互/视觉冲击类关键词密集(magicui 这类)。
+ * - technical：中性(近黑白)配色 / 等宽字 / UI 组件工具类关键词(shadcn 这类)。
+ * - editorial：有饱和品牌色的产品站(supabase 这类)。
+ * - 都不命中：seed 决定(同站稳定)。
+ */
+function selectVisualSystem(sig: ToneSignals, seed: number): VisualSystem {
+  const t = sig.text.toLowerCase()
+  const has = (words: string[]) => words.reduce((n, w) => n + (t.includes(w) ? 1 : 0), 0)
+  // 高能量/动效信号
+  const kinetic = has([
+    "animat", "motion", "effect", "interactive", "magic", "stunning", "beautiful",
+    "dynamic", "particle", "marquee", "hover", "transition", "design engineer", "gradient",
+  ])
+  // UI 组件工具/终端感信号(只针对组件库这类，避免误判后端产品)
+  const techUI = has([
+    "component", "registry", "copy", "paste", "cli", "npm", "tailwind",
+    "primitive", "headless", "snippet", "terminal", "monorepo", "classname", "open source",
+  ])
+  if (kinetic >= 2) return VISUAL_SYSTEMS.kinetic
+  if (sig.accentNeutral || sig.monoFont || techUI >= 2) return VISUAL_SYSTEMS.technical
+  if (sig.accentSat >= 0.25) return VISUAL_SYSTEMS.editorial
+  const pool = [VISUAL_SYSTEMS.editorial, VISUAL_SYSTEMS.kinetic, VISUAL_SYSTEMS.technical]
+  const rng = makeRng((seed ^ 0x9e3779b9) >>> 0)
+  return pool[Math.floor(rng() * pool.length) % pool.length]
+}
+
+interface StoryboardInput {
+  seedKey: string
+  shots: ShotMaterial[]
+  stats: Stat[]
+  chips: number
+  valueProps: number
+  logos: number
+  pricing: number
+}
+
+/**
+ * 按素材 + 域名 seed 选 8-12 个镜头拼故事板：
+ * - 同站稳定：纯 seed 驱动（hostname → mulberry32），无 Math.random。
+ * - 异站不同：seed 不同 + 素材(截图数/统计/标签)不同 → 镜头组合与顺序都不同。
+ * - 镜头数受 floor(total/MIN_SHOT_SEC) 约束并夹在 [.., 12]，避免一闪而过。
+ */
+function selectStoryboard(input: StoryboardInput, total: number, skin: VisualSystem): StoryEntry[] {
+  const seed = hashSeed(input.seedKey)
+  const rng = makeRng(seed)
+  const pick = <T>(arr: T[]): T => arr[Math.floor(rng() * arr.length) % arr.length]
+
+  // 1) 开场品牌 + 2) 英雄：按皮肤偏置构图
+  //    kinetic 走居中大字(brand-center/hero-stack)；technical 走带栏侧栏(brand-side/hero-split)；editorial 随 seed。
+  const brandKind: ShotType =
+    skin.id === "kinetic" ? "brand-center" : skin.id === "technical" ? "brand-side" : pick<ShotType>(["brand-center", "brand-side"])
+  const heroKind: ShotType =
+    skin.id === "kinetic" ? "hero-stack" : skin.id === "technical" ? "hero-split" : pick<ShotType>(["hero-split", "hero-stack"])
+  const brand: StoryEntry = { kind: brandKind, weight: 4.5 }
+  const hero: StoryEntry = { kind: heroKind, weight: 6 }
+
+  // 3) 主体池：翻转主次——HTML 原生重绘为默认/核心，截图降级为「真实产品 UI 证据」点缀。
+  const body: StoryEntry[] = []
+  // 结构化内容够丰富(功能≥3 / logo≥4 / 指标≥2 / 定价≥2)时，截图退为 ≤1 张点缀；否则至多 2 张。
+  const htmlRich =
+    input.valueProps >= 3 || input.logos >= 4 || input.stats.length >= 2 || input.pricing >= 2
+  const screenshotBudget = Math.min(htmlRich ? 1 : 2, input.shots.length, MAX_SHOT_SCENES)
+  // 截图统一走「套浏览器壳」的 shot-window(产品主视觉证据)，低权重，绝不做纯缩放/平移刷屏。
+  input.shots.slice(0, screenshotBudget).forEach((s) => {
+    body.push({ kind: "shot-window", weight: 4, shots: [s] })
+  })
+  // HTML 重绘镜头为叙事主体(权重高于截图)：功能卡错落 / logo 行 / 定价 / 数字滚动 / 标签跑马灯。
+  if (input.valueProps > 0) {
+    // kinetic 用横排大卡(feature-row)；editorial/technical 用堆叠清单(feature-stack)。两种都放。
+    const featKind: ShotType = skin.id === "kinetic" ? "feature-row" : "feature-stack"
+    body.push({ kind: featKind, weight: 7 })
+    body.push({ kind: featKind === "feature-row" ? "feature-stack" : "feature-row", weight: 6 })
+  }
+  if (input.logos >= 4) body.push({ kind: "logo-wall", weight: 5.5 })
+  if (input.pricing >= 2) body.push({ kind: "pricing", weight: 6 })
+  if (input.stats.length >= 2) body.push({ kind: "data-counter", weight: 6.5, stats: input.stats.slice(0, 3) })
+  if (input.chips >= 3) body.push({ kind: "chips-marquee", weight: 5 })
+
+  // seed 驱动的 Fisher-Yates 洗牌：同站稳定、异站不同
+  for (let i = body.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    ;[body[i], body[j]] = [body[j], body[i]]
+  }
+
+  // 4) 结尾 CTA：kinetic 满屏收束(cta-fullbleed)；editorial 留白命令(cta-push)；technical 随 seed。
+  const ctaKind: ShotType =
+    skin.id === "kinetic" ? "cta-fullbleed" : skin.id === "editorial" ? "cta-push" : pick<ShotType>(["cta-push", "cta-fullbleed"])
+  const cta: StoryEntry = { kind: ctaKind, weight: 3 }
+
+  // 5) 计数上限：受皮肤 minShot(剪切密度) + maxShots 双重约束；预留 brand/hero/cta 三镜
+  const targetMax = Math.min(skin.maxShots, Math.max(3, Math.floor(total / skin.minShot)))
+  const bodyBudget = Math.max(1, targetMax - 3)
+  return [brand, hero, ...body.slice(0, bodyBudget), cta]
 }
 
 // ---------- 主入口 ----------
@@ -289,7 +615,8 @@ export async function buildVideoModel(captureDir: string, options: BuildModelOpt
   const tokens = await readJsonSafe<PageTokens>(join(captureDir, "extracted", "tokens.json"))
   const visible = parseVisibleText(await readTextSafe(join(captureDir, "extracted", "visible-text.txt")))
   const descs = parseAssetDescriptions(await readTextSafe(join(captureDir, "extracted", "asset-descriptions.md")))
-  const assetPaths = await listAssets(join(captureDir, "assets"))
+  // ④ 先按内容密度筛选/排序：丢弃近空白截图，密集的真·产品 UI 优先
+  const assetPaths = await filterDenseAssets(captureDir, await listAssets(join(captureDir, "assets")))
 
   const name = options.name || meta.name || tokens?.title || meta.id || "Untitled"
   const palette = derivePalette(tokens)
@@ -306,43 +633,83 @@ export async function buildVideoModel(captureDir: string, options: BuildModelOpt
     .filter((t) => t.length >= 3 && t.length <= 22 && !ctas.includes(t))
     .slice(0, 6)
 
-  // 价值卡：优先 h2/h3 作标题；不足则用通用兜底
+  // 价值卡：翻转优先级——优先用采集到的结构化功能块(真实标题+描述)，让 HTML 重绘的功能卡
+  //   场景有真内容支撑；不足(<2 条)再回退 h2/h3，最后才用通用兜底。
+  const c = tokens?.content
+  const contentFeatures = (c?.features || [])
+    .filter((f) => f.title && f.desc)
+    .map((f) => ({ title: f.title.slice(0, 28), desc: f.desc.slice(0, 120) }))
   const propTitles = dedupe([...visible.h2, ...visible.h3]).filter((t) => t.length <= 28).slice(0, 3)
   const fallbackProps = [
     { title: "Fast", desc: "Built for speed and a smooth experience end to end." },
     { title: "Reliable", desc: "Consistent, production-ready quality every run." },
     { title: "Simple", desc: "Clear, focused, and easy to get started with." },
   ]
-  const valueProps = [0, 1, 2].map((i) => {
-    const t = propTitles[i]
-    if (!t) return fallbackProps[i]
-    // 找一段与标题不同的描述文本
-    const desc = visible.p.find((p) => p !== t && p.length > 20)?.slice(0, 110) || fallbackProps[i].desc
-    return { title: t.slice(0, 24), desc }
-  })
+  const valueProps =
+    contentFeatures.length >= 2
+      ? contentFeatures.slice(0, 3)
+      : [0, 1, 2].map((i) => {
+          const t = propTitles[i]
+          if (!t) return fallbackProps[i]
+          // 找一段与标题不同的描述文本
+          const desc = visible.p.find((p) => p !== t && p.length > 20)?.slice(0, 110) || fallbackProps[i].desc
+          return { title: t.slice(0, 24), desc }
+        })
+
+  // logo 墙 / 定价：采集到的结构化内容块，供 HTML 原生重绘镜头(logo-wall / pricing)
+  const logos = dedupe(c?.logos || []).filter((l) => l.length >= 2 && l.length <= 24).slice(0, 8)
+  const pricing: PricingTier[] = (c?.pricing || [])
+    .filter((p) => p.name && p.price)
+    .slice(0, 4)
+    .map((p) => ({ name: p.name.slice(0, 24), price: p.price.slice(0, 16) }))
 
   // CTA
   const ctaHeadline = ctas[0] ? `${ctas[0]}.` : "Get started."
   const command = (tokens?.ctas?.[0]?.href || "").replace(/^https?:\/\//, "").slice(0, 48)
 
-  // 截图：最多取 2 张做 showcase 场景
-  const shots = assetPaths.slice(0, 2).map((src, i) => ({
+  // 截图：用满已采集截图（最多 8 张，实际入选镜头数在 selectStoryboard 里限量）。
+  //   字幕换源——只用页面真实卖点(h2/h3/标签)派生短句；asset 描述仅供内部参考，
+  //   绝不进字幕（避免 "补充截图 N — marketing" 内部标签 / "A documentation page…" 泛描述）。
+  void descs
+  const captionPool = buildCaptionPool(visible, chips)
+  const captionFallback = (i: number): string =>
+    [`${title} in action`, "See it in action", "A closer look", `Inside ${title}`][i % 4]
+  const shots: ShotMaterial[] = assetPaths.slice(0, 8).map((src, i) => ({
     src,
-    caption: (descs.get(src) || "").split(/[.。]/)[0].slice(0, 60) || (i === 0 ? "Inside the product." : "More of the experience."),
+    caption: captionPool[i % captionPool.length] || captionFallback(i),
     tall: true,
   }))
 
-  // 组装场景 + 权重（对齐 shadcn-30s 的节奏感）
-  const kinds: Array<{ kind: SceneKind; weight: number; shot?: Scene["shot"] }> = [
-    { kind: "brand", weight: 5 },
-    { kind: "hero", weight: 8 },
-  ]
-  if (shots.length > 0) {
-    for (const shot of shots) kinds.push({ kind: "showcase", weight: 9, shot })
-  }
-  kinds.push({ kind: "value", weight: 5.5 })
-  kinds.push({ kind: "cta", weight: 2.5 })
-  const scenes = layoutScenes(kinds, durationSec)
+  // 从可见文本 / 结构化内容里取真实统计数字：优先采集到的结构化 stats，不足再从可见文本
+  //   兜底提取（无 / 不足 2 条则不会出现 data-counter 镜头，两条路径都绝不编造）
+  const contentStats = (c?.stats || []).filter((s) => s.value && s.label)
+  const stats = contentStats.length >= 2 ? contentStats.slice(0, 3) : extractStats(visible)
+
+  // 域名 seed：优先用 meta.id(= 采集时按 URL 主机名派生的 slug)，保证同站稳定、异站不同
+  const seedKey = meta.id || title || name
+
+  // 视觉系统(皮肤)：按调性(文案+配色+字体) + seed 选一套 → 异站分化到"皮肤"层，不只镜头顺序
+  const accentSat = saturation(palette.accent)
+  const toneText = [
+    title,
+    tagline,
+    headline,
+    lede,
+    ...chips,
+    ...valueProps.map((v) => `${v.title} ${v.desc}`),
+    ...ctas,
+  ].join(" ")
+  const skin = selectVisualSystem(
+    { text: toneText, accentSat, accentNeutral: accentSat < 0.15, monoFont: /mono/i.test(palette.fontFamily) },
+    hashSeed(seedKey)
+  )
+
+  const entries = selectStoryboard(
+    { seedKey, shots, stats, chips: chips.length, valueProps: valueProps.length, logos: logos.length, pricing: pricing.length },
+    durationSec,
+    skin
+  )
+  const scenes = layoutScenes(entries, durationSec, skin.minShot)
 
   return {
     id: meta.id || "video",
@@ -350,8 +717,11 @@ export async function buildVideoModel(captureDir: string, options: BuildModelOpt
     brand: { title, tagline },
     hero: { headline, lede, ctas, chips },
     valueProps,
+    logos,
+    pricing,
     cta: { headline: ctaHeadline, command },
     palette,
+    skin,
     scenes,
     durationSec,
   }

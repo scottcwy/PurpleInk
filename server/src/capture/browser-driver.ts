@@ -14,6 +14,10 @@ export interface BrowserDriver {
   snapshot(): Promise<SemanticSnapshot>
   /** 截取当前页面截图 */
   screenshot(): Promise<Buffer>
+  /** ④ 元素级紧裁截图：把某个内容容器单独截出(scrollIntoView + 等可见)；太小/失败返回 null */
+  screenshotElement?(selector: string): Promise<Buffer | null>
+  /** ④ 截图前静置：等字体/入场动画/懒加载(marquee 等异步组件)渲染完，避免截到空白 */
+  settle?(ms?: number): Promise<void>
   /** 点击元素 */
   click(selector: string): Promise<void>
   /** 填充表单字段 */

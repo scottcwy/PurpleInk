@@ -3,6 +3,7 @@
 // assets 从源 capture/assets 拷入。
 import { mkdir, writeFile, copyFile, readdir } from "node:fs/promises"
 import { join } from "node:path"
+import sharp from "sharp"
 import { renderIndexHtml } from "./template"
 import type { VideoModel } from "./model"
 
@@ -29,7 +30,35 @@ function packageJson(name: string): string {
   return JSON.stringify(pkg, null, 2) + "\n"
 }
 
-/** 把 capture/assets 下的图片拷进项目 assets/ */
+/**
+ * ② 去白边：把一张截图智能裁到「内容包围盒」再写入项目 assets/。
+ *   用 sharp.trim() 去掉四周与角色像素同色的留白，随后配合模板 object-fit:cover
+ *   即可焦点填满 16:9，避免 pan 进空白。任何失败(格式/无内容)都优雅回退到原图拷贝。
+ *   注：只处理位图；mp4 不能 trim，直接拷贝。
+ */
+async function trimOrCopy(srcPath: string, destPath: string): Promise<void> {
+  if (/\.mp4$/i.test(srcPath)) {
+    await copyFile(srcPath, destPath)
+    return
+  }
+  try {
+    // threshold 越大越激进；用 sharp 探测边缘同色并裁掉。保留 alpha，输出保持原扩展名。
+    const out = await sharp(srcPath)
+      .trim({ threshold: 18 })
+      .toBuffer()
+    // 裁完若几乎为空(sharp 会返回极小图)则视作无效，回退原图
+    const meta = await sharp(out).metadata()
+    if ((meta.width ?? 0) >= 64 && (meta.height ?? 0) >= 64) {
+      await writeFile(destPath, out)
+      return
+    }
+  } catch {
+    // sharp 不可用 / 无可裁边界 / 解码失败 —— 回退到原图
+  }
+  await copyFile(srcPath, destPath)
+}
+
+/** 把 capture/assets 下的图片拷进项目 assets/（位图先去白边裁到内容包围盒） */
 async function copyAssets(srcAssetsDir: string, destAssetsDir: string): Promise<number> {
   await mkdir(destAssetsDir, { recursive: true })
   let count = 0
@@ -41,7 +70,7 @@ async function copyAssets(srcAssetsDir: string, destAssetsDir: string): Promise<
   }
   for (const f of files) {
     if (!/\.(png|jpe?g|webp|mp4)$/i.test(f)) continue
-    await copyFile(join(srcAssetsDir, f), join(destAssetsDir, f))
+    await trimOrCopy(join(srcAssetsDir, f), join(destAssetsDir, f))
     count++
   }
   return count

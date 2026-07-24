@@ -40,7 +40,26 @@ export interface PageTokens {
     maxArea?: number
   }>
   sections?: Array<Record<string, unknown>>
+  /**
+   * 结构化内容块：从 DOM 多读一层（成本低、不加渲染时间），供 compose 层用
+   * HTML/GSAP 原生重绘为主体场景（功能卡/logo 墙/定价/分区/指标），截图仅作点缀证据。
+   */
+  content?: PageContent
   page?: { width: number; height: number; viewport?: { width: number; height: number } }
+}
+
+/** 采集到的结构化内容块（全部来自真实 DOM 文本，绝不编造） */
+export interface PageContent {
+  /** 功能列表：标题 + 描述（就近的段落文本） */
+  features?: Array<{ title: string; desc: string }>
+  /** logo 墙：客户/合作方品牌名 */
+  logos?: string[]
+  /** 定价套餐：套餐名 + 价格串 */
+  pricing?: Array<{ name: string; price: string; features?: string[] }>
+  /** 分区标题（h2 文本） */
+  sections?: string[]
+  /** 指标数字：大数字 + 相邻标签 */
+  stats?: Array<{ value: string; label: string }>
 }
 
 /** 采集过程中每一步的语义快照（顺序 = 采集顺序），用于拼 visible-text.txt */
