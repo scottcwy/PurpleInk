@@ -154,6 +154,7 @@
 | `/api/director/pipeline` | POST, DELETE | body `{projectId}` | `@/features/director/advance` | `wired` |
 | `/api/director/stage` | POST | body `{projectId,nodeId,stage}` | `@/features/director/queue-handler` | `wired` |
 | `/api/director/stream/[nodeId]` | GET (SSE) | `nodeId` path + `projectId` query | `@/lib/stream/stream-bus` | `wired` |
+| `/api/director/stream/project/[projectId]` | GET (SSE) | `projectId` path | `@/lib/stream/status-bus` | `wired` |
 | `/api/share/[shareId]` | GET | `shareId` path | `@/features/share`（待建） | `planned` |
 | `/api/settings` | GET, POST | — | `@/features/ai/*`、`@/lib/queue/runtime-config` | `wired` |
 
@@ -190,9 +191,13 @@
 | --- | --- | --- | --- |
 | Artifact 下载 | `/api/artifacts/{artifactId}?projectId={projectId}` | `api/jobs/[id]`、`api/render/export`、`api/render/thumbnails`、`shots/[shotId]/page.tsx` | `ArtifactChip`、`ExportWorkspace`、`CanvasInspector` |
 | 阶段日志流 | `/api/director/stream/{nodeId}?projectId={projectId}` | `use-stage-stream.ts` | `StreamingLogCard` |
+| 项目状态流 | `/api/director/stream/project/{projectId}` | `use-project-status-stream.ts` | `CanvasView`（节点状态覆盖层 + 拓扑变更触发 refresh） |
 | worker 视频 | `${API_BASE}/jobs/{jobId}/video` | `src/lib/api.ts` | 下载/播放 |
 
-三条 URL 的所有 path 与 query 片段都必须 `encodeURIComponent`。ISSUE-009 已修复 `canvas-inspector.tsx` 与 `src/lib/api.ts` 的编码缺失。
+四条 URL 的所有 path 与 query 片段都必须 `encodeURIComponent`。ISSUE-009 已修复 `canvas-inspector.tsx` 与 `src/lib/api.ts` 的编码缺失。
+
+项目状态流与阶段日志流职责不同（状态事件 vs 文本增量），两者并存；静态段 `project`
+优先于动态段 `[nodeId]` 匹配，nodeId 为 UUID 不会与字面量 `project` 冲突（ISSUE-012）。
 
 没有真实 Artifact 时不允许渲染播放器、下载按钮或可点击的产物 chip。
 
