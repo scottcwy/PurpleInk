@@ -17,15 +17,19 @@ export function SettingsRow({ label, value, children, className }: SettingsRowPr
   return (
     <div
       className={cn(
-        'flex h-11 items-center justify-between px-4',
+        'flex h-11 min-w-0 items-center justify-between px-4',
         className,
       )}
     >
-      <span className="text-sm font-sc text-ds-text">{label}</span>
-      <div className="flex items-center gap-2">
-        {value && <span className="text-xs font-mono text-ds-text-muted">{value}</span>}
+      <span className="shrink-0 text-sm font-sc text-ds-text">{label}</span>
+      <div className="flex min-w-0 items-center justify-end gap-2">
+        {value && (
+          <span className="truncate text-xs font-mono text-ds-text-muted">
+            {value}
+          </span>
+        )}
         {children}
-        <ChevronRight className="size-4 text-ds-text-muted" />
+        <ChevronRight className="size-4 shrink-0 text-ds-text-muted" />
       </div>
     </div>
   )

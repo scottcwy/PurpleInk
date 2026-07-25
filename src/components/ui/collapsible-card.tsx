@@ -21,6 +21,8 @@ export interface CollapsibleCardProps {
   /** 展开态变化回调。 */
   onOpenChange?: (open: boolean) => void
   className?: string
+  /** 内容容器样式；用于组合 SettingsGroup 等公共内容原语。 */
+  bodyClassName?: string
   /** 内容区。 */
   children: ReactNode
 }
@@ -39,6 +41,7 @@ export function CollapsibleCard({
   open,
   onOpenChange,
   className,
+  bodyClassName,
   children,
 }: CollapsibleCardProps) {
   const [internalOpen, setInternalOpen] = useState(defaultOpen)
@@ -54,7 +57,7 @@ export function CollapsibleCard({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-md border border-separator bg-surface shadow-card',
+        'min-w-0 max-w-full overflow-hidden rounded-lg border border-ds-border bg-ds-surface text-ds-text shadow-sm',
         className,
       )}
     >
@@ -62,19 +65,19 @@ export function CollapsibleCard({
         type="button"
         onClick={toggle}
         aria-expanded={isOpen}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left"
+        className="flex min-h-12 w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-ds-surface-muted"
       >
-        {Icon && <Icon className="h-4 w-4 shrink-0 text-accent" />}
-        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold font-sc text-label">
+        {Icon && <Icon className="h-4 w-4 shrink-0 self-start text-ds-blue" />}
+        <span className="min-w-0 flex-1 text-sm font-semibold font-sc text-ds-text">
           {title}
         </span>
-        {meta && <span className="shrink-0 font-mono text-[11px] text-label-tertiary">{meta}</span>}
+        {meta && <span className="shrink-0 font-mono text-[11px] text-ds-text-muted">{meta}</span>}
         <motion.span
           animate={{ rotate: isOpen ? 0 : -90 }}
           transition={TRANSITION_BASE}
           className="shrink-0"
         >
-          <ChevronDown className="h-4 w-4 text-label-tertiary" />
+          <ChevronDown className="h-4 w-4 text-ds-text-muted" />
         </motion.span>
       </button>
       <AnimatePresence initial={false}>
@@ -87,7 +90,14 @@ export function CollapsibleCard({
             exit="hidden"
             className="overflow-hidden"
           >
-            <div className="border-t border-separator px-3 py-2">{children}</div>
+            <div
+              className={cn(
+                'border-t border-ds-border px-4 py-3',
+                bodyClassName,
+              )}
+            >
+              {children}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

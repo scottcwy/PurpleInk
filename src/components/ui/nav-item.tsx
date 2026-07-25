@@ -27,7 +27,12 @@ export function NavItem({
   compact,
 }: NavItemProps) {
   const icon = (
-    <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-accent' : 'text-label-secondary')} />
+    <Icon
+      className={cn(
+        'h-4 w-4 shrink-0',
+        active ? 'text-ds-blue' : 'text-ds-text-muted',
+      )}
+    />
   )
 
   const content = compact ? (
@@ -38,7 +43,9 @@ export function NavItem({
       <span
         className={cn(
           'text-[13px] font-sc',
-          active ? 'font-semibold text-label' : 'font-normal text-label-secondary',
+          active
+            ? 'font-semibold text-ds-text'
+            : 'font-normal text-ds-text-muted',
         )}
       >
         {children}
@@ -47,9 +54,9 @@ export function NavItem({
   )
 
   const classes = cn(
-    'flex h-8 items-center rounded-sm transition-colors duration-[var(--duration-fast)] ease-standard',
+    'flex h-8 items-center rounded-sm transition-colors duration-150 ease-out',
     compact ? 'w-8 justify-center px-0' : 'gap-2 px-2.5 py-1.5',
-    active ? 'bg-fill-strong' : 'bg-transparent',
+    active ? 'bg-ds-surface-muted' : 'bg-transparent',
     className,
   )
 

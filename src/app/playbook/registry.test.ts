@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   entriesByCategory,
@@ -47,6 +48,7 @@ const EXPECTED_PENCIL_FAMILIES = [
 const EXPECTED_UI_FAMILIES = [
   ...EXPECTED_PENCIL_FAMILIES,
   "resize-handle",
+  "settings-panel",
   "skeleton",
 ] as const;
 
@@ -54,7 +56,7 @@ describe("Track P playbook registry", () => {
   it("tracks the latest Pencil inventory and every translated application family", () => {
     expect(PENCIL_REUSABLE_SYMBOL_COUNT).toBe(113);
     expect(PENCIL_COMPONENT_FAMILY_COUNT).toBe(35);
-    expect(UI_COMPONENT_FAMILY_COUNT).toBe(37);
+    expect(UI_COMPONENT_FAMILY_COUNT).toBe(38);
     expect(
       entriesByCategory("ui")
         .map(({ id }) => id)
@@ -72,5 +74,14 @@ describe("Track P playbook registry", () => {
     expect(entriesByCategory("icons").map(({ id }) => id)).toEqual([
       "lucide-catalog",
     ]);
+  });
+
+  it("keeps icon-bearing SettingsPanel demos on the client boundary", () => {
+    const source = readFileSync(
+      "src/components/ui/settings-panel.demo.tsx",
+      "utf8",
+    );
+
+    expect(source.startsWith("'use client'")).toBe(true);
   });
 });

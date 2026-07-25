@@ -3,10 +3,15 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { ArtifactChip } from './artifact-chip'
 import { Button } from './button'
+import {
+  CollapsibleCard,
+  type CollapsibleCardProps,
+} from './collapsible-card'
 import { ProgressBar } from './progress-bar'
 import { ProjectCard } from './project-card'
 import { QueueStatusBar } from './queue-status-bar'
 import { SegmentedControl } from './segmented-control'
+import { SettingsPanel, type SettingsPanelProps } from './settings-panel'
 import { TextArea } from './text-area'
 import { TextField } from './text-field'
 import { Toggle } from './toggle'
@@ -26,6 +31,19 @@ describe('Pencil canonical components', () => {
       }),
       createElement(ProgressBar, { value: 50, label: 'Pipeline 进度' }),
       createElement(ArtifactChip, { filename: 'shot-source.json' }),
+      createElement(
+        CollapsibleCard,
+        { title: '模型服务' } as CollapsibleCardProps,
+        '配置内容',
+      ),
+      createElement(
+        SettingsPanel,
+        {
+          title: '运行与导出',
+          description: '独立滚动区中的折叠设置',
+        } as SettingsPanelProps,
+        '配置内容',
+      ),
       createElement(SegmentedControl, {
         options: [{ value: 'data', label: 'Data' }],
         value: 'data',
