@@ -1,0 +1,60 @@
+{
+  "capturedAt": "2026-07-25T07:35:00.000Z",
+  "projectId": "a816b03a-2f71-4243-baba-08061e9bf847",
+  "nodeId": "d6324a27-5376-46fa-af51-b57b05e0323b",
+  "queries": {
+    "artifacts": "select kind, version, lifecycle, schema_version, size_bytes, content_hash, storage_key from artifacts where project_id = $1 order by kind;",
+    "canvasNodes": "select id, type, stage, status, data->'payload'->>'directorArtifactId' as director_artifact_id, data->'payload'->>'directorError' as director_error from canvas_nodes where project_id = $1 order by stage, type;"
+  },
+  "artifacts": [
+    {
+      "kind": "director-ingest",
+      "version": 1,
+      "lifecycle": "draft",
+      "schema_version": "cvc.director-artifact/v1",
+      "size_bytes": 2427,
+      "content_hash": "e07aa2f129505d28a659000330c4827049c2195771a7f940ad899e0f16abed1f",
+      "storage_key": "director/a816b03a-2f71-4243-baba-08061e9bf847/d6324a27-5376-46fa-af51-b57b05e0323b/ingest-e07aa2f129505d28a659000330c4827049c2195771a7f940ad899e0f16abed1f.txt"
+    },
+    {
+      "kind": "director-stream-log",
+      "version": 1,
+      "lifecycle": "draft",
+      "schema_version": "cvc.director-stream-log/v1",
+      "size_bytes": 371,
+      "content_hash": "5af8ce7978a73a4f3b41e6205e04d6932801c620725e5763f6b27eb6014c1814",
+      "storage_key": "director-stream/a816b03a-2f71-4243-baba-08061e9bf847/d6324a27-5376-46fa-af51-b57b05e0323b/ingest.log"
+    },
+    {
+      "kind": "pi-session",
+      "version": 1,
+      "lifecycle": "draft",
+      "schema_version": "cvc.director-pointer/v1",
+      "size_bytes": 192,
+      "content_hash": "7909a06ded9590e6567a7ddf238eef65461119efed129b76c12ce5e3c3a41b60",
+      "storage_key": "pi-sessions/a816b03a-2f71-4243-baba-08061e9bf847/d6324a27-5376-46fa-af51-b57b05e0323b-b1af2a2f-6b52-4d06-a319-d7379353ebd6.jsonl",
+      "note": "content_hash 是 registerArtifactPointer 在 run() 之前对刚创建的 JSONL 打的指针快照；run() 期间会继续 appendMessage 追加消息，最终文件比该快照更大，这是设计如此（session 文件本身是可变的会话日志，pointer 只记录登记时刻的哈希，不是 lifecycle 不可变 artifact）。"
+    }
+  ],
+  "canvasNodesAtCapture": [
+    { "id": "d6324a27-5376-46fa-af51-b57b05e0323b", "type": "script-import", "stage": "INGEST", "status": "succeeded", "director_artifact_id": "3eb50946-be2e-40a0-9220-a37763e446b8", "director_error": null },
+    { "id": "36afbb89-9130-40b5-b5a3-82afbe33b8c7", "type": "shot-split", "stage": "DIRECT", "status": "idle", "director_artifact_id": null, "director_error": null },
+    { "id": "b867e8d5-d4b0-4914-9491-9a93ca48fa17", "type": "score", "stage": "ASSEMBLE", "status": "idle", "director_artifact_id": null, "director_error": null },
+    { "id": "bf3d9c05-b52c-47b7-a77f-e6694c2eb66d", "type": "export", "stage": "FINALIZE", "status": "idle", "director_artifact_id": null, "director_error": null }
+  ],
+  "localFileVerification": {
+    "director-ingest": {
+      "path": ".data/artifacts/director/a816b03a-2f71-4243-baba-08061e9bf847/d6324a27-5376-46fa-af51-b57b05e0323b/ingest-e07aa2f129505d28a659000330c4827049c2195771a7f940ad899e0f16abed1f.txt",
+      "sha256MatchesDbContentHash": true,
+      "sizeBytesMatchesDb": true
+    },
+    "pi-session-jsonl": {
+      "path": ".data/artifacts/pi-sessions/a816b03a-2f71-4243-baba-08061e9bf847/d6324a27-5376-46fa-af51-b57b05e0323b-b1af2a2f-6b52-4d06-a319-d7379353ebd6.jsonl",
+      "entryTypes": ["session", "message", "message"],
+      "containsThinking": false,
+      "containsGeminiApiKeyPlaintext": false,
+      "containsAIzaPrefix": false
+    }
+  },
+  "conclusion": "script-import(INGEST) 节点状态从 idle 经 POST /api/director/stage 入队，job 表 pending->running->done，节点最终落 status=succeeded，directorArtifactId 指向 director-ingest artifact；directorError 为空。下游 DIRECT/ASSEMBLE/FINALIZE 节点仍为 idle（本次未开 autopilot 自动推进，符合手动单阶段触发的预期）。"
+}

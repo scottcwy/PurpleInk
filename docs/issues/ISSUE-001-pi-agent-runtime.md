@@ -1,7 +1,7 @@
 # ISSUE-001 · Director pi-agent 运行时缺失，六阶段全部不可执行
 
 - 优先级：**P0（阻断）**
-- 状态：`open`
+- 状态：`done`（2026-07-25，见 §10）
 - 范围：前端画布 Director。**不得触碰 `server/**`**（后端是另一套独立智能体，见 `README.md` §0）
 - 依赖：无。本 issue 是整条链路的拱心石
 - 阻塞：ISSUE-002、ISSUE-005、ISSUE-014
@@ -254,3 +254,67 @@ src/features/director/
 ## 9. 交付后应立即解锁
 
 ISSUE-002（`shot-codegen` 接缝）。两者串起来才有第一个单镜 MP4。
+
+## 10. 修复记录（2026-07-25）
+
+### 10.1 版本核实结论
+
+`0.80.10` 未做偏离，直接采用。方法：在仓库外临时目录 `npm install` 该精确版本，
+读 `dist/**/*.d.ts` 并写探测脚本实跑（`Agent`、`AgentTool` 校验、
+`JsonlSessionStorage.create/open` + `Session.appendMessage/buildContext`、
+`createModels/createProvider/envApiKeyAuth`、`google-generative-ai.lazy` /
+`openai-completions.lazy`），确认与规格测试的 mock 假设完全一致。
+
+### 10.2 落地文件
+
+按 §7.2 建议拆分，`pi-session.ts` 保持对外导出面不变：
+
+- `pi-session.ts` — 会话装配与 `run()` 编排
+- `pi-provider.ts` — `DirectorModelTarget` → pi Provider/Model；gemini 剥
+  `/v1beta/openai/` 回原生 `/v1beta`，stepfun 走 `openai-completions`；
+  缺 Key 显式抛 `${Provider} API Key 未配置` 不兜底
+- `pi-tool-adapter.ts` — `DirectorTool` → `AgentTool`（JSON Schema 直接交给
+  pi 校验器，pi 的 `validateToolArguments` 对无 TypeBox Kind 符号的纯 JSON
+  Schema 有专门兼容路径，不需要新增第二套 schema 真值）
+- `pi-messages.ts` — 消息投影 + `thinking` 脱敏（落盘前过滤）
+- `pi-stream-bridge.ts` — `message_update` 增量前缀 diff → `streamBus`；
+  `message_end` → `appendMessage`
+- `session-store.ts` — 改为 `constructor(storage: StorageAdapter)`；
+  `storageKey` 恒为 `pi-sessions/` 前缀相对路径；`resume()` 校验前缀且解析
+  后仍在 root 内才放行
+
+删除：`tests/stage-a-unavailable.test.ts`；`vitest.config.ts` / `tsconfig.json`
+中锁定本 issue 的 4 条 exclude。
+
+### 10.3 验证结果
+
+| 项 | 结果 |
+| --- | --- |
+| `pnpm typecheck` | exit 0 |
+| `pnpm lint` | 通过 |
+| `pnpm test` | 100 files（98→100）/ 433 passed；`pi-session.test.ts` 8 例、`session-store.test.ts` 3 例全绿，未改一处断言 |
+| `pnpm verify:v3` | 违规数未增（仍是 baseline 既有 2 条超行）；`directOpenAiClientImports`=3、`canvasForbiddenImports`=15、`agentsSdk*`=0 均未超 debt cap |
+| `pnpm build` | 成功 |
+| grep `NOT_AVAILABLE_STAGE_A` | 全仓库无残留 |
+
+真实运行证据（`GEMINI_API_KEY` 经 `POST /api/settings` 真实 API 校验后写入
+Postgres 加密存储，对一个真实项目触发 `POST /api/director/stage` INGEST）：
+
+- Job：`pending → running → done`
+- SSE `/api/director/stream/{nodeId}`：收到 5 个真实 `delta` 增量事件 + `done`
+- `artifacts` 表：`director-ingest` / `director-stream-log` / `pi-session` 三条
+  记录，`content_hash` 与本机文件实际字节的 SHA-256 核对一致
+- `canvas_nodes`：`script-import` 节点 `status` 落 `succeeded`，
+  `directorArtifactId` 指向 `director-ingest`，`directorError` 为空
+- `pi-sessions/**.jsonl` 人工核对：**不含** `thinking` 内容、**不含** Gemini
+  Key 明文（含 `AIza` 前缀检测）
+
+证据文件：
+- `docs/issues/evidence/issue-001/http-ingest-run.json`（HTTP + SSE 全量事件）
+- `docs/issues/evidence/issue-001/sql-node-and-artifact-state.json`（SQL 查询
+  结果 + 本机文件哈希核对）
+
+### 10.4 遗留说明
+
+`pi-session.ts` 装配逻辑本身控制在 150 行内（未触及 250/350 行门禁），
+拆分后 5 个新文件均在目标值内，未产生新的超行债务。
