@@ -147,7 +147,6 @@ function graphNode(
     status,
     stage: null,
     data,
-    position: { x: 0, y: 0 },
     laneKey,
     laneRole: laneKey ? type : null,
   } as CanvasGraphNode

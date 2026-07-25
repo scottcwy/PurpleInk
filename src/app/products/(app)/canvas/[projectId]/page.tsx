@@ -6,6 +6,7 @@ import {
   getCanvasGraph,
   getProjectAutopilot,
   listProjects,
+  type PositionedCanvasNode,
 } from '@/features/canvas'
 import { PublishNavContext } from '@/features/navigation/nav-context'
 import { CanvasLoader } from './canvas-loader'
@@ -28,10 +29,11 @@ export default async function CanvasPage({ params }: CanvasPageProps) {
   }
 
   const positions = computeLayout(graph.nodes, graph.edges)
-  const nodes = graph.nodes.map((node) => ({
-    ...node,
-    position: positions.get(node.id) ?? node.position,
-  }))
+  const nodes: PositionedCanvasNode[] = graph.nodes.map((node) => {
+    const position = positions.get(node.id)
+    if (!position) throw new Error(`布局未能定位节点：${node.id}`)
+    return { ...node, position }
+  })
 
   return (
     <CanvasLoader

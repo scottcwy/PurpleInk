@@ -225,8 +225,6 @@ async function insertNode(
       logicalKey: `test:${id}`,
       type: 'shot-script',
       stage: 'SHOT_SPEC',
-      positionX: 0,
-      positionY: 0,
       data: versionedData(contentHash),
       status,
     })

@@ -99,7 +99,6 @@ function node(overrides: Partial<CanvasGraphNode>): CanvasGraphNode {
     stage: null,
     contentHash: null,
     data: {},
-    position: { x: 0, y: 0 },
     laneKey: null,
     laneRole: null,
     artifacts: [],

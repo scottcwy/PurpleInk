@@ -5,6 +5,7 @@ import type {
   CanvasGraphEdge,
   CanvasGraphNode,
   NodeStatus,
+  PositionedCanvasNode,
   ShotLaneNodeType,
 } from '@/features/canvas'
 import { cn } from '@/lib/utils'
@@ -81,7 +82,7 @@ export function buildLaneSummaries(nodes: readonly CanvasGraphNode[]): LaneSumma
 }
 
 export function toFlowNode(
-  node: CanvasGraphNode,
+  node: PositionedCanvasNode,
   hiddenNodeIds: Set<string>,
   collapsedLanes: Set<string>
 ): ViewNode {

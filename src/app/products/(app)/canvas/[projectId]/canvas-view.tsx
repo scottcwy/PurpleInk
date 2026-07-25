@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { QueueStatusBar } from '@/components/ui/queue-status-bar'
 import { Toast } from '@/components/ui/toast'
 import { TopBar } from '@/components/ui/top-bar'
-import type { CanvasGraphEdge, CanvasGraphNode } from '@/features/canvas'
+import type { CanvasGraphEdge, PositionedCanvasNode } from '@/features/canvas'
 import { fadeInUp } from '@/lib/motion/variants'
 import { usePublishNavContext } from '@/features/navigation/nav-context'
 import { productExportHref } from '@/features/navigation/products-routes'
@@ -38,7 +38,7 @@ export interface CanvasViewProps {
   projectId: string
   projectTitle: string
   autopilot: boolean
-  nodes: CanvasGraphNode[]
+  nodes: PositionedCanvasNode[]
   edges: CanvasGraphEdge[]
 }
 

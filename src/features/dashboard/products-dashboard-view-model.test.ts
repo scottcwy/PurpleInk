@@ -113,7 +113,6 @@ function node(
     stage: null,
     contentHash: null,
     data: {},
-    position: { x: 0, y: 0 },
     laneKey: type === 'shot-codegen' ? id : null,
     laneRole: null,
     artifacts: artifactIds.map((artifactId) => ({

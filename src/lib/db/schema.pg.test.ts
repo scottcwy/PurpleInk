@@ -44,15 +44,14 @@ async function seedCoreAndCanvas(): Promise<void> {
   `
   await database.sql`
     INSERT INTO canvas_nodes (
-      workspace_id, id, project_id, logical_key, type, stage, status,
-      position_x, position_y, data
+      workspace_id, id, project_id, logical_key, type, stage, status, data
     ) VALUES
       (${IDS.workspace}, ${IDS.sourceNode}, ${IDS.project}, 'source',
-        'script-import', 'INGEST', 'idle', 0, 0, '{"schemaVersion":1}'::jsonb),
+        'script-import', 'INGEST', 'idle', '{"schemaVersion":1}'::jsonb),
       (${IDS.workspace}, ${IDS.targetNode}, ${IDS.project}, 'target',
-        'shot-split', 'DIRECT', 'idle', 10, 10, '{"schemaVersion":1}'::jsonb),
+        'shot-split', 'DIRECT', 'idle', '{"schemaVersion":1}'::jsonb),
       (${IDS.otherWorkspace}, ${IDS.foreignNode}, ${IDS.otherProject}, 'foreign',
-        'script-import', 'INGEST', 'idle', 0, 0, '{"schemaVersion":1}'::jsonb)
+        'script-import', 'INGEST', 'idle', '{"schemaVersion":1}'::jsonb)
   `
 }
 

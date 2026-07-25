@@ -7,6 +7,7 @@ import {
   canvasNodes,
   projects,
 } from '@/lib/db/schema/index'
+import type { NodePosition } from './layout'
 import { canvasNodeTypeSchema } from './schemas'
 import { resolveExportSettings, type ExportSettings } from './export-settings'
 import type { CanvasNodeType, NodeStatus, Project } from './types'
@@ -30,12 +31,14 @@ export interface CanvasGraphNode {
   stage: string | null
   contentHash: string | null
   data: Record<string, unknown>
-  position: { x: number; y: number }
   laneKey: string | null
   laneRole: string | null
   artifacts: CanvasNodeArtifact[]
   directorError?: DirectorNodeError
 }
+
+/** 挂了渲染坐标的画布节点；坐标只来自 `computeLayout`，不是持久化字段。 */
+export type PositionedCanvasNode = CanvasGraphNode & { position: NodePosition }
 
 export interface CanvasGraphEdge {
   id: string
@@ -94,6 +97,26 @@ export async function getProjectAutopilot(projectId: string): Promise<boolean> {
 }
 /** 读取单个项目的画布投影；不会跨项目返回节点或边。 */
 export async function getCanvasGraph(projectId: string): Promise<CanvasGraph> {
+  // TEMP-ISSUE-012-MEASURE：临时插桩，测量结束后删除，不提交。
+  const measureStore = globalThis as unknown as {
+    __cvcGraphMeasure?: { count: number; durationsMs: number[] }
+  }
+  const measure = (measureStore.__cvcGraphMeasure ??= { count: 0, durationsMs: [] })
+  measure.count += 1
+  const measureStart = performance.now()
+  const measureSeq = measure.count
+  try {
+    return await getCanvasGraphInner(projectId)
+  } finally {
+    const elapsed = performance.now() - measureStart
+    measure.durationsMs.push(elapsed)
+    console.log(
+      `[ISSUE-012-MEASURE] getCanvasGraph #${measureSeq} project=${projectId} t=${Date.now()} ms=${elapsed.toFixed(1)}`
+    )
+  }
+}
+
+async function getCanvasGraphInner(projectId: string): Promise<CanvasGraph> {
   const database = await getDb()
   const nodeRows = await database
     .select({
@@ -102,8 +125,6 @@ export async function getCanvasGraph(projectId: string): Promise<CanvasGraph> {
       status: canvasNodes.status,
       stage: canvasNodes.stage,
       data: canvasNodes.data,
-      positionX: canvasNodes.positionX,
-      positionY: canvasNodes.positionY,
     })
     .from(canvasNodes)
     .where(
@@ -123,7 +144,6 @@ export async function getCanvasGraph(projectId: string): Promise<CanvasGraph> {
         contentHash:
           typeof data.contentHash === 'string' ? data.contentHash : null,
         data,
-        position: { x: node.positionX, y: node.positionY },
         laneKey: typeof data.laneKey === 'string' ? data.laneKey : null,
         laneRole: typeof data.laneRole === 'string' ? data.laneRole : null,
         artifacts: await getNodeArtifacts(projectId, node.id),

@@ -2,7 +2,6 @@ import { sql } from 'drizzle-orm'
 import {
   bigint,
   check,
-  doublePrecision,
   foreignKey,
   jsonb,
   pgTable,
@@ -57,8 +56,6 @@ export const canvasNodes = pgTable(
     type: text('type').notNull(),
     stage: text('stage').notNull(),
     status: text('status').default('idle').notNull(),
-    positionX: doublePrecision('position_x').notNull(),
-    positionY: doublePrecision('position_y').notNull(),
     data: jsonb('data').$type<VersionedPayload>().notNull(),
     revision: bigint('revision', { mode: 'number' }).default(0).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
