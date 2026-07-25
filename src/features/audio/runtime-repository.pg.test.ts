@@ -3,7 +3,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
 import {
   artifacts,
-  canvasNodes,
   pipelineRuns,
   projects,
   taskAttempts,
@@ -118,16 +117,8 @@ async function seedWorkspace(
     workflowVersion: 'test-v1',
     exportSettings: { schemaVersion: 1 },
   })
-  await db.insert(canvasNodes).values({
-    workspaceId,
-    id: NODE_ID,
-    projectId: PROJECT_ID,
-    logicalKey: 'global:script-import',
-    type: 'script-import',
-    stage: 'INGEST',
-    data: { schemaVersion: 1 },
-    status: 'succeeded',
-  })
+  // loadNarration 只按 workspace/project/kind 查 artifacts，不 join canvas_nodes，
+  // 因此 fixture 也不播种画布节点：依赖面必须与实现一致。
   await db.insert(pipelineRuns).values({
     workspaceId,
     id: RUN_ID,
