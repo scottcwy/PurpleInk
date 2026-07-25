@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "debtCaps": {
-    "directOpenAiClientImports": 3,
+    "directOpenAiClientImports": 1,
     "canvasForbiddenImports": 15,
     "triggerTaskForbiddenImports": 0
   },
