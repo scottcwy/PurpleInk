@@ -4,6 +4,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ReleaseStepNav } from "@/app/(product)/_components/release-step-nav";
 import { UnwiredPanel } from "@/app/(product)/_components/unwired-panel";
+import {
+  STAGE_B_WORKFLOW_NODES,
+  WORKFLOW_BLUEPRINT_EDGES,
+} from "@/features/workflow/blueprint-model";
 
 const ROUTE_FILES = [
   "src/app/(product)/login/page.tsx",
@@ -39,7 +43,7 @@ describe("M6 route shells", () => {
       createElement(ReleaseStepNav, {
         releaseId: "release/1",
         current: "evidence",
-      }),
+      })
     );
 
     for (const step of [
@@ -63,7 +67,7 @@ describe("M6 route shells", () => {
         title: "真实证据",
         description: "未来在这里审阅真实采集证据。",
         sources: ["CaptureRun", "NodeEvidence"],
-      }),
+      })
     );
 
     expect(html).toContain("该页尚未接线（Stage B）");
@@ -71,5 +75,25 @@ describe("M6 route shells", () => {
     expect(html).toContain("NodeEvidence");
     expect(html).not.toContain("100%");
     expect(html).not.toContain("审批通过");
+  });
+
+  it("keeps the seven-node Pencil workflow honest while Stage B is disconnected", () => {
+    expect(STAGE_B_WORKFLOW_NODES).toHaveLength(7);
+    expect(WORKFLOW_BLUEPRINT_EDGES).toHaveLength(7);
+    expect(
+      STAGE_B_WORKFLOW_NODES.every((node) => node.status === "unwired")
+    ).toBe(true);
+    expect(
+      STAGE_B_WORKFLOW_NODES.every((node) => node.artifact === undefined)
+    ).toBe(true);
+    expect(STAGE_B_WORKFLOW_NODES.map((node) => node.title)).toEqual([
+      "开始",
+      "项目规划",
+      "镜头生成",
+      "媒体处理",
+      "画面渲染",
+      "视觉 QA",
+      "项目合成",
+    ]);
   });
 });

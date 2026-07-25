@@ -1,0 +1,90 @@
+:root {
+  --ds-gradient-start: #ffffff;
+  --ds-gradient-mid: #f1f3ff;
+  --ds-gradient-end: #dce3ff;
+  --ds-surface: #fafbfff2;
+  --ds-surface-muted: #e8ecfa;
+  --ds-border: #d2d9ee;
+  --ds-text: #171a2e;
+  --ds-text-muted: #68728f;
+  --ds-primary: #202a5b;
+  --ds-blue: #4e5fa8;
+  --ds-blue-soft: #e5e9ff;
+  --ds-green: #168f63;
+  --ds-green-soft: #e9f8f2;
+  --ds-red: #c4475b;
+  --ds-red-soft: #f2deda;
+  --ds-magenta: #f23886;
+  --ds-canvas: #e8ecfa;
+  --ds-button-start: #3a4788;
+  --ds-button-end: #1c244f;
+  --ds-shadow: 0 10px 28px #25305a1f;
+  --ds-button-shadow: 0 6px 16px #25305a1f;
+}
+
+.dark {
+  --ds-gradient-start: #03040a;
+  --ds-gradient-mid: #080912;
+  --ds-gradient-end: #23295c;
+  --ds-surface: #0d0e13f2;
+  --ds-surface-muted: #171820;
+  --ds-border: #292b35;
+  --ds-text: #f1f1f4;
+  --ds-text-muted: #9696a3;
+  --ds-primary: #403778;
+  --ds-blue: #8d8daa;
+  --ds-blue-soft: #1c1d2b;
+  --ds-green: #63b28e;
+  --ds-green-soft: #122a22;
+  --ds-red: #de7c91;
+  --ds-red-soft: #3a2421;
+  --ds-canvas: #080910;
+  --ds-button-start: #594f94;
+  --ds-button-end: #302762;
+  --ds-shadow: 0 10px 28px #00000066;
+  --ds-button-shadow: 0 6px 16px #00000052;
+}
+
+@theme inline {
+  --color-ds-surface: var(--ds-surface);
+  --color-ds-surface-muted: var(--ds-surface-muted);
+  --color-ds-border: var(--ds-border);
+  --color-ds-text: var(--ds-text);
+  --color-ds-text-muted: var(--ds-text-muted);
+  --color-ds-primary: var(--ds-primary);
+  --color-ds-blue: var(--ds-blue);
+  --color-ds-blue-soft: var(--ds-blue-soft);
+  --color-ds-green: var(--ds-green);
+  --color-ds-green-soft: var(--ds-green-soft);
+  --color-ds-red: var(--ds-red);
+  --color-ds-red-soft: var(--ds-red-soft);
+  --color-ds-canvas: var(--ds-canvas);
+}
+
+.ds-app-gradient {
+  background: linear-gradient(
+    180deg,
+    var(--ds-gradient-start) 0%,
+    var(--ds-gradient-mid) 52%,
+    var(--ds-gradient-end) 100%
+  );
+}
+
+.ds-dot-grid {
+  background-color: var(--ds-canvas);
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--ds-text-muted) 20%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 20px 20px;
+}
+
+.ds-primary-button {
+  background: linear-gradient(
+    135deg,
+    var(--ds-button-start) 0%,
+    var(--ds-button-end) 100%
+  );
+  box-shadow: var(--ds-button-shadow);
+}
