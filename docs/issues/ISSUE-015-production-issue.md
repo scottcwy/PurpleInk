@@ -1,7 +1,7 @@
 # ISSUE-015 · Docker 生产部署前置问题与分批修复清单
 
 - 优先级：**P0（阻断上线）**
-- 状态：`in-progress`（P-1 已完成，见 §9）
+- 状态：`in-progress`（P-1/P-2/P-6/P-7 已完成，见 §9）
 - 范围：`next.config.ts`、`.dockerignore`、`Dockerfile`、生产 compose、
   `src/lib/queue/**`、`src/features/render/{encode,concat}.ts`、
   `src/app/api/settings/route.ts`、`scripts/verify/`、`docs/deployment/`
@@ -12,13 +12,18 @@
 
 ## 0. 结论
 
-「文本 → 成片」链路本身已经端到端跑通（ISSUE-014 §9），但**部署面是空的**：
-仓库没有 `Dockerfile`、没有生产 compose，只有一个开发用 Postgres compose。
-除此之外还有两类问题：
+「文本 → 成片」链路本身已经端到端跑通（ISSUE-014 §9）。**部署面已落盘**
+（P-6/P-7，见 §9）：`Dockerfile`、`server/Dockerfile`、
+`docker-compose.prod.yml`、反代（`deploy/reverse-proxy/`）均已构建并实测通过；
+入站边界已由部署层收敛（P-2）。**剩余阻塞项为成片音轨（P-3）**。除此之外
+还有一类问题：
 
-1. **两个真正的上线阻塞项**——零认证、成片无音轨。它们都不是部署配置能绕过的。
-2. **一批在开发机成立、在容器里不成立的运行时假设**——CPU 核数、Chromium 沙箱、
-   CJK 字体、生产构建的日志剥离、渲染缓存的字体无关性。
+1. **一个真正的上线阻塞项**——成片无音轨（P-3，`decision`，未启动）。零认证
+   已由 P-2 在部署层收敛为"受信网络 + Basic Auth"，应用内认证仍是独立议题
+   （见 §2.1「当前处置」与 `PLAN-002-auth-system.md`）。
+2. **一批在开发机成立、在容器里不成立的运行时假设**——CPU 核数（P-4，`todo`）、
+   Chromium 沙箱与 CJK 字体（P-6，`done`）、生产构建的日志剥离（P-1，`done`）、
+   渲染缓存的字体无关性（P-7 运行手册已提示，见 `docs/deployment/runbook.md` §6）。
 
 本文件按「会不会挡住上线」排序记录证据，并在 §9 给出可逐项派发的分批修复清单。
 
@@ -26,19 +31,32 @@
 
 | 项 | 实测结果 |
 | --- | --- |
-| `Dockerfile` / 生产 compose | **不存在** |
+| `Dockerfile` / 生产 compose | **已落盘**：根 `Dockerfile`（Next，四阶段）、`server/Dockerfile`（worker，两阶段）、`docker-compose.prod.yml`（commit `6e34a01` / `ca8f19d`） |
 | `.dockerignore` | 原本不存在，已由 P-1 补上 |
-| `docker-compose.dev.yml` | 仅 1 个 `postgres:17.5-alpine`，口令 `cvc_dev_only`，端口只绑 `127.0.0.1:54328` |
-| `output: 'standalone'` | 未启用 |
-| `engines` 字段 | 无 |
+| `docker-compose.dev.yml` | 仅 1 个 `postgres:17.5-alpine`，口令 `cvc_dev_only`，端口只绑 `127.0.0.1:54328`（生产 compose 不继承） |
+| `output: 'standalone'` | 未启用（P-6 §2.4 首版推荐路径：整份 `node_modules` 进运行镜像，体积大但零风险） |
+| `engines` 字段 | 已补 `"node": ">=22.11.0"`（commit `6e34a01`），容器实测 `node -v` = `v22.23.1` |
 | `packageManager` | `pnpm@10.30.0` |
-| 认证守卫 | 全仓库零命中（详见 §2.1） |
-| `final-mp4` 音轨 | 无（详见 §2.2） |
-| 队列位置 | Next 进程内（`src/instrumentation.ts` → `initQueue()`） |
+| 认证守卫 | **分层表述**：入站边界已由部署层保证（反代 IP 过滤 + Basic Auth over TLS，commit `f5a7ab3`）；应用内认证仍未落地，详见 §2.1「当前处置」与 `PLAN-002-auth-system.md` |
+| `final-mp4` 音轨 | 无（详见 §2.2，P-3 未启动） |
+| 队列位置 | 不变，仍在 Next 进程内（`src/instrumentation.ts` → `initQueue()`） |
 
 ## 2. 阻塞项
 
 ### 2.1 零认证，不得暴露公网
+
+**当前处置（P-2，commit `f5a7ab3`）**：入站已由部署层拒绝未授权请求——反代
+（`deploy/reverse-proxy/Caddyfile`）在网络层 IP 过滤 + Basic Auth over TLS
+两道防线上默认拒绝（不做路径白名单），`next` / `postgres` / `worker` 容器均
+不 publish 端口，反代是唯一暴露面。证据见 `docs/issues/evidence/issue-015/p2/`。
+
+**明确写清残留风险**：P-2 只是把「公网任意人」收敛成「受信网络内 + 拿到共享
+口令的任意人」——**不等于应用内认证已实现**。拿到凭据的任何人仍是全权管理员
+（无租户、无角色、无审计）；产物 URL 仍携带内部 `projectId`；
+`LOCAL_WORKSPACE_ID` 仍是硬编码单工作区。下面的问题描述保留作为历史证据，
+应用内认证是独立议题，见 `PLAN-002-auth-system.md`。
+
+---
 
 `docs/conventions/routing.md` §9.1 原文已写明：守卫是目标状态、不是已实现状态，
 **认证落地前只能跑在本地或受信网络内，不得直接暴露公网**。
@@ -239,22 +257,37 @@ model routing 与 job 状态机——不要在 Dockerfile 里图省事共用一�
 
 ---
 
-### P-2 · 定接入策略并落地边界防护 —— `decision` + `todo`
+### P-2 · 定接入策略并落地边界防护 —— `done`
 
 **这是所有后续步骤的硬前提**（§2.1）。
 
-- **需要你先决策**：反代 Basic Auth / mTLS / IP allowlist / 仅内网 + VPN，四选一或组合。
-- **落点**：部署层（反代配置 / compose network），**不改 `src/**`**。
-- **做法要点**：
-  - Next 容器不直接对外，只对反代暴露；
+**决策结论**：网络层 IP 过滤（默认放行，生产收紧）+ 反代 Basic Auth over TLS
+（Caddy）。理由：客户端画布状态订阅用同源 `EventSource`
+（`use-project-status-stream.ts`、`use-stage-stream.ts`），**它不能设置自定义
+请求头**——任何要求 `Authorization: Bearer <token>` 的方案都会打断 SSE，因此
+排除 header token 与需要签发端的 Cookie 会话方案（后者等于在部署层做半个
+认证系统，违反本项禁区）。Basic Auth 走浏览器原生凭据缓存，同源请求（含
+`EventSource`）自动带上，对前端代码零侵入。反代选 Caddy：内置自动 TLS，
+`basic_auth` 与 `remote_ip` 匹配器能力足够。详见 `docs/deployment/access.md`。
+
+- **commit**：`f5a7ab3`
+- **落点**：部署层（`deploy/reverse-proxy/`、`docker-compose.prod.yml`），
+  **未改 `src/**`**（`docs/conventions/routing.md` §9.1 追加一段除外，属文档）。
+- **做法要点**（均已落地）：
+  - Next 容器不写 `ports:`，只对反代暴露；
   - Postgres 不映射宿主端口；
-  - 反代需放行 SSE（不缓冲、长连接）。
-- **验收**：
+  - 反代放行 SSE：`flush_interval -1`，不启用 gzip/encode。
+- **验收**（已核销，证据见 `docs/issues/evidence/issue-015/p2/`）：
   - 未携带凭据时 `POST /api/settings`、`POST /api/director/pipeline`、
-    `GET /api/artifacts/*` 均被反代拒绝，留真实 HTTP 证据；
-  - 携带凭据后画布 SSE 能正常收到 `node-status` 帧（证明反代未破坏流式）。
+    `GET /api/artifacts/{id}?projectId=`、`GET /api/ping` 四条实测均返回
+    401（`Www-Authenticate: Basic realm="restricted"`），反代 access log 有
+    完整记录，同一时间窗内 `next` 容器日志对这三个关键字零命中；
+  - 携带凭据后 `GET /api/director/stream/project/{projectId}` 立即收到
+    `snapshot` 事件，空闲超过 15s 后仍收到 `: keepalive`（证明未被缓冲、
+    未被提前断流）；
+  - 宿主对 Postgres 端口的连接测得 `TcpTestSucceeded: False`。
 - **禁区**：不要在本项里实现应用内认证。那会牵动 routing.md §9 守卫矩阵与
-  `LOCAL_WORKSPACE_ID` 单工作区模型，必须单开 issue。
+  `LOCAL_WORKSPACE_ID` 单工作区模型，必须单开 issue（见 `PLAN-002-auth-system.md`）。
 
 ---
 
@@ -314,48 +347,76 @@ model routing 与 job 状态机——不要在 Dockerfile 里图省事共用一�
 
 ---
 
-### P-6 · 写 Dockerfile —— `blocked`（等 P-2 决策；P-4 兜底可先用 env）
+### P-6 · 写 Dockerfile —— `done`
 
-- **落点**：`Dockerfile`（新增）、`docs/deployment/`（新增说明文档）
-- **做法要点**：
-  - 基础镜像用与 `playwright@1.61.1` 匹配的官方 Playwright 镜像，或自行
-    `playwright install --with-deps chromium` 并钉死版本；
-  - **显式安装 CJK 字体**（§3.3 第 3 点）；
-  - **以非 root 用户运行**（§3.3 第 1 点）；
-  - 镜像内 `pnpm install`（`--frozen-lockfile`），不得拷宿主 `node_modules`；
-  - Node 版本钉死；建议同时给 `package.json` 补 `engines`；
-  - 若启用 `output: 'standalone'`，必须实测 `serverExternalPackages` 三个包被带出；
-  - 保留 `tsx` 以便迁移/bootstrap 脚本可跑，或为迁移单独做一个含完整依赖的 init 阶段。
-- **验收**：
-  - 容器内 `chromium.launch()` 成功（非 root、无 `--no-sandbox`）；
-  - 容器内渲一镜，抽帧目视确认中文**不是**豆腐块；
-  - `ffmpeg-static` 的二进制存在且可执行；
-  - `node -v` 与钉死版本一致。
+**基础镜像选型结论**：计划草稿推荐的选项 A（`mcr.microsoft.com/playwright:v1.62.0-noble` /
+`:v1.62.0`）实测 `docker pull` 均 `not found`（两个 tag 都试过）。改走选项 B：
+`node:22-bookworm-slim` + `playwright install-deps chromium` + 非 root `playwright
+install chromium`（浏览器版本按 `node_modules` 实际安装版本对齐，不硬编码
+`package.json` 声明的 `^1.61.1`）。CJK 字体从 `fonts-noto-cjk` 改为 `fonts-wqy-zenhei`
+（前者 60.2MB 单文件在本仓库构建网络环境下反复下载失败，后者 7.5MB 稳定成功且同样覆盖中文字形）。
 
----
-
-### P-7 · 生产 compose 与运行时配置 —— `blocked`（等 P-6）
-
-- **落点**：`docker-compose.prod.yml`（新增）、`docs/deployment/`
-- **做法要点**：
-  - `replicas: 1`（§3.1），recreate 而非滚动更新，给足 `stop_grace_period`；
-  - `DATA_DIR` 指向持久卷；**用全新 artifacts 目录，不复用开发机的**（§3.4）；
-  - Postgres 换强口令、不映射 5822/5432 到宿主、独立持久卷；
-  - 显式设两个并发配额 env（P-4 兜底）；
-  - `CVC_CREDENTIAL_MASTER_KEY` 走 secret，不进镜像层与 compose 明文；
-  - 迁移用 init 容器/一次性任务执行，**连续跑两次**（§6）；
-  - 决定是否部署 worker（§7）；不部署时营销页 Try 会 502，需接受或临时隐藏入口。
-- **验收**：
-  - `pnpm db:migrate` 连续两次均成功，第二次无变更；
-  - 容器重启后 artifacts 与 DB 数据都还在；
-  - `docker compose config` 中不含任何明文 secret。
+- **commit**：`6e34a01`
+- **镜像**：`purpleink-dev-next`（5.29GB）、`purpleink-dev-worker`（5.13GB）、
+  `purpleink-dev-reverse-proxy`（82.9MB）
+- **`node -v` 实测**：`v22.23.1`（两个镜像一致，满足新补 `engines.node >=22.11.0`）
+- **`output: 'standalone'` 取舍结论**：未启用，首版采用 §2.4 推荐路径（整份
+  `node_modules` 进运行镜像，体积大但零风险）
+- **做法要点**（均已落地）：
+  - **显式安装 CJK 字体**（`fonts-wqy-zenhei`）；
+  - **以非 root 用户运行**（`pwuser`，uid 999），不加 `--no-sandbox`；
+  - 镜像内 `pnpm install --frozen-lockfile`，未拷宿主 `node_modules`；
+  - Node 版本钉死（`node:22-bookworm-slim`），`package.json` 已补 `engines`；
+  - 未启用 `output: 'standalone'`，无需验证 `serverExternalPackages` 带出；
+  - 迁移单独一个 `migrate` stage（保留 devDependencies 含 `tsx`）。
+- **构建期连带发现并修复的两个真实 bug**（非 P-6 计划内条目，详见
+  `docs/issues/evidence/issue-015/p6/README.md` §7）：根 `package.json` 缺
+  `@next/env` 直接依赖声明（已用 `pnpm add -w` 补上）；`node_modules/.bin/{next,tsx}`
+  是 pnpm 生成的 POSIX shell shim，`node <shim>` 会报语法错误（两个 Dockerfile 的
+  `CMD` 已改为直接调用入口）。
+- **验收**（已核销，证据见 `docs/issues/evidence/issue-015/p6/`）：
+  - 容器内 `chromium.launch()` 成功（`id` 输出 `uid=999(pwuser)`，无 `--no-sandbox`）；
+  - 容器内渲一帧，抽帧目视确认中文不是豆腐块（存图 `p6/cjk-frame.png`）；
+  - `ffmpeg-static` 二进制存在且可执行（`ffmpeg version 7.0.2-static` 有输出）；
+  - `node -v` = `v22.23.1`，与 `engines.node` 一致。
 
 ---
 
-### P-8 · 生产环境端到端验收 —— `blocked`（等 P-7）
+### P-7 · 生产 compose 与运行时配置 —— `done`
 
-- **落点**：`scripts/verify/e2e-smoke.ts`（已存在，复用）、
-  `docs/issues/evidence/issue-015/`
+- **commit**：`ca8f19d`
+- **是否部署 worker**：**一起部署**。`docker-compose.prod.yml` 含 `worker` 服务，
+  不 publish 端口，`next` 经 `BACKEND_ORIGIN=http://worker:8787` 内网访问；
+  独立 env、独立健康检查，不与 `next` 共用配置（AGENTS.md §0 硬边界）。
+- **两个并发配额 env 实际取值**：`docker-compose.prod.yml` 用 `${VAR:?错误提示}`
+  语法强制要求显式设置 `CVC_QUEUE_RENDER_SHOT_CONCURRENCY` 与
+  `CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY`，缺失时 compose 直接拒绝启动；本地
+  验证值为 `1`，生产按 `docs/deployment/runbook.md` §3 根据容器 `--cpus` 上限设置。
+- **迁移两次的输出路径**：`docs/issues/evidence/issue-015/p7/README.md` §1
+  （完整命令行与输出）。
+- **做法要点**（均已落地）：
+  - `replicas: 1`（§3.1），recreate 而非滚动更新，`stop_grace_period: 120s`；
+  - `DATA_DIR` 指向 `cvc_data` 持久卷（全新卷，不复用开发机的，§3.4）；
+  - Postgres 用 `${POSTGRES_PASSWORD:?}` 强制要求强口令、不映射任何宿主端口、独立持久卷；
+  - `CVC_CREDENTIAL_MASTER_KEY` 运行期从宿主 `.env`（已 gitignore）注入，不进镜像层与 compose 明文；
+  - 迁移用单独 `migrate` 服务（一次性任务，`depends_on: postgres healthy`）执行，
+    **连续跑两次**均成功且第二次无变更；
+  - `docs/deployment/runbook.md` 已写明非正常重启后 `running` 记录需人工核对
+    （P-5 未落地的提醒）、卷备份建议、凭据轮换步骤。
+- **验收**（已核销，证据见 `docs/issues/evidence/issue-015/p7/`）：
+  - `pnpm db:migrate`（`docker compose run --rm migrate`）连续两次均成功，
+    第二次只有幂等 NOTICE，无实际 DDL 变更；
+  - 容器重启（`down` + `up`）后新建项目仍可通过 `GET /api/projects` 查到，
+    DB 数据完整；
+  - `docker compose config` 在未设真实值环境下全文搜不到明文 secret
+    （`secrets:` 顶层只暴露文件路径）。
+
+---
+
+### P-8 · 生产环境端到端验收 —— `todo`（前置 P-7 已满足）
+
+- **落点**：`scripts/verify/e2e-smoke.ts`（已存在，复用；已支持
+  `CVC_VERIFY_BASIC_AUTH` 反代凭据注入）、`docs/issues/evidence/issue-015/`
 - **做法**：起服务 → 设置页写入凭据（真实 API 校验）→
   `pnpm verify:e2e --base-url <生产地址>`。
 - **验收**：
