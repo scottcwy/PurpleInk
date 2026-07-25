@@ -42,3 +42,52 @@ describe('queue 单例与 initQueue 的 globalThis 锚定', () => {
     expect(store.__cvcQueueInitialized).toBe(true)
   })
 })
+
+describe('resolveLaneQuotas', () => {
+  beforeEach(() => {
+    clearAnchors()
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    clearAnchors()
+    vi.resetModules()
+  })
+
+  it('returns no overrides when env vars are unset or blank', async () => {
+    const { resolveLaneQuotas } = await import('./init')
+    expect(resolveLaneQuotas({})).toEqual({})
+    expect(
+      resolveLaneQuotas({
+        CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY: '',
+        CVC_QUEUE_RENDER_SHOT_CONCURRENCY: '   ',
+      })
+    ).toEqual({})
+  })
+
+  it('parses valid env overrides for known lanes', async () => {
+    const { resolveLaneQuotas } = await import('./init')
+    expect(
+      resolveLaneQuotas({
+        CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY: '4',
+        CVC_QUEUE_RENDER_SHOT_CONCURRENCY: '2',
+      })
+    ).toEqual({ 'director-stage': 4, 'render-shot': 2 })
+  })
+
+  it('rejects zero, negative, non-integer, and non-numeric overrides', async () => {
+    const { resolveLaneQuotas } = await import('./init')
+    expect(() =>
+      resolveLaneQuotas({ CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY: '0' })
+    ).toThrow()
+    expect(() =>
+      resolveLaneQuotas({ CVC_QUEUE_RENDER_SHOT_CONCURRENCY: '-1' })
+    ).toThrow()
+    expect(() =>
+      resolveLaneQuotas({ CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY: '1.5' })
+    ).toThrow()
+    expect(() =>
+      resolveLaneQuotas({ CVC_QUEUE_RENDER_SHOT_CONCURRENCY: 'abc' })
+    ).toThrow()
+  })
+})

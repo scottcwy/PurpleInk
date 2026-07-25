@@ -1,13 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto'
 import os from 'node:os'
-import { and, asc, eq, like } from 'drizzle-orm'
+import { and, asc, eq, like, notInArray } from 'drizzle-orm'
 import { getDb, LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
 import { pipelineRuns, taskAttempts } from '@/lib/db/schema/index'
 import {
   ACTIVE_WORKFLOW_VERSION,
   serializeWorkflowVersion,
 } from '@/lib/workflow/version'
-import type { JobHandler, QueueAdapter, QueueJob } from './types'
+import type { JobHandler, LaneQuotas, QueueAdapter, QueueJob } from './types'
 
 interface LegacyQueueCheckpoint {
   schemaVersion: number
@@ -15,10 +15,50 @@ interface LegacyQueueCheckpoint {
   payload: Record<string, unknown>
 }
 
+/** 未在 `start(lanes)` 中显式配额的 kind 落入此通道，固定配额 1。 */
+const FALLBACK_LANE = '__fallback__'
+const FALLBACK_LANE_QUOTA = 1
+
+export const DEFAULT_DIRECTOR_STAGE_CONCURRENCY = 12
+
+export function defaultRenderShotConcurrency(): number {
+  return Math.max(1, Math.floor(os.cpus().length / 2))
+}
+
+function defaultLaneQuotas(): Record<string, number> {
+  return {
+    'director-stage': DEFAULT_DIRECTOR_STAGE_CONCURRENCY,
+    'render-shot': defaultRenderShotConcurrency(),
+  }
+}
+
+export function isPositiveInteger(value: number): boolean {
+  return Number.isInteger(value) && value >= 1
+}
+
+function resolveLanes(lanes: LaneQuotas): Record<string, number> {
+  const resolved = defaultLaneQuotas()
+  for (const [kind, quota] of Object.entries(lanes)) {
+    if (quota === undefined) continue
+    resolved[kind] = quota
+  }
+  for (const [kind, quota] of Object.entries(resolved)) {
+    if (!isPositiveInteger(quota)) {
+      throw new Error(
+        `legacy queue lane quota for kind "${kind}" must be a positive integer, got: ${quota}`
+      )
+    }
+  }
+  return resolved
+}
+
+type ClaimFilter = { kind: string } | { excludeKinds: string[] }
+
 export class InProcessQueue implements QueueAdapter {
   private readonly handlers = new Map<string, JobHandler>()
   private timer: ReturnType<typeof setInterval> | null = null
-  private running = 0
+  private readonly running = new Map<string, number>()
+  private lanes: Record<string, number> = {}
 
   async enqueue(
     kind: string,
@@ -61,9 +101,11 @@ export class InProcessQueue implements QueueAdapter {
     this.handlers.set(kind, handler)
   }
 
-  start(concurrency = Math.max(1, os.cpus().length)): void {
+  start(lanes: LaneQuotas = {}): void {
+    const resolved = resolveLanes(lanes)
     if (this.timer) return
-    this.timer = setInterval(() => void this.tick(concurrency), 200)
+    this.lanes = resolved
+    this.timer = setInterval(() => void this.tick(), 200)
   }
 
   stop(): void {
@@ -73,20 +115,47 @@ export class InProcessQueue implements QueueAdapter {
     }
   }
 
-  private async tick(concurrency: number): Promise<void> {
-    while (this.running < concurrency) {
-      const job = await this.claim()
+  private async tick(): Promise<void> {
+    const knownKinds = Object.keys(this.lanes)
+    await Promise.all([
+      ...knownKinds.map((kind) =>
+        this.drainLane(kind, this.lanes[kind]!, { kind })
+      ),
+      this.drainLane(FALLBACK_LANE, FALLBACK_LANE_QUOTA, {
+        excludeKinds: knownKinds,
+      }),
+    ])
+  }
+
+  /** 在单个通道内按配额领取作业；`laneKey` 是并发计数的桶，不一定等于作业的真实 kind（兜底通道混装多个未登记 kind）。 */
+  private async drainLane(
+    laneKey: string,
+    quota: number,
+    filter: ClaimFilter
+  ): Promise<void> {
+    while ((this.running.get(laneKey) ?? 0) < quota) {
+      const job = await this.claim(filter)
       if (!job) return
-      this.running += 1
+      this.running.set(laneKey, (this.running.get(laneKey) ?? 0) + 1)
       void this.run(job).finally(() => {
-        this.running -= 1
+        this.running.set(laneKey, (this.running.get(laneKey) ?? 0) - 1)
       })
     }
   }
 
-  private async claim(): Promise<QueueJob | null> {
+  private async claim(filter: ClaimFilter): Promise<QueueJob | null> {
     const database = await getDb()
     return database.transaction(async (transaction) => {
+      const kindCondition =
+        'kind' in filter
+          ? eq(taskAttempts.taskId, `legacy.${filter.kind}`)
+          : and(
+              like(taskAttempts.taskId, 'legacy.%'),
+              notInArray(
+                taskAttempts.taskId,
+                filter.excludeKinds.map((kind) => `legacy.${kind}`)
+              )
+            )
       const [row] = await transaction
         .select({
           id: taskAttempts.id,
@@ -100,7 +169,7 @@ export class InProcessQueue implements QueueAdapter {
           and(
             eq(taskAttempts.workspaceId, LOCAL_WORKSPACE_ID),
             eq(taskAttempts.status, 'queued'),
-            like(taskAttempts.taskId, 'legacy.%')
+            kindCondition
           )
         )
         .orderBy(asc(taskAttempts.createdAt), asc(taskAttempts.id))

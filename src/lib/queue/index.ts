@@ -9,5 +9,5 @@ const globalStore = globalThis as unknown as { __cvcQueue?: InProcessQueue }
 export const queue: InProcessQueue = (globalStore.__cvcQueue ??= new InProcessQueue())
 
 export { InProcessQueue } from './in-process-queue'
-export type { JobHandler, JobStatus, QueueAdapter, QueueJob } from './types'
+export type { JobHandler, JobStatus, LaneQuotas, QueueAdapter, QueueJob } from './types'
 export { getJobSnapshot, type JobSnapshot } from './query'
