@@ -123,11 +123,11 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
 | --- | --- | --- | --- |
 | [ISSUE-006](./ISSUE-006-dormant-pipeline-layer.md) | `src/features/pipeline/**` 整层休眠，是第三套执行模型 | `open` | `src/features/pipeline/**`、`vitest.config.ts`、`tsconfig.json` |
 | [ISSUE-007](./ISSUE-007-duplicate-canvas.md) | 两套画布实现并存（`WorkflowCanvas` vs `CanvasView`） | `done` | `src/features/workflow/**`、`src/app/playbook/registry.ts` |
-| [ISSUE-008](./ISSUE-008-canvas-layout-truth.md) | dagre 每次重算布局，覆盖已持久化坐标 | `done` | `src/features/canvas/layout.ts`、`canvas/[projectId]/page.tsx`（方案 A2，删列，证据 `evidence/issue-008/`） |
+| [ISSUE-008](./ISSUE-008-canvas-layout-truth.md) | dagre 每次重算布局，覆盖已持久化坐标 | `done` | `src/features/canvas/layout.ts`、`canvas/[projectId]/page.tsx`（方案 A2，删列，commit `6aa3b52` + merge `79ef9b2`，证据 `evidence/issue-008/`） |
 | [ISSUE-009](./ISSUE-009-routing-convergence.md) | routing.md §11 收敛清单未清（编码、robots、sitemap、token） | `done` | `canvas-inspector.tsx`、`robots.ts`、`sitemap.ts`、`empty-state.tsx`、`button.tsx`（commit `94af7d3`，证据 `evidence/issue-009/`） |
 | [ISSUE-010](./ISSUE-010-oversized-files.md) | 2 个超硬上限文件使 `verify:v3` 恒红 | `done` | `export-workspace.tsx`、`shot-detail.tsx` |
 | [ISSUE-011](./ISSUE-011-settings-placeholders.md) | 设置页占位项与只读并发数 | `done` | `settings-form.tsx`、`runtime-concurrency-panel.tsx`、`runtime-config.ts`、`route.ts` |
-| [ISSUE-012](./ISSUE-012-canvas-live-updates.md) | 画布靠 1.5s `router.refresh()` 轮询驱动状态 | `open` | `canvas-view.tsx`、`src/lib/stream/**` |
+| [ISSUE-012](./ISSUE-012-canvas-live-updates.md) | 画布靠 1.5s `router.refresh()` 轮询驱动状态 | `in-progress` | `canvas-view.tsx`、`src/lib/stream/**` |
 | [ISSUE-013](./ISSUE-013-ai-adapter-boundary.md) | `features/ai` 适配器与 pi-ai 会形成第二套 provider 客户端 | `in-progress` | `src/features/ai/**`、`src/features/render/vision-qa.ts` |
 
 ### 贯穿
@@ -156,8 +156,9 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
   ISSUE-005  done · 71f1de4 + 171f692 · 真实 TTS 前移到 INGEST，时长实测取证
              （单镜 MP4 时长对比仍待 ISSUE-002 打通渲染接缝后补，已在文件内登记）
   ISSUE-011  需要 004 才有真实可配的并发数（004 已 done，可提前）
-  ISSUE-008  done · 方案 A2（删列）· 分支 issue-008-canvas-layout-truth（隔离
-             worktree，未合并/未提交，详见 issue 文件 §9）· 证据 evidence/issue-008/
+  ISSUE-008  done · commit 6aa3b52 + merge 79ef9b2 · 方案 A2（删列）
+             （隔离 worktree + 独立 Postgres 完成，详见 issue 文件 §9）
+             · 证据 evidence/issue-008/
   ISSUE-012  独立收尾
 
 全程

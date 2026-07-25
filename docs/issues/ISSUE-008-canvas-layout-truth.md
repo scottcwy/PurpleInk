@@ -232,3 +232,17 @@ rebase 后重新跑过一遍完整验证（隔离 Postgres 已清空重建，验
 
 结论不变：ISSUE-008 范围内改动全部验证通过；rebase 后暴露的 4 项新失败均已逐一
 核实为与本 issue 无关的既有问题，据实记录、不在本 issue 内修复。
+
+### 9.6 合并落地
+
+`issue-008-canvas-layout-truth` 分支提交 `6aa3b52`，rebase 到 `master`（当时 HEAD
+`0c89855`）后以 `--no-ff` 合并，产生合并提交 `79ef9b2`。合并时 `master` 工作区里有
+另一并发会话对 `src/features/render/render.pg-fixture.ts`、`src/features/canvas/queries.ts`
+等文件的未提交改动挡路，经确认后用 `git stash push -u -m
+concurrent-session-wip-before-issue008-merge-20260725` 暂存（stash SHA
+`8b1e43ef3a2d43aa3f9c7ac8a51cc9d9ae55e818`）完成合并；尝试用 `git stash apply` 把该
+stash 放回时，`queries.ts` 与 `render.pg-fixture.ts` 两个文件产生真实文本冲突（对方
+新增的字段/插桩与本 issue 删除的坐标字段落在同一处），未替对方决定如何取舍，已用
+`git reset --hard HEAD` 干净撤回，**stash 条目原样保留、未 drop**，交还给该并发会话
+自行 `git stash apply 8b1e43ef3a2d43aa3f9c7ac8a51cc9d9ae55e818` 后手动解决。
+合并后在主目录重跑 `pnpm typecheck`，exit 0。
