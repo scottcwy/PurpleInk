@@ -40,9 +40,8 @@ import { ExportNodeDemo } from "@/components/ui/node/export-node.demo";
 import { StageNodeDemo } from "@/components/ui/node/stage-node.demo";
 import { ShotNodeDemo } from "@/components/ui/node/shot-node.demo";
 import { TooltipDemo } from "@/components/ui/tooltip.demo";
-import { WorkflowCanvasDemo } from "@/features/workflow/workflow-canvas.demo";
 
-export type PlaybookCategory = "ui" | "icons" | "patterns";
+export type PlaybookCategory = "ui" | "icons";
 
 export interface PlaybookEntry {
   id: string;
@@ -231,12 +230,6 @@ export const PLAYBOOK_ENTRIES: PlaybookEntry[] = [
     name: "Lucide 白名单",
     category: "icons",
     Demo: LucideCatalogDemo,
-  },
-  {
-    id: "workflow-canvas",
-    name: "WorkflowCanvas",
-    category: "patterns",
-    Demo: WorkflowCanvasDemo,
   },
 ];
 

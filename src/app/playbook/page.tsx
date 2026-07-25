@@ -12,7 +12,6 @@ const CATEGORIES = [
     desc: "设计 token：色板 / 字体 / 圆角 / 间距",
   },
   { id: "ui", title: "UI 组件", desc: "已进入应用公共边界的 37 个组件族" },
-  { id: "patterns", title: "Patterns", desc: "工作流等可组合页面模式" },
   { id: "icons", title: "Icons", desc: "Pencil A4 · Lucide 白名单" },
 ] as const;
 

@@ -85,11 +85,12 @@
 | --- | --- | --- |
 | `/playbook` | `src/app/playbook/page.tsx` | `wired` |
 | `/playbook/ui` | `src/app/playbook/ui/page.tsx` | `wired`（37 组件族） |
-| `/playbook/patterns` | `src/app/playbook/patterns/page.tsx` | `wired`（1 项） |
 | `/playbook/icons` | `src/app/playbook/icons/page.tsx` | `wired`（Pencil A4 图标白名单） |
 | `/playbook/foundations` | `src/app/playbook/foundations/page.tsx` | `wired`，但无 registry 分类 |
 
-`/playbook/foundations` 是手写 token 展示页，`PlaybookCategory` 只有 `ui | icons | patterns`。这是已知不一致：foundations 要么补进 registry，要么在索引页标注它不是组件登记页。
+`/playbook/foundations` 是手写 token 展示页，`PlaybookCategory` 只有 `ui | icons`。这是已知不一致：foundations 要么补进 registry，要么在索引页标注它不是组件登记页。
+
+`/playbook/patterns` 与 `patterns` 分类已于 2026-07-25（ISSUE-007）整体删除：唯一登记项 `WorkflowCanvas` 是脚手架期硬编码 fixture（`STAGE_B_WORKFLOW_NODES`），未被 `docs/designs/Design-system-inventory.md` 登记为必需组合，且其内联的两个 disabled 按钮与「`ProductFlowVersion`/`FlowNode`」文案引用了 §12 已作废的 Release 六步模型实体。删除后不留空分类占位，见 §2.5。
 
 ### 2.5 已收敛
 
@@ -102,6 +103,7 @@
 | `/products/[productId]` | 无（未接线空壳） |
 | `/releases`、`/releases/[releaseId]/{brief,flow,evidence,storyboard,review,artifacts,sources,render}` | `/release` 单页占位 |
 | `(product)` 路由组整体（含 `ProductAppShell`、`ProductSidebar`、`ReleaseStepNav`、`ProductPageHeader`） | `(auth)` + `(public)` + `products/(app)` |
+| `/playbook/patterns`（含 `patterns` 分类、`src/features/workflow/**`） | 无（ISSUE-007：分类整体移除，无设计真值要求保留） |
 
 `/releases/[releaseId]/artifacts` 与 L1 的 `/artifacts` 曾有语义冲突，这批删除同时解决了它。
 
@@ -360,7 +362,7 @@ Project（可变，L3 内部）
 
 错误与未找到边界（`not-found.tsx` ×2、`error.tsx`、`global-error.tsx`、`route-status.tsx`）已落盘，见 §3.1。
 
-已完成、无需再处理（见 §2.5）：`/legacy/*`、根 `/dashboard`、`/products/[productId]`、整个 `(product)` 路由组。占位组件已收敛到 `src/app/_components/{unwired-panel,route-shell-page}.tsx`；`WorkflowCanvas` 的唯一挂载点转为 `/playbook/patterns`。`src/app/README.md` 记录路由树现状。
+已完成、无需再处理（见 §2.5）：`/legacy/*`、根 `/dashboard`、`/products/[productId]`、整个 `(product)` 路由组、`/playbook/patterns`（含 `WorkflowCanvas`，ISSUE-007）。占位组件已收敛到 `src/app/_components/{unwired-panel,route-shell-page}.tsx`。`src/app/README.md` 记录路由树现状。
 
 ## 12. 归档：已作废的 Release 六步规范
 

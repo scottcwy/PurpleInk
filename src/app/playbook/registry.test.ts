@@ -64,12 +64,6 @@ describe("Track P playbook registry", () => {
     ).toEqual([...EXPECTED_UI_FAMILIES].sort());
   });
 
-  it("registers the canonical workflow composition as a pattern, not a primitive", () => {
-    expect(entriesByCategory("patterns").map(({ id }) => id)).toEqual([
-      "workflow-canvas",
-    ]);
-  });
-
   it("keeps the icon whitelist as a catalog rather than a visual primitive", () => {
     expect(entriesByCategory("icons").map(({ id }) => id)).toEqual([
       "lucide-catalog",

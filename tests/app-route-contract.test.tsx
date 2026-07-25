@@ -3,10 +3,6 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { UnwiredPanel } from '@/app/_components/unwired-panel'
-import {
-  STAGE_B_WORKFLOW_NODES,
-  WORKFLOW_BLUEPRINT_EDGES,
-} from '@/features/workflow/blueprint-model'
 
 /** docs/conventions/routing.md §2 的路由表。改路由必须先改文档，再改这里。 */
 const ROUTE_FILES = [
@@ -51,6 +47,8 @@ const RETIRED_PATHS = [
   'src/app/dashboard',
   'src/app/products/[productId]',
   'src/app/releases',
+  'src/app/playbook/patterns',
+  'src/features/workflow',
 ] as const
 
 describe('src/app 路由契约', () => {
@@ -133,26 +131,6 @@ describe('src/app 路由契约', () => {
     expect(html).not.toContain('100%')
     expect(html).not.toContain('审批通过')
     expect(html).not.toContain('Stage B')
-  })
-
-  it('Playbook 的 workflow 图谱保持诚实', () => {
-    expect(STAGE_B_WORKFLOW_NODES).toHaveLength(7)
-    expect(WORKFLOW_BLUEPRINT_EDGES).toHaveLength(7)
-    expect(
-      STAGE_B_WORKFLOW_NODES.every((node) => node.status === 'unwired'),
-    ).toBe(true)
-    expect(
-      STAGE_B_WORKFLOW_NODES.every((node) => node.artifact === undefined),
-    ).toBe(true)
-    expect(STAGE_B_WORKFLOW_NODES.map((node) => node.title)).toEqual([
-      '开始',
-      '项目规划',
-      '镜头生成',
-      '媒体处理',
-      '画面渲染',
-      '视觉 QA',
-      '项目合成',
-    ])
   })
 
   it('站点身份是 PurpleInk 而不是历史模板', () => {

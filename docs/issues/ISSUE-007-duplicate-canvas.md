@@ -1,10 +1,22 @@
 # ISSUE-007 · 两套画布实现并存（`WorkflowCanvas` vs `CanvasView`）
 
 - 优先级：**P2**
-- 状态：`open`
+- 状态：`done`
 - 范围：`src/features/workflow/**`、`src/app/playbook/registry.ts`
 - 依赖：无。**可第一批并行**，与 P0 三条文件零重叠
 - 性质：需要先决策（保留为组件登记样例 / 删除），再动手
+
+## 0. 决策记录（2026-07-25）
+
+**选定方案 A（删除），并把删除范围从「仅清空 `patterns` 分类」扩大为「整体移除 `patterns` 分类与 `/playbook/patterns` 路由」。**
+
+核实结论：
+
+1. 核对 `docs/designs/Design-system-inventory.md` 全文：只登记了 `PipelineNode/Canonical`（symbol `Qsovp`，单节点组件，消费点 "C2 Pipeline / S3"），**没有任何条目要求保留 `WorkflowCanvas` 这个整图组合样例**。方案 C 的前置条件不成立，排除。
+2. 核对 `src/components/ui/pipeline-node.tsx` 的引用面：它有独立的 `pipeline-node.demo.tsx`，且在 `registry.ts` 以 `ui` 分类独立登记（`registry.test.ts` 的 `EXPECTED_PENCIL_FAMILIES` 包含 `pipeline-node`）。它**不是仅被 `WorkflowCanvas` 使用**，因此第 5 节修复范围表第 7 行的条件不成立——`PipelineNode` 组件及其 demo 保留，不删除。
+3. 第 7 节验收标准第 4 条「全仓库 grep `PipelineNodeStatus` 零命中」与上一条结论冲突（`PipelineNodeStatus` 类型定义并使用在保留的 `pipeline-node.tsx` 内）。修正解读：该条只约束 `STAGE_B_WORKFLOW_NODES`/`CANONICAL_WORKFLOW_NODES`/`WORKFLOW_BLUEPRINT_EDGES` 这三个 workflow 专属 fixture 零命中，`PipelineNodeStatus` 允许在存活的 `pipeline-node.tsx` 中继续存在。
+4. `/playbook/page.tsx` 的 Patterns 分类卡片文案（"工作流等可组合页面模式"）在删除后若只清空 `patterns/page.tsx` 内容，会产生验收标准第 5 条明确禁止的「空分类占位」。因此扩大删除范围：连同 `PlaybookCategory` 的 `patterns` 值、`/playbook/patterns` 路由、首页 Patterns 卡片一并删除，而不是保留路由显示"暂无登记项"。
+5. 额外发现（原 ISSUE 未列出）：`tests/app-route-contract.test.tsx` 直接 `import { STAGE_B_WORKFLOW_NODES, WORKFLOW_BLUEPRINT_EDGES } from '@/features/workflow/blueprint-model'` 并有整段断言（"Playbook 的 workflow 图谱保持诚实"），删除 `blueprint-model.ts` 前必须同步移除该 import 与断言块，并把 `src/app/playbook/patterns`、`src/features/workflow` 加入该文件的 `RETIRED_PATHS` 锁存清单。
 
 ## 1. 症状
 

@@ -122,7 +122,7 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
 | ID | 标题 | 状态 | 主要落点 |
 | --- | --- | --- | --- |
 | [ISSUE-006](./ISSUE-006-dormant-pipeline-layer.md) | `src/features/pipeline/**` 整层休眠，是第三套执行模型 | `open` | `src/features/pipeline/**`、`vitest.config.ts`、`tsconfig.json` |
-| [ISSUE-007](./ISSUE-007-duplicate-canvas.md) | 两套画布实现并存（`WorkflowCanvas` vs `CanvasView`） | `open` | `src/features/workflow/**`、`src/app/playbook/registry.ts` |
+| [ISSUE-007](./ISSUE-007-duplicate-canvas.md) | 两套画布实现并存（`WorkflowCanvas` vs `CanvasView`） | `done` | `src/features/workflow/**`、`src/app/playbook/registry.ts` |
 | [ISSUE-008](./ISSUE-008-canvas-layout-truth.md) | dagre 每次重算布局，覆盖已持久化坐标 | `open` | `src/features/canvas/layout.ts`、`canvas/[projectId]/page.tsx` |
 | [ISSUE-009](./ISSUE-009-routing-convergence.md) | routing.md §11 收敛清单未清（编码、robots、sitemap、token） | `open` | `canvas-inspector.tsx`、`robots.ts`、`sitemap.ts`、`empty-state.tsx`、`button.tsx` |
 | [ISSUE-010](./ISSUE-010-oversized-files.md) | 2 个超硬上限文件使 `verify:v3` 恒红 | `open` | `export-workspace.tsx`、`shot-detail.tsx` |
