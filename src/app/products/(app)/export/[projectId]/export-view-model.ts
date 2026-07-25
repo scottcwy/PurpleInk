@@ -1,3 +1,8 @@
+import {
+  EXPORT_RESOLUTION_PRESETS,
+  type ResolutionPreset,
+} from '@/features/canvas/export-settings'
+
 export interface TimelineClip {
   start: number
   width: number
@@ -7,6 +12,19 @@ export interface TimelineClip {
 const CLIP_WIDTH = 92
 const CLIP_GAP = 8
 const TRACK_INSET = 4
+
+const RESOLUTION_TIER_LABEL: Record<ResolutionPreset, string> = {
+  '1080x1920': '高清',
+  '720x1280': '标清',
+  '540x960': '流畅',
+}
+
+export function buildResolutionOptions() {
+  return Object.keys(EXPORT_RESOLUTION_PRESETS).map((value) => ({
+    value,
+    label: RESOLUTION_TIER_LABEL[value as ResolutionPreset],
+  }))
+}
 
 /** 将真实分镜通道投影为 Pencil S5 的时间线片段。 */
 export function buildShotClips(laneKeys: readonly string[]): TimelineClip[] {

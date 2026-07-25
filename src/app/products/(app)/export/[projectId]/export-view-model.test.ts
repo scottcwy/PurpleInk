@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildShotClips, fullTrackClip } from './export-view-model'
+import {
+  buildResolutionOptions,
+  buildShotClips,
+  fullTrackClip,
+} from './export-view-model'
 
 describe('export view model', () => {
   it('projects the real lane count instead of a six-shot demo constant', () => {
@@ -15,5 +19,13 @@ describe('export view model', () => {
       { start: 4, width: 292, label: '配音' },
     ])
     expect(fullTrackClip('配音', 0)).toEqual([])
+  })
+
+  it('projects every supported resolution preset to its existing tier label', () => {
+    expect(buildResolutionOptions()).toEqual([
+      { value: '1080x1920', label: '高清' },
+      { value: '720x1280', label: '标清' },
+      { value: '540x960', label: '流畅' },
+    ])
   })
 })
