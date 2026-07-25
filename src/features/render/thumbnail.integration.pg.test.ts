@@ -5,6 +5,7 @@ import { readFile, rm } from 'node:fs/promises'
 import { and, eq } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { artifacts, canvasNodes } from '@/lib/db/schema/index'
+import { MASTER_HEIGHT, MASTER_WIDTH } from '@/features/canvas/contracts'
 import {
   createPgTestDatabase,
   type PgTestDatabase,
@@ -51,10 +52,10 @@ beforeEach(async () => {
           laneKey: 'S001',
           laneRole: 'shot-codegen',
           renderSpec: {
-            fps: 24,
+            fps: 30,
             durationInFrames: 12,
-            width: 320,
-            height: 180,
+            width: MASTER_WIDTH,
+            height: MASTER_HEIGHT,
           },
         },
       },
