@@ -125,7 +125,7 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
 | [ISSUE-007](./ISSUE-007-duplicate-canvas.md) | 两套画布实现并存（`WorkflowCanvas` vs `CanvasView`） | `done` | `src/features/workflow/**`、`src/app/playbook/registry.ts` |
 | [ISSUE-008](./ISSUE-008-canvas-layout-truth.md) | dagre 每次重算布局，覆盖已持久化坐标 | `open` | `src/features/canvas/layout.ts`、`canvas/[projectId]/page.tsx` |
 | [ISSUE-009](./ISSUE-009-routing-convergence.md) | routing.md §11 收敛清单未清（编码、robots、sitemap、token） | `open` | `canvas-inspector.tsx`、`robots.ts`、`sitemap.ts`、`empty-state.tsx`、`button.tsx` |
-| [ISSUE-010](./ISSUE-010-oversized-files.md) | 2 个超硬上限文件使 `verify:v3` 恒红 | `open` | `export-workspace.tsx`、`shot-detail.tsx` |
+| [ISSUE-010](./ISSUE-010-oversized-files.md) | 2 个超硬上限文件使 `verify:v3` 恒红 | `done` | `export-workspace.tsx`、`shot-detail.tsx` |
 | [ISSUE-011](./ISSUE-011-settings-placeholders.md) | 设置页占位项与只读并发数 | `open` | `settings-form.tsx` |
 | [ISSUE-012](./ISSUE-012-canvas-live-updates.md) | 画布靠 1.5s `router.refresh()` 轮询驱动状态 | `open` | `canvas-view.tsx`、`src/lib/stream/**` |
 | [ISSUE-013](./ISSUE-013-ai-adapter-boundary.md) | `features/ai` 适配器与 pi-ai 会形成第二套 provider 客户端 | `open` | `src/features/ai/**`、`src/features/render/vision-qa.ts` |

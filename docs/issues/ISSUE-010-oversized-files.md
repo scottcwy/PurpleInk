@@ -1,7 +1,7 @@
 # ISSUE-010 · 2 个超硬上限文件使 `verify:v3` 恒红
 
 - 优先级：**P2**
-- 状态：`open`
+- 状态：`done`
 - 范围：2 个文件及其拆出的兄弟文件
 - 依赖：无。**可第一批并行**
 - 性质：纯结构拆分，无行为变更
@@ -134,3 +134,14 @@ AGENTS.md 明令：
 
 这条门禁一旦转绿，后续所有 issue 就都能用「`verify:v3` 违规数不增加」作为客观判据。
 因此**建议第一批就做掉**，它是其他 issue 验收标准的基础设施。
+
+## 9. 完成证据（2026-07-25）
+
+- `shot-detail.tsx`：525 → 144 行；
+- `export-workspace.tsx`：389 → 107 行；
+- 新增生产文件：73 / 188 / 109 / 52 / 234 行，均不超过 250；
+- `pnpm verify:v3`：exit 0，`violations: []`；
+- `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build`：exit 0；
+- 全量测试：100 files / 434 tests passed；
+- Chromium 1440×1000 前后截图逐文件 SHA-256 完全相同，console error 为 0；
+- 详细证据：[`docs/issues/evidence/issue-010/baseline.md`](./evidence/issue-010/baseline.md)。

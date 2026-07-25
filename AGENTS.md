@@ -110,12 +110,8 @@ pnpm db:migrate
 - 一个文件只有一个主要变化原因。
 - 碰到硬上限或职责混杂，必须在**当前 Task** 内按 domain / application / infrastructure / UI 的真实职责拆分并复用公共代码。禁止只套 re-export 壳、把大段代码搬到别处或制造循环依赖来规避门禁。
 
-已知欠债（`pnpm verify:v3` 当前为红，不是新引入的）：
-
-- `src/app/products/(app)/shots/[shotId]/shot-detail.tsx` 525 行；
-- `src/app/products/(app)/export/[projectId]/export-workspace.tsx` 389 行。
-
-改动这两个文件所在的模块时必须顺带拆分；不得在它们上面继续加行。
+`pnpm verify:v3` 的 architecture violations 必须保持为空；不得把新超限文件写入
+baseline 来掩盖门禁。
 
 编码规则：
 
