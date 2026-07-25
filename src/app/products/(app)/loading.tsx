@@ -18,7 +18,7 @@ export default function AppLoading() {
         </div>
         <Skeleton className="h-8 w-28" />
       </div>
-      <div className="mx-auto flex max-w-[1160px] flex-col gap-6 p-5 sm:p-8">
+      <div className="flex w-full flex-col gap-6 px-4 py-5 sm:px-7 sm:py-6">
         <Skeleton className="h-10 w-full max-w-md" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Skeleton className="h-28 rounded-md" />

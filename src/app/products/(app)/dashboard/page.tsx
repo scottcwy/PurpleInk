@@ -34,20 +34,20 @@ export default async function ProductsDashboardPage() {
           meta="本地项目与 Pipeline 运行概览"
           actions={<NewProjectDialog />}
         />
-        <div className="mx-auto flex max-w-[1280px] flex-col gap-[18px] p-5 sm:p-8">
+        <div className="flex w-full flex-col gap-6 px-4 py-5 sm:px-7 sm:py-6">
           <header className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h1 className="text-[28px] font-bold tracking-[-0.03em]">统计</h1>
+              <h1 className="text-xl font-semibold tracking-tight">统计</h1>
               <p className="mt-1 text-xs text-ds-text-muted">
                 查看真实项目、Pipeline 与 Artifact 当前快照。
               </p>
             </div>
-            <p className="text-[11px] text-ds-text-muted">{dashboard.updatedLabel}</p>
+            <p className="text-xs text-ds-text-muted">{dashboard.updatedLabel}</p>
           </header>
           <ProjectStatisticsPanel
             metrics={dashboard.metrics}
             statusDistribution={dashboard.statusDistribution}
-            trendUnavailableLabel="暂无可用历史快照"
+            trendUnavailableLabel="尚无历史快照可绘制"
             updatedLabel={dashboard.updatedLabel}
           />
           <RecentProjectsPanel projects={dashboard.recentProjects.slice(0, 3)} />
