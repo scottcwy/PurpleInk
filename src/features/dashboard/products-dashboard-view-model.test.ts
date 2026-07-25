@@ -66,6 +66,24 @@ describe('buildProductsDashboardView', () => {
     expect(view.recentProjects).toEqual([])
     expect(view.updatedLabel).toBe('暂无项目快照')
   })
+
+  it('counts an active pipeline even when the same project also has a failed node', () => {
+    const projects = [project('mixed', '混合状态', '2026-07-25T10:00:00.000Z')]
+    const graphs = new Map<string, CanvasGraph>([
+      [
+        'mixed',
+        graph([
+          node('failed', 'shot-codegen', 'failed'),
+          node('running', 'shot-qa', 'running'),
+        ]),
+      ],
+    ])
+
+    const view = buildProductsDashboardView(projects, graphs)
+
+    expect(view.metrics[1]?.value).toBe('1')
+    expect(view.statusDistribution.failed).toBe(1)
+  })
 })
 
 function project(id: string, title: string, updatedAt: string): Project {

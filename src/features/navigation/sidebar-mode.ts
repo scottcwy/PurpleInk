@@ -1,4 +1,5 @@
 import type { AppSection } from './types'
+import { resolveProductsSection } from './products-routes'
 
 export type SidebarMode = 'expanded' | 'rail' | 'hidden'
 
@@ -18,10 +19,5 @@ export function resolveSidebarMode(
  * 切页时侧栏据此高亮，不依赖页面传参；canvas 子路由必须先于 canvas 根匹配。
  */
 export function resolveActiveSection(pathname: string): AppSection {
-  if (pathname.startsWith('/products/shots/')) return 'renderer'
-  if (pathname.startsWith('/products/export/')) return 'export'
-  if (pathname.startsWith('/products/canvas/')) return 'canvas'
-  if (pathname.startsWith('/products/projects')) return 'projects'
-  if (pathname.startsWith('/products/settings')) return 'settings'
-  return 'workbench'
+  return resolveProductsSection(pathname)
 }

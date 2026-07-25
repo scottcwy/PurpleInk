@@ -58,7 +58,13 @@ export function buildProductsDashboardView(
     }
     const status = projectStatus(graph)
     statusDistribution[status] += 1
-    if (status === 'running') activePipelines += 1
+    if (
+      graph.nodes.some(
+        (node) => node.status === 'pending' || node.status === 'running',
+      )
+    ) {
+      activePipelines += 1
+    }
     return {
       id: project.id,
       title: project.title,

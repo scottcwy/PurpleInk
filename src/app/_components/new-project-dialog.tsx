@@ -53,12 +53,12 @@ export function NewProjectDialog({ featured = false }: NewProjectDialogProps) {
       {featured ? (
         <Button
           variant="gray"
-          className="h-24 w-full flex-col gap-2 rounded-lg border border-separator bg-surface"
+          className="h-24 w-full flex-col gap-2 rounded-lg"
           onClick={() => setOpen(true)}
         >
-          <Plus className="h-7 w-7 text-accent" />
-          <span className="text-[17px] text-label-secondary">粘贴一段文字稿，开始创作</span>
-          <span className="text-xs font-normal text-label-tertiary">
+          <Plus className="size-7 text-ds-blue" />
+          <span className="text-[17px] text-ds-text">粘贴一段文字稿，开始创作</span>
+          <span className="text-xs font-normal text-ds-text-muted">
             支持导入 .txt / .md，可选上传配音作为时间地基
           </span>
         </Button>
@@ -70,9 +70,8 @@ export function NewProjectDialog({ featured = false }: NewProjectDialogProps) {
       <Dialog
         open={open}
         onClose={() => !submitting && setOpen(false)}
-        title="新建项目"
-        description="粘贴你的文字稿，AI 将按语义自动拆分为分镜节点。"
-        className="w-[560px]"
+        title="创建项目"
+        description="规划开始前，源文本会先保存为版本化项目 Snapshot。"
         actions={
           <>
             <Button variant="gray" onClick={() => setOpen(false)} disabled={submitting}>
@@ -84,7 +83,7 @@ export function NewProjectDialog({ featured = false }: NewProjectDialogProps) {
           </>
         }
       >
-        <form id="new-project-form" className="flex flex-col gap-4 p-4" onSubmit={handleSubmit}>
+        <form id="new-project-form" className="flex flex-col gap-3.5" onSubmit={handleSubmit}>
           <TextField
             label="项目名称"
             placeholder="例如：RAG 十分钟入门"
@@ -93,33 +92,35 @@ export function NewProjectDialog({ featured = false }: NewProjectDialogProps) {
             className="w-full"
           />
           <TextArea
-            label="文字稿"
+            label="源文本"
             placeholder={SCRIPT_PLACEHOLDER}
             value={script}
             onChange={(event) => setScript(event.target.value)}
-            className="w-full"
+            className="w-full [&>textarea]:min-h-[220px]"
           />
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-[13px] text-label">
-              <AudioLines className="h-4 w-4 text-stage-audio" />
+          <div className="rounded-md bg-ds-surface-muted p-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-[13px] text-ds-text">
+                <AudioLines className="size-4 text-ds-blue" />
               <span>配音（可选）</span>
-              <span className="text-xs text-label-tertiary">作为全片时间地基</span>
+                <span className="text-xs text-ds-text-muted">作为全片时间地基</span>
+              </div>
+              <Button
+                type="button"
+                variant="gray"
+                size="sm"
+                icon={Upload}
+                disabled
+                title="音频上传尚未接线"
+              >
+                上传音频
+              </Button>
             </div>
-            <Button
-              type="button"
-              variant="gray"
-              size="sm"
-              icon={Upload}
-              disabled
-              title="音频上传尚未接线"
-            >
-              上传音频
-            </Button>
+            <p className="mt-3 flex items-center gap-1.5 text-[11px] text-ds-text-muted">
+              <Timer className="size-3" />
+              预计规划：6–8 个镜头 · ProjectSourceSnapshotV1
+            </p>
           </div>
-          <p className="flex items-center gap-1.5 text-xs text-label-tertiary">
-            <Timer className="h-3 w-3" />
-            预计 6–8 个分镜 · 首轮渲染约 3–5 分钟
-          </p>
           {error && <Toast variant="error" title="创建失败" body={error} className="w-full" />}
         </form>
       </Dialog>
