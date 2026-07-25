@@ -6,8 +6,9 @@ import { describe, expect, it } from "vitest";
  *
  * ISSUE-003 修订后，本测试只断言「Next 侧代码确实消费 / bootstrap 中转消费」的变量：
  *   - CVC_CREDENTIAL_MASTER_KEY：credential-envelope.ts:45 强制读取
- *   - GEMINI_API_KEY / STEPFUN_API_KEY：scripts/setup/bootstrap-credentials.ts 读取
- *     （写入 DB 加密存储，运行时不读 env；详见 docs/configuration/credentials.md）
+ *   - GEMINI_API_KEY / STEPFUN_API_KEY：scripts/setup/bootstrap-credentials.ts 读取（写入
+ *     DB 加密存储，运行时不读 env；详见 docs/configuration/credentials.md）
+ *   - BACKEND_ORIGIN：next.config.ts:30 rewrites 直接消费（反向代理到 worker）
  *
  * 移除的旧断言（历史漂移，至本 issue 一次性纠正）：
  *   - STEP_API_KEY       —— server/.env.example 的变量，Next 侧 config.ts:64-70
@@ -16,6 +17,8 @@ import { describe, expect, it } from "vitest";
  *                           「repository-level .env.example intentionally contains no TTS settings」
  *   - IMAP_PASSWORD       —— server 注册机器人用，Next 进程零消费
  *   - SIGNUP_PASSWORD     —— 同上
+ *   - BROWSER_DRIVER      —— server/.env.example:20，Next 侧零消费
+ *   - PORT                —— server/src/index.ts:14，Next 用 `next dev` 默认端口不读 PORT
  */
 describe("global environment isolation", () => {
   it("keeps sensitive examples present but value-free", async () => {
@@ -25,6 +28,7 @@ describe("global environment isolation", () => {
       "CVC_CREDENTIAL_MASTER_KEY",
       "GEMINI_API_KEY",
       "STEPFUN_API_KEY",
+      "BACKEND_ORIGIN",
     ]) {
       expect(rootExample).toMatch(new RegExp(`^${name}=$`, "m"));
     }
@@ -39,7 +43,7 @@ describe("global environment isolation", () => {
       "IMAP_PASSWORD",
       "SIGNUP_PASSWORD",
       "BROWSER_DRIVER",
-      "BACKEND_ORIGIN",
+      "PORT",
     ]) {
       expect(rootExample).not.toMatch(new RegExp(`^${name}=`, "m"));
     }
