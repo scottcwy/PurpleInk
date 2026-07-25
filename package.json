@@ -22,6 +22,8 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
+    "@earendil-works/pi-agent-core": "0.80.10",
+    "@earendil-works/pi-ai": "0.80.10",
     "@xyflow/react": "^12.11.2",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
@@ -47,8 +49,8 @@
     "@types/node": "^22.11.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^9",
     "drizzle-kit": "^0.31.10",
+    "eslint": "^9",
     "eslint-config-next": "^16.2.0",
     "prettier": "^3.7.4",
     "prettier-plugin-tailwindcss": "^0.7.2",
