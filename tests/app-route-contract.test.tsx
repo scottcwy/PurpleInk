@@ -1,0 +1,165 @@
+import { existsSync, readFileSync } from 'node:fs'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { describe, expect, it } from 'vitest'
+import { UnwiredPanel } from '@/app/_components/unwired-panel'
+import {
+  STAGE_B_WORKFLOW_NODES,
+  WORKFLOW_BLUEPRINT_EDGES,
+} from '@/features/workflow/blueprint-model'
+
+/** docs/conventions/routing.md §2 的路由表。改路由必须先改文档，再改这里。 */
+const ROUTE_FILES = [
+  // L1 公开
+  'src/app/(marketing)/page.tsx',
+  'src/app/(public)/layout.tsx',
+  'src/app/(public)/release/page.tsx',
+  // L2 认证
+  'src/app/(auth)/layout.tsx',
+  'src/app/(auth)/login/page.tsx',
+  'src/app/(auth)/signup/page.tsx',
+  // L3 制作应用
+  'src/app/products/page.tsx',
+  'src/app/products/(app)/layout.tsx',
+  'src/app/products/(app)/dashboard/page.tsx',
+  'src/app/products/(app)/projects/page.tsx',
+  'src/app/products/(app)/canvas/[projectId]/page.tsx',
+  'src/app/products/(app)/shots/[shotId]/page.tsx',
+  'src/app/products/(app)/export/[projectId]/page.tsx',
+  'src/app/products/(app)/settings/page.tsx',
+  // L4 内部
+  'src/app/playbook/page.tsx',
+  // 错误与未找到边界
+  'src/app/not-found.tsx',
+  'src/app/global-error.tsx',
+  'src/app/products/(app)/not-found.tsx',
+  'src/app/products/(app)/error.tsx',
+  // 元数据路由
+  'src/app/robots.ts',
+  'src/app/sitemap.ts',
+] as const
+
+/** 已收敛的历史路由与并行壳，不允许回归。 */
+const RETIRED_PATHS = [
+  'src/app/legacy',
+  'src/app/(product)',
+  'src/app/(product)/releases',
+  'src/app/(product)/_components/product-app-shell.tsx',
+  'src/app/(product)/_components/product-sidebar.tsx',
+  'src/app/(product)/_components/release-step-nav.tsx',
+  'src/app/(product)/_components/product-page-header.tsx',
+  'src/app/dashboard',
+  'src/app/products/[productId]',
+  'src/app/releases',
+] as const
+
+describe('src/app 路由契约', () => {
+  it('落盘规范里的每一条路由', () => {
+    expect(ROUTE_FILES.filter((file) => !existsSync(file))).toEqual([])
+  })
+
+  it('不保留已收敛的历史路由与并行壳', () => {
+    expect(RETIRED_PATHS.filter((path) => existsSync(path))).toEqual([])
+  })
+
+  it('制作应用只有一套壳与一套 pathname 映射', () => {
+    const shellSource = readFileSync(
+      'src/features/navigation/app-shell.tsx',
+      'utf8',
+    )
+    const sidebarSource = readFileSync(
+      'src/features/navigation/app-sidebar.tsx',
+      'utf8',
+    )
+    const layoutSource = readFileSync(
+      'src/app/products/(app)/layout.tsx',
+      'utf8',
+    )
+
+    expect(shellSource).toContain('ds-app-gradient')
+    expect(layoutSource).toContain('<AppShell>')
+    expect(sidebarSource).toContain('@/components/ui/sidebar')
+    expect(sidebarSource).toContain('<PurpleInkSidebar')
+    expect(sidebarSource).not.toContain('LegacySidebar')
+    for (const label of ['工作台', '项目', '画布', '镜头', '导出']) {
+      expect(sidebarSource).toMatch(new RegExp(`label:\\s*["']${label}["']`))
+    }
+  })
+
+  it('认证与公开层不挂应用侧栏', () => {
+    for (const file of [
+      'src/app/(auth)/layout.tsx',
+      'src/app/(public)/layout.tsx',
+    ]) {
+      const source = readFileSync(file, 'utf8')
+      expect(source).not.toContain("from '@/features/navigation")
+      expect(source).not.toMatch(/<\w*(AppShell|Sidebar)\b/)
+    }
+  })
+
+  it('应用源码里不留可执行的历史链接', () => {
+    const sources = ROUTE_FILES.filter((file) => existsSync(file))
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n')
+
+    expect(sources).not.toContain('/legacy')
+    expect(sources).not.toContain('/releases/')
+  })
+
+  it('Playbook 与应用复用同一个 Canonical 侧栏', () => {
+    const sidebarDemo = readFileSync(
+      'src/components/ui/sidebar.demo.tsx',
+      'utf8',
+    )
+
+    expect(sidebarDemo).toContain('<PurpleInkSidebar')
+    expect(sidebarDemo).not.toContain('CodeVideoCanvas')
+  })
+
+  it('未接线占位只声明边界与未来数据来源', () => {
+    const html = renderToStaticMarkup(
+      createElement(UnwiredPanel, {
+        title: '发布',
+        description: '未来在这里组织发布内容。',
+        sources: ['Product', 'Release'],
+        futureGuard: '需要先完成认证。',
+      }),
+    )
+
+    expect(html).toContain('该页尚未接线')
+    expect(html).toContain('Product')
+    expect(html).toContain('Release')
+    expect(html).toContain('未来进入前置')
+    expect(html).not.toContain('100%')
+    expect(html).not.toContain('审批通过')
+    expect(html).not.toContain('Stage B')
+  })
+
+  it('Playbook 的 workflow 图谱保持诚实', () => {
+    expect(STAGE_B_WORKFLOW_NODES).toHaveLength(7)
+    expect(WORKFLOW_BLUEPRINT_EDGES).toHaveLength(7)
+    expect(
+      STAGE_B_WORKFLOW_NODES.every((node) => node.status === 'unwired'),
+    ).toBe(true)
+    expect(
+      STAGE_B_WORKFLOW_NODES.every((node) => node.artifact === undefined),
+    ).toBe(true)
+    expect(STAGE_B_WORKFLOW_NODES.map((node) => node.title)).toEqual([
+      '开始',
+      '项目规划',
+      '镜头生成',
+      '媒体处理',
+      '画面渲染',
+      '视觉 QA',
+      '项目合成',
+    ])
+  })
+
+  it('站点身份是 PurpleInk 而不是历史模板', () => {
+    const metadataSource = readFileSync('src/lib/metadata.ts', 'utf8')
+
+    expect(metadataSource).toContain('name: "PurpleInk"')
+    expect(metadataSource).not.toContain('React Bits Pro')
+    expect(metadataSource).not.toContain('nexus-ai.com')
+  })
+})
