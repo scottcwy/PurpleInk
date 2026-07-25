@@ -11,7 +11,7 @@ import { logger } from "../lib/logger"
 import { buildRootHtml } from "./chapters/root-html"
 import { splitScenesToChapters } from "./chapters/split"
 import { generateChapters, buildComposeContext } from "./chapters/generate"
-import { getTtsEnv } from "../../../lib/tts/config"
+import { getTtsEnv } from "../../../src/lib/tts/config"
 import { prepareNarrationAssets } from "../tts/orchestrate"
 import {
   buildNarrationTrack,

@@ -51,7 +51,44 @@
 
 ## M1 目录形态改造
 
-待执行。
+执行时间：2026-07-25
+
+### 实际改造
+
+- 使用 `git mv` 将根 `app/`、`components/`、`lib/` 移入 `src/`，根目录不再保留同名目录。
+- 将 `motion.tsx` 改名为 `marketing-motion.tsx`，将 `config.ts` 改名为
+  `site-config.ts`，并同步修正引用。
+- 19 个营销组件全部移入 `src/components/marketing/`；引用修正未超过时间上限，无 waiver。
+- `@/*` 唯一映射改为 `./src/*`；保留 `strict: true`，关闭计划指定的 6 个细分严格项。
+- `.prettierignore` 已忽略计划指定的 CVC 导入目录；仓库没有把 `format:check` 接入现有门禁。
+- 修正 `server/src/compose/run-pipeline.ts` 对共享 TTS 配置的相对路径，使其适配 `src/` 布局。
+
+### 依赖引导记录
+
+| 命令 | 退出码 | 结果 |
+| --- | ---: | --- |
+| 根目录 `npm ci` | 1 | 现有 lock 与 manifest 不同步：lock 缺少 `zod@4.4.3` |
+| 根目录 `npm install` | 1 | Windows 清理半成品依赖时出现 `ENOTEMPTY/EPERM` |
+| 根目录 `pnpm install --lockfile=false` | 0 | 仅用于 M1 运行时验证，不生成 pnpm lock |
+| `server/` 中 `pnpm install --lockfile=false` | 0 | 仅用于 M1 运行时验证，不生成 pnpm lock |
+
+正式 workspace 与锁文件仍按 M2 的 `pnpm import`、`pnpm install` 流程生成。
+
+### 退出门
+
+| 命令或检查 | 退出码/结果 | 证据摘要 |
+| --- | --- | --- |
+| `pnpm run typecheck` | 0 | 根 TypeScript 检查通过 |
+| `pnpm run build` | 0 | Next 16.1.1 构建成功，`/` 静态生成 |
+| `pnpm exec next dev -p 3100` | 运行成功 | Next dev ready |
+| `GET http://127.0.0.1:3100/` | 200 | HTML 包含首页标题 |
+| Chromium 首页快照 | 通过 | 标题、营销区块、FAQ、页脚均渲染 |
+| 主题切换 | 通过 | 根类从 `dark` 切换为 `light`，按钮标签同步变化 |
+| smooth-scroll | 通过 | 根类包含 `lenis`；真实滚轮后 `scrollY` 从 0 到 900 |
+| fluid-cursor | 通过 | 鼠标移动后流体 Canvas 保持活动尺寸 `1036x905` |
+
+运行时控制台有 1 条 `favicon-16x16.png` 404；该文件在初始仓库即不存在，不影响 M1
+规定的首页交互与构建门禁，留待 Stage B 静态资源整理。
 
 ## M2 包与工具链统一
 

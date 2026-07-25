@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseTtsEnv } from "../lib/tts/config";
+import { parseTtsEnv } from "../src/lib/tts/config";
 
 const validTtsEnv = {
   TTS_PROVIDER: "listenhub-flowspeech",

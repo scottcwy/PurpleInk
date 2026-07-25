@@ -2,7 +2,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import Lenis from "lenis";
-import { features } from "@/lib/config";
+import { features } from "@/lib/site-config";
 
 const LENIS_OPTIONS = {
   duration: 1.6,

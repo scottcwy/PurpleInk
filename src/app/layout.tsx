@@ -1,5 +1,5 @@
-import { Providers } from "@/components/providers";
-import { SkipToContent } from "@/components/skip-to-content";
+import { Providers } from "@/components/marketing/providers";
+import { SkipToContent } from "@/components/marketing/skip-to-content";
 import { baseMetadata } from "@/lib/metadata";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";

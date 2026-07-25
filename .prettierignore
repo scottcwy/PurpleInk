@@ -18,3 +18,9 @@ yarn.lock
 # Generated files
 *.min.js
 *.min.css
+
+# Imported CodeVideoCanvas sources (Stage A)
+src/features/**
+src/lib/**
+src/components/ui/**
+src/components/icons/**
