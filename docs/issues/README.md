@@ -137,7 +137,7 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
 
 | ID | 标题 | 状态 | 主要落点 |
 | --- | --- | --- | --- |
-| [ISSUE-014](./ISSUE-014-e2e-verification.md) | 端到端验证与证据留存（先小后大） | `open` | `scripts/verify/`、`docs/issues/evidence/` |
+| [ISSUE-014](./ISSUE-014-e2e-verification.md) | 端到端验证与证据留存（先小后大） | `in-progress` | 第一轮 G1–G6 全通过（`scripts/verify/e2e-smoke.ts` + 证据 `evidence/issue-014/`）；第二轮待跑 |
 
 ## 5. 依赖与派发顺序
 
