@@ -19,7 +19,7 @@
 
 | 层 | 前缀 | 壳 | 认证 | 可索引 | 用途 |
 | --- | --- | --- | --- | --- | --- |
-| L1 公开 | `/`、`/artifacts*`、`/share/*`、`/release` | 营销壳 / 只读分享壳 | 匿名 | `/`、`/artifacts*` 是；`/share/*` 否 | 获客、案例、对外分享 |
+| L1 公开 | `/`、`/community`、`/artifacts*`、`/share/*`、`/release` | 营销壳 / 只读分享壳 | 匿名 | `/`、`/community`、`/artifacts*` 是；`/share/*` 否 | 获客、案例、对外分享 |
 | L2 认证 | `/login`、`/signup` | 认证壳（无侧栏） | 匿名 | 否 | 进入 L3 |
 | L3 制作应用 | `/products/*` | `AppShell` + `AppSidebarShell` | 必须登录（见 §9） | 否 | 全部真实制作功能 |
 | L4 内部 | `/playbook/*` | 独立无业务壳 | 仅非生产环境 | 否 | 组件登记与视觉验收 |
@@ -42,6 +42,7 @@
 | 路由 | 文件 | 状态 |
 | --- | --- | --- |
 | `/` | `src/app/(marketing)/page.tsx` | `wired` |
+| `/community` | `src/app/(marketing)/community/page.tsx` | `wired`（随站发布的真实精选成片；无社区互动或虚构指标） |
 | `/artifacts` | `src/app/(public)/artifacts/page.tsx` | `planned` |
 | `/artifacts/[caseSlug]` | `src/app/(public)/artifacts/[caseSlug]/page.tsx` | `planned` |
 | `/share/[shareId]` | `src/app/(public)/share/[shareId]/page.tsx` | `planned` |
@@ -49,7 +50,7 @@
 
 `(public)` 组的壳是 `src/app/(public)/layout.tsx`：无侧栏、无写操作入口。
 
-`/` 右上角 **Try it** 已接线到 `PRODUCTS_ROUTES.projects`（`/products/projects`），是进入 L3 的主 CTA。Contact 与 footer 仍多为 `#` / 空串；`/login` 入口尚未接线，属已知缺口。
+`/` 右上角 **Try it** 已接线到 `PRODUCTS_ROUTES.projects`（`/products/projects`），是进入 L3 的主 CTA。Header 与 Footer 的 **Community** 均接到 `/community`。该页复用营销壳，只展示随站发布且可实际播放的精选视频文件；它不是 `ShareSnapshot` 社区列表，也不得显示作者、播放量或点赞等无真实来源字段。Contact 与 footer 其余入口仍多为 `#` / 空串；`/login` 入口尚未接线，属已知缺口。
 
 ### 2.2 L2 认证
 
@@ -114,7 +115,7 @@
 | 路由 | 文件 | 状态 | 规则 |
 | --- | --- | --- | --- |
 | `/robots.txt` | `src/app/robots.ts` | `wired` | 当前 `allow: /`、`disallow: /api/`、`/private/`。新增 `/share/` 到 disallow |
-| `/sitemap.xml` | `src/app/sitemap.ts` | `wired` | 当前只有 `/` 一条。`/artifacts` 与每个 `featured` 案例必须进 sitemap |
+| `/sitemap.xml` | `src/app/sitemap.ts` | `wired` | 当前包含 `/` 与 `/community`。`/artifacts` 与每个 `featured` 案例必须在真实数据落盘后加入 sitemap |
 | `/favicon.ico`、`/icon.svg`、`/apple-icon.svg` | `src/app/*` | `wired` | — |
 | `/site.webmanifest` | `public/site.webmanifest` | `wired` | 由 `src/lib/metadata.ts` 的 `manifest` 引用 |
 
