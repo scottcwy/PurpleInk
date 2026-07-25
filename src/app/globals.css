@@ -14,6 +14,61 @@
   --accent-foreground: #ffffff;
   --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* CodeVideoCanvas design tokens */
+  --color-accent: #007aff;
+  --color-success: #34c759;
+  --color-warning: #ff9500;
+  --color-danger: #ff3b30;
+  --color-purple: #af52de;
+  --color-teal: #30b0c7;
+  --color-stage-ingest: #30b0c7;
+  --color-stage-direct: #af52de;
+  --color-stage-shotspec: #af52de;
+  --color-stage-shot: #007aff;
+  --color-stage-audio: #30b0c7;
+  --color-stage-assemble: #ff9500;
+  --color-stage-finalize: #34c759;
+  --color-bg: #ffffff;
+  --color-bg-secondary: #f2f2f7;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-fill: #f2f2f7;
+  --color-fill-strong: #e5e5ea;
+  --color-separator: #3c3c432e;
+  --color-canvas-bg: #f5f5f7;
+  --color-scrim: #00000066;
+  --color-label: #000000;
+  --color-label-secondary: #3c3c4399;
+  --color-label-tertiary: #3c3c434c;
+  --color-text-inverse: #ffffff;
+  --color-accent-fill: #007aff1a;
+  --color-success-fill: #34c7591a;
+  --color-teal-fill: #30b0c71a;
+  --color-danger-fill: #ff3b301a;
+  --color-warning-fill: #ff95001a;
+  --color-overlay: #00000099;
+  --color-canvas-grid: #3c3c4312;
+  --color-on-accent: #ffffff;
+  --color-glass: #ffffffcc;
+  --color-glass-sidebar: #f2f2f7cc;
+  --color-tooltip-bg: #1c1c1e;
+  --color-player-bg: #000000;
+  --color-knob: #ffffff;
+  --color-transparent: #00000000;
+  --shadow-card: 0 1px 3px 0 #00000014, 0 1px 2px -1px #00000014;
+  --shadow-float: 0 4px 12px 0 #0000001f, 0 2px 4px -1px #0000001f;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+  --duration-fast: 120ms;
+  --duration-base: 220ms;
+  --duration-slow: 360ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
 }
 
 .dark {
@@ -26,6 +81,50 @@
   --accent: #6366F1;
   --accent-light: #A5B4FC;
   --accent-foreground: #ffffff;
+
+  /* CodeVideoCanvas dark design tokens */
+  --color-accent: #0a84ff;
+  --color-success: #30d158;
+  --color-warning: #ff9f0a;
+  --color-danger: #ff453a;
+  --color-purple: #bf5af2;
+  --color-teal: #40cbe0;
+  --color-stage-ingest: #40cbe0;
+  --color-stage-direct: #bf5af2;
+  --color-stage-shotspec: #bf5af2;
+  --color-stage-shot: #0a84ff;
+  --color-stage-audio: #40cbe0;
+  --color-stage-assemble: #ff9f0a;
+  --color-stage-finalize: #30d158;
+  --color-bg: #0f0f0f;
+  --color-bg-secondary: #1c1c1e;
+  --color-surface: #1c1c1e;
+  --color-surface-raised: #252525;
+  --color-fill: #2c2c2e;
+  --color-fill-strong: #3a3a3c;
+  --color-separator: #5454587a;
+  --color-canvas-bg: #0a0a0a;
+  --color-scrim: #00000080;
+  --color-label: #ffffff;
+  --color-label-secondary: #ebebf599;
+  --color-label-tertiary: #ebebf54c;
+  --color-text-inverse: #ffffff;
+  --color-accent-fill: #0a84ff29;
+  --color-success-fill: #30d15829;
+  --color-teal-fill: #40cbe029;
+  --color-danger-fill: #ff453a29;
+  --color-warning-fill: #ff9f0a29;
+  --color-overlay: #00000099;
+  --color-canvas-grid: #ebebf526;
+  --color-on-accent: #ffffff;
+  --color-glass: #1c1c1ecc;
+  --color-glass-sidebar: #1c1c1ecc;
+  --color-tooltip-bg: #2c2c2e;
+  --color-player-bg: #000000;
+  --color-knob: #ffffff;
+  --color-transparent: #00000000;
+  --shadow-card: 0 1px 3px 0 #00000066, 0 1px 2px -1px #00000066;
+  --shadow-float: 0 4px 12px 0 #00000080, 0 2px 4px -1px #00000080;
 }
 
 @theme inline {
@@ -40,6 +139,58 @@
   --color-accent-foreground: var(--accent-foreground);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
+
+  /* CodeVideoCanvas Tailwind mappings */
+  --color-accent: var(--color-accent);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-danger: var(--color-danger);
+  --color-purple: var(--color-purple);
+  --color-teal: var(--color-teal);
+  --color-stage-ingest: var(--color-stage-ingest);
+  --color-stage-direct: var(--color-stage-direct);
+  --color-stage-shotspec: var(--color-stage-shotspec);
+  --color-stage-shot: var(--color-stage-shot);
+  --color-stage-audio: var(--color-stage-audio);
+  --color-stage-assemble: var(--color-stage-assemble);
+  --color-stage-finalize: var(--color-stage-finalize);
+  --color-bg: var(--color-bg);
+  --color-bg-secondary: var(--color-bg-secondary);
+  --color-surface: var(--color-surface);
+  --color-surface-raised: var(--color-surface-raised);
+  --color-fill: var(--color-fill);
+  --color-fill-strong: var(--color-fill-strong);
+  --color-separator: var(--color-separator);
+  --color-canvas-bg: var(--color-canvas-bg);
+  --color-scrim: var(--color-scrim);
+  --color-label: var(--color-label);
+  --color-label-secondary: var(--color-label-secondary);
+  --color-label-tertiary: var(--color-label-tertiary);
+  --color-text-inverse: var(--color-text-inverse);
+  --color-accent-fill: var(--color-accent-fill);
+  --color-success-fill: var(--color-success-fill);
+  --color-teal-fill: var(--color-teal-fill);
+  --color-danger-fill: var(--color-danger-fill);
+  --color-warning-fill: var(--color-warning-fill);
+  --color-overlay: var(--color-overlay);
+  --color-canvas-grid: var(--color-canvas-grid);
+  --color-on-accent: var(--color-on-accent);
+  --color-glass: var(--color-glass);
+  --color-glass-sidebar: var(--color-glass-sidebar);
+  --color-tooltip-bg: var(--color-tooltip-bg);
+  --color-player-bg: var(--color-player-bg);
+  --color-knob: var(--color-knob);
+  --shadow-card: var(--shadow-card);
+  --shadow-float: var(--shadow-float);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-pill: var(--radius-pill);
+  --ease-standard: var(--ease-standard);
+  --ease-emphasized: var(--ease-emphasized);
+  --ease-exit: var(--ease-exit);
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
 }
 
 html {
@@ -142,4 +293,14 @@ textarea:focus-visible {
   line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
 }

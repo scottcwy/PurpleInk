@@ -152,7 +152,63 @@
 
 ## M3 CVC 视觉层与基础库
 
-待执行。
+执行时间：2026-07-25
+
+### 复制清单
+
+所有目录均由 `robocopy /E` 从只读来源复制；退出码均为 1（成功复制新文件）。
+
+| 目标目录/文件 | 文件数 | 行数 |
+| --- | ---: | ---: |
+| `src/components/ui` | 67 | 2073 |
+| `src/components/icons` | 3 | 119 |
+| `src/features/navigation` | 9 | 555 |
+| `src/lib/motion` | 4 | 108 |
+| `src/lib/gsap` | 2 | 28 |
+| `src/lib/hooks` | 5 | 295 |
+| `src/lib/layout` | 1 | 25 |
+| `src/lib/determinism` | 4 | 99 |
+| `src/lib/config` | 2 | 18 |
+| `src/lib/storage` | 4 | 131 |
+| `src/lib/stream` | 2 | 276 |
+| `src/lib/queue` | 7 | 610 |
+| `src/lib/workflow` | 3 | 100 |
+| `src/lib/architecture` | 1 | 308 |
+| `src/lib/utils.ts`（编译依赖） | 1 | 6 |
+| `src/features/canvas/types.ts`（纯类型依赖） | 1 | 37 |
+
+### 合并与适配
+
+- 保留 PurpleInk 原有 `:root`、`.dark` 与 Tailwind 映射，追加 CVC 颜色、阶段、
+  canvas、separator、圆角、阴影、时长和缓动 token。
+- 根 layout 保留 Geist、Providers、SkipToContent、metadata、viewport；新增
+  `theme-mode` 初始化脚本，并且只挂载一次 `AppMotionConfig`。
+- `src/lib/utils.ts` 是复制 UI/导航组件的直接依赖，按原文件复制。
+- node 类 UI 组件依赖 `canvas/types.ts`；该文件无运行时导入，因此提前复制纯类型契约，
+  未提前复制 Canvas 业务实现。
+
+### 临时依赖顺序豁免
+
+M3 清单同时要求复制 `queue/architecture/workflow`，但这些目录的部分实现/测试依赖 M4
+才允许复制的 DB、director、render 与 verify scripts。为避免 stub 和假返回值，M3 在
+`tsconfig.json` 临时排除：
+
+- `src/lib/queue/**`
+- `src/lib/architecture/**/*.test.ts`
+- `src/lib/workflow/**/*.test.ts`
+
+M4 复制真实依赖后必须移除这三条排除并重新 typecheck。
+
+### 退出门
+
+| 命令或检查 | 退出码/结果 | 证据摘要 |
+| --- | --- | --- |
+| `pnpm typecheck` | 0 | 临时依赖边界生效，视觉层类型通过 |
+| `pnpm build` | 0 | Next 16.2.11 构建成功 |
+| CVC UI SSR 烟测 | 0 | Button、Card、StatusPill 同时真实渲染，1/1 通过 |
+| `GET http://localhost:3100/` | 200 | 营销页返回正常 |
+| Chromium 首页验收 | 通过 | 主要版式与 M1 一致，主题按钮完成 dark → light 切换 |
+| 控制台 | 1 个已知 404 | 仍仅为初始仓缺少的 `favicon-16x16.png` |
 
 ## M4 CVC 数据层与业务后端
 

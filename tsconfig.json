@@ -38,5 +38,13 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", ".next", "out", ".data"]
+  "exclude": [
+    "node_modules",
+    ".next",
+    "out",
+    ".data",
+    "src/lib/queue/**",
+    "src/lib/architecture/**/*.test.ts",
+    "src/lib/workflow/**/*.test.ts"
+  ]
 }
