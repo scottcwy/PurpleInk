@@ -1,10 +1,12 @@
 # ISSUE-005 · `audio-demo` 编造固定 8 秒/镜时长，TTS 时序颠倒
 
 - 优先级：**P1**
-- 状态：`open`
+- 状态：`done`（真实前移已落地并取证；两项运行时观测受 ISSUE-002 阻塞，见 §9.4）
 - 范围：`src/features/director` 的 INGEST 结果构造 + `src/features/audio`。**不得触碰 `server/**`**
-- 依赖：ISSUE-001、ISSUE-002（要先能跑通才能验真实时长）
+- 依赖：ISSUE-001（已 done）、ISSUE-002（仍 open，只影响单镜 MP4 的运行时观测）
 - 关联：本 issue 是 AGENTS.md §6「不得接假数据」的直接违规修复
+- 修复提交：`171f692`（实现）、`71f1de4`（时长实测前置）
+- 证据：[`evidence/issue-005/`](./evidence/issue-005/)
 
 ## 1. 症状
 
@@ -207,3 +209,78 @@ INGEST 需要「每个 script unit 的音频时长」来分配帧数，
 
 这是链路里唯一的**时序性架构错误**，其余问题都是接线或收敛。
 用户已确认本轮修复，不走降级方案。
+
+---
+
+## 9. 修复记录（2026-07-25）
+
+未走降级方案。真实 TTS 已前移到 INGEST，时长全部来自实测字节。
+
+### 9.1 §5 提出的结构性抉择：`prepareStageResult` 改异步
+
+issue 要求「先给出方案再动手」。两个候选：
+
+| 方案 | 结论 |
+| --- | --- |
+| A：TTS 放进 `runStageEffect`，allocation 事后回填 | **否决**。effect 在 `writeArtifact` 之后运行，artifact 会先带着空/占位 allocation 落库，再被回填——既违反不可变性，也违反验收第 4 条「不得产生任何 artifact」 |
+| B：`prepareStageResult` 改 async，TTS 在写 artifact 之前完成 | **采用**。artifact 只在旁白合成并实测成功后才存在，失败路径天然零产物 |
+
+落地形态：`prepareStageResult(context, rawContent, dependencies?)` 返回 Promise，
+`synthesizeNarration` 以依赖注入传入，默认实现用 dynamic import 拉 server-only 模块，
+因此 `stage-result.ts` 本身仍可在 node 环境单测。`stage-runner` 的 `prepareResult`
+类型放宽为 `T | Promise<T>`，调用点 `await`。
+
+### 9.2 与 §4.1 第 5 条的偏差：不新增 `allocationMethod: 'measured'`
+
+issue 允许「若 schema 未包含该枚举值，同步扩展」。实际检查后发现
+`schemas/ingest.ts` **原本就有**真实口径枚举，旧代码只是选了回退分支：
+
+| 字段 | 旧值（假） | 新值（真） | 是否新增枚举 |
+| --- | --- | --- | --- |
+| `shotAllocation.allocationMethod` | `duration-weight-fallback` | `unit-boundary` | 否 |
+| `audioUnit.alignment.mode` | 未填 | `unit-file`（coverage=1） | 否 |
+| `audioManifest.alignmentReport.policy` | 未填 | `unit-files` | 否 |
+| `audioManifest.contractVersion` | 未填 | `vnext-audio-v1` | 否 |
+
+每个分镜正好覆盖一个完整音频文件，`unit-boundary` / `unit-file` 就是如实描述。
+再加一个 `measured` 会与既有语义重叠，反而制造第二套口径，故不加。
+另外启用 `vnext-audio-v1` 契约后，schema 的 `superRefine` 会**强制**
+`sampleRateHz` / `sampleCount` / `sha256` / `alignment` / `alignmentReport` 必填，
+等于把「必须有实测数据」做成结构约束，而不是靠代码自觉。
+
+### 9.3 实际改动
+
+| 文件 | 动作 |
+| --- | --- |
+| `src/features/audio/mp3-frame-header.ts` | 新增。纯函数解析 MPEG 帧头取原生采样率；带下一帧同步校验，避免把数据里的 `0xFF` 误认为帧头 |
+| `src/features/audio/measure.ts` | 新增。`measureMp3` 用 `ffmpeg-static` 解码为 16-bit 单声道 PCM 并统计采样数，时长 = 采样数 / 采样率。**不读 TTS 自报 duration，不按字数估算** |
+| `src/features/audio/narration.ts` | 新增。批量合成（默认并发 4）、按 `sha256(engine\|voice\|text)` 内容寻址复用字节、模型漂移即失败 |
+| `src/features/audio/narration-repository.ts` | 新增。落盘后复核实际字节 SHA-256，再原子登记 artifact；每 unit 独立 kind `narration-audio:U00N`（共用 kind 会让 N 段旁白在版本链上互相 supersede） |
+| `src/features/director/audio-timing.ts` | 新增，取代 `audio-demo.ts`。纯函数由实测结果构造 manifest / allocation，`durationInFrames = ceil(durationMs × fps / 1000)`（向上取整，保证画面覆盖完整旁白） |
+| `src/features/director/audio-demo.ts` | **已删除**，无 fallback |
+| `src/features/director/stage-result.ts` | 改异步，INGEST 分支消费实测结果 |
+| `src/features/director/runtime-artifact-source.ts` | 删除「缺 manifest 就重造 demo」的回退分支，缺失即失败 |
+| `src/features/audio/voiceover.ts` + 测试 | **已删除**。第二处合成路径消失，全仓库 `generateVoiceover` 零命中 |
+| `src/features/audio/runtime-repository.ts` | `loadVoiceover` → `loadNarration(projectId, unitId)`，读 INGEST 产物并核验字节 hash |
+| `src/features/director/stage-effects.ts` | `shot-sfx` 从生产方改为消费方（只核验）；`shot-subtitle` 复用同一份音频做 ASR |
+| `src/features/artifacts/service.ts` | content-type 映射跟随新 kind |
+| `src/features/director/stage-artifact-gate.ts` | 新增。`stage-runner.ts` 因签名变宽超 350 行硬上限，按职责拆出「产物生成 + 门禁重试」，不是 re-export 壳 |
+
+`MASTER_FPS = 30` 落在 `audio-timing.ts`，作为母版时间轴常量与 `MASTER_WIDTH/HEIGHT` 呼应。
+
+### 9.4 验收结果
+
+| 验收项 | 结果 |
+| --- | --- |
+| 1 · `pnpm test` / `typecheck` / `verify:v3` | 本 issue 范围内全绿：`vitest src/features/{audio,director,artifacts}` 24 files / 122 passed；typecheck 该范围零错误；`verify:v3` exit 0（violations 空、replacementCharacters 空、oversized 仅 3 个已登记营销文件）。**注**：取证期间他人正在同一 worktree 并行改 `src/features/{canvas,render}/**` 与 `src/lib/db/schema/canvas.ts`，全量 `pnpm typecheck` 因那些在途改动而红，与本 issue 无关 |
+| 2 · grep `demo-tts` / `project://audio/demo.mp3` / `buildDemoAudio` | 源码零命中（仅本文档与 README 索引提及） |
+| 3 · 真实证据 | 部分完成，见 `evidence/issue-005/README.md`：U001 2281.96 ms / 69 帧、U002 14473.96 ms / 435 帧；`ffprobe` 差值恒为 22.04 ms（529 samples @24 kHz 的解码器延迟，<1 帧公差）；三个 `content_hash` 与实际字节一致。**未完成**：单镜 MP4 时长对比需 ISSUE-002 先打通 `fabricateShot` → render 接缝；`shot-sfx` 不产生第二份语音只有代码与单测证据，无运行时观测 |
+| 4 · 负向验证 | 通过。移除 stepfun 凭据后 job `failed`、节点 `failed`、`directorError` 为「尚未配置 StepFun API Key」，`director-ingest` 与 `narration-audio:*` 均为零，无 8 秒占位。验证后已从 `.env.local` 恢复凭据 |
+| 额外 · 重复文本命中缓存 | 通过。重跑同节点后两次 `storage_key` 与 `content_hash` 完全一致（TTS 输出非确定性，一致即证明未重新合成） |
+
+### 9.5 遗留（不属本 issue，已登记）
+
+单镜 MP4 目前不含音轨（`frame-capture` → `encode.ts` 使用 `-an`，
+`concat.ts` 只接受分镜 mp4 + 配乐），旁白音频尚未混入成片。
+本 issue 只负责「时序与时长真值」，混音接线属于 ASSEMBLE/导出范围，
+待 ISSUE-002 打通渲染接缝后单独处理。

@@ -1,0 +1,252 @@
+{
+  "startedAt": "2026-07-25T08:40:13.677Z",
+  "baseUrl": "http://127.0.0.1:3000",
+  "steps": [
+    {
+      "step": "POST /api/projects",
+      "status": 201,
+      "response": {
+        "ok": true,
+        "project": {
+          "id": "60951709-652c-4798-b01e-82a8d4080e79",
+          "title": "ISSUE-005 实测旁白时长取证",
+          "script": "音频时长必须实测。过去的实现给每个分镜都写死八秒三十帧，无论旁白是十个字还是一百二十个字，于是文本长的分镜旁白还没说完就切镜，文本短的分镜画面干等，成片时长与真实旁白完全无关。",
+          "createdAt": "2026-07-25T08:40:13.734Z",
+          "updatedAt": "2026-07-25T08:40:13.734Z"
+        },
+        "ingestNodeId": "5175afbf-3343-4a97-a10f-b3f115879d11"
+      }
+    },
+    {
+      "step": "POST /api/director/stage",
+      "status": 200,
+      "response": {
+        "ok": true,
+        "jobId": "4ec5e925-c3fc-45af-82ce-704e0abd36b2"
+      }
+    },
+    {
+      "step": "GET /api/jobs/{id} 终态",
+      "finalJob": {
+        "ok": false,
+        "error": "缺少 projectId"
+      }
+    }
+  ],
+  "projectId": "60951709-652c-4798-b01e-82a8d4080e79",
+  "ingestNodeId": "5175afbf-3343-4a97-a10f-b3f115879d11",
+  "artifacts": [
+    {
+      "kind": "director-ingest",
+      "version": 1,
+      "lifecycle": "draft",
+      "schema_version": "cvc.director-artifact/v1",
+      "size_bytes": "2907",
+      "content_hash": "71cbeed1400d48c040b70f9c6b86f879b8b44f12520cbce2150580e21a50c2af",
+      "storage_key": "director/60951709-652c-4798-b01e-82a8d4080e79/5175afbf-3343-4a97-a10f-b3f115879d11/ingest-71cbeed1400d48c040b70f9c6b86f879b8b44f12520cbce2150580e21a50c2af.txt"
+    },
+    {
+      "kind": "director-stream-log",
+      "version": 1,
+      "lifecycle": "draft",
+      "schema_version": "cvc.director-stream-log/v1",
+      "size_bytes": "357",
+      "content_hash": "9280dcd20af5e3e673e92b0cfca4aa57c97fb87c708a11ff4796e56b52554562",
+      "storage_key": "director-stream/60951709-652c-4798-b01e-82a8d4080e79/5175afbf-3343-4a97-a10f-b3f115879d11/ingest.log"
+    },
+    {
+      "kind": "narration-audio:U001",
+      "version": 1,
+      "lifecycle": "draft",
+      "schema_version": "cvc.narration-audio/v1",
+      "size_bytes": "38696",
+      "content_hash": "9304d15bbc2c9df3160690d4a1ec47c86614f021236585c0bb0c4b882dd5fa85",
+      "storage_key": "narration/60951709-652c-4798-b01e-82a8d4080e79/1802e4c255d9ecf9ef2c5d4dc62bc52e7d562501777336150b6fd3e38e0341bf.mp3"
+    },
+    {
+      "kind": "narration-audio:U002",
+      "version": 1,
+      "lifecycle": "draft",
+      "schema_version": "cvc.narration-audio/v1",
+      "size_bytes": "233770",
+      "content_hash": "33616e722d7702f4044dae1083db07b936a59b8bcefacfa2a56f392b89358537",
+      "storage_key": "narration/60951709-652c-4798-b01e-82a8d4080e79/65da7699deb0ca7a136682665a1ca9401720178392116e346b010f79ce7c4428.mp3"
+    },
+    {
+      "kind": "pi-session",
+      "version": 1,
+      "lifecycle": "draft",
+      "schema_version": "cvc.director-pointer/v1",
+      "size_bytes": "192",
+      "content_hash": "5b9e4c5884d8a317b5f2ff528088ea2e8182cae6eb2557b5ea065df41902175d",
+      "storage_key": "pi-sessions/60951709-652c-4798-b01e-82a8d4080e79/5175afbf-3343-4a97-a10f-b3f115879d11-7b97fecb-afb4-4c7c-8882-7b4081d912be.jsonl"
+    }
+  ],
+  "canvasNodes": [
+    {
+      "type": "score",
+      "stage": "ASSEMBLE",
+      "status": "idle",
+      "director_error": null,
+      "render_spec": null
+    },
+    {
+      "type": "shot-sfx",
+      "stage": "ASSEMBLE",
+      "status": "idle",
+      "director_error": null,
+      "render_spec": null
+    },
+    {
+      "type": "shot-sfx",
+      "stage": "ASSEMBLE",
+      "status": "idle",
+      "director_error": null,
+      "render_spec": null
+    },
+    {
+      "type": "shot-subtitle",
+      "stage": "ASSEMBLE",
+      "status": "idle",
+      "director_error": null,
+      "render_spec": null
+    },
+    {
+      "type": "shot-subtitle",
+      "stage": "ASSEMBLE",
+      "status": "idle",
+      "director_error": null,
+      "render_spec": null
+    },
+    {
+      "type": "shot-split",
+      "stage": "DIRECT",
+      "status": "idle",
+      "director_error": null,
+      "render_spec": null
+    },
+    {
+      "type": "shot-codegen",
+      "stage": "FABRICATE",
+      "status": "idle",
+      "director_error": null,
+      "render_spec": null
+    },
+    {
+      "type": "shot-codegen",
+      "stage": "FABRICATE",
+      "status": "idle",
+      "director_error": null,
+      "render_spec": null
+    },
+    {
+      "type": "export",
+      "stage": "FINALIZE",
+      "status": "idle",
+      "director_error": null,
+      "render_spec": null
+    },
+    {
+      "type": "shot-qa",
+      "stage": "FINALIZE",
+      "status": "idle",
+      "director_error": null,
+      "render_spec": null
+    },
+    {
+      "type": "shot-qa",
+      "stage": "FINALIZE",
+      "status": "idle",
+      "director_error": null,
+      "render_spec": null
+    },
+    {
+      "type": "script-import",
+      "stage": "INGEST",
+      "status": "succeeded",
+      "director_error": null,
+      "render_spec": null
+    },
+    {
+      "type": "shot-script",
+      "stage": "SHOT_SPEC",
+      "status": "idle",
+      "director_error": null,
+      "render_spec": null
+    },
+    {
+      "type": "shot-script",
+      "stage": "SHOT_SPEC",
+      "status": "idle",
+      "director_error": null,
+      "render_spec": null
+    }
+  ],
+  "ingestArtifact": {
+    "storageKey": "director/60951709-652c-4798-b01e-82a8d4080e79/5175afbf-3343-4a97-a10f-b3f115879d11/ingest-71cbeed1400d48c040b70f9c6b86f879b8b44f12520cbce2150580e21a50c2af.txt",
+    "dbContentHash": "71cbeed1400d48c040b70f9c6b86f879b8b44f12520cbce2150580e21a50c2af",
+    "actualSha256": "71cbeed1400d48c040b70f9c6b86f879b8b44f12520cbce2150580e21a50c2af",
+    "sizeMatches": true
+  },
+  "measuredUnits": [
+    {
+      "unitId": "U001",
+      "textLength": 9,
+      "manifestDurationMs": 2281.9583333333335,
+      "manifestSampleRateHz": 24000,
+      "manifestSampleCount": 54767,
+      "manifestSha256": "sha256:9304d15bbc2c9df3160690d4a1ec47c86614f021236585c0bb0c4b882dd5fa85",
+      "actualSha256": "sha256:9304d15bbc2c9df3160690d4a1ec47c86614f021236585c0bb0c4b882dd5fa85",
+      "dbArtifactKind": "narration-audio:U001",
+      "dbContentHash": "9304d15bbc2c9df3160690d4a1ec47c86614f021236585c0bb0c4b882dd5fa85",
+      "ffprobeDurationMs": 2304,
+      "ffprobeDeltaMs": 22.041666666666515,
+      "ffprobeWithinOneFrame": true,
+      "ffprobeStream": {
+        "codec_name": "mp3",
+        "sample_rate": "24000",
+        "channels": 1
+      },
+      "shotId": "S001",
+      "durationInFrames": 69,
+      "allocationMethod": "unit-boundary"
+    },
+    {
+      "unitId": "U002",
+      "textLength": 79,
+      "manifestDurationMs": 14473.958333333334,
+      "manifestSampleRateHz": 24000,
+      "manifestSampleCount": 347375,
+      "manifestSha256": "sha256:33616e722d7702f4044dae1083db07b936a59b8bcefacfa2a56f392b89358537",
+      "actualSha256": "sha256:33616e722d7702f4044dae1083db07b936a59b8bcefacfa2a56f392b89358537",
+      "dbArtifactKind": "narration-audio:U002",
+      "dbContentHash": "33616e722d7702f4044dae1083db07b936a59b8bcefacfa2a56f392b89358537",
+      "ffprobeDurationMs": 14496,
+      "ffprobeDeltaMs": 22.04166666666606,
+      "ffprobeWithinOneFrame": true,
+      "ffprobeStream": {
+        "codec_name": "mp3",
+        "sample_rate": "24000",
+        "channels": 1
+      },
+      "shotId": "S002",
+      "durationInFrames": 435,
+      "allocationMethod": "unit-boundary"
+    }
+  ],
+  "audioManifestSummary": {
+    "engine": "stepaudio-2.5-tts",
+    "voice": "cixingnansheng",
+    "contractVersion": "vnext-audio-v1",
+    "totalMs": 16755.916666666668,
+    "alignmentReport": {
+      "policy": "unit-files",
+      "scriptCoverage": 1,
+      "continuousCoverage": true,
+      "lowConfidenceUnitIds": []
+    },
+    "fps": 30,
+    "totalFrames": 504
+  },
+  "finishedAt": "2026-07-25T08:43:31.129Z"
+}

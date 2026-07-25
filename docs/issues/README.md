@@ -115,7 +115,7 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
 | ID | 标题 | 状态 | 主要落点 |
 | --- | --- | --- | --- |
 | [ISSUE-004](./ISSUE-004-queue-concurrency-lanes.md) | 队列单一并发数字混用 LLM 与渲染两类负载 | `done` | `src/lib/queue/in-process-queue.ts`、`types.ts`、`init.ts`、`index.ts`（commit `97b741e`） |
-| [ISSUE-005](./ISSUE-005-audio-timing-truth.md) | `audio-demo` 编造固定 8 秒/镜时长，TTS 时序颠倒 | `open` | `src/features/director/audio-demo.ts`、`stage-result.ts`、`schemas/ingest.ts`、`src/features/audio/**` |
+| [ISSUE-005](./ISSUE-005-audio-timing-truth.md) | `audio-demo` 编造固定 8 秒/镜时长，TTS 时序颠倒 | `done` | `audio-demo.ts`（已删）、`audio-timing.ts`、`stage-result.ts`、`src/features/audio/**`（commit `71f1de4` + `171f692`，证据 `evidence/issue-005/`） |
 
 ### P2 架构收敛与体验
 
@@ -153,7 +153,8 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
   ISSUE-006  接手 vitest/tsconfig 第 14-16 行 / 第 49 行所有权
 
 第三批（依赖前两批）
-  ISSUE-005  需要 001 + 002 先能跑通，才能验真实音频时长
+  ISSUE-005  done · 71f1de4 + 171f692 · 真实 TTS 前移到 INGEST，时长实测取证
+             （单镜 MP4 时长对比仍待 ISSUE-002 打通渲染接缝后补，已在文件内登记）
   ISSUE-011  需要 004 才有真实可配的并发数（004 已 done，可提前）
   ISSUE-008  ISSUE-012  独立收尾
 
