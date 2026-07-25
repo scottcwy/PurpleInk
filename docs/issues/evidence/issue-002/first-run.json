@@ -1,0 +1,116 @@
+{
+  "summary": "ISSUE-002 fabricateShot -> render 接缝真实打通：两条分镜泳道从 shot-codegen idle 状态自动经 fabricateShot 生成 HTML，再由 render handler 渲染出真实 MP4，帧数/分辨率/fps 与 renderSpec 完全一致。",
+  "projectId": "c9ad9ea8-64fe-4eb8-82b1-e5ba486556b8",
+  "environment": {
+    "database": "purpleink-dev-postgres-1 (127.0.0.1:54328)",
+    "aiProvider": "Gemini (真实 API，gemini-3.6-flash + gemini-3.1-flash-lite)",
+    "ttsProvider": "StepFun stepaudio-2.5-tts (真实 API，INGEST 阶段实测旁白时长，ISSUE-005 已落地)",
+    "note": "未 mock、未使用 fixture；从 POST /api/projects 创建项目开始走生产代码路径"
+  },
+  "lanes": [
+    {
+      "laneKey": "S001",
+      "codegenNodeId": "3672cecd-bfb0-52d3-a7a9-fe2d0d649ee5",
+      "finalStatus": "succeeded",
+      "renderSpec": {
+        "fps": 30,
+        "seed": 642701046,
+        "width": 1080,
+        "height": 1920,
+        "durationInFrames": 119
+      },
+      "artifacts": [
+        {
+          "kind": "director-fabricate",
+          "version": 1,
+          "storageKey": "director/c9ad9ea8-64fe-4eb8-82b1-e5ba486556b8/3672cecd-bfb0-52d3-a7a9-fe2d0d649ee5/fabricate-ea5b1ea0abb4b65599e41049cb6b0d4ac6aa314e05739dead23794e415d8c287.html",
+          "createdAt": "2026-07-25T12:10:05.419Z"
+        },
+        {
+          "kind": "render-mp4",
+          "version": 1,
+          "storageKey": "render/c9ad9ea8-64fe-4eb8-82b1-e5ba486556b8/3672cecd-bfb0-52d3-a7a9-fe2d0d649ee5/93cb2c81c13e60ff65d6b333f5888682060ab7a8e620d83bf96f2b4a16f36007.mp4",
+          "createdAt": "2026-07-25T12:10:13.815Z"
+        }
+      ],
+      "ffprobe": {
+        "duration": "00:00:03.97",
+        "durationSeconds": 3.97,
+        "expectedSeconds": 3.9666666666666668,
+        "video": { "codec": "h264 (High)", "pixelFormat": "yuv420p", "resolution": "1080x1920", "fps": 30, "bitrateKbps": 614 }
+      }
+    },
+    {
+      "laneKey": "S002",
+      "codegenNodeId": "ba0723b2-b68d-5d17-8a70-e2486ffc9c10",
+      "finalStatus": "succeeded (首次运行；见 negativeTest 说明其后被人为破坏又恢复)",
+      "renderSpec": {
+        "fps": 30,
+        "seed": 2229923656,
+        "width": 1080,
+        "height": 1920,
+        "durationInFrames": 227
+      },
+      "artifacts": [
+        {
+          "kind": "director-fabricate",
+          "version": 1,
+          "storageKey": "director/c9ad9ea8-64fe-4eb8-82b1-e5ba486556b8/ba0723b2-b68d-5d17-8a70-e2486ffc9c10/fabricate-b2bced6430f714b14ede8150aa538f57a1ca851e6296ec151f870c0ead199312.html",
+          "createdAt": "2026-07-25T12:08:52.069Z"
+        },
+        {
+          "kind": "render-mp4",
+          "version": 1,
+          "storageKey": "render/c9ad9ea8-64fe-4eb8-82b1-e5ba486556b8/ba0723b2-b68d-5d17-8a70-e2486ffc9c10/048910e38940a1257c5f6bd532f368905ca9edbb31389e4a1f66750f76e31ddf.mp4",
+          "createdAt": "2026-07-25T12:09:04.301Z"
+        }
+      ],
+      "ffprobe": {
+        "duration": "00:00:07.57",
+        "durationSeconds": 7.57,
+        "expectedSeconds": 7.5666666666666667,
+        "video": { "codec": "h264 (High)", "pixelFormat": "yuv420p", "resolution": "1080x1920", "fps": 30, "bitrateKbps": 611 }
+      }
+    }
+  ],
+  "checks": {
+    "resolutionMatchesRenderSpec": true,
+    "fpsMatchesRenderSpec": true,
+    "durationMatchesRenderSpecWithinOneFrame": true,
+    "twoLanesDifferentDurations": "S001 119 帧 / S002 227 帧，MP4 时长确实不同，且各自与 renderSpec 一致 —— 补齐 ISSUE-005 §9.4 遗留的运行时观测缺口"
+  },
+  "idempotency": {
+    "description": "已成功节点重跑 POST /api/render 被 admission 直接拒绝入队（状态非 enqueueable），不会二次生成 HTML；手动置 failed 后重跑，director-fabricate 与 render-mp4 均保持 version=1，未新增版本，证明 hasFabricateArtifact 正确跳过重复 fabricateShot。",
+    "nodeId": "ba0723b2-b68d-5d17-8a70-e2486ffc9c10",
+    "beforeRetryVersion": 1,
+    "afterRetryVersion": 1
+  },
+  "negativeTest": {
+    "description": "手动删除 storage 里 director-fabricate 的 HTML 字节（DB 记录保留），置节点 failed 后重跑 POST /api/render。",
+    "nodeId": "ba0723b2-b68d-5d17-8a70-e2486ffc9c10",
+    "response": { "status": 409, "body": { "ok": false, "error": "渲染 source 读取失败" } },
+    "nodePayloadAfterFailure": {
+      "renderError": { "message": "渲染 source 读取失败" },
+      "directorErrorPresent": false
+    },
+    "conclusion": "如实失败在 admission 预检阶段（未进入渲染队列），未静默重新生成 HTML；失败落在 renderError（非 directorError），Inspector 可据此区分渲染失败与 HTML 生成失败。测试后已恢复原 HTML 字节。"
+  },
+  "unrelatedFailuresObservedDuringE2E": [
+    {
+      "type": "DIRECT stage transient failure",
+      "message": "Director 模型调用失败（gemini/gemini-3.6-flash）",
+      "cause": "gemini-3.6-flash 偶发把全部输出预算耗在隐藏 reasoning token 上返回空文本（pi-ai google-generative-ai.js:201 的 stopReason==='error' 分支），与 ISSUE-002 改动无关，重试后即成功",
+      "action": "未修复，超出本 issue 范围；已如实记录"
+    },
+    {
+      "type": "stale DB model route override",
+      "detail": "model_routes 表中 shot-spec/fabricate 曾被路由到 gemini-3.1-flash-lite（早前设置页测试遗留），lite 模型对 validate_shot_plan 工具调用不稳定，导致 SHOT_SPEC 反复失败",
+      "action": "已删除这两条路由覆盖记录，回退到代码默认 gemini-3.6-flash；本地开发 DB 状态调整，不影响生产迁移或 schema"
+    },
+    {
+      "type": "shot-qa downstream failures",
+      "detail": "两条泳道的 shot-qa（FINALIZE）节点失败；QA 阶段消费 render-mp4 之后的规则检测/视觉核对，属于下游阶段，不在 ISSUE-002 范围内",
+      "action": "未处理，据实记录"
+    }
+  ]
+}

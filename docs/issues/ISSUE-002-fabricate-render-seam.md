@@ -1,10 +1,11 @@
 # ISSUE-002 · FABRICATE→render 接缝断裂，`fabricateShot` 零调用方
 
 - 优先级：**P0（阻断）**
-- 状态：`open`
+- 状态：`done`（真实打通并取证，见 §9）
 - 范围：`src/features/render` 与 `src/features/director` 的接缝。**不得触碰 `server/**`**
-- 依赖：ISSUE-001（没有 pi 运行时，本 issue 无法端到端验证）
-- 阻塞：ISSUE-005、ISSUE-014
+- 依赖：ISSUE-001（done，已提供 pi 运行时）
+- 修复记录与证据：见 §9、[`evidence/issue-002/`](./evidence/issue-002/)
+- 已解锁：ISSUE-005 剩余的运行时观测缺口（本次已补齐）、ISSUE-014 的「极小闭环」验证
 
 ## 1. 症状
 
@@ -207,3 +208,96 @@ if (status !== 'pending' && !(status === 'running' && stage === 'FABRICATE')) {
 ## 8. 交付后应立即解锁
 
 第一个真实单镜 MP4 → ISSUE-014 的「极小闭环」验证。
+
+## 9. 修复记录（2026-07-25）
+
+### 9.1 与原方案的偏差：先系统性分析，证伪了 issue 原文 §4 的前提
+
+原文 §4「入队只校验 `renderSpec` 与节点可入队性」被证伪：ISSUE-005（`171f692`）落地后，
+`shot-codegen` 首次由 `materializeShotLanes` 播种时的 payload 只有 `laneKey`/`laneRole`/
+`sourceUnit`，**没有 `renderSpec`**——它只在 FABRICATE 成功提交后才写入。若入队仍解析
+`renderSpec`，首次路径会在更早的 `parseRenderSpec` 处抛错，`fabricateShot` 永远不会被调用。
+
+采用的实际方案：入队上下文（`RenderEnqueueContext`）**完全不解析 `renderSpec`**，只携带
+`{projectId, nodeId, shotId}`；`frames`/`htmlKey` 的解析下沉到 `loadRenderContext`
+（节点已处于 `running`、`fabricateShot` 已跑完之后）。
+
+### 9.2 额外发现并修复的 P0 缺口（原 issue 未提及）
+
+`enqueueRenderShot` 原实现里 `loadAdmissionContext` 的调用在 `try` 块之外，任何在此阶段
+抛出的异常（包括首次路径必然出现的 `renderSpec` 缺失）都会绕过 render 自己的补偿链
+（`compensateEnqueueFailure`：`idle→pending→running→failed` + `recordRenderError`），
+直接冒泡给 `advance.ts` 的通用 `recordStageError`——那条路径**只写 `directorError`、
+不转 `failed`**，导致节点永久停留在 `idle`，而 Inspector 的 `StreamingLogCard` 只在
+`status === 'failed'` 时才展示错误，用户看到的是「什么都没发生」而不是「瞬间变红」（原文
+§2.4 的描述）。已把 admission 加载纳入统一 try 块，按失败发生时点（`pendingSet` 是否已置）
+选择正确的补偿转移序列。
+
+### 9.3 UI 可见性缺口一并解决（原文 §4 第 3 条要求但未实现）
+
+新增 `renderError`（对称于既有 `directorError`）：`CanvasGraphNode`/`queries.ts` 解析、
+Inspector 的 `StreamingLogCard` 展示（标签「渲染失败」区别于「阶段失败」）。两个错误字段
+互斥维护——`recordStageError` 写 `directorError` 时清掉残留 `renderError`，`recordRenderError`
+反之，避免同一次失败展示两条互相独立又指向同一事件的噪音信号。
+
+### 9.4 实际改动
+
+| 文件 | 动作 |
+| --- | --- |
+| `src/features/render/types.ts` | 新增 `RenderEnqueueContext`（不含 `frames`）、`RenderAdmissionContext { enqueue, job }` |
+| `src/features/render/render-shot-repository.ts` | `loadRenderAdmissionContext` 改为返回 `RenderAdmissionContext`；`job` 仅在 `director-fabricate` 产物已存在时非空；新增 `hasFabricateArtifact` |
+| `src/features/render/queue-handler.ts` | handler 内按需调用 `fabricateShot`；`enqueueRenderShot` 把 admission 加载纳入统一补偿路径；新增 `failFabricate`（只转 failed，不写 `renderError`，避免与 `directorError` 重复） |
+| `src/features/render/render.pg-fixture.ts` | `withFabricateArtifact:false` 时同步不再预置 `renderSpec`，还原真实首次入队状态 |
+| `src/features/render/repository.pg.test.ts` | 新增「首次入队：无 renderSpec、无产物」与「重跑：产物已存在可预检」两个用例 |
+| `src/features/render/queue-handler.test.ts` | 重写为三分支覆盖（缺 HTML 调 fabricate / 已有 HTML 不调 / fabricate 失败不进渲染）+ 补偿序列断言 |
+| `src/features/render/persistence.ts` | 新增 `withoutPayloadKeys`，供两个 error 字段互斥清理 |
+| `src/features/director/runtime-repository.ts` | `recordStageError` 写入时清掉残留 `renderError` |
+| `src/features/canvas/queries.ts`、`index.ts` | 新增 `RenderNodeError` 类型与 `parseRenderError` |
+| `src/app/products/(app)/canvas/[projectId]/streaming-log-card.tsx`、`canvas-inspector.tsx` | Inspector 展示 `renderError`，与 `directorError` 分标签 |
+
+不改：`fabricate.ts` 行为语义、`advance.ts` 分流逻辑、`admission.ts` 签名、
+确定性门禁、`shot-codegen` 状态机语义。
+
+### 9.5 验证结果
+
+| 项 | 结果 |
+| --- | --- |
+| `pnpm typecheck` | exit 0（全仓库；唯一红是与本 issue 无关的既有文件 `live-status.test.ts`，见 Batch-002 交接） |
+| `pnpm test` | 108 files / 498 passed |
+| `pnpm test:pg src/features/render` | 3 files / 15 passed（含两个新首次入队用例） |
+| `pnpm verify:v3` | `ok: true`，0 违规 |
+
+### 9.6 真实运行证据（Gemini + StepFun 真实 API，非 mock 非 fixture）
+
+对一个真实创建的项目（`purpleink-dev-postgres-1`）跑通 INGEST → DIRECT → SHOT_SPEC →
+两条 `shot-codegen` 首次入队 → `fabricateShot` 生成 HTML → 真实渲染出 MP4：
+
+| 泳道 | `renderSpec.durationInFrames` | `director-fabricate` | `render-mp4` | `ffprobe` 时长 |
+| --- | --- | --- | --- | --- |
+| S001 | 119（30fps） | version 1 | version 1 | 3.97s（≈119/30） |
+| S002 | 227（30fps） | version 1 | version 1 | 7.57s（≈227/30） |
+
+`ffprobe` 分辨率/fps（1080x1920 @30fps）与两个节点的 `renderSpec` 完全一致；两条泳道时长
+不同且各自吻合，**同时补齐了 ISSUE-005 §9.4 遗留的运行时观测缺口**。
+
+**幂等**：对已成功节点重跑，`director-fabricate`/`render-mp4` 均保持 `version=1`，
+未触发二次 `fabricateShot`。
+
+**负向验证**：手动删除 storage 里的 HTML 字节（保留 DB 记录）后重跑，入队 admission
+阶段如实报 `渲染 source 读取失败`（HTTP 409），未静默重新生成；节点落 `renderError`
+而非 `directorError`，验证后已恢复原字节。
+
+**过程中处理的无关问题**（据实记录，未纳入本 issue 代码改动）：
+- 本地开发 DB 的 `model_routes` 表存有早前设置页测试遗留的路由覆盖，把 `shot-spec`/
+  `fabricate` 指向 `gemini-3.1-flash-lite`，该轻量模型对 `validate_shot_plan` 工具调用不稳定，
+  已删除这两条覆盖记录使其回退到代码默认 `gemini-3.6-flash`（仅本地 DB 状态调整）；
+- `gemini-3.6-flash` 在 DIRECT 阶段偶发把全部输出预算耗在隐藏 reasoning token 上返回空文本
+  （`pi-ai` 的 `google-generative-ai.js` 把该情形归一为 `An unknown error occurred`），
+  重试后即成功，与本 issue 改动无关；
+- 两条泳道的 `shot-qa`（FINALIZE）下游节点失败，属 QA 阶段自身问题，不在本 issue 范围。
+
+证据文件：`docs/issues/evidence/issue-002/first-run.json`。
+
+## 10. 交付后已解锁
+
+第一个真实单镜 MP4已产出（两条泳道）→ ISSUE-014 可以开始「极小闭环」验证。

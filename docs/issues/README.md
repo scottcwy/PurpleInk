@@ -34,11 +34,14 @@
 链路架构是健全的——数据模型、状态机、产物不可变性、队列领取、帧捕获、编码、拼接全是真的。
 但链路上有 **3 个断点**，且**没有一个在画布 UI 侧**：
 
-| 断点 | 位置 | 后果 |
-| --- | --- | --- |
-| Director pi 运行时被掏成 stub，无条件抛错 | `src/features/director/pi-session.ts:51-57`、`session-store.ts:40-44` | 六个阶段一个都执行不了 |
-| `fabricateShot()` 定义了但全仓库零调用方 | `src/features/director/fabricate.ts:18` | 即使修好上一条，`shot-codegen` 仍在入队时因缺 `director-fabricate` 产物失败 |
-| Next 应用进程内没有任何 AI 凭据 | 根 `.env.local` 只有 3 个 DB/密钥变量 | `getGeminiConfig()` 拿不到 key |
+| 断点 | 位置 | 后果 | 状态 |
+| --- | --- | --- | --- |
+| Director pi 运行时被掏成 stub，无条件抛错 | `src/features/director/pi-session.ts:51-57`、`session-store.ts:40-44` | 六个阶段一个都执行不了 | `done`（ISSUE-001） |
+| `fabricateShot()` 定义了但全仓库零调用方 | `src/features/director/fabricate.ts:18` | 即使修好上一条，`shot-codegen` 仍在入队时因缺 `director-fabricate` 产物失败 | `done`（ISSUE-002，见 §4） |
+| Next 应用进程内没有任何 AI 凭据 | 根 `.env.local` 只有 3 个 DB/密钥变量 | `getGeminiConfig()` 拿不到 key | `done`（ISSUE-003） |
+
+> 以上三行是本文档 2026-07-25 撰写时的原始断点快照，保留作历史记录；三者均已 `done`，
+> 当前实际状态以 §4 Issue 清单为准。
 
 ## 2. 为什么门禁全绿却跑不通（关键）
 
@@ -107,7 +110,7 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
 | ID | 标题 | 状态 | 主要落点 |
 | --- | --- | --- | --- |
 | [ISSUE-001](./ISSUE-001-pi-agent-runtime.md) | Director pi-agent 运行时缺失，六阶段全部不可执行 | `done` | `src/features/director/pi-session.ts`、`session-store.ts`、`package.json`、`vitest.config.ts`、`tsconfig.json` |
-| [ISSUE-002](./ISSUE-002-fabricate-render-seam.md) | FABRICATE→render 接缝断裂，`fabricateShot` 零调用方 | `open` | `src/features/render/queue-handler.ts`、`admission.ts`、`render-shot-repository.ts` |
+| [ISSUE-002](./ISSUE-002-fabricate-render-seam.md) | FABRICATE→render 接缝断裂，`fabricateShot` 零调用方 | `done` | `src/features/render/queue-handler.ts`、`types.ts`、`render-shot-repository.ts`、`canvas/queries.ts`（证据 `evidence/issue-002/`） |
 | [ISSUE-003](./ISSUE-003-next-ai-credentials.md) | Next 应用进程内无 AI 凭据，配置真值不对称 | `done` | `.env.local`、`.env.example`、`docs/configuration/`、`scripts/setup/bootstrap-credentials.ts`、`tests/env.test.ts` |
 
 ### P1 能力与正确性
@@ -149,13 +152,14 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
   ISSUE-013  in-progress · 分析完成，实施收尾中（释放 openai 债务空间）
 
 第二批（ISSUE-001 已落地，可开工）
-  ISSUE-002  fabricateShot 入 render 队列
+  ISSUE-002  done · fabricateShot 接入 render 队列，真实 Gemini+StepFun 端测取证
+             · 证据 evidence/issue-002/
   ISSUE-006  done · 1f545ed + 42568d2 + efc498f · 方案 A 删层 + instrumentation 接线
              · 无 HTTP 队列消费取证 evidence/issue-006/
 
 第三批（依赖前两批）
   ISSUE-005  done · 71f1de4 + 171f692 · 真实 TTS 前移到 INGEST，时长实测取证
-             （单镜 MP4 时长对比仍待 ISSUE-002 打通渲染接缝后补，已在文件内登记）
+             （单镜 MP4 时长对比已由 ISSUE-002 补齐，见 evidence/issue-002/）
   ISSUE-011  需要 004 才有真实可配的并发数（004 已 done，可提前）
   ISSUE-008  done · commit 6aa3b52 + merge 79ef9b2 · 方案 A2（删列）
              （隔离 worktree + 独立 Postgres 完成，详见 issue 文件 §9）
