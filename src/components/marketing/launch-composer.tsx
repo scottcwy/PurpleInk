@@ -29,6 +29,7 @@ const PHASE_LABEL: Record<JobPhase, string> = {
   composing: "正在合成分镜…",
   rendering: "正在渲染视频…",
   verifying: "正在校验金样本…",
+  muxing: "正在混流旁白音轨…",
   done: "完成",
   failed: "失败",
 };
@@ -43,6 +44,7 @@ const PHASE_BAND: Record<JobPhase, [number, number, number]> = {
   composing: [72, 78, 8],
   rendering: [78, 93, 70],
   verifying: [93, 98, 4],
+  muxing: [98, 99, 3],
   done: [100, 100, 1],
   failed: [0, 0, 1],
 };

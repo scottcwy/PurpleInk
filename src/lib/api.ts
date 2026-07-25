@@ -15,6 +15,7 @@ export type JobPhase =
   | "composing"
   | "rendering"
   | "verifying"
+  | "muxing"
   | "done"
   | "failed";
 
