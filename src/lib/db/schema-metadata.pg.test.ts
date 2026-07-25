@@ -4,7 +4,7 @@ import { createPgTestDatabase } from './test/pg-test-database'
 const TABLES = [
   'workspaces', 'projects', 'canvas_nodes', 'canvas_edges', 'pipeline_runs',
   'task_attempts', 'artifacts', 'command_receipts', 'model_routes',
-  'media_routes', 'provider_credentials', 'ai_invocations',
+  'media_routes', 'provider_credentials', 'ai_invocations', 'workspace_settings',
 ] as const
 const BUSINESS_TABLES = TABLES.filter((table) => table !== 'workspaces')
 const ENUM_CHECKS = {
@@ -145,7 +145,7 @@ beforeAll(async () => Object.assign(database, await createPgTestDatabase()))
 beforeEach(async () => database.reset())
 afterAll(async () => database.close())
 
-it('creates exactly twelve tables with workspace-scoped primary keys', async () => {
+it('creates exactly thirteen tables with workspace-scoped primary keys', async () => {
   const rows = await database.sql<{ table_name: string }[]>`
     SELECT table_name FROM information_schema.tables
     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
@@ -155,14 +155,17 @@ it('creates exactly twelve tables with workspace-scoped primary keys', async () 
   const signatures = (await constraints('p')).map(constraintSignature).sort()
   const expected = [
     'workspaces:id',
-    ...BUSINESS_TABLES.map((table) => `${table}:workspace_id,id`),
+    ...BUSINESS_TABLES
+      .filter((table) => table !== 'workspace_settings')
+      .map((table) => `${table}:workspace_id,id`),
+    'workspace_settings:workspace_id,key',
   ].sort()
   expect(signatures).toEqual(expected)
 })
 
-it('locks the exact set of twenty-three workspace-safe foreign keys', async () => {
+it('locks the exact set of twenty-four workspace-safe foreign keys', async () => {
   const signatures = (await foreignKeys()).map(foreignKeySignature).sort()
-  expect(EXPECTED_FOREIGN_KEYS).toHaveLength(23)
+  expect(EXPECTED_FOREIGN_KEYS).toHaveLength(24)
   expect(signatures).toEqual([...EXPECTED_FOREIGN_KEYS].sort())
 })
 
@@ -218,7 +221,7 @@ it('uses UUID identities, bigint revisions, and timestamptz suffixes', async () 
     SELECT table_name, data_type FROM information_schema.columns
     WHERE table_schema = 'public' AND column_name IN ('id', 'workspace_id')
   `
-  expect(identities).toHaveLength(23)
+  expect(identities).toHaveLength(24)
   expect(identities.every((row) => row.data_type === 'uuid')).toBe(true)
   const revisions = await database.sql<{ table_name: string; data_type: string }[]>`
     SELECT table_name, data_type FROM information_schema.columns
@@ -230,7 +233,7 @@ it('uses UUID identities, bigint revisions, and timestamptz suffixes', async () 
     SELECT table_name, data_type FROM information_schema.columns
     WHERE table_schema = 'public' AND right(column_name, 3) = '_at'
   `
-  expect(times).toHaveLength(31)
+  expect(times).toHaveLength(32)
   expect(new Set(times.map((row) => row.table_name))).toEqual(new Set(TABLES))
   expect(times.every((row) => row.data_type === 'timestamp with time zone')).toBe(true)
 })
