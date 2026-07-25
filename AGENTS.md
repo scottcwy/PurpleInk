@@ -1,117 +1,184 @@
-# AGENTS.md — PurpleInk Stage A
+# AGENTS.md — PurpleInk
 
-本文件是本仓库的代理执行入口。所有文本保持 UTF-8，禁止引入 U+FFFD replacement character 或破坏中文。仓库使用 Git；每个可独立验证的阶段必须做本地 Conventional Commit。未经用户明确授权，不得 push、创建 PR、force push 或改写远端。
+本文件是本仓库的代理执行入口。所有文本保持 UTF-8，禁止引入 U+FFFD replacement character 或破坏中文。
 
-## 1. 当前产品边界
+## 1. 执行前提
 
-PurpleInk Stage A 在一个 Next.js 应用中同时提供：
+### 1.1 运行环境是 Windows
 
-- `/`：PurpleInk 营销页与本地出片入口；
-- `/api/engine/*`：反向代理到 `server/` 渲染 worker；
-- `/legacy/*`：CodeVideoCanvas 过渡页面，读取真实 Postgres 数据；
-- `/playbook/*`：CVC 组件登记与展示；
-- `/login`、`/signup`、`/dashboard`、`/products*`、`/releases*`：Stage B 新规范路由壳。
+终端是 Windows PowerShell。写命令前先确认语法，实际踩过的坑：
 
-新规范路由壳不得接假数据库、假认证或假引擎。未接线页面必须明确显示“该页尚未接线（Stage B）”及未来数据来源。`/legacy/*` 是过渡资产，不应被描述成新的 Product/Release 域模型。
+- 命令分隔符是 `;`，不是 `&&`。
+- 不支持 `cd`。要在子目录执行，用工具的 `cwd` 参数。
+- `dir` / `ls` / `cat` / `grep` 都是 PowerShell 别名，不接受 cmd 或 GNU 风格参数。`dir /s /b`、`findstr /r`、`ls -la` 都会失败。
+- 管道里的 `$_` 在跨 shell 传递时会被吞掉。需要 `Where-Object` / `ForEach-Object` 时，优先改用 `-Include` / `-Filter` / `Select-String`，或把脚本落到 `.ps1` 再执行。
+- 路径带 `(` `)` `[` `]` 的（如 `src/app/products/(app)`）必须用 `-LiteralPath` 或单引号包裹。
+- 读文件、搜索、编辑一律用专用工具，不要用 `Get-Content` / `Select-String` 代替。
 
-## 2. 目录与公开边界
+### 1.2 长文件分批写入
+
+一次性写入长文件会被截断，导致文件残缺。超过约 150 行或 6 KB 的内容：
+
+1. 先写第一段；
+2. 再逐段追加；
+3. 写完核对字符数与章节数，确认没有截断。
+
+### 1.3 每个版块单独 commit
+
+仓库使用 Git。每完成一个可独立验证的版块，就为**本次改动的文件**做一次 Conventional Commit：
+
+```powershell
+git status --porcelain
+git diff --cached --name-status
+```
+
+- 只 stage 当前职责的文件，不要 `git add .`。
+- 提交信息用 `type(scope): 摘要`，正文说明改了什么、验证了什么。
+- 未经用户明确授权，不得 push、创建 PR、force push 或改写远端。
+- 禁止用 `git reset --hard`、`git checkout --` 或覆盖式命令清除用户改动。
+- 禁止 `--amend` 已推送的提交；禁止 `--no-verify` 跳过 hook。
+- 提交前检查是否夹带 `.env*`、构建物或凭据。
+
+## 2. 产品边界
+
+PurpleInk 是一套把产品事实与真实演示证据制作成发布视频的工作流。一个 Next.js 应用同时提供：
+
+- `/`：营销页；
+- `/products/*`：制作应用本体（工作台、项目、画布、镜头、导出、设置），接真实 Postgres、Artifact 与渲染队列；
+- `/playbook/*`：组件登记与视觉验收；
+- `/api/*`：Next 自有 API；
+- `/api/engine/*`：反向代理到 `server/` 渲染 worker。
+
+路由的唯一真值是 `docs/conventions/routing.md`。新增或删除任何可寻址表面（页面、API、元数据路由）必须先改那份文件，再改代码。
+
+未接线的页面必须显式显示未接线状态与未来数据来源，不得接假数据库、假认证或假引擎。
+
+## 3. 目录与公开边界
 
 ```text
 src/
-  app/                  页面、layout 与 Next API 薄入口
+  app/                  页面、layout 与 API 薄入口
     (marketing)/        营销首页
-    (product)/          Stage B 产品路由壳
-    legacy/(app)/       CVC 过渡应用
-    playbook/           组件登记页面
+    products/(app)/     制作应用（唯一应用壳挂载点）
+    playbook/           组件登记
     api/                Next 自有 API
   components/
-    marketing/          PurpleInk 营销组件
-    ui/                 共享 UI 原语
-  features/             canvas、artifact、render、audio、AI 等领域能力
+    marketing/          营销组件
+    ui/                 共享 UI 原语（设计系统 SSOT）
+  features/             canvas、artifacts、render、director、navigation、ai 等领域能力
   lib/                  数据库、存储、队列、配置与基础设施
-server/                 PurpleInk 渲染 worker
+server/                 渲染 worker
 scripts/                数据库、验证与迁移脚本
-tests/                  跨目录契约与 Stage A 测试
-docs/                   路由规范、迁移报告与证据
+tests/                  跨目录契约测试
+docs/                   规范、设计与评审文档
 ```
 
 - TypeScript `@/*` 只映射到 `./src/*`。
-- 默认使用 Server Component；`'use client'` 下沉到确有交互需求的叶子组件。
-- Next 16 的 `params`、`searchParams`、`cookies`、`headers` 必须 `await`。
-- 跨域复用现有公开导出；避免为同一职责增加平行 wrapper、第二套状态模型或纯 re-export 壳。
+- 跨域复用现有公开导出（`src/features/*/index.ts`）；不要为同一职责增加平行 wrapper、第二套状态模型或纯 re-export 壳。
 - `src/app` 只做参数解析、组合与响应映射，不放 SQL、渲染参数或复杂业务状态机。
+- 应用壳只有一套：`src/features/navigation/app-shell.tsx`。禁止出现第二个 shell、第二个 sidebar 或第二套 pathname 到高亮的映射。
+- 视觉只有一套：`docs/designs/canvas.pen` 是像素真值，`docs/designs/Design-system-inventory.md` 是文字索引，`/playbook` 是已登记组件的唯一清单。页面不得本地拼装平行的 Button / Card / Badge / Sidebar / Tabs。
 
-## 3. 包管理与运行方式
+## 4. 包管理与运行
 
-唯一包管理器是 pnpm 10.30.0。根目录与 `server/` 由 `pnpm-workspace.yaml` 管理；不要生成或提交 `package-lock.json`，不要手工修改 `pnpm-lock.yaml`。
+唯一包管理器是 pnpm 10.30.0。根目录与 `server/` 由 `pnpm-workspace.yaml` 管理。
 
 ```powershell
 pnpm install
-pnpm dev
-pnpm dev:worker
+pnpm dev                                      # Next，默认 http://localhost:3000
+pnpm dev:worker                               # worker，默认 http://localhost:8787
 docker compose -f docker-compose.dev.yml up -d
 pnpm db:migrate
 ```
 
-- Next 默认监听 `http://localhost:3000`。
-- worker 默认监听 `http://localhost:8787`。
-- 本地 Postgres 默认由目标仓库 Docker Compose 提供；若端口冲突，以 `.env.local` 和迁移报告登记的实际端口为准。
-- HyperFrames 必须使用 workspace 本地固定版本，不允许运行时动态下载 CLI。
+- 不生成或提交 `package-lock.json`；不手改 `pnpm-lock.yaml`。依赖由 pnpm 命令产生并锁精确版本。
+- `pnpm dev`、`pnpm dev:worker` 是长驻进程，必须放后台运行，不要在同步命令里执行。
+- 本地 Postgres 由 `docker-compose.dev.yml` 提供；端口冲突时以 `.env.local` 实际值为准。
+- HyperFrames 使用 workspace 本地固定版本，不允许运行时动态下载 CLI。
 
-## 4. 数据、Artifact 与 UI 真值
+## 5. 文件与编码
 
-- Postgres 是当前结构化业务数据源；不得新增 SQLite 运行依赖或双写路径。
-- approved/released Artifact 不可原地更新或删除；新版本使用新记录并保留 lineage。
+规模门禁（由 `pnpm verify:v3` 真实执行，基线只允许持平或下降）：
+
+| 类型 | 目标 | 硬上限 |
+| --- | --- | --- |
+| `page.tsx` | 200 | 300 |
+| 一般生产文件 | 250 | 350 |
+| schema / repository（按聚合拆分） | — | 400 |
+| 单函数 | 50 | — |
+
+- 一个文件只有一个主要变化原因。
+- 碰到硬上限或职责混杂，必须在**当前 Task** 内按 domain / application / infrastructure / UI 的真实职责拆分并复用公共代码。禁止只套 re-export 壳、把大段代码搬到别处或制造循环依赖来规避门禁。
+
+已知欠债（`pnpm verify:v3` 当前为红，不是新引入的）：
+
+- `src/app/products/(app)/shots/[shotId]/shot-detail.tsx` 525 行；
+- `src/app/products/(app)/export/[projectId]/export-workspace.tsx` 389 行。
+
+改动这两个文件所在的模块时必须顺带拆分；不得在它们上面继续加行。
+
+编码规则：
+
+- TypeScript strict，禁止 `any`；用 `unknown` 加类型收窄。
+- 默认 Server Component；`'use client'` 尽量下沉到确有交互需求的叶子组件。
+- Next 16 用 `proxy.ts`，不用 `middleware.ts`。
+- 异步入参 `params`、`searchParams`、`cookies`、`headers` 必须 `await`。
+- 图标统一 Lucide，取自设计规范白名单，禁止 emoji。
+- 不提交构建物、`.env*`、`.data/`、`.trigger/`、`out/`、`output/`、浏览器临时目录或凭据。
+
+## 6. 数据与 UI 真值
+
+- Postgres 是唯一结构化业务数据源；不得新增 SQLite 运行依赖或双写路径。
+- approved / released Artifact 不可原地更新或删除；新版本使用新记录并保留 lineage。
 - `content_hash` 必须来自实际字节的 SHA-256；文件大小、状态、版本与来源不能伪造。
-- 凭据只存加密内容；master key 只从 server-only 环境读取，不得明文 fallback。
-- UI 可见字段必须可追溯到 API、数据库投影、Artifact 或明确的 Stage B 占位。
-- 禁止固定假百分比、恒真成功/QA、无 Artifact 的下载链接、可点击但无行为的业务按钮。
-- fixture、mock、真实 API/模型调用必须分别标注；mock 渲染不能宣称为真实外部站点采集。
+- UI 可见字段必须可追溯到 API、数据库投影、Artifact，或明确标注的未接线占位。
+- 禁止固定假百分比、恒真成功 / QA、无 Artifact 的下载链接、可点击但无行为的业务按钮、永久 Skeleton。
+- 状态不能只靠颜色表达，必须同时有文本或图标语义。
+- 不展示 raw assistant delta、tool 参数值、prompt、credential、provider 原始错误或隐藏推理。错误页只给类别文案与 `error.digest`。
+- fixture、mock、真实 API / 模型调用必须分别标注；mock 渲染不得宣称为真实外部站点采集。
 
-## 5. 密钥与本地文件
+## 7. Key 与 secret
 
-代理可以为本地验证读取 `.env.local`，但只允许在报告、日志和对话中引用变量名：
+用户已授权代理读取 `.env` / `.env.local` 做本地验证，但：
 
-- 不回显 secret 值；
-- 不写入源码、测试 fixture、截图、日志或 commit；
-- 不创建携带 secret 的 `NEXT_PUBLIC_*` 变量；
-- `.env.local`、`.data/`、`out/`、`output/`、构建产物和浏览器临时目录不得提交；
-- 设置 API 先验证再保存，验证失败不得覆盖已有凭据。
+- 只引用变量名，不回显值；
+- 不写入源码、测试 fixture、截图、日志、commit 或对话；
+- 禁止创建携带 secret 的 `NEXT_PUBLIC_*` 变量；
+- 客户端不得解析 provider credential；
+- 凭据只存加密内容，master key 只从 server-only 环境读取，不得明文 fallback；
+- 设置类 API 必须先验证再保存；验证失败返回 422 且不覆盖已有 secret。
 
-## 6. 文件与函数规模
+## 8. 验证
 
-- `page.tsx` 目标不超过 200 行，硬上限 300 行；
-- 一般生产文件目标不超过 250 行，硬上限 350 行；
-- schema/repository 按聚合拆分，硬上限 400 行；
-- 单函数目标不超过 50 行；
-- 文件只承担一个主要变化原因。达到硬上限或职责混杂时，按真实 domain/application/infrastructure/UI 边界拆分并复用公共代码，不能用循环依赖或空壳文件规避行数。
-
-## 7. 验证与提交
-
-功能和修复遵循 RED → GREEN → 重构 → 验证。完成前至少运行：
+功能与修复遵循 RED → GREEN → 重构 → 验证。提交前至少运行：
 
 ```powershell
 pnpm lint
 pnpm typecheck
 pnpm test
-pnpm test:pg
+pnpm verify:v3
 pnpm build
 git diff --check
 ```
 
-并按变更范围补充：
+按变更范围补充：
 
-- Postgres migration 连续执行两次；
-- `/api/engine/*` 与 Next `/api/*` 的 HTTP 证据；
-- 用户可见页面的真实 Chromium 截图与控制台检查；
-- 视频产物的 `ffprobe`、实际文件哈希和可下载验证；
-- `AGENTS.md README.md docs src server scripts` 的 U+FFFD 扫描；
-- 禁止依赖、未跟踪 secret 和 staged scope 检查。
+- 涉及数据库：`pnpm test:pg`，并把 migration 连续执行两次；
+- 涉及 API：`/api/*` 与 `/api/engine/*` 的真实 HTTP 证据；
+- 涉及用户可见页面：真实 Chromium 截图与控制台检查；
+- 涉及视频产物：`ffprobe`、实际文件哈希与可下载验证；
+- 文本变更：对 `AGENTS.md README.md docs src server scripts` 做 U+FFFD 扫描。
 
-提交前检查 `git diff --cached --name-status`，只提交当前职责的文件。禁止用 `git reset --hard`、`git checkout --` 或覆盖式命令清除用户改动。
+无法运行某项验证时必须说明原因，不得声称已验证。
 
-## 8. 当前权威文档
+## 9. 权威文档
 
-- `docs/conventions/routing.md`：新规范路由、守卫与实现状态。
-- `docs/migration/stage-a-report.md`：M0–M7 迁移事实、waiver、命令与运行证据。
-- `docs/superpowers/plans/2026-07-25-m6-route-shells.md`：M6 路由壳实施清单。
+| 文档 | 责任 |
+| --- | --- |
+| `docs/conventions/routing.md` | 全部路由、上下文参数、守卫与状态口径 |
+| `docs/designs/canvas.pen` | 视觉像素、token、reusable symbol 的 SSOT |
+| `docs/designs/Design-system-inventory.md` | token、组件、页面与同步规则的文字索引 |
+| `docs/designs/README.md` | `docs/designs` 内部权威关系 |
+| `docs/configuration/tts.md` | TTS 配置 |
+
+`docs/archive/**` 是历史迁移记录，只供追溯，不作为实现依据。
