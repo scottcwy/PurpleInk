@@ -1,0 +1,95 @@
+name: purpleink
+
+services:
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      PURPLEINK_DOMAIN: ${PURPLEINK_DOMAIN:?set PURPLEINK_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - app
+    security_opt:
+      - no-new-privileges:true
+
+  web:
+    image: ghcr.io/scottcwy/purpleink-web:${IMAGE_TAG:?set IMAGE_TAG}
+    restart: unless-stopped
+    depends_on:
+      worker:
+        condition: service_healthy
+    expose:
+      - "3000"
+    environment:
+      BACKEND_ORIGIN: http://worker:8787
+      HOSTNAME: 0.0.0.0
+      NODE_ENV: production
+      PORT: 3000
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - app
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+
+  worker:
+    image: ghcr.io/scottcwy/purpleink-worker:${IMAGE_TAG:?set IMAGE_TAG}
+    restart: unless-stopped
+    init: true
+    expose:
+      - "8787"
+    env_file:
+      - path: ${WORKER_ENV_FILE:-.env.worker}
+        required: true
+    environment:
+      NODE_ENV: production
+      PORT: 8787
+    volumes:
+      - ./data:/app/server/out
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:8787/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - app
+    shm_size: 1gb
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2800m
+
+networks:
+  app:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

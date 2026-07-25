@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   // 允许取证/端测用独立构建目录，避免与正在运行的 dev server 争用 .next。
   // 不设置时行为与以往完全一致。
   ...(process.env.CVC_NEXT_DIST_DIR
