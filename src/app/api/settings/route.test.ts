@@ -13,9 +13,26 @@ const mocks = vi.hoisted(() => ({
   validateGeminiKey: vi.fn(),
   describeDirectorRoutes: vi.fn(),
   saveDirectorRoutes: vi.fn(),
+  describeLaneQuotas: vi.fn(),
+  saveLaneQuotas: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
+
+// route.ts 对 renderShot 做运行时 cpu 上限校验——固定为 4 保证 suite 可复现。
+vi.mock('node:os', async (importOriginal) => {
+  const original = await importOriginal<typeof import('node:os')>()
+  const stubbedOs = {
+    ...original,
+    cpus: () => Array.from({ length: 4 }),
+  }
+  return { ...original, default: stubbedOs }
+})
+
+const MOCK_DEFAULT_LANE_VIEW = {
+  directorStage: { value: 12, source: 'default' },
+  renderShot: { value: 2, source: 'default' },
+} as const
 vi.mock('@/features/ai/stepfun-adapter', () => ({
   saveApiKey: mocks.saveApiKey,
   validateKey: mocks.validateKey,
@@ -38,6 +55,10 @@ vi.mock('@/features/ai/gemini-adapter', () => ({
 vi.mock('@/features/ai/model-routing', () => ({
   describeDirectorRoutes: mocks.describeDirectorRoutes,
   saveDirectorRoutes: mocks.saveDirectorRoutes,
+}))
+vi.mock('@/lib/queue/runtime-config', () => ({
+  describeLaneQuotas: mocks.describeLaneQuotas,
+  saveLaneQuotas: mocks.saveLaneQuotas,
 }))
 
 describe('GET /api/settings', () => {
@@ -74,6 +95,7 @@ describe('GET /api/settings', () => {
         source: 'default',
       },
     })
+    mocks.describeLaneQuotas.mockResolvedValue(MOCK_DEFAULT_LANE_VIEW)
 
     const response = await GET()
     const body = await response.json()
@@ -91,6 +113,7 @@ describe('GET /api/settings', () => {
     })
     expect(body.gemini.primaryModel.value).toBe('gemini-3.6-flash')
     expect(body.routes['shot-codegen'].provider).toBe('gemini')
+    expect(body.laneQuotas).toEqual(MOCK_DEFAULT_LANE_VIEW)
     expect(mocks.describeCredential).toHaveBeenCalledTimes(2)
   })
 })
@@ -106,11 +129,13 @@ describe('POST /api/settings', () => {
     mocks.describeStepfunConfig.mockResolvedValue({})
     mocks.describeGeminiConfig.mockResolvedValue({})
     mocks.describeDirectorRoutes.mockResolvedValue({})
+    mocks.describeLaneQuotas.mockResolvedValue(MOCK_DEFAULT_LANE_VIEW)
     mocks.saveStepfunModelSettings.mockResolvedValue(undefined)
     mocks.saveGeminiSettings.mockResolvedValue(undefined)
     mocks.saveDirectorRoutes.mockResolvedValue(undefined)
     mocks.saveApiKey.mockResolvedValue(undefined)
     mocks.saveGeminiApiKey.mockResolvedValue(undefined)
+    mocks.saveLaneQuotas.mockResolvedValue(undefined)
   })
 
   it('validates before saving a StepFun Key', async () => {
@@ -221,6 +246,128 @@ describe('POST /api/settings', () => {
     expect(mocks.saveGeminiApiKey).not.toHaveBeenCalled()
     expect(mocks.saveGeminiSettings).not.toHaveBeenCalled()
     expect(mocks.saveDirectorRoutes).not.toHaveBeenCalled()
+  })
+})
+
+describe('POST /api/settings lane quotas (ISSUE-011)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.describeCredential.mockResolvedValue({
+      configured: false,
+      verifiedAt: null,
+      updatedAt: null,
+    })
+    mocks.describeStepfunConfig.mockResolvedValue({})
+    mocks.describeGeminiConfig.mockResolvedValue({})
+    mocks.describeDirectorRoutes.mockResolvedValue({})
+    mocks.describeLaneQuotas.mockResolvedValue(MOCK_DEFAULT_LANE_VIEW)
+    mocks.saveStepfunModelSettings.mockResolvedValue(undefined)
+    mocks.saveGeminiSettings.mockResolvedValue(undefined)
+    mocks.saveDirectorRoutes.mockResolvedValue(undefined)
+    mocks.saveApiKey.mockResolvedValue(undefined)
+    mocks.saveGeminiApiKey.mockResolvedValue(undefined)
+    mocks.saveLaneQuotas.mockResolvedValue(undefined)
+  })
+
+  it('persists valid lane quotas and signals requiresRestart=true', async () => {
+    const response = await POST(request({
+      laneQuotas: { directorStageConcurrency: 4, renderShotConcurrency: 2 },
+    }))
+
+    expect(response.status).toBe(200)
+    expect(mocks.saveLaneQuotas).toHaveBeenCalledWith({
+      directorStage: 4,
+      renderShot: 2,
+    })
+    const body = await response.json()
+    expect(body.requiresRestart).toBe(true)
+    expect(body.laneQuotas).toEqual(MOCK_DEFAULT_LANE_VIEW)
+  })
+
+  it('does not call saveLaneQuotas when laneQuotas is omitted', async () => {
+    const response = await POST(request({ chatModel: 'step-3.5-flash' }))
+
+    expect(response.status).toBe(200)
+    expect(mocks.saveLaneQuotas).not.toHaveBeenCalled()
+    const body = await response.json()
+    expect(body.requiresRestart).toBe(false)
+  })
+
+  it('rejects directorStage=0 with 400 and does not persist anything', async () => {
+    const response = await POST(request({
+      laneQuotas: { directorStageConcurrency: 0, renderShotConcurrency: 2 },
+    }))
+
+    expect(response.status).toBe(400)
+    expect(mocks.saveLaneQuotas).not.toHaveBeenCalled()
+    expect(mocks.saveStepfunModelSettings).not.toHaveBeenCalled()
+    expect(mocks.saveApiKey).not.toHaveBeenCalled()
+  })
+
+  it('rejects renderShotConcurrency=-1 with 400', async () => {
+    const response = await POST(request({
+      laneQuotas: { directorStageConcurrency: 4, renderShotConcurrency: -1 },
+    }))
+
+    expect(response.status).toBe(400)
+    expect(mocks.saveLaneQuotas).not.toHaveBeenCalled()
+  })
+
+  it('rejects non-integer 1.5 with 400', async () => {
+    const response = await POST(request({
+      laneQuotas: { directorStageConcurrency: 1.5, renderShotConcurrency: 2 },
+    }))
+
+    expect(response.status).toBe(400)
+    expect(mocks.saveLaneQuotas).not.toHaveBeenCalled()
+  })
+
+  it('rejects directorStage=33 (over schema max 32) with 400', async () => {
+    const response = await POST(request({
+      laneQuotas: { directorStageConcurrency: 33, renderShotConcurrency: 2 },
+    }))
+
+    expect(response.status).toBe(400)
+    expect(mocks.saveLaneQuotas).not.toHaveBeenCalled()
+  })
+
+  it('rejects renderShotConcurrency=5 (over runtime CPU count=4) with 400', async () => {
+    const response = await POST(request({
+      laneQuotas: { directorStageConcurrency: 4, renderShotConcurrency: 5 },
+    }))
+
+    expect(response.status).toBe(400)
+    expect(mocks.saveLaneQuotas).not.toHaveBeenCalled()
+    expect(mocks.saveStepfunModelSettings).not.toHaveBeenCalled()
+    const body = await response.json()
+    expect(body.error).toMatch(/CPU/)
+  })
+
+  it('does not persist lane quotas when a StepFun key in the same request fails validation', async () => {
+    mocks.validateKey.mockResolvedValue(false)
+    const response = await POST(request({
+      apiKey: 'sk-invalid',
+      laneQuotas: { directorStageConcurrency: 4, renderShotConcurrency: 2 },
+    }))
+
+    expect(response.status).toBe(422)
+    expect(mocks.saveLaneQuotas).not.toHaveBeenCalled()
+    expect(mocks.saveApiKey).not.toHaveBeenCalled()
+  })
+
+  it('persists lane quotas and a validated StepFun key in the same request', async () => {
+    mocks.validateKey.mockResolvedValue(true)
+    const response = await POST(request({
+      apiKey: 'sk-valid',
+      laneQuotas: { directorStageConcurrency: 4, renderShotConcurrency: 2 },
+    }))
+
+    expect(response.status).toBe(200)
+    expect(mocks.saveApiKey).toHaveBeenCalledWith('sk-valid')
+    expect(mocks.saveLaneQuotas).toHaveBeenCalledWith({
+      directorStage: 4,
+      renderShot: 2,
+    })
   })
 })
 
