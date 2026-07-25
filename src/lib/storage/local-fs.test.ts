@@ -69,4 +69,16 @@ describe('LocalFsStorage', () => {
       storage.removeTempDir(path.join(root, 'does-not-exist'))
     ).resolves.toBeUndefined()
   })
+
+  it('rejects keys that escape the root directory', async () => {
+    const escapes = ['../outside.txt', '..\\outside.txt', 'a/../../outside.txt']
+    for (const key of escapes) {
+      await expect(storage.put(key, 'x')).rejects.toThrow(/root/)
+      await expect(storage.get(key)).rejects.toThrow(/root/)
+      await expect(storage.delete(key)).rejects.toThrow(/root/)
+      expect(() => storage.localPath(key)).toThrow(/root/)
+    }
+    // 绝对路径 key 同样不得穿透 root。
+    await expect(storage.put('C:/temp/abs.txt', 'x')).rejects.toThrow(/root/)
+  })
 })
