@@ -107,13 +107,29 @@
 | U+FFFD 扫描 | 0（verify:v3 report.replacementCharacters） |
 | 跟踪 secret/生成目录 | `git ls-files` 无 `.env.local`、`.data/`、`out/`、`output/`、`package-lock.json`、`.next/` |
 
-说明：本次未触及 schema，无新 migration；`pnpm db:migrate` 双次幂等证据沿用 M7 登记，未重复执行（无变更范围触发）。HTTP 运行时证据：muxing 缺陷的复现路径依赖完整出片任务（约 2 分钟真实渲染），本次以"worker 源码上报点 + 前端解构点 + 派生契约测试"三重静态证据代替运行时复现，标注为 **未运行时复现**（回归由契约测试长期看护）。
+说明：本次未触及 schema，无新 migration；`pnpm db:migrate` 双次幂等证据沿用 M7 登记，未重复执行（无变更范围触发）。
+
+### 4.1 运行时 HTTP 证据（第 2 轮补齐，关闭 F-01/F-02 的“未运行时复现”缺口）
+
+临时 worker 实例：本分支修复后代码，端口 8791（默认 8787 被外部实例占用，未动），`BROWSER_DRIVER=mock` + `PURPLEINK_COMPOSE_MODE=template`（同 M5 登记的允许降级；TTS、HyperFrames 渲染、金样本校验均真实执行）：
+
+| 检查项 | 实测结果 |
+| --- | --- |
+| `GET /health` | 200 `{"ok":true}` |
+| `POST /render`（非法 JSON） | 400 `{"error":"invalid JSON body"}` |
+| 失败任务错误卫生（F-02） | job `d809d96f`（captureDir 指向不存在盘）→ `status:failed`，公开 `error` 仅为 `"ENOENT: no such file or directory, mkdir ..."` message，**无 stack、无本机绝对路径**；失败如实上报未被吞 |
+| muxing 阶段（F-01） | job `5cb89842`（url=https://example.com, 15s, draft）完整阶段序列：`queued→capturing→scripting→synthesizing→timing→composing→rendering→verifying→muxing→done`，耗时 226s；`muxing` 在 JobView.logs 中真实出现，web 类型/标签/进度带已覆盖 |
+| 真实状态呈现 | `checkPassed:false`（hyperframes 静态 check 告警）如实回传未被伪装；`goldenVerified:true`（15 通过/0 失败） |
+| 视频端点 | `GET /jobs/5cb89842/video` → 200，`video/mp4`，353,524 bytes，SHA-256 `A1FE8DBF3DE3A04F9A7325AB01898491CBE625C08C6904431B30DF0B3782739B` |
+
+F-01/F-02 至此均有静态契约测试 + 运行时 HTTP 双重证据，不再标注“未运行时复现”。
 
 ## 5. 已知限制
 
 - `BRANCH-DRIFT`：分支名在实施期间由外部改为 `master`；本次未创建/删除任何分支。若需要恢复 `feature/merge-cvc` 命名，请协调并行 Agent 后由维护者操作。
-- 工作树在收口时仍包含并行 Agent 的未提交改动（playbook/ui/workflow/globals.css/m6 测试），`pnpm lint`/`typecheck`/`test` 结果不可避免地覆盖这些文件的当下状态；本人提交不包含它们。
-- worker 无独立测试基础设施，F-02 的部分断言采用仓库既有的"跨目录读源码契约测试"风格（与 job-phase/env 测试同型），非运行时行为测试。
+- 工作树在收口时仍包含并行 Agent 的未提交改动（playbook/ui/(product)/navigation/layout 等），`pnpm lint`/`typecheck`/`test` 结果不可避免地覆盖这些文件的当下状态；本人提交不包含它们。
+- worker 无独立测试基础设施，F-02 的部分断言采用仓库既有的“跨目录读源码契约测试”风格（与 job-phase/env 测试同型）；运行时行为已由 §4.1 的真实 HTTP 证据覆盖。
+- 运行时验收用的临时 worker（端口 8791）由沙箱限制未能在收口时终止，可能仍在监听；它只读本地配置、不占默认端口，可安全关闭。验证产物/日志位于未跟踪的 `.data/`。
 
 ## 6. Stage B 建议（增量于迁移报告既有建议）
 
