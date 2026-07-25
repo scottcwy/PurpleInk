@@ -268,6 +268,18 @@ async function readArtifactInventory(projectId: string): Promise<ArtifactRow[]> 
   return inventory
 }
 
+/**
+ * 反代 Basic Auth 凭据（ISSUE-015 P-2）的唯一注入出口。
+ * 格式 `user:pass`，来自 env `CVC_VERIFY_BASIC_AUTH`；未设置时返回空对象，
+ * 行为与反代落地前完全一致（不发该头）。Node fetch 不接受 URL 内嵌凭据
+ * （`https://user:pass@host` 会直接抛 TypeError），因此走请求头而非 URL。
+ */
+function basicAuthHeaders(): Record<string, string> {
+  const credentials = process.env.CVC_VERIFY_BASIC_AUTH
+  if (!credentials) return {}
+  return { Authorization: `Basic ${Buffer.from(credentials).toString('base64')}` }
+}
+
 async function post(
   baseUrl: string,
   route: string,
@@ -275,7 +287,7 @@ async function post(
 ): Promise<Record<string, unknown>> {
   const response = await fetch(`${baseUrl}${route}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...basicAuthHeaders() },
     body: JSON.stringify(body),
   })
   const parsed: unknown = await response.json().catch(() => null)
@@ -330,7 +342,6 @@ async function writeReport(
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
-
 main().catch((error: unknown) => {
   console.error(
     `[e2e] 中止：${error instanceof Error ? error.message : String(error)}`
