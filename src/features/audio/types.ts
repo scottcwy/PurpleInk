@@ -4,15 +4,6 @@ export interface Caption {
   text: string
 }
 
-export interface VoiceoverTrack {
-  shotId: string
-  audioArtifactId: string
-  audioKey: string
-  metadataArtifactId: string
-  metadataKey: string
-  durationMs: number
-}
-
 export interface BgmPlan {
   trackKey: string
   gainDb: number
@@ -33,14 +24,6 @@ export interface SubtitleInput {
   audioKey: string
   audioBytes: Buffer
   audioFormat: 'mp3' | 'wav' | 'ogg' | 'pcm'
-}
-
-export interface VoiceoverInput {
-  projectId: string
-  nodeId: string
-  shotId: string
-  text: string
-  voiceId?: string
 }
 
 export interface SfxInput {
@@ -69,15 +52,6 @@ export interface SubtitleResult {
   alignmentSource: 'stepfun-asr'
   trackArtifactId: string
   trackKey: string
-}
-
-export interface VoiceoverResult {
-  kind: 'voiceover'
-  status: 'ready'
-  shotId: string
-  model: string
-  nativeCaptions: Caption[]
-  track: VoiceoverTrack
 }
 
 export interface SfxResult extends PlaceholderResult {

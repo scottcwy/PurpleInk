@@ -3,7 +3,6 @@ import { z } from 'zod'
 import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
 import { artifacts, canvasNodes } from '@/lib/db/schema/index'
 import type { StorageAdapter } from '@/lib/storage'
-import { buildDemoAudioAllocation, buildDemoAudioManifest } from './audio-demo'
 import { readLaneKey } from './runtime-node-data'
 import {
   audioAllocationSchema,
@@ -44,28 +43,20 @@ export class DirectorArtifactSource {
   }> {
     const nodeId = await this.findNodeId(projectId, 'script-import')
     const raw = await this.loadArtifactJson(projectId, nodeId, 'director-ingest')
+    // 音频时序没有回退口径：INGEST 必须已写入实测 manifest/allocation，缺失即失败。
     const parsed = z
       .object({
         scriptUnits: z.unknown(),
-        audioManifest: z.unknown().optional(),
-        audioAllocation: z.unknown().optional(),
+        audioManifest: z.unknown(),
+        audioAllocation: z.unknown(),
       })
       .parse(raw)
-    const scriptUnits = ingestStageResultSchema.parse({
-      scriptUnits: parsed.scriptUnits,
-    }).scriptUnits
-    if (parsed.audioManifest && parsed.audioAllocation) {
-      return {
-        scriptUnits,
-        audioManifest: audioManifestSchema.parse(parsed.audioManifest),
-        audioAllocation: audioAllocationSchema.parse(parsed.audioAllocation),
-      }
-    }
-    const audioManifest = buildDemoAudioManifest(scriptUnits)
     return {
-      scriptUnits,
-      audioManifest,
-      audioAllocation: buildDemoAudioAllocation(scriptUnits, audioManifest),
+      scriptUnits: ingestStageResultSchema.parse({
+        scriptUnits: parsed.scriptUnits,
+      }).scriptUnits,
+      audioManifest: audioManifestSchema.parse(parsed.audioManifest),
+      audioAllocation: audioAllocationSchema.parse(parsed.audioAllocation),
     }
   }
 

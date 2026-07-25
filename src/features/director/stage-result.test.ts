@@ -1,8 +1,35 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type { NarrationInput, NarrationResult } from '@/features/audio'
 import type { DirectorStageContext } from './runtime-repository'
-import { prepareStageResult } from './stage-result'
+import { prepareStageResult, type StageResultDependencies } from './stage-result'
 
 const digest = `sha256:${'a'.repeat(64)}`
+
+/** 每个 unit 的实测时长由文本长度以外的真实音频决定，这里用可控实测值替代。 */
+function narrationStub(durationsMs: readonly number[]): StageResultDependencies {
+  return {
+    synthesizeNarration: vi.fn(
+      async (input: NarrationInput): Promise<NarrationResult> => ({
+        engine: 'stepaudio-2.5-tts',
+        voice: 'cixingnansheng',
+        units: input.units.map((unit, index) => ({
+          unitId: unit.unitId,
+          text: unit.text,
+          audioKey: `narration/project-1/${unit.unitId}.mp3`,
+          audioArtifactId: `artifact-${unit.unitId}`,
+          contentHash: 'c'.repeat(64),
+          durationMs: durationsMs[index] ?? 1000,
+          sampleRateHz: 24_000,
+          sampleCount: Math.round(
+            ((durationsMs[index] ?? 1000) * 24_000) / 1000
+          ),
+          nativeCaptions: [],
+          reused: false,
+        })),
+      })
+    ),
+  }
+}
 const baseContext = {
   projectId: 'project-1',
   nodeId: 'node-1',
@@ -14,14 +41,16 @@ const baseContext = {
 }
 
 describe('prepareStageResult', () => {
-  it('normalizes fenced INGEST JSON and assigns stable shot ids', () => {
-    const result = prepareStageResult(
+  it('normalizes fenced INGEST JSON and assigns stable shot ids', async () => {
+    const dependencies = narrationStub([1583.375, 7216.5])
+    const result = await prepareStageResult(
       {
         ...baseContext,
         stage: 'INGEST',
         directorInput: { rawScript: '第一句。第二句。' },
       },
-      '```json\n{"scriptUnits":[{"unitId":"U001","text":"第一句。"},{"unitId":"U002","text":"第二句。"}]}\n```'
+      '```json\n{"scriptUnits":[{"unitId":"U001","text":"第一句。"},{"unitId":"U002","text":"第二句。"}]}\n```',
+      dependencies
     )
 
     const parsed = JSON.parse(result.content)
@@ -29,8 +58,19 @@ describe('prepareStageResult', () => {
       { unitId: 'U001', text: '第一句。' },
       { unitId: 'U002', text: '第二句。' },
     ])
-    expect(parsed.audioManifest).toMatchObject({ version: 1, engine: 'demo-tts' })
+    expect(parsed.audioManifest).toMatchObject({
+      version: 1,
+      engine: 'stepaudio-2.5-tts',
+      contractVersion: 'vnext-audio-v1',
+    })
+    expect(parsed.audioManifest.units.map((unit: { durationMs: number }) => unit.durationMs))
+      .toEqual([1583.375, 7216.5])
     expect(parsed.audioAllocation).toMatchObject({ schemaVersion: 1, fps: 30 })
+    expect(
+      parsed.audioAllocation.shots.map(
+        (shot: { durationInFrames: number }) => shot.durationInFrames
+      )
+    ).toEqual([48, 217])
     expect(result.ingestShots).toEqual([
       {
         shotId: 'S001',
@@ -43,21 +83,43 @@ describe('prepareStageResult', () => {
     ])
   })
 
-  it('rejects malformed INGEST output before it can become an artifact', () => {
-    expect(() =>
+  it('rejects malformed INGEST output before any TTS call happens', async () => {
+    const dependencies = narrationStub([1000])
+
+    await expect(
       prepareStageResult(
         {
           ...baseContext,
           stage: 'INGEST',
           directorInput: {},
         },
-        '{"scriptUnits":[{"unitId":"wrong","text":"内容"}]}'
+        '{"scriptUnits":[{"unitId":"wrong","text":"内容"}]}',
+        dependencies
       )
-    ).toThrow()
+    ).rejects.toThrow()
+    expect(dependencies.synthesizeNarration).not.toHaveBeenCalled()
   })
 
-  it('derives FABRICATE render metadata from trusted allocation', () => {
-    const result = prepareStageResult(fabricateContext(), '<!doctype html>')
+  it('fails INGEST without any artifact content when TTS is unavailable', async () => {
+    await expect(
+      prepareStageResult(
+        {
+          ...baseContext,
+          stage: 'INGEST',
+          directorInput: { rawScript: '第一句。' },
+        },
+        '{"scriptUnits":[{"unitId":"U001","text":"第一句。"}]}',
+        {
+          synthesizeNarration: async () => {
+            throw new Error('尚未配置 StepFun API Key')
+          },
+        }
+      )
+    ).rejects.toThrow('StepFun API Key')
+  })
+
+  it('derives FABRICATE render metadata from trusted allocation', async () => {
+    const result = await prepareStageResult(fabricateContext(), '<!doctype html>')
 
     expect(result.renderSpec).toMatchObject({
       fps: 30,

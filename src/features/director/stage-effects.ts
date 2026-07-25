@@ -4,10 +4,8 @@ import { storage } from '@/lib/storage'
 import {
   AudioRuntimeRepository,
   generateSubtitle,
-  generateVoiceover,
-  type LoadedVoiceover,
+  type LoadedNarration,
   type SubtitleInput,
-  type VoiceoverInput,
 } from '@/features/audio'
 import { runShotQaCheck } from '@/features/render/qa-check'
 import { runShotVisionQa } from '@/features/render/vision-qa'
@@ -19,12 +17,11 @@ import {
 import { shotQaPromptInputSchema } from './prompts/finalize'
 
 interface StageEffectDependencies {
-  generateVoiceover: (input: VoiceoverInput) => Promise<unknown>
   generateSubtitle: (input: SubtitleInput) => Promise<unknown>
-  loadVoiceover: (
+  loadNarration: (
     projectId: string,
-    shotId: string
-  ) => Promise<LoadedVoiceover>
+    unitId: string
+  ) => Promise<LoadedNarration>
   runRuleQa: (projectId: string, qaNodeId: string) => Promise<unknown>
   runVisionQa: (input: {
     projectId: string
@@ -37,26 +34,29 @@ export type DirectorStageEffect = (
   context: DirectorStageContext
 ) => Promise<void>
 
-/** 把 Director 的类型化阶段提交接到音频域真实副作用，保持 runner 不含领域细节。 */
+/**
+ * 把 Director 的类型化阶段提交接到音频域真实副作用，保持 runner 不含领域细节。
+ *
+ * 旁白只在 INGEST 合成一次；ASSEMBLE 的两个分镜节点都是消费方：
+ * `shot-sfx` 核验本镜旁白确实存在且字节可信，`shot-subtitle` 用同一份音频做 ASR。
+ */
 export function createDirectorStageEffect(
   dependencies: StageEffectDependencies
 ): DirectorStageEffect {
   return async (context) => {
     if (context.nodeType === 'shot-sfx') {
       const input = shotSfxPromptInputSchema.parse(context.directorInput)
-      await dependencies.generateVoiceover({
-        projectId: context.projectId,
-        nodeId: context.nodeId,
-        shotId: input.shot.id,
-        text: input.scriptUnit.text,
-      })
+      await dependencies.loadNarration(
+        context.projectId,
+        input.shotAllocation.audioUnitId
+      )
       return
     }
     if (context.nodeType === 'shot-subtitle') {
       const input = shotSubtitlePromptInputSchema.parse(context.directorInput)
-      const source = await dependencies.loadVoiceover(
+      const source = await dependencies.loadNarration(
         context.projectId,
-        input.shot.id
+        input.shotAllocation.audioUnitId
       )
       await dependencies.generateSubtitle({
         projectId: context.projectId,
@@ -83,12 +83,11 @@ export function createDirectorStageEffect(
 }
 
 export const runDirectorStageEffect = createDirectorStageEffect({
-  generateVoiceover,
   generateSubtitle,
-  loadVoiceover: async (projectId, shotId) =>
-    new AudioRuntimeRepository(await getDb(), storage).loadVoiceover(
+  loadNarration: async (projectId, unitId) =>
+    new AudioRuntimeRepository(await getDb(), storage).loadNarration(
       projectId,
-      shotId
+      unitId
     ),
   runRuleQa: runShotQaCheck,
   runVisionQa: runShotVisionQa,

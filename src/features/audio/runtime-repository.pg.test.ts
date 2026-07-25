@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
 import {
@@ -23,17 +24,16 @@ const NODE_ID = '20000000-0000-4000-8000-000000000001'
 const RUN_ID = '30000000-0000-4000-8000-000000000001'
 const ATTEMPT_ID = '40000000-0000-4000-8000-000000000001'
 const AUDIO_ID = '50000000-0000-4000-8000-000000000001'
-const METADATA_ID = '60000000-0000-4000-8000-000000000001'
-const AUDIO_KEY = `audio/${PROJECT_ID}/S001/voiceover.mp3`
-const METADATA_KEY = `audio/${PROJECT_ID}/S001/voiceover.json`
-const HASH = 'a'.repeat(64)
+const AUDIO_KEY = `narration/${PROJECT_ID}/u001.mp3`
+const AUDIO_BYTES = Buffer.from([1, 2, 3])
+const AUDIO_HASH = createHash('sha256').update(AUDIO_BYTES).digest('hex')
+const FINGERPRINT = 'a'.repeat(64)
 
 function testStorage(): StorageAdapter {
   return {
     put: vi.fn(),
     get: vi.fn(async (key: string) => {
-      if (key === AUDIO_KEY) return Buffer.from([1, 2, 3])
-      if (key === METADATA_KEY) return metadataBytes(AUDIO_KEY)
+      if (key === AUDIO_KEY) return AUDIO_BYTES
       throw new Error(`不应读取其他 workspace 的对象：${key}`)
     }),
     exists: vi.fn(),
@@ -43,21 +43,6 @@ function testStorage(): StorageAdapter {
     readLocalFile: vi.fn(),
     removeTempDir: vi.fn(),
   }
-}
-
-function metadataBytes(audioKey: string): Buffer {
-  return Buffer.from(
-    JSON.stringify({
-      version: 1,
-      shotId: 'S001',
-      model: 'stepaudio-2.5-tts',
-      durationMs: 1200,
-      audioArtifactId: AUDIO_ID,
-      audioKey,
-      audioFormat: 'mp3',
-      nativeCaptions: [{ startMs: 0, endMs: 1200, text: '旁白' }],
-    })
-  )
 }
 
 describe('AudioRuntimeRepository', () => {
@@ -80,31 +65,37 @@ describe('AudioRuntimeRepository', () => {
     await database.close()
   })
 
-  it('loads a traceable voiceover only from the trusted workspace and lane', async () => {
+  it('loads the INGEST narration audio only from the trusted workspace', async () => {
     const repository = new AudioRuntimeRepository(db, storage)
 
-    const source = await repository.loadVoiceover(PROJECT_ID, 'S001')
+    const source = await repository.loadNarration(PROJECT_ID, 'U001')
 
-    expect(source).toEqual(
-      expect.objectContaining({
-        audioArtifactId: AUDIO_ID,
-        audioKey: AUDIO_KEY,
-        audioFormat: 'mp3',
-        durationMs: 1200,
-      })
-    )
-    expect(source.audioBytes).toEqual(Buffer.from([1, 2, 3]))
+    expect(source).toEqual({
+      unitId: 'U001',
+      audioArtifactId: AUDIO_ID,
+      audioKey: AUDIO_KEY,
+      audioBytes: AUDIO_BYTES,
+      audioFormat: 'mp3',
+      contentHash: AUDIO_HASH,
+      sizeBytes: 3,
+    })
     expect(storage.get).not.toHaveBeenCalledWith(expect.stringContaining('other/'))
   })
 
-  it('rejects metadata that points outside the indexed audio artifact', async () => {
-    vi.mocked(storage.get).mockImplementationOnce(async () =>
-      metadataBytes(`audio/${PROJECT_ID}/S001/other.mp3`)
-    )
+  it('rejects audio bytes that do not match the indexed content hash', async () => {
+    vi.mocked(storage.get).mockImplementationOnce(async () => Buffer.from([9, 9]))
     const repository = new AudioRuntimeRepository(db, storage)
 
-    await expect(repository.loadVoiceover(PROJECT_ID, 'S001')).rejects.toThrow(
-      '索引不一致'
+    await expect(repository.loadNarration(PROJECT_ID, 'U001')).rejects.toThrow(
+      'hash 不一致'
+    )
+  })
+
+  it('fails instead of inventing audio when INGEST produced none', async () => {
+    const repository = new AudioRuntimeRepository(db, storage)
+
+    await expect(repository.loadNarration(PROJECT_ID, 'U404')).rejects.toThrow(
+      'narration-audio:U404'
     )
   })
 })
@@ -131,11 +122,9 @@ async function seedWorkspace(
     workspaceId,
     id: NODE_ID,
     projectId: PROJECT_ID,
-    logicalKey: 'shot:S001:shot-sfx',
-    type: 'shot-sfx',
-    stage: 'ASSEMBLE',
-    positionX: 0,
-    positionY: 0,
+    logicalKey: 'global:script-import',
+    type: 'script-import',
+    stage: 'INGEST',
     data: { schemaVersion: 1 },
     status: 'succeeded',
   })
@@ -145,50 +134,33 @@ async function seedWorkspace(
     projectId: PROJECT_ID,
     status: 'running',
     workflowVersion: 'test-v1',
-    fingerprint: HASH,
+    fingerprint: FINGERPRINT,
   })
   await db.insert(taskAttempts).values({
     workspaceId,
     id: ATTEMPT_ID,
     runId: RUN_ID,
-    taskId: 'cvc.shot.media',
+    taskId: 'cvc.script.ingest',
     entityType: 'node',
     entityId: NODE_ID,
     attemptNo: 1,
     status: 'running',
-    fingerprint: HASH,
+    fingerprint: FINGERPRINT,
     checkpoint: { schemaVersion: 1 },
   })
-  await db.insert(artifacts).values([
-    {
-      workspaceId,
-      id: AUDIO_ID,
-      projectId: PROJECT_ID,
-      aggregateType: 'node',
-      aggregateId: NODE_ID,
-      kind: 'voiceover-audio',
-      version: 1,
-      lifecycle: 'draft',
-      schemaVersion: 'cvc.audio-artifact/v1',
-      storageKey: `${storagePrefix}${AUDIO_KEY}`,
-      sizeBytes: 3,
-      contentHash: HASH,
-      attemptId: ATTEMPT_ID,
-    },
-    {
-      workspaceId,
-      id: METADATA_ID,
-      projectId: PROJECT_ID,
-      aggregateType: 'node',
-      aggregateId: NODE_ID,
-      kind: 'voiceover-metadata',
-      version: 1,
-      lifecycle: 'draft',
-      schemaVersion: 'cvc.audio-artifact/v1',
-      storageKey: `${storagePrefix}${METADATA_KEY}`,
-      sizeBytes: 128,
-      contentHash: HASH,
-      attemptId: ATTEMPT_ID,
-    },
-  ])
+  await db.insert(artifacts).values({
+    workspaceId,
+    id: AUDIO_ID,
+    projectId: PROJECT_ID,
+    aggregateType: 'node',
+    aggregateId: NODE_ID,
+    kind: 'narration-audio:U001',
+    version: 1,
+    lifecycle: 'draft',
+    schemaVersion: 'cvc.narration-audio/v1',
+    storageKey: `${storagePrefix}${AUDIO_KEY}`,
+    sizeBytes: 3,
+    contentHash: AUDIO_HASH,
+    attemptId: ATTEMPT_ID,
+  })
 }

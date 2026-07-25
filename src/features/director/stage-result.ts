@@ -5,9 +5,14 @@ import {
   resolutionForPreset,
   type ShotLaneSeed,
 } from '@/features/canvas/contracts'
+import type { NarrationInput, NarrationResult } from '@/features/audio'
 import { fabricatePromptInputSchema } from './prompts/fabricate'
-import { buildDemoAudioAllocation, buildDemoAudioManifest } from './audio-demo'
-import { ingestStageResultSchema } from './schemas/ingest'
+import {
+  buildMeasuredAudioAllocation,
+  buildMeasuredAudioManifest,
+  shotIdFor,
+} from './audio-timing'
+import { ingestStageResultSchema, type ScriptUnit } from './schemas/ingest'
 import { directorShotPlanSchema } from './schemas/director-shot-plan'
 import type { DirectorStageContext } from './runtime-repository'
 
@@ -27,26 +32,25 @@ export type PreparedStageResult = {
   renderSpec?: z.infer<typeof renderSpecSchema>
 }
 
-/** 将不可信模型文本归一化为可提交的阶段结果。 */
-export function prepareStageResult(
+export interface StageResultDependencies {
+  synthesizeNarration: (input: NarrationInput) => Promise<NarrationResult>
+}
+
+/**
+ * 将不可信模型文本归一化为可提交的阶段结果。
+ *
+ * INGEST 是异步的：音频时长必须先由真实 TTS 合成并实测，
+ * 才能派生出 allocation 与后续 FABRICATE 的帧数。合成失败即整个阶段失败，
+ * 不产出任何占位产物。
+ */
+export async function prepareStageResult(
   context: DirectorStageContext,
-  rawContent: string
-): PreparedStageResult {
+  rawContent: string,
+  dependencies: StageResultDependencies = defaultDependencies()
+): Promise<PreparedStageResult> {
   if (context.stage === 'INGEST') {
     const parsed = ingestStageResultSchema.parse(parseJsonObject(rawContent))
-    const audioManifest = buildDemoAudioManifest(parsed.scriptUnits)
-    const audioAllocation = buildDemoAudioAllocation(parsed.scriptUnits, audioManifest)
-    return {
-      content: JSON.stringify({
-        scriptUnits: parsed.scriptUnits,
-        audioManifest,
-        audioAllocation,
-      }),
-      ingestShots: parsed.scriptUnits.map((unit, index) => ({
-        shotId: `S${String(index + 1).padStart(3, '0')}`,
-        sourceUnit: unit,
-      })),
-    }
+    return prepareIngestResult(context, parsed.scriptUnits, dependencies)
   }
 
   if (context.stage === 'FABRICATE') {
@@ -80,6 +84,37 @@ export function prepareStageResult(
   }
 
   return { content: rawContent }
+}
+
+async function prepareIngestResult(
+  context: DirectorStageContext,
+  scriptUnits: ScriptUnit[],
+  dependencies: StageResultDependencies
+): Promise<PreparedStageResult> {
+  const narration = await dependencies.synthesizeNarration({
+    projectId: context.projectId,
+    nodeId: context.nodeId,
+    units: scriptUnits.map(({ unitId, text }) => ({ unitId, text })),
+  })
+  const audioManifest = buildMeasuredAudioManifest(scriptUnits, narration)
+  const audioAllocation = buildMeasuredAudioAllocation(scriptUnits, audioManifest)
+  return {
+    content: JSON.stringify({ scriptUnits, audioManifest, audioAllocation }),
+    ingestShots: scriptUnits.map((unit, index) => ({
+      shotId: shotIdFor(index),
+      sourceUnit: unit,
+    })),
+  }
+}
+
+/** 真实 TTS 只在服务端可用；动态导入避免把 server-only 拉进纯归一化路径。 */
+function defaultDependencies(): StageResultDependencies {
+  return {
+    synthesizeNarration: async (input) => {
+      const { synthesizeNarration } = await import('@/features/audio/narration')
+      return synthesizeNarration(input)
+    },
+  }
 }
 
 function parseDirectOutput(content: string): { masterPlan: string; styleBible: string } {

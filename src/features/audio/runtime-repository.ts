@@ -1,77 +1,51 @@
 import 'server-only'
+import { createHash } from 'node:crypto'
 import { and, desc, eq } from 'drizzle-orm'
-import { z } from 'zod'
 import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
-import { artifacts, canvasNodes } from '@/lib/db/schema/index'
+import { artifacts } from '@/lib/db/schema/index'
 import type { StorageAdapter } from '@/lib/storage'
-import type { Caption, SubtitleInput } from './types'
+import { narrationArtifactKind } from './narration-repository'
 
-const metadataSchema = z
-  .object({
-    version: z.literal(1),
-    shotId: z.string().min(1),
-    model: z.string().min(1),
-    durationMs: z.number().int().positive(),
-    audioArtifactId: z.string().min(1),
-    audioKey: z.string().min(1),
-    audioFormat: z.enum(['mp3', 'wav', 'ogg', 'pcm']),
-    nativeCaptions: z.array(
-      z
-        .object({
-          startMs: z.number().int().nonnegative(),
-          endMs: z.number().int().positive(),
-          text: z.string().min(1),
-        })
-        .strict()
-    ),
-  })
-  .strict()
-
-export interface LoadedVoiceover
-  extends Pick<
-    SubtitleInput,
-    'audioArtifactId' | 'audioKey' | 'audioBytes' | 'audioFormat'
-  > {
-  durationMs: number
-  model: string
-  nativeCaptions: Caption[]
+export interface LoadedNarration {
+  unitId: string
+  audioArtifactId: string
+  audioKey: string
+  audioBytes: Buffer
+  audioFormat: 'mp3'
+  contentHash: string
+  sizeBytes: number
 }
 
-/** 为字幕阶段恢复同项目、同分镜的可信配音产物。 */
+/**
+ * 恢复 INGEST 阶段已产出的旁白音频。
+ *
+ * 下游（音效编排、字幕 ASR）只消费这份音频，不再二次合成，
+ * 避免同一分镜出现两份不同的语音。
+ */
 export class AudioRuntimeRepository {
   constructor(
     private readonly db: Db,
     private readonly storage: StorageAdapter
   ) {}
 
-  async loadVoiceover(
+  async loadNarration(
     projectId: string,
-    shotId: string
-  ): Promise<LoadedVoiceover> {
-    const [node] = await this.db
-      .select({ id: canvasNodes.id })
-      .from(canvasNodes)
-      .where(
-        and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
-          eq(canvasNodes.projectId, projectId),
-          eq(canvasNodes.type, 'shot-sfx'),
-          eq(canvasNodes.logicalKey, `shot:${shotId}:shot-sfx`)
-        )
-      )
-      .limit(1)
-    if (!node) throw new Error(`找不到 shot-sfx(${shotId}) 节点`)
-
-    const [metadataArtifact] = await this.db
-      .select({ storageKey: artifacts.storageKey })
+    unitId: string
+  ): Promise<LoadedNarration> {
+    const kind = narrationArtifactKind(unitId)
+    const [artifact] = await this.db
+      .select({
+        id: artifacts.id,
+        storageKey: artifacts.storageKey,
+        contentHash: artifacts.contentHash,
+      })
       .from(artifacts)
       .where(
         and(
           eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
           eq(artifacts.projectId, projectId),
           eq(artifacts.aggregateType, 'node'),
-          eq(artifacts.aggregateId, node.id),
-          eq(artifacts.kind, 'voiceover-metadata')
+          eq(artifacts.kind, kind)
         )
       )
       .orderBy(
@@ -80,50 +54,22 @@ export class AudioRuntimeRepository {
         desc(artifacts.id)
       )
       .limit(1)
-    if (!metadataArtifact) {
-      throw new Error(`找不到 voiceover-metadata 产物：${shotId}`)
+    if (!artifact) {
+      throw new Error(`找不到 ${kind} 产物：INGEST 尚未产出该单元的旁白`)
     }
-
-    const metadataBytes = await this.storage.get(metadataArtifact.storageKey)
-    const metadata = parseMetadata(metadataBytes, metadataArtifact.storageKey)
-    if (metadata.shotId !== shotId) {
-      throw new Error(`配音元数据分镜不一致：${metadata.shotId} != ${shotId}`)
+    const audioBytes = await this.storage.get(artifact.storageKey)
+    const actualHash = createHash('sha256').update(audioBytes).digest('hex')
+    if (actualHash !== artifact.contentHash) {
+      throw new Error(`旁白音频实体与索引 hash 不一致：${artifact.storageKey}`)
     }
-
-    const [audioArtifact] = await this.db
-      .select({ storageKey: artifacts.storageKey })
-      .from(artifacts)
-      .where(
-        and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
-          eq(artifacts.id, metadata.audioArtifactId),
-          eq(artifacts.projectId, projectId),
-          eq(artifacts.aggregateType, 'node'),
-          eq(artifacts.aggregateId, node.id),
-          eq(artifacts.kind, 'voiceover-audio')
-        )
-      )
-      .limit(1)
-    if (!audioArtifact || audioArtifact.storageKey !== metadata.audioKey) {
-      throw new Error(`配音元数据与 voiceover-audio 索引不一致：${shotId}`)
-    }
-
     return {
-      audioArtifactId: metadata.audioArtifactId,
-      audioKey: audioArtifact.storageKey,
-      audioBytes: await this.storage.get(audioArtifact.storageKey),
-      audioFormat: metadata.audioFormat,
-      durationMs: metadata.durationMs,
-      model: metadata.model,
-      nativeCaptions: metadata.nativeCaptions,
+      unitId,
+      audioArtifactId: artifact.id,
+      audioKey: artifact.storageKey,
+      audioBytes,
+      audioFormat: 'mp3',
+      contentHash: actualHash,
+      sizeBytes: audioBytes.byteLength,
     }
-  }
-}
-
-function parseMetadata(bytes: Buffer, storageKey: string) {
-  try {
-    return metadataSchema.parse(JSON.parse(bytes.toString('utf-8')) as unknown)
-  } catch (error) {
-    throw new Error(`voiceover-metadata 无效：${storageKey}`, { cause: error })
   }
 }

@@ -42,10 +42,11 @@ export async function measureMp3(
 
 /** 以原生采样率解码为 16-bit 单声道 PCM 并统计字节数。 */
 function decodePcmByteCount(bytes: Buffer, sampleRateHz: number): Promise<number> {
-  if (!ffmpegPath) throw new Error('ffmpeg-static 未提供当前平台二进制')
+  const executable = ffmpegPath
+  if (!executable) throw new Error('ffmpeg-static 未提供当前平台二进制')
   return new Promise((resolve, reject) => {
     const child = spawn(
-      ffmpegPath,
+      executable,
       [
         '-hide_banner',
         '-loglevel',
@@ -65,20 +66,23 @@ function decodePcmByteCount(bytes: Buffer, sampleRateHz: number): Promise<number
         String(sampleRateHz),
         'pipe:1',
       ],
-      { stdio: ['pipe', 'pipe', 'pipe'] }
+      { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] }
     )
     let total = 0
     let stderr = ''
     child.stdout.on('data', (chunk: Buffer) => {
       total += chunk.length
     })
-    child.stderr.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString('utf-8')
+    child.stderr.setEncoding('utf8')
+    child.stderr.on('data', (chunk: string) => {
+      stderr += chunk
     })
-    child.on('error', reject)
-    child.on('close', (code) => {
-      if (code === 0) return resolve(total)
-      reject(new Error(`ffmpeg 解码失败（exit ${code}）：${stderr.trim()}`))
+    child.once('error', (error) => {
+      reject(new Error(`ffmpeg 启动失败：${error.message}`, { cause: error }))
+    })
+    child.once('close', (code) => {
+      if (code === 0) resolve(total)
+      else reject(new Error(`ffmpeg 解码失败（exit ${String(code)}）：${stderr.trim()}`))
     })
     // 解码器提前退出时 stdin 会 EPIPE；真实失败由 close 的非零退出码报告。
     child.stdin.on('error', () => {})

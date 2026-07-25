@@ -26,29 +26,26 @@ const shotAllocation = {
 } as const
 
 function harness() {
-  const generateVoiceover = vi.fn(async () => ({ kind: 'voiceover' as const }))
   const generateSubtitle = vi.fn(async () => ({ kind: 'subtitle' as const }))
-  const loadVoiceover = vi.fn(async () => ({
+  const loadNarration = vi.fn(async (_projectId: string, unitId: string) => ({
+    unitId,
     audioArtifactId: 'audio-1',
-    audioKey: 'audio/S001.mp3',
+    audioKey: 'narration/project-1/u001.mp3',
     audioBytes: Buffer.from([1, 2, 3]),
     audioFormat: 'mp3' as const,
-    durationMs: 1200,
-    model: 'stepaudio-2.5-tts',
-    nativeCaptions: [],
+    contentHash: 'c'.repeat(64),
+    sizeBytes: 3,
   }))
   const runRuleQa = vi.fn(async () => ({ passed: true }))
   const runVisionQa = vi.fn(async () => ({ passed: true }))
   return {
-    generateVoiceover,
     generateSubtitle,
-    loadVoiceover,
+    loadNarration,
     runRuleQa,
     runVisionQa,
     effect: createDirectorStageEffect({
-      generateVoiceover,
       generateSubtitle,
-      loadVoiceover,
+      loadNarration,
       runRuleQa,
       runVisionQa,
     }),
@@ -56,7 +53,7 @@ function harness() {
 }
 
 describe('Director stage effects', () => {
-  it('routes shot-sfx to real TTS using the persisted script unit text', async () => {
+  it('makes shot-sfx consume the INGEST narration instead of synthesizing again', async () => {
     const target = harness()
 
     await target.effect({
@@ -71,16 +68,11 @@ describe('Director stage effects', () => {
       },
     })
 
-    expect(target.generateVoiceover).toHaveBeenCalledWith({
-      projectId: 'project-1',
-      nodeId: 'node-1',
-      shotId: 'S001',
-      text: '真实旁白文本',
-    })
+    expect(target.loadNarration).toHaveBeenCalledWith('project-1', 'U001')
     expect(target.generateSubtitle).not.toHaveBeenCalled()
   })
 
-  it('routes shot-subtitle to ASR using the voiceover from the same lane', async () => {
+  it('routes shot-subtitle to ASR using the narration from the same unit', async () => {
     const target = harness()
 
     await target.effect({
@@ -93,14 +85,14 @@ describe('Director stage effects', () => {
       },
     })
 
-    expect(target.loadVoiceover).toHaveBeenCalledWith('project-1', 'S001')
+    expect(target.loadNarration).toHaveBeenCalledWith('project-1', 'U001')
     expect(target.generateSubtitle).toHaveBeenCalledWith({
       projectId: 'project-1',
       nodeId: 'node-1',
       shotId: 'S001',
       script: '真实旁白文本',
       audioArtifactId: 'audio-1',
-      audioKey: 'audio/S001.mp3',
+      audioKey: 'narration/project-1/u001.mp3',
       audioBytes: expect.any(Buffer),
       audioFormat: 'mp3',
     })
@@ -115,9 +107,8 @@ describe('Director stage effects', () => {
       directorInput: {},
     })
 
-    expect(target.generateVoiceover).not.toHaveBeenCalled()
     expect(target.generateSubtitle).not.toHaveBeenCalled()
-    expect(target.loadVoiceover).not.toHaveBeenCalled()
+    expect(target.loadNarration).not.toHaveBeenCalled()
   })
 
   it('keeps deterministic rule QA and Vision QA as two required shot-qa layers', async () => {
