@@ -9,12 +9,13 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
+import { PRODUCTS_ROUTES } from "@/features/navigation/products-routes";
 
 const navLinks = [{ href: "#community", label: "Community" }];
 
 const authLinks = [
   { href: "", label: "Contact" },
-  { href: "", label: "Join\u00A0waitlist" },
+  { href: PRODUCTS_ROUTES.projects, label: "Try\u00A0it" },
 ];
 
 export function Header(): ReactNode {

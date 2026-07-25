@@ -47,7 +47,7 @@
 
 `(public)` 组的壳是 `src/app/(public)/layout.tsx`：无侧栏、无写操作入口。
 
-`/` 当前的 header / footer 链接全部是 `#` 或空串，没有任何进入 `/products/*` 或 `/login` 的入口。这是已知缺口：营销页必须至少提供一个进入 L3 的主 CTA 和一个 `/login` 入口，位置等 Pencil 补画后再定，不在页面里临时加。
+`/` 右上角 **Try it** 已接线到 `PRODUCTS_ROUTES.projects`（`/products/projects`），是进入 L3 的主 CTA。Contact 与 footer 仍多为 `#` / 空串；`/login` 入口尚未接线，属已知缺口。
 
 ### 2.2 L2 认证
 
