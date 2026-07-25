@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { and, eq } from 'drizzle-orm'
-import { artifacts, canvasNodes } from '@/lib/db/schema/index'
+import {
+  artifacts,
+  canvasNodes,
+  pipelineRuns,
+  taskAttempts,
+} from '@/lib/db/schema/index'
 import {
   createPgTestDatabase,
   type PgTestDatabase,
@@ -154,7 +159,61 @@ describe('RenderRepository Postgres', () => {
     )
   })
 
-  it('versions thumbnail artifacts and preserves the attempt fence', async () => {
+  it('registers thumbnails with no running attempt by inheriting the source HTML lineage', async () => {
+    // 生产真实形状：渲染 attempt 已结束（分镜页浏览 / Final QA / shot-qa 触发时都是如此）。
+    await database.db
+      .update(taskAttempts)
+      .set({ status: 'succeeded' })
+      .where(eq(taskAttempts.workspaceId, TEST_WORKSPACE_ID))
+    await database.db
+      .update(pipelineRuns)
+      .set({ status: 'succeeded' })
+      .where(eq(pipelineRuns.workspaceId, TEST_WORKSPACE_ID))
+
+    const repository = new RenderRepository(database.db)
+    const artifactId = await repository.registerThumbnail({
+      projectId: fixture.projectId,
+      nodeId: fixture.codegenNodeId,
+      outputKey: 'thumb/no-attempt.png',
+      contentHash: 'a'.repeat(64),
+      sizeBytes: 7,
+    })
+
+    const [row] = await database.db
+      .select()
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.workspaceId, TEST_WORKSPACE_ID),
+          eq(artifacts.id, artifactId)
+        )
+      )
+    expect(row).toMatchObject({
+      kind: 'frame-thumbnail',
+      aggregateId: fixture.codegenNodeId,
+      attemptId: fixture.nodeAttemptId,
+    })
+  })
+
+  it('refuses to register a thumbnail when the source HTML artifact is absent', async () => {
+    const projectId = randomUUID()
+    const bare = await seedRenderFixture(database.db, TEST_WORKSPACE_ID, projectId, {
+      withFabricateArtifact: false,
+      codegenStatus: 'idle',
+    })
+
+    await expect(
+      new RenderRepository(database.db).registerThumbnail({
+        projectId,
+        nodeId: bare.codegenNodeId,
+        outputKey: 'thumb/orphan.png',
+        contentHash: 'b'.repeat(64),
+        sizeBytes: 7,
+      })
+    ).rejects.toThrow('找不到派生来源产物')
+  })
+
+  it('versions thumbnail artifacts and keeps the source HTML lineage', async () => {
     const repository = new RenderRepository(database.db)
     const first = await repository.registerThumbnail({
       projectId: fixture.projectId,

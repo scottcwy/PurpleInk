@@ -2,7 +2,9 @@ import 'server-only'
 import { and, desc, eq } from 'drizzle-orm'
 import {
   commitArtifactRecord,
+  commitDerivedArtifact,
   resolveCurrentAttemptId,
+  resolveDerivedSourceAttemptId,
 } from '@/features/artifacts'
 import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
 import { artifacts } from '@/lib/db/schema/index'
@@ -127,12 +129,34 @@ export class RenderArtifactRepository extends RenderShotRepository {
       : null
   }
 
+  /**
+   * 逐帧缩略图是 `director-fabricate` HTML 的确定性再加工，按需生成于三种场景：
+   * 渲染后的 Final QA、shot-qa 阶段（running attempt 属于 QA 节点而非 codegen 节点）、
+   * 以及分镜页浏览（完全没有 running attempt）。因此它走派生产物提交路径，
+   * 归属继承来源 HTML 的 attempt，而不是要求「当前有 running attempt」。
+   */
   async registerThumbnail(input: ThumbnailRegistration): Promise<string> {
-    return this.commitNodeArtifact(
-      input,
-      FRAME_THUMBNAIL_KIND,
-      'cvc.frame-thumbnail/v1'
-    )
+    const database = await this.database()
+    const attemptId = await resolveDerivedSourceAttemptId(database, {
+      workspaceId: LOCAL_WORKSPACE_ID,
+      projectId: input.projectId,
+      aggregateType: 'node',
+      aggregateId: input.nodeId,
+      sourceKind: 'director-fabricate',
+    })
+    const committed = await commitDerivedArtifact(database, {
+      workspaceId: LOCAL_WORKSPACE_ID,
+      projectId: input.projectId,
+      aggregateType: 'node',
+      aggregateId: input.nodeId,
+      kind: FRAME_THUMBNAIL_KIND,
+      schemaVersion: 'cvc.frame-thumbnail/v1',
+      storageKey: input.outputKey,
+      sizeBytes: input.sizeBytes,
+      contentHash: input.contentHash,
+      attemptId,
+    })
+    return committed.artifactId
   }
 
   async registerVisionReport(
@@ -187,28 +211,6 @@ export class RenderArtifactRepository extends RenderShotRepository {
       .orderBy(desc(artifacts.version), desc(artifacts.createdAt))
       .limit(1)
     return row?.storageKey ?? null
-  }
-
-  private async commitNodeArtifact(
-    input: ThumbnailRegistration,
-    kind: string,
-    schemaVersion: string
-  ): Promise<string> {
-    const database = await this.database()
-    const attemptId = await this.nodeAttempt(database, input)
-    const committed = await commitArtifactRecord(database, {
-      workspaceId: LOCAL_WORKSPACE_ID,
-      projectId: input.projectId,
-      aggregateType: 'node',
-      aggregateId: input.nodeId,
-      kind,
-      schemaVersion,
-      storageKey: input.outputKey,
-      sizeBytes: input.sizeBytes,
-      contentHash: input.contentHash,
-      attemptId,
-    })
-    return committed.artifactId
   }
 
   private async nodeAttempt(

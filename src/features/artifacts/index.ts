@@ -6,7 +6,10 @@ export {
 } from './service'
 export {
   commitArtifactRecord,
+  commitDerivedArtifact,
   resolveCurrentAttemptId,
+  resolveDerivedSourceAttemptId,
   type ArtifactAggregateType,
   type CommitArtifactInput,
+  type DerivedSourceLookup,
 } from './commit'
