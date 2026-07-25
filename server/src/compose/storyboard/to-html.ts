@@ -2,8 +2,11 @@
 // Converts a Storyboard's shots into per-chapter HTML strings,
 // each a self-contained sub-composition with CSS + GSAP timeline.
 import type { Storyboard, StoryboardShot } from "./types"
-import type { ChapterId, ComposeContext } from "../chapters/types"
-import type { VideoModel } from "../model"
+import type { ChapterId, ChapterPlan, ComposeContext } from "../chapters/types"
+import type { VideoModel, Scene, Palette } from "../model"
+import { getBlueprintMapping } from "../blueprint-mapping.js"
+import { renderTemplateChapter } from "../chapters/template-fallback"
+import { springPopEntrance, depthScatterAssemble, countingDynamicScale, centerOutwardExpansion } from "../motion-rules"
 
 const GSAP_CDN = "https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"
 
@@ -23,6 +26,14 @@ export function storyboardToChapters(
 ): Map<ChapterId, string> {
   const result = new Map<ChapterId, string>()
 
+  // Try the rich rendering path via template-fallback first
+  let templateModel: VideoModel | null = null
+  try {
+    templateModel = storyboardShotsToVideoModel(sb)
+  } catch {
+    templateModel = null
+  }
+
   // Group shots by chapter
   const chapterShots = new Map<ChapterId, StoryboardShot[]>()
   for (const shot of sb.shots) {
@@ -34,6 +45,42 @@ export function storyboardToChapters(
   // Generate HTML for each chapter
   for (const chId of ALL_CHAPTERS) {
     const shots = chapterShots.get(chId) || []
+
+    // ch3-showcase always uses the fallback path (renderChapterHtml)
+    // because its shot types (data-counter, feature-stack, etc.) are not
+    // in the template-fallback's shotToChapter ch3 mapping.
+    if (chId === "ch3-showcase") {
+      const html = renderChapterHtml(chId, shots, sb)
+      result.set(chId, html)
+      continue
+    }
+
+    // Prefer renderTemplateChapter() for rich 4-layer + PageCam + motion-rules rendering
+    if (templateModel) {
+      // Build a sub-VideoModel containing only this chapter's scenes,
+      // so renderTemplateChapter() can't mis-route them via shotToChapter().
+      const chapterScenes = shots
+        .map((shot) => {
+          const idx = sb.shots.findIndex((s) => s.id === shot.id)
+          return idx >= 0 ? templateModel.scenes[idx] : null
+        })
+        .filter((s): s is Scene => s != null)
+
+      if (chapterScenes.length > 0) {
+        const subModel = { ...templateModel, scenes: chapterScenes }
+        try {
+          const html = renderTemplateChapter(chId, subModel)
+          if (html && html.length > 100) {
+            result.set(chId, html)
+            continue
+          }
+        } catch {
+          // Fall through to simple rendering
+        }
+      }
+    }
+
+    // Fallback: simple 3-layer rendering
     const html = renderChapterHtml(chId, shots, sb)
     result.set(chId, html)
   }
@@ -42,7 +89,120 @@ export function storyboardToChapters(
 }
 
 // ---------------------------------------------------------------------------
-// Chapter HTML rendering
+// StoryboardShot[] → VideoModel conversion
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert storyboard shots + metadata into a VideoModel suitable for
+ * renderTemplateChapter(). This allows reusing the rich 4-layer rendering
+ * with PageCam camera motion and motion-rules animations.
+ */
+function storyboardShotsToVideoModel(sb: Storyboard): VideoModel {
+  const meta = sb.meta
+  const palette: Palette = {
+    ...meta.palette,
+    fontFamily: meta.fontFamily,
+  }
+
+  // Derive brand/hero/cta from storyboard shots' screenText
+  const brandShot = sb.shots.find((s) => s.type === "brand-center" || s.type === "brand-side")
+  const heroShot = sb.shots.find((s) => s.type === "hero-split" || s.type === "hero-stack")
+  const ctaShot = sb.shots.find((s) => s.type === "cta-push" || s.type === "cta-fullbleed")
+
+  const brand = {
+    title: brandShot?.screenText?.headline || meta.brand,
+    tagline: brandShot?.screenText?.subheadline || meta.tagline,
+  }
+
+  const hero = {
+    headline: heroShot?.screenText?.headline || meta.brand,
+    lede: heroShot?.screenText?.subheadline || "",
+    ctas: heroShot?.screenText?.labels?.slice(0, 2) || [],
+    chips: heroShot?.screenText?.labels?.slice(0, 6) || [],
+  }
+
+  // Extract value props from feature shots
+  const featureShot = sb.shots.find((s) => s.type === "feature-row" || s.type === "feature-stack")
+  const valueProps = (featureShot?.screenText?.data || []).map((d) => ({
+    title: d.label,
+    desc: d.value,
+  }))
+
+  // Logo wall shot
+  const logoShot = sb.shots.find((s) => s.type === "logo-wall")
+  const logos = logoShot?.screenText?.labels || []
+
+  // Pricing shot
+  const pricingShot = sb.shots.find((s) => s.type === "pricing")
+  const pricing = (pricingShot?.screenText?.data || []).map((d) => ({
+    name: d.label,
+    price: d.value,
+  }))
+
+  const cta = {
+    headline: ctaShot?.screenText?.headline || "Get started.",
+    command: ctaShot?.screenText?.command || "",
+  }
+
+  // Convert all shots to Scene[]
+  const scenes: Scene[] = sb.shots.map((shot) => {
+    const scene: Scene = {
+      kind: shot.type,
+      start: shot.startTime,
+      duration: shot.duration,
+    }
+
+    // Map assets to ShotMaterial[]
+    if (shot.assets && shot.assets.length > 0) {
+      scene.shots = shot.assets.map((src, i) => ({
+        src,
+        caption: shot.screenText?.headline || shot.visualDescription || `Screenshot ${i + 1}`,
+        tall: true,
+      }))
+    }
+
+    // Map screenText.data to stats for data-counter / data-chart
+    if (shot.screenText?.data && (shot.type === "data-counter" || shot.type === "data-chart")) {
+      scene.stats = shot.screenText.data.map((d) => ({
+        value: d.value,
+        label: d.label,
+      }))
+    }
+
+    return scene
+  })
+
+  // Derive skin from storyboard meta
+  const skinId = meta.skin as VideoModel["skin"]["id"]
+  const validSkins: VideoModel["skin"]["id"][] = ["editorial", "kinetic", "technical"]
+  const skin = validSkins.includes(skinId) ? skinId : "editorial"
+
+  const SKIN_MAP: Record<string, VideoModel["skin"]> = {
+    editorial: { id: "editorial", motion: { enter: "power2.out", transition: "crossfade" }, minShot: 3.0, maxShots: 7 },
+    kinetic: { id: "kinetic", motion: { enter: "expo.out", transition: "flash" }, minShot: 2.0, maxShots: 12 },
+    technical: { id: "technical", motion: { enter: "power4.out", transition: "cut" }, minShot: 2.4, maxShots: 9 },
+  }
+
+  const totalDuration = scenes.reduce((sum, s) => sum + s.duration, 0)
+
+  return {
+    id: "storyboard-video",
+    name: meta.brand,
+    brand,
+    hero,
+    valueProps,
+    logos,
+    pricing,
+    cta,
+    palette,
+    skin: SKIN_MAP[skin] || SKIN_MAP.editorial!,
+    scenes,
+    durationSec: totalDuration,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Chapter HTML rendering (fallback path)
 // ---------------------------------------------------------------------------
 
 function renderChapterHtml(
@@ -59,7 +219,6 @@ function renderChapterHtml(
   // Re-time shots so the first one starts at 0 (chapter-local timeline)
   const firstStart = shots[0]!.startTime
   const reTimed = shots.map((s) => ({ ...s, startTime: s.startTime - firstStart }))
-  const chapterDuration = reTimed.reduce((sum, s) => sum + s.duration, 0)
 
   // Generate CSS variables
   const cssVars = `--fg: ${palette.fg}; --bg: ${palette.bg}; --accent: ${palette.accent}; --accent-fg: ${palette.accentFg}; --muted: ${palette.muted}; --secondary: ${palette.secondary}; --border: ${palette.border}; --radius: 10px;`
@@ -165,7 +324,32 @@ function renderShotClip(shot: StoryboardShot, localStart: number): string {
   const depthBgClass = shot.layers?.background?.type === "grid" ? "grid" : "gradient"
   const inner = renderShotInner(shot)
 
-  return `<div id="s_${shot.id}" class="clip" data-start="${round(localStart)}" data-duration="${round(shot.duration)}" data-track-index="1">
+  // Build data attributes from new HyperFrames metadata
+  const dataAttrs: string[] = [
+    `data-start="${round(localStart)}"`,
+    `data-duration="${round(shot.duration)}"`,
+    `data-track-index="1"`,
+  ]
+  if (shot.transition_in) {
+    dataAttrs.push(`data-transition="${esc(shot.transition_in)}"`)
+  }
+  if (shot.src) {
+    dataAttrs.push(`data-composition-src="${esc(shot.src)}"`)
+  }
+  if (shot.blueprint) {
+    dataAttrs.push(`data-blueprint="${esc(shot.blueprint)}"`)
+  }
+
+  // Blueprint comment for debugging — enhanced with motion rules (Phase 3)
+  const mapping = shot.blueprint ? getBlueprintMapping(shot.type) : undefined
+  const rulesList = mapping ? mapping.motionRules.join(", ") : ""
+  const blueprintComment = shot.blueprint
+    ? `<!-- blueprint: ${esc(shot.blueprint)} | rules: [${esc(rulesList)}] -->\n  `
+    : mapping
+      ? `<!-- blueprint: ${esc(mapping.blueprintId)} | rules: [${esc(rulesList)}] -->\n  `
+      : ""
+
+  return `${blueprintComment}<div id="s_${shot.id}" class="clip" ${dataAttrs.join(" ")}>
   <div class="depth-bg ${depthBgClass}"></div>
   <div class="depth-content">${inner}</div>
   <div class="depth-fg"></div>
@@ -337,14 +521,54 @@ function renderShotTimeline(shot: StoryboardShot, localStart: number): string {
 
   const lines: string[] = []
 
-  // Entrance animation for content layer
-  lines.push(`tl.from("${sel} .depth-content", { opacity: 0, y: 30, duration: 0.8, ease: "${ease}" }, ${at(0.1)});`)
+  // Shot-type-specific entrance animation using motion-rules
+  switch (shot.type) {
+    case "brand-center":
+      lines.push(springPopEntrance(`${sel} .shot-headline`, at(0.2)))
+      break
+    case "brand-side":
+      lines.push(springPopEntrance(`${sel} .shot-headline`, at(0.2)))
+      break
+    case "hero-split":
+    case "hero-stack":
+      lines.push(springPopEntrance(`${sel} .shot-headline`, at(0.3)))
+      break
+    case "feature-row":
+    case "feature-stack":
+      lines.push(...depthScatterAssemble(
+        (shot.screenText?.data || []).map((_, i) => `${sel} .feat-card:nth-child(${i + 1})`),
+        at(0.2),
+      ))
+      break
+    case "data-counter":
+      lines.push(...(shot.screenText?.data || []).map((_, i) =>
+        countingDynamicScale(`${sel} .data-value:nth-child(${i + 1})`, at(0.2 + i * 0.14)),
+      ))
+      break
+    case "logo-wall":
+      lines.push(springPopEntrance(`${sel} .shot-headline`, at(0.2)))
+      break
+    case "cta-push":
+    case "cta-fullbleed":
+      lines.push(springPopEntrance(`${sel} .shot-headline`, at(0.2)))
+      break
+    case "shot-split":
+      lines.push(...centerOutwardExpansion(
+        [`${sel} .sp-pane-a`, `${sel} .sp-pane-b`],
+        at(0.2),
+      ))
+      break
+    default:
+      // Generic entrance for other shot types
+      lines.push(`tl.from("${sel} .depth-content", { opacity: 0, y: 30, duration: 0.8, ease: "${ease}" }, ${at(0.1)});`)
+      break
+  }
 
   // Background parallax
   lines.push(`tl.fromTo("${sel} .depth-bg", { x: -8, y: -4 }, { x: 8, y: 4, duration: ${shot.duration}, ease: "sine.inOut" }, ${at(0)});`)
 
   // Exit animation
-  const exitDelay = shot.choreography?.exitDelay || 0.3
+  const exitDelay = shot.choreography?.exitDelay || 0.15
   const exitStart = Math.max(0.1, shot.duration - exitDelay)
   lines.push(`tl.to("${sel} .depth-content", { opacity: 0, y: -20, duration: 0.5, ease: "power2.in" }, ${at(exitStart)});`)
 
@@ -399,6 +623,87 @@ function buildEmptyChapter(
         </script>
       </div>
     </template>`
+}
+
+/**
+ * Derive ChapterPlan[] from a Storyboard.
+ * Computes sequential, non-overlapping chapter timing from the storyboard's
+ * actual shot startTime/duration values. This ensures the root HTML timing
+ * matches the storyboard content (not the template model's scene layout).
+ */
+export function storyboardToChapterPlans(sb: Storyboard): ChapterPlan[] {
+  const ALL_CHAPTERS: ChapterId[] = [
+    "ch1-opening", "ch2-hero", "ch3-showcase", "ch4-proof", "ch5-cta",
+  ]
+  const CHAPTER_META: Record<ChapterId, { title: string }> = {
+    "ch1-opening":  { title: "Opening" },
+    "ch2-hero":     { title: "Hero" },
+    "ch3-showcase": { title: "Showcase" },
+    "ch4-proof":    { title: "Proof" },
+    "ch5-cta":      { title: "Call to Action" },
+  }
+
+  // Group shots by chapter
+  const chapterShots = new Map<ChapterId, StoryboardShot[]>()
+  for (const chId of ALL_CHAPTERS) chapterShots.set(chId, [])
+  for (const shot of sb.shots) {
+    const shots = chapterShots.get(shot.chapter) || []
+    shots.push(shot)
+    chapterShots.set(shot.chapter, shots)
+  }
+
+  // Compute timing per chapter from storyboard shot times
+  const rawPlans: Map<ChapterId, ChapterPlan> = new Map()
+  for (const id of ALL_CHAPTERS) {
+    const shots = chapterShots.get(id) || []
+    const meta = CHAPTER_META[id]
+    if (shots.length === 0) {
+      rawPlans.set(id, { id, title: meta.title, startSec: 0, durationSec: 0, shotTypes: [], assets: [] })
+      continue
+    }
+    const startSec = Math.min(...shots.map((s) => s.startTime))
+    const endSec = Math.max(...shots.map((s) => s.startTime + s.duration))
+    const durationSec = Math.max(1, endSec - startSec)
+    const shotTypes = shots.map((s) => s.type)
+    const assets: string[] = []
+    if (id === "ch3-showcase") {
+      for (const shot of shots) {
+        for (const a of shot.assets || []) assets.push(a)
+      }
+    }
+    rawPlans.set(id, { id, title: meta.title, startSec, durationSec, shotTypes, assets })
+  }
+
+  // Build sequential timeline: each chapter starts where the previous one ends
+  const plans: ChapterPlan[] = []
+  let cursor = 0
+  for (const id of ALL_CHAPTERS) {
+    const raw = rawPlans.get(id)!
+    if (raw.durationSec === 0) {
+      plans.push({ ...raw, startSec: cursor })
+      continue
+    }
+    plans.push({ ...raw, startSec: cursor })
+    cursor += raw.durationSec
+  }
+
+  // Adjust last chapter to match total duration – distribute slack proportionally
+  const totalDuration = sb.meta.totalDuration
+  const nonEmpty = plans.filter((p) => p.durationSec > 0)
+  if (nonEmpty.length > 0 && cursor > 0 && totalDuration > cursor) {
+    const diff = totalDuration - cursor
+    nonEmpty.forEach((p) => {
+      p.durationSec += diff * (p.durationSec / cursor)
+    })
+    // Recompute startSec after redistribution
+    let c = 0
+    for (const p of plans) {
+      p.startSec = c
+      c += p.durationSec
+    }
+  }
+
+  return plans
 }
 
 function esc(s: string): string {

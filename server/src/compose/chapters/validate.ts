@@ -72,21 +72,6 @@ export function validateHyperFramesHtml(
         }
       }
     }
-
-    // 5b. Check <video> src files exist (same logic as <img>)
-    const videoSrcs = [...html.matchAll(/<video[^>]*src="([^"]+)"/g)].map((m) => m[1]!)
-    for (const src of videoSrcs) {
-      if (src.startsWith("data:") || src.startsWith("http://") || src.startsWith("https://")) continue
-      const baseName = src.replace(/^assets\//, "")
-      if (!assetFiles.includes(baseName) && !assetFiles.includes(src)) {
-        if (assetsDir) {
-          const fullPath = join(assetsDir, src.replace(/^assets\//, ""))
-          if (!existsSync(fullPath)) {
-            errors.push(`Video asset not found: ${src}`)
-          }
-        }
-      }
-    }
   }
 
   // 6. Forbidden elements
@@ -117,51 +102,4 @@ export function validateHyperFramesHtml(
   }
 
   return { valid: errors.length === 0, errors }
-}
-
-export interface AiPatternResult {
-  severity: "ok" | "warning" | "critical"
-  issues: string[]
-}
-
-export function detectAiPatterns(html: string): AiPatternResult {
-  const issues: string[] = []
-  let severity: "ok" | "warning" | "critical" = "ok"
-
-  const gradientCount = (html.match(/linear-gradient|radial-gradient/gi) || []).length
-  if (gradientCount > 8) {
-    issues.push(`Excessive gradients: ${gradientCount}`)
-    severity = "critical"
-  }
-
-  const textShadowCount = (html.match(/text-shadow/gi) || []).length
-  const boxShadowCount = (html.match(/box-shadow/gi) || []).length
-  if (textShadowCount > 3 && boxShadowCount > 5) {
-    issues.push(`Excessive glow: text-shadow(${textShadowCount}) + box-shadow(${boxShadowCount})`)
-    severity = "critical"
-  }
-
-  if (/lorem ipsum|placeholder|sample text|TODO|FIXME/i.test(html)) {
-    issues.push("Placeholder text detected")
-    severity = "critical"
-  }
-
-  const blurCount = (html.match(/backdrop-filter\s*:\s*blur/gi) || []).length
-  if (blurCount > 3) {
-    issues.push(`Excessive glassmorphism: ${blurCount}`)
-    if (severity === "ok") severity = "warning"
-  }
-
-  if (boxShadowCount > 10) {
-    issues.push(`Excessive box-shadow: ${boxShadowCount}`)
-    if (severity === "ok") severity = "warning"
-  }
-
-  const emptyDivs = html.match(/<div[^>]*>\s*<\/div>/g) || []
-  if (emptyDivs.length > 5) {
-    issues.push(`Empty containers: ${emptyDivs.length}`)
-    if (severity === "ok") severity = "warning"
-  }
-
-  return { severity, issues }
 }

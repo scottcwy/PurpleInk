@@ -58,7 +58,7 @@ export function buildRootHtml(
     if (transition === "crossfade" && i > 0) {
       // Soft crossfade overlap at chapter boundaries
       timelineLines.push(
-        `      tl.from("${sel}", { opacity: 0, duration: 0.6, ease: "power1.inOut" }, ${start});`
+        `      tl.from("${sel}", { opacity: 0, duration: 0.35, ease: "power1.inOut" }, ${start});`
       )
     } else if (transition === "flash" && i > 0) {
       // Flash white at chapter boundaries

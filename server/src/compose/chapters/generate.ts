@@ -16,31 +16,8 @@ import {
   extractHtmlFromResponse,
   parseBatchResponse,
 } from "./prompts"
-import { detectAiPatterns, validateHyperFramesHtml } from "./validate"
+import { validateHyperFramesHtml } from "./validate"
 import { renderTemplateChapter } from "./template-fallback"
-import { generateStoryboard } from "../storyboard/generate"
-import { validateStoryboard } from "../storyboard/validate"
-import { storyboardToChapters } from "../storyboard/to-html"
-
-/**
- * Ensure chapter HTML has a <template> or <body> wrapper.
- * LLM sometimes returns bare <div data-composition-id="..."> without
- * the required wrapper, causing the renderer to fail.
- */
-function ensureHtmlWrapper(html: string, _chapterId: string): string {
-  // Already has <template> or <body> wrapping the composition element
-  if (/<(?:template|body)[^>]*>[\s\S]*data-composition-id/.test(html)) {
-    return html
-  }
-  // Wrap in a minimal HTML document
-  return `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body>
-${html}
-</body>
-</html>`
-}
 
 /**
  * Generate all 5 chapters via LLM with per-chapter validation and fallback.
@@ -59,34 +36,6 @@ export async function generateChapters(
   captureDir: string,
   model: VideoModel,
 ): Promise<ChapterHtml[]> {
-  // --- Storyboard path (feature-flagged) ---
-  const storyboardMode = (process.env.PURPLEINK_STORYBOARD_MODE || "auto") as "storyboard" | "direct" | "auto"
-
-  if (storyboardMode === "storyboard" || storyboardMode === "auto") {
-    try {
-      logger.info("generate:storyboard_start", { mode: storyboardMode, brand: ctx.brand.title })
-      const storyboard = await generateStoryboard(ctx, model)
-      const errors = validateStoryboard(storyboard)
-      if (errors.length > 0) {
-        logger.warn("generate:storyboard_invalid", { errors })
-        throw new Error(`Storyboard validation failed: ${errors.join("; ")}`)
-      }
-      const chapterMap = storyboardToChapters(storyboard, ctx, captureDir, model)
-      const allIds: ChapterId[] = ["ch1-opening", "ch2-hero", "ch3-showcase", "ch4-proof", "ch5-cta"]
-      const chapters: ChapterHtml[] = allIds.map((id) => ({
-        id,
-        html: chapterMap.get(id) || "",
-        source: "storyboard" as const,
-      }))
-      logger.info("generate:storyboard_success", { shots: storyboard.shots.length, chapters: chapters.length })
-      return chapters
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err)
-      logger.warn("generate:storyboard_failed, falling back to direct HTML", { error: errMsg })
-      // Continue to existing direct HTML generation path below
-    }
-  }
-
   const systemPrompt = buildSystemPrompt(ctx)
   const results = new Map<ChapterId, ChapterHtml>()
   const assetFiles = await listAssetFiles(captureDir)
@@ -106,22 +55,12 @@ export async function generateChapters(
     logger.info("generate:batch_response", { responseLen: response?.length || 0, hasContent: !!response })
     const parsed = parseBatchResponse(response)
     for (const id of batchIds) {
-      const rawHtml = parsed.get(id)
-      if (rawHtml) {
-        const html = ensureHtmlWrapper(rawHtml, id)
+      const html = parsed.get(id)
+      if (html) {
         const validation = validateHyperFramesHtml(html, id, assetFiles, join(captureDir, "assets"))
         if (validation.valid) {
-          const aiCheck = detectAiPatterns(html)
-          if (aiCheck.severity === "critical") {
-            logger.warn("generate:ai_patterns_critical", { chapter: id, issues: aiCheck.issues })
-            results.set(id, fallbackToTemplate(id, model, assetFiles, captureDir))
-          } else {
-            if (aiCheck.issues.length > 0) {
-              logger.warn("generate:ai_patterns_warning", { chapter: id, issues: aiCheck.issues })
-            }
-            results.set(id, { id, html, source: "llm" })
-            logger.info("generate:chapter_ok", { chapter: id, source: "llm" })
-          }
+          results.set(id, { id, html, source: "llm" })
+          logger.info("generate:chapter_ok", { chapter: id, source: "llm" })
         } else {
           logger.warn("generate:chapter_invalid", { chapter: id, errors: validation.errors })
           results.set(id, fallbackToTemplate(id, model, assetFiles, captureDir))
@@ -170,22 +109,11 @@ export async function generateChapters(
       model: "step-explore",
     })
     logger.info("generate:ch2_response", { responseLen: response?.length || 0 })
-    const rawHtml2 = extractHtmlFromResponse(response)
-    const html2 = ensureHtmlWrapper(rawHtml2, "ch2-hero")
-    const html2Checked = ensureScreenshotArea(html2, "ch2-hero")
-    const validation = validateHyperFramesHtml(html2Checked, "ch2-hero", assetFiles, join(captureDir, "assets"))
+    const html = extractHtmlFromResponse(response)
+    const validation = validateHyperFramesHtml(html, "ch2-hero", assetFiles, join(captureDir, "assets"))
     if (validation.valid) {
-      const aiCheck = detectAiPatterns(html2Checked)
-      if (aiCheck.severity === "critical") {
-        logger.warn("generate:ai_patterns_critical", { chapter: "ch2-hero", issues: aiCheck.issues })
-        results.set("ch2-hero", fallbackToTemplate("ch2-hero", model, assetFiles, captureDir))
-      } else {
-        if (aiCheck.issues.length > 0) {
-          logger.warn("generate:ai_patterns_warning", { chapter: "ch2-hero", issues: aiCheck.issues })
-        }
-        results.set("ch2-hero", { id: "ch2-hero", html: html2Checked, source: "llm" })
-        logger.info("generate:chapter_ok", { chapter: "ch2-hero", source: "llm" })
-      }
+      results.set("ch2-hero", { id: "ch2-hero", html, source: "llm" })
+      logger.info("generate:chapter_ok", { chapter: "ch2-hero", source: "llm" })
     } else {
       logger.warn("generate:chapter_invalid", { chapter: "ch2-hero", errors: validation.errors })
       results.set("ch2-hero", fallbackToTemplate("ch2-hero", model, assetFiles, captureDir))
@@ -227,22 +155,11 @@ export async function generateChapters(
       model: "step-explore",
     })
     logger.info("generate:ch3_response", { responseLen: response?.length || 0 })
-    const rawHtml3 = extractHtmlFromResponse(response)
-    const html3 = ensureHtmlWrapper(rawHtml3, "ch3-showcase")
-    const html3Checked = ensureScreenshotArea(html3, "ch3-showcase")
-    const validation = validateHyperFramesHtml(html3Checked, "ch3-showcase", assetFiles, join(captureDir, "assets"))
+    const html = extractHtmlFromResponse(response)
+    const validation = validateHyperFramesHtml(html, "ch3-showcase", assetFiles, join(captureDir, "assets"))
     if (validation.valid) {
-      const aiCheck = detectAiPatterns(html3Checked)
-      if (aiCheck.severity === "critical") {
-        logger.warn("generate:ai_patterns_critical", { chapter: "ch3-showcase", issues: aiCheck.issues })
-        results.set("ch3-showcase", fallbackToTemplate("ch3-showcase", model, assetFiles, captureDir))
-      } else {
-        if (aiCheck.issues.length > 0) {
-          logger.warn("generate:ai_patterns_warning", { chapter: "ch3-showcase", issues: aiCheck.issues })
-        }
-        results.set("ch3-showcase", { id: "ch3-showcase", html: html3Checked, source: "llm" })
-        logger.info("generate:chapter_ok", { chapter: "ch3-showcase", source: "llm" })
-      }
+      results.set("ch3-showcase", { id: "ch3-showcase", html, source: "llm" })
+      logger.info("generate:chapter_ok", { chapter: "ch3-showcase", source: "llm" })
     } else {
       logger.warn("generate:chapter_invalid", { chapter: "ch3-showcase", errors: validation.errors })
       results.set("ch3-showcase", fallbackToTemplate("ch3-showcase", model, assetFiles, captureDir))
@@ -265,21 +182,11 @@ export async function generateChapters(
       model: "step-explore",
     })
     logger.info("generate:ch4_response", { responseLen: response?.length || 0 })
-    const rawHtml4 = extractHtmlFromResponse(response)
-    const html4 = ensureHtmlWrapper(rawHtml4, "ch4-proof")
-    const validation = validateHyperFramesHtml(html4, "ch4-proof", assetFiles, join(captureDir, "assets"))
+    const html = extractHtmlFromResponse(response)
+    const validation = validateHyperFramesHtml(html, "ch4-proof", assetFiles, join(captureDir, "assets"))
     if (validation.valid) {
-      const aiCheck = detectAiPatterns(html4)
-      if (aiCheck.severity === "critical") {
-        logger.warn("generate:ai_patterns_critical", { chapter: "ch4-proof", issues: aiCheck.issues })
-        results.set("ch4-proof", fallbackToTemplate("ch4-proof", model, assetFiles, captureDir))
-      } else {
-        if (aiCheck.issues.length > 0) {
-          logger.warn("generate:ai_patterns_warning", { chapter: "ch4-proof", issues: aiCheck.issues })
-        }
-        results.set("ch4-proof", { id: "ch4-proof", html: html4, source: "llm" })
-        logger.info("generate:chapter_ok", { chapter: "ch4-proof", source: "llm" })
-      }
+      results.set("ch4-proof", { id: "ch4-proof", html, source: "llm" })
+      logger.info("generate:chapter_ok", { chapter: "ch4-proof", source: "llm" })
     } else {
       logger.warn("generate:chapter_invalid", { chapter: "ch4-proof", errors: validation.errors })
       results.set("ch4-proof", fallbackToTemplate("ch4-proof", model, assetFiles, captureDir))
@@ -308,19 +215,6 @@ export async function generateChapters(
   return results_
 }
 
-/**
- * Ensure screenshot-area chapters have at least one <img> inside a browser-frame container.
- * LLM sometimes omits the screenshot area entirely, producing a pretty but useless page.
- */
-function ensureScreenshotArea(html: string, chapterId: string): string {
-  if (chapterId !== "ch2-hero" && chapterId !== "ch3-showcase") return html
-  // Check if there's at least one <img> tag referencing assets
-  if (/<img[^>]+src="assets\//i.test(html)) return html
-  // No screenshot area found — inject a placeholder browser frame
-  logger.warn("generate:no_screenshot_area", { chapter: chapterId })
-  return html
-}
-
 /** Fallback: render a chapter using the template system */
 function fallbackToTemplate(
   id: ChapterId,
@@ -336,7 +230,7 @@ function fallbackToTemplate(
 async function listAssetFiles(captureDir: string): Promise<string[]> {
   try {
     const files = await readdir(join(captureDir, "assets"))
-    return files.filter((f) => /\.(png|jpe?g|webp|mp4|webm)$/i.test(f))
+    return files.filter((f) => /\.(png|jpe?g|webp)$/i.test(f))
   } catch {
     return []
   }

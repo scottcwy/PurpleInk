@@ -1,9 +1,25 @@
 import type { ChapterId } from "../chapters/types"
 import type { ShotType } from "../model"
 
+/** HyperFrames transition types for frame entry */
+export type TransitionType =
+  | "cut"
+  | "crossfade"
+  | "blur-crossfade"
+  | "push-slide"
+  | "zoom-through"
+  | "squeeze"
+
 export interface Storyboard {
   meta: StoryboardMeta
   shots: StoryboardShot[]
+  /** Global storyboard metadata (HyperFrames STORYBOARD.md format) */
+  globals?: {
+    format?: string
+    message?: string
+    arc?: string
+    audience?: string
+  }
 }
 
 export interface StoryboardMeta {
@@ -48,6 +64,29 @@ export interface StoryboardShot {
     stagger: number
     exitDelay: number
   }
+
+  // ── HyperFrames STORYBOARD.md fields (all optional, backward-compatible) ──
+
+  /** Transition type for entering this frame */
+  transition_in?: TransitionType
+  /** Contact-sheet thumbnail seek position (seconds) */
+  poster?: number
+  /** Asset candidates selected from asset-descriptions.md */
+  asset_candidates?: string[]
+  /** Animation blueprint ID */
+  blueprint?: string
+  /** Focal element description */
+  focal?: string
+  /** Element roles mapping */
+  roles?: Record<string, string>
+  /** Sound effect hint */
+  sfx?: string
+  /** Frame production status */
+  status?: "outline" | "built" | "animated"
+  /** Frame HTML source file path */
+  src?: string
+  /** Voiceover narration text */
+  voiceover?: string
 }
 
 export interface LayerSpec {

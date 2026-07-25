@@ -65,20 +65,10 @@ interface ShotDef {
   timeline: ShotTimeline
 }
 
-/** 统一 clip 外壳（占位 start/duration 由 renderScene 注入真实值）
- *  内含四层深度结构：depth-bg / depth-mid / depth-content / depth-fg */
+/** 统一 clip 外壳（占位 start/duration 由 renderScene 注入真实值） */
 function clip(sid: string, cls: string, inner: string, extraAttr = ""): string {
   return `      <div id="${sid}" class="clip ${cls}" data-start="0" data-duration="1" data-track-index="1"${extraAttr ? " " + extraAttr : ""}>
-        <div class="depth-bg"></div>
-        <div class="depth-mid"></div>
-        <div class="depth-content">
 ${inner}
-        </div>
-        <div class="depth-fg">
-          <div class="geo geo-1"></div>
-          <div class="geo geo-2"></div>
-          <div class="geo geo-3"></div>
-        </div>
       </div>`
 }
 
@@ -99,7 +89,7 @@ const brandCenter: ShotDef = {
     const at = (d: number) => round(t + d)
     const dur = mpEnterDur(m, 1)
     const l = [
-      `      tl.from("${sel} .brand", { opacity: 0, y: 42, scale: 0.96, duration: ${dur}, ease: "${enterEase(m)}" }, ${at(0.2)});`,
+      `      tl.from("${sel} .brand", { opacity: 0, y: 42, scale: 0.96, duration: ${dur}, ease: "${enterEase(m)}" }, ${at(0.05)});`,
       `      tl.fromTo("${sel} .rule", { scaleX: 0 }, { scaleX: 1, duration: ${round(dur * 0.9)}, ease: "power2.inOut" }, ${at(0.2 + dur * 0.8)});`,
     ]
     if (m.brand.tagline)
@@ -123,7 +113,7 @@ const brandSide: ShotDef = {
     const at = (d: number) => round(t + d)
     const dur = mpEnterDur(m, 0.9)
     const l = [
-      `      tl.fromTo("${sel} .bs-bar", { scaleY: 0 }, { scaleY: 1, duration: ${round(dur * 0.88)}, ease: "power2.inOut" }, ${at(0.2)});`,
+      `      tl.fromTo("${sel} .bs-bar", { scaleY: 0 }, { scaleY: 1, duration: ${round(dur * 0.88)}, ease: "power2.inOut" }, ${at(0.05)});`,
       `      tl.from("${sel} .brand", { opacity: 0, x: 60, duration: ${dur}, ease: "${enterEase(m)}" }, ${at(0.5)});`,
     ]
     if (m.brand.tagline)
@@ -161,7 +151,7 @@ const heroSplit: ShotDef = {
     const at = (d: number) => round(t + d)
     const dur = mpEnterDur(m, 0.9)
     const stag = mpStagger(m, 0.12)
-    const l = [`      tl.from("${sel} .h1", { opacity: 0, y: 50, duration: ${dur}, ease: "${enterEase(m)}" }, ${at(0.2)});`]
+    const l = [`      tl.from("${sel} .h1", { opacity: 0, y: 50, duration: ${dur}, ease: "${enterEase(m)}" }, ${at(0.05)});`]
     if (m.hero.lede) l.push(`      tl.from("${sel} .lede", { opacity: 0, y: 30, duration: ${round(dur * 0.88)}, ease: "power2.out" }, ${at(0.6)});`)
     if (m.hero.ctas.length)
       l.push(`      tl.from("${sel} .btn", { opacity: 0, y: 24, duration: ${round(dur * 0.66)}, stagger: ${stag}, ease: "${backEase(m, 1.6)}" }, ${at(1.1)});`)
@@ -186,7 +176,7 @@ const heroStack: ShotDef = {
     const at = (d: number) => round(t + d)
     const dur = mpEnterDur(m, 0.9)
     const stag = mpStagger(m, 0.12)
-    const l = [`      tl.from("${sel} .h1", { opacity: 0, y: 56, duration: ${dur}, ease: "${enterEase(m)}" }, ${at(0.2)});`]
+    const l = [`      tl.from("${sel} .h1", { opacity: 0, y: 56, duration: ${dur}, ease: "${enterEase(m)}" }, ${at(0.05)});`]
     if (m.hero.lede) l.push(`      tl.from("${sel} .lede", { opacity: 0, y: 30, duration: ${round(dur * 0.88)}, ease: "power2.out" }, ${at(0.6)});`)
     if (m.hero.ctas.length)
       l.push(`      tl.from("${sel} .btn", { opacity: 0, y: 26, scale: 0.94, duration: ${round(dur * 0.66)}, stagger: ${stag}, ease: "${backEase(m, 1.6)}" }, ${at(1.0)});`)
@@ -224,7 +214,7 @@ const shotWindow: ShotDef = {
     const ease = m.motionProfile?.enterEase || "power2.inOut"
     const cam = buildPageCamAnimation(keys, `${sel} .shot`, ease)
     return [
-      `      tl.from("${sel} .window", { opacity: 0, y: 56, scale: 0.96, duration: ${mpEnterDur(m, 0.9)}, ease: "${enterEase(m)}" }, ${at(0.2)});`,
+      `      tl.from("${sel} .window", { opacity: 0, y: 56, scale: 0.96, duration: ${mpEnterDur(m, 0.9)}, ease: "${enterEase(m)}" }, ${at(0.05)});`,
       `      tl.from("${sel} .shot-visual", { opacity: 0, duration: 0.6, ease: "power2.out" }, ${at(0.5)});`,
       `      tl.from("${sel} .cap", { opacity: 0, y: 20, duration: 0.7, ease: "power2.out" }, ${at(0.8)});`,
       cam.css,
@@ -256,7 +246,7 @@ const shotTilt: ShotDef = {
     const ease = m.motionProfile?.enterEase || "power2.inOut"
     const cam = buildPageCamAnimation(keys, `${sel} .tilt-img`, ease)
     return [
-      `      tl.from("${sel} .tilt-card", { opacity: 0, rotationY: -22, rotationX: 8, y: 70, transformPerspective: 1600, duration: ${mpEnterDur(m, 1.1)}, ease: "${enterEase(m)}" }, ${at(0.2)});`,
+      `      tl.from("${sel} .tilt-card", { opacity: 0, rotationY: -22, rotationX: 8, y: 70, transformPerspective: 1600, duration: ${mpEnterDur(m, 1.1)}, ease: "${enterEase(m)}" }, ${at(0.05)});`,
       `      tl.from("${sel} .tilt-img", { opacity: 0, duration: 0.6, ease: "power2.out" }, ${at(0.5)});`,
       `      tl.from("${sel} .cap", { opacity: 0, y: 20, duration: 0.7, ease: "power2.out" }, ${at(0.8)});`,
       cam.css,
@@ -279,7 +269,7 @@ const shotZoom: ShotDef = {
     const ease = m.motionProfile?.enterEase || "power2.inOut"
     const cam = buildPageCamAnimation(keys, `${sel} .zoom-img`, ease)
     return [
-      `      tl.from("${sel} .window", { opacity: 0, scale: 0.94, duration: ${mpEnterDur(m, 0.9)}, ease: "${enterEase(m)}" }, ${at(0.2)});`,
+      `      tl.from("${sel} .window", { opacity: 0, scale: 0.94, duration: ${mpEnterDur(m, 0.9)}, ease: "${enterEase(m)}" }, ${at(0.05)});`,
       `      tl.from("${sel} .shot-visual", { opacity: 0, duration: 0.6, ease: "power2.out" }, ${at(0.5)});`,
       `      tl.from("${sel} .cap", { opacity: 0, y: 20, duration: 0.7, ease: "power2.out" }, ${at(0.8)});`,
       cam.css,
@@ -310,7 +300,7 @@ ${pane(b, "After", "b")}
     const at = (d: number) => round(t + d)
     const stag = mpStagger(m, 0.1)
     return [
-      `      tl.from("${sel} .sp-a", { opacity: 0, x: -110, duration: ${mpEnterDur(m, 0.85)}, ease: "${enterEase(m)}" }, ${at(0.2)});`,
+      `      tl.from("${sel} .sp-a", { opacity: 0, x: -110, duration: ${mpEnterDur(m, 0.85)}, ease: "${enterEase(m)}" }, ${at(0.05)});`,
       `      tl.from("${sel} .sp-b", { opacity: 0, x: 110, duration: ${mpEnterDur(m, 0.85)}, ease: "${enterEase(m)}" }, ${at(0.5)});`,
       `      tl.from("${sel} .sp-badge", { opacity: 0, y: -18, duration: 0.5, stagger: ${stag}, ease: "${backEase(m, 1.7)}" }, ${at(0.9)});`,
     ]
@@ -392,7 +382,7 @@ const dataCounter: ShotDef = {
     const at = (d: number) => round(t + d)
     const stag = mpStagger(m, 0.14)
     const lines: string[] = [
-      `      tl.from("${sel} .dcard", { opacity: 0, y: 46, scale: 0.95, duration: ${mpEnterDur(m, 0.7)}, stagger: ${stag}, ease: "${enterEase(m)}" }, ${at(0.2)});`,
+      `      tl.from("${sel} .dcard", { opacity: 0, y: 46, scale: 0.95, duration: ${mpEnterDur(m, 0.7)}, stagger: ${stag}, ease: "${enterEase(m)}" }, ${at(0.05)});`,
     ]
     ;(scene.stats || []).forEach((s, i) => {
       const { num, suffix, decimals } = parseStatValue(s.value)
@@ -427,7 +417,7 @@ const chipsMarquee: ShotDef = {
     const stag = mpStagger(m, 0.05)
     return [
       `      tl.from("${sel} .chip", { opacity: 0, y: 24, scale: 0.9, duration: 0.5, stagger: ${stag}, ease: "${backEase(m, 1.7)}" }, ${at(0.1)});`,
-      `      tl.fromTo("${sel} .mq-track", { x: 0 }, { x: -760, duration: ${dur}, ease: "none" }, ${at(0.2)});`,
+      `      tl.fromTo("${sel} .mq-track", { x: 0 }, { x: -760, duration: ${dur}, ease: "none" }, ${at(0.05)});`,
     ]
   },
 }
@@ -452,7 +442,7 @@ ${cells}
     const at = (d: number) => round(t + d)
     const stag = mpStagger(m, 0.08)
     return [
-      `      tl.from("${sel} .logos-title", { opacity: 0, y: 30, duration: ${mpEnterDur(m, 0.7)}, ease: "${enterEase(m)}" }, ${at(0.2)});`,
+      `      tl.from("${sel} .logos-title", { opacity: 0, y: 30, duration: ${mpEnterDur(m, 0.7)}, ease: "${enterEase(m)}" }, ${at(0.05)});`,
       `      tl.from("${sel} .logo-cell", { opacity: 0, y: 34, scale: 0.9, duration: 0.6, stagger: ${stag}, ease: "${backEase(m, 1.6)}" }, ${at(0.6)});`,
     ]
   },
@@ -493,7 +483,7 @@ const ctaPush: ShotDef = {
   timeline: (m, sel, _s, t) => {
     const at = (d: number) => round(t + d)
     const dur = mpEnterDur(m, 0.7)
-    const l = [`      tl.from("${sel} .cta-h", { opacity: 0, y: 44, duration: ${dur}, ease: "${enterEase(m)}" }, ${at(0.2)});`]
+    const l = [`      tl.from("${sel} .cta-h", { opacity: 0, y: 44, duration: ${dur}, ease: "${enterEase(m)}" }, ${at(0.05)});`]
     if (m.cta.command) l.push(`      tl.from("${sel} .cmd", { opacity: 0, y: 24, duration: ${round(dur * 0.85)}, ease: "${backEase(m, 1.6)}" }, ${at(0.6)});`)
     return l
   },
@@ -525,127 +515,6 @@ const ctaFullbleed: ShotDef = {
 // 镜头注册表
 // ============================================================
 
-// ============================================================
-// 新增镜头：data-chart / terminal-demo / typing-effect / scroll-demo / video-shot
-// ============================================================
-
-const dataChart: ShotDef = {
-  render: (_m, sid, scene) => {
-    const stats = scene.stats || []
-    const bars = stats.slice(0, 6).map((s, i) => {
-      const h = 40 + (i * 10)
-      return `<div class="chart-bar"><div class="bar-fill" style="--target-h:${h}%"></div><span class="bar-value mono">${esc(s.value)}</span><span class="bar-label">${esc(s.label)}</span></div>`
-    }).join("")
-    return clip(sid, "sc-chart", `
-      <div class="chart-eyebrow">KEY METRICS</div>
-      <div class="chart-title">${esc("Metrics")}</div>
-      <div class="chart-bars">${bars}</div>
-    `)
-  },
-  timeline: (_m, sel, scene, t) => {
-    const at = (d: number) => round(t + d)
-    return [
-      `      tl.from("${sel} .chart-title", { clipPath: "inset(0 100% 0 0)", duration: 0.6, ease: "power3.out" }, ${at(0.1)});`,
-      `      tl.from("${sel} .bar-fill", { height: 0, duration: 0.8, ease: "power2.out", stagger: 0.15 }, ${at(0.3)});`,
-      `      tl.from("${sel} .bar-value", { opacity: 0, y: 10, duration: 0.5, stagger: 0.15 }, ${at(0.5)});`,
-    ]
-  },
-}
-
-const terminalDemo: ShotDef = {
-  render: (m, sid) => {
-    const brand = m.brand?.title || "app"
-    const cmd = m.cta?.command || `npx ${brand}`
-    const lines = [
-      { type: "prompt", text: `$ npm install ${brand.toLowerCase().replace(/\s+/g, "-")}` },
-      { type: "success", text: "+ installed 142 packages in 3.2s" },
-      { type: "prompt", text: `$ ${cmd}` },
-      { type: "info", text: "  Creating project structure..." },
-      { type: "success", text: "  ✓ Project ready." },
-    ]
-    const linesHtml = lines.map(l => `<div class="term-line term-${l.type}">${esc(l.text)}</div>`).join("")
-    return clip(sid, "sc-terminal", `
-      <div class="terminal">
-        <div class="term-bar"><span class="term-title mono">Terminal</span></div>
-        <div class="term-body mono">${linesHtml}<span class="term-cursor">█</span></div>
-      </div>
-    `)
-  },
-  timeline: (_m, sel, _scene, t) => {
-    const at = (d: number) => round(t + d)
-    return [
-      `      tl.from("${sel} .terminal", { y: 30, opacity: 0, duration: 0.6, ease: "power3.out" }, ${at(0.1)});`,
-      `      tl.from("${sel} .term-line", { opacity: 0, x: -10, duration: 0.4, ease: "power2.out", stagger: 0.3 }, ${at(0.3)});`,
-      `      tl.to("${sel} .term-cursor", { opacity: 0, duration: 0.6, ease: "sine.inOut", yoyo: true, repeat: -1 }, ${at(0.3)});`,
-    ]
-  },
-}
-
-const typingEffect: ShotDef = {
-  render: (m, sid, scene) => {
-    const headline = m.hero?.headline || ""
-    return clip(sid, "sc-typing", `
-      <div class="typing-wrap">
-        <div class="typing-text">${esc(headline)}</div>
-        <div class="typing-cursor">|</div>
-      </div>
-    `)
-  },
-  timeline: (_m, sel, _scene, t) => {
-    const at = (d: number) => round(t + d)
-    return [
-      `      tl.from("${sel} .typing-text", { clipPath: "inset(0 100% 0 0)", duration: 1.5, ease: "steps(20)" }, ${at(0.2)});`,
-      `      tl.to("${sel} .typing-cursor", { opacity: 0, duration: 0.5, ease: "sine.inOut", yoyo: true, repeat: -1 }, ${at(0.2)});`,
-    ]
-  },
-}
-
-const scrollDemo: ShotDef = {
-  render: (_m, sid, scene) => {
-    const imgSrc = scene.shots?.[0]?.src || ""
-    return clip(sid, "sc-scroll", `
-      <div class="scroll-window">
-        <div class="scroll-window-bar">
-          <span class="shot-window-dot r"></span>
-          <span class="shot-window-dot y"></span>
-          <span class="shot-window-dot g"></span>
-        </div>
-        <div class="scroll-viewport">
-          <img src="${esc(imgSrc)}" class="scroll-content" />
-        </div>
-      </div>
-    `)
-  },
-  timeline: (_m, sel, scene, t) => {
-    const at = (d: number) => round(t + d)
-    return [
-      `      tl.from("${sel} .scroll-window", { opacity: 0, scale: 0.95, duration: 0.8, ease: "power3.out" }, ${at(0.1)});`,
-      `      tl.to("${sel} .scroll-content", { y: "-40%", duration: ${round(scene.duration - 1)}, ease: "sine.inOut" }, ${at(0.5)});`,
-    ]
-  },
-}
-
-const videoShot: ShotDef = {
-  render: (_m, sid, scene) => {
-    const videoSrc = scene.shots?.[0]?.src || ""
-    return clip(sid, "sc-video", `
-      <div class="video-window">
-        <video class="video-element" src="${esc(videoSrc)}" muted playsinline></video>
-      </div>
-    `)
-  },
-  timeline: (_m, sel, _scene, t) => {
-    const at = (d: number) => round(t + d)
-    return [
-      `      tl.from("${sel} .video-window", { opacity: 0, y: 40, scale: 0.96, duration: 0.9, ease: "power3.out" }, ${at(0.2)});`,
-    ]
-  },
-}
-
-// ============================================================
-// 镜头注册表
-// ============================================================
-
 const SHOTS: Record<ShotType, ShotDef> = {
   "brand-center": brandCenter,
   "brand-side": brandSide,
@@ -663,11 +532,6 @@ const SHOTS: Record<ShotType, ShotDef> = {
   "pricing": pricingTable,
   "cta-push": ctaPush,
   "cta-fullbleed": ctaFullbleed,
-  "data-chart": dataChart,
-  "terminal-demo": terminalDemo,
-  "typing-effect": typingEffect,
-  "scroll-demo": scrollDemo,
-  "video-shot": videoShot,
 }
 
 /** 生成一个场景的 clip 外壳（注入真实 start/duration） */
@@ -700,15 +564,9 @@ function buildTimeline(m: VideoModel): string {
     }
     // 软叠化：非首镜、非满屏纯色镜头，整片淡入(editorial 的缓慢叠化质感)
     if (trans === "crossfade" && index > 0 && !isSolidFull(scene.kind)) {
-      lines.push(`      tl.from("${sel}", { opacity: 0, duration: 0.6, ease: "power1.inOut" }, ${start});`)
+      lines.push(`      tl.from("${sel}", { opacity: 0, duration: 0.35, ease: "power1.inOut" }, ${start});`)
     }
     lines.push(...def.timeline(m, sel, scene, scene.start))
-    // 深度层视差动画
-    const sceneDur = round(scene.duration)
-    const tStart = round(scene.start)
-    lines.push(`      tl.fromTo("${sel} .depth-bg", { x: -8, y: -4 }, { x: 8, y: 4, duration: ${sceneDur}, ease: "sine.inOut" }, ${tStart});`)
-    lines.push(`      tl.fromTo("${sel} .depth-mid", { x: 4, y: 2 }, { x: -4, y: -2, duration: ${sceneDur}, ease: "sine.inOut" }, ${tStart});`)
-    lines.push(`      tl.to("${sel} .depth-fg .geo", { y: "+=3", duration: 2, ease: "sine.inOut", yoyo: true, repeat: -1 }, ${tStart});`)
     // 闪白硬切：非首镜，在切点前后一次白闪脉冲(kinetic 的高能量硬切)
     if (trans === "flash" && index > 0) {
       lines.push(`      tl.to(".fx-flash", { opacity: 0.92, duration: 0.09, ease: "power1.in" }, ${round(start - 0.09)});`)
@@ -927,109 +785,19 @@ function buildCss(m: VideoModel): string {
       #root[data-skin="technical"] .tilt-card,
       #root[data-skin="technical"] .sp-pane { border-radius: 2px; border: 2px solid var(--fg); box-shadow: 0 0 0 1px rgba(255,255,255,0.03), 0 4px 20px rgba(0,0,0,0.12); }
       #root[data-skin="technical"] .rule,
-      #root[data-skin="technical"] .bs-bar { background: var(--accent); }
-
-      /* --- data-chart --- */
-      .sc-chart { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 32px; padding: 0 80px; }
-      .chart-eyebrow { font-size: 14px; text-transform: uppercase; letter-spacing: 3px; color: var(--accent); }
-      .chart-title { font-size: 36px; font-weight: 800; letter-spacing: -1px; }
-      .chart-bars { display: flex; align-items: flex-end; gap: 32px; height: 400px; width: 100%; max-width: 1200px; }
-      .chart-bar { display: flex; flex-direction: column; align-items: center; flex: 1; height: 100%; justify-content: flex-end; }
-      .bar-fill { width: 100%; background: var(--accent); border-radius: 8px 8px 0 0; height: var(--target-h, 50%); }
-      .bar-value { font-size: 36px; font-weight: 800; color: var(--accent); margin-bottom: 8px; }
-      .bar-label { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
-
-      /* --- terminal-demo --- */
-      .sc-terminal { display: flex; align-items: center; justify-content: center; height: 100%; }
-      .terminal { width: 960px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); background: #1a1a1a; }
-      .term-bar { height: 40px; background: #2a2a2a; display: flex; align-items: center; padding: 0 16px; }
-      .term-title { color: #999; font-size: 14px; }
-      .term-body { padding: 24px; font-size: 18px; line-height: 1.8; }
-      .term-line { opacity: 1; }
-      .term-line.term-prompt { color: #e0e0e0; }
-      .term-line.term-success { color: #4ade80; }
-      .term-line.term-info { color: #94a3b8; }
-      .term-cursor { display: inline-block; color: var(--accent); }
-
-      /* --- typing-effect --- */
-      .sc-typing { display: flex; align-items: center; justify-content: center; height: 100%; }
-      .typing-wrap { display: flex; align-items: center; gap: 4px; }
-      .typing-text { font-size: 64px; font-weight: 800; letter-spacing: -2px; clip-path: inset(0 0 0 0); }
-      .typing-cursor { font-size: 64px; font-weight: 300; color: var(--accent); }
-
-      /* --- scroll-demo --- */
-      .sc-scroll { display: flex; align-items: center; justify-content: center; height: 100%; }
-      .scroll-window { width: 1000px; height: 600px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
-      .scroll-window-bar { height: 32px; background: var(--secondary); display: flex; align-items: center; padding: 0 12px; gap: 6px; }
-      .scroll-viewport { height: calc(100% - 32px); overflow: hidden; }
-      .scroll-content { width: 100%; object-fit: cover; }
-
-      /* --- video-shot --- */
-      .sc-video { display: flex; align-items: center; justify-content: center; height: 100%; }
-      .video-window { width: 1200px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
-      .video-element { width: 100%; display: block; }
-
-      /* 深度层基础 */
-      .depth-bg { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
-      .depth-mid { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
-      .depth-content { position: absolute; inset: 0; z-index: 3; }
-      .depth-fg { position: absolute; inset: 0; z-index: 4; pointer-events: none; overflow: hidden; }
-
-      /* 皮肤: Editorial — 柔和渐变 */
-      [data-skin="editorial"] .depth-bg {
-        background: radial-gradient(ellipse at 30% 40%, var(--accent) 8%, transparent 60%);
-        opacity: 0.06;
-      }
-      [data-skin="editorial"] .depth-mid {
-        background: repeating-linear-gradient(90deg, var(--border) 0 1px, transparent 1px 120px);
-        opacity: 0.08;
-      }
-
-      /* 皮肤: Kinetic — 强调色块 */
-      [data-skin="kinetic"] .depth-bg {
-        background: linear-gradient(135deg, var(--accent) 0%, transparent 50%);
-        opacity: 0.08;
-      }
-      [data-skin="kinetic"] .depth-mid {
-        background: repeating-linear-gradient(45deg, var(--border) 0 1px, transparent 1px 100px);
-        opacity: 0.06;
-      }
-
-      /* 皮肤: Technical — 网格底纹 */
-      [data-skin="technical"] .depth-bg {
-        background-image:
-          repeating-linear-gradient(to right, var(--border) 0 1px, transparent 1px 80px),
-          repeating-linear-gradient(to bottom, var(--border) 0 1px, transparent 1px 80px);
-        opacity: 0.4;
-      }
-      [data-skin="technical"] .depth-mid {
-        background: radial-gradient(circle at 70% 60%, var(--accent) 5%, transparent 40%);
-        opacity: 0.05;
-      }
-
-      /* 前景装饰 */
-      .depth-fg .geo {
-        position: absolute;
-        border: 1px solid var(--border);
-        opacity: 0.15;
-      }
-      .depth-fg .geo-1 { width: 60px; height: 60px; top: 10%; right: 8%; transform: rotate(15deg); border-radius: 8px; }
-      .depth-fg .geo-2 { width: 40px; height: 40px; bottom: 15%; left: 5%; transform: rotate(-20deg); border-radius: 50%; }
-      .depth-fg .geo-3 { width: 80px; height: 1px; top: 40%; right: 15%; background: var(--border); opacity: 0.1; }`
+      #root[data-skin="technical"] .bs-bar { background: var(--accent); }`
 }
 
 /** Map a shot type to its chapter ID */
 function shotToChapter(kind: ShotType): ChapterId {
   if (kind === "brand-center" || kind === "brand-side") return "ch1-opening"
-  if (kind === "hero-split" || kind === "hero-stack" || kind === "terminal-demo") return "ch2-hero"
-  if (kind === "shot-window" || kind === "shot-tilt" || kind === "shot-zoom" || kind === "shot-split" || kind === "scroll-demo" || kind === "video-shot") return "ch3-showcase"
+  if (kind === "hero-split" || kind === "hero-stack") return "ch2-hero"
+  if (kind === "shot-window" || kind === "shot-tilt" || kind === "shot-zoom" || kind === "shot-split") return "ch3-showcase"
   if (
     kind === "feature-row" || kind === "feature-stack" ||
     kind === "data-counter" || kind === "chips-marquee" ||
-    kind === "logo-wall" || kind === "pricing" ||
-    kind === "data-chart"
+    kind === "logo-wall" || kind === "pricing"
   ) return "ch4-proof"
-  if (kind === "typing-effect") return "ch1-opening"
   return "ch5-cta"
 }
 
@@ -1106,12 +874,6 @@ export function renderChapterHtml(
     if (trans === "wipe" && index > 0) {
       timelineLines.push(`      tl.from("${sel}", { x: 120, opacity: 0, duration: 0.7, ease: "power3.inOut" }, ${start});`)
     }
-    // 深度层视差动画
-    const sceneDur = round(scene.duration)
-    const tStart = round(scene.start)
-    timelineLines.push(`      tl.fromTo("${sel} .depth-bg", { x: -8, y: -4 }, { x: 8, y: 4, duration: ${sceneDur}, ease: "sine.inOut" }, ${tStart});`)
-    timelineLines.push(`      tl.fromTo("${sel} .depth-mid", { x: 4, y: 2 }, { x: -4, y: -2, duration: ${sceneDur}, ease: "sine.inOut" }, ${tStart});`)
-    timelineLines.push(`      tl.to("${sel} .depth-fg .geo", { y: "+=3", duration: 2, ease: "sine.inOut", yoyo: true, repeat: -1 }, ${tStart});`)
   })
   const timelineJs = timelineLines.join("\n")
   const css = buildCss(subModel)

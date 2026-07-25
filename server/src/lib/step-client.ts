@@ -26,8 +26,8 @@ export interface StepMessageOptions {
   effort?: "low" | "medium" | "high"
 }
 
-const MODEL = process.env.STEP_MODEL || "step-explore"
-const MIN_INTERVAL_MS = Number(process.env.STEP_MIN_INTERVAL_MS) || 5000
+const MODEL = process.env.STEP_MODEL || "step-3.7-flash"
+const MIN_INTERVAL_MS = Number(process.env.STEP_MIN_INTERVAL_MS) || 7000
 const MAX_RETRIES = Number(process.env.STEP_MAX_RETRIES) || 4
 
 function getConfig() {
@@ -79,7 +79,7 @@ async function doCall(opts: StepMessageOptions): Promise<string> {
           system: opts.system,
           messages: [{ role: "user", content: opts.content }],
           // 推理模型（step-3.7-flash）会先产 thinking 块再产 text；effort:low 收敛思考
-          ...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
+          output_config: { effort: opts.effort || "low" },
         }),
       })
     } catch (err) {
@@ -99,6 +99,13 @@ async function doCall(opts: StepMessageOptions): Promise<string> {
     }
 
     const errText = await res.text().catch(() => "")
+    // 400 "stream truncated" 是 StepFun 服务端瞬时故障，应重试
+    if (res.status === 400 && errText.includes("stream truncated") && attempt < MAX_RETRIES) {
+      logger.warn("step_client:stream_truncated_retry", { attempt, backoff: 4000 })
+      await sleep(4000)
+      continue
+    }
+
     // 429 限速 / 5xx 服务端异常：退避重试
     if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
       const backoff = res.status === 429 ? 12_000 : 4_000

@@ -34,7 +34,7 @@ export interface ChapterPlan {
 export interface ChapterHtml {
   id: ChapterId
   html: string
-  source: "llm" | "template" | "storyboard"
+  source: "llm" | "template"
 }
 
 /**
