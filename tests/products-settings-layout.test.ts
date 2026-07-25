@@ -2,20 +2,18 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 describe('Products settings workspace', () => {
-  it('keeps the shell fixed and scrolls only the settings content region', () => {
+  it('keeps the shell fixed and scrolls the settings main region', () => {
     const source = readFileSync(
       'src/app/products/(app)/settings/settings-form.tsx',
       'utf8',
     )
 
-    expect(source).toContain(
-      'className="flex min-h-0 flex-1 flex-col overflow-hidden text-ds-text"',
-    )
     expect(source).toContain('data-testid="settings-scroll-region"')
     expect(source).toContain(
-      'min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain',
+      'min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain text-ds-text',
     )
     expect(source).toContain('aria-label="设置分类"')
+    expect(source).toContain('lg:sticky lg:top-0')
   })
 
   it('composes long setting groups from the public SettingsPanel primitive', () => {

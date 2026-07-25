@@ -84,7 +84,7 @@ export function AppSidebar({
       onCollapsedChange={(next) => onCompactChange?.(next)}
       accountOpen={accountOpen}
       onAccountOpenChange={setAccountOpen}
-      brandHref={PRODUCTS_ROUTES.dashboard}
+      brandHref="/"
       settingsHref={productSettingsHref(projectId)}
       className={cn('shrink-0', className)}
     />

@@ -74,6 +74,34 @@ export default function PlaybookFoundationsPage() {
             ))}
           </div>
         </section>
+
+        <section className="border-ds-border bg-ds-surface mt-5 rounded-lg border p-6">
+          <h2 className="text-ds-text-muted font-mono text-[11px] font-semibold tracking-wide uppercase">
+            滚动条
+          </h2>
+          <p className="text-ds-text-muted mt-2 text-xs">
+            全局细滚动条：`--scrollbar-*`。浅色 / 深色拇指色不同；切换主题可见差异。
+            `.scrollbar-hide` 仍用于需要完全隐藏的区域。
+          </p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className="border-ds-border h-36 overflow-y-auto rounded-lg border bg-ds-surface-muted p-3">
+              <p className="text-xs font-semibold">默认细条</p>
+              {Array.from({ length: 12 }, (_, index) => (
+                <p key={index} className="text-ds-text-muted mt-2 text-xs">
+                  滚动行 {index + 1} · thumb 使用主题 token
+                </p>
+              ))}
+            </div>
+            <div className="scrollbar-hide border-ds-border h-36 overflow-y-auto rounded-lg border bg-ds-surface-muted p-3">
+              <p className="text-xs font-semibold">scrollbar-hide</p>
+              {Array.from({ length: 12 }, (_, index) => (
+                <p key={index} className="text-ds-text-muted mt-2 text-xs">
+                  仍可滚动，轨道与拇指均隐藏 {index + 1}
+                </p>
+              ))}
+            </div>
+          </div>
+        </section>
       </div>
     </main>
   );

@@ -43,7 +43,7 @@ Pencil reusable symbol
 
 | 区域 | 内容 | 当前节点 |
 |---|---|---|
-| A | Foundations | A1 Tokens、A2 Typography & Spacing、A3 Icon & Content Rules、A4 Board Headers & Sync |
+| A | Foundations | A1 Tokens、A2 Typography & Spacing、A3 Icon & Content Rules、A4 Board Headers & Sync、Scrollbar（`--scrollbar-*` 细条，明暗不同；`.scrollbar-hide` 全隐） |
 | B0 | Canonical mother components | 16 个正式 reusable symbols |
 | B | Component specimens | B1 Actions & Inputs、B2 Navigation & Feedback、B3 CVC Domain Components |
 | C | Stable compositions | C1 Workbench、C2 Pipeline、C3 Inspector |
@@ -100,6 +100,10 @@ Pencil reusable symbol
 | `ds-text-muted` | `#68728F` | `#9696A3` | 次级文字、元数据 |
 | `ds-border` | `#D2D9EE` | `#292B35` | 1px 边界与分隔 |
 | `ds-shadow` | `#25305A1F` | `#00000099` | Canonical 卡片/浮层阴影色 |
+
+### 4.1.1 滚动条（全局细条）
+
+运行时变量写在 `src/app/globals.css`：`--scrollbar-size`（8px）、`--scrollbar-thumb` / `--scrollbar-thumb-hover` / `--scrollbar-track`。默认对所有可滚动元素生效；浅色拇指偏石墨半透明，深色拇指偏浅灰半透明。需要完全隐藏时用工具类 `.scrollbar-hide`。标本见 `/playbook/foundations`。
 
 ### 4.2 页面背景渐变
 

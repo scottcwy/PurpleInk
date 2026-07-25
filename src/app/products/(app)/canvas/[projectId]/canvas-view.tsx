@@ -15,12 +15,12 @@ import '@xyflow/react/dist/style.css'
 import { Button } from '@/components/ui/button'
 import { QueueStatusBar } from '@/components/ui/queue-status-bar'
 import { Toast } from '@/components/ui/toast'
-import { TopBar } from '@/components/ui/top-bar'
 import type { CanvasGraphEdge, PositionedCanvasNode } from '@/features/canvas'
 import { fadeInUp } from '@/lib/motion/variants'
 import { useProjectStatusStream } from '@/lib/hooks/use-project-status-stream'
 import { usePublishNavContext } from '@/features/navigation/nav-context'
 import { productExportHref } from '@/features/navigation/products-routes'
+import { CanvasAutoHideTopBar } from './canvas-auto-hide-top-bar'
 import { CanvasInspector } from './canvas-inspector'
 import { startPipeline, stopPipeline } from './canvas-action-api'
 import { applyStatusOverlay } from './live-status'
@@ -153,8 +153,8 @@ export function CanvasView({
 
   return (
     <div className="flex min-h-0 flex-1 bg-ds-canvas text-ds-text">
-      <section className="flex min-w-0 flex-1 flex-col">
-        <TopBar
+      <section className="relative flex min-w-0 flex-1 flex-col">
+        <CanvasAutoHideTopBar
           title={projectTitle}
           meta={`${liveNodes.length} 节点`}
           actions={
@@ -175,7 +175,7 @@ export function CanvasView({
           }
         />
         {pipelineFeedback && (
-          <div className="px-4 pt-3">
+          <div className="pointer-events-none absolute inset-x-0 top-4 z-20 px-4">
             <Toast
               variant={pipelineFeedback.variant}
               title={pipelineFeedback.title}

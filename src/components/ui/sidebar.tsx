@@ -31,7 +31,7 @@ export function PurpleInkSidebar({
   onCollapsedChange,
   accountOpen,
   onAccountOpenChange,
-  brandHref = '/products/dashboard',
+  brandHref = '/',
   settingsHref,
   className,
 }: PurpleInkSidebarProps) {
@@ -44,25 +44,30 @@ export function PurpleInkSidebar({
         className,
       )}
     >
-      <header className="flex h-10 items-center justify-between gap-3">
-        <Link href={brandHref} aria-label="PurpleInk 首页">
-          <PurpleInkLogo compact={collapsed} />
-        </Link>
-        {!collapsed ? (
+      <header
+        className={cn(
+          'flex h-10 items-center gap-3',
+          collapsed ? 'justify-center' : 'justify-between',
+        )}
+      >
+        {collapsed ? (
           <SidebarToggle
-            collapsed={false}
-            onClick={() => onCollapsedChange(true)}
+            collapsed
+            className="size-10"
+            onClick={() => onCollapsedChange(false)}
           />
-        ) : null}
+        ) : (
+          <>
+            <Link href={brandHref} aria-label="PurpleInk 首页">
+              <PurpleInkLogo />
+            </Link>
+            <SidebarToggle
+              collapsed={false}
+              onClick={() => onCollapsedChange(true)}
+            />
+          </>
+        )}
       </header>
-
-      {collapsed ? (
-        <SidebarToggle
-          collapsed
-          className="mx-auto"
-          onClick={() => onCollapsedChange(false)}
-        />
-      ) : null}
 
       <nav aria-label="产品主导航" className="flex flex-1 flex-col gap-[3px]">
         {items.map((item) => (

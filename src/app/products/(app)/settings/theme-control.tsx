@@ -1,9 +1,21 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useTheme } from 'next-themes'
 import { SegmentedControl } from '@/components/ui/segmented-control'
+import {
+  isThemeMode,
+  type ThemeMode,
+} from '@/lib/theme-mode'
 
-export type ThemeMode = 'light' | 'dark' | 'system'
+export type { ThemeMode } from '@/lib/theme-mode'
+export {
+  THEME_MODE_ORDER,
+  applyTheme,
+  isThemeMode,
+  nextThemeMode,
+  resolveDarkMode,
+  themeModeLabel,
+} from '@/lib/theme-mode'
 
 const OPTIONS = [
   { value: 'light', label: '浅色' },
@@ -12,33 +24,17 @@ const OPTIONS = [
 ]
 
 export function ThemeControl() {
-  const [mode, setMode] = useState<ThemeMode>('system')
+  const { theme, setTheme } = useTheme()
+  const mode: ThemeMode = isThemeMode(theme) ? theme : 'system'
 
-  useEffect(() => {
-    const stored = localStorage.getItem('theme-mode')
-    const initial = isThemeMode(stored) ? stored : 'system'
-    applyTheme(initial, window.matchMedia('(prefers-color-scheme: dark)').matches)
-    queueMicrotask(() => setMode(initial))
-  }, [])
-
-  function change(next: string) {
-    if (!isThemeMode(next)) return
-    setMode(next)
-    localStorage.setItem('theme-mode', next)
-    applyTheme(next, window.matchMedia('(prefers-color-scheme: dark)').matches)
-  }
-
-  return <SegmentedControl options={OPTIONS} value={mode} onChange={change} />
-}
-
-export function applyTheme(mode: ThemeMode, systemDark: boolean): void {
-  document.documentElement.classList.toggle('dark', resolveDarkMode(mode, systemDark))
-}
-
-export function resolveDarkMode(mode: ThemeMode, systemDark: boolean): boolean {
-  return mode === 'dark' || (mode === 'system' && systemDark)
-}
-
-function isThemeMode(value: string | null): value is ThemeMode {
-  return value === 'light' || value === 'dark' || value === 'system'
+  return (
+    <SegmentedControl
+      options={OPTIONS}
+      value={mode}
+      onChange={(next) => {
+        if (!isThemeMode(next)) return
+        setTheme(next)
+      }}
+    />
+  )
 }

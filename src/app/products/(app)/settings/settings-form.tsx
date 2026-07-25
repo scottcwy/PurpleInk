@@ -38,12 +38,15 @@ export function SettingsForm({
   const controller = useModelSettingsController()
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col overflow-hidden text-ds-text">
+    <main
+      data-testid="settings-scroll-region"
+      className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain text-ds-text"
+    >
       <TopBar title="设置" meta="Provider Registry 与运行默认值" />
-      <div className="mx-auto grid min-h-0 w-full max-w-[1280px] flex-1 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <div className="mx-auto grid w-full max-w-[1280px] lg:grid-cols-[220px_minmax(0,1fr)]">
         <aside
           aria-label="设置分类"
-          className="hidden min-h-0 border-r border-ds-border px-4 py-6 lg:flex lg:flex-col"
+          className="hidden border-r border-ds-border px-4 py-6 lg:sticky lg:top-0 lg:flex lg:max-h-screen lg:flex-col lg:self-start"
         >
           <div className="px-2">
             <p className="text-[11px] font-semibold tracking-[0.16em] text-ds-text-muted uppercase">
@@ -77,10 +80,7 @@ export function SettingsForm({
           </div>
         </aside>
 
-        <div
-          data-testid="settings-scroll-region"
-          className="min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain"
-        >
+        <div className="min-w-0">
           <div className="mx-auto flex min-w-0 w-full max-w-[940px] flex-col gap-3 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
             <header className="mb-2">
               <h2 className="text-2xl font-bold">Provider 与默认值</h2>

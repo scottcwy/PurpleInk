@@ -70,6 +70,10 @@
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --scrollbar-size: 8px;
+  --scrollbar-thumb: #3c3c4340;
+  --scrollbar-thumb-hover: #3c3c4366;
+  --scrollbar-track: transparent;
 }
 
 .dark {
@@ -126,6 +130,9 @@
   --color-transparent: #00000000;
   --shadow-card: 0 1px 3px 0 #00000066, 0 1px 2px -1px #00000066;
   --shadow-float: 0 4px 12px 0 #00000080, 0 2px 4px -1px #00000080;
+  --scrollbar-thumb: #ebebf54d;
+  --scrollbar-thumb-hover: #ebebf573;
+  --scrollbar-track: transparent;
 }
 
 @theme inline {
@@ -269,6 +276,29 @@ textarea:focus-visible {
 
 .no-focus-ring:focus-visible {
   outline: none;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
 }
 
 .scrollbar-hide {
