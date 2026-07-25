@@ -1,6 +1,8 @@
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 
+process.loadEnvFile('.env.local')
+
 export default defineConfig({
   test: {
     environment: 'node',

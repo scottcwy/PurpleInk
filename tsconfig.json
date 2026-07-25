@@ -43,8 +43,9 @@
     ".next",
     "out",
     ".data",
-    "src/lib/queue/**",
-    "src/lib/architecture/**/*.test.ts",
-    "src/lib/workflow/**/*.test.ts"
+    "scripts/migration/**",
+    "src/features/director/pi-session.test.ts",
+    "src/features/director/session-store.test.ts",
+    "src/features/pipeline/contracts/contracts.test.ts"
   ]
 }

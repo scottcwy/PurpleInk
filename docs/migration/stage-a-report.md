@@ -212,7 +212,75 @@ M4 复制真实依赖后必须移除这三条排除并重新 typecheck。
 
 ## M4 CVC 数据层与业务后端
 
-待执行。
+执行时间：2026-07-25
+
+### 复制清单
+
+| 目标目录/文件 | 文件数 | 行数 |
+| --- | ---: | ---: |
+| `src/lib/db` | 25 | 6439 |
+| `src/features/canvas` | 12 | 1147 |
+| `src/features/artifacts` | 3 | 295 |
+| `src/features/pipeline` | 20 | 1349 |
+| `src/features/render` | 38 | 4816 |
+| `src/features/audio` | 16 | 1537 |
+| `src/features/ai` | 13 | 1476 |
+| `src/features/credentials` | 5 | 685 |
+| `src/features/routing` | 5 | 458 |
+| `src/features/director` | 50 | 5977 |
+| `src/app/api` | 21 | 1275 |
+| `scripts/setup` | 4 | 23 |
+| `scripts/migration` | 5 | 503 |
+| `scripts/verify` | 3 | 580 |
+| `drizzle.config.ts` | 1 | 6 |
+| `docker-compose.dev.yml` | 1 | 20 |
+
+### 环境与 Postgres
+
+- `.env.example` 已补齐数据库、测试数据库、凭据主密钥及 AI/媒体配置变量名。
+- 被 Git 忽略的 `.env.local` 已配置 `DATABASE_URL`、`TEST_DATABASE_URL`，并使用
+  `RandomNumberGenerator.Create().GetBytes()` 生成 32 字节 `CVC_CREDENTIAL_MASTER_KEY`。
+- 初次 Docker 启动失败：`127.0.0.1:54327` 已被
+  `codevideocanvas-postgres-1` 占用。为避免写入来源项目数据库，记录
+  `PG-PORT-WAIVER`，目标仓隔离容器改用 54328。
+- 目标容器 `purpleink-dev-postgres-1` 健康检查为 `healthy`。
+- `drizzle.config.ts` 的 schema/out 分别指向
+  `./src/lib/db/schema/index.ts` 与 `./src/lib/db/migrations/pg`。
+
+### Stage A 屏蔽点与测试范围
+
+| 位置 | 处理 | 原因 |
+| --- | --- | --- |
+| `src/features/director/pi-session.ts` | `NOT_AVAILABLE_STAGE_A` 显式错误 | Pi runtime 已作废且未引入 |
+| `src/features/director/session-store.ts` | `NOT_AVAILABLE_STAGE_A` 显式错误 | Pi JSONL 会话属于 Stage B |
+| `scripts/migration/**` | 从 typecheck 排除 | 本 Goal 明确不迁移 CVC 历史 SQLite 数据 |
+| `src/features/director/pi-session.test.ts` | 从 typecheck 排除 | 测试绑定已作废 Pi SDK |
+| `src/features/director/session-store.test.ts` | 从 typecheck 排除 | 测试绑定已作废 Pi JSONL 实现 |
+| `src/features/pipeline/contracts/contracts.test.ts` | 从 typecheck 排除 | 测试绑定已作废 Trigger 队列 |
+
+`pi-output` 仅依赖消息结构，已改为本地结构类型；其 9 项解析测试继续通过。新增
+`stage-a-unavailable` 测试，确认 Director 会抛稳定错误而不是返回假结果。
+
+### 数据库门禁
+
+| 命令或检查 | 退出码/结果 | 证据摘要 |
+| --- | --- | --- |
+| 第一次 `pnpm db:migrate` | 1 | 脚本未加载 `.env.local` |
+| 修正后第一次 `pnpm db:migrate` | 0 | 从零应用 Postgres migrations |
+| 修正后第二次 `pnpm db:migrate` | 0 | 幂等执行，仅输出 schema/relation 已存在 NOTICE |
+| 第一次 `pnpm test:pg` | 1 | 测试环境未加载 `TEST_DATABASE_URL` |
+| 第二次 `pnpm test:pg` | 1 | 68/70 通过；2 项缺 Playwright Chromium |
+| 安装 Chromium 后 `pnpm test:pg` | 0 | 14/14 文件、70/70 测试通过 |
+| `pnpm typecheck` | 0 | M3 临时排除已移除，真实 M4 依赖通过 |
+
+### `verify:v3` 非门禁结果
+
+`pnpm verify:v3` 退出码 1，按计划不作为 Stage A 门禁且不据此重构复制代码：
+
+- 3 个 PurpleInk 既有营销文件超过其 350 行 CVC 架构阈值。
+- 报告列出 3 个直接 OpenAI client import，均在复制的 AI/render adapter 内。
+- 报告列出 15 个 Canvas → DB 直接 import，属于复制代码的既有目录责任划分。
+- 未发现 Trigger task import、Agent SDK package/import 或 U+FFFD。
 
 ## M5 路由并存
 

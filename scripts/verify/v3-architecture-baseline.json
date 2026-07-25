@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "debtCaps": {
+    "directOpenAiClientImports": 3,
+    "canvasForbiddenImports": 23,
+    "triggerTaskForbiddenImports": 0
+  },
+  "oversizedFiles": {
+    "src/app/(app)/canvas/export/export-workspace.tsx": {
+      "lineCount": 389,
+      "hardLimit": 350
+    },
+    "src/app/(app)/canvas/shot/[id]/shot-detail.tsx": {
+      "lineCount": 518,
+      "hardLimit": 350
+    },
+    "src/app/(app)/settings/model-service-settings.tsx": {
+      "lineCount": 507,
+      "hardLimit": 350
+    },
+    "src/features/director/runtime-repository.ts": {
+      "lineCount": 565,
+      "hardLimit": 400
+    }
+  }
+}

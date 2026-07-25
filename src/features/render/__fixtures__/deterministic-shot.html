@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #0f0f0f;
+      }
+
+      #hero {
+        width: 320px;
+        height: 180px;
+        border-radius: 32px;
+        background: #4fd1c5;
+        color: #0f0f0f;
+        display: grid;
+        place-items: center;
+        font: 700 32px Arial, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="hero">CodeVideoCanvas</div>
+    <script>
+      const hero = document.querySelector('#hero')
+      window.__CVC_RENDER__ = {
+        version: 1,
+        seek(frame, fps) {
+          const progress = Math.min(frame / fps / 2, 1)
+          const x = 80 + 640 * progress
+          const y = 120 + 300 * progress
+          const rotation = -8 + 24 * progress
+          hero.style.transform = `translate(${x}px, ${y}px) rotate(${rotation}deg)`
+          hero.style.opacity = String(0.25 + 0.75 * progress)
+        },
+      }
+    </script>
+  </body>
+</html>
