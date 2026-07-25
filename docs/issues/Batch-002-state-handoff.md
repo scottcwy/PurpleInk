@@ -310,3 +310,78 @@ schema 改动必须与 migration 同批提交，否则会横向阻塞所有其�
    - `pnpm test:pg`：`src/features/director/runtime-repository.pg.test.ts` 的 score input fixture。
    - `pnpm test`：`src/lib/stream/status-bus.test.ts` 的订阅者错误隔离用例。
    不要为使 ISSUE-011 “全绿”而修改或跳过这些测试；由对应 Director / stream owner 处理。
+
+---
+
+## ISSUE-012 · 画布状态改为项目级 SSE 推送（done）
+
+- 执行时间：2026-07-25（本批次最后一个收尾 issue）
+- 最终状态：`done`，验收 §8 四项全过，前后取证留档 `docs/issues/evidence/issue-012/`
+- 方案：issue §4 的**方案 A**（项目级 SSE 状态流），由基线测量数据裁决
+
+### 提交链（7 个 commit，全部落在本地 master）
+
+| Commit | 内容 |
+| --- | --- |
+| `5be5869` | fix(next)：`@earendil-works/pi-ai` / `pi-agent-core` 加入 `serverExternalPackages`。Turbopack 打包 pi-ai dist 的 provider 懒加载动态 require 会抛 `MODULE_NOT_FOUND`，导致 Director 全部阶段模型调用失败——这是横在测量前面的环境级阻断，属真实修复而非 ISSUE-012 功能。 |
+| `fb0f530` | docs：基线测量入档（39 节点 121.1s 窗口：`getCanvasGraph` 249 次 / 2.06 次每秒、每次 41 SQL、DB→UI p50 1359ms max 1949ms、long task 22 次 1200ms）+ 选定方案 A + 方案 B/C 否决理由。 |
+| `a1cbe1d` | docs(routing)：§4.1 + §4.3 先行登记 `GET /api/director/stream/project/[projectId]`（文档先行硬约束）。 |
+| `6df8abf` | feat(stream)：新增 `src/lib/stream/status-bus.ts`（独立于 StreamBus 的状态总线：每节点最新值 upsert + 订阅时快照回放 + per-project 单调 seq + 30s 末位订阅者清理 + globalThis 锚定）；`transitionNodeStatus` / `materializeShotLanes` 两个发布点均在 `withTransaction` 提交后发布，回滚路径零事件。19 个测试。 |
+| `a239b57` | feat(api)：SSE 端点（snapshot / node-status / topology 三种帧，15s keepalive，abort 即退订，无持久化回放分支，服务端不主动 close）。4 个测试 + 真实 HTTP 证据。 |
+| `f1a763e` | feat(canvas)：`use-project-status-stream`（事件走 `applyStreamEvent` 纯归约）+ `live-status.ts`（`applyStatusOverlay` 纯合成）+ `canvas-view.tsx` 集成——props 为真值基线、SSE 只做 status 覆盖层；原 1.5s 轮询保留为 `!connected` 门控的兜底；refresh 收敛为拓扑/未知节点/终态漂移三种触发（400ms 防抖）。11 个测试。 |
+| `50ae96d` | docs：修复后取证入档 + issue 转 done + README 同步 + route.ts prefer-const 修复。 |
+
+### 架构关键决策（下一位不要推翻的点）
+
+1. **status-bus 与 stream-bus 是两个总线，不要合并。** 文本流是累积 append 语义（快照=全文回放、有 256KB 截断、有 done/error 终态），状态流是最新值 upsert 语义（快照=每节点当前状态、天然有界、无终态）。强行泛型化会污染两边的不变式与既有 11 个 stream-bus 测试。
+2. **发布必须在 `withTransaction` 返回之后。** `status.ts` / `fan-out.ts` 的单测锁了「抛错路径零发布」；把 publish 挪进事务体内会产生回滚幽灵事件。
+3. **客户端只有一个状态合成方向：props 基线 + SSE 覆盖层。** 兜底轮询不是第二套状态源，它只是「SSE 不健康时重新拉 props」的原路径，与覆盖层汇入同一个 `applyStatusOverlay`。不要给 hook 加第二个 fetch 数据源。
+4. **重连一致性靠快照，不靠增量回放。** 每次（重）连接的 snapshot 全量替换覆盖层并重置 seq 水位；不要加 Last-Event-ID / 环形缓冲——34 节点规模下是纯负担（方案评审时已否决）。
+5. **`@/lib/stream` 从 canvas 层 import 是合法的**，已对照 `scripts/verify/v3-architecture.ts` 的 `isCanvasForbidden` 逐条确认；`canvasForbiddenImports` 仍是原有 15 条 db 债务，无新增。
+
+### 验收证据摘要（详见 evidence/issue-012/）
+
+| 验收项 | 结果 |
+| --- | --- |
+| 状态变更 → UI 可见 < 1s | **115ms**（基线 p50 1359ms / max 1949ms） |
+| `getCanvasGraph` 显著下降 | 353s 活跃期 RSC refresh **4 次** vs 基线折算 ≈727 次（-99.4%） |
+| SSE 断开退兜底 | 端点临时 503：EventSource 重试 ×3 → 1.5s 轮询接管 → 10.1s 收敛「已完成」；恢复后 snapshot(seq=7) 一帧对齐 |
+| 扇出新增泳道 | 页内「一键启动」后画布自动 4n/0l → 39n/7l，零手动刷新；截图 `after-canvas-r4.png` |
+| 门禁 | lint / typecheck / `pnpm test`(108 文件 502 例) / `verify:v3 ok:true` / build / `git diff --check` 全绿 |
+
+### 执行过程中的环境发现与处置（重要，含跨 issue 影响）
+
+1. **pi-ai Turbopack 打包缺陷**（上文 `5be5869`）：修复使 dev 下 Director 从必挂变为可用，
+   所有依赖 Director 的 issue（002/005/014）都受益；`.next` 陈旧缓存还曾执行过旧 schema 的 INSERT，
+   诊断时清过一次缓存。**注意：`.next` 的备份目录名必须仍在 .gitignore 覆盖内**，
+   否则 Tailwind v4 源扫描会拾取二进制垃圾生成损坏 CSS 类（踩过，已入档 baseline-metrics §过程发现 4）。
+2. **`gemini-3.6-flash` 在 DIRECT/工具调用场景稳定触发 finishReason→error**
+   （pi-ai 把 MALFORMED_FUNCTION_CALL 一类统一映射为 error，原始信息被 `An unknown error occurred` 吞掉）。
+   已通过 `POST /api/settings` 把 DB 的 `gemini.primaryModel` 切到 `gemini-3.1-flash-lite`，DIRECT 即通。
+   **该 DB 设置保留未回滚**（`primaryModel.source=settings`）；恢复 3.6-flash 前需先解决其函数调用兼容性，
+   建议归入 ISSUE-013 收尾时一并处理。
+3. **SHOT_SPEC 间歇性失败**：`Director Tool 输出缺失或无效：validate_shot_plan`，与模型无关
+   （lite 也会），但同一节点重试常能成功（实测 7 失败重试后陆续成功多个）。
+   属 Director 工具输出提取/prompt 合同的上游缺陷，**未在本 issue 修**；它当前是全链路（含 render 泳道）
+   端测的最大障碍，ISSUE-014 执行者请优先排查 `pi-output.ts` 的工具实参提取路径。
+4. **ISSUE-008 的迁移 journal 时间戳乱序**：`_journal.json` 里 0003 的 `when` 早于 0002，
+   drizzle 按时间戳判定 0003 已过期而跳过，造成 schema（无 position 列）与 DB（列 NOT NULL）不一致，
+   **全库项目创建 400**。我已把 0003 的 `when` 改为 1785002500000（> 0002）并重跑 `pnpm db:migrate`，
+   position 两列已删、创建恢复。**`_journal.json` 这处修改仍在工作区未提交**——它属于 ISSUE-008 的
+   在途文件（连同 render/* 等一批），由该线执行者确认后随其批次提交；不要重置它，否则任何
+   重建的数据库会再次跳过 0003。
+5. **临时验证物已全部清理**：兜底测试的 503 短路（`TEMP-ISSUE-012-FALLBACK-TEST`）已删；
+   `getCanvasGraph` 临时插桩已删（它曾被并发 stash 回放带回一次，最终状态已确认干净，
+   全仓库 `TEMP-ISSUE-012` 零命中）。`.data/issue-012-*.mjs/.ps1` 是取证脚本，留在 .data（不入库）。
+
+### 已知边界与下一位执行者注意事项
+
+1. **不要删兜底轮询**（issue 禁区 2）。`canvas-view.tsx` 的 1.5s effect 以 `live.connected` 门控，
+   是 SSE 不可用时唯一的收敛路径。
+2. **连接生命周期**：`enabled = 存在 pending/running 节点 || autopilot`。页面加载时全终态且
+   autopilot 关的情况下，SSE 与轮询都不激活——这继承自修复前行为（基线文档已记录该结构性缺口），
+   autopilot 常开时缺口已大幅收窄；要彻底消除需把连接改为挂载即常驻，这是行为变更，需单独议题。
+3. **stream-bus / status-bus 仍是进程内**（README §8 已登记），多实例部署换 Redis pub/sub 时
+   两个总线一起换，事件协议（snapshot/node-status/topology + seq）可以原样平移。
+4. **全链路（含 render 泳道）前后对比数据未补**，被 ISSUE-002（open）与上文第 3 条上游缺陷卡住；
+   ISSUE-014 端测批次补齐时，基线与修复后的测量方法在 evidence/issue-012 两份 metrics 文档里可直接复用。
