@@ -8,14 +8,32 @@ import type {
   PositionedCanvasNode,
   ShotLaneNodeType,
 } from '@/features/canvas'
+import { NODE_HEIGHT, NODE_WIDTH } from '@/features/canvas/layout'
 import { cn } from '@/lib/utils'
 
-type ViewNode = Node<{
+type ViewNodeData = {
   label: ReactNode
   type: CanvasGraphNode['type']
   status: CanvasGraphNode['status']
   laneKey: string | null
-}>
+}
+
+type ViewNode = Node<ViewNodeData>
+
+/** 与画布节点边框同一套 stage token，驱动 border class 与 MiniMap 填色。 */
+type StageToken = 'ingest' | 'direct' | 'shot' | 'audio' | 'assemble' | 'finalize'
+
+const STAGE_TOKEN: Record<CanvasGraphNode['type'], StageToken> = {
+  'script-import': 'ingest',
+  'shot-split': 'ingest',
+  score: 'assemble',
+  export: 'finalize',
+  'shot-script': 'shot',
+  'shot-codegen': 'direct',
+  'shot-sfx': 'audio',
+  'shot-subtitle': 'audio',
+  'shot-qa': 'finalize',
+}
 
 export interface LaneSummaryNode {
   type: ShotLaneNodeType
@@ -81,19 +99,30 @@ export function buildLaneSummaries(nodes: readonly CanvasGraphNode[]): LaneSumma
     })
 }
 
+export function miniMapNodeColor(node: Node): string {
+  const type = node.data.type
+  if (!isCanvasNodeType(type)) return 'var(--ds-text-muted)'
+  return `var(--color-stage-${STAGE_TOKEN[type]})`
+}
+
 export function toFlowNode(
   node: PositionedCanvasNode,
   hiddenNodeIds: Set<string>,
-  collapsedLanes: Set<string>
+  collapsedLanes: Set<string>,
+  selected = false
 ): ViewNode {
   const collapsed = Boolean(node.laneKey && collapsedLanes.has(node.laneKey))
+  const stage = STAGE_TOKEN[node.type]
   return {
     id: node.id,
     position: node.position,
+    width: NODE_WIDTH,
+    height: NODE_HEIGHT,
+    selected,
     hidden: hiddenNodeIds.has(node.id),
     className: cn(
       '!w-[220px] !rounded-lg !border !border-ds-border !bg-ds-surface !p-0 !text-ds-text !shadow-[var(--ds-shadow)]',
-      NODE_STAGE_CLASS[node.type]
+      `!border-stage-${stage}`
     ),
     data: {
       type: node.type,
@@ -217,16 +246,8 @@ const LANE_NODE_LABEL: Record<ShotLaneNodeType, string> = {
   'shot-qa': '验收',
 }
 
-const NODE_STAGE_CLASS: Record<CanvasGraphNode['type'], string> = {
-  'script-import': '!border-stage-ingest',
-  'shot-split': '!border-stage-ingest',
-  score: '!border-stage-assemble',
-  export: '!border-stage-finalize',
-  'shot-script': '!border-stage-shot',
-  'shot-codegen': '!border-stage-direct',
-  'shot-sfx': '!border-stage-audio',
-  'shot-subtitle': '!border-stage-audio',
-  'shot-qa': '!border-stage-finalize',
+function isCanvasNodeType(value: unknown): value is CanvasGraphNode['type'] {
+  return typeof value === 'string' && Object.hasOwn(STAGE_TOKEN, value)
 }
 
 function isShotLaneNodeType(type: CanvasGraphNode['type']): type is ShotLaneNodeType {

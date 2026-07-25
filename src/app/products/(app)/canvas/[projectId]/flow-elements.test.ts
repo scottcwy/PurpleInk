@@ -1,8 +1,58 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { CanvasGraphNode } from '@/features/canvas'
-import { buildLaneSummaries, LaneSummaryDetails } from './flow-elements'
+import type { CanvasGraphNode, CanvasNodeType } from '@/features/canvas'
+import {
+  buildLaneSummaries,
+  LaneSummaryDetails,
+  miniMapNodeColor,
+} from './flow-elements'
+
+const NODE_TYPES: CanvasNodeType[] = [
+  'script-import',
+  'shot-split',
+  'score',
+  'export',
+  'shot-script',
+  'shot-codegen',
+  'shot-sfx',
+  'shot-subtitle',
+  'shot-qa',
+]
+
+const EXPECTED_MINIMAP_COLOR: Record<CanvasNodeType, string> = {
+  'script-import': 'var(--color-stage-ingest)',
+  'shot-split': 'var(--color-stage-ingest)',
+  score: 'var(--color-stage-assemble)',
+  export: 'var(--color-stage-finalize)',
+  'shot-script': 'var(--color-stage-shot)',
+  'shot-codegen': 'var(--color-stage-direct)',
+  'shot-sfx': 'var(--color-stage-audio)',
+  'shot-subtitle': 'var(--color-stage-audio)',
+  'shot-qa': 'var(--color-stage-finalize)',
+}
+
+describe('miniMapNodeColor', () => {
+  it.each(NODE_TYPES)('maps %s to the canvas stage CSS variable', (type) => {
+    expect(
+      miniMapNodeColor({
+        id: type,
+        position: { x: 0, y: 0 },
+        data: { type },
+      })
+    ).toBe(EXPECTED_MINIMAP_COLOR[type])
+  })
+
+  it('falls back when node data type is unknown', () => {
+    expect(
+      miniMapNodeColor({
+        id: 'x',
+        position: { x: 0, y: 0 },
+        data: { type: 'unknown' },
+      })
+    ).toBe('var(--ds-text-muted)')
+  })
+})
 
 describe('buildLaneSummaries', () => {
   it('groups lane nodes in stable lane and role order while preserving real statuses', () => {

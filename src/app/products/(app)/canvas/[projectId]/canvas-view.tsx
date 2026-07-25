@@ -8,7 +8,6 @@ import { useRouter } from 'next/navigation'
 import {
   Background,
   Controls,
-  MiniMap,
   ReactFlow,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -22,6 +21,7 @@ import { usePublishNavContext } from '@/features/navigation/nav-context'
 import { productExportHref } from '@/features/navigation/products-routes'
 import { CanvasAutoHideTopBar } from './canvas-auto-hide-top-bar'
 import { CanvasInspector } from './canvas-inspector'
+import { CanvasMiniMap } from './canvas-minimap'
 import { startPipeline, stopPipeline } from './canvas-action-api'
 import { applyStatusOverlay } from './live-status'
 import {
@@ -83,8 +83,11 @@ export function CanvasView({
     [collapsedLanes, liveNodes]
   )
   const flowNodes = useMemo(
-    () => liveNodes.map((node) => toFlowNode(node, hiddenNodeIds, collapsedLanes)),
-    [collapsedLanes, hiddenNodeIds, liveNodes]
+    () =>
+      liveNodes.map((node) =>
+        toFlowNode(node, hiddenNodeIds, collapsedLanes, node.id === selectedNodeId)
+      ),
+    [collapsedLanes, hiddenNodeIds, liveNodes, selectedNodeId]
   )
   const flowEdges = useMemo(
     () => edges.map((edge) => toFlowEdge(edge, hiddenNodeIds)),
@@ -195,7 +198,7 @@ export function CanvasView({
             onNodeClick={(_, node) => setSelectedNodeId(node.id)}
           >
             <Background color="var(--ds-text-muted)" gap={20} size={1} />
-            <MiniMap pannable zoomable className="!bg-ds-surface !shadow-[var(--ds-shadow)]" />
+            <CanvasMiniMap onSelectNode={setSelectedNodeId} />
             <Controls className="!border-ds-border !bg-ds-surface !shadow-[var(--ds-shadow)]" />
           </ReactFlow>
           <LanePanel
