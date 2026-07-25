@@ -8,12 +8,12 @@
  */
 
 export const siteConfig = {
-  name: "Nexus AI",
-  tagline: "The AI Platform for Modern Teams",
+  name: "PurpleInk",
+  tagline: "Product launch videos, composed with AI",
   description:
-    "Build, deploy, and scale AI-powered applications with enterprise-grade infrastructure. From ideation to production in minutes.",
-  url: "https://nexus-ai.com",
-  twitter: "@nexusai",
+    "Create polished product launch videos from a URL with AI-guided capture, editing, and rendering.",
+  url: "https://shuheng.cloud",
+  twitter: "",
 
   nav: {
     cta: {

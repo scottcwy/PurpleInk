@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1.7
+
+FROM mcr.microsoft.com/playwright:v1.49.0-noble
+
+USER root
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app/server
+COPY server/package.json server/package-lock.json ./
+RUN npm ci
+
+WORKDIR /app
+COPY --chown=pwuser:pwuser lib/tts ./lib/tts
+COPY --chown=pwuser:pwuser server ./server
+RUN ln -s /app/server/node_modules /app/node_modules
+
+USER pwuser
+WORKDIR /app/server
+ENV NODE_ENV=production \
+    PORT=8787
+
+EXPOSE 8787
+CMD ["npm", "start"]

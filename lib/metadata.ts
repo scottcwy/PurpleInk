@@ -1,28 +1,27 @@
 import type { Metadata } from "next";
 
 export const siteConfig = {
-  name: "React Bits Pro - AI SaaS Template",
+  name: "PurpleInk",
   description:
-    "Build, deploy, and scale AI-powered applications with enterprise-grade infrastructure. From ideation to production in minutes.",
-  url: "https://nexus-ai.com",
+    "Create polished product launch videos from a URL with AI-guided capture, editing, and rendering.",
+  url: "https://shuheng.cloud",
   ogImage: "/og-image.png",
-  creator: "@nexusai",
+  creator: "PurpleInk",
   authors: [
     {
-      name: "Nexus AI",
-      url: "https://nexus-ai.com",
+      name: "PurpleInk",
+      url: "https://shuheng.cloud",
     },
   ],
   keywords: [
     "AI",
     "artificial intelligence",
     "machine learning",
-    "AI platform",
-    "LLM",
-    "GPT",
-    "AI API",
-    "developer tools",
-    "AI infrastructure",
+    "product launch video",
+    "AI video generator",
+    "product demo",
+    "screen capture",
+    "video rendering",
   ],
 } as const;
 

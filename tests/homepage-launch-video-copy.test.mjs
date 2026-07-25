@@ -18,6 +18,10 @@ const hero = await readFile(
   new URL("../components/hero.tsx", import.meta.url),
   "utf8"
 );
+const launchComposer = await readFile(
+  new URL("../components/launch-composer.tsx", import.meta.url),
+  "utf8"
+);
 const header = await readFile(
   new URL("../components/header.tsx", import.meta.url),
   "utf8"
@@ -59,12 +63,13 @@ test("does not render pricing on the homepage", () => {
   assert.doesNotMatch(homePage, /components\/pricing|<Pricing\s*\/>/);
 });
 
-test("removes pricing entry points while keeping the launch CTA", () => {
-  assert.doesNotMatch(`${hero}\n${header}\n${footer}`, /#pricing|Pricing/);
-  assert.match(
-    hero,
-    /<motion\.button[\s\S]*创建你的首个Launch Video[\s\S]*<\/motion\.button>/
+test("removes pricing entry points while keeping the launch entry", () => {
+  assert.doesNotMatch(
+    `${hero}\n${launchComposer}\n${header}\n${footer}`,
+    /#pricing|Pricing/
   );
+  assert.match(launchComposer, /创建你的首个 Launch Video/);
+  assert.match(launchComposer, /Launch Video 即将开放/);
 });
 
 test("shows Community as the only primary navigation item", () => {
@@ -94,24 +99,18 @@ test("keeps the footer wordmark clear of its right edge", () => {
 });
 
 test("gives the launch CTA branded, accessible click feedback", () => {
-  assert.match(hero, /useReducedMotion/);
-  assert.match(hero, /onClick=\{handleLaunchClick\}/);
-  assert.match(hero, /disabled=\{isLaunching\}/);
-  assert.match(hero, /aria-busy=\{isLaunching\}/);
-  assert.match(hero, /whileTap=\{\{ scale: 0\.98, y: 1 \}\}/);
-  assert.match(hero, /bg-\[#352e82\]/);
-  assert.doesNotMatch(hero, /#6d28d9/);
-  assert.match(hero, /scale: \[1, 1, 15\]/);
-  assert.match(hero, /duration: 0\.68/);
-  assert.match(hero, /setShowPreparing\(true\), 180/);
-  assert.match(hero, /exit=\{\{ opacity: 0 \}\}/);
-  assert.match(hero, /Preparing your Launch\.\.\./);
-  assert.match(hero, /LoaderCircle/);
+  assert.match(launchComposer, /useReducedMotion/);
+  assert.match(launchComposer, /whileTap: \{ scale: 0\.98, y: 1 \}/);
+  assert.match(launchComposer, /aria-label="开始生成"/);
+  assert.match(launchComposer, /backgroundColor: active \? "#352e82"/);
+  assert.doesNotMatch(launchComposer, /#6d28d9/);
+  assert.match(launchComposer, /startRender/);
+  assert.match(launchComposer, /pollUntilDone/);
+  assert.match(launchComposer, /LoaderCircle/);
 });
 
-test("adds a refined outer white glow without an inner border", () => {
-  assert.doesNotMatch(hero, /key="white-glow-border"/);
-  assert.doesNotMatch(hero, /inset-px[^"]*border-white\/60/);
-  assert.match(hero, /0 0 20px rgba\(255,255,255,0\.28\)/);
-  assert.match(hero, /boxShadow:/);
+test("keeps the launch composer shadow free of an inner border", () => {
+  assert.doesNotMatch(launchComposer, /key="white-glow-border"/);
+  assert.doesNotMatch(launchComposer, /inset-px[^"]*border-white\/60/);
+  assert.match(launchComposer, /shadow-\[0_8px_32px_rgba\(0,0,0,0\.12\)\]/);
 });

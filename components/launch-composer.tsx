@@ -17,6 +17,8 @@ import {
   type JobPhase,
 } from "@/lib/api";
 
+const RENDER_ENABLED = process.env.NEXT_PUBLIC_RENDER_ENABLED === "true";
+
 type Stage = "idle" | "input" | "running" | "done" | "error";
 type Quality = "draft" | "standard" | "high";
 
@@ -90,7 +92,9 @@ function Chip({
       aria-pressed={active}
       className="focus-ring rounded-full px-3 py-1 text-xs font-medium transition-colors"
       style={{
-        backgroundColor: active ? "#352e82" : "color-mix(in oklab, var(--foreground) 8%, transparent)",
+        backgroundColor: active
+          ? "#352e82"
+          : "color-mix(in oklab, var(--foreground) 8%, transparent)",
         color: active ? "#ffffff" : "var(--foreground)",
       }}
     >
@@ -106,6 +110,26 @@ function fmtElapsed(sec: number): string {
 }
 
 export function LaunchComposer(): ReactNode {
+  if (!RENDER_ENABLED) {
+    return (
+      <div
+        aria-label="Launch Video 即将开放"
+        className={`${PILL_BASE} cursor-default justify-between py-2 pr-2 pl-7 text-base font-medium`}
+      >
+        <span className="relative z-10 whitespace-nowrap">
+          Launch Video 即将开放
+        </span>
+        <ActionCircle>
+          <ArrowRight className="h-5 w-5" />
+        </ActionCircle>
+      </div>
+    );
+  }
+
+  return <InteractiveLaunchComposer />;
+}
+
+function InteractiveLaunchComposer(): ReactNode {
   const [stage, setStage] = useState<Stage>("idle");
   const [url, setUrl] = useState("");
   const [phase, setPhase] = useState<JobPhase>("queued");
@@ -181,12 +205,14 @@ export function LaunchComposer(): ReactNode {
           }
         },
         1500,
-        ac.signal,
+        ac.signal
       );
 
       if (job.status === "failed" || !job.hasVideo) {
         setStage("error");
-        setMessage(job.error ? firstLine(job.error) : "渲染失败，请查看后端日志");
+        setMessage(
+          job.error ? firstLine(job.error) : "渲染失败，请查看后端日志"
+        );
         return;
       }
 
@@ -218,7 +244,10 @@ export function LaunchComposer(): ReactNode {
       };
 
   const accessory = prefersReducedMotion
-    ? { initial: false as const, animate: { opacity: 1, height: "auto" as const } }
+    ? {
+        initial: false as const,
+        animate: { opacity: 1, height: "auto" as const },
+      }
     : {
         initial: { opacity: 0, height: 0 },
         animate: { opacity: 1, height: "auto" as const },
@@ -229,7 +258,11 @@ export function LaunchComposer(): ReactNode {
     ? {}
     : {
         animate: { rotate: 360 },
-        transition: { duration: 0.8, ease: "linear" as const, repeat: Infinity },
+        transition: {
+          duration: 0.8,
+          ease: "linear" as const,
+          repeat: Infinity,
+        },
       };
 
   return (
@@ -356,14 +389,12 @@ export function LaunchComposer(): ReactNode {
       {/* 附属区：输入时显示质量/时长；运行时显示进度条 */}
       <AnimatePresence initial={false}>
         {stage === "input" && (
-          <motion.div
-            key="settings"
-            className="overflow-hidden"
-            {...accessory}
-          >
+          <motion.div key="settings" className="overflow-hidden" {...accessory}>
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-2 pt-4">
               <div className="flex items-center gap-1.5">
-                <span className="text-muted-foreground mr-0.5 text-xs">质量</span>
+                <span className="text-muted-foreground mr-0.5 text-xs">
+                  质量
+                </span>
                 {QUALITY_OPTS.map((o) => (
                   <Chip
                     key={o.value}
@@ -375,7 +406,9 @@ export function LaunchComposer(): ReactNode {
                 ))}
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-muted-foreground mr-0.5 text-xs">时长</span>
+                <span className="text-muted-foreground mr-0.5 text-xs">
+                  时长
+                </span>
                 {DURATION_OPTS.map((d) => (
                   <Chip
                     key={d}
@@ -391,11 +424,7 @@ export function LaunchComposer(): ReactNode {
         )}
 
         {stage === "running" && (
-          <motion.div
-            key="progress"
-            className="overflow-hidden"
-            {...accessory}
-          >
+          <motion.div key="progress" className="overflow-hidden" {...accessory}>
             <div className="px-2 pt-4">
               <div
                 className="bg-foreground/10 h-1.5 w-full overflow-hidden rounded-full"
@@ -412,7 +441,9 @@ export function LaunchComposer(): ReactNode {
                 />
               </div>
               <div className="text-muted-foreground mt-2 flex items-center justify-between text-xs">
-                <span>已用 {fmtElapsed(elapsed)} · {Math.round(progress)}%</span>
+                <span>
+                  已用 {fmtElapsed(elapsed)} · {Math.round(progress)}%
+                </span>
                 <span>通常约 3–7 分钟</span>
               </div>
             </div>

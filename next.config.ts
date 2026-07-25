@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   // Pin turbopack root so the empty lockfile in the parent YE/ dir isn't picked up
   turbopack: {
     root: process.cwd(),

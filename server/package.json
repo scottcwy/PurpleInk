@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "hyperframes": "0.7.68",
     "imapflow": "^1.0.171",
     "mailparser": "^3.7.1",
     "playwright": "^1.49.0",

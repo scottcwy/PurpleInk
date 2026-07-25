@@ -1,0 +1,16 @@
+.git
+.github
+.next
+node_modules
+server/node_modules
+server/out
+server/capture
+coverage
+deploy/data
+.env
+.env.*
+server/.env
+*.log
+*.mp4
+*.pem
+
