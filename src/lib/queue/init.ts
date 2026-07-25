@@ -1,6 +1,7 @@
 import 'server-only'
 import { queue } from './index'
 import { isPositiveInteger } from './in-process-queue'
+import { loadLaneQuotasForStart } from './runtime-config'
 import type { LaneQuotas } from './types'
 
 /**
@@ -18,7 +19,13 @@ const LANE_QUOTA_ENV_KEYS: Record<string, string> = {
   'render-shot': 'CVC_QUEUE_RENDER_SHOT_CONCURRENCY',
 }
 
-/** 读取队列并发的 env 覆盖并做范围校验；非法值（非正整数）直接抛错，不静默回退默认值。 */
+/**
+ * 读取队列并发的 env 覆盖并做范围校验；非法值（非正整数）直接抛错，不静默回退默认值。
+ *
+ * 该函数只负责 env 通道；DB 覆盖比 env 优先（ISSUE-011），由
+ * `runtime-config.ts` 的 `loadLaneQuotasForStart()` 在启动时合并后传入 `queue.start()`。
+ * 本出口仍保留同步签名，让单测可独立覆盖 env 解析而不必触达 DB。
+ */
 export function resolveLaneQuotas(
   env: Record<string, string | undefined> = process.env
 ): LaneQuotas {
@@ -41,6 +48,10 @@ export function resolveLaneQuotas(
  *
  * 在 dev 模式下 Next.js instrumentation 有时不会自动触发，
  * 因此 API 路由在首次请求时兜底调用本函数。
+ *
+ * 启动期的 lane 配额按 **DB > env > 代码默认** 合并（ISSUE-011 单真值原则）。
+ * 保存到 DB 的新配额需重启 dev 进程才会接管 `InProcessQueue.lanes`——
+ * UI 直接同步标注「重启后生效」，不让用户以为已热生效。
  */
 export async function initQueue(): Promise<void> {
   if (globalStore.__cvcQueueInitialized) return
@@ -50,9 +61,10 @@ export async function initQueue(): Promise<void> {
   }
   if (globalStore.__cvcQueueInitializing) return globalStore.__cvcQueueInitializing
   globalStore.__cvcQueueInitializing = (async () => {
-    const [directorMod, renderMod] = await Promise.all([
+    const [directorMod, renderMod, lanes] = await Promise.all([
       import('@/features/director/queue-handler'),
       import('@/features/render/queue-handler'),
+      loadLaneQuotasForStart(),
     ])
     if (typeof directorMod.registerDirectorStageHandler === 'function') {
       directorMod.registerDirectorStageHandler(queue)
@@ -60,7 +72,7 @@ export async function initQueue(): Promise<void> {
     if (typeof renderMod.registerRenderShotHandler === 'function') {
       renderMod.registerRenderShotHandler(queue)
     }
-    queue.start(resolveLaneQuotas())
+    queue.start(lanes)
     globalStore.__cvcQueueInitialized = true
   })()
   return globalStore.__cvcQueueInitializing
