@@ -23,9 +23,9 @@ describe('export view model', () => {
 
   it('projects every supported resolution preset to its existing tier label', () => {
     expect(buildResolutionOptions()).toEqual([
-      { value: '1080x1920', label: '高清' },
-      { value: '720x1280', label: '标清' },
-      { value: '540x960', label: '流畅' },
+      { value: '1920x1080', label: '高清' },
+      { value: '1280x720', label: '标清' },
+      { value: '960x540', label: '流畅' },
     ])
   })
 })

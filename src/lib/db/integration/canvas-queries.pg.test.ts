@@ -20,6 +20,13 @@ import {
   getNodeStreamContext,
   listProjects,
 } from '@/features/canvas/queries'
+import {
+  getProjectRouteState,
+} from '@/features/projects/project-compatibility'
+import {
+  ACTIVE_WORKFLOW_VERSION,
+  serializeWorkflowVersion,
+} from '@/lib/workflow/version'
 
 const WORKSPACE_ID = '00000000-0000-4000-8000-000000000001'
 const OTHER_WORKSPACE_ID = '00000000-0000-4000-8000-000000000002'
@@ -202,17 +209,36 @@ describe('artifact and stream projections', () => {
   })
 })
 
-it('listProjects excludes projects from other workspaces', async () => {
-  await seedProject(database.db, WORKSPACE_ID, '本地项目')
+it('listProjects excludes projects from other workspaces and legacy workflows', async () => {
+  await seedProject(database.db, WORKSPACE_ID, '本地项目', randomUUID(), ACTIVE_VERSION)
+  await seedProject(database.db, WORKSPACE_ID, '旧版竖屏项目')
   await seedProject(database.db, OTHER_WORKSPACE_ID, '其他项目')
   await expect(listProjects()).resolves.toMatchObject([{ title: '本地项目' }])
 })
+
+it('getProjectRouteState distinguishes supported, legacy, and missing projects', async () => {
+  const supportedId = await seedProject(
+    database.db,
+    WORKSPACE_ID,
+    '横屏项目',
+    randomUUID(),
+    ACTIVE_VERSION
+  )
+  const legacyId = await seedProject(database.db, WORKSPACE_ID, '旧版项目')
+
+  await expect(getProjectRouteState(supportedId)).resolves.toBe('supported')
+  await expect(getProjectRouteState(legacyId)).resolves.toBe('legacy')
+  await expect(getProjectRouteState(randomUUID())).resolves.toBe('missing')
+})
+
+const ACTIVE_VERSION = serializeWorkflowVersion(ACTIVE_WORKFLOW_VERSION)
 
 async function seedProject(
   db: Db,
   workspaceId: string,
   title: string,
-  id = randomUUID()
+  id = randomUUID(),
+  workflowVersion = 'canvas-test-v1'
 ): Promise<string> {
   await db
     .insert(workspaces)
@@ -227,7 +253,7 @@ async function seedProject(
     id,
     title,
     script: '',
-    workflowVersion: 'canvas-test-v1',
+    workflowVersion,
     exportSettings: { schemaVersion: 1, settings: {} },
   })
   return id

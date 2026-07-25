@@ -10,7 +10,7 @@ describe('export API client', () => {
         incompleteNodeIds: ['node-2'],
         shotCount: 1,
         shotQa: { S001: null, S002: true },
-        resolutionPreset: '720x1280',
+        resolutionPreset: '1280x720',
         artifactUrl: '/api/artifacts/final?projectId=project-1',
       })
     )
@@ -19,7 +19,7 @@ describe('export API client', () => {
       incompleteNodeIds: ['node-2'],
       shotCount: 1,
       shotQa: { S001: null, S002: true },
-      resolutionPreset: '720x1280',
+      resolutionPreset: '1280x720',
       artifactUrl: '/api/artifacts/final?projectId=project-1',
     })
   })
@@ -33,7 +33,7 @@ describe('export API client', () => {
       incompleteNodeIds: [],
       shotCount: 0,
       shotQa: {},
-      resolutionPreset: '1080x1920',
+      resolutionPreset: '1920x1080',
     })
   })
 
@@ -98,15 +98,15 @@ describe('export API client', () => {
 
   it('PATCHes the resolution preset to the project settings API', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-      json({ ok: true, exportSettings: { resolutionPreset: '720x1280' } })
+      json({ ok: true, exportSettings: { resolutionPreset: '1280x720' } })
     )
     await expect(
-      updateExportResolution('project-1', '720x1280', fetcher)
+      updateExportResolution('project-1', '1280x720', fetcher)
     ).resolves.toBeUndefined()
     expect(fetcher).toHaveBeenCalledWith('/api/projects/project-1', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ exportSettings: { resolutionPreset: '720x1280' } }),
+      body: JSON.stringify({ exportSettings: { resolutionPreset: '1280x720' } }),
     })
   })
 })

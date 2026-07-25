@@ -1,6 +1,7 @@
 import 'server-only'
 import { z } from 'zod'
 import { transitionNodeStatus } from '@/features/canvas'
+import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 import { queue as defaultQueue, type QueueAdapter } from '@/lib/queue'
 import { storage } from '@/lib/storage'
 import { assertRenderAdmission } from './admission'
@@ -87,8 +88,9 @@ export async function enqueueRenderShot(
   input: RenderShotInput,
   dependencies?: EnqueueDependencies
 ): Promise<string> {
-  const resolved = dependencies ?? createEnqueueDependencies()
   const payload = renderJobPayloadSchema.parse(input)
+  if (!dependencies) await assertProjectWorkflowSupported(payload.projectId)
+  const resolved = dependencies ?? createEnqueueDependencies()
   let pendingSet = false
   try {
     const admission = await resolved.loadAdmissionContext(

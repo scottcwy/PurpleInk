@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCanvasGraph } from '@/features/canvas'
+import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 import { captureThumbnails, RenderRepository } from '@/features/render'
 
 export const dynamic = 'force-dynamic'
@@ -22,14 +23,15 @@ export async function GET(request: Request) {
       { status: 400 }
     )
   }
-  const graph = await getCanvasGraph(projectId)
-  if (!graph.nodes.some((node) => node.id === nodeId)) {
-    return NextResponse.json(
-      { ok: false, error: '节点不存在或不属于该项目' },
-      { status: 404 }
-    )
-  }
   try {
+    await assertProjectWorkflowSupported(projectId)
+    const graph = await getCanvasGraph(projectId)
+    if (!graph.nodes.some((node) => node.id === nodeId)) {
+      return NextResponse.json(
+        { ok: false, error: '节点不存在或不属于该项目' },
+        { status: 404 }
+      )
+    }
     const repository = new RenderRepository()
     const context = await repository.loadCompletedThumbnailContext(
       projectId,

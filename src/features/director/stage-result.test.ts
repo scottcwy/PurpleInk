@@ -124,8 +124,8 @@ describe('prepareStageResult', () => {
     expect(result.renderSpec).toMatchObject({
       fps: 30,
       durationInFrames: 45,
-      width: 1080,
-      height: 1920,
+      width: 1920,
+      height: 1080,
     })
     expect(result.renderSpec?.seed).toEqual(expect.any(Number))
   })

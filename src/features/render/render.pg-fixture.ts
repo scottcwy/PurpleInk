@@ -60,7 +60,7 @@ export async function seedRenderFixture(
     workflowVersion: 'render-test-v1',
     exportSettings: {
       schemaVersion: 1,
-      settings: { resolutionPreset: '720x1280' },
+      settings: { resolutionPreset: '1280x720' },
     },
   })
   await db.insert(canvasNodes).values([

@@ -14,9 +14,9 @@ const CLIP_GAP = 8
 const TRACK_INSET = 4
 
 const RESOLUTION_TIER_LABEL: Record<ResolutionPreset, string> = {
-  '1080x1920': '高清',
-  '720x1280': '标清',
-  '540x960': '流畅',
+  '1920x1080': '高清',
+  '1280x720': '标清',
+  '960x540': '流畅',
 }
 
 export function buildResolutionOptions() {

@@ -6,6 +6,7 @@ import {
   getExportReadiness,
 } from '@/features/render/export-service'
 import { initQueue } from '@/lib/queue/init'
+import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +18,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: '缺少 projectId' }, { status: 400 })
   }
   try {
+    await assertProjectWorkflowSupported(projectId)
     // best-effort：QA 检测失败（如缩略图截取异常）不阻断 readiness 返回。
     try {
       await ensureShotQaChecked(projectId)
@@ -49,6 +51,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: '请求体无效' }, { status: 400 })
   }
   try {
+    await assertProjectWorkflowSupported(parsed.data.projectId)
     await initQueue()
     // 未就绪在入队前如实拒绝，保持既有 409 + incompleteNodeIds 契约；
     // 拼接与产物提交交给项目级队列作业（需要 project 级 attempt 才能提交 final-mp4）。

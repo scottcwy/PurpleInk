@@ -16,6 +16,7 @@ import {
 import { DEFAULT_EXPORT_SETTINGS } from './export-settings'
 import { createProjectSchema, exportSettingsSchema, type ExportSettings } from './schemas'
 import type { Project } from './types'
+import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 
 const GLOBAL_NODE_DEFINITIONS = [
   { type: 'script-import', stage: 'INGEST', logicalKey: 'global:script-import' },
@@ -104,6 +105,7 @@ export async function updateExportSettings(
   input: unknown
 ): Promise<ExportSettings> {
   const exportSettings = exportSettingsSchema.parse(input)
+  await assertProjectWorkflowSupported(projectId)
   const database = await getDb()
   const [updated] = await database
     .update(projects)
@@ -127,6 +129,7 @@ export async function setProjectAutopilot(
   projectId: string,
   enabled: boolean
 ): Promise<boolean> {
+  await assertProjectWorkflowSupported(projectId)
   const database = await getDb()
   const [updated] = await database
     .update(projects)

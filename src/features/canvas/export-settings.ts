@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 /**
- * 导出分辨率预设：全部保持 9:16 竖屏比例（与 FABRICATE 母版画幅同比例）。
+ * 导出分辨率预设：全部保持 16:9 横屏比例（与 FABRICATE 母版画幅同比例）。
  * 分辨率仅是编码/交付参数，不进入内容生产（见 issue-06 §A.5）。
  *
  * 本模块是 features/canvas 下的叶子模块（仅依赖 zod），供 canvas / render / director
@@ -9,9 +9,9 @@ import { z } from 'zod'
  * 放在此处可避免 director→render / render↔canvas 循环依赖（见 issue-06 §A.2 边界修正）。
  */
 export const EXPORT_RESOLUTION_PRESETS = {
-  '1080x1920': { width: 1080, height: 1920, label: '1080×1920 · 竖屏高清' },
-  '720x1280': { width: 720, height: 1280, label: '720×1280 · 竖屏标清' },
-  '540x960': { width: 540, height: 960, label: '540×960 · 竖屏流畅' },
+  '1920x1080': { width: 1920, height: 1080, label: '1920×1080 · 横屏高清' },
+  '1280x720': { width: 1280, height: 720, label: '1280×720 · 横屏标清' },
+  '960x540': { width: 960, height: 540, label: '960×540 · 横屏流畅' },
 } as const
 
 export type ResolutionPreset = keyof typeof EXPORT_RESOLUTION_PRESETS
@@ -21,10 +21,11 @@ export interface ExportSettings {
 }
 
 /** 母版画幅预设：与 features/director/stage-result.ts 的 FABRICATE 画幅一致，不可经导出设置更改。 */
-export const MASTER_RESOLUTION_PRESET: ResolutionPreset = '1080x1920'
+export const MASTER_RESOLUTION_PRESET: ResolutionPreset = '1920x1080'
 
 export const MASTER_WIDTH = EXPORT_RESOLUTION_PRESETS[MASTER_RESOLUTION_PRESET].width
 export const MASTER_HEIGHT = EXPORT_RESOLUTION_PRESETS[MASTER_RESOLUTION_PRESET].height
+export const MASTER_ASPECT_RATIO = MASTER_WIDTH / MASTER_HEIGHT
 
 /** 项目从未设置导出参数时（DB 列为 null）的回退默认。 */
 export const DEFAULT_EXPORT_SETTINGS: ExportSettings = {

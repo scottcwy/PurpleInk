@@ -69,10 +69,10 @@
 | `/products` | `src/app/products/page.tsx` | `redirect` → `/products/dashboard` | 无 | — |
 | `/products/dashboard` | `src/app/products/(app)/dashboard/page.tsx` | `wired` | 无 | 空状态引导新建项目 |
 | `/products/projects` | `src/app/products/(app)/projects/page.tsx` | `wired` | 无 | 空状态 |
-| `/products/canvas/[projectId]` | `src/app/products/(app)/canvas/[projectId]/page.tsx` | `wired` | `projectId` path | `notFound()` |
-| `/products/shots/[shotId]` | `src/app/products/(app)/shots/[shotId]/page.tsx` | `wired` | `shotId` path + `projectId` query（必填） | `notFound()` |
-| `/products/export/[projectId]` | `src/app/products/(app)/export/[projectId]/page.tsx` | `wired` | `projectId` path | `notFound()` |
-| `/products/settings` | `src/app/products/(app)/settings/page.tsx` | `wired` | `projectId` query（可选） | 渲染账号级设置 |
+| `/products/canvas/[projectId]` | `src/app/products/(app)/canvas/[projectId]/page.tsx` | `wired` | `projectId` path | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明 |
+| `/products/shots/[shotId]` | `src/app/products/(app)/shots/[shotId]/page.tsx` | `wired` | `shotId` path + `projectId` query（必填） | 缺失项目/镜头 `notFound()`；旧 workflow 显示保留数据说明 |
+| `/products/export/[projectId]` | `src/app/products/(app)/export/[projectId]/page.tsx` | `wired` | `projectId` path | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明 |
+| `/products/settings` | `src/app/products/(app)/settings/page.tsx` | `wired` | `projectId` query（可选） | 无项目参数渲染账号级设置；旧 workflow 显示保留数据说明 |
 
 段级约定（已落盘，新增 L3 路由沿用）：
 
@@ -80,6 +80,8 @@
 - `src/app/products/(app)/loading.tsx` 提供段级骨架；骨架不得常驻，必须由真实数据替换。
 - `src/app/products/(app)/template.tsx` 只做内容区入场动画，不得承载状态。
 - 全部 L3 页面 `export const dynamic = 'force-dynamic'`，禁止静态化含项目数据的页面。
+- 当前产品 workflow 的唯一母版合同是 `1920×1080 @ 30fps`。项目列表、工作台统计与最近项目只投影当前 `ACTIVE_WORKFLOW_VERSION`；历史 workflow 项目及其 Artifact 不迁移、不删除，但不进入普通列表。
+- 项目深链必须用持久化 `workflowVersion` 区分 `supported | legacy | missing`，禁止按创建日期、导出设置或 Artifact 尺寸猜测。`legacy` 显示“旧版项目暂不可用，数据已保留”，`missing` 才调用 `notFound()`。
 
 ### 2.4 L4 内部
 
@@ -165,7 +167,7 @@
 1. 写操作一律 POST/PATCH/DELETE + 严格 JSON schema 校验；校验失败返回 400 且**不落任何写入**。
    `/api/settings` POST 承载字段范围：StepFun/Gemini 凭据与模型、Director 节点路由、`laneQuotas.{directorStageConcurrency, renderShotConcurrency}`（ISSUE-011）。
    `laneQuotas` 子字段做两层校验：schema 静态 max（directorStage≤32、renderShot≤128）+ route 运行时 `os.cpus().length` 上限；任一失败回 400 且不落任何 secret / route / 配额写入。
-2. 状态码语义固定：400 参数非法、404 资源不存在或不属于当前作用域、409 状态冲突（队列已存在、前置未就绪）、422 外部凭据校验失败。
+2. 状态码语义固定：400 参数非法、404 资源不存在或不属于当前作用域、409 状态冲突（队列已存在、前置未就绪、旧 workflow 暂不支持执行）、422 外部凭据校验失败。项目设置、Director、单镜渲染、缩略图与成片导出的写/执行入口必须在任何数据库、Artifact 或队列变更前拒绝旧 workflow。
 3. 凭据类 POST 必须先验证后保存；验证失败返回 422 且不覆盖已有值。
 4. 除 `/api/ping` 外全部 `export const dynamic = 'force-dynamic'`。
 

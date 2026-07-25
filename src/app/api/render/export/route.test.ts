@@ -6,7 +6,10 @@ const mocks = vi.hoisted(() => ({
   getExportReadiness: vi.fn(),
   enqueueProjectExport: vi.fn(),
   initQueue: vi.fn(),
+  assertProjectWorkflowSupported: vi.fn(),
 }))
+
+class UnsupportedProjectWorkflowError extends Error {}
 
 vi.mock('server-only', () => ({}))
 vi.mock('@/features/render/export-service', () => ({
@@ -17,6 +20,9 @@ vi.mock('@/features/render/export-queue-handler', () => ({
   enqueueProjectExport: mocks.enqueueProjectExport,
 }))
 vi.mock('@/lib/queue/init', () => ({ initQueue: mocks.initQueue }))
+vi.mock('@/features/projects/project-compatibility', () => ({
+  assertProjectWorkflowSupported: mocks.assertProjectWorkflowSupported,
+}))
 
 function readiness(overrides: Record<string, unknown> = {}) {
   return {
@@ -24,7 +30,7 @@ function readiness(overrides: Record<string, unknown> = {}) {
     incompleteNodeIds: [],
     shotCount: 1,
     shotQa: { S001: true },
-    resolutionPreset: '1080x1920',
+    resolutionPreset: '1920x1080',
     finalArtifactId: null,
     ...overrides,
   }
@@ -54,6 +60,19 @@ describe('POST /api/render/export', () => {
       ok: false,
       incompleteNodeIds: ['node-1', 'node-2'],
     })
+    expect(mocks.enqueueProjectExport).not.toHaveBeenCalled()
+  })
+
+  it('rejects an unsupported workflow before queue or readiness writes', async () => {
+    mocks.assertProjectWorkflowSupported.mockRejectedValueOnce(
+      new UnsupportedProjectWorkflowError('旧版项目暂不可用')
+    )
+
+    const response = await POST(request({ projectId: 'old-project' }))
+
+    expect(response.status).toBe(409)
+    expect(mocks.initQueue).not.toHaveBeenCalled()
+    expect(mocks.getExportReadiness).not.toHaveBeenCalled()
     expect(mocks.enqueueProjectExport).not.toHaveBeenCalled()
   })
 

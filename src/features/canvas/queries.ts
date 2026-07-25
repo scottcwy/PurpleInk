@@ -11,6 +11,10 @@ import type { NodePosition } from './layout'
 import { canvasNodeTypeSchema } from './schemas'
 import { resolveExportSettings, type ExportSettings } from './export-settings'
 import type { CanvasNodeType, NodeStatus, Project } from './types'
+import {
+  ACTIVE_WORKFLOW_VERSION,
+  serializeWorkflowVersion,
+} from '@/lib/workflow/version'
 
 export interface CanvasNodeArtifact {
   id: string
@@ -57,7 +61,7 @@ export interface CanvasGraph {
   nodes: CanvasGraphNode[]
   edges: CanvasGraphEdge[]
 }
-/** 列出全部项目（按更新时间倒序）。 */
+/** 只列出当前横屏 workflow 项目（按更新时间倒序）。 */
 export async function listProjects(): Promise<Project[]> {
   const database = await getDb()
   return database
@@ -69,7 +73,15 @@ export async function listProjects(): Promise<Project[]> {
       updatedAt: projects.updatedAt,
     })
     .from(projects)
-    .where(eq(projects.workspaceId, LOCAL_WORKSPACE_ID))
+    .where(
+      and(
+        eq(projects.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(
+          projects.workflowVersion,
+          serializeWorkflowVersion(ACTIVE_WORKFLOW_VERSION)
+        )
+      )
+    )
     .orderBy(desc(projects.updatedAt))
 }
 /** 读取项目导出设置；null/缺省时回退 DEFAULT_EXPORT_SETTINGS。项目不存在抛错。 */

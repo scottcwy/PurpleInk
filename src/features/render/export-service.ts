@@ -2,7 +2,8 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { storage as defaultStorage, type StorageAdapter } from '@/lib/storage'
-import type { ResolutionPreset } from '@/features/canvas/contracts'
+import type { ResolutionPreset } from '@/features/canvas'
+import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 import { concatExport } from './concat'
 import { runShotQaChecks } from './qa-check'
 import {
@@ -36,6 +37,9 @@ export async function exportProject(
   projectId: string,
   dependencies: ExportDependencies = {}
 ): Promise<ExportProjectResult> {
+  if (!dependencies.repository) {
+    await assertProjectWorkflowSupported(projectId)
+  }
   const repository = dependencies.repository ?? new RenderRepository()
   const storage = dependencies.storage ?? defaultStorage
   const concat = dependencies.concat ?? concatExport
@@ -112,6 +116,7 @@ export async function getExportReadiness(
  * contentHash 未变自动跳过）。供 readiness 路由在返回前调用，使 shotQa 反映真实结果。
  */
 export async function ensureShotQaChecked(projectId: string): Promise<void> {
+  await assertProjectWorkflowSupported(projectId)
   await runShotQaChecks(projectId)
 }
 

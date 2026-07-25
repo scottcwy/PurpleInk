@@ -8,8 +8,10 @@ import {
   listProjects,
   type PositionedCanvasNode,
 } from '@/features/canvas'
+import { getProjectRouteState } from '@/features/projects/project-compatibility'
 import { PublishNavContext } from '@/features/navigation/nav-context'
 import { CanvasLoader } from './canvas-loader'
+import { UnsupportedProjectNotice } from '@/features/canvas/unsupported-project-notice'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +21,9 @@ interface CanvasPageProps {
 
 export default async function CanvasPage({ params }: CanvasPageProps) {
   const { projectId } = await params
+  const routeState = await getProjectRouteState(projectId)
+  if (routeState === 'missing') notFound()
+  if (routeState === 'legacy') return <UnsupportedProjectNotice />
   const projects = await listProjects()
   const project = projects.find((candidate) => candidate.id === projectId)
   if (!project) notFound()

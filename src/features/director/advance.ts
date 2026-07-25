@@ -1,5 +1,6 @@
 import 'server-only'
 import { getDb } from '@/lib/db/client'
+import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 import type { CanvasNodeType, NodeStatus } from '@/features/canvas'
 import { AdvanceRepositoryImpl } from './advance-repository'
 import { PIPELINE_STAGES, type PipelineStage } from './types'
@@ -127,6 +128,7 @@ export async function startProjectPipeline(
   projectId: string,
   dependencies?: PipelineControlDependencies
 ): Promise<PipelineStartResult> {
+  if (!dependencies) await assertProjectWorkflowSupported(projectId)
   const resolved = dependencies ?? (await createDefaultControlDependencies())
   await resolved.repository.setAutopilot(projectId, true)
   const entry = await resolved.repository.getEntryNode(projectId)
@@ -164,6 +166,7 @@ export async function startProjectPipeline(
 export async function stopProjectPipeline(
   projectId: string
 ): Promise<{ autopilot: false }> {
+  await assertProjectWorkflowSupported(projectId)
   const database = await getDb()
   await new AdvanceRepositoryImpl(database).setAutopilot(projectId, false)
   return { autopilot: false }

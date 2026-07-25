@@ -1,6 +1,7 @@
 import 'server-only'
 import { z } from 'zod'
 import { transitionNodeStatus } from '@/features/canvas'
+import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 import { getDb } from '@/lib/db/client'
 import { storage } from '@/lib/storage'
 import { queue as defaultQueue, type QueueAdapter } from '@/lib/queue'
@@ -57,8 +58,9 @@ export async function enqueueDirectorStage(
   input: DirectorStageJobInput,
   dependencies?: EnqueueDependencies
 ): Promise<string> {
-  const resolved = dependencies ?? (await createDefaultEnqueueDependencies())
   const payload = directorStageJobSchema.parse(input)
+  if (!dependencies) await assertProjectWorkflowSupported(payload.projectId)
+  const resolved = dependencies ?? (await createDefaultEnqueueDependencies())
   await resolved.assertEnqueueable(payload)
   await resolved.transitionNodeStatus(payload.nodeId, 'pending')
   try {

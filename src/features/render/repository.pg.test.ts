@@ -141,7 +141,7 @@ describe('RenderRepository Postgres', () => {
       },
     ])
     expect(plan.incompleteNodeIds).toEqual([fixture.qaNodeId])
-    expect(plan.resolutionPreset).toBe('720x1280')
+    expect(plan.resolutionPreset).toBe('1280x720')
     expect(plan.targetResolution).toEqual({ width: 720, height: 1280 })
   })
 

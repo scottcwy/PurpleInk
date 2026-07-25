@@ -17,6 +17,13 @@ import {
   updateExportSettings,
 } from '@/features/canvas/actions'
 import {
+  UnsupportedProjectWorkflowError,
+} from '@/features/projects/project-compatibility'
+import {
+  ACTIVE_WORKFLOW_VERSION,
+  serializeWorkflowVersion,
+} from '@/lib/workflow/version'
+import {
   getExportSettings,
   getProjectAutopilot,
 } from '@/features/canvas/queries'
@@ -61,6 +68,14 @@ describe('createProject', () => {
     const edges = await database.db.select().from(canvasEdges)
 
     expect(project.title).toBe('RAG 十分钟入门')
+    const [persistedProject] = await database.db.select().from(projects)
+    expect(persistedProject?.workflowVersion).toBe(
+      serializeWorkflowVersion(ACTIVE_WORKFLOW_VERSION)
+    )
+    expect(persistedProject?.exportSettings).toEqual({
+      schemaVersion: 1,
+      settings: { resolutionPreset: '1920x1080' },
+    })
     expect(nodes.every((node) => node.workspaceId === WORKSPACE_ID)).toBe(true)
     expect(nodes.map(({ type, stage }) => [type, stage])).toEqual([
       ['script-import', 'INGEST'],
@@ -111,21 +126,21 @@ describe('export settings', () => {
 
   it('defaults to the master preset when never set', async () => {
     await expect(getExportSettings(projectId)).resolves.toEqual({
-      resolutionPreset: '1080x1920',
+      resolutionPreset: '1920x1080',
     })
   })
 
   it('persists a valid versioned preset and reads it back', async () => {
-    await updateExportSettings(projectId, { resolutionPreset: '720x1280' })
+    await updateExportSettings(projectId, { resolutionPreset: '1280x720' })
     await expect(getExportSettings(projectId)).resolves.toEqual({
-      resolutionPreset: '720x1280',
+      resolutionPreset: '1280x720',
     })
     const [row] = await database.db
       .select({ exportSettings: projects.exportSettings })
       .from(projects)
     expect(row?.exportSettings).toEqual({
       schemaVersion: 1,
-      settings: { resolutionPreset: '720x1280' },
+      settings: { resolutionPreset: '1280x720' },
     })
   })
 
@@ -134,14 +149,28 @@ describe('export settings', () => {
       updateExportSettings(projectId, { resolutionPreset: '9999x9999' })
     ).rejects.toThrow()
     await expect(getExportSettings(projectId)).resolves.toEqual({
-      resolutionPreset: '1080x1920',
+      resolutionPreset: '1920x1080',
     })
   })
 
   it('throws when the project does not exist', async () => {
     await expect(
-      updateExportSettings(randomUUID(), { resolutionPreset: '720x1280' })
+      updateExportSettings(randomUUID(), { resolutionPreset: '1280x720' })
     ).rejects.toThrow('项目不存在')
+  })
+
+  it('rejects a legacy workflow before changing export settings', async () => {
+    await database.db
+      .update(projects)
+      .set({ workflowVersion: 'legacy-portrait-workflow' })
+    await expect(
+      updateExportSettings(projectId, { resolutionPreset: '1280x720' })
+    ).rejects.toBeInstanceOf(UnsupportedProjectWorkflowError)
+    const [row] = await database.db.select().from(projects)
+    expect(row?.exportSettings).toEqual({
+      schemaVersion: 1,
+      settings: { resolutionPreset: '1920x1080' },
+    })
   })
 })
 
@@ -170,5 +199,15 @@ describe('project autopilot', () => {
       '项目不存在'
     )
     await expect(getProjectAutopilot(missingId)).rejects.toThrow('项目不存在')
+  })
+
+  it('rejects a legacy workflow before changing autopilot', async () => {
+    await database.db
+      .update(projects)
+      .set({ workflowVersion: 'legacy-portrait-workflow' })
+    await expect(setProjectAutopilot(projectId, true)).rejects.toBeInstanceOf(
+      UnsupportedProjectWorkflowError
+    )
+    await expect(getProjectAutopilot(projectId)).resolves.toBe(false)
   })
 })

@@ -7,6 +7,7 @@ import {
   type QueueAdapter,
 } from '@/lib/queue'
 import { exportProject } from './export-service'
+import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 
 /**
  * 成片导出的队列接线。
@@ -54,6 +55,9 @@ export async function enqueueProjectExport(
   targetQueue: QueueAdapter = defaultQueue
 ): Promise<string> {
   const payload = exportJobPayloadSchema.parse(input)
+  if (targetQueue === defaultQueue) {
+    await assertProjectWorkflowSupported(payload.projectId)
+  }
   // 不传 nodeId：导出的聚合是项目本身，attempt 必须是 project 级。
   return targetQueue.enqueue(EXPORT_PROJECT_KIND, payload, {
     projectId: payload.projectId,
