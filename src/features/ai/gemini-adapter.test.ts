@@ -1,35 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { GeminiAdapter, validateGeminiKey } from './gemini-adapter'
+import { validateGeminiKey } from './gemini-adapter'
 
 const mocks = vi.hoisted(() => ({
-  create: vi.fn().mockResolvedValue({
-    choices: [{ message: { content: 'Gemini 完成' } }],
-  }),
-  constructor: vi.fn(),
   getConfig: vi.fn(),
-  resolveBaseUrl: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
 vi.mock('./gemini-config', () => ({
   getGeminiConfig: mocks.getConfig,
-  resolveGeminiBaseUrl: mocks.resolveBaseUrl,
-}))
-vi.mock('openai', () => ({
-  default: class MockOpenAI {
-    static readonly APIError = class extends Error {}
-    readonly chat = { completions: { create: mocks.create } }
-    constructor(options: unknown) {
-      mocks.constructor(options)
-    }
-  },
 }))
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.resolveBaseUrl.mockReturnValue(
-    'https://generativelanguage.googleapis.com/v1beta/openai/',
-  )
   mocks.getConfig.mockResolvedValue({
     apiKey: null,
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
@@ -38,48 +20,77 @@ beforeEach(() => {
   })
 })
 
-describe('GeminiAdapter', () => {
-  it('uses Google official OpenAI-compatible configuration', async () => {
-    const adapter = new GeminiAdapter('test-key')
-    await adapter.chat([{ role: 'user', content: 'hello' }], {
-      temperature: 0.9,
-    })
+describe('validateGeminiKey', () => {
+  it('joins the trailing-slash default baseUrl without double slashes', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({}))
 
-    expect(mocks.constructor).toHaveBeenCalledWith({
-      apiKey: 'test-key',
-      baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
-    })
-    expect(mocks.create).toHaveBeenCalledWith({
+    await expect(validateGeminiKey('secret-key', {}, fetcher)).resolves.toBe(
+      true,
+    )
+
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    const [url, init] = fetcher.mock.calls[0]!
+    expect(url).toBe(
+      'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    )
+    expect(init?.method).toBe('POST')
+    expect(new Headers(init?.headers).get('authorization')).toBe(
+      'Bearer secret-key',
+    )
+    expect(JSON.parse(String(init?.body))).toEqual({
       model: 'gemini-3.6-flash',
-      messages: [{ role: 'user', content: 'hello' }],
-      max_tokens: undefined,
+      messages: [{ role: 'user', content: 'ping' }],
+      max_tokens: 1,
     })
+    expect(init?.signal).toBeInstanceOf(AbortSignal)
   })
 
   it('validates with the candidate endpoint/model and never logs key material', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({}))
+
     await expect(
-      validateGeminiKey('secret-key', {
-        baseUrl: 'https://candidate.example/openai/',
-        primaryModel: 'candidate-model',
-      }),
+      validateGeminiKey(
+        'secret-key',
+        {
+          baseUrl: 'https://candidate.example/openai/',
+          primaryModel: 'candidate-model',
+        },
+        fetcher,
+      ),
     ).resolves.toBe(true)
-    expect(mocks.constructor).toHaveBeenCalledWith({
-      apiKey: 'secret-key',
-      baseURL: 'https://candidate.example/openai/',
-    })
-    expect(mocks.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: 'candidate-model',
-        messages: [{ role: 'user', content: 'ping' }],
-        max_tokens: 1,
-      }),
-      expect.anything(),
+
+    const [url, init] = fetcher.mock.calls[0]!
+    expect(url).toBe('https://candidate.example/openai/chat/completions')
+    expect(JSON.parse(String(init?.body))).toEqual(
+      expect.objectContaining({ model: 'candidate-model' }),
     )
 
-    mocks.create.mockRejectedValueOnce(new Error('boom'))
+    const failing = vi.fn<typeof fetch>().mockRejectedValue(new Error('boom'))
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    await expect(validateGeminiKey('do-not-log')).resolves.toBe(false)
+    await expect(validateGeminiKey('do-not-log', {}, failing)).resolves.toBe(
+      false,
+    )
     expect(JSON.stringify(errorSpy.mock.calls)).not.toContain('do-not-log')
+    errorSpy.mockRestore()
+  })
+
+  it('returns false when the probe returns non-2xx or a non-JSON body', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const unauthorized = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response('', { status: 401 }))
+    await expect(
+      validateGeminiKey('bad-key', {}, unauthorized),
+    ).resolves.toBe(false)
+    expect(JSON.stringify(errorSpy.mock.calls[0])).toContain('401')
+
+    const nonJson = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response('<html>', { status: 200 }))
+    await expect(validateGeminiKey('bad-key', {}, nonJson)).resolves.toBe(
+      false,
+    )
     errorSpy.mockRestore()
   })
 })

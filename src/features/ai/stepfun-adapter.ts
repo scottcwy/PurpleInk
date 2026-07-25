@@ -1,12 +1,6 @@
 import 'server-only'
-import OpenAI from 'openai'
 import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
-import {
-  getAiConfigDependencies,
-  getStepfunConfig,
-  resolveStepfunBaseUrl,
-} from './config'
-import type { ChatMessage, ChatOptions, LlmAdapter } from './types'
+import { getAiConfigDependencies, getStepfunConfig } from './config'
 
 /** 读取加密保存的 StepFun Key（仅服务端；不回退 env）。 */
 export async function getStoredApiKey(): Promise<string | null> {
@@ -29,54 +23,45 @@ export async function saveApiKey(
   })
 }
 
-function createClient(apiKey: string, baseUrl: string): OpenAI {
-  return new OpenAI({ apiKey, baseURL: baseUrl })
-}
-
-/** 校验 Key 是否可用（用与真实对话一致的最小 chat 探测；端点/模型走统一 resolver）。 */
-export async function validateKey(apiKey: string): Promise<boolean> {
+/** 校验 Key 是否可用（fetch 直连、与真实对话一致的最小 chat 探测；端点/模型走统一 resolver）。 */
+export async function validateKey(
+  apiKey: string,
+  fetcher: typeof fetch = fetch,
+): Promise<boolean> {
   const config = await getStepfunConfig()
   try {
-    await createClient(apiKey, config.baseUrl).chat.completions.create(
+    const response = await fetcher(
+      `${config.baseUrl.replace(/\/+$/, '')}/chat/completions`,
       {
-        model: config.chatModel,
-        messages: [{ role: 'user', content: 'ping' }],
-        max_tokens: 1,
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${apiKey}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: config.chatModel,
+          messages: [{ role: 'user', content: 'ping' }],
+          max_tokens: 1,
+        }),
+        signal: AbortSignal.timeout(15_000),
       },
-      { timeout: 15_000, maxRetries: 0 },
     )
+    if (!response.ok) {
+      // 仅服务端日志用于排障：不回显给客户端、不写入会被提交的文件、绝不含 Key
+      console.error('[stepfun] validateKey 失败', {
+        status: response.status,
+        errorType: 'HttpError',
+      })
+      return false
+    }
+    await response.json()
     return true
   } catch (error) {
-    // 仅服务端日志用于排障：不回显给客户端、不写入会被提交的文件、绝不含 Key
-    const status = error instanceof OpenAI.APIError ? error.status : undefined
     const errorType = error instanceof Error ? error.name : 'UnknownError'
-    console.error('[stepfun] validateKey 失败', { status, errorType })
-    return false
-  }
-}
-
-/** 用本地保存的 Key 构造适配器；未配置返回 null。 */
-export async function createLlmFromSettings(): Promise<StepfunAdapter | null> {
-  const key = await getStoredApiKey()
-  return key ? new StepfunAdapter(key) : null
-}
-
-/** StepFun LLM 适配器（OpenAI 兼容端点；端点/模型统一走 `getStepfunConfig()`）。 */
-export class StepfunAdapter implements LlmAdapter {
-  private readonly client: OpenAI
-
-  constructor(apiKey: string) {
-    this.client = createClient(apiKey, resolveStepfunBaseUrl())
-  }
-
-  async chat(messages: ChatMessage[], options: ChatOptions = {}): Promise<string> {
-    const model = options.model ?? (await getStepfunConfig()).chatModel
-    const res = await this.client.chat.completions.create({
-      model,
-      messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-      temperature: options.temperature,
-      max_tokens: options.maxTokens,
+    console.error('[stepfun] validateKey 失败', {
+      status: undefined,
+      errorType,
     })
-    return res.choices[0]?.message?.content ?? ''
+    return false
   }
 }

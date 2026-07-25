@@ -1,19 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  getStoredApiKey,
-  saveApiKey,
-  StepfunAdapter,
-  validateKey,
-} from './stepfun-adapter'
+import { getStoredApiKey, saveApiKey, validateKey } from './stepfun-adapter'
 
 const mocks = vi.hoisted(() => ({
-  create: vi.fn().mockResolvedValue({
-    choices: [{ message: { content: 'mocked content' } }],
-  }),
   getConfig: vi.fn(),
   loadSecret: vi.fn(),
-  openAiConstructor: vi.fn(),
-  resolveBaseUrl: vi.fn(),
   saveSecret: vi.fn(),
 }))
 
@@ -26,30 +16,10 @@ vi.mock('./config', () => ({
     },
   }),
   getStepfunConfig: mocks.getConfig,
-  resolveStepfunBaseUrl: mocks.resolveBaseUrl,
 }))
-vi.mock('openai', () => {
-  class MockAPIError extends Error {
-    readonly status?: number
-    constructor(message: string, status?: number) {
-      super(message)
-      this.status = status
-    }
-  }
-  return {
-    default: class MockOpenAI {
-      static readonly APIError = MockAPIError
-      readonly chat = { completions: { create: mocks.create } }
-      constructor(options: unknown) {
-        mocks.openAiConstructor(options)
-      }
-    },
-  }
-})
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.resolveBaseUrl.mockReturnValue('https://api.stepfun.com/v1')
   mocks.getConfig.mockResolvedValue({
     apiKey: null,
     baseUrl: 'https://api.stepfun.com/v1',
@@ -60,32 +30,7 @@ beforeEach(() => {
   })
 })
 
-describe('StepfunAdapter', () => {
-  it('initializes the compatible client with the server-only endpoint', () => {
-    new StepfunAdapter('test-key')
-
-    expect(mocks.openAiConstructor).toHaveBeenCalledWith({
-      apiKey: 'test-key',
-      baseURL: 'https://api.stepfun.com/v1',
-    })
-  })
-
-  it('uses an explicit model or the asynchronously resolved model', async () => {
-    const adapter = new StepfunAdapter('test-key')
-    await adapter.chat(
-      [{ role: 'user', content: 'hello' }],
-      { model: 'explicit-model' },
-    )
-    expect(mocks.create).toHaveBeenLastCalledWith(
-      expect.objectContaining({ model: 'explicit-model' }),
-    )
-
-    await adapter.chat([{ role: 'user', content: 'hello' }])
-    expect(mocks.create).toHaveBeenLastCalledWith(
-      expect.objectContaining({ model: 'step-3.5-flash' }),
-    )
-  })
-
+describe('credentials', () => {
   it('reads and writes credentials only through the encrypted store', async () => {
     mocks.loadSecret.mockResolvedValue('stored-key')
     await expect(getStoredApiKey()).resolves.toBe('stored-key')
@@ -106,26 +51,65 @@ describe('StepfunAdapter', () => {
 })
 
 describe('validateKey', () => {
-  it('probes with a minimal completion using the resolved model', async () => {
-    await expect(validateKey('sk-valid')).resolves.toBe(true)
-    expect(mocks.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        model: 'step-3.5-flash',
-        max_tokens: 1,
-        messages: [{ role: 'user', content: 'ping' }],
-      }),
-      expect.anything(),
+  it('probes chat/completions with the resolved model over fetch', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({}))
+
+    await expect(validateKey('sk-valid', fetcher)).resolves.toBe(true)
+
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    const [url, init] = fetcher.mock.calls[0]!
+    expect(url).toBe('https://api.stepfun.com/v1/chat/completions')
+    expect(init?.method).toBe('POST')
+    expect(new Headers(init?.headers).get('authorization')).toBe(
+      'Bearer sk-valid',
     )
+    expect(new Headers(init?.headers).get('content-type')).toBe(
+      'application/json',
+    )
+    expect(JSON.parse(String(init?.body))).toEqual({
+      model: 'step-3.5-flash',
+      messages: [{ role: 'user', content: 'ping' }],
+      max_tokens: 1,
+    })
+    expect(init?.signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('returns false on a non-2xx probe without leaking the key', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response('unauthorized', { status: 401 }))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(validateKey('sk-bad-key', fetcher)).resolves.toBe(false)
+
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(errorSpy.mock.calls[0])).toContain('401')
+    expect(JSON.stringify(errorSpy.mock.calls[0])).not.toContain('sk-bad-key')
+    errorSpy.mockRestore()
+  })
+
+  it('returns false on a 200 response with a non-JSON body', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response('<html>', { status: 200 }))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(validateKey('sk-valid', fetcher)).resolves.toBe(false)
+    errorSpy.mockRestore()
   })
 
   it('returns false and logs server-side without leaking the key', async () => {
-    mocks.create.mockRejectedValueOnce(new Error('boom'))
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockRejectedValue(new TypeError('fetch failed'))
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    await expect(validateKey('sk-super-secret')).resolves.toBe(false)
+    await expect(validateKey('sk-super-secret', fetcher)).resolves.toBe(false)
 
     expect(errorSpy).toHaveBeenCalledTimes(1)
-    expect(JSON.stringify(errorSpy.mock.calls[0])).not.toContain('sk-super-secret')
+    expect(JSON.stringify(errorSpy.mock.calls[0])).not.toContain(
+      'sk-super-secret',
+    )
     errorSpy.mockRestore()
   })
 })
