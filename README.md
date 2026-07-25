@@ -1,4 +1,27 @@
-# PurpleInk Stage A
+# PurpleInk
+
+## AdventureX 参赛说明（请先读）
+
+本仓库是 **AdventureX** 参赛项目 **PurpleInk**。
+
+比赛期间队员按两个方向同步推进，再合并到本仓库交付：
+
+| 方向 | 负责 | 说明 |
+| --- | --- | --- |
+| 工作流 / 节点画布 | 羽升 | 比赛开始后新建对照仓 [AIMFllyYS/code-video-canvas](https://github.com/AIMFllyYS/code-video-canvas)；评委如需对照独立演进过程可查看该仓 |
+| 前端设计 | 燕耳 Firenze | 产品界面与视觉设计 |
+| 后端 | DeepSuck | 服务端、采集与出片链路 |
+| 产品运营 | Annie.Y | 产品与运营 |
+
+**两板块合并后的交付分支是 `yusheng/two-part-merge`。**  
+请评委与协作者检出该分支查看合并结果。
+
+> **禁止直接合并到 `main` / `master`。**  
+> 云端协作与评审只通过 `yusheng/two-part-merge`（或基于它的 PR）进行，不得把本合并线强推/直合进默认主分支。
+
+---
+
+## Stage A 概览
 
 PurpleInk 是一个本地优先的产品发布视频工作区。当前 Stage A 把营销出片链路、CodeVideoCanvas 过渡应用、组件 Playbook 和新 Product/Release 路由骨架合并在一个 Next.js 仓库中。
 
