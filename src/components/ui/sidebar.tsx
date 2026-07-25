@@ -38,9 +38,9 @@ export function PurpleInkSidebar({
   return (
     <aside
       className={cn(
-        'flex h-full shrink-0 flex-col gap-3.5 border-r border-ds-border p-3 transition-[width] duration-200',
+        'flex h-full shrink-0 flex-col border-r border-ds-border transition-[width] duration-200',
         'bg-[linear-gradient(180deg,var(--ds-gradient-start),var(--ds-gradient-mid)_52%,var(--ds-gradient-end))]',
-        collapsed ? 'w-[76px]' : 'w-[248px]',
+        collapsed ? 'w-[60px] gap-2.5 p-2' : 'w-[248px] gap-3.5 p-3',
         className,
       )}
     >
@@ -53,7 +53,7 @@ export function PurpleInkSidebar({
         {collapsed ? (
           <SidebarToggle
             collapsed
-            className="size-10"
+            className="size-9"
             onClick={() => onCollapsedChange(false)}
           />
         ) : (

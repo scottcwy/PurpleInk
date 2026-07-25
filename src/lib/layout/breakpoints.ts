@@ -9,7 +9,7 @@ export const BP_SIDEBAR_HIDDEN = 900
 export const BP_SECONDARY_PANEL_COLLAPSE = 1180
 
 export const SIDEBAR_DEFAULT_WIDTH = 248
-export const SIDEBAR_RAIL_WIDTH = 76
+export const SIDEBAR_RAIL_WIDTH = 60
 export const SIDEBAR_MIN_WIDTH = 200
 export const SIDEBAR_MAX_WIDTH = 360
 

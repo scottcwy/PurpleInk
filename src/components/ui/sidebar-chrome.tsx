@@ -75,36 +75,35 @@ export function SidebarAccount({
   compact?: boolean
   onSettings?: () => void
 }) {
+  if (compact) {
+    return (
+      <div className="flex items-center justify-center border-t border-ds-border pt-2.5">
+        <DefaultAvatar />
+      </div>
+    )
+  }
+
   return (
-    <div
-      className={cn(
-        'flex h-14 items-center justify-between gap-2 border-t border-ds-border pt-2.5',
-        compact && 'justify-center',
-      )}
-    >
+    <div className="flex h-14 items-center justify-between gap-2 border-t border-ds-border pt-2.5">
       <div className="flex min-w-0 flex-1 items-center gap-2.5">
         <DefaultAvatar />
-        {!compact ? (
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-xs font-semibold text-ds-text">
-              本地用户
-            </span>
-            <span className="block truncate text-[10px] text-ds-text-muted">
-              PurpleInk Free
-            </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-xs font-semibold text-ds-text">
+            本地用户
           </span>
-        ) : null}
+          <span className="block truncate text-[10px] text-ds-text-muted">
+            PurpleInk Free
+          </span>
+        </span>
       </div>
-      {!compact ? (
-        <button
-          type="button"
-          className="flex size-[34px] shrink-0 items-center justify-center rounded text-ds-text transition-colors hover:bg-ds-surface-muted"
-          aria-label="打开账户菜单"
-          onClick={onSettings}
-        >
-          <Settings aria-hidden className="size-[18px]" />
-        </button>
-      ) : null}
+      <button
+        type="button"
+        className="flex size-[34px] shrink-0 items-center justify-center rounded text-ds-text transition-colors hover:bg-ds-surface-muted"
+        aria-label="打开账户菜单"
+        onClick={onSettings}
+      >
+        <Settings aria-hidden className="size-[18px]" />
+      </button>
     </div>
   )
 }
