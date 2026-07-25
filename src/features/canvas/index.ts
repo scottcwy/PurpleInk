@@ -30,6 +30,7 @@ export {
   type CanvasGraphEdge,
   type CanvasGraphNode,
   type DirectorNodeError,
+  type RenderNodeError,
   type NodeStreamContext,
   type PositionedCanvasNode,
 } from './queries'

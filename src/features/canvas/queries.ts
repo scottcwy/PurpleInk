@@ -24,6 +24,12 @@ export interface DirectorNodeError {
   message: string
 }
 
+/** 可展示的渲染阶段失败信息（源自 canvas_nodes.data.renderError）；与 `directorError`
+ *  互斥存在——render handler 与 fabricate 各自成功时会清掉对方残留的失败标记。 */
+export interface RenderNodeError {
+  message: string
+}
+
 export interface CanvasGraphNode {
   id: string
   type: CanvasNodeType
@@ -35,6 +41,7 @@ export interface CanvasGraphNode {
   laneRole: string | null
   artifacts: CanvasNodeArtifact[]
   directorError?: DirectorNodeError
+  renderError?: RenderNodeError
 }
 
 /** 挂了渲染坐标的画布节点；坐标只来自 `computeLayout`，不是持久化字段。 */
@@ -97,26 +104,6 @@ export async function getProjectAutopilot(projectId: string): Promise<boolean> {
 }
 /** 读取单个项目的画布投影；不会跨项目返回节点或边。 */
 export async function getCanvasGraph(projectId: string): Promise<CanvasGraph> {
-  // TEMP-ISSUE-012-MEASURE：临时插桩，测量结束后删除，不提交。
-  const measureStore = globalThis as unknown as {
-    __cvcGraphMeasure?: { count: number; durationsMs: number[] }
-  }
-  const measure = (measureStore.__cvcGraphMeasure ??= { count: 0, durationsMs: [] })
-  measure.count += 1
-  const measureStart = performance.now()
-  const measureSeq = measure.count
-  try {
-    return await getCanvasGraphInner(projectId)
-  } finally {
-    const elapsed = performance.now() - measureStart
-    measure.durationsMs.push(elapsed)
-    console.log(
-      `[ISSUE-012-MEASURE] getCanvasGraph #${measureSeq} project=${projectId} t=${Date.now()} ms=${elapsed.toFixed(1)}`
-    )
-  }
-}
-
-async function getCanvasGraphInner(projectId: string): Promise<CanvasGraph> {
   const database = await getDb()
   const nodeRows = await database
     .select({
@@ -148,6 +135,7 @@ async function getCanvasGraphInner(projectId: string): Promise<CanvasGraph> {
         laneRole: typeof data.laneRole === 'string' ? data.laneRole : null,
         artifacts: await getNodeArtifacts(projectId, node.id),
         directorError: parseDirectorError(data),
+        renderError: parseRenderError(data),
       }
     })
   )
@@ -210,6 +198,17 @@ export function parseDirectorError(
     return undefined
   }
   return { stage: record.stage, message: record.message }
+}
+
+/** 从节点 data 收窄出可展示的渲染失败信息（无 / 形状不符时返回 undefined）。 */
+export function parseRenderError(
+  data: Record<string, unknown>
+): RenderNodeError | undefined {
+  const raw = data.renderError
+  if (!raw || typeof raw !== 'object') return undefined
+  const record = raw as Record<string, unknown>
+  if (typeof record.message !== 'string') return undefined
+  return { message: record.message }
 }
 
 export interface NodeStreamContext {

@@ -274,6 +274,7 @@ function InspectorBody({
         status={node.status}
         stage={node.stage}
         directorError={node.directorError}
+        renderError={node.renderError}
         onRetry={onExecute}
         retrying={submitting}
       />

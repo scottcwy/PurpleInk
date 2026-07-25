@@ -156,8 +156,12 @@ export class DirectorRuntimeRepository {
     error: unknown
   ): Promise<void> {
     const message = error instanceof Error ? error.message : String(error)
+    // 清掉可能残留的 renderError：本次失败发生在 director 阶段（含 render
+    // handler 内的 fabricate 子步骤），任何更早一次渲染失败已经过时，
+    // 不应与本次失败同时展示在 Inspector 里。
     await this.updateNodePayload(nodeId, {
       directorError: { stage, message },
+      renderError: undefined,
     })
   }
 
