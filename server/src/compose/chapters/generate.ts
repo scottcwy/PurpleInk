@@ -228,17 +228,22 @@ async function buildScreenshotPreviews(
 ): Promise<Array<{ path: string; base64Preview: string; caption: string }>> {
   const results: Array<{ path: string; base64Preview: string; caption: string }> = []
 
-  // Collect screenshot paths from scenes
-  const shotPaths: Array<{ src: string; caption: string }> = []
+  // 从磁盘读取所有 asset 文件（而非仅 storyboard 选中的 shots），确保 HTML Agent 能看到全部截图
+  const assetFiles = await listAssetFiles(captureDir)
+  const screenshotFiles = assetFiles.filter((f) => !f.includes('cutouts'))
+
+  // 同时收集 storyboard 中的 caption 信息
+  const captionMap = new Map<string, string>()
   for (const scene of model.scenes) {
     for (const shot of scene.shots || []) {
-      if (shot.src) shotPaths.push({ src: shot.src, caption: shot.caption })
+      if (shot.src) captionMap.set(shot.src.replace(/^assets\//, ''), shot.caption)
     }
   }
 
-  // Limit to first 5 screenshots
-  for (const { src, caption } of shotPaths.slice(0, 8)) {
+  for (const filename of screenshotFiles.slice(0, 8)) {
+    const src = `assets/${filename}`
     const fullPath = join(captureDir, src)
+    const caption = captionMap.get(filename) || ''
     try {
       const buf = await sharp(fullPath)
         .resize(800, undefined, { fit: "inside", withoutEnlargement: true })

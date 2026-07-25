@@ -4,6 +4,7 @@
 import { readFile, readdir } from "node:fs/promises"
 import { join } from "node:path"
 import sharp from "sharp"
+import { logger } from "../lib/logger"
 import type { PageTokens } from "../adapter/types"
 
 /**
@@ -550,6 +551,7 @@ async function filterDenseAssets(captureDir: string, rels: string[]): Promise<st
     })
   )
   const dense = scored.filter((s) => s.d >= DENSITY_MIN)
+  logger.info("model:density_filter", { total: scored.length, dense: dense.length, scores: scored.map(s => ({ rel: s.rel.split('/').pop(), d: Math.round(s.d * 10) / 10 })) })
   // 全都被判空白时不砸手（保留原集），避免空产物；否则只留密集帧
   const use = dense.length ? dense : scored
   return use.sort((a, b) => b.d - a.d).map((s) => s.rel)
@@ -782,6 +784,7 @@ export async function buildVideoModel(captureDir: string, options: BuildModelOpt
   const descs = parseAssetDescriptions(await readTextSafe(join(captureDir, "extracted", "asset-descriptions.md")))
   // ④ 先按内容密度筛选/排序：丢弃近空白截图，密集的真·产品 UI 优先
   const assetPaths = await filterDenseAssets(captureDir, await listAssets(join(captureDir, "assets")))
+  logger.info("model:asset_paths", { total: assetPaths.length, paths: assetPaths.slice(0, 8) })
 
   const name = options.name || meta.name || tokens?.title || meta.id || "Untitled"
   const palette = derivePalette(tokens)

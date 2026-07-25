@@ -136,6 +136,19 @@ export class PlaywrightDriver implements BrowserDriver {
         const buf2 = await page.screenshot({ type: "png", fullPage: false, timeout: 12_000 })
         return Buffer.from(buf2)
       }
+      // 全页截图压缩：限制宽度 1920px，PNG 压缩，大幅减小文件体积
+      if (options?.fullPage) {
+        try {
+          const compressed = await sharp(buf)
+            .resize(1920, undefined, { fit: "inside", withoutEnlargement: true })
+            .png({ compressionLevel: 9 })
+            .toBuffer()
+          console.log(`[PlaywrightDriver] fullpage compressed: ${buf.length} -> ${compressed.length} bytes`)
+          return compressed
+        } catch {
+          // 压缩失败则返回原始 PNG
+        }
+      }
       return Buffer.from(buf)
     } catch (err) {
       // 字体/资源迟迟不 ready 导致 Playwright 截图挂起时，退回 CDP 直接抓当前帧（不等字体）。
