@@ -43,6 +43,53 @@ describe('queue 单例与 initQueue 的 globalThis 锚定', () => {
   })
 })
 
+describe('initQueue 失败可重试', () => {
+  beforeEach(() => {
+    clearAnchors()
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    clearAnchors()
+    vi.resetModules()
+    vi.unstubAllEnvs()
+    vi.doUnmock('./runtime-config')
+    vi.doUnmock('./index')
+    vi.doUnmock('@/features/director/queue-handler')
+    vi.doUnmock('@/features/render/queue-handler')
+  })
+
+  it('首次启动失败不缓存 rejected promise，第二次调用可重试成功', async () => {
+    const loadLaneQuotasForStart = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('DB 未就绪'))
+      .mockResolvedValueOnce({})
+    vi.doMock('./runtime-config', () => ({ loadLaneQuotasForStart }))
+    vi.doMock('./index', () => ({
+      queue: { register: vi.fn(), start: vi.fn() },
+    }))
+    vi.doMock('@/features/director/queue-handler', () => ({
+      registerDirectorStageHandler: vi.fn(),
+    }))
+    vi.doMock('@/features/render/queue-handler', () => ({
+      registerRenderShotHandler: vi.fn(),
+    }))
+    // 绕过测试环境短路，走真实启动路径（instrumentation 首跑失败 -> API 路由兜底重试的场景）。
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('VITEST', '')
+
+    const { initQueue } = await import('./init')
+
+    await expect(initQueue()).rejects.toThrow('DB 未就绪')
+    expect(store.__cvcQueueInitialized).toBeUndefined()
+    expect(store.__cvcQueueInitializing).toBeNull()
+
+    await expect(initQueue()).resolves.toBeUndefined()
+    expect(store.__cvcQueueInitialized).toBe(true)
+    expect(loadLaneQuotasForStart).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('resolveLaneQuotas', () => {
   beforeEach(() => {
     clearAnchors()
