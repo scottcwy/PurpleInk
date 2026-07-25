@@ -32,4 +32,43 @@ describe('Products settings workspace', () => {
     expect(modelSource).toContain("@/components/ui/settings-panel")
     expect(modelSource).toContain('defaultOpen={false}')
   })
+
+  it('does not keep ISSUE-011 demo placeholders or read-only render concurrency in settings', () => {
+    const formSource = readFileSync(
+      'src/app/products/(app)/settings/settings-form.tsx',
+      'utf8',
+    )
+    const runtimeSource = readFileSync(
+      'src/app/products/(app)/settings/runtime-concurrency-panel.tsx',
+      'utf8',
+    )
+    // ISSUE-011 §7.2 grep contract: zero hits across settings surface.
+    expect(formSource).not.toContain('尚未实现')
+    expect(formSource).not.toContain('Demo 占位')
+    expect(formSource).not.toContain('暂不可配置')
+    expect(runtimeSource).not.toContain('尚未实现')
+    expect(runtimeSource).not.toContain('Demo 占位')
+    expect(runtimeSource).not.toContain('暂不可配置')
+    // ISSUE-011 §3.1: render concurrency must not collapse to one read-only number.
+    expect(formSource).not.toContain('暂不可配置')
+  })
+
+  it('exposes runtime concurrency panel and account-level scope marker (ISSUE-011)', () => {
+    const formSource = readFileSync(
+      'src/app/products/(app)/settings/settings-form.tsx',
+      'utf8',
+    )
+    const runtimeSource = readFileSync(
+      'src/app/products/(app)/settings/runtime-concurrency-panel.tsx',
+      'utf8',
+    )
+    expect(formSource).toContain('RuntimeConcurrencyPanel')
+    // ISSUE-011 §3.1: lane quotas are account-level, must be labeled.
+    expect(runtimeSource).toContain('账号级')
+    // ISSUE-011 §3.1: restart-required hint is mandatory, no fake "applied" wording.
+    expect(runtimeSource).toContain('重启')
+    // ISSUE-011 §3.1: two independent lanes, not one collapsed number.
+    expect(runtimeSource).toContain('Director 阶段并发')
+    expect(runtimeSource).toContain('渲染并发')
+  })
 })

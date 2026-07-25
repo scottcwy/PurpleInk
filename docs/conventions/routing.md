@@ -155,11 +155,13 @@
 | `/api/director/stage` | POST | body `{projectId,nodeId,stage}` | `@/features/director/queue-handler` | `wired` |
 | `/api/director/stream/[nodeId]` | GET (SSE) | `nodeId` path + `projectId` query | `@/lib/stream/stream-bus` | `wired` |
 | `/api/share/[shareId]` | GET | `shareId` path | `@/features/share`（待建） | `planned` |
-| `/api/settings` | GET, POST | — | `@/features/ai/*` | `wired` |
+| `/api/settings` | GET, POST | — | `@/features/ai/*`、`@/lib/queue/runtime-config` | `wired` |
 
 约定：
 
 1. 写操作一律 POST/PATCH/DELETE + 严格 JSON schema 校验；校验失败返回 400 且**不落任何写入**。
+   `/api/settings` POST 承载字段范围：StepFun/Gemini 凭据与模型、Director 节点路由、`laneQuotas.{directorStageConcurrency, renderShotConcurrency}`（ISSUE-011）。
+   `laneQuotas` 子字段做两层校验：schema 静态 max（directorStage≤32、renderShot≤128）+ route 运行时 `os.cpus().length` 上限；任一失败回 400 且不落任何 secret / route / 配额写入。
 2. 状态码语义固定：400 参数非法、404 资源不存在或不属于当前作用域、409 状态冲突（队列已存在、前置未就绪）、422 外部凭据校验失败。
 3. 凭据类 POST 必须先验证后保存；验证失败返回 422 且不覆盖已有值。
 4. 除 `/api/ping` 外全部 `export const dynamic = 'force-dynamic'`。

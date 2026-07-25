@@ -1,9 +1,9 @@
 # ISSUE-011 · 设置页占位项与只读并发数
 
 - 优先级：**P2**
-- 状态：`open`
-- 范围：`src/app/products/(app)/settings/**`
-- 依赖：**ISSUE-004**（并发要先变成真实可配项，UI 才有东西可接）
+- 状态：`done`（5 commits · 8baee2e / b9696a0 / 0c89855 / 3a502a1 + 本提交）
+- 范围：`src/app/products/(app)/settings/**`、`src/lib/queue/**`、`src/app/api/settings/**`
+- 依赖：**ISSUE-004**（已 done · commit 97b741e）
 - 性质：先决策「删掉还是接线」，再动手
 
 ## 1. 症状
@@ -121,3 +121,26 @@ render-shot    : max(1, floor(cpus / 2))
    留档到 `docs/issues/evidence/issue-011/`。
 6. `/products/settings`（带与不带 `projectId` 两种）真实 Chromium 截图，
    分区与生效范围标注清晰，控制台无报错。
+
+## 8. 决策快照（落地版）
+
+| 决策点 | 选择 | 落地的 commit |
+| --- | --- | --- |
+| 并发配额存储 | 新增 `workspace_settings(workspace_id PK, key PK, value jsonb)` 通用 workspace 偏好表 | 8baee2e（migration 0002） |
+| 保存后生效方式 | 重启 dev 进程生效；`InProcessQueue.lanes` 只在 `initQueue()` 启动时读取；UI 显式写「保存后需重启 dev 进程生效」 | b9696a0（runtime-config.ts）、3a502a1（runtime-concurrency-panel.tsx） |
+| 合理上限 | `directorStage ∈ [1, 32]`、`renderShot ∈ [1, 128]` 且 route 二次校验 `renderShot <= os.cpus().length` | 0c89855（schemas.ts + route.ts） |
+| SettingsResponse 真值合并 | 扩 `model-service-contract.ts` 的 `SettingsResponse`，并入 `laneQuotas`；删除 `settings-form.tsx` 私有 `SettingsResponse` 与自带 `useEffect`，单 fetch 单 controller | 3a502a1（settings-form.tsx + model-service-settings.tsx） |
+
+## 9. 已校验项
+
+- `pnpm db:migrate` 连续执行两次通过（幂等）。
+- `pnpm test:pg -- runtime-config` → 7/7 pass（默认回落、env 覆盖、DB > env、`saveLaneQuotas` 幂等 upsert、`saveLaneQuotas` 拒绝 0/负/非整数、`loadLaneQuotasForStart` DB/env 合并）。
+- `pnpm test -- src/app/api/settings/route.test.ts` → 17/17 pass（含合法值 200、0/负 400、`1.5` 非整数 400、`directorStage=33` 超静态 max 400、`renderShot=5` 超运行时 cpu=4 400、StepFun key 校验失败 422 时 `saveLaneQuotas` 未调用、key 与 laneQuotas 同请求成功 200）。
+- `pnpm test -- tests/products-settings-layout.test.ts` → 4/4 pass（含 ISSUE-011 §3.1 的双 lane、账号级标注、重启提示三项断言）。
+- `pnpm verify:v3` → `violations: []`，无新增超限文件（`model-service-panels.tsx` 保持 324 行未触及，禁区第 4 条守住）。
+- 触摸文件无 U+FFFD replacement character；新文件均 ≤ 216 行。
+- `workspace_settings` 表在 Postgres `information_schema` 中确认存在，列结构与 migration SQL 一致。
+
+### 仍待补的端到端证据（依赖 ISSUE-001 + ISSUE-002 + ISSUE-003）
+
+§7 第 5 项的「起 >= 6 个 unit 项目跑通真链路 + SQL 查询同时 running 不超过 4」需要 P0 全部落地后才能取证；本 issue 已完成代码与契约的全部接线，证据窗口归 ISSUE-014 端到端批次补齐。
