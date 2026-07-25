@@ -46,13 +46,13 @@ export function ExportNode({
     >
       <div className="flex items-center gap-2">
         <Icon className={cn('h-4 w-4 text-stage-finalize')} />
-        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold font-sc text-label">
+        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ds-text">
           {title}
         </span>
       </div>
       <div className="flex items-center gap-2">
-        <Film className="h-4 w-4 text-label-secondary" />
-        <span className="min-w-0 flex-1 truncate text-[13px] font-sc text-label">
+        <Film className="h-4 w-4 text-ds-text-muted" />
+        <span className="min-w-0 flex-1 truncate text-[13px] text-ds-text">
           {fileLabel}
         </span>
         <StatusPill variant={STATUS_MAP[status]} />

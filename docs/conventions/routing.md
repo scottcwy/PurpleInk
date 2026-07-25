@@ -190,7 +190,7 @@
 | 阶段日志流 | `/api/director/stream/{nodeId}?projectId={projectId}` | `use-stage-stream.ts` | `StreamingLogCard` |
 | worker 视频 | `${API_BASE}/jobs/{jobId}/video` | `src/lib/api.ts` | 下载/播放 |
 
-三条 URL 的所有 path 与 query 片段都必须 `encodeURIComponent`。已知违规：`src/app/products/(app)/canvas/[projectId]/canvas-inspector.tsx` 拼 artifact href 时未编码 `projectId`，需修。
+三条 URL 的所有 path 与 query 片段都必须 `encodeURIComponent`。ISSUE-009 已修复 `canvas-inspector.tsx` 与 `src/lib/api.ts` 的编码缺失。
 
 没有真实 Artifact 时不允许渲染播放器、下载按钮或可点击的产物 chip。
 
@@ -352,13 +352,13 @@ Project（可变，L3 内部）
 
 删除前必须先验证等价功能已在新 URL 可用。
 
-| 资产 | 处置 | 理由 |
-| --- | --- | --- |
-| `src/app/products/(app)/canvas/[projectId]/canvas-inspector.tsx` | 修 artifact href 的 `projectId` 编码 | §4.3 |
-| `src/app/robots.ts` | 增加 `/share/` 到 disallow | §8.5 |
-| `src/app/sitemap.ts` | 增加 `/artifacts` 与 featured 案例 | §3 |
-| `src/components/ui/empty-state.tsx` | token 收敛：仍在用 `text-label-secondary` / `text-label-tertiary` 等历史 token | design-system-inventory §4 要求新 Canonical 组件只用 `ds-*` |
-| `font-sc` class | 全仓库未定义，`button.tsx`、`empty-state.tsx` 仍在挂 | 空类名，应删或补定义 |
+| 资产 | 处置 | 理由 | 状态 |
+| --- | --- | --- | --- |
+| `src/app/products/(app)/canvas/[projectId]/canvas-inspector.tsx` | 修 artifact href 的 `projectId` 编码 | §4.3 | ✅ 已完成（ISSUE-009） |
+| `src/app/robots.ts` | 增加 `/share/` 到 disallow | §8.5 | ✅ 已完成（ISSUE-009） |
+| `src/app/sitemap.ts` | 增加 `/artifacts` 与 featured 案例 | §3 | ⏳ 结构就绪，待 `ShareSnapshot` 落盘后接入（见 `sitemap.ts` 注释） |
+| `src/components/ui/empty-state.tsx` | token 收敛：仍在用 `text-label-secondary` / `text-label-tertiary` 等历史 token | design-system-inventory §4 要求新 Canonical 组件只用 `ds-*` | ✅ 已完成（ISSUE-009） |
+| `font-sc` class | 全仓库未定义，`button.tsx`、`empty-state.tsx` 仍在挂 | 空类名，应删或补定义 | ✅ 已删除（ISSUE-009） |
 
 错误与未找到边界（`not-found.tsx` ×2、`error.tsx`、`global-error.tsx`、`route-status.tsx`）已落盘，见 §3.1。
 

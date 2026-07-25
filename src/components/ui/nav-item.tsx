@@ -42,7 +42,7 @@ export function NavItem({
       {icon}
       <span
         className={cn(
-          'text-[13px] font-sc',
+          'text-[13px]',
           active
             ? 'font-semibold text-ds-text'
             : 'font-normal text-ds-text-muted',

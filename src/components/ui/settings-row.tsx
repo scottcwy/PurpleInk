@@ -21,7 +21,7 @@ export function SettingsRow({ label, value, children, className }: SettingsRowPr
         className,
       )}
     >
-      <span className="shrink-0 text-sm font-sc text-ds-text">{label}</span>
+      <span className="shrink-0 text-sm text-ds-text">{label}</span>
       <div className="flex min-w-0 items-center justify-end gap-2">
         {value && (
           <span className="truncate text-xs font-mono text-ds-text-muted">

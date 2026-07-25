@@ -17,7 +17,7 @@ export function Tooltip({ children, content, className }: TooltipProps) {
   return (
     <div className={cn('group relative inline-flex', className)}>
       {children}
-      <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 whitespace-nowrap rounded-sm bg-tooltip-bg px-2 py-1 text-xs font-sc text-on-accent opacity-0 transition-opacity group-hover:opacity-100">
+      <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 whitespace-nowrap rounded-sm bg-tooltip-bg px-2 py-1 text-xs text-on-accent opacity-0 transition-opacity group-hover:opacity-100">
         {content}
       </div>
     </div>

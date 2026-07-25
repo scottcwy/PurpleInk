@@ -44,8 +44,8 @@ export function Toast({ variant = 'info', title, body, onClose, className }: Toa
     >
       <Icon className={cn('h-5 w-5 shrink-0', ICON_COLORS[variant])} />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-[13px] font-semibold font-sc">{title}</span>
-        {body && <span className="text-xs font-sc text-ds-text-muted">{body}</span>}
+        <span className="text-[13px] font-semibold">{title}</span>
+        {body && <span className="text-xs text-ds-text-muted">{body}</span>}
       </div>
       {onClose && (
         <button

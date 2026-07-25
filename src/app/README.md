@@ -142,12 +142,12 @@ L3 的壳只有一处实现：`src/features/navigation/app-shell.tsx`。`(auth)`
 ## 8. 当前已知问题
 
 1. **无认证。** 没有 `proxy.ts`，全部页面与 API 都不读 session，workspace 固定 `LOCAL_WORKSPACE_ID`。`/products/*` 与 `/api/*` 目前未授权可访问，只能跑在本地或受信网络内。
-2. `robots.ts` 的 disallow 里有不存在的 `/private/`，缺未来要屏蔽的 `/share/`。
-3. `sitemap.ts` 只有 `/` 一条。
-4. `canvas-inspector.tsx` 拼 artifact href 时 `projectId` 未 `encodeURIComponent`。
+2. ~~`robots.ts` 缺 `/share/` disallow~~ 已修复（ISSUE-009）。
+3. `sitemap.ts` 只有 `/` 一条；`/artifacts` 与 featured 案例待 `ShareSnapshot` 落盘后接入（见 `sitemap.ts` 注释）。
+4. ~~`canvas-inspector.tsx` 拼 artifact href 时 `projectId` 未 `encodeURIComponent`~~ 已修复（ISSUE-009）。
 5. `/playbook/foundations` 有页面但不在 `PlaybookCategory` 里。
 6. `shot-detail.tsx`（525 行）与 `export-workspace.tsx`（389 行）超出行数门禁，`pnpm verify:v3` 因此为红。
-7. `font-sc` class 全仓库未定义，`button.tsx`、`empty-state.tsx` 仍在挂。
+7. ~~`font-sc` class 全仓库未定义~~ 已删除（ISSUE-009）。
 
 ## 9. 相关文档
 

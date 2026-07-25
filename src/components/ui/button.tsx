@@ -32,7 +32,7 @@ const SIZES: Record<ButtonSize, string> = {
 }
 
 const BASE =
-  'inline-flex items-center justify-center font-medium font-sc transition-[background-color,filter,opacity] disabled:pointer-events-none disabled:opacity-50'
+  'inline-flex items-center justify-center font-medium transition-[background-color,filter,opacity] disabled:pointer-events-none disabled:opacity-50'
 
 /**
  * 按钮外观配方（SSOT）。

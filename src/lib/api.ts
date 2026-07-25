@@ -73,7 +73,7 @@ export async function getJob(id: string): Promise<JobView> {
 
 /** 视频直链（可用于 <video src> 或下载） */
 export function videoUrl(id: string): string {
-  return `${API_BASE}/jobs/${id}/video`;
+  return `${API_BASE}/jobs/${encodeURIComponent(id)}/video`;
 }
 
 /**

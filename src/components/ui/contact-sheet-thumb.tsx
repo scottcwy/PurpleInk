@@ -32,7 +32,7 @@ export function ContactSheetThumb({
         ))}
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-xs font-sc text-ds-text">{label}</span>
+        <span className="text-xs text-ds-text">{label}</span>
         {checked && <CircleCheck className="size-3.5 text-ds-green" />}
       </div>
     </div>

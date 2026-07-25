@@ -102,7 +102,20 @@ routing.md §11：
 4. 不动 `server/**`。
 5. 改 `routing.md` 时遵循「先改真值文件再改代码」的顺序。
 
-## 5. 验收标准
+## 5. sitemap 方案决策
+
+**选择「结构就绪 + 注释」方案**。
+
+理由：
+1. `sitemap.ts` 当前已 `wired`，保持现状不倒退。
+2. `/artifacts` 与 `ShareSnapshot` 都是 `planned` 状态，数据源不存在。
+3. AGENTS.md §6 禁止假数据，不得编造 featured 案例或假 slug。
+4. 在 `sitemap.ts` 加注释指向 routing.md §3 与 §8，说明待 `ShareSnapshot` 落盘后接入，是诚实标注而非假数据。
+5. 不标 `blocked`——sitemap 本身是 `wired` 的，只是条目不全，这是增量待补而非阻断状态。
+
+已在 `sitemap.ts` 加注释，并在 `routing.md` §11 表格中标注为「⏳ 结构就绪，待 `ShareSnapshot` 落盘后接入」。
+
+## 6. 验收标准
 
 1. `pnpm test` 全绿；新增的编码测试覆盖含 `/` 的 id 并断言 `%2F`。
 2. `pnpm typecheck` exit 0；`pnpm build` 成功；`pnpm verify:v3` 违规数不增加。

@@ -55,9 +55,9 @@ export function Dialog({
           className,
         )}
       >
-        {title && <h2 className="text-[22px] font-bold font-sc">{title}</h2>}
+        {title && <h2 className="text-[22px] font-bold">{title}</h2>}
         {description && (
-          <p className="text-sm leading-[1.45] font-sc text-ds-text-muted">{description}</p>
+          <p className="text-sm leading-[1.45] text-ds-text-muted">{description}</p>
         )}
         {children}
         {actions && <div className="flex justify-end gap-2.5">{actions}</div>}

@@ -54,14 +54,14 @@ export function QueueStatusBar({
             active > 0 && 'animate-spin'
           )}
         />
-        <span className="text-xs font-sc text-ds-text-muted">
+        <span className="text-xs text-ds-text-muted">
           {label ?? `Pipeline · 已提交 ${completed} / ${total} 个检查点`}
         </span>
         <div className="h-1 w-[120px] rounded-full bg-ds-surface-muted">
           <div className="h-1 rounded-full bg-ds-blue" style={{ width: `${percent}%` }} />
         </div>
       </div>
-      <span className="text-xs font-sc text-ds-text-muted">
+      <span className="text-xs text-ds-text-muted">
         {describeQueueActivity({ completed, active, failed, total })}
       </span>
     </div>

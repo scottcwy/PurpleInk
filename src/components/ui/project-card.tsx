@@ -29,8 +29,8 @@ export function ProjectCard({ title, meta, status = 'rendered', className }: Pro
         </div>
       </div>
       <div className="flex flex-col gap-2 p-4">
-        <span className="text-[15px] font-semibold font-sc text-ds-text">{title}</span>
-        <span className="text-xs font-sc text-ds-text-muted">{meta}</span>
+        <span className="text-[15px] font-semibold text-ds-text">{title}</span>
+        <span className="text-xs text-ds-text-muted">{meta}</span>
       </div>
     </div>
   )

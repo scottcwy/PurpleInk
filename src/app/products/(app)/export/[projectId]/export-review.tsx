@@ -152,7 +152,7 @@ function ExportSettings({
     <SettingsGroup>
       <div className="flex flex-col gap-2 px-4 py-3">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-sc text-ds-text">分辨率</span>
+          <span className="text-sm text-ds-text">分辨率</span>
           <span className="text-xs font-mono text-ds-text-muted">
             {EXPORT_RESOLUTION_PRESETS[currentPreset].label}
           </span>
@@ -175,7 +175,7 @@ function ExportSettings({
         </Button>
         {exporting ? (
           <div className="flex w-full flex-col gap-1.5" aria-live="polite">
-            <div className="flex items-center justify-between text-[13px] font-sc">
+            <div className="flex items-center justify-between text-[13px]">
               <span className="text-ds-text">导出队列</span>
               <span className="text-ds-text-muted">处理中</span>
             </div>

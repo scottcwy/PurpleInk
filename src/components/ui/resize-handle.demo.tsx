@@ -11,7 +11,7 @@ export function ResizeHandleDemo() {
   return (
     <div className="flex h-48 overflow-hidden rounded-md border border-separator">
       <div
-        className="flex items-center justify-center bg-glass-sidebar text-[13px] text-label-secondary"
+        className="flex items-center justify-center bg-glass-sidebar text-[13px] text-ds-text-muted"
         style={{ width }}
       >
         {width}px
@@ -35,7 +35,7 @@ export function ResizeHandleDemo() {
         }}
         onKeyAdjust={(delta) => setWidth((current) => Math.min(360, Math.max(160, current + delta)))}
       />
-      <div className="flex min-w-0 flex-1 items-center justify-center bg-surface text-[13px] text-label-tertiary">
+      <div className="flex min-w-0 flex-1 items-center justify-center bg-surface text-[13px] text-ds-text-muted">
         主区
       </div>
     </div>

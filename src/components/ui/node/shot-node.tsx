@@ -57,7 +57,7 @@ export function ShotNode({
       >
         重渲此镜
       </Button>
-      <span className="text-xs font-sc text-label-tertiary">{cachedLabel}</span>
+      <span className="text-xs text-ds-text-muted">{cachedLabel}</span>
     </>
   ) : ops
   return (
@@ -69,22 +69,22 @@ export function ShotNode({
       )}
     >
       <div className="relative flex h-32 items-center justify-center rounded-t-md bg-fill">
-        <Play className="h-6 w-6 text-label-tertiary" />
+        <Play className="h-6 w-6 text-ds-text-muted" />
         <div className="absolute left-2 top-2">
           <StatusPill variant={STATUS_MAP[status]} />
         </div>
-        <div className="absolute bottom-2 right-2 rounded px-1.5 py-0.5 text-[11px] font-sc text-text-inverse bg-overlay">
+        <div className="absolute bottom-2 right-2 rounded px-1.5 py-0.5 text-[11px] text-text-inverse bg-overlay">
           {duration}
         </div>
       </div>
       <div className="flex flex-1 flex-col gap-1.5 p-3">
         <div className="flex items-center justify-between">
-          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold font-sc text-label">
+          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ds-text">
             {title}
           </span>
-          <Ellipsis className="h-4 w-4 text-label-tertiary" />
+          <Ellipsis className="h-4 w-4 text-ds-text-muted" />
         </div>
-        <span className="text-xs font-mono text-label-tertiary">{meta}</span>
+        <span className="text-xs font-mono text-ds-text-muted">{meta}</span>
         {actions && <div className="mt-auto flex items-center gap-2">{actions}</div>}
       </div>
       <div

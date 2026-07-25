@@ -4,7 +4,7 @@ import { Tooltip } from './tooltip'
 export function TooltipDemo() {
   return (
     <Tooltip content="重渲此镜">
-      <span className="cursor-help text-label-secondary">悬停查看提示</span>
+      <span className="cursor-help text-ds-text-muted">悬停查看提示</span>
     </Tooltip>
   )
 }

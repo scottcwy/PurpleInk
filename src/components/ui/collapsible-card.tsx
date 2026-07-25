@@ -68,7 +68,7 @@ export function CollapsibleCard({
         className="flex min-h-12 w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-ds-surface-muted"
       >
         {Icon && <Icon className="h-4 w-4 shrink-0 self-start text-ds-blue" />}
-        <span className="min-w-0 flex-1 text-sm font-semibold font-sc text-ds-text">
+        <span className="min-w-0 flex-1 text-sm font-semibold text-ds-text">
           {title}
         </span>
         {meta && <span className="shrink-0 font-mono text-[11px] text-ds-text-muted">{meta}</span>}

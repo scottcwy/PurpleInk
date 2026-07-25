@@ -22,8 +22,8 @@ export function TopBar({ title, meta, actions, className }: TopBarProps) {
       )}
     >
       <div className="flex items-center gap-2">
-        {title && <span className="text-[17px] font-semibold font-sc">{title}</span>}
-        {meta && <span className="text-xs font-sc text-ds-text-muted">{meta}</span>}
+        {title && <span className="text-[17px] font-semibold">{title}</span>}
+        {meta && <span className="text-xs text-ds-text-muted">{meta}</span>}
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
     </div>

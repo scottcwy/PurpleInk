@@ -42,7 +42,7 @@ export function StatusPill({ variant = 'pending', label, className }: StatusPill
       )}
     >
       <span className={cn('h-1.5 w-1.5 rounded-full bg-current', style.color)} />
-      <span className={cn('text-[11px] font-medium font-sc', style.color)}>
+      <span className={cn('text-[11px] font-medium', style.color)}>
         {label ?? style.defaultLabel}
       </span>
     </div>

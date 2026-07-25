@@ -18,7 +18,7 @@ export function SearchField({ className, ...props }: SearchFieldProps) {
     >
       <Search className="size-4 shrink-0" />
       <input
-        className="h-full min-w-0 flex-1 bg-transparent text-sm font-sc text-ds-text outline-none placeholder:text-ds-text-muted"
+        className="h-full min-w-0 flex-1 bg-transparent text-sm text-ds-text outline-none placeholder:text-ds-text-muted"
         {...props}
       />
     </div>

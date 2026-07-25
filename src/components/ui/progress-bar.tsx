@@ -15,7 +15,7 @@ export function ProgressBar({ value, label, className }: ProgressBarProps) {
   return (
     <div className={cn('flex w-80 max-w-full flex-col gap-2 text-ds-text', className)}>
       <div className="flex items-center justify-between">
-        {label && <span className="text-[13px] font-medium font-sc">{label}</span>}
+        {label && <span className="text-[13px] font-medium">{label}</span>}
         <span className="text-xs font-mono text-ds-text-muted">{percent}%</span>
       </div>
       <div className="h-1.5 w-full rounded-full bg-ds-surface-muted">

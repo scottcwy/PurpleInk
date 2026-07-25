@@ -21,10 +21,10 @@ export function EmptyState({ icon: Icon, title, description, action, className }
         className,
       )}
     >
-      <Icon className="h-12 w-12 text-label-tertiary" />
-      <h3 className="text-[17px] font-semibold font-sc text-label-secondary">{title}</h3>
+      <Icon className="h-12 w-12 text-ds-text-muted" />
+      <h3 className="text-[17px] font-semibold text-ds-text-muted">{title}</h3>
       {description && (
-        <p className="text-[13px] font-sc text-label-tertiary">{description}</p>
+        <p className="text-[13px] text-ds-text-muted">{description}</p>
       )}
       {action && <div>{action}</div>}
     </div>

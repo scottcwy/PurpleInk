@@ -260,7 +260,7 @@ function InspectorBody({
                 key={artifact.id}
                 icon={FileCode}
                 filename={ARTIFACT_FILENAME[artifact.kind] ?? artifact.filename}
-                href={`/api/artifacts/${artifact.id}?projectId=${projectId}`}
+                href={`/api/artifacts/${encodeURIComponent(artifact.id)}?projectId=${encodeURIComponent(projectId)}`}
               />
             ))}
           </div>

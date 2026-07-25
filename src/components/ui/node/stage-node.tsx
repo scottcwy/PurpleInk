@@ -40,7 +40,7 @@ export function StageNode({ nodeType, name, icon: Icon, status = 'idle', chips, 
       <div className="flex flex-1 flex-col gap-2 p-3">
         <div className="flex items-center gap-2">
           <Icon className={cn('h-4 w-4', color.split(' ')[0])} />
-          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold font-sc text-label">
+          <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ds-text">
             {name}
           </span>
           <span className={cn('h-2 w-2 rounded-full', STATUS_DOT[status])} />
