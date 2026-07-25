@@ -127,7 +127,7 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
 | [ISSUE-009](./ISSUE-009-routing-convergence.md) | routing.md §11 收敛清单未清（编码、robots、sitemap、token） | `done` | `canvas-inspector.tsx`、`robots.ts`、`sitemap.ts`、`empty-state.tsx`、`button.tsx`（commit `94af7d3`，证据 `evidence/issue-009/`） |
 | [ISSUE-010](./ISSUE-010-oversized-files.md) | 2 个超硬上限文件使 `verify:v3` 恒红 | `done` | `export-workspace.tsx`、`shot-detail.tsx` |
 | [ISSUE-011](./ISSUE-011-settings-placeholders.md) | 设置页占位项与只读并发数 | `done` | `settings-form.tsx`、`runtime-concurrency-panel.tsx`、`runtime-config.ts`、`route.ts` |
-| [ISSUE-012](./ISSUE-012-canvas-live-updates.md) | 画布靠 1.5s `router.refresh()` 轮询驱动状态 | `in-progress` | `canvas-view.tsx`、`src/lib/stream/**` |
+| [ISSUE-012](./ISSUE-012-canvas-live-updates.md) | 画布靠 1.5s `router.refresh()` 轮询驱动状态 | `done` | `status-bus.ts`、`stream/project/[projectId]/route.ts`、`use-project-status-stream.ts`、`canvas-view.tsx`（证据 `evidence/issue-012/`） |
 | [ISSUE-013](./ISSUE-013-ai-adapter-boundary.md) | `features/ai` 适配器与 pi-ai 会形成第二套 provider 客户端 | `in-progress` | `src/features/ai/**`、`src/features/render/vision-qa.ts` |
 
 ### 贯穿

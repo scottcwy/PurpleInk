@@ -1,7 +1,7 @@
 # ISSUE-012 · 画布靠 1.5s `router.refresh()` 轮询驱动状态
 
 - 优先级：**P2**（体验与成本，非阻断）
-- 状态：`in-progress`
+- 状态：`done`（修复链 commits：`a1cbe1d` routing 登记 → `6df8abf` status-bus+发布点 → `a239b57` SSE 端点 → `f1a763e` 客户端集成；前后取证见 `evidence/issue-012/`）
 - 范围：`canvas/[projectId]/canvas-view.tsx`、`src/lib/stream/**`、可能新增一条 SSE 端点
 - 依赖：建议在 ISSUE-001 + ISSUE-002 之后（先有真实运行的节点，才能验证推送）
 - 性质：需要先决策实现方式

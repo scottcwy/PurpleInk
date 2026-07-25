@@ -27,7 +27,6 @@ export async function GET(
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       let closed = false
-      let unsubscribe: (() => void) | undefined
 
       const send = (event: string, data: unknown): void => {
         if (closed) return
@@ -35,26 +34,9 @@ export async function GET(
           encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
         )
       }
-      const finish = (): void => {
-        if (closed) return
-        closed = true
-        clearInterval(keepalive)
-        unsubscribe?.()
-        request.signal.removeEventListener('abort', finish)
-        try {
-          controller.close()
-        } catch {
-          // 已关闭，忽略。
-        }
-      }
-      request.signal.addEventListener('abort', finish)
 
-      const keepalive = setInterval(() => {
-        if (!closed) controller.enqueue(encoder.encode(`: keepalive\n\n`))
-      }, KEEPALIVE_MS)
-      ;(keepalive as { unref?: () => void }).unref?.()
-
-      unsubscribe = statusBus.subscribe(projectId, (event) => {
+      // 订阅时同步回放 snapshot，帧由 controller 缓冲，早于 keepalive/abort 注册无害。
+      const unsubscribe = statusBus.subscribe(projectId, (event) => {
         if (event.type === 'snapshot') {
           send('snapshot', { seq: event.seq, statuses: event.statuses })
         } else if (event.type === 'node-status') {
@@ -67,8 +49,27 @@ export async function GET(
           send('topology', { seq: event.seq })
         }
       })
-      // 订阅回调同步触发了 finish（异常路径）时补退订，避免悬挂监听。
-      if (closed) unsubscribe()
+
+      const keepalive = setInterval(() => {
+        if (!closed) controller.enqueue(encoder.encode(`: keepalive\n\n`))
+      }, KEEPALIVE_MS)
+      ;(keepalive as { unref?: () => void }).unref?.()
+
+      const finish = (): void => {
+        if (closed) return
+        closed = true
+        clearInterval(keepalive)
+        unsubscribe()
+        request.signal.removeEventListener('abort', finish)
+        try {
+          controller.close()
+        } catch {
+          // 已关闭，忽略。
+        }
+      }
+      request.signal.addEventListener('abort', finish)
+      // 连接建立前已 abort（竞态）：立即收尾，避免悬挂监听。
+      if (request.signal.aborted) finish()
     },
   })
 
