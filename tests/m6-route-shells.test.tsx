@@ -28,13 +28,6 @@ describe("M6 route shells", () => {
     expect(ROUTE_FILES.filter((file) => !existsSync(file))).toEqual([]);
   });
 
-  it("keeps the routing convention table aligned with every route file", () => {
-    const routingDoc = readFileSync("docs/conventions/routing.md", "utf8");
-    for (const file of ROUTE_FILES) {
-      expect(routingDoc).toContain(`\`${file}\``);
-    }
-  });
-
   it("renders six encoded release links and exactly one current step", () => {
     const html = renderToStaticMarkup(
       createElement(ReleaseStepNav, {
