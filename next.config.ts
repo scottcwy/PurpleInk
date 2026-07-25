@@ -20,9 +20,16 @@ const nextConfig: NextConfig = {
   ],
   // Disable source maps in production to protect code
   productionBrowserSourceMaps: false,
-  // Remove console.log in production
+  // 生产构建移除 console.log，但**必须保留 error / warn**：
+  // 服务端刻意不把 provider 原始错误暴露给用户（AGENTS.md §6），分类后的诊断信息
+  // 只经 console.error 落到服务端日志。若一并移除，生产环境节点 failed 时容器日志
+  // 里将没有任何可归因信息（实测：布尔 true 时 `[director] 模型调用失败`、
+  // `[render] 下游自动推进失败` 等字符串在 285 个 server chunk 中零命中）。
   compiler: {
-    removeConsole: process.env.NODE_ENV === "production",
+    removeConsole:
+      process.env.NODE_ENV === "production"
+        ? { exclude: ["error", "warn"] }
+        : false,
   },
   images: {
     remotePatterns: [

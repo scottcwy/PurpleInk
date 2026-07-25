@@ -1,0 +1,64 @@
+# Docker 构建上下文排除清单。
+#
+# 两条硬要求：
+# 1. node_modules 绝不进上下文——ffmpeg-static / playwright 的二进制是按平台在
+#    postinstall 期下载的，宿主（Windows）的 node_modules 拷进 Linux 镜像必然不可用。
+#    镜像内必须自己跑 pnpm install。
+# 2. .env* 与 .data/ 绝不进上下文——前者含 secret，后者是媒体产物与本地构建目录，
+#    既会泄密也会让构建上下文膨胀到 GB 级。
+
+# 依赖与平台二进制
+node_modules
+**/node_modules
+.pnp
+.pnp.*
+.yarn
+
+# 构建产物（含 CVC_NEXT_DIST_DIR 使用的隔离目录，位于 .data 下）
+.next
+out
+output
+build
+.turbo
+*.tsbuildinfo
+next-env.d.ts
+
+# 运行期数据：artifacts 是媒体字节唯一副本，走持久卷而非镜像层
+.data
+.trigger
+.playwright-cli
+logs
+coverage
+
+# secret
+.env
+.env.*
+!.env.example
+!server/.env.example
+*.pem
+
+# 版本控制与本地工具
+.git
+.gitignore
+.github
+.vscode
+.claude
+.kiro
+
+# worker 的采集与视频输出
+server/out
+server/capture
+*.mp4
+
+# 文档与历史记录（镜像不需要）
+docs
+README.md
+AGENTS.md
+
+# 跨目录契约测试与本地 compose（镜像不需要）
+tests
+docker-compose.dev.yml
+
+# 注意：刻意**不**排除 src 内的 *.test.ts。
+# 它们体积可忽略，而 tsconfig 的 include 覆盖 src/**，在未实测 Docker 构建前
+# 排除源码内测试文件属于不可验证的风险改动。确认构建稳定后可再单独收紧。
