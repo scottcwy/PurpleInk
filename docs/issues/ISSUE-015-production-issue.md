@@ -1,0 +1,411 @@
+# ISSUE-015 · Docker 生产部署前置问题与分批修复清单
+
+- 优先级：**P0（阻断上线）**
+- 状态：`in-progress`（P-1 已完成，见 §9）
+- 范围：`next.config.ts`、`.dockerignore`、`Dockerfile`、生产 compose、
+  `src/lib/queue/**`、`src/features/render/{encode,concat}.ts`、
+  `src/app/api/settings/route.ts`、`scripts/verify/`、`docs/deployment/`
+- 依赖：ISSUE-014 第一轮已通过（链路本身可跑通）
+- 性质：部署面缺失 + 若干运行时假设在容器内不成立
+- 撰写日期：2026-07-26
+- 审查基线：`c68a72e`（ISSUE-014 第一轮取证入档后）
+
+## 0. 结论
+
+「文本 → 成片」链路本身已经端到端跑通（ISSUE-014 §9），但**部署面是空的**：
+仓库没有 `Dockerfile`、没有生产 compose，只有一个开发用 Postgres compose。
+除此之外还有两类问题：
+
+1. **两个真正的上线阻塞项**——零认证、成片无音轨。它们都不是部署配置能绕过的。
+2. **一批在开发机成立、在容器里不成立的运行时假设**——CPU 核数、Chromium 沙箱、
+   CJK 字体、生产构建的日志剥离、渲染缓存的字体无关性。
+
+本文件按「会不会挡住上线」排序记录证据，并在 §9 给出可逐项派发的分批修复清单。
+
+## 1. 现状基线（2026-07-26 实测）
+
+| 项 | 实测结果 |
+| --- | --- |
+| `Dockerfile` / 生产 compose | **不存在** |
+| `.dockerignore` | 原本不存在，已由 P-1 补上 |
+| `docker-compose.dev.yml` | 仅 1 个 `postgres:17.5-alpine`，口令 `cvc_dev_only`，端口只绑 `127.0.0.1:54328` |
+| `output: 'standalone'` | 未启用 |
+| `engines` 字段 | 无 |
+| `packageManager` | `pnpm@10.30.0` |
+| 认证守卫 | 全仓库零命中（详见 §2.1） |
+| `final-mp4` 音轨 | 无（详见 §2.2） |
+| 队列位置 | Next 进程内（`src/instrumentation.ts` → `initQueue()`） |
+
+## 2. 阻塞项
+
+### 2.1 零认证，不得暴露公网
+
+`docs/conventions/routing.md` §9.1 原文已写明：守卫是目标状态、不是已实现状态，
+**认证落地前只能跑在本地或受信网络内，不得直接暴露公网**。
+
+实测确认其严重程度：
+
+- `next-auth` / `getServerSession` / `requireAuth` / 401 守卫在 `src/**` 零命中；
+- 没有 `proxy.ts`，也没有 `middleware.ts`；
+- `/login`、`/signup` 是 `AuthShellForm` 的禁用态占位（routing.md 标 `shell`）；
+- `LOCAL_WORKSPACE_ID` 是硬编码常量（`src/lib/db/client.ts:11`），单工作区、无租户隔离。
+
+无凭据即可调用的暴露面：
+
+| 端点 | 后果 |
+| --- | --- |
+| `POST /api/settings` | 写 provider 凭据与并发配额 |
+| `POST /api/director/pipeline` | 无限触发真实 Gemini + StepFun 调用，直接消耗 API 额度 |
+| `POST /api/render` / `POST /api/render/export` | 触发 Chromium 渲染与 ffmpeg 拼接，消耗 CPU |
+| `GET /api/artifacts/{id}?projectId=` | 下载任意产物字节 |
+
+因此**第一步不是写 Dockerfile**，而是先定接入策略。真正的应用内认证是独立议题，
+不要在部署批次里顺手做（会同时牵动 routing.md §9 的守卫矩阵与工作区模型）。
+
+### 2.2 成片目前没有音轨
+
+实测最新一条 `final-mp4` 的流信息只有 `0,h264,video`。
+
+代码层面是明确的、不是偶发：
+
+- `src/features/render/encode.ts:36` 单镜编码写死 `-an`；
+- `src/features/render/concat.ts:109` 只在存在 `score-audio`（配乐）时才
+  `-map 1:a:0`，否则 `-an`；
+- 旁白 `narration-audio:U00N` 从不参与混音，全库也没有任何 `score-audio` 产物。
+
+ISSUE-005 的交接文档已把它登记为遗留观察（当时判断混音属 ASSEMBLE / 导出范围）。
+但迁生产改变了它的性质：**真实 TTS 花了钱、时长被实测、帧数按它分配，
+最终交付的却是静音视频**。上线前必须先定交付口径，见 §9 的 P-3。
+
+## 3. 架构与运行时约束
+
+### 3.1 只能单实例；重启会留下孤儿作业
+
+两件事要分开看：
+
+**领取本身是多实例安全的**——`InProcessQueue.claim()` 用
+`FOR UPDATE SKIP LOCKED`，多副本不会重复消费同一个 attempt。
+
+**但多实例仍不可行**：`stream-bus` 与 `status-bus` 都是进程内 + `globalThis`
+锚定（`docs/issues/README.md` §8 已登记）。A 实例执行作业、B 实例持有 SSE 连接时，
+画布状态推送与 Director 文本流会静默丢事件，只能退回 1.5s 轮询兜底。
+
+**没有 lease / heartbeat / reclaim**——`src/lib/queue/**` 内
+`stale|reclaim|heartbeat|lease|requeue` 零命中，`claim()` 只挑 `queued`。
+进程被 kill（滚动更新、OOMKilled、节点漂移）时，`task_attempts.status='running'`
+与 `canvas_nodes.status='running'` 会**永久卡住**，无任何机制捞回。
+
+实践含义：`replicas: 1`；用 recreate 而非滚动更新；容器需要足够长的
+`stop_grace_period`；更新前最好先关 autopilot 并等队列排空。
+
+### 3.2 容器内 CPU 核数被读错，会导致 OOMKilled
+
+`defaultRenderShotConcurrency()` = `max(1, floor(os.cpus().length / 2))`。
+Node 的 `os.cpus()` 读**宿主核数**，不读 cgroup 限制。一个 render 作业
+= 一个 Chromium + 一个 ffmpeg，都是 CPU 与内存大户。
+
+宿主 32 核、容器限 2 核时，它会开 16 路并行渲染。
+
+同一问题也出现在校验面：`src/app/api/settings/route.ts` 对 `renderShot` 的动态
+上限校验同样用 `os.cpus().length`，所以设置页会允许保存远超容器实际能力的值。
+
+另注意 ISSUE-011 的既有语义：DB 配额改动**要重启进程才生效**，这是有意设计、
+UI 也如实标注了，不要在部署时误判为「配置没生效」。
+
+### 3.3 Chromium 在 Docker 的三个硬点
+
+`src/features/render/frame-capture.ts:23` 是 `chromium.launch({ headless: true })`，
+没有任何 args。
+
+1. **以 root 运行会直接失败**（Chromium 拒绝 root 且无 `--no-sandbox`）。
+   优先用非 root 用户（Playwright 官方镜像的 `pwuser`）而不是加 `--no-sandbox`
+   ——这个进程要加载模型生成的 HTML，沙箱是有意义的防线。
+2. **系统依赖与版本对齐**：`playwright@^1.61.1`，镜像里的浏览器版本必须与之匹配，
+   否则 launch 时报浏览器缺失。
+3. **CJK 字体（最容易漏）**：本产品所有屏幕文字都是中文。精简镜像缺 CJK 字体时，
+   每一帧都会渲成豆腐块，而 `shot-qa` 的视觉 QA 会拿这些帧去核对 `mustShow`
+   ——得到的是「渲染成功但内容全错」的假绿。必须显式安装 CJK 字体。
+
+### 3.4 字体差异会让渲染缓存错误命中
+
+渲染与缩略图缓存的 key 由 HTML 字节 + frames 规格派生
+（`thumbnailSourceKey` 与 renderer 的 renderHash 同源语义），**不包含字体环境**。
+
+所以把开发机的 `.data` 卷带到生产复用时，用 Windows 字体渲出的 MP4 会被判定命中
+直接复用，生产永远渲不出 Linux 字体下的正确画面。
+
+结论：生产用全新 artifacts 目录；确需迁移历史数据时，明确排除
+`render-mp4` / `frame-thumbnail` / `director-fabricate` 这几类可重算产物。
+
+### 3.5 生产构建曾吞掉全部服务端诊断日志（P-1 已修）
+
+`compiler.removeConsole` 原本传布尔 `true`，SWC 会移除**全部** `console.*`
+（含 `console.error`）。而这些 `console.error` 是有意设计的唯一诊断出口——服务端
+刻意不把 provider 原始错误暴露给用户（AGENTS.md §6），只在日志留分类信息。
+
+实测对比（生产构建 server chunk 内字符串命中数）：
+
+| 日志 | 修复前 | 修复后 |
+| --- | ---: | ---: |
+| `[director] 模型调用失败` | 0 | 4 |
+| `[render] 下游自动推进失败` | 0 | 7 |
+| `[render/export] QA 检测触发失败` | 0 | 1 |
+| `[instrumentation] 队列启动失败` | 0 | 1 |
+
+已改为 `{ exclude: ['error', 'warn'] }`（commit `2c7d4d4`）。
+`src/**` 内没有任何 `console.log`，因此 log 剥离对应用代码本就是空操作。
+
+## 4. 镜像与构建
+
+- **`ffmpeg-static` 靠 postinstall 下载平台二进制**。必须在 Linux 镜像内执行
+  `pnpm install`，绝不能从 Windows 宿主 `COPY node_modules`。（P-1 的 `.dockerignore`
+  已把 `node_modules` 排除在构建上下文之外，从机制上避免误拷。）
+- **未启用 `output: 'standalone'`**。要么整份 `node_modules` 进运行镜像，要么启用
+  standalone 后**实测验证** `serverExternalPackages` 里那三个包
+  （`ffmpeg-static`、`@earendil-works/pi-ai`、`@earendil-works/pi-agent-core`）
+  被正确带出。这三个是外部化的，standalone 的自动依赖追踪容易漏——pi-ai 那条正是
+  ISSUE-012 踩过的 `MODULE_NOT_FOUND`（commit `5be5869`）。
+- **迁移与 bootstrap 脚本走 `tsx`，那是 devDependency**。运行镜像若只装 prod 依赖，
+  `pnpm db:migrate` 与 `scripts/setup/bootstrap-credentials.ts` 会缺依赖。
+- **没有 `engines` 字段**。Next 16 需要 Node 20.9+ / 22，基础镜像版本要自己钉死。
+- **`ffprobe` 不在依赖里**。运行时代码不用它（`src/**` 零命中），但任何「验证成片」
+  的运维脚本需要它。ISSUE-014 第一轮用的是宿主 winget 安装的 `Gyan.FFmpeg`，
+  仓库不自带，已在该 issue 证据里如实记录。
+
+## 5. 数据与密钥
+
+- **`DATA_DIR` 是所有媒体字节的唯一副本**（默认 `<cwd>/.data`，
+  `ARTIFACTS_DIR` = 其下 `artifacts`，见 `src/lib/config/paths.ts`）。必须是持久卷。
+  卷丢失后 DB 行仍在、字节全无，得到一批能查到 `content_hash` 却下载不了的悬空产物；
+  而 approved / released 产物有 DB 触发器保护不可原地更新，修复只能靠新版本。
+- **`CVC_CREDENTIAL_MASTER_KEY` 丢失 = 所有 provider 凭据不可解密**，设计上无明文
+  fallback（AGENTS.md §7 + 两条契约测试锁定）。轮换至今是手工操作。该 key 必须走
+  secret 管理，不得进镜像层。
+- **凭据注入优先走设置页 / `POST /api/settings`**（有真实 API 校验、失败 422 且不
+  覆盖已有值），而不是把 `.env.local` 打进镜像。`bootstrap-credentials.ts` 在设计上
+  是读 `.env.local` 的冷启动脚本。应用没有凭据也能正常启动（凭据只在跑管线时才需要），
+  所以「先起服务 → 设置页写入」是可行且更干净的顺序。
+
+## 6. Postgres
+
+- 客户端是 `postgres.js`，`postgres(databaseUrl)` **未传任何连接参数**，走默认连接数
+  与 `prepare: true`。若前面挂 PgBouncer 的 transaction 模式，必须关 `prepare`。
+- 队列每 200ms tick 一次、按 lane 数并行查询，长期空转也有稳定基础负载。连接数要给
+  SSE 长连接与页面留余量。
+- **迁移必须在应用启动前完成，并连续跑两次验证幂等**。`_journal.json` 时间戳乱序曾让
+  `0003` 被 drizzle 判定过期而跳过，造成 schema 与 DB 不一致、全库建项目 400
+  （ISSUE-008 / ISSUE-012 均有记录）。容器化后这个风险更隐蔽。
+- dev compose 的口令是 `cvc_dev_only`，生产必须更换；生产 compose 不要映射 5432。
+
+## 7. worker（`server/`）是否需要部署
+
+`/api/engine` 只被 `src/lib/api.ts` 的 `API_BASE` 使用，而它只被**一个文件**引用：
+`src/components/marketing/launch-composer.tsx`。
+
+也就是说制作应用 `/products/*` 完全不依赖 worker。可以先只部署 **Next + Postgres**，
+核心「文本 → 成片」链路完整可用；代价是营销首页的 Try 演示会 502。
+
+若要一起部署 worker，注意它是另一套系统：独立 env 模板（`server/.env.example`，
+含 ListenHub / IMAP）、独立 job 状态机、需要 `sharp` 与自己的 Playwright。
+AGENTS.md §0 / `docs/issues/README.md` §0 明确禁止合并两套的 env 加载器、
+model routing 与 job 状态机——不要在 Dockerfile 里图省事共用一份配置。
+
+## 8. 已确认无需处理
+
+写在这里避免重复发现或「顺手优化」。
+
+| 事项 | 结论 |
+| --- | --- |
+| SSE 被反代缓冲 | **已做对**。两个流式路由都设了 `Cache-Control: no-cache, no-transform` 与 `X-Accel-Buffering: no`。只需保证 LB 的 idle timeout 大于 15s keepalive 间隔。 |
+| 导出长任务占用 HTTP 请求 | 不存在。等待发生在队列内（`runProjectExport` 上限 1800 × 1s），HTTP 只返回 jobId。 |
+| 构建期需要 DB | 不需要。`instrumentation.register()` 有 `NEXT_PHASE === 'phase-production-build'` 守卫，静态预渲染页面也不查库。建议在流水线里实测一次确认。 |
+| 客户端轮询无上限 | `renderShotAndWait` / `waitForExportArtifact` 是无界 `for(;;)`。页面长时间停留会持续轮询，不阻塞部署，仅需知道。 |
+
+## 9. 分批修复清单
+
+按依赖顺序排列。每项都可独立派发、独立验收。
+状态口径：`done` 已完成；`todo` 待处理；`blocked` 等前置；`decision` 需产品决策。
+
+---
+
+### P-1 · 生产构建保留 error/warn + 补 `.dockerignore` —— `done`
+
+- **落点**：`next.config.ts`、`.dockerignore`（新增）
+- **commit**：`2c7d4d4`
+- **验收**（已核销）：
+  - 生产构建的 server chunk 内四条应用日志字符串命中数由 0 变为 4 / 7 / 1 / 1；
+  - `pnpm build` exit 0（隔离 distDir 全新构建）；
+  - lint / typecheck exit 0；`pnpm test` 112 files / 543 passed；`verify:v3` ok:true。
+
+---
+
+### P-2 · 定接入策略并落地边界防护 —— `decision` + `todo`
+
+**这是所有后续步骤的硬前提**（§2.1）。
+
+- **需要你先决策**：反代 Basic Auth / mTLS / IP allowlist / 仅内网 + VPN，四选一或组合。
+- **落点**：部署层（反代配置 / compose network），**不改 `src/**`**。
+- **做法要点**：
+  - Next 容器不直接对外，只对反代暴露；
+  - Postgres 不映射宿主端口；
+  - 反代需放行 SSE（不缓冲、长连接）。
+- **验收**：
+  - 未携带凭据时 `POST /api/settings`、`POST /api/director/pipeline`、
+    `GET /api/artifacts/*` 均被反代拒绝，留真实 HTTP 证据；
+  - 携带凭据后画布 SSE 能正常收到 `node-status` 帧（证明反代未破坏流式）。
+- **禁区**：不要在本项里实现应用内认证。那会牵动 routing.md §9 守卫矩阵与
+  `LOCAL_WORKSPACE_ID` 单工作区模型，必须单开 issue。
+
+---
+
+### P-3 · 定成片音轨口径 —— `decision`
+
+见 §2.2。两条路，先选再做：
+
+- **方案 A：接旁白混音（推荐）**。落点 `encode.ts` / `concat.ts`，把
+  `narration-audio:U00N` 按 allocation 的 `startInUnitMs` / `endInUnitMs` 混入。
+  注意 ISSUE-005 的禁区仍然有效：**时长真值只能来自 `measureMp3()`**，
+  混音不得反过来改写 allocation 或帧数。
+- **方案 B：明确交付无声版**。则必须在导出页与产物下载处显式标注「无音轨」，
+  不能让用户以为拿到的是带旁白的成片（AGENTS.md §6：UI 可见字段必须可追溯）。
+- **验收（方案 A）**：`ffprobe` 显示 `final-mp4` 含 aac 音轨；音轨时长与视频时长
+  相差在一帧公差内；逐镜旁白与 `audioAllocation` 的 unit 对应关系可核对。
+- **禁区**：不得为了「让音轨对上」而调整已实测的 `durationInFrames`。
+
+---
+
+### P-4 · 并发配额在容器内可信 —— `todo`
+
+见 §3.2。
+
+- **落点**：`src/lib/queue/in-process-queue.ts`（默认值来源）、
+  `src/app/api/settings/route.ts`（动态上限校验）
+- **做法（建议）**：引入一个「可用 CPU 数」的单一读取口，优先读
+  cgroup v2 的 `cpu.max`（`/sys/fs/cgroup/cpu.max`），退回 `os.cpus().length`；
+  默认配额与设置页上限都改用它。**不要在两处各写一份探测逻辑**——
+  ISSUE-004 已导出 `isPositiveInteger()` 的先例，同一规则只能有一个出口。
+- **验收**：
+  - 单测覆盖「cgroup 限额存在时取限额」「无限额时退回宿主核数」「格式非法时退回」；
+  - 在 `--cpus=2` 的容器里实测默认 `renderShot` 配额为 1，且设置页不允许保存 > 2；
+  - 现有 `resolveLaneQuotas` / `loadLaneQuotasForStart` 的 DB > env > 默认优先级不变
+    （ISSUE-011 的单真值原则）。
+- **兜底**：本项落地前，生产必须显式设置
+  `CVC_QUEUE_RENDER_SHOT_CONCURRENCY` 与 `CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY`。
+
+---
+
+### P-5 · 队列重启后可回收孤儿作业 —— `todo`
+
+见 §3.1。当前进程被 kill 会永久留下 `running` 的 attempt 与节点。
+
+- **落点**：`src/lib/queue/in-process-queue.ts` + `init.ts`
+- **做法（两个层次，建议只做第一层）**：
+  1. **启动期回收**：`initQueue()` 时把本 workspace 内仍为 `running` 的 attempt
+     标记为 `failed`（附明确 failure message，如「进程重启前中断」），并把对应节点
+     经合法转换落到 `failed`。单实例前提下这是安全且足够的。
+  2. （可选、需先做多实例改造）真正的 lease + heartbeat 续租。
+- **验收**：
+  - pg 测试：种入一个 `running` attempt + `running` 节点，跑 `initQueue()` 后两者
+    都成为 `failed` 且 failure message 可归因；
+  - 节点状态转换必须走 `transitionNodeStatus` 的合法路径，不得直接 UPDATE 绕过状态机；
+  - 不影响 ISSUE-006 的「无 HTTP 请求也消费队列」语义与 `init.test.ts` 既有用例。
+- **禁区**：不要顺手把 `running` 直接改回 `queued` 自动重试——渲染与 LLM 阶段都可能
+  已产生部分副作用，静默重试会掩盖真实失败。
+
+---
+
+### P-6 · 写 Dockerfile —— `blocked`（等 P-2 决策；P-4 兜底可先用 env）
+
+- **落点**：`Dockerfile`（新增）、`docs/deployment/`（新增说明文档）
+- **做法要点**：
+  - 基础镜像用与 `playwright@1.61.1` 匹配的官方 Playwright 镜像，或自行
+    `playwright install --with-deps chromium` 并钉死版本；
+  - **显式安装 CJK 字体**（§3.3 第 3 点）；
+  - **以非 root 用户运行**（§3.3 第 1 点）；
+  - 镜像内 `pnpm install`（`--frozen-lockfile`），不得拷宿主 `node_modules`；
+  - Node 版本钉死；建议同时给 `package.json` 补 `engines`；
+  - 若启用 `output: 'standalone'`，必须实测 `serverExternalPackages` 三个包被带出；
+  - 保留 `tsx` 以便迁移/bootstrap 脚本可跑，或为迁移单独做一个含完整依赖的 init 阶段。
+- **验收**：
+  - 容器内 `chromium.launch()` 成功（非 root、无 `--no-sandbox`）；
+  - 容器内渲一镜，抽帧目视确认中文**不是**豆腐块；
+  - `ffmpeg-static` 的二进制存在且可执行；
+  - `node -v` 与钉死版本一致。
+
+---
+
+### P-7 · 生产 compose 与运行时配置 —— `blocked`（等 P-6）
+
+- **落点**：`docker-compose.prod.yml`（新增）、`docs/deployment/`
+- **做法要点**：
+  - `replicas: 1`（§3.1），recreate 而非滚动更新，给足 `stop_grace_period`；
+  - `DATA_DIR` 指向持久卷；**用全新 artifacts 目录，不复用开发机的**（§3.4）；
+  - Postgres 换强口令、不映射 5822/5432 到宿主、独立持久卷；
+  - 显式设两个并发配额 env（P-4 兜底）；
+  - `CVC_CREDENTIAL_MASTER_KEY` 走 secret，不进镜像层与 compose 明文；
+  - 迁移用 init 容器/一次性任务执行，**连续跑两次**（§6）；
+  - 决定是否部署 worker（§7）；不部署时营销页 Try 会 502，需接受或临时隐藏入口。
+- **验收**：
+  - `pnpm db:migrate` 连续两次均成功，第二次无变更；
+  - 容器重启后 artifacts 与 DB 数据都还在；
+  - `docker compose config` 中不含任何明文 secret。
+
+---
+
+### P-8 · 生产环境端到端验收 —— `blocked`（等 P-7）
+
+- **落点**：`scripts/verify/e2e-smoke.ts`（已存在，复用）、
+  `docs/issues/evidence/issue-015/`
+- **做法**：起服务 → 设置页写入凭据（真实 API 校验）→
+  `pnpm verify:e2e --base-url <生产地址>`。
+- **验收**：
+  - 全部节点 `succeeded`，不可变产物哈希逐条一致；
+  - `ffprobe` 核对成片帧数 = 各镜帧数之和；分辨率 / fps 与 `renderSpec` 一致；
+  - 若 P-3 选了方案 A，成片含 aac 音轨；
+  - 中文字形正确（抽一帧目视 + 视觉 QA 报告非恒真）；
+  - 容器日志里能看到应用层 `console.error` 诊断（验证 P-1 在真实生产环境生效）。
+- **禁区**：不得把 mock、fixture 或开发机产物当作生产证据（沿用 ISSUE-014 §4 口径）。
+
+---
+
+### P-9 · 多实例（如确有需要）—— `todo`，非上线必需
+
+- **前置**：P-5 第二层（lease + heartbeat）。
+- **落点**：`src/lib/stream/{stream-bus,status-bus}.ts` 换 Redis pub/sub。
+- **要点**：两个总线必须一起换；事件协议
+  （`snapshot` / `node-status` / `topology` + 单调 `seq`）可原样平移；
+  ISSUE-012 的架构决策「两个总线不合并」仍然有效，换传输层不等于合并语义。
+
+## 10. 上线前门禁清单
+
+每次部署镜像前跑一遍：
+
+```powershell
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm test:pg
+pnpm verify:v3
+pnpm build
+git diff --check
+```
+
+补充检查：
+
+1. `docker compose config` 无明文 secret；
+2. 构建上下文体积合理（`.dockerignore` 生效）；
+3. 迁移连续两次幂等；
+4. 生产地址跑一次 `pnpm verify:e2e` 并留证。
+
+## 11. 禁区
+
+1. **不得为了部署方便降级任何既有门禁**：确定性红线、
+   `window.__CVC_RENDER__@v1` 合同、artifact 校验、QA 判定，一律不许放宽。
+2. **不得在部署批次里做应用内认证**（P-2 已说明理由）。
+3. **不得把 `.env*`、`.data/`、宿主 `node_modules` 放进镜像或构建上下文**。
+4. **不得合并 Next 与 worker 的 env 加载器、model routing、job 状态机**
+   （AGENTS.md §0 硬边界）。
+5. **不得复用开发机的 render 产物到生产**（§3.4 字体缓存错误命中）。
+6. **不得把 `running` 的孤儿 attempt 静默改回 `queued` 自动重试**（P-5 禁区）。
+7. **不得为迁就音轨而修改已实测的 `durationInFrames`**（P-3 禁区，
+   ISSUE-005 §6 明文禁区的延伸）。
