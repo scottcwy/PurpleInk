@@ -55,3 +55,6 @@ server/capture/
 
 # Video files
 *.mp4
+
+# Archive (historical records, not tracked)
+docs/archive/
