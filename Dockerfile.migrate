@@ -1,0 +1,20 @@
+FROM node:24-bookworm-slim
+
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+WORKDIR /app
+
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+COPY server/package.json ./server/package.json
+RUN pnpm install --frozen-lockfile
+
+ENV NODE_ENV=production
+
+COPY scripts/setup/db-migrate.ts ./scripts/setup/db-migrate.ts
+COPY src/lib/db/migrate.ts ./src/lib/db/migrate.ts
+COPY src/lib/db/schema ./src/lib/db/schema
+COPY src/lib/db/migrations/pg ./src/lib/db/migrations/pg
+
+CMD ["pnpm", "db:migrate"]
