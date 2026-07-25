@@ -1,5 +1,5 @@
 export async function createProjectAndStartIngest(
-  input: { title: string; script: string },
+  input: { title: string; script: string; visualTheme: 'dark' | 'light' },
   fetcher: typeof fetch = fetch
 ): Promise<{ projectId: string }> {
   const created = await fetcher('/api/projects', jsonRequest(input))

@@ -9,8 +9,23 @@ describe('createProjectAndStartIngest', () => {
       .mockResolvedValueOnce(jsonResponse({ ok: true, jobId: 'job-1' }, 200))
 
     await expect(
-      createProjectAndStartIngest({ title: 'RAG 十分钟入门', script: '稿件' }, fetcher)
+      createProjectAndStartIngest(
+        { title: 'RAG 十分钟入门', script: '稿件', visualTheme: 'light' },
+        fetcher
+      )
     ).resolves.toEqual({ projectId: 'project-1' })
+    expect(fetcher).toHaveBeenNthCalledWith(
+      1,
+      '/api/projects',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'RAG 十分钟入门',
+          script: '稿件',
+          visualTheme: 'light',
+        }),
+      })
+    )
     expect(fetcher).toHaveBeenNthCalledWith(
       2,
       '/api/director/stage',

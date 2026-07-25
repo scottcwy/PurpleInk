@@ -36,6 +36,26 @@ describe('buildStagePrompt', () => {
     expect(prompt).toContain('INGEST')
   })
 
+  it('keeps INGEST parseable when visualTheme stays outside directorInput', () => {
+    // createProject 把 visualTheme 存在 payload 旁路；INGEST 只吃 directorInput。
+    expect(() =>
+      buildStagePrompt('INGEST', {
+        projectTitle: '演示项目',
+        projectScript: '原稿',
+        nodeType: 'script-import',
+        directorInput: { rawScript: '原稿' },
+      })
+    ).not.toThrow()
+    expect(() =>
+      buildStagePrompt('INGEST', {
+        projectTitle: '演示项目',
+        projectScript: '原稿',
+        nodeType: 'script-import',
+        directorInput: { rawScript: '原稿', visualTheme: 'dark' },
+      })
+    ).toThrow()
+  })
+
   it('rejects missing typed input for downstream stages', () => {
     expect(() =>
       buildStagePrompt('DIRECT', {

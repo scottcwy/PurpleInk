@@ -33,12 +33,16 @@ export class DirectorArtifactReader {
       return payload.directorInput ?? { rawScript: row.projectScript }
     }
     if (stage === 'DIRECT') {
-      const ingest = await this.source.loadIngestArtifact(row.nodeProjectId)
+      const [ingest, visualTheme] = await Promise.all([
+        this.source.loadIngestArtifact(row.nodeProjectId),
+        this.source.loadVisualTheme(row.nodeProjectId),
+      ])
       return {
         projectTitle: row.projectTitle,
         scriptUnits: ingest.scriptUnits,
         audioManifest: ingest.audioManifest,
         audioAllocation: ingest.audioAllocation,
+        visualTheme,
       }
     }
     if (stage === 'SHOT_SPEC') return this.resolveShotSpecInput(row)
@@ -63,15 +67,17 @@ export class DirectorArtifactReader {
 
   private async resolveFabricateInput(row: StageContextRow): Promise<unknown> {
     if (!row.laneKey) throw new Error('FABRICATE 节点缺少 laneKey')
-    const [ingest, direct, shot] = await Promise.all([
+    const [ingest, direct, shot, visualTheme] = await Promise.all([
       this.source.loadIngestArtifact(row.nodeProjectId),
       this.source.loadDirectArtifact(row.nodeProjectId),
       this.loadShot(row.nodeProjectId, row.laneKey),
+      this.source.loadVisualTheme(row.nodeProjectId),
     ])
     return {
       shot,
       audioAllocation: ingest.audioAllocation,
       styleBible: direct.styleBible,
+      visualTheme,
     }
   }
 

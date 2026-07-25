@@ -27,7 +27,7 @@ const GLOBAL_NODE_DEFINITIONS = [
 
 /** 单事务创建项目与初始全局 DAG，避免出现无入口节点的半成品项目。 */
 export async function createProject(input: unknown): Promise<Project> {
-  const { title, script } = createProjectSchema.parse(input)
+  const { title, script, visualTheme } = createProjectSchema.parse(input)
   const database = await getDb()
   return withTransaction(database, async (tx) => {
     await tx
@@ -69,7 +69,7 @@ export async function createProject(input: unknown): Promise<Project> {
         schemaVersion: 1,
         payload:
           definition.type === 'script-import'
-            ? { directorInput: { rawScript: script } }
+            ? { directorInput: { rawScript: script }, visualTheme }
             : {},
       },
     }))

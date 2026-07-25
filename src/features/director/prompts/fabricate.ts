@@ -1,12 +1,18 @@
 import { z } from 'zod'
 import { audioAllocationSchema } from '../schemas/ingest'
 import { directorShotSchema } from '../schemas/director-shot-plan'
+import {
+  DEFAULT_VISUAL_THEME,
+  visualThemeConstraint,
+  visualThemeSchema,
+} from './visual-theme'
 
 export const fabricatePromptInputSchema = z
   .object({
     shot: directorShotSchema,
     audioAllocation: audioAllocationSchema,
     styleBible: z.string().min(1),
+    visualTheme: visualThemeSchema.default(DEFAULT_VISUAL_THEME),
   })
   .strict()
 
@@ -21,7 +27,9 @@ const retryPromptInputSchema = z
   .strict()
 
 /** 构建 FABRICATE 阶段的确定性 HTML+GSAP 生成提示词。 */
-export function buildFabricatePrompt(input: FabricatePromptInput): string {
+export function buildFabricatePrompt(
+  input: z.input<typeof fabricatePromptInputSchema>
+): string {
   const parsed = fabricatePromptInputSchema.parse(input)
   return `你正在执行 CodeVideoCanvas 的 FABRICATE 阶段，只实现当前分镜。
 
@@ -51,6 +59,7 @@ export function buildFabricatePrompt(input: FabricatePromptInput): string {
   seek 必须同步或返回 Promise，并只根据传入的 frame/fps 更新当前帧。
 - 输出的第一个字符必须是 <，最后一个字符必须是 >；禁止 Markdown 围栏、
   解释、前后缀或省略内容。
+- ${visualThemeConstraint(parsed.visualTheme)}
 
 shot contract：
 ${JSON.stringify(parsed.shot)}

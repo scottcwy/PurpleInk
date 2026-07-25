@@ -9,6 +9,10 @@ import { buildFabricatePrompt, buildFabricateRetryPrompt } from './fabricate'
 import { buildExportFinalizePrompt, buildShotQaPrompt } from './finalize'
 import { buildIngestPrompt } from './ingest'
 import { buildShotSpecPrompt, buildShotSpecRetryPrompt } from './shot-spec'
+import {
+  resolveVisualTheme,
+  visualThemeConstraint,
+} from './visual-theme'
 
 const digest = `sha256:${'a'.repeat(64)}`
 const scriptUnits = [{ unitId: 'U001' as const, text: '测试文稿', order: 0 }]
@@ -170,6 +174,35 @@ describe('director prompt templates', () => {
     ]) {
       expect(prompt).toContain(term)
     }
+  })
+
+  it('injects dark/light visual theme hard constraints into DIRECT and FABRICATE', () => {
+    const darkDirect = buildDirectPrompt({
+      projectTitle: '测试',
+      scriptUnits,
+      audioManifest,
+      audioAllocation,
+      visualTheme: 'dark',
+    })
+    const lightFabricate = buildFabricatePrompt({
+      shot,
+      audioAllocation,
+      styleBible: '风格圣经',
+      visualTheme: 'light',
+    })
+    expect(darkDirect).toContain(visualThemeConstraint('dark'))
+    expect(lightFabricate).toContain(visualThemeConstraint('light'))
+    expect(
+      buildDirectPrompt({
+        projectTitle: '测试',
+        scriptUnits,
+        audioManifest,
+        audioAllocation,
+      })
+    ).toContain(visualThemeConstraint('dark'))
+    expect(resolveVisualTheme(undefined)).toBe('dark')
+    expect(resolveVisualTheme('light')).toBe('light')
+    expect(resolveVisualTheme('neon')).toBe('dark')
   })
 
   it('builds typed gate feedback prompts with exact violations and full-output instructions', () => {

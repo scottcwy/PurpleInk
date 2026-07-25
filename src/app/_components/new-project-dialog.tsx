@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { AudioLines, Plus, Sparkles, Timer, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import { TextArea } from '@/components/ui/text-area'
 import { TextField } from '@/components/ui/text-field'
 import { Toast } from '@/components/ui/toast'
@@ -13,6 +14,11 @@ import { createProjectAndStartIngest } from './new-project-api'
 
 const SCRIPT_PLACEHOLDER =
   '你有没有想过，为什么大语言模型总是一本正经地胡说八道？这背后不是它"想骗人"，而是它的训练目标决定的——它只学会了"下一个词最可能是什么"。今天这支视频，我们用十分钟讲清楚 RAG：给模型配一本可以翻阅的参考书……'
+
+const VISUAL_THEME_OPTIONS = [
+  { value: 'dark', label: '深色系' },
+  { value: 'light', label: '浅色系' },
+] as const
 
 export interface NewProjectDialogProps {
   featured?: boolean
@@ -23,6 +29,7 @@ export function NewProjectDialog({ featured = false }: NewProjectDialogProps) {
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [script, setScript] = useState('')
+  const [visualTheme, setVisualTheme] = useState<'dark' | 'light'>('dark')
   const [error, setError] = useState<string>()
   const [submitting, setSubmitting] = useState(false)
 
@@ -40,7 +47,11 @@ export function NewProjectDialog({ featured = false }: NewProjectDialogProps) {
     setSubmitting(true)
     setError(undefined)
     try {
-      const { projectId } = await createProjectAndStartIngest({ title, script })
+      const { projectId } = await createProjectAndStartIngest({
+        title,
+        script,
+        visualTheme,
+      })
       router.push(productCanvasHref(projectId))
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '请稍后重试')
@@ -91,6 +102,17 @@ export function NewProjectDialog({ featured = false }: NewProjectDialogProps) {
             onChange={(event) => setTitle(event.target.value)}
             className="w-full"
           />
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-medium text-ds-text">视频色调</span>
+            <SegmentedControl
+              options={[...VISUAL_THEME_OPTIONS]}
+              value={visualTheme}
+              onChange={(value) => {
+                if (value === 'dark' || value === 'light') setVisualTheme(value)
+              }}
+              className="w-full justify-stretch [&>button]:flex-1"
+            />
+          </div>
           <TextArea
             label="源文本"
             placeholder={SCRIPT_PLACEHOLDER}

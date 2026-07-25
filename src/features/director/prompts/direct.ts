@@ -4,6 +4,11 @@ import {
   audioManifestSchema,
   scriptUnitsSchema,
 } from '../schemas/ingest'
+import {
+  DEFAULT_VISUAL_THEME,
+  visualThemeConstraint,
+  visualThemeSchema,
+} from './visual-theme'
 
 export const directPromptInputSchema = z
   .object({
@@ -11,13 +16,16 @@ export const directPromptInputSchema = z
     scriptUnits: scriptUnitsSchema,
     audioManifest: audioManifestSchema,
     audioAllocation: audioAllocationSchema,
+    visualTheme: visualThemeSchema.default(DEFAULT_VISUAL_THEME),
   })
   .strict()
 
 export type DirectPromptInput = z.infer<typeof directPromptInputSchema>
 
 /** 构建 DIRECT 阶段的 master plan 与 style bible 提示词。 */
-export function buildDirectPrompt(input: DirectPromptInput): string {
+export function buildDirectPrompt(
+  input: z.input<typeof directPromptInputSchema>
+): string {
   const parsed = directPromptInputSchema.parse(input)
   return `你正在执行 CodeVideoCanvas 的 DIRECT 阶段，为「${parsed.projectTitle}」建立导演总纲。
 
@@ -26,6 +34,8 @@ export function buildDirectPrompt(input: DirectPromptInput): string {
 - style bible：世界观、色彩职责、中文排版、形状材质、背景演进、构图重量、运动 ownership、共享组件和禁止项。
 - 明确 2–3 个代表性校准镜；校准未通过不得批量制作。
 - 不把原稿逐句换成卡片，不引入原文之外的确定性事实。
+- ${visualThemeConstraint(parsed.visualTheme)}
+  style bible 的色彩职责必须服从上述色调硬约束。
 
 正向视觉法则 1：一镜只承担一个核心判断，同时保持低语义负载与高感知完成度。
 正向视觉法则 2：少而清楚不能变成空、薄、小、散；主视觉要有尺度、轮廓、内部结构和材质。

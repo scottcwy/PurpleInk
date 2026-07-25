@@ -85,7 +85,10 @@ describe('createProject', () => {
     ])
     expect(nodes[0]?.data).toEqual({
       schemaVersion: 1,
-      payload: { directorInput: { rawScript: '测试稿件' } },
+      payload: {
+        directorInput: { rawScript: '测试稿件' },
+        visualTheme: 'dark',
+      },
     })
     expect(edges.map(({ source, target }) => [source, target])).toEqual([
       [nodes[0]?.id, nodes[1]?.id],

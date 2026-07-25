@@ -4,6 +4,7 @@ import type { CanvasNodeType } from './types'
 export const createProjectSchema = z.object({
   title: z.string().min(1, '标题不能为空').max(200),
   script: z.string().default(''),
+  visualTheme: z.enum(['dark', 'light']).default('dark'),
 })
 
 export const canvasNodeTypeSchema = z.enum([

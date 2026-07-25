@@ -17,6 +17,10 @@ import {
   type DirectorShot,
   type DirectorShotPlan,
 } from './schemas/director-shot-plan'
+import {
+  resolveVisualTheme,
+  type VisualTheme,
+} from './prompts/visual-theme'
 
 const directArtifactSchema = z
   .object({
@@ -65,6 +69,30 @@ export class DirectorArtifactSource {
     return directArtifactSchema.parse(
       await this.loadArtifactJson(projectId, nodeId, 'director-direct')
     )
+  }
+
+  /** 从 script-import.payload.visualTheme 读取色调；缺失或非法回落 dark。 */
+  async loadVisualTheme(projectId: string): Promise<VisualTheme> {
+    const [row] = await this.db
+      .select({ data: canvasNodes.data })
+      .from(canvasNodes)
+      .where(
+        and(
+          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.projectId, projectId),
+          eq(canvasNodes.type, 'script-import')
+        )
+      )
+      .limit(1)
+    if (!row) return resolveVisualTheme(undefined)
+    const payload = z
+      .object({
+        schemaVersion: z.number(),
+        payload: z.record(z.string(), z.unknown()),
+      })
+      .safeParse(row.data)
+    if (!payload.success) return resolveVisualTheme(undefined)
+    return resolveVisualTheme(payload.data.payload.visualTheme)
   }
 
   async loadShotSpecArtifact(
