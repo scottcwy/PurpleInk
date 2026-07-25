@@ -326,7 +326,7 @@ Required layout:
 - Command/URL in monospace terminal-style treatment below button (14-16px, muted, with copy-like styling)
 - Brand logo small at bottom center
 - 2-3 decorative elements: floating particles, gradient orbs, or geometric shapes (rotated squares with border)
-- Decorative scanline or accent line that animates across screen
+- Small decorative accent marks near the CTA button (short lines, dots, or shapes — NOT full-width horizontal lines)
 
 Animation choreography:
 - Background fades in with grid

@@ -868,7 +868,9 @@ export async function buildVideoModel(captureDir: string, options: BuildModelOpt
   const stats = contentStats.length >= 2 ? contentStats.slice(0, 3) : extractStats(visible)
 
   // 域名 seed：优先用 meta.id(= 采集时按 URL 主机名派生的 slug)，保证同站稳定、异站不同
-  const seedKey = meta.id || title || name
+  // 混入时间桶因子（分钟级精度），使同 URL 每次生成不同风格/镜头顺序
+  const timeBucket = Math.floor(Date.now() / 60000)
+  const seedKey = `${meta.id || title || name}:${timeBucket}`
 
   // 视觉系统(皮肤)：按调性(文案+配色+字体) + seed 选一套 → 异站分化到"皮肤"层，不只镜头顺序
   const accentSat = saturation(palette.accent)

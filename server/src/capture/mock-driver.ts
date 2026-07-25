@@ -40,7 +40,7 @@ export class MockDriver implements BrowserDriver {
     }
   }
 
-  async screenshot(): Promise<Buffer> {
+  async screenshot(_options?: { fullPage?: boolean }): Promise<Buffer> {
     await delay(30)
     return Buffer.from(TINY_PNG_BASE64, "base64")
   }

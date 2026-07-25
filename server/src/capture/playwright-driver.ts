@@ -125,11 +125,17 @@ export class PlaywrightDriver implements BrowserDriver {
     }
   }
 
-  async screenshot(): Promise<Buffer> {
+  async screenshot(options?: { fullPage?: boolean }): Promise<Buffer> {
     const page = this.getPage()
     try {
       // 限定 12s：部分站点截图会卡在 Playwright "waiting for fonts to load"（等 document.fonts.ready）。
-      const buf = await page.screenshot({ type: "png", fullPage: false, timeout: 12_000 })
+      const buf = await page.screenshot({ type: "png", fullPage: options?.fullPage ?? false, timeout: 12_000 })
+      // 全页截图防护：超过 15MB 回退 viewport
+      if (options?.fullPage && buf.length > 15 * 1024 * 1024) {
+        console.warn("[PlaywrightDriver] fullpage screenshot too large, falling back to viewport:", buf.length)
+        const buf2 = await page.screenshot({ type: "png", fullPage: false, timeout: 12_000 })
+        return Buffer.from(buf2)
+      }
       return Buffer.from(buf)
     } catch (err) {
       // 字体/资源迟迟不 ready 导致 Playwright 截图挂起时，退回 CDP 直接抓当前帧（不等字体）。

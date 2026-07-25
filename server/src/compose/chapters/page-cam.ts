@@ -107,8 +107,8 @@ export function buildRetinaCss(targetSelector: string): string {
 export const CAMERA_PRESETS: Record<string, CamKey[]> = {
   /** Slow drift from upper-left to lower-right */
   "drift-down-right": [
-    { cx: -40, cy: -30, zoom: 1.05, rotX: 2, rotY: -3, rotZ: 0, persp: 1200, t: 0 },
-    { cx: 40, cy: 30, zoom: 1.0, rotX: -1, rotY: 2, rotZ: 0, persp: 1200, t: 5 },
+    { cx: -60, cy: -200, zoom: 1.08, rotX: 0, rotY: 0, rotZ: 0, persp: 1200, t: 0 },
+    { cx: 60, cy: 200, zoom: 1.0, rotX: 0, rotY: 0, rotZ: 0, persp: 1200, t: 1 },
   ],
   /** Straight pan with subtle rotation */
   "pan-straight": [

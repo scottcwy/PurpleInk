@@ -33,10 +33,11 @@ export interface ChapterScreenshotPolicy {
 export function getChapterScreenshotPolicy(chapterId: ChapterId): ChapterScreenshotPolicy {
   switch (chapterId) {
     case "ch3-showcase":
-      // Showcase gets ALL screenshots — user wants maximum screenshot utilization
-      return { maxCount: 99, mandatory: true, role: "main product showcase — display ALL allocated screenshots" }
+      // Showcase: first 3 screenshots for <img> rendering (original: ctx.screenshots.slice(0, 3))
+      return { maxCount: 3, mandatory: true, role: "main product showcase — render allocated screenshots as <img>" }
     case "ch2-hero":
-      return { maxCount: 2, mandatory: false, role: "product UI reference — optionally include 1-2 screenshots" }
+      // Hero: screenshots attached as base64 vision reference ONLY, not listed in prompt
+      return { maxCount: 2, mandatory: false, role: "product UI reference — base64 for visual context only, do NOT render as <img>" }
     default:
       // ch1-opening, ch4-proof, ch5-cta: no screenshots
       return { maxCount: 0, mandatory: false, role: "no screenshots needed — focus on text, brand, stats, and layout" }
@@ -178,10 +179,11 @@ function buildAgentPrompt(
   // Build screenshot instructions based on chapter policy
   const screenshotBlock = buildScreenshotBlock(chapterScreenshots, policy)
 
-  // Screenshot DOM rules — only include when chapter actually uses screenshots
-  const screenshotDomRules = chapterScreenshots.length > 0
+  // Screenshot DOM rules — only for chapters that render screenshots as <img> (ch3-showcase)
+  // ch2-hero gets screenshots as base64 vision reference only, NOT for <img> rendering
+  const screenshotDomRules = policy.mandatory && chapterScreenshots.length > 0
     ? `
-## Screenshot DOM Rules (when using screenshots)
+## Screenshot DOM Rules
 - Container: <div class="window"><div class="viewport"><img class="shot-visual" src="..." /></div></div>
 - .window: box-shadow: 0 0 0 1px rgba(255,255,255,0.05), 0 8px 40px rgba(0,0,0,0.3); border-radius: 12-16px
 - .shot-visual: object-fit: cover; width/height 100%
@@ -227,6 +229,7 @@ ${colors}
 - NO @keyframes, <iframe>, <form>, fetch(), XMLHttpRequest
 - NO external resources except GSAP CDN
 - NO flat static layouts — every scene must have continuous motion
+- NO full-width horizontal lines or dividers that span the entire canvas width — they create visual artifacts that split the frame in half. Use subtle borders on specific elements instead.
 
 ## Output
 Return ONLY the complete HTML file. No markdown, no code fences, no explanation.
@@ -240,21 +243,32 @@ ${screenshotBlock}`
 
 /**
  * Build the screenshot instruction block based on chapter policy.
- * - Showcase: lists ALL paths, mandates every one must appear
- * - Hero: lists 1-2 paths, says "use if helpful for product UI"
- * - Others: empty string (no screenshot instructions)
+ * - Showcase (mandatory): lists paths, mandates <img> rendering
+ * - Hero (non-mandatory): returns "" — base64 attached separately for vision only
+ * - Others (maxCount 0): explicit "no screenshots" note
+ *
+ * IMPORTANT: Only mandatory chapters get screenshot paths in the prompt.
+ * Non-mandatory chapters (ch2-hero) receive screenshots as base64 image content
+ * blocks for visual reference, but the prompt does NOT list paths or ask for <img> tags.
+ * This matches the original generate.ts behavior where ch2 used screenshots for
+ * product UI reference only.
  */
 function buildScreenshotBlock(
   chapterScreenshots: string[],
   policy: ChapterScreenshotPolicy,
 ): string {
-  if (chapterScreenshots.length === 0) {
-    // No screenshots for this chapter — explicitly tell LLM not to use any
+  // Non-mandatory chapters: no screenshot paths in prompt (base64 attached separately)
+  if (!policy.mandatory) {
     if (policy.maxCount === 0) {
       return `\n## Screenshots\nThis chapter does NOT use product screenshots. Focus on ${policy.role}.`
     }
+    // ch2-hero: base64 previews are attached as image content blocks for visual reference
+    // but we do NOT list paths or ask the LLM to render <img> tags
     return ""
   }
+
+  // Mandatory chapters (ch3-showcase): list paths and require <img> rendering
+  if (chapterScreenshots.length === 0) return ""
 
   const pathList = chapterScreenshots
     .map((p, i) => `${i + 1}. assets/${p.replace(/^assets\//, "")}`)
@@ -267,12 +281,9 @@ function buildScreenshotBlock(
     })
     .join("\n")
 
-  if (policy.mandatory) {
-    // ch3-showcase: MUST use ALL screenshots
-    return `\n## Screenshots (YOU MUST USE ALL OF THEM)
+  return `\n## Screenshots (YOU MUST USE ALL OF THEM)
 This is the product showcase chapter. You MUST use ALL ${chapterScreenshots.length} screenshots listed below.
 Every single screenshot must appear as an <img class="shot-visual"> in the HTML output.
-Do NOT skip any screenshot — the user wants maximum screenshot coverage.
 
 ${pathList}
 
@@ -280,17 +291,7 @@ Each screenshot MUST be wrapped in its own window/viewport container:
 ${domExamples}
 
 Each .shot-visual MUST have Ken Burns animation (scale + translate, power1.inOut) and opacity fade-in.
-Spread screenshots across multiple scenes within this chapter for visual variety.`
-  }
+Spread screenshots across multiple scenes within this chapter for visual variety.
 
-  // ch2-hero: optional, use if helpful
-  return `\n## Screenshots (OPTIONAL — use if helpful for product UI)
-You may use up to ${chapterScreenshots.length} screenshot(s) as product UI reference:
-
-${pathList}
-
-If you use them, wrap each in:
-${domExamples}
-
-These are for visual reference — use them to make the product interface look realistic.`
+Note: These screenshots may be full-page captures (tall images). Use Ken Burns animation with vertical translate (y offset drifting from top to bottom of the image) to simulate scrolling through the page content. Do NOT just show the top portion.`
 }

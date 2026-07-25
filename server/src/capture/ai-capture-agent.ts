@@ -153,7 +153,7 @@ export class AiCaptureAgent {
     this.driver = driver
     this.maxSteps = options?.maxSteps ?? 14
     this.minScreenshots = options?.minScreenshots ?? 4
-    this.maxScreenshots = options?.maxScreenshots ?? 6
+    this.maxScreenshots = options?.maxScreenshots ?? 8
     this.authBudget = options?.authBudget ?? 10
     if (options?.credentials) this.credentials = options.credentials
     if (options?.description) this.description = options.description
@@ -286,12 +286,25 @@ export class AiCaptureAgent {
         if (this.driver.settle) {
           try { await this.driver.settle() } catch { /* ignore */ }
         }
-        // ④ 优先元素级紧裁：AI 指定了目标容器 ref 时单独截该元素(整帧留白由 compose 层兑底)
+        // 前 3 张截图使用全页长截图（分配给 ch3-showcase），其余保持 viewport
+        const useFullPage = screenshots.length < 3 && !authWall
         let buf: Buffer | null = null
-        if (decision && typeof decision.ref === "number" && this.driver.screenshotElement) {
-          const sel = this.resolveSelector(decision, snapshot)
-          if (sel) {
-            try { buf = await this.driver.screenshotElement(sel) } catch { buf = null }
+        if (useFullPage) {
+          try {
+            buf = await this.driver.screenshot({ fullPage: true })
+            logger.info("ai_capture:fullpage_screenshot", { index: screenshots.length })
+          } catch (e) {
+            logger.warn("ai_capture:fullpage_failed_fallback", { error: String(e) })
+            buf = null
+          }
+        }
+        // ④ 优先元素级紧裁：AI 指定了目标容器 ref 时单独截该元素(整帧留白由 compose 层兑底)
+        if (!buf) {
+          if (decision && typeof decision.ref === "number" && this.driver.screenshotElement) {
+            const sel = this.resolveSelector(decision, snapshot)
+            if (sel) {
+              try { buf = await this.driver.screenshotElement(sel) } catch { buf = null }
+            }
           }
         }
         // 元素级不可用则静置后重抓一帧整帧(比循环顶部的旧帧更新)
@@ -416,15 +429,20 @@ export class AiCaptureAgent {
 
       if (mode === "auth") { this.authSteps++; if (isCodePage) this.codeSteps++ }
 
-      // ---- 提前终止：截图已够 + 连续 3 步停留同一 URL → 认为已采集完毕 ----
+      // ---- 提前终止：截图已够 + URL 多样性达标 + 连续 3 步停留同一 URL → 认为已采集完毕 ----
       if (mode === "capture" && screenshots.length >= this.minScreenshots) {
         stepUrls.push(stripUrl(snapshot.url || ""))
-        const last3 = stepUrls.slice(-3)
-        if (last3.length >= 3 && new Set(last3).size === 1) {
-          logger.info("ai_capture:early_terminate", {
-            step, screenshots: screenshots.length, url: snapshot.url,
-          })
-          break
+        const uniqueUrls = new Set(stepUrls)
+        // 至少访问过 3 个不同 URL 才允许因同URL重复而提前终止
+        if (uniqueUrls.size >= 3) {
+          const last3 = stepUrls.slice(-3)
+          if (last3.length >= 3 && new Set(last3).size === 1) {
+            logger.info("ai_capture:early_terminate", {
+              step, screenshots: screenshots.length, url: snapshot.url,
+              uniqueUrlCount: uniqueUrls.size,
+            })
+            break
+          }
         }
       }
 
@@ -739,18 +757,22 @@ ${passwordlessLine}${codeLine}逐个字段 fill，填完后点击提交按钮或
   private buildCapturePrompt(): { phaseGoal: string; guidance: string; rules: string; actionEnum: string } {
     const guidance = `采集指引（首页 tab/导航切换 → 浏览不同内容区域 → 截图）：
 1. 你正在产品首页。**不要尝试登录或注册**，只采集公开可见的内容。
-2. 优先通过点击**顶部导航栏的 tab/链接**来切换浏览不同内容区域（如 Features、Pricing、Docs、Blog、About 等），每个 tab 切换后截 1 张。
+2. **严格执行「切换→截图→切换→截图」交替模式**：每点击一个 tab/导航链接后，必须立刻执行 screenshot，不要连续 click 多次再截图。
 3. 如果当前页面有可交互的核心功能演示（如编辑器/对话/生成器），可先 fill 示例内容并点击运行让功能呈现结果再截图。
 4. 尽量覆盖 ${this.minScreenshots}~${this.maxScreenshots} 个**不同页面/区域**，充分利用 tab 切换获取多样化的截图。
 5. 对于大型网站，绝不尝试登录注册，只采集公开可见的内容。
+6. **必须访问至少 3 个不同的页面/tab**，每个都要截图。优先覆盖不同功能模块（如 Features、Pricing、Docs、Blog 等）。
+7. 如果首页有子导航/标签页（如 "All / Design / Code / Marketing"），也要切换并截图。
 `
     const rules = `1. **绝对不要尝试登录或注册**，不要点击任何登录/注册按钮或链接，只采集公开可见内容。
-2. **优先使用 tab/导航切换**来浏览不同页面区域，这是获取多样化截图的最高效方式。
+2. **交替执行 click 和 screenshot**：click 切换 tab 后，下一步必须是 screenshot。禁止连续 2 次 click 而不截图。
 3. 只有页面确实展示了产品**核心内容或功能的真实效果**时才选 "screenshot"；纯空白页不算。
 4. **screenshot 时尽量给出正在展示核心内容的主内容容器 [ref]**（如功能演示区/定价表/文档内容/结果区），系统会对该元素做紧裁；别停在页脚/导航 logo/cookie 条。
 5. 切换内容时用 "click"（点击导航 tab/链接 [ref]）或 "navigate"；内容不全时 "scroll" value="down"。
 6. 已采集足够多**不同页面/区域**（≥${this.minScreenshots}）时选 "done"。
-7. 不要重复访问已看过的页面，不要重复相同操作。`
+7. 不要重复访问已看过的页面，不要重复相同操作。
+8. **截图多样性硬约束**：每张截图必须来自不同的页面或 tab。如果当前截图的 URL 与上一张相同，必须先点击不同的导航链接再截图。
+9. 在选 "done" 之前，确认已覆盖至少 3 个不同 URL/页面区域，且每个区域都有截图。`
 
     const actionEnum = ACTION_ENUM.CAPTURE
     return { phaseGoal: "首页 tab 切换采集公开内容截图", guidance, rules, actionEnum }

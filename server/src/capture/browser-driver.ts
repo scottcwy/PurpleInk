@@ -13,7 +13,7 @@ export interface BrowserDriver {
   /** 获取当前页面的语义快照 */
   snapshot(): Promise<SemanticSnapshot>
   /** 截取当前页面截图 */
-  screenshot(): Promise<Buffer>
+  screenshot(options?: { fullPage?: boolean }): Promise<Buffer>
   /** ④ 元素级紧裁截图：把某个内容容器单独截出(scrollIntoView + 等可见)；太小/失败返回 null */
   screenshotElement?(selector: string): Promise<Buffer | null>
   /** 元素级抠图：透明底 PNG，用于素材提取；元素不存在或太小返回 null */
