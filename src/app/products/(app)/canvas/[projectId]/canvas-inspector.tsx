@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { ChevronRight, FileCode, RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { ArtifactChip } from '@/components/ui/artifact-chip'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
 import { ResizeHandle } from '@/components/ui/resize-handle'
@@ -11,9 +10,10 @@ import { SettingsGroup, SettingsSeparator } from '@/components/ui/settings-group
 import { SettingsRow } from '@/components/ui/settings-row'
 import { StatusPill } from '@/components/ui/status-pill'
 import { Toast } from '@/components/ui/toast'
+import type { CanvasGraphNode } from '@/features/canvas'
+import { ArtifactHoverChip } from '@/features/canvas/artifact-hover-chip'
 import { AnimatedAside, DrawerOverlay } from '@/features/navigation/collapsible-panel'
 import { productShotHref } from '@/features/navigation/products-routes'
-import type { CanvasGraphNode } from '@/features/canvas'
 import { useMediaQuery } from '@/lib/hooks/use-media-query'
 import { usePersistentToggle } from '@/lib/hooks/use-persistent-toggle'
 import { useResizablePanel } from '@/lib/hooks/use-resizable-panel'
@@ -256,11 +256,12 @@ function InspectorBody({
         {node.artifacts.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {node.artifacts.map((artifact) => (
-              <ArtifactChip
+              <ArtifactHoverChip
                 key={artifact.id}
-                icon={FileCode}
+                artifactId={artifact.id}
+                kind={artifact.kind}
                 filename={ARTIFACT_FILENAME[artifact.kind] ?? artifact.filename}
-                href={`/api/artifacts/${encodeURIComponent(artifact.id)}?projectId=${encodeURIComponent(projectId)}`}
+                projectId={projectId}
               />
             ))}
           </div>

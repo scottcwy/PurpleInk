@@ -88,7 +88,7 @@
 | 路由 | 文件 | 状态 |
 | --- | --- | --- |
 | `/playbook` | `src/app/playbook/page.tsx` | `wired` |
-| `/playbook/ui` | `src/app/playbook/ui/page.tsx` | `wired`（40 组件族，与 `UI_COMPONENT_FAMILY_COUNT` 同步） |
+| `/playbook/ui` | `src/app/playbook/ui/page.tsx` | `wired`（41 组件族，与 `UI_COMPONENT_FAMILY_COUNT` 同步） |
 | `/playbook/icons` | `src/app/playbook/icons/page.tsx` | `wired`（Pencil A4 图标白名单） |
 | `/playbook/foundations` | `src/app/playbook/foundations/page.tsx` | `wired`，但无 registry 分类 |
 

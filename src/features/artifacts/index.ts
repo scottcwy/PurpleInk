@@ -5,6 +5,10 @@ export {
   type ArtifactDescriptor,
 } from './service'
 export {
+  artifactPreviewMode,
+  type ArtifactPreviewMode,
+} from './preview-mode'
+export {
   commitArtifactRecord,
   commitDerivedArtifact,
   resolveCurrentAttemptId,

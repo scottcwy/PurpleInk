@@ -17,6 +17,7 @@ import { EmptyStateDemo } from "@/components/ui/empty-state.demo";
 import { IconButtonDemo } from "@/components/ui/icon-button.demo";
 import { MediaViewportDemo } from "@/components/ui/media-viewport.demo";
 import { NavItemDemo } from "@/components/ui/nav-item.demo";
+import { HoverPreviewDemo } from "@/components/ui/hover-preview.demo";
 import { PopoverDemo } from "@/components/ui/popover.demo";
 import { SidebarDemo } from "@/components/ui/sidebar.demo";
 import { TopBarDemo } from "@/components/ui/top-bar.demo";
@@ -55,7 +56,7 @@ export interface PlaybookEntry {
 export const PENCIL_REUSABLE_SYMBOL_COUNT = 113;
 export const PENCIL_COMPONENT_FAMILY_COUNT = 35;
 /** Pencil 族之外的交互原语（如 ResizeHandle / Skeleton / Popover）计入 UI 登记总数。 */
-export const UI_COMPONENT_FAMILY_COUNT = 40;
+export const UI_COMPONENT_FAMILY_COUNT = 41;
 export const PENCIL_CONSOLIDATION_NOTE =
   "当前登记 35 个已转译的应用组件族；其余 reusable symbols 属于上游 kit、变体或尚未进入 PurpleInk 公共边界的设计资产。";
 
@@ -97,6 +98,12 @@ export const PLAYBOOK_ENTRIES: PlaybookEntry[] = [
     Demo: ExportNodeDemo,
   },
   { id: "dialog", name: "Dialog", category: "ui", Demo: DialogDemo },
+  {
+    id: "hover-preview",
+    name: "HoverPreview",
+    category: "ui",
+    Demo: HoverPreviewDemo,
+  },
   { id: "popover", name: "Popover", category: "ui", Demo: PopoverDemo },
   {
     id: "empty-state",
