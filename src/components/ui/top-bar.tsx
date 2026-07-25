@@ -10,20 +10,20 @@ export interface TopBarProps {
 
 /**
  * 页面顶栏（SSOT）。
- * canvas.pen: surface 底、下边框 separator、高 14（56px）、px-4、
+ * canvas.pen Canonical: ds-surface 底、下边框、高 64px、px-7、
  * 左右两端分布：左侧标题 + 元信息，右侧操作区。
  */
 export function TopBar({ title, meta, actions, className }: TopBarProps) {
   return (
     <div
       className={cn(
-        'flex h-14 items-center justify-between border-b border-separator bg-surface px-4',
+        'flex h-16 shrink-0 items-center justify-between border-b border-ds-border bg-ds-surface px-4 text-ds-text backdrop-blur-xl sm:px-7',
         className,
       )}
     >
       <div className="flex items-center gap-2">
-        {title && <span className="text-[17px] font-semibold font-sc text-label">{title}</span>}
-        {meta && <span className="text-xs font-sc text-label-tertiary">{meta}</span>}
+        {title && <span className="text-[17px] font-semibold font-sc">{title}</span>}
+        {meta && <span className="text-xs font-sc text-ds-text-muted">{meta}</span>}
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
     </div>

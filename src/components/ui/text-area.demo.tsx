@@ -3,9 +3,8 @@ import { TextArea } from './text-area'
 export function TextAreaDemo() {
   return (
     <TextArea
-      label="文字稿"
-      placeholder="粘贴你的文字稿…"
-      className="w-[280px]"
+      label="源文本"
+      placeholder="粘贴源材料。项目规划器将创建持久且可审查的检查点。"
     />
   )
 }

@@ -13,13 +13,13 @@ export interface SegmentedControlProps {
 }
 
 /**
- * 分段控制器（fill 轨道 + surface-raised 激活项 + shadow-float）。
+ * InspectorTabs Canonical（ds-surface-muted 轨道 + ds-surface 激活项）。
  */
 export function SegmentedControl({ options, value, onChange, className }: SegmentedControlProps) {
   return (
     <div
       className={cn(
-        'inline-flex items-center gap-0.5 rounded-md bg-fill p-0.5',
+        'inline-flex items-center gap-1 rounded-md bg-ds-surface-muted p-1 text-ds-text',
         className,
       )}
     >
@@ -31,10 +31,10 @@ export function SegmentedControl({ options, value, onChange, className }: Segmen
             type="button"
             onClick={() => onChange(option.value)}
             className={cn(
-              'rounded-sm px-3.5 py-1 text-[13px] font-sc transition-colors',
+              'rounded px-2.5 py-1.5 text-xs font-medium transition-colors',
               active
-                ? 'bg-surface-raised font-semibold text-label shadow-float'
-                : 'font-normal text-label-secondary hover:text-label',
+                ? 'bg-ds-surface text-ds-text'
+                : 'text-ds-text-muted hover:text-ds-text',
             )}
           >
             {option.label}

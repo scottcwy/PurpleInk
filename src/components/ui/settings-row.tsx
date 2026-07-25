@@ -21,11 +21,11 @@ export function SettingsRow({ label, value, children, className }: SettingsRowPr
         className,
       )}
     >
-      <span className="text-[15px] font-sc text-label">{label}</span>
+      <span className="text-sm font-sc text-ds-text">{label}</span>
       <div className="flex items-center gap-2">
-        {value && <span className="text-[13px] font-mono text-label-secondary">{value}</span>}
+        {value && <span className="text-xs font-mono text-ds-text-muted">{value}</span>}
         {children}
-        <ChevronRight className="h-4 w-4 text-label-tertiary" />
+        <ChevronRight className="size-4 text-ds-text-muted" />
       </div>
     </div>
   )

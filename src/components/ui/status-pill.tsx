@@ -15,12 +15,16 @@ export interface StatusPillProps {
 }
 
 const STYLES: Record<StatusPillVariant, { bg: string; color: string; defaultLabel: string }> = {
-  pending: { bg: 'bg-fill', color: 'text-label-tertiary', defaultLabel: '待生成' },
-  generating: { bg: 'bg-accent-fill', color: 'text-accent', defaultLabel: '生成中' },
-  rendered: { bg: 'bg-success-fill', color: 'text-success', defaultLabel: '已渲染' },
-  cached: { bg: 'bg-teal-fill', color: 'text-teal', defaultLabel: '已缓存' },
-  stale: { bg: 'bg-warning-fill', color: 'text-warning', defaultLabel: '需重渲' },
-  failed: { bg: 'bg-danger-fill', color: 'text-danger', defaultLabel: '失败' },
+  pending: {
+    bg: 'bg-ds-surface-muted',
+    color: 'text-ds-text-muted',
+    defaultLabel: '待生成',
+  },
+  generating: { bg: 'bg-ds-blue-soft', color: 'text-ds-blue', defaultLabel: '生成中' },
+  rendered: { bg: 'bg-ds-green-soft', color: 'text-ds-green', defaultLabel: '已渲染' },
+  cached: { bg: 'bg-ds-blue-soft', color: 'text-ds-blue', defaultLabel: '已缓存' },
+  stale: { bg: 'bg-ds-amber-soft', color: 'text-ds-amber', defaultLabel: '需重渲' },
+  failed: { bg: 'bg-ds-red-soft', color: 'text-ds-red', defaultLabel: '失败' },
 }
 
 /**
@@ -32,7 +36,7 @@ export function StatusPill({ variant = 'pending', label, className }: StatusPill
   return (
     <div
       className={cn(
-        'inline-flex h-[22px] items-center gap-1.5 rounded-pill px-2.5',
+        'inline-flex items-center gap-1.5 rounded-full border border-ds-border px-2 py-1',
         style.bg,
         className,
       )}

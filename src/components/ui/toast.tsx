@@ -22,10 +22,10 @@ const ICONS: Record<ToastVariant, ComponentType<{ className?: string }>> = {
 }
 
 const ICON_COLORS: Record<ToastVariant, string> = {
-  info: 'text-accent',
-  success: 'text-success',
-  warning: 'text-warning',
-  error: 'text-danger',
+  info: 'text-ds-blue',
+  success: 'text-ds-green',
+  warning: 'text-ds-amber',
+  error: 'text-ds-red',
 }
 
 /**
@@ -38,20 +38,20 @@ export function Toast({ variant = 'info', title, body, onClose, className }: Toa
   return (
     <div
       className={cn(
-        'flex w-[360px] items-start gap-2.5 rounded-lg bg-glass p-3 shadow-float backdrop-blur-[20px]',
+        'flex w-[360px] items-start gap-2.5 rounded-lg border border-ds-border bg-ds-surface p-3 text-ds-text shadow-[var(--ds-shadow)] backdrop-blur-[20px]',
         className,
       )}
     >
       <Icon className={cn('h-5 w-5 shrink-0', ICON_COLORS[variant])} />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-[13px] font-semibold font-sc text-label">{title}</span>
-        {body && <span className="text-xs font-sc text-label-secondary">{body}</span>}
+        <span className="text-[13px] font-semibold font-sc">{title}</span>
+        {body && <span className="text-xs font-sc text-ds-text-muted">{body}</span>}
       </div>
       {onClose && (
         <button
           type="button"
           onClick={onClose}
-          className="shrink-0 text-label-tertiary transition-colors hover:text-label"
+          className="shrink-0 text-ds-text-muted transition-colors hover:text-ds-text"
         >
           <X className="h-4 w-4" />
         </button>

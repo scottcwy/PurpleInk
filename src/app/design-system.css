@@ -14,8 +14,11 @@
   --ds-green-soft: #e9f8f2;
   --ds-red: #c4475b;
   --ds-red-soft: #f2deda;
+  --ds-amber: #b66a18;
+  --ds-amber-soft: #f3e7d4;
   --ds-magenta: #f23886;
   --ds-canvas: #e8ecfa;
+  --ds-scrim: #10183a70;
   --ds-button-start: #3a4788;
   --ds-button-end: #1c244f;
   --ds-shadow: 0 10px 28px #25305a1f;
@@ -38,7 +41,10 @@
   --ds-green-soft: #122a22;
   --ds-red: #de7c91;
   --ds-red-soft: #3a2421;
+  --ds-amber: #d9a55e;
+  --ds-amber-soft: #3b2d1d;
   --ds-canvas: #080910;
+  --ds-scrim: #02030a99;
   --ds-button-start: #594f94;
   --ds-button-end: #302762;
   --ds-shadow: 0 10px 28px #00000066;
@@ -58,6 +64,8 @@
   --color-ds-green-soft: var(--ds-green-soft);
   --color-ds-red: var(--ds-red);
   --color-ds-red-soft: var(--ds-red-soft);
+  --color-ds-amber: var(--ds-amber);
+  --color-ds-amber-soft: var(--ds-amber-soft);
   --color-ds-canvas: var(--ds-canvas);
 }
 

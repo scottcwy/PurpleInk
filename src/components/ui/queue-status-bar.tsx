@@ -28,8 +28,7 @@ export function describeQueueActivity(input: QueueActivity): string {
 
 /**
  * 渲染队列状态条（SSOT）。
- * canvas.pen: surface 底、上边框 separator、h-9、px-4；
- * 左侧 loader + 标签 + 迷你进度，右侧辅助信息。
+ * canvas.pen Canonical: ds-surface 底、上边框、高 40px、px-3.5。
  */
 export function QueueStatusBar({
   completed,
@@ -44,25 +43,25 @@ export function QueueStatusBar({
   return (
     <div
       className={cn(
-        'flex h-9 items-center justify-between border-t border-separator bg-surface px-4',
+        'flex h-10 items-center justify-between border-t border-ds-border bg-ds-surface px-3.5 text-ds-text',
         className,
       )}
     >
       <div className="flex items-center gap-2">
         <LoaderCircle
           className={cn(
-            'h-3.5 w-3.5 text-accent',
+            'size-3.5 text-ds-blue',
             active > 0 && 'animate-spin'
           )}
         />
-        <span className="text-xs font-sc text-label-secondary">
-          {label ?? `渲染队列 · ${completed}/${total} 节点完成`}
+        <span className="text-xs font-sc text-ds-text-muted">
+          {label ?? `Pipeline · 已提交 ${completed} / ${total} 个检查点`}
         </span>
-        <div className="h-1 w-[120px] rounded-sm bg-fill">
-          <div className="h-1 rounded-sm bg-accent" style={{ width: `${percent}%` }} />
+        <div className="h-1 w-[120px] rounded-full bg-ds-surface-muted">
+          <div className="h-1 rounded-full bg-ds-blue" style={{ width: `${percent}%` }} />
         </div>
       </div>
-      <span className="text-xs font-sc text-label-tertiary">
+      <span className="text-xs font-sc text-ds-text-muted">
         {describeQueueActivity({ completed, active, failed, total })}
       </span>
     </div>

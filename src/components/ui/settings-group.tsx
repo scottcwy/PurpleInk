@@ -8,13 +8,13 @@ export interface SettingsGroupProps {
 
 /**
  * 设置组（SSOT）。
- * canvas.pen: surface 底、rounded-md、shadow-card、垂直布局、clip。
+ * canvas.pen: ds-surface 底、8px 圆角、ds-border、垂直布局、clip。
  */
 export function SettingsGroup({ children, className }: SettingsGroupProps) {
   return (
     <div
       className={cn(
-        'flex flex-col overflow-hidden rounded-md bg-surface shadow-card',
+        'flex flex-col overflow-hidden rounded-lg border border-ds-border bg-ds-surface text-ds-text',
         className,
       )}
     >
@@ -24,5 +24,5 @@ export function SettingsGroup({ children, className }: SettingsGroupProps) {
 }
 
 export function SettingsSeparator({ className }: { className?: string }) {
-  return <div className={cn('h-px w-full bg-separator', className)} />
+  return <div className={cn('h-px w-full bg-ds-border', className)} />
 }

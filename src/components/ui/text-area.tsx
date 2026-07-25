@@ -10,15 +10,15 @@ export interface TextAreaProps extends TextareaHTMLAttributes<HTMLTextAreaElemen
  */
 export function TextArea({ label, className, ...props }: TextAreaProps) {
   return (
-    <div className={cn('flex w-[280px] flex-col gap-1.5', className)}>
+    <div className={cn('flex w-[520px] max-w-full flex-col gap-[7px]', className)}>
       {label && (
-        <label className="text-[13px] font-normal text-label-secondary font-sc">
+        <label className="text-[13px] font-medium text-ds-text font-sc">
           {label}
         </label>
       )}
       <textarea
         className={cn(
-          'min-h-[120px] w-full resize-none rounded-md border border-separator bg-surface px-3 py-2 text-[15px] font-sc text-label placeholder:text-label-tertiary focus:border-accent focus:outline-none',
+          'min-h-[120px] w-full resize-none rounded-md border border-ds-border bg-ds-surface p-3 text-sm leading-[1.5] font-sc text-ds-text placeholder:text-ds-text-muted focus:border-ds-blue focus:outline-none',
         )}
         {...props}
       />

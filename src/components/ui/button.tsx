@@ -18,16 +18,17 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: 'bg-accent text-on-accent hover:opacity-90',
-  tinted: 'bg-accent-fill text-accent hover:opacity-80',
-  gray: 'bg-fill text-label hover:bg-fill-strong',
-  destructive: 'bg-danger text-on-accent hover:opacity-90',
+  primary: 'ds-primary-button text-white hover:brightness-105',
+  tinted: 'bg-ds-blue-soft text-ds-blue hover:brightness-95',
+  gray:
+    'border border-ds-border bg-ds-surface text-ds-text hover:bg-ds-surface-muted',
+  destructive: 'bg-ds-red text-white hover:brightness-95',
 }
 
 const SIZES: Record<ButtonSize, string> = {
-  sm: 'h-8 gap-1 px-3 text-[13px] rounded-sm',
-  md: 'h-9 gap-1.5 px-4 text-[15px] rounded-sm',
-  lg: 'h-10 gap-1.5 px-5 text-[15px] rounded-md',
+  sm: 'h-8 gap-1.5 px-3 text-xs rounded-md',
+  md: 'h-10 gap-2 px-3.5 text-sm rounded-md',
+  lg: 'h-11 gap-2 px-5 text-sm rounded-md',
 }
 
 /**
@@ -45,7 +46,7 @@ export function Button({
   return (
     <button
       className={cn(
-        'inline-flex items-center justify-center font-semibold font-sc transition-colors disabled:pointer-events-none disabled:opacity-50',
+        'inline-flex items-center justify-center font-medium font-sc transition-[background-color,filter,opacity] disabled:pointer-events-none disabled:opacity-50',
         VARIANTS[variant],
         SIZES[size],
         className,

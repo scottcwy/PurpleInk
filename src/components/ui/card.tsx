@@ -1,20 +1,20 @@
 import type { HTMLAttributes } from 'react'
 import { cn } from '@/lib/utils'
 
-/** 卡片容器原语（token：surface 底 + separator 描边 + shadow-card + radius-lg）。 */
+/** 卡片容器原语（Canonical ds surface + border + radius 8）。 */
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('rounded-lg border border-separator bg-surface p-4 shadow-card', className)}
+      className={cn('rounded-lg border border-ds-border bg-ds-surface p-4 text-ds-text', className)}
       {...props}
     />
   )
 }
 
 export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) {
-  return <h3 className={cn('text-base font-semibold text-label', className)} {...props} />
+  return <h3 className={cn('text-base font-semibold text-ds-text', className)} {...props} />
 }
 
 export function CardBody({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('mt-2 text-sm text-label-secondary', className)} {...props} />
+  return <div className={cn('mt-2 text-sm text-ds-text-muted', className)} {...props} />
 }

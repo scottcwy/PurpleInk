@@ -11,18 +11,18 @@ export interface ArtifactChipProps {
 
 /**
  * 工件文件名芯片（SSOT）。
- * canvas.pen: fill 底、rounded-sm、h-[26px]、gap-1.5、px-2 py-1。
+ * canvas.pen Canonical: ds-surface-muted 底、6px 圆角、边框、px-2 py-[5px]。
  */
 export function ArtifactChip({ icon: Icon, filename, href, className }: ArtifactChipProps) {
   const classes = cn(
-    'inline-flex h-[26px] items-center gap-1.5 rounded-sm bg-fill px-2 py-1',
-    href && 'transition-colors hover:bg-fill-strong',
+    'inline-flex items-center gap-[7px] rounded-md border border-ds-border bg-ds-surface-muted px-2 py-[5px] text-ds-text',
+    href && 'transition-colors hover:brightness-95',
     className,
   )
   const content = (
     <>
-      {Icon && <Icon className="h-3 w-3 text-label-secondary" />}
-      <span className="text-[11px] font-mono text-label">{filename}</span>
+      {Icon && <Icon className="size-[13px] text-ds-text-muted" />}
+      <span className="text-[11px] font-mono">{filename}</span>
     </>
   )
 

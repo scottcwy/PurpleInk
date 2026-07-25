@@ -8,15 +8,15 @@ export interface ToggleProps extends Omit<InputHTMLAttributes<HTMLInputElement>,
 
 /**
  * 开关（SSOT）。
- * canvas.pen: 44×26、rounded-pill；开启 success 底，关闭 fill 底；
- * knob 22×22 白色 + shadow-float。
+ * canvas.pen Canonical: 40×22、rounded-pill；开启 primary 底；
+ * knob 18×18 白色。
  */
 export function Toggle({ checked, onCheckedChange, className, ...props }: ToggleProps) {
   return (
     <label
       className={cn(
-        'relative inline-flex h-[26px] w-11 cursor-pointer items-center rounded-pill transition-colors',
-        checked ? 'bg-success' : 'bg-fill',
+        'relative inline-flex h-[22px] w-10 cursor-pointer items-center rounded-full p-0.5 transition-colors',
+        checked ? 'bg-ds-primary' : 'bg-ds-surface-muted',
         className,
       )}
     >
@@ -29,8 +29,8 @@ export function Toggle({ checked, onCheckedChange, className, ...props }: Toggle
       />
       <span
         className={cn(
-          'h-[22px] w-[22px] rounded-full bg-knob shadow-float transition-transform',
-          checked ? 'translate-x-5' : 'translate-x-0.5',
+          'size-[18px] rounded-full bg-white shadow-sm transition-transform',
+          checked ? 'translate-x-[18px]' : 'translate-x-0',
         )}
       />
     </label>

@@ -25,15 +25,15 @@ export function ContactSheetThumb({
         {frames.map((pct, i) => (
           <div
             key={i}
-            className="flex h-[30px] w-[52px] flex-col justify-end rounded-sm bg-fill p-0.5"
+            className="flex h-[30px] w-[52px] flex-col justify-end rounded bg-ds-surface-muted p-0.5"
           >
-            <span className="text-center text-[9px] font-mono text-label-tertiary">{pct}</span>
+            <span className="text-center text-[9px] font-mono text-ds-text-muted">{pct}</span>
           </div>
         ))}
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-xs font-sc text-label">{label}</span>
-        {checked && <CircleCheck className="h-3.5 w-3.5 text-success" />}
+        <span className="text-xs font-sc text-ds-text">{label}</span>
+        {checked && <CircleCheck className="size-3.5 text-ds-green" />}
       </div>
     </div>
   )

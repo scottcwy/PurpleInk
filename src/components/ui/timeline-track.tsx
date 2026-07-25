@@ -24,10 +24,10 @@ export function TimelineTrack({
   return (
     <div className={cn('flex h-10 items-center', className)}>
       <div className="flex w-[72px] items-center gap-1">
-        <Icon className="h-3.5 w-3.5 text-label-secondary" />
-        <span className="text-xs font-sc text-label-secondary">{label}</span>
+        <Icon className="size-3.5 text-ds-text-muted" />
+        <span className="text-xs font-sc text-ds-text-muted">{label}</span>
       </div>
-      <div className="relative h-8 flex-1 overflow-hidden rounded-md bg-fill">
+      <div className="relative h-8 flex-1 overflow-hidden rounded-md bg-ds-surface-muted">
         {clips.map((clip, i) => (
           <div
             key={i}
