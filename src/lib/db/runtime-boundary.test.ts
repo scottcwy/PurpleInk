@@ -244,10 +244,11 @@ describe("runtime dependency and startup boundary", () => {
       trackedFiles("src", "trigger").filter(isTypeScript),
     )
 
+    // Stage A 已全面移除 SQLite：dependencies 与 devDependencies 都不得再出现。
     expect(manifest.dependencies?.["better-sqlite3"]).toBeUndefined()
-    expect(manifest.devDependencies?.["better-sqlite3"]).toBe("12.1.0")
+    expect(manifest.devDependencies?.["better-sqlite3"]).toBeUndefined()
     expect(manifest.dependencies?.["@types/better-sqlite3"]).toBeUndefined()
-    expect(manifest.devDependencies?.["@types/better-sqlite3"]).toBe("7.6.13")
+    expect(manifest.devDependencies?.["@types/better-sqlite3"]).toBeUndefined()
     expect(manifest.dependencies?.openai).toBeTruthy()
     expect(lockfile).not.toMatch(/@openai\/agents(?:[-/@]|(?=['":\s]))/)
     expect(

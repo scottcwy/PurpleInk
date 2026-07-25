@@ -5,11 +5,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts', 'tests/**/*.test.{ts,tsx}'],
-    exclude: [
-      ...configDefaults.exclude,
-      '**/*.pg.test.ts',
-      'src/lib/db/runtime-boundary.test.ts',
-    ],
+    exclude: [...configDefaults.exclude, '**/*.pg.test.ts'],
   },
   resolve: {
     alias: {
