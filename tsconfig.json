@@ -43,7 +43,6 @@
     ".next",
     "out",
     ".data",
-    "scripts/migration/**",
-    "src/features/pipeline/contracts/contracts.test.ts"
+    "scripts/migration/**"
   ]
 }

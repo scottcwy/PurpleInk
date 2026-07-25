@@ -8,9 +8,6 @@ export default defineConfig({
     exclude: [
       ...configDefaults.exclude,
       '**/*.pg.test.ts',
-      // Stage A explicitly removes these historical Trigger and SQLite contracts.
-      'src/features/pipeline/contracts/contracts.test.ts',
-      'src/features/pipeline/contracts/task-source-boundary.test.ts',
       'src/lib/db/runtime-boundary.test.ts',
     ],
   },

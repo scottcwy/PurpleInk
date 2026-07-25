@@ -129,7 +129,7 @@ describe('dependency direction', () => {
       'drizzle-orm',
       '@trigger.dev/sdk',
       '@/trigger/dispatcher',
-      '@/features/pipeline/trigger-adapter',
+      '@/features/foo/trigger-adapter',
       '@earendil-works/pi-agent-core',
       '@earendil-works/pi-ai',
       'hyperframes',
@@ -163,7 +163,7 @@ describe('dependency direction', () => {
     const allowed = [
       '@trigger.dev/sdk',
       'zod',
-      '@/features/pipeline/project-plan-service',
+      '@/features/foo/project-plan-service',
       './payload-schema',
     ]
     writeFixture(
