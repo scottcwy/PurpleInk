@@ -18,7 +18,17 @@ const nextConfig: NextConfig = {
     "ffmpeg-static",
     "@earendil-works/pi-ai",
     "@earendil-works/pi-agent-core",
+    "playwright",
+    "playwright-core",
   ],
+  // Playwright dynamically loads browsers.json and server bundles. Next's
+  // standalone tracer cannot discover all of those files from static imports.
+  outputFileTracingIncludes: {
+    "/*": [
+      "./node_modules/playwright/**/*",
+      "./node_modules/playwright-core/**/*",
+    ],
+  },
   // Disable source maps in production to protect code
   productionBrowserSourceMaps: false,
   // Remove console.log in production
