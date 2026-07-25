@@ -8,7 +8,8 @@ import { logger } from "../../lib/logger"
 function shotToChapter(kind: ShotType): ChapterId {
   if (kind === "brand-center" || kind === "brand-side") return "ch1-opening"
   if (kind === "hero-split" || kind === "hero-stack") return "ch2-hero"
-  if (kind === "shot-window" || kind === "shot-tilt" || kind === "shot-zoom" || kind === "shot-split") return "ch3-showcase"
+  if (kind === "shot-window" || kind === "shot-tilt" || kind === "shot-split") return "ch3-showcase"
+  if (kind === "shot-zoom") return "ch2-hero"
   if (
     kind === "feature-row" || kind === "feature-stack" ||
     kind === "data-counter" || kind === "chips-marquee" ||
@@ -81,9 +82,9 @@ export function splitScenesToChapters(model: VideoModel): ChapterPlan[] {
 
     const shotTypes = scenes.map((s) => s.kind)
 
-    // Collect screenshot assets (only ch3-showcase uses them)
+    // Collect screenshot assets (ch2-hero and ch3-showcase use them)
     const assets: string[] = []
-    if (id === "ch3-showcase") {
+    if (id === "ch3-showcase" || id === "ch2-hero") {
       for (const scene of scenes) {
         for (const shot of scene.shots || []) {
           if (shot.src) assets.push(shot.src)

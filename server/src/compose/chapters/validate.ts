@@ -101,6 +101,8 @@ export function validateHyperFramesHtml(
     }
   }
 
+
+
   return { valid: errors.length === 0, errors }
 }
 

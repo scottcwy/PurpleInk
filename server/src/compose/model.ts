@@ -564,7 +564,7 @@ const MIN_SHOT_SEC = 2.2
  * ③ 截图镜头上限：截图只作「真·产品 UI 证据」，限量 + 降权，避免纯缩放/平移刷屏；
  * 其余叙事优先用 HTML 重绘镜头（大字卡/数字滚动/列表揭示/标签跑马灯）。
  */
-const MAX_SHOT_SCENES = 3
+const MAX_SHOT_SCENES = 8
 
 /** 故事板一条目：镜头类型 + 权重 + 可选素材 */
 interface StoryEntry {
@@ -731,15 +731,13 @@ function selectStoryboard(input: StoryboardInput, total: number, skin: VisualSys
   const brand: StoryEntry = { kind: brandKind, weight: 4.5 }
   const hero: StoryEntry = { kind: heroKind, weight: 6 }
 
-  // 3) 主体池：翻转主次——HTML 原生重绘为默认/核心，截图降级为「真实产品 UI 证据」点缀。
+  // 3) 主体池：截图作为「真实产品 UI 证据」，权重 5，与 HTML 重绘镜头平分秋色。
   const body: StoryEntry[] = []
-  // 结构化内容够丰富(功能≥3 / logo≥4 / 指标≥2 / 定价≥2)时，截图退为 ≤1 张点缀；否则至多 2 张。
-  const htmlRich =
-    input.valueProps >= 3 || input.logos >= 4 || input.stats.length >= 2 || input.pricing >= 2
-  const screenshotBudget = Math.min(htmlRich ? 1 : 2, input.shots.length, MAX_SHOT_SCENES)
-  // 截图统一走「套浏览器壳」的 shot-window(产品主视觉证据)，低权重，绝不做纯缩放/平移刷屏。
-  input.shots.slice(0, screenshotBudget).forEach((s) => {
-    body.push({ kind: "shot-window", weight: 4, shots: [s] })
+  const screenshotBudget = Math.min(input.shots.length, 8)
+  // 截图类型多样化：交替使用 shot-window / shot-zoom / shot-tilt，让视频视觉更丰富
+  const shotKinds: ShotType[] = ["shot-window", "shot-zoom", "shot-tilt"]
+  input.shots.slice(0, screenshotBudget).forEach((s, idx) => {
+    body.push({ kind: shotKinds[idx % 3]!, weight: 5, shots: [s] })
   })
   // HTML 重绘镜头为叙事主体(权重高于截图)：功能卡错落 / logo 行 / 定价 / 数字滚动 / 标签跑马灯。
   if (input.valueProps > 0) {

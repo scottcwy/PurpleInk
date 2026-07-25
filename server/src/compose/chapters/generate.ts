@@ -1,6 +1,5 @@
 // LLM chapter generation with template fallback.
-// LLM directly generates full HTML for each chapter.
-// Three-level fallback: LLM HTML → template-fallback → safety net
+// Three-level fallback: HTML Agent → legacy LLM → template-fallback → safety net
 import { readdir } from "node:fs/promises"
 import { join } from "node:path"
 import sharp from "sharp"
@@ -11,22 +10,19 @@ import type { VideoModel } from "../model"
 import {
   buildSystemPrompt,
   buildChapterPrompt,
-  buildBatchPrompt,
-  getBatchableChapterIds,
   extractHtmlFromResponse,
-  parseBatchResponse,
 } from "./prompts"
+import { generateChapterHtml, checkScreenshotUtilization, selectScreenshotsForChapter } from "./html-agent"
 import { validateHyperFramesHtml } from "./validate"
 import { renderTemplateChapter } from "./template-fallback"
 
 /**
- * Generate all 5 chapters via LLM with per-chapter validation and fallback.
+ * Generate all 5 chapters via HTML Agent with per-chapter validation and fallback.
  *
- * Strategy (4 LLM calls total):
- *   1. Batch call: Ch1 + Ch5 (no screenshots, low token count)
- *   2. Individual call: Ch2 (hero with screenshots — product UI mockup)
- *   3. Individual call: Ch3 (showcase with screenshots — heaviest)
- *   4. Individual call: Ch4 (proof with stats/logos/pricing)
+ * Strategy (per chapter, 5 individual calls):
+ *   1. HTML Agent (generateChapterHtml) — enhanced prompt with screenshot enforcement
+ *   2. Legacy LLM (callStepMessages) — original prompt path as fallback
+ *   3. Template fallback (renderTemplateChapter) — if both LLM paths fail
  *
  * Each chapter is validated after generation. Failed chapters fall back to
  * renderTemplateChapter() from template-fallback.ts.
@@ -39,167 +35,19 @@ export async function generateChapters(
   const systemPrompt = buildSystemPrompt(ctx)
   const results = new Map<ChapterId, ChapterHtml>()
   const assetFiles = await listAssetFiles(captureDir)
+  const allScreenshotPaths = ctx.screenshots.map((s) => s.path)
 
-  // --- Call 1: Batch Ch1 + Ch5 ---
-  const batchIds = getBatchableChapterIds()
-  try {
-    logger.info("generate:batch_start", { chapters: batchIds, hasApiKey: !!process.env.STEP_API_KEY })
-    const batchPrompt = buildBatchPrompt(batchIds, ctx)
-    logger.info("generate:batch_calling", { chapters: batchIds, promptLen: batchPrompt.length })
-    const response = await callStepMessages({
-      system: systemPrompt,
-      content: [{ type: "text", text: batchPrompt }],
-      maxTokens: 8000,
-      model: "step-explore",
-    })
-    logger.info("generate:batch_response", { responseLen: response?.length || 0, hasContent: !!response })
-    const parsed = parseBatchResponse(response)
-    for (const id of batchIds) {
-      const html = parsed.get(id)
-      if (html) {
-        const validation = validateHyperFramesHtml(html, id, assetFiles, join(captureDir, "assets"))
-        if (validation.valid) {
-          results.set(id, { id, html, source: "llm" })
-          logger.info("generate:chapter_ok", { chapter: id, source: "llm" })
-        } else {
-          logger.warn("generate:chapter_invalid", { chapter: id, errors: validation.errors })
-          results.set(id, fallbackToTemplate(id, model, assetFiles, captureDir))
-        }
-      } else {
-        logger.warn("generate:chapter_missing", { chapter: id })
-        results.set(id, fallbackToTemplate(id, model, assetFiles, captureDir))
-      }
-    }
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err)
-    logger.error("generate:batch_failed", { error: errMsg, chapters: batchIds })
-    for (const id of batchIds) {
-      logger.warn("generate:batch_fallback", { chapter: id, reason: errMsg })
-      results.set(id, fallbackToTemplate(id, model, assetFiles, captureDir))
-    }
-  }
+  // Generate each chapter individually with three-level fallback
+  const allIds: ChapterId[] = ["ch1-opening", "ch2-hero", "ch3-showcase", "ch4-proof", "ch5-cta"]
 
-  // --- Call 2: Individual Ch2 (hero with screenshots) ---
-  try {
-    logger.info("generate:ch2_start", { screenshots: ctx.screenshots.length })
-    const ch2Prompt = buildChapterPrompt("ch2-hero", ctx)
-    const content2: Array<
-      | { type: "text"; text: string }
-      | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
-    > = [{ type: "text", text: ch2Prompt }]
-
-    // Attach first 2 screenshot previews as base64 images for product UI reference
-    for (const ss of ctx.screenshots.slice(0, 2)) {
-      if (ss.base64Preview) {
-        content2.push({
-          type: "image",
-          source: {
-            type: "base64",
-            media_type: "image/jpeg",
-            data: ss.base64Preview,
-          },
-        })
-      }
-    }
-
-    const response = await callStepMessages({
-      system: systemPrompt,
-      content: content2,
-      maxTokens: 8000,
-      model: "step-explore",
-    })
-    logger.info("generate:ch2_response", { responseLen: response?.length || 0 })
-    const html = extractHtmlFromResponse(response)
-    const validation = validateHyperFramesHtml(html, "ch2-hero", assetFiles, join(captureDir, "assets"))
-    if (validation.valid) {
-      results.set("ch2-hero", { id: "ch2-hero", html, source: "llm" })
-      logger.info("generate:chapter_ok", { chapter: "ch2-hero", source: "llm" })
-    } else {
-      logger.warn("generate:chapter_invalid", { chapter: "ch2-hero", errors: validation.errors })
-      results.set("ch2-hero", fallbackToTemplate("ch2-hero", model, assetFiles, captureDir))
-    }
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err)
-    logger.error("generate:ch2_failed", { error: errMsg })
-    logger.warn("generate:ch2_fallback", { reason: errMsg })
-    results.set("ch2-hero", fallbackToTemplate("ch2-hero", model, assetFiles, captureDir))
-  }
-
-  // --- Call 3: Individual Ch3 (showcase) ---
-  try {
-    logger.info("generate:ch3_start", { screenshots: ctx.screenshots.length })
-    const ch3Prompt = buildChapterPrompt("ch3-showcase", ctx)
-    const content: Array<
-      | { type: "text"; text: string }
-      | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
-    > = [{ type: "text", text: ch3Prompt }]
-
-    // Attach screenshot previews as base64 images
-    for (const ss of ctx.screenshots.slice(0, 3)) {
-      if (ss.base64Preview) {
-        content.push({
-          type: "image",
-          source: {
-            type: "base64",
-            media_type: "image/jpeg",
-            data: ss.base64Preview,
-          },
-        })
-      }
-    }
-
-    const response = await callStepMessages({
-      system: systemPrompt,
-      content,
-      maxTokens: 8000,
-      model: "step-explore",
-    })
-    logger.info("generate:ch3_response", { responseLen: response?.length || 0 })
-    const html = extractHtmlFromResponse(response)
-    const validation = validateHyperFramesHtml(html, "ch3-showcase", assetFiles, join(captureDir, "assets"))
-    if (validation.valid) {
-      results.set("ch3-showcase", { id: "ch3-showcase", html, source: "llm" })
-      logger.info("generate:chapter_ok", { chapter: "ch3-showcase", source: "llm" })
-    } else {
-      logger.warn("generate:chapter_invalid", { chapter: "ch3-showcase", errors: validation.errors })
-      results.set("ch3-showcase", fallbackToTemplate("ch3-showcase", model, assetFiles, captureDir))
-    }
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err)
-    logger.error("generate:ch3_failed", { error: errMsg })
-    logger.warn("generate:ch3_fallback", { reason: errMsg })
-    results.set("ch3-showcase", fallbackToTemplate("ch3-showcase", model, assetFiles, captureDir))
-  }
-
-  // --- Call 4: Individual Ch4 (proof) ---
-  try {
-    logger.info("generate:ch4_start", { hasStats: model.scenes.some((s) => s.stats?.length), hasLogos: model.logos.length > 0 })
-    const ch4Prompt = buildChapterPrompt("ch4-proof", ctx)
-    const response = await callStepMessages({
-      system: systemPrompt,
-      content: [{ type: "text", text: ch4Prompt }],
-      maxTokens: 8000,
-      model: "step-explore",
-    })
-    logger.info("generate:ch4_response", { responseLen: response?.length || 0 })
-    const html = extractHtmlFromResponse(response)
-    const validation = validateHyperFramesHtml(html, "ch4-proof", assetFiles, join(captureDir, "assets"))
-    if (validation.valid) {
-      results.set("ch4-proof", { id: "ch4-proof", html, source: "llm" })
-      logger.info("generate:chapter_ok", { chapter: "ch4-proof", source: "llm" })
-    } else {
-      logger.warn("generate:chapter_invalid", { chapter: "ch4-proof", errors: validation.errors })
-      results.set("ch4-proof", fallbackToTemplate("ch4-proof", model, assetFiles, captureDir))
-    }
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err)
-    logger.error("generate:ch4_failed", { error: errMsg })
-    logger.warn("generate:ch4_fallback", { reason: errMsg })
-    results.set("ch4-proof", fallbackToTemplate("ch4-proof", model, assetFiles, captureDir))
+  for (const chapterId of allIds) {
+    const chapterResult = await generateChapterWithFallback(
+      chapterId, ctx, systemPrompt, allScreenshotPaths, assetFiles, captureDir, model,
+    )
+    results.set(chapterId, chapterResult)
   }
 
   // Return in canonical order
-  const allIds: ChapterId[] = ["ch1-opening", "ch2-hero", "ch3-showcase", "ch4-proof", "ch5-cta"]
   const results_ = allIds.map((id) => {
     const ch = results.get(id)
     if (ch) return ch
@@ -213,6 +61,93 @@ export async function generateChapters(
     details: results_.map((c) => ({ id: c.id, source: c.source })),
   })
   return results_
+}
+
+/**
+ * Generate a single chapter with three-level fallback:
+ *   1. HTML Agent (enhanced prompt with screenshot enforcement)
+ *   2. Legacy LLM (original callStepMessages path)
+ *   3. Template fallback
+ */
+async function generateChapterWithFallback(
+  chapterId: ChapterId,
+  ctx: ComposeContext,
+  systemPrompt: string,
+  allScreenshotPaths: string[],
+  assetFiles: string[],
+  captureDir: string,
+  model: VideoModel,
+): Promise<ChapterHtml> {
+  const chapterPrompt = buildChapterPrompt(chapterId, ctx)
+
+  // --- Level 1: HTML Agent ---
+  try {
+    logger.info("generate:html_agent_start", { chapter: chapterId })
+    const html = await generateChapterHtml(chapterId, ctx, chapterPrompt, allScreenshotPaths)
+    const validation = validateHyperFramesHtml(html, chapterId, assetFiles, join(captureDir, "assets"))
+    if (validation.valid) {
+      // Verify chapter-specific screenshots are actually used
+      const chapterScreenshots = selectScreenshotsForChapter(chapterId, allScreenshotPaths)
+      const utilization = checkScreenshotUtilization(html, chapterScreenshots)
+      if (utilization.ok) {
+        logger.info("generate:chapter_ok", { chapter: chapterId, source: "html_agent" })
+        return { id: chapterId, html, source: "llm" }
+      }
+      logger.warn("generate:html_agent_missing_screenshots", { chapter: chapterId, missing: utilization.missing.length })
+    } else {
+      logger.warn("generate:html_agent_invalid", { chapter: chapterId, errors: validation.errors })
+    }
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    logger.warn("generate:html_agent_failed", { chapter: chapterId, error: errMsg })
+  }
+
+  // --- Level 2: Legacy LLM ---
+  try {
+    logger.info("generate:legacy_llm_start", { chapter: chapterId })
+    const content: Array<
+      | { type: "text"; text: string }
+      | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
+    > = [{ type: "text", text: chapterPrompt }]
+
+    // Attach screenshot previews as base64 images
+    for (const ss of ctx.screenshots.slice(0, 3)) {
+      if (ss.base64Preview) {
+        content.push({
+          type: "image",
+          source: { type: "base64", media_type: "image/jpeg", data: ss.base64Preview },
+        })
+      }
+    }
+
+    const response = await callStepMessages({
+      system: systemPrompt,
+      content,
+      maxTokens: 8000,
+      model: "step-explore",
+    })
+    logger.info("generate:legacy_llm_response", { chapter: chapterId, responseLen: response?.length || 0 })
+    const html = extractHtmlFromResponse(response)
+    const validation = validateHyperFramesHtml(html, chapterId, assetFiles, join(captureDir, "assets"))
+    if (validation.valid) {
+      // Legacy LLM path: also check chapter-specific screenshot utilization (relaxed — only warn)
+      const chapterScreenshots = selectScreenshotsForChapter(chapterId, allScreenshotPaths)
+      const utilization = checkScreenshotUtilization(html, chapterScreenshots)
+      if (!utilization.ok) {
+        logger.warn("generate:legacy_llm_missing_screenshots", { chapter: chapterId, missing: utilization.missing.length })
+      }
+      logger.info("generate:chapter_ok", { chapter: chapterId, source: "legacy_llm" })
+      return { id: chapterId, html, source: "llm" }
+    }
+    logger.warn("generate:legacy_llm_invalid", { chapter: chapterId, errors: validation.errors })
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err)
+    logger.error("generate:legacy_llm_failed", { chapter: chapterId, error: errMsg })
+  }
+
+  // --- Level 3: Template fallback ---
+  logger.warn("generate:template_fallback", { chapter: chapterId })
+  return fallbackToTemplate(chapterId, model, assetFiles, captureDir)
 }
 
 /** Fallback: render a chapter using the template system */
@@ -302,7 +237,7 @@ async function buildScreenshotPreviews(
   }
 
   // Limit to first 5 screenshots
-  for (const { src, caption } of shotPaths.slice(0, 5)) {
+  for (const { src, caption } of shotPaths.slice(0, 8)) {
     const fullPath = join(captureDir, src)
     try {
       const buf = await sharp(fullPath)

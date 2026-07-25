@@ -28,12 +28,12 @@ export interface RunCaptureOptions {
   /** 测试账号（提供则登录优先） */
   testEmail?: string
   testPassword?: string
-  minScreenshots?: number
-  maxScreenshots?: number
-  /** Agent 最大决策步数（默认 14，冒烟/调试时可调小） */
+  /** Agent 最大决策步数（默认 12，不登录场景足够；显式传值可覆盖） */
   maxSteps?: number
   /** 是否有头（调试用），默认 headless */
   headful?: boolean
+  /** 是否跳过登录认证（默认 true，不登录只采集公开内容；显式 false 走原 auth 流程） */
+  skipAuth?: boolean
 }
 
 /**
@@ -67,44 +67,22 @@ export async function runCapture(url: string, options: RunCaptureOptions = {}): 
       logger.warn("run_capture:page_tokens_failed", { error: String(err) })
     }
 
-    // 2. 解析凭据（提供账号→登录优先；配了 IMAP→自助注册；都没有→仅采集公开内容）
-    const credentials = await resolveCredentials({
-      ...(options.testEmail != null ? { testEmail: options.testEmail } : {}),
-      ...(options.testPassword != null ? { testPassword: options.testPassword } : {}),
-    })
-
-    // 3. 根据页面导航项数量推断复杂度，动态调整最大步数
-    let effectiveMaxSteps = options.maxSteps ?? 14
-    if (!options.maxSteps) {
-      try {
-        const navCount = await driver.evaluate(() => {
-          const nav = document.querySelectorAll(
-            'nav a, header a, [role="navigation"] a, [role="menubar"] a'
-          )
-          // 去重（同一 href 只算一个）
-          const seen = new Set<string>()
-          nav.forEach((a) => {
-            const href = (a as HTMLAnchorElement).href
-            if (href) seen.add(href)
-          })
-          return seen.size
+    // 2. 解析凭据（skipAuth 默认 true → 跳过登录，只采集公开内容；显式 false 走原流程）
+    const skipAuth = options.skipAuth !== false
+    const credentials = skipAuth
+      ? null
+      : await resolveCredentials({
+          ...(options.testEmail != null ? { testEmail: options.testEmail } : {}),
+          ...(options.testPassword != null ? { testPassword: options.testPassword } : {}),
         })
-        if (navCount < 5) effectiveMaxSteps = 8
-        else if (navCount <= 15) effectiveMaxSteps = 14
-        else effectiveMaxSteps = 18
-        logger.info("run_capture:complexity", { navCount, maxSteps: effectiveMaxSteps })
-      } catch {
-        // 评估失败时保持默认
-        logger.warn("run_capture:complexity_detect_failed", { fallback: effectiveMaxSteps })
-      }
-    }
+
+    // 3. 最大步数：不登录场景默认 12（显式传 maxSteps 可覆盖）
+    const effectiveMaxSteps = options.maxSteps ?? 12
 
     // 4. 实时采集
     const agent = new AiCaptureAgent(driver, {
       ...(credentials ? { credentials } : {}),
       ...(options.description != null ? { description: options.description } : {}),
-      ...(options.minScreenshots != null ? { minScreenshots: options.minScreenshots } : {}),
-      ...(options.maxScreenshots != null ? { maxScreenshots: options.maxScreenshots } : {}),
       maxSteps: effectiveMaxSteps,
       onSnapshot: (snap, index) => {
         snapshots[index] = {

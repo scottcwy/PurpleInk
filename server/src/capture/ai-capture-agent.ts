@@ -609,7 +609,7 @@ export class AiCaptureAgent {
       model: this.visionModel,
       effort: "low",
       system:
-        "你是一个网页浏览 Agent，负责主动登录/注册并采集产品核心功能截图。只返回 JSON，不要其他文字。",
+        "你是一个网页浏览 Agent，负责浏览产品网站并采集核心功能截图，用于制作产品演示视频。只返回 JSON，不要其他文字。",
       maxTokens: 1500,
       content: [
         { type: "text", text: prompt },
@@ -737,21 +737,23 @@ ${passwordlessLine}${codeLine}逐个字段 fill，填完后点击提交按钮或
 
   /** CAPTURE 阶段的目标、指引、规则、可用 action */
   private buildCapturePrompt(): { phaseGoal: string; guidance: string; rules: string; actionEnum: string } {
-    const guidance = `采集指引（先分析功能 → 让功能呈现 → 再截图）：
-1. 你已进入产品（或本就无需登录）。先观察当前页面与导航，判断产品提供了哪些**核心功能**（如编辑器/对话/生成/数据面板/上传等）。
-2. 进入某个功能后，**先与它交互让功能真正「呈现出结果」再截图** —— 例如在输入框 fill 一段示例内容并点击生成/运行按钮、展开面板，使界面展示真实内容而非空白状态。
-3. 尽量覆盖 ${this.minScreenshots}~${this.maxScreenshots} 个**不同功能**，每个功能呈现后截 1 张。
+    const guidance = `采集指引（首页 tab/导航切换 → 浏览不同内容区域 → 截图）：
+1. 你正在产品首页。**不要尝试登录或注册**，只采集公开可见的内容。
+2. 优先通过点击**顶部导航栏的 tab/链接**来切换浏览不同内容区域（如 Features、Pricing、Docs、Blog、About 等），每个 tab 切换后截 1 张。
+3. 如果当前页面有可交互的核心功能演示（如编辑器/对话/生成器），可先 fill 示例内容并点击运行让功能呈现结果再截图。
+4. 尽量覆盖 ${this.minScreenshots}~${this.maxScreenshots} 个**不同页面/区域**，充分利用 tab 切换获取多样化的截图。
+5. 对于大型网站，绝不尝试登录注册，只采集公开可见的内容。
 `
-    const rules = `1. **绝对不要对登录页 / 注册页 / 密码输入页截图**；若当前处于这类页面，改为 click 进入功能或 navigate 离开，不要选 screenshot。
-2. 只有页面确实展示了产品**核心功能的真实使用效果**时才选 "screenshot"；空白表单、纯营销首页都不算。
-3. 要让功能「呈现」出来：可先 fill 示例内容 / click 生成或运行按钮 / 展开区域，等界面真正渲染出内容再截图。
-4. **screenshot 时尽量给出正在展示核心功能的主内容容器 [ref]**（如编辑器/画布/数据面板/结果区），系统会对该元素做紧裁；别停在文档侧栏/页脚/导航 logo/cookie 条。
-5. 需进入功能时用 "click"（给出目标 [ref]）或 "navigate"；内容不全时 "scroll" value="down"。
-6. 已采集足够多**不同功能页面**（≥${this.minScreenshots}）时选 "done"。
+    const rules = `1. **绝对不要尝试登录或注册**，不要点击任何登录/注册按钮或链接，只采集公开可见内容。
+2. **优先使用 tab/导航切换**来浏览不同页面区域，这是获取多样化截图的最高效方式。
+3. 只有页面确实展示了产品**核心内容或功能的真实效果**时才选 "screenshot"；纯空白页不算。
+4. **screenshot 时尽量给出正在展示核心内容的主内容容器 [ref]**（如功能演示区/定价表/文档内容/结果区），系统会对该元素做紧裁；别停在页脚/导航 logo/cookie 条。
+5. 切换内容时用 "click"（点击导航 tab/链接 [ref]）或 "navigate"；内容不全时 "scroll" value="down"。
+6. 已采集足够多**不同页面/区域**（≥${this.minScreenshots}）时选 "done"。
 7. 不要重复访问已看过的页面，不要重复相同操作。`
 
     const actionEnum = ACTION_ENUM.CAPTURE
-    return { phaseGoal: "采集核心功能截图", guidance, rules, actionEnum }
+    return { phaseGoal: "首页 tab 切换采集公开内容截图", guidance, rules, actionEnum }
   }
 
   private async executeAction(action: AiAction, snapshot: SemanticSnapshot | null): Promise<void> {
