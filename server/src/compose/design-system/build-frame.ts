@@ -50,12 +50,12 @@ function mapPalette(preset: FramePreset, tokens: BrandTokens): PresetPalette {
   const darkest = byLight[byLight.length - 1]!
 
   // Replace canvas if the brand's lightest is significantly different
-  if (colorDistance(lightest, palette.canvas) > 0.15) {
+  if (colorDistance(lightest, palette.canvas) > 0.10) {
     palette.canvas = lightest
   }
 
   // Replace ink if the brand's darkest is significantly different
-  if (colorDistance(darkest, palette.ink) > 0.15) {
+  if (colorDistance(darkest, palette.ink) > 0.10) {
     palette.ink = darkest
   }
 

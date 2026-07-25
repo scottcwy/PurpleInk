@@ -178,30 +178,42 @@ export async function verifyGolden(projectDir: string): Promise<{ passed: boolea
 
   const html = await readFile(htmlPath, "utf8")
 
-  // 基础结构
+  // 合并 compositions/ 子目录中所有 HTML（.window/.viewport/.shot-visual 等在子文件中）
+  const compositionsDir = join(projectDir, "compositions")
+  let allHtml = html
+  if (existsSync(compositionsDir)) {
+    const compFiles = await readdir(compositionsDir)
+    for (const f of compFiles) {
+      if (f.endsWith(".html")) {
+        allHtml += await readFile(join(compositionsDir, f), "utf8")
+      }
+    }
+  }
+
+  // 基础结构（在 root index.html 中）
   check("包含 GSAP CDN", html.includes("gsap@3"))
   check("包含 gsap.timeline", html.includes("gsap.timeline"))
   check("包含 data-skin", /data-skin="(editorial|kinetic|technical)"/.test(html))
 
-  // 截图镜头容器
-  check("包含 .window 容器", html.includes('class="window"'))
-  check("包含 .viewport", html.includes('class="viewport"'))
-  check("包含 shot-visual 类", html.includes("shot-visual"))
+  // 截图镜头容器（在 root + compositions 子文件中检查）
+  check("包含 .window 容器", allHtml.includes('class="window"'))
+  check("包含 .viewport", allHtml.includes('class="viewport"'))
+  check("包含 shot-visual 类", allHtml.includes("shot-visual"))
 
   // 无红绿黄圆点（已移除 macOS titlebar）
-  check("无红绿黄圆点", !html.includes("#ff5f57") && !html.includes("#febc2e") && !html.includes("#28c840"), "titlebar dots should be removed")
-  check("无 .titlebar 元素", !html.includes('class="titlebar"'))
+  check("无红绿黄圆点", !allHtml.includes("#ff5f57") && !allHtml.includes("#febc2e") && !allHtml.includes("#28c840"), "titlebar dots should be removed")
+  check("无 .titlebar 元素", !allHtml.includes('class="titlebar"'))
 
   // 光晕 box-shadow
-  check("window 有多层 box-shadow", html.includes("0 0 0 1px rgba(255,255,255") && html.includes("0 8px 40px rgba(0,0,0,0.3)"))
+  check("window 有多层 box-shadow", allHtml.includes("0 0 0 1px rgba(255,255,255") && allHtml.includes("0 8px 40px rgba(0,0,0,0.3)"))
 
   // Ken Burns: x/y 偏移
-  check("Ken Burns x 偏移", /x:\s*-?\d+/.test(html), "shot timeline should have x offset")
-  check("Ken Burns y 偏移", /y:\s*-?\d+/.test(html), "shot timeline should have y offset")
-  check("Ken Burns power1.inOut 缓动", html.includes("power1.inOut"))
+  check("Ken Burns x 偏移", /x:\s*-?\d+/.test(allHtml), "shot timeline should have x offset")
+  check("Ken Burns y 偏移", /y:\s*-?\d+/.test(allHtml), "shot timeline should have y offset")
+  check("Ken Burns power1.inOut 缓动", allHtml.includes("power1.inOut"))
 
   // 分层入场: shot-visual opacity 动画
-  check("分层入场 shot-visual 淡入", html.includes(".shot-visual") && html.includes("opacity"))
+  check("分层入场 shot-visual 淡入", allHtml.includes(".shot-visual") && allHtml.includes("opacity"))
 
   // 视频产物
   const videoPath = await findNewestMp4(projectDir)

@@ -32,6 +32,14 @@ const SYSTEM_PROMPT = `You are a HyperFrames sub-composition generator. You prod
 - Use realistic content from the capture data. NEVER fabricate statistics, pricing, or partner names.
 - Minimize long paragraphs. Use short headlines (max 8 words), bullet points, and visual elements.
 
+## Screenshot Container Structure (MANDATORY)
+- Any screenshot/image display MUST use this exact DOM structure:
+  <div class="window"><div class="viewport"><img class="shot-visual" src="..." /></div></div>
+- The .window container MUST have multi-layer box-shadow:
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.05), 0 8px 40px rgba(0,0,0,0.3);
+- The .shot-visual img MUST have an independent fade-in entry animation
+  (separate from the .window entry), creating a layered entrance effect.
+
 ## Animation Choreography
 - Every element must have an entry animation (fade+slide, scale, or blur-in).
 - Stagger entries: elements enter one by one with 0.1-0.2s delays, creating a cascade effect.
@@ -39,6 +47,8 @@ const SYSTEM_PROMPT = `You are a HyperFrames sub-composition generator. You prod
 - Elements that exit should fade out or slide out before the scene ends — no hard cuts.
 - Add subtle continuous motion: floating elements (y: ±3px, duration: 2-3s, yoyo, repeat: -1), pulsing glows, or slow rotations.
 - Use clip-path reveals for headlines: clip-path: inset(0 100% 0 0) → inset(0 0 0 0).
+- Layered entry choreography: background → main content (fade+slide) → detail elements (stagger)
+- Screenshot containers: .window enters with fade+slide+scale first, then .shot-visual fades in independently 0.3s later
 
 ## Typography Rules
 - Headlines: 48-80px, font-weight 700-800, letter-spacing: -1px to -2px, max 8 words per line.
@@ -64,6 +74,9 @@ const SYSTEM_PROMPT = `You are a HyperFrames sub-composition generator. You prod
 - NO <iframe>, <form>, fetch(), XMLHttpRequest
 - NO CSS @keyframes (use GSAP timelines only)
 - NO external resource loading except GSAP CDN
+- NO flat static layouts — every scene must have continuous motion (Ken Burns drift, floating, pulsing)
+- NO element should remain visually static for more than 1.5 seconds
+- Screenshots MUST use Ken Burns effect: slow scale(1)→scale(1.04) + slight translate over full duration
 
 ## Output Format
 Return ONLY the complete HTML file. No markdown, no code fences, no explanation.`

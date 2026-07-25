@@ -103,3 +103,34 @@ export function validateHyperFramesHtml(
 
   return { valid: errors.length === 0, errors }
 }
+
+/**
+ * Validate that a chapter's generated HTML contains the required structural
+ * elements for screenshot-type shots (shot-window / shot-zoom).
+ *
+ * When a chapter includes these shot types the HTML must contain both
+ * `class="window"` and the `shot-visual` class so the renderer can
+ * correctly display the browser-chrome mock-up.
+ */
+export function validateChapterStructure(
+  chapterId: string,
+  html: string,
+  shotTypes: string[],
+): { valid: boolean; reason?: string } {
+  const hasScreenshotShot = shotTypes.includes("shot-window") || shotTypes.includes("shot-zoom")
+  if (!hasScreenshotShot) {
+    return { valid: true }
+  }
+
+  const hasWindow = html.includes('class="window"')
+  const hasShotVisual = html.includes("shot-visual")
+
+  if (hasWindow && hasShotVisual) {
+    return { valid: true }
+  }
+
+  return {
+    valid: false,
+    reason: `章节 ${chapterId} 包含截图但缺少 .window/.shot-visual 结构`,
+  }
+}

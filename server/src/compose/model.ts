@@ -267,12 +267,27 @@ function contrast(a: string, b: string): number {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
 }
 
-/** 饱和度粗估（0..1），用于挑「品牌强调色」 */
+/** 饱和度粗估（0..1)，用于挑「品牌强调色」 */
 function saturation(hex: string): number {
   const [r, g, b] = rgb(hex).map((c) => c / 255) as [number, number, number]
   const max = Math.max(r, g, b)
   const min = Math.min(r, g, b)
   return max === 0 ? 0 : (max - min) / max
+}
+
+/** 返回 HSL 色相角度 0-360 */
+function hue(hex: string): number {
+  const r = parseInt(hex.slice(1, 3), 16) / 255
+  const g = parseInt(hex.slice(3, 5), 16) / 255
+  const b = parseInt(hex.slice(5, 7), 16) / 255
+  const max = Math.max(r, g, b), min = Math.min(r, g, b)
+  if (max === min) return 0
+  const d = max - min
+  let h = 0
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60
+  else if (max === g) h = ((b - r) / d + 2) * 60
+  else h = ((r - g) / d + 4) * 60
+  return h
 }
 
 /** 前景色：在 bg 上对比 >=4.5 的深/浅色 */
@@ -333,7 +348,11 @@ function derivePalette(tokens: PageTokens | null): Palette {
   let accent = varHex("--primary") || ""
   if (!accent) {
     const candidates = uniq
-      .filter((h) => saturation(h) > 0.25 && contrast(h, bg) >= 3)
+      .filter((h) => {
+        // 排除与 bg 同色系（色相差 < 30°）的颜色
+        if (Math.abs(hue(h) - hue(bg)) < 30) return false
+        return saturation(h) > 0.25 && contrast(h, bg) >= 3
+      })
       .sort((a, b) => {
         const ca = countOf.get(a) ?? 0
         const cb = countOf.get(b) ?? 0

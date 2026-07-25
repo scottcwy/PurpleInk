@@ -2,6 +2,7 @@
 // Each scene is assigned to exactly one chapter based on its shot type prefix.
 import type { VideoModel, Scene, ShotType } from "../model"
 import type { ChapterId, ChapterPlan } from "./types"
+import { logger } from "../../lib/logger"
 
 /** Map a shot type to its chapter ID */
 function shotToChapter(kind: ShotType): ChapterId {
@@ -49,12 +50,22 @@ export function splitScenesToChapters(model: VideoModel): ChapterPlan[] {
     groups.get(chId)!.push(scene)
   }
 
-  // Compute timing per chapter
+  // --- Sequential timing allocation ---
+  // 1. Compute raw duration per chapter (sum of scene durations)
+  const rawDurations = new Map<ChapterId, number>()
+  for (const id of ALL_CHAPTER_IDS) {
+    const scenes = groups.get(id)!
+    rawDurations.set(id, scenes.reduce((sum, s) => sum + s.duration, 0))
+  }
+
+  // 2. Sequential allocation: assign startSec cumulatively
   const plans: ChapterPlan[] = []
+  let cursor = 0 // running time cursor
 
   for (const id of ALL_CHAPTER_IDS) {
     const scenes = groups.get(id)!
     const meta = CHAPTER_META[id]
+    const durationSec = rawDurations.get(id)!
 
     if (scenes.length === 0) {
       plans.push({
@@ -68,8 +79,6 @@ export function splitScenesToChapters(model: VideoModel): ChapterPlan[] {
       continue
     }
 
-    const startSec = Math.min(...scenes.map((s) => s.start))
-    const durationSec = scenes.reduce((sum, s) => sum + s.duration, 0)
     const shotTypes = scenes.map((s) => s.kind)
 
     // Collect screenshot assets (only ch3-showcase uses them)
@@ -82,18 +91,56 @@ export function splitScenesToChapters(model: VideoModel): ChapterPlan[] {
       }
     }
 
-    plans.push({ id, title: meta.title, startSec, durationSec, shotTypes, assets })
+    plans.push({ id, title: meta.title, startSec: cursor, durationSec, shotTypes, assets })
+    cursor += durationSec
   }
 
-  // Fix overlaps: if a chapter's end exceeds the next chapter's start, shrink it
-  for (let i = 0; i < plans.length - 1; i++) {
-    const curr = plans[i]!
-    const next = plans[i + 1]!
+  // 3. Normalization: if total duration exceeds model.durationSec, scale proportionally
+  const totalDuration = plans.reduce((sum, p) => sum + p.durationSec, 0)
+  const targetDuration = model.durationSec
+
+  if (totalDuration > 0 && totalDuration > targetDuration) {
+    const scale = targetDuration / totalDuration
+    let newCursor = 0
+    for (const plan of plans) {
+      if (plan.durationSec > 0) {
+        plan.startSec = newCursor
+        plan.durationSec = plan.durationSec * scale
+        newCursor += plan.durationSec
+      }
+    }
+  }
+
+  // 4. Per-chapter constraints: min=2s, max=totalDuration*0.4
+  const maxChapterDuration = targetDuration * 0.4
+  for (const plan of plans) {
+    if (plan.durationSec > 0) {
+      if (plan.durationSec < 2) plan.durationSec = 2
+      if (plan.durationSec > maxChapterDuration) plan.durationSec = maxChapterDuration
+    }
+  }
+
+  // 5. Rebuild startSec after constraint adjustments (sequential again)
+  {
+    let rebuildCursor = 0
+    for (const plan of plans) {
+      if (plan.durationSec > 0) {
+        plan.startSec = rebuildCursor
+        rebuildCursor += plan.durationSec
+      }
+    }
+  }
+
+  // 6. Defensive overlap assertion
+  const nonEmpty = plans.filter((p) => p.durationSec > 0)
+  for (let i = 0; i < nonEmpty.length - 1; i++) {
+    const curr = nonEmpty[i]!
+    const next = nonEmpty[i + 1]!
     const currEnd = curr.startSec + curr.durationSec
-    if (currEnd > next.startSec && next.startSec > curr.startSec) {
-      curr.durationSec = next.startSec - curr.startSec
-      // Ensure minimum duration
-      if (curr.durationSec < 1) curr.durationSec = 1
+    if (currEnd > next.startSec + 0.001) {
+      logger.warn(
+        `[split] Overlap detected: ${curr.id} ends at ${currEnd.toFixed(2)}s but ${next.id} starts at ${next.startSec.toFixed(2)}s`
+      )
     }
   }
 
