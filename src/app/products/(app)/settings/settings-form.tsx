@@ -5,6 +5,7 @@ import { ShieldCheck } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { SettingsGroup, SettingsSeparator } from '@/components/ui/settings-group'
 import { SettingsRow } from '@/components/ui/settings-row'
+import { TopBar } from '@/components/ui/top-bar'
 import { usePublishNavContext } from '@/features/navigation/nav-context'
 import { productExportHref } from '@/features/navigation/products-routes'
 import { ModelServiceSettings } from './model-service-settings'
@@ -35,10 +36,18 @@ export function SettingsForm({
   }, [])
 
   return (
-    <main className="mx-auto flex min-h-0 w-full max-w-[720px] flex-1 flex-col gap-6 overflow-y-auto px-4 py-10">
-        <h1 className="text-[28px] font-bold">设置</h1>
-        <ModelServiceSettings />
-        <SettingsSection title="渲染">
+    <main className="min-h-0 flex-1 overflow-y-auto text-ds-text">
+      <TopBar title="设置" meta="Provider Registry 与运行默认值" />
+      <div className="mx-auto flex max-w-[1280px] flex-col gap-5 px-5 py-7 sm:px-8 xl:px-[120px]">
+        <header className="flex flex-col gap-1.5">
+          <h1 className="text-[28px] font-bold">Provider 与默认值</h1>
+          <p className="text-sm text-ds-text-muted">
+            Provider Registry 会先验证凭据，再替换已保存的 Secret。
+          </p>
+        </header>
+        <div className="grid items-start gap-[18px] lg:grid-cols-2">
+          <ModelServiceSettings />
+          <SettingsSection title="渲染">
           <SettingsRow
             label="渲染并发数"
             value={renderConcurrency ? `${renderConcurrency}（CPU 核数，暂不可配置）` : undefined}
@@ -48,19 +57,19 @@ export function SettingsForm({
             {projectId ? (
               <Link
                 href={productExportHref(projectId)}
-                className="text-[13px] text-accent underline-offset-2 hover:underline"
+                className="text-[13px] text-ds-blue underline-offset-2 hover:underline"
               >
                 按项目在导出页配置
               </Link>
             ) : (
-              <span className="text-[13px] text-label-tertiary">按项目在导出页配置</span>
+              <span className="text-[13px] text-ds-text-muted">按项目在导出页配置</span>
             )}
           </SettingsRow>
           <SettingsSeparator />
           <SettingsRow label="崩溃续渲">
             {/* Demo 占位：执行状态已落 Postgres，但暂无崩溃后自动重新入队的恢复逻辑，
                 见 docs/issues/issue-10-*.md；不得用恒 checked 的 Toggle 伪装为已实现。 */}
-            <span className="text-[13px] text-label-tertiary">尚未实现（Demo 占位）</span>
+            <span className="text-[13px] text-ds-text-muted">尚未实现（Demo 占位）</span>
           </SettingsRow>
         </SettingsSection>
         <SettingsSection title="外观">
@@ -72,13 +81,17 @@ export function SettingsForm({
           <SettingsRow label="版本" value="0.1.0 (Demo)" />
           <SettingsSeparator />
           <SettingsRow label="本地模式">
-            <span className="flex items-center gap-2 text-[13px] text-label-secondary">
-              <ShieldCheck className="h-3.5 w-3.5 text-success" />
+            <span className="flex items-center gap-2 text-[13px] text-ds-text-muted">
+              <ShieldCheck className="size-3.5 text-ds-green" />
               本地存储 · 模型数据直连所选服务
             </span>
           </SettingsRow>
         </SettingsSection>
-        <p className="text-center text-xs text-label-tertiary">CodeVideoCanvas · 本地优先的 AIGC 视频创作引擎</p>
+        </div>
+        <p className="text-center text-xs text-ds-text-muted">
+          PurpleInk · 本地优先的 AIGC 视频创作引擎
+        </p>
+      </div>
     </main>
   )
 }
@@ -86,7 +99,7 @@ export function SettingsForm({
 function SettingsSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h2 className="mb-2 text-xs text-label-tertiary">{title}</h2>
+      <h2 className="mb-2 text-xs text-ds-text-muted">{title}</h2>
       <SettingsGroup>{children}</SettingsGroup>
     </section>
   )

@@ -77,7 +77,7 @@ export function ShotDetail({
   usePublishNavContext({ projectId, rendererNodeId: nodeId })
 
   return (
-    <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <main className="flex min-h-0 min-w-0 flex-1 flex-col text-ds-text">
         <TopBar
           title={
             <span className="flex items-center gap-2">
@@ -348,7 +348,7 @@ function ShotPlayer({
               onClick={() => stepBy(1)}
               disabled={!canStep}
             />
-            <span className="text-xs font-mono text-label-secondary">
+            <span className="text-xs font-mono text-ds-text-muted">
               {formatTimecode(currentTime)} / {formatTimecode(duration)}
             </span>
             <ProgressBar
@@ -383,7 +383,7 @@ function ThumbnailTrack({
 }) {
   if (error) {
     return (
-      <p className="flex h-18 items-center justify-center rounded-sm bg-fill text-xs text-label-tertiary">
+      <p className="flex h-18 items-center justify-center rounded-md bg-ds-surface-muted text-xs text-ds-text-muted">
         缩略图生成失败
       </p>
     )
@@ -438,7 +438,7 @@ function ShotCode({
     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-2 text-[13px] font-semibold">
-          <FileCode className="h-4 w-4 text-accent" />分镜画布代码
+          <FileCode className="size-4 text-ds-blue" />分镜画布代码
         </span>
         <span className={cn('text-[11px]', sync.tone)}>{sync.label}</span>
       </div>
@@ -449,7 +449,7 @@ function ShotCode({
           ))}
         </div>
       ) : (
-        <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap rounded-md bg-bg-secondary p-3 text-[11px] leading-relaxed text-label-secondary">
+        <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap rounded-md bg-ds-surface-muted p-3 text-[11px] leading-relaxed text-ds-text-muted">
           {sourceCode}
         </pre>
       )}
@@ -472,11 +472,11 @@ function codeSyncLabel({
   codeError: boolean
   hasCode: boolean
 }): { label: string; tone: string } {
-  if (rendering) return { label: '渲染中', tone: 'text-label-tertiary' }
-  if (codeLoading) return { label: '加载中', tone: 'text-label-tertiary' }
-  if (codeError) return { label: '读取失败', tone: 'text-danger' }
-  if (hasCode) return { label: '已同步', tone: 'text-success' }
-  return { label: '待生成', tone: 'text-label-tertiary' }
+  if (rendering) return { label: '渲染中', tone: 'text-ds-text-muted' }
+  if (codeLoading) return { label: '加载中', tone: 'text-ds-text-muted' }
+  if (codeError) return { label: '读取失败', tone: 'text-ds-red' }
+  if (hasCode) return { label: '已同步', tone: 'text-ds-green' }
+  return { label: '待生成', tone: 'text-ds-text-muted' }
 }
 
 /**
@@ -498,7 +498,7 @@ function ShotContract({
 }) {
   return (
     <aside className="flex min-w-0 flex-col gap-4">
-      <h2 className="text-[13px] font-semibold text-label-secondary">分镜合同</h2>
+      <h2 className="text-[13px] font-semibold text-ds-text-muted">分镜合同</h2>
       <SettingsGroup>
         <SettingsRow label="分镜编号" value={laneKey} />
         <SettingsSeparator />
@@ -509,14 +509,14 @@ function ShotContract({
           value={resolution ? `${resolution.width}×${resolution.height}` : '待生成'}
         />
       </SettingsGroup>
-      <h2 className="text-[13px] font-semibold text-label-secondary">字幕</h2>
-      <div className="rounded-sm bg-fill p-2">
-        <p className="mb-1 text-xs font-mono text-accent">00:00–结束</p>
+      <h2 className="text-[13px] font-semibold text-ds-text-muted">字幕</h2>
+      <div className="rounded-md bg-ds-surface-muted p-2">
+        <p className="mb-1 text-xs font-mono text-ds-blue">00:00–结束</p>
         <p className="text-[13px]">{sourceText}</p>
       </div>
-      <p className="flex items-center gap-2 text-xs text-label-secondary">
+      <p className="flex items-center gap-2 text-xs text-ds-text-muted">
         <ShieldCheck
-          className={cn('h-3.5 w-3.5', deterministic ? 'text-success' : 'text-label-tertiary')}
+          className={cn('size-3.5', deterministic ? 'text-ds-green' : 'text-ds-text-muted')}
         />
         {deterministic ? '无 rAF / 无墙钟 · 通过' : '无 rAF / 无墙钟 · 未验证'}
       </p>

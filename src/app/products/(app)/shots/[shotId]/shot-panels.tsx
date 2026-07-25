@@ -95,7 +95,7 @@ export function ShotPanelChrome({
 }) {
   return (
     <section className="relative min-h-0 flex-1 overflow-hidden">
-      <div className="flex h-full min-h-0 gap-0 overflow-auto p-6">
+      <div className="flex h-full min-h-0 gap-6 overflow-auto p-6">
         <div className="min-w-0 flex-1 pr-4">{player}</div>
         <AnimatedInlinePanel
           width={panels.code.width}
@@ -129,7 +129,7 @@ export function ShotPanelChrome({
             <IconButton
               icon={ChevronRight}
               aria-label="展开代码列"
-              className="shadow-float [&>svg]:rotate-180"
+              className="shadow-[var(--ds-shadow)] [&>svg]:rotate-180"
               onClick={panels.openCode}
             />
           )}
@@ -137,7 +137,7 @@ export function ShotPanelChrome({
             <IconButton
               icon={FileCode}
               aria-label="展开合同列"
-              className="shadow-float"
+              className="shadow-[var(--ds-shadow)]"
               onClick={panels.openContract}
             />
           )}
@@ -149,7 +149,7 @@ export function ShotPanelChrome({
         onDismiss={panels.dismissCodeOverlay}
         side="right"
         scrimLabel="关闭代码列遮罩"
-        className="flex bg-surface"
+        className="flex bg-ds-surface text-ds-text"
         style={{ width: panels.code.width }}
       >
         <ResizeHandle
@@ -165,7 +165,7 @@ export function ShotPanelChrome({
         onDismiss={panels.dismissContractOverlay}
         side="right"
         scrimLabel="关闭合同列遮罩"
-        className="flex bg-surface"
+        className="flex bg-ds-surface text-ds-text"
         style={{ width: panels.contract.width }}
       >
         <ResizeHandle
@@ -210,7 +210,7 @@ function AnimatedInlinePanel({
     >
       <div
         style={{ width }}
-        className="relative flex h-full min-w-0 flex-col border-l border-separator pl-4"
+        className="relative flex h-full min-w-0 flex-col border-l border-ds-border pl-4"
       >
         {!collapsed && (
           <ResizeHandle

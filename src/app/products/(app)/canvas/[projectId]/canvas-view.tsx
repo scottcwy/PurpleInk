@@ -123,7 +123,7 @@ export function CanvasView({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 bg-canvas-bg">
+    <div className="flex min-h-0 flex-1 bg-ds-canvas text-ds-text">
       <section className="flex min-w-0 flex-1 flex-col">
         <TopBar
           title={projectTitle}
@@ -165,9 +165,9 @@ export function CanvasView({
             proOptions={{ hideAttribution: true }}
             onNodeClick={(_, node) => setSelectedNodeId(node.id)}
           >
-            <Background color="var(--color-canvas-grid)" gap={20} size={1} />
-            <MiniMap pannable zoomable className="!bg-surface !shadow-card" />
-            <Controls className="!border-separator !bg-surface !shadow-card" />
+            <Background color="var(--ds-text-muted)" gap={20} size={1} />
+            <MiniMap pannable zoomable className="!bg-ds-surface !shadow-[var(--ds-shadow)]" />
+            <Controls className="!border-ds-border !bg-ds-surface !shadow-[var(--ds-shadow)]" />
           </ReactFlow>
           <LanePanel
             laneSummaries={laneSummaries}
@@ -195,8 +195,8 @@ interface LanePanelProps {
 
 function LanePanel({ laneSummaries, collapsedLanes, onToggle }: LanePanelProps) {
   return (
-    <aside className="absolute left-4 top-4 max-h-[calc(100%-8rem)] w-56 overflow-auto rounded-md border border-separator bg-glass p-3 shadow-float backdrop-blur-xl">
-      <p className="mb-2 text-xs font-semibold text-label">
+    <aside className="absolute left-4 top-4 max-h-[calc(100%-8rem)] w-56 overflow-auto rounded-md border border-ds-border bg-ds-surface p-3 text-ds-text shadow-[var(--ds-shadow)] backdrop-blur-xl">
+      <p className="mb-2 text-xs font-semibold">
         分镜通道 · {laneSummaries.length}
       </p>
       <div className="space-y-2">
@@ -212,7 +212,7 @@ function LanePanel({ laneSummaries, collapsedLanes, onToggle }: LanePanelProps) 
                 className="w-full justify-between"
               >
                 <span className="truncate">{summary.laneKey}</span>
-                <span className="text-label-secondary">
+                <span className="text-ds-text-muted">
                   {collapsed ? '展开' : '折叠'}
                 </span>
               </Button>

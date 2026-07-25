@@ -128,7 +128,7 @@ export function CanvasInspector({
       <AnimatedAside
         width={collapsed ? 32 : width}
         animateWidth={!isDragging}
-        className="flex h-full flex-col border-l border-separator bg-surface"
+        className="flex h-full flex-col border-l border-ds-border bg-ds-surface text-ds-text"
       >
         {collapsed ? (
           <div className="flex flex-col items-center py-3">
@@ -170,7 +170,7 @@ export function CanvasInspector({
           onKeyAdjust={(delta) => setWidth(width - delta)}
           aria-label="调节分镜合同宽度"
         />
-        <div className="min-w-0 flex-1 overflow-auto border-l border-separator bg-surface">
+        <div className="min-w-0 flex-1 overflow-auto border-l border-ds-border bg-ds-surface text-ds-text">
           {body}
         </div>
       </DrawerOverlay>
@@ -188,7 +188,7 @@ function EmptyInspector({
   return (
     <div className="flex h-full flex-col p-4">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-sm text-label-secondary">分镜合同</p>
+        <p className="text-sm text-ds-text-muted">分镜合同</p>
         {showCollapse && (
           <IconButton
             icon={ChevronRight}
@@ -238,8 +238,8 @@ function InspectorBody({
           )}
         </div>
       </div>
-      <div className="flex h-40 items-center justify-center rounded-sm bg-fill">
-        <FileCode className="h-10 w-10 text-label-tertiary" />
+      <div className="flex h-40 items-center justify-center rounded-md bg-ds-surface-muted">
+        <FileCode className="size-10 text-ds-text-muted" />
       </div>
       <SettingsGroup>
         <SettingsRow label="节点类型" value={node.type} />
@@ -252,7 +252,7 @@ function InspectorBody({
         />
       </SettingsGroup>
       <div>
-        <p className="mb-2 text-[13px] font-semibold text-label-secondary">关联产物</p>
+        <p className="mb-2 text-[13px] font-semibold text-ds-text-muted">关联产物</p>
         {node.artifacts.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {node.artifacts.map((artifact) => (
@@ -265,7 +265,7 @@ function InspectorBody({
             ))}
           </div>
         ) : (
-          <p className="text-[13px] text-label-tertiary">暂无产物</p>
+          <p className="text-[13px] text-ds-text-muted">暂无产物</p>
         )}
       </div>
       <StreamingLogCard

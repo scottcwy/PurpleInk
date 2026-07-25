@@ -367,7 +367,7 @@ function ProviderFooter({
     <>
       <SettingsSeparator />
       <SettingsRow label="配置">
-        <span className="text-[13px] text-label-tertiary">
+        <span className="text-[13px] text-ds-text-muted">
           留空回退环境变量/内置默认
         </span>
         <Button size="sm" variant="gray" onClick={onSave} disabled={busy}>
@@ -415,7 +415,7 @@ function RoutingSection({
               value={routes[nodeType]}
               onChange={(value) => onChange(nodeType, value as AiProviderId)}
             />
-            <span className="text-[12px] text-label-tertiary">
+            <span className="text-[12px] text-ds-text-muted">
               {effective?.[nodeType]?.model}
             </span>
           </SettingsRow>
@@ -423,7 +423,7 @@ function RoutingSection({
       ))}
       <SettingsSeparator />
       <SettingsRow label="路由配置">
-        <span className="text-[13px] text-label-tertiary">
+        <span className="text-[13px] text-ds-text-muted">
           仅影响 Director 与 Vision；TTS/ASR 始终使用阶跃星辰
         </span>
         <Button size="sm" variant="gray" disabled={busy} onClick={onSave}>
@@ -455,7 +455,7 @@ function SettingsSection({
 }) {
   return (
     <section data-testid={testId}>
-      <h2 className="mb-2 text-xs text-label-tertiary">{title}</h2>
+      <h2 className="mb-2 text-xs text-ds-text-muted">{title}</h2>
       <SettingsGroup>{children}</SettingsGroup>
     </section>
   )

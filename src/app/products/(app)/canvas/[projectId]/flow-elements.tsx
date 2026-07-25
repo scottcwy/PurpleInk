@@ -91,7 +91,7 @@ export function toFlowNode(
     position: node.position,
     hidden: hiddenNodeIds.has(node.id),
     className: cn(
-      '!w-[220px] !rounded-md !border-2 !bg-surface !p-0 !shadow-card',
+      '!w-[220px] !rounded-lg !border !border-ds-border !bg-ds-surface !p-0 !text-ds-text !shadow-[var(--ds-shadow)]',
       NODE_STAGE_CLASS[node.type]
     ),
     data: {
@@ -108,7 +108,7 @@ export function toFlowEdge(edge: CanvasGraphEdge, hiddenNodeIds: Set<string>): E
     ...edge,
     hidden: hiddenNodeIds.has(edge.source) || hiddenNodeIds.has(edge.target),
     markerEnd: { type: MarkerType.ArrowClosed },
-    style: { stroke: 'var(--color-label-tertiary)' },
+    style: { stroke: 'var(--ds-text-muted)' },
   }
 }
 
@@ -116,9 +116,9 @@ function nodeLabel(node: CanvasGraphNode, collapsed: boolean): ReactNode {
   return (
     <div className="flex min-h-20 flex-col items-start justify-between gap-3 p-3 text-left">
       <div>
-        <p className="text-[13px] font-semibold text-label">{NODE_LABEL[node.type]}</p>
+        <p className="text-[13px] font-semibold text-ds-text">{NODE_LABEL[node.type]}</p>
         {node.laneKey && (
-          <p className="mt-1 text-[11px] text-label-secondary">{node.laneKey}</p>
+          <p className="mt-1 text-[11px] text-ds-text-muted">{node.laneKey}</p>
         )}
       </div>
       <StatusPill
@@ -170,7 +170,7 @@ export function LaneSummaryDetails({ summary }: { summary: LaneSummary }) {
   return (
     <div className="space-y-2 px-1 pb-2 pt-1">
       {summary.sourceExcerpt && (
-        <p className="text-xs leading-relaxed text-label-secondary">
+        <p className="text-xs leading-relaxed text-ds-text-muted">
           {summary.sourceExcerpt}
         </p>
       )}

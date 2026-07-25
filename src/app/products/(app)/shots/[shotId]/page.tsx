@@ -15,6 +15,10 @@ export default async function ShotDetailPage({
 }) {
   const [{ shotId }, { projectId }] = await Promise.all([params, searchParams])
   if (!projectId) notFound()
+  const project = (await listProjects()).find(
+    (candidate) => candidate.id === projectId,
+  )
+  if (!project) notFound()
   const graph = await getCanvasGraph(projectId)
   const node = graph.nodes.find(({ id: nodeId }) => nodeId === shotId)
   if (!node || node.type !== 'shot-codegen') notFound()
@@ -43,10 +47,7 @@ export default async function ShotDetailPage({
   return (
     <ShotDetail
       projectId={projectId}
-      projectTitle={
-        (await listProjects()).find((project) => project.id === projectId)
-          ?.title ?? '未命名项目'
-      }
+      projectTitle={project.title}
       nodeId={shotId}
       laneKey={node.laneKey ?? 'S000'}
       sourceText={sourceTextOf(node)}

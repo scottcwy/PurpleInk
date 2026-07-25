@@ -60,7 +60,7 @@ export function ExportWorkspace({
   usePublishNavContext({ projectId, rendererNodeId })
 
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto bg-bg text-label">
+    <main className="min-h-0 flex-1 overflow-y-auto text-ds-text">
         <TopBar
           title="合成与导出"
           actions={
@@ -145,7 +145,7 @@ function ExportPreview({
           <Film className="h-10 w-10 text-text-inverse" />
         )}
       </div>
-      <p className="text-xs text-label-tertiary">{projectTitle} · 成片预览</p>
+      <p className="text-xs text-ds-text-muted">{projectTitle} · 成片预览</p>
     </section>
   )
 }
@@ -159,7 +159,7 @@ function ExportTimeline({
 }) {
   return (
     <section className="flex flex-col gap-1 px-4 sm:px-6">
-      <div className="flex h-5 justify-between border-b border-separator text-[11px] font-mono text-label-tertiary">
+      <div className="flex h-5 justify-between border-b border-ds-border text-[11px] font-mono text-ds-text-muted">
         {['00:00', '00:20', '00:40', '01:00', '01:20'].map((time) => (
           <span key={time}>{time}</span>
         ))}
@@ -241,7 +241,7 @@ function ExportReview(props: {
         <IconButton
           icon={ChevronRight}
           aria-label="展开导出设置"
-          className="absolute left-4 top-4 z-10 shadow-float [&>svg]:rotate-180"
+          className="absolute left-4 top-4 z-10 shadow-[var(--ds-shadow)] [&>svg]:rotate-180"
           onClick={() => {
             if (autoCollapse) setOverlayOpen(true)
             else setManualCollapsed(false)
@@ -256,7 +256,7 @@ function ExportReview(props: {
         onDismiss={() => setOverlayOpen(false)}
         side="left"
         scrimLabel="关闭导出设置遮罩"
-        className="flex bg-surface"
+        className="flex bg-ds-surface text-ds-text"
         style={{ width }}
       >
         <div className="min-w-0 flex-1 overflow-auto p-4">
@@ -307,8 +307,8 @@ function ExportSettings({
     <SettingsGroup>
       <div className="flex flex-col gap-2 px-4 py-3">
         <div className="flex items-center justify-between">
-          <span className="text-[15px] font-sc text-label">分辨率</span>
-          <span className="text-[13px] font-mono text-label-secondary">
+          <span className="text-sm font-sc text-ds-text">分辨率</span>
+          <span className="text-xs font-mono text-ds-text-muted">
             {EXPORT_RESOLUTION_PRESETS[currentPreset].label}
           </span>
         </div>
@@ -331,8 +331,8 @@ function ExportSettings({
         {exporting ? (
           <div className="flex w-full flex-col gap-1.5" aria-live="polite">
             <div className="flex items-center justify-between text-[13px] font-sc">
-              <span className="text-label">导出队列</span>
-              <span className="text-label-secondary">处理中</span>
+              <span className="text-ds-text">导出队列</span>
+              <span className="text-ds-text-muted">处理中</span>
             </div>
             <Skeleton className="h-1 w-full" />
           </div>
@@ -354,7 +354,7 @@ function ExportQa({
     <div className="flex min-w-0 flex-col gap-3">
       <div className="flex items-center gap-2">
         <h2 className="text-[13px] font-semibold">Final QA · 抽帧审查</h2>
-        <p className="text-xs text-label-tertiary">25% / 60% / 95% 三态联系表</p>
+        <p className="text-xs text-ds-text-muted">25% / 60% / 95% 三态联系表</p>
       </div>
       <div className="flex gap-4 overflow-x-auto">
         {laneKeys.map((laneKey) => (
@@ -373,8 +373,8 @@ function ExportQa({
       )}
       {!readiness?.ready && readiness && (
         <>
-          <p className="flex items-center gap-2 text-xs text-label-secondary">
-            <TriangleAlert className="h-3.5 w-3.5 text-warning" />未完成分镜
+          <p className="flex items-center gap-2 text-xs text-ds-text-muted">
+            <TriangleAlert className="size-3.5 text-ds-amber" />未完成分镜
           </p>
           <div className="flex max-h-20 flex-wrap gap-2 overflow-auto">
             {readiness.incompleteNodeIds.map((id) => (

@@ -7,8 +7,8 @@ import type { CanvasViewProps } from './canvas-view'
 /** 画布加载骨架：撑出顶栏 + 节点区轮廓，替代无信息的“正在加载画布…”。 */
 function CanvasSkeleton() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-canvas-bg">
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-separator px-4">
+    <div className="flex min-h-0 flex-1 flex-col bg-ds-canvas text-ds-text">
+      <div className="flex h-16 shrink-0 items-center justify-between border-b border-ds-border bg-ds-surface px-7">
         <Skeleton className="h-5 w-48" />
         <div className="flex gap-2">
           <Skeleton className="h-8 w-24" />

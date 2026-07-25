@@ -33,7 +33,7 @@ export function StageErrorDialog({
       onClose={onClose}
       title={
         <span className="flex items-center gap-2">
-          <CircleX className="h-5 w-5 shrink-0 text-danger" />
+          <CircleX className="size-5 shrink-0 text-ds-red" />
           {stage ? `${stage} 阶段失败` : '阶段执行失败'}
         </span>
       }
@@ -49,7 +49,7 @@ export function StageErrorDialog({
         </>
       }
     >
-      <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs leading-relaxed text-danger">
+      <pre className="max-h-60 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs leading-relaxed text-ds-red">
         {message || '（无错误详情）'}
       </pre>
     </Dialog>

@@ -69,7 +69,7 @@ export function StreamingLogCard({
 
   const meta = stream.streaming ? (
     <span className="flex items-center gap-1">
-      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+      <span className="size-1.5 animate-pulse rounded-full bg-ds-blue" />
       {stream.charCount} 字
     </span>
   ) : (
@@ -82,28 +82,28 @@ export function StreamingLogCard({
         {stream.text ? (
           <pre
             ref={scrollRef}
-            className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-label-secondary"
+            className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-ds-text-muted"
           >
             {stream.text}
           </pre>
         ) : (
-          <p className="text-[13px] text-label-tertiary">
+          <p className="text-[13px] text-ds-text-muted">
             {stream.streaming ? '正在连接 AI 流…' : '本阶段暂无流式输出'}
           </p>
         )}
         {stream.truncated && (
-          <p className="mt-1 text-[11px] text-label-tertiary">（日志过长，仅显示最近部分）</p>
+          <p className="mt-1 text-[11px] text-ds-text-muted">（日志过长，仅显示最近部分）</p>
         )}
         {error && (
-          <div className="mt-2 flex items-center justify-between gap-2 rounded-sm bg-danger-fill px-2 py-1.5">
-            <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-danger">
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-md bg-ds-red-soft px-2 py-1.5">
+            <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-ds-red">
               <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">阶段失败</span>
             </span>
             <button
               type="button"
               onClick={() => setDialogOpen(true)}
-              className="shrink-0 text-[12px] font-medium text-danger transition-colors hover:opacity-80"
+              className="shrink-0 text-[12px] font-medium text-ds-red transition-colors hover:opacity-80"
             >
               查看错误详情
             </button>

@@ -1,4 +1,5 @@
-import { getCanvasGraph } from '@/features/canvas'
+import { notFound } from 'next/navigation'
+import { getCanvasGraph, listProjects } from '@/features/canvas'
 import { SettingsForm } from './settings-form'
 
 export const dynamic = 'force-dynamic'
@@ -9,6 +10,10 @@ export default async function SettingsPage({
   searchParams: Promise<{ projectId?: string }>
 }) {
   const { projectId } = await searchParams
+  if (projectId) {
+    const projects = await listProjects()
+    if (!projects.some((project) => project.id === projectId)) notFound()
+  }
   const rendererNodeId = projectId
     ? (await getCanvasGraph(projectId)).nodes.find(
         (node) => node.type === 'shot-codegen'
