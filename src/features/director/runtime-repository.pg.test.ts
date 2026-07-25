@@ -15,6 +15,11 @@ import {
   type PgTestDatabase,
 } from '@/lib/db/test/pg-test-database'
 import type { StorageAdapter } from '@/lib/storage'
+import type { NarrationResult } from '@/features/audio'
+import {
+  buildMeasuredAudioAllocation,
+  buildMeasuredAudioManifest,
+} from './audio-timing'
 import { DirectorRuntimeRepository } from './runtime-repository'
 import type { ArtifactCommitResult } from './tools/write-artifact'
 
@@ -341,16 +346,43 @@ async function seedArtifact(
   })
 }
 
+const SCRIPT_UNITS = [{ unitId: 'U001', text: '第一句。' }]
+
+/**
+ * INGEST 产物内容。
+ *
+ * manifest / allocation 刻意由生产同一组构造器派生（而不是手写 JSON 常量）：
+ * ISSUE-005 把这两个字段提升为必填后，手写 fixture 漂移了三个批次都没人修。
+ * 走构造器则字段形状不可能再与生产分叉。
+ */
+function ingestArtifactContent(): Record<string, unknown> {
+  const narration: NarrationResult = {
+    engine: 'stepaudio-2.5-tts',
+    voice: 'cixingnansheng',
+    units: SCRIPT_UNITS.map((unit) => ({
+      unitId: unit.unitId,
+      text: unit.text,
+      audioKey: `narration/${PROJECT_ID}/${unit.unitId}.mp3`,
+      audioArtifactId: randomUUID(),
+      contentHash: HASH,
+      durationMs: 2281.958,
+      sampleRateHz: 24_000,
+      sampleCount: 54_767,
+      nativeCaptions: [],
+      reused: false,
+    })),
+  }
+  const audioManifest = buildMeasuredAudioManifest(SCRIPT_UNITS, narration)
+  return {
+    scriptUnits: SCRIPT_UNITS,
+    audioManifest,
+    audioAllocation: buildMeasuredAudioAllocation(SCRIPT_UNITS, audioManifest),
+  }
+}
+
 function seedFiles(): Map<string, Buffer> {
   return new Map([
-    [
-      'input/ingest.json',
-      Buffer.from(
-        JSON.stringify({
-          scriptUnits: [{ unitId: 'U001', text: '第一句。' }],
-        })
-      ),
-    ],
+    ['input/ingest.json', Buffer.from(JSON.stringify(ingestArtifactContent()))],
     [
       'input/direct.json',
       Buffer.from(JSON.stringify({ masterPlan: '导演总纲', styleBible: '风格圣经' })),

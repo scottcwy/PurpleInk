@@ -2,7 +2,11 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 import { and, eq, inArray } from 'drizzle-orm'
 import { getDb, LOCAL_WORKSPACE_ID } from '@/lib/db/client'
-import { canvasEdges, canvasNodes } from '@/lib/db/schema/index'
+import {
+  canvasEdges,
+  canvasNodes,
+  type VersionedPayload,
+} from '@/lib/db/schema/index'
 import {
   withTransaction,
   type TransactionContext,
@@ -66,9 +70,14 @@ export async function transitionNodeStatus(
     if (next === 'stale' && !(await isStaleInTransaction(tx, node))) {
       throw new Error(`节点上游内容未变化，不能标记为 stale：${nodeId}`)
     }
+    const cleared = next === 'success' ? withoutStageErrors(node.data) : null
     await tx
       .update(canvasNodes)
-      .set({ status: toPersistedStatus(next), updatedAt: new Date() })
+      .set({
+        status: toPersistedStatus(next),
+        ...(cleared === null ? {} : { data: cleared }),
+        updatedAt: new Date(),
+      })
       .where(
         and(
           eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
@@ -148,6 +157,29 @@ async function dependencyHashes(
       contentHash: readContentHash(node.data),
     }))
     .sort((left, right) => left.id.localeCompare(right.id))
+}
+
+/**
+ * 上一次失败留下的错误字段。成功转换必须清掉它们，否则 `succeeded` 节点会长期
+ * 携带一条早已过期的失败描述（实测存在：一个 succeeded 的 shot-split 仍带着
+ * 前一次尝试的 directorError），DB 投影与节点状态互相矛盾。
+ */
+const STAGE_ERROR_PAYLOAD_KEYS = ['directorError', 'renderError'] as const
+
+/** 返回去掉错误字段后的 data；本来就没有可清理字段时返回 null，避免无意义写入。 */
+function withoutStageErrors(value: VersionedPayload): VersionedPayload | null {
+  const payload = value.payload
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return null
+  }
+  const entries = payload as Record<string, unknown>
+  const present = STAGE_ERROR_PAYLOAD_KEYS.filter((key) =>
+    Object.hasOwn(entries, key)
+  )
+  if (present.length === 0) return null
+  const nextPayload = { ...entries }
+  for (const key of present) delete nextPayload[key]
+  return { ...value, payload: nextPayload }
 }
 
 function readContentHash(value: unknown): string | null {

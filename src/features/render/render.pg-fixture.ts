@@ -98,23 +98,42 @@ export async function seedRenderFixture(
       data: nodeData('S001', 'shot-qa'),
     },
   ])
-  const runId = randomUUID()
   const nodeAttemptId = randomUUID()
   const qaAttemptId = randomUUID()
   const projectAttemptId = randomUUID()
-  await db.insert(pipelineRuns).values({
-    workspaceId,
-    id: runId,
-    projectId,
-    status: 'running',
-    workflowVersion: 'render-test-v1',
-    fingerprint: 'a'.repeat(64),
-  })
-  await db.insert(taskAttempts).values([
-    attempt(workspaceId, nodeAttemptId, runId, codegenNodeId, 'node', 1),
-    attempt(workspaceId, qaAttemptId, runId, qaNodeId, 'node', 2),
-    attempt(workspaceId, projectAttemptId, runId, projectId, 'project', 3),
-  ])
+  // 生产形状是「一次入队 = 一个 pipeline_run + 一个 task_attempt」。
+  // 早先把三个 attempt 塞进同一个 run，制造了生产永远产不出来的状态，
+  // 也因此掩盖了缩略图必失败的缺陷（见 commitDerivedArtifact 的引入原因）。
+  const runs = [
+    { attemptId: nodeAttemptId, entityId: codegenNodeId, entityType: 'node' as const },
+    { attemptId: qaAttemptId, entityId: qaNodeId, entityType: 'node' as const },
+    { attemptId: projectAttemptId, entityId: projectId, entityType: 'project' as const },
+  ]
+  let attemptNo = 0
+  for (const run of runs) {
+    attemptNo += 1
+    const runId = randomUUID()
+    await db.insert(pipelineRuns).values({
+      workspaceId,
+      id: runId,
+      projectId,
+      status: 'running',
+      workflowVersion: 'render-test-v1',
+      fingerprint: String(attemptNo).repeat(64),
+    })
+    await db
+      .insert(taskAttempts)
+      .values(
+        attempt(
+          workspaceId,
+          run.attemptId,
+          runId,
+          run.entityId,
+          run.entityType,
+          attemptNo
+        )
+      )
+  }
   if (withFabricateArtifact) {
     await insertArtifact(db, {
       workspaceId,

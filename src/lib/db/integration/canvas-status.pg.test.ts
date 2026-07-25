@@ -76,6 +76,47 @@ describe('canvas node status', () => {
     expect(node?.status).toBe('succeeded')
   })
 
+  it('clears stale stage errors when a retry finally succeeds', async () => {
+    const nodeId = await insertNode(database.db, WORKSPACE_ID, projectId)
+    await database.db
+      .update(canvasNodes)
+      .set({
+        data: {
+          schemaVersion: 1,
+          payload: {
+            laneKey: 'S001',
+            directorError: { stage: 'SHOT_SPEC', message: '上一次失败' },
+            renderError: { message: '上一次渲染失败' },
+          },
+        },
+      })
+      .where(
+        and(
+          eq(canvasNodes.workspaceId, WORKSPACE_ID),
+          eq(canvasNodes.id, nodeId)
+        )
+      )
+
+    await transitionNodeStatus(nodeId, 'pending')
+    await transitionNodeStatus(nodeId, 'running')
+    await transitionNodeStatus(nodeId, 'success')
+
+    const [node] = await database.db
+      .select({ status: canvasNodes.status, data: canvasNodes.data })
+      .from(canvasNodes)
+      .where(
+        and(
+          eq(canvasNodes.workspaceId, WORKSPACE_ID),
+          eq(canvasNodes.id, nodeId)
+        )
+      )
+    expect(node?.status).toBe('succeeded')
+    expect(node?.data).toEqual({
+      schemaVersion: 1,
+      payload: { laneKey: 'S001' },
+    })
+  })
+
   it('persists cancellation without disguising it as failure', async () => {
     const nodeId = await insertNode(database.db, WORKSPACE_ID, projectId)
     await transitionNodeStatus(nodeId, 'pending')
