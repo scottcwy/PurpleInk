@@ -108,7 +108,7 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
 | --- | --- | --- | --- |
 | [ISSUE-001](./ISSUE-001-pi-agent-runtime.md) | Director pi-agent 运行时缺失，六阶段全部不可执行 | `open` | `src/features/director/pi-session.ts`、`session-store.ts`、`package.json`、`vitest.config.ts`、`tsconfig.json` |
 | [ISSUE-002](./ISSUE-002-fabricate-render-seam.md) | FABRICATE→render 接缝断裂，`fabricateShot` 零调用方 | `open` | `src/features/render/queue-handler.ts`、`admission.ts`、`render-shot-repository.ts` |
-| [ISSUE-003](./ISSUE-003-next-ai-credentials.md) | Next 应用进程内无 AI 凭据，配置真值不对称 | `open` | `.env.local`、`.env.example`、`docs/configuration/` |
+| [ISSUE-003](./ISSUE-003-next-ai-credentials.md) | Next 应用进程内无 AI 凭据，配置真值不对称 | `done` | `.env.local`、`.env.example`、`docs/configuration/`、`scripts/setup/bootstrap-credentials.ts`、`tests/env.test.ts` |
 
 ### P1 能力与正确性
 
@@ -128,7 +128,7 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
 | [ISSUE-010](./ISSUE-010-oversized-files.md) | 2 个超硬上限文件使 `verify:v3` 恒红 | `done` | `export-workspace.tsx`、`shot-detail.tsx` |
 | [ISSUE-011](./ISSUE-011-settings-placeholders.md) | 设置页占位项与只读并发数 | `open` | `settings-form.tsx` |
 | [ISSUE-012](./ISSUE-012-canvas-live-updates.md) | 画布靠 1.5s `router.refresh()` 轮询驱动状态 | `open` | `canvas-view.tsx`、`src/lib/stream/**` |
-| [ISSUE-013](./ISSUE-013-ai-adapter-boundary.md) | `features/ai` 适配器与 pi-ai 会形成第二套 provider 客户端 | `open` | `src/features/ai/**`、`src/features/render/vision-qa.ts` |
+| [ISSUE-013](./ISSUE-013-ai-adapter-boundary.md) | `features/ai` 适配器与 pi-ai 会形成第二套 provider 客户端 | `in-progress` | `src/features/ai/**`、`src/features/render/vision-qa.ts` |
 
 ### 贯穿
 
