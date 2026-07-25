@@ -46,4 +46,8 @@ describe('Products route migration', () => {
 
     expect(routeSources.join('\n')).not.toContain('/legacy')
   })
+
+  it('does not flush a shared loading boundary before dynamic 404 guards resolve', () => {
+    expect(existsSync('src/app/products/(app)/loading.tsx')).toBe(false)
+  })
 })
