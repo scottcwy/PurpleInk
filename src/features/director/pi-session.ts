@@ -135,8 +135,8 @@ function assertRunSucceeded(agent: Agent, routeLabel: string): void {
 function buildDirectorSystemPrompt(stage: PipelineStage): string {
   return [
     `你是 PurpleInk 的视频导演智能体，当前执行 ${stage} 阶段。`,
-    '严格遵守用户消息里的输出格式要求：要求返回 JSON 时只返回 JSON，不要 Markdown 代码围栏。',
-    '提供工具时必须调用工具提交结果，工具返回校验失败就按错误信息修订后重试。',
+    '本轮提供了工具时：最终结果必须通过工具调用提交，不要把工具实参当作普通文本输出；工具返回校验失败就按错误信息修订后再次调用同一工具。',
+    '本轮未提供工具时：严格遵守用户消息里的输出格式要求，要求返回 JSON 就只返回 JSON，不要 Markdown 代码围栏。',
     '不要编造原稿之外的事实，不要输出推理过程、凭据或工具参数之外的解释。',
   ].join('\n')
 }

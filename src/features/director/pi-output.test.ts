@@ -171,6 +171,68 @@ describe('extractDirectorOutput', () => {
     expect(result.displayText).toBe('')
   })
 
+  it('recovers a validated argument the model emitted as assistant text', () => {
+    const result = extractDirectorOutput(
+      asMessages([
+        {
+          role: 'assistant',
+          content: [
+            { type: 'thinking', thinking: '隐藏推理' },
+            { type: 'text', text: '{"shotPlan":{"schemaVersion":1,"shots":[]}}' },
+          ],
+        },
+      ]),
+      { ...toolPolicy, recover: (text) => JSON.parse(text).shotPlan && '恢复内容' }
+    )
+
+    expect(result).toEqual({
+      artifactContent: '恢复内容',
+      displayText: '{"shotPlan":{"schemaVersion":1,"shots":[]}}',
+      provenance: {
+        kind: 'assistant-text-recovery',
+        toolName: 'validate_shot_plan',
+      },
+    })
+    expect(JSON.stringify(result)).not.toContain('隐藏推理')
+  })
+
+  it('prefers the validated Tool argument over the recovery path', () => {
+    const result = extractDirectorOutput(toolTranscript(), {
+      ...toolPolicy,
+      recover: () => '不应被使用',
+    })
+
+    expect(result.artifactContent).toBe('{"schemaVersion":1,"shots":[]}')
+    expect(result.provenance).toMatchObject({ kind: 'tool-argument' })
+  })
+
+  it('still fails when the recovery validator rejects the assistant text', () => {
+    const error = captureError(() =>
+      extractDirectorOutput(toolTranscript({ isError: true }), {
+        ...toolPolicy,
+        recover: () => null,
+      })
+    )
+
+    expect(error.code).toBe('DIRECTOR_TOOL_OUTPUT_MISSING')
+  })
+
+  it('does not attempt recovery when there is no assistant text', () => {
+    let called = false
+    const error = captureError(() =>
+      extractDirectorOutput(asMessages([]), {
+        ...toolPolicy,
+        recover: () => {
+          called = true
+          return '不应被调用'
+        },
+      })
+    )
+
+    expect(error.code).toBe('DIRECTOR_TOOL_OUTPUT_MISSING')
+    expect(called).toBe(false)
+  })
+
   it('rejects a missing or unserializable Tool argument explicitly', () => {
     const circular: Record<string, unknown> = {}
     circular.self = circular

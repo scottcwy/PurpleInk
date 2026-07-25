@@ -9,6 +9,24 @@ import {
 
 vi.mock('server-only', () => ({}))
 
+/**
+ * 工具产物阶段的输出策略。`recover` 是可信校验器回调（模型把实参当文本输出时的抢救路径），
+ * 断言只校验它存在，具体行为由 `output-recovery.test.ts` 覆盖。
+ */
+const SHOT_SPEC_OUTPUT = {
+  kind: 'validated-tool-argument',
+  toolName: 'validate_shot_plan',
+  argumentKey: 'shotPlan',
+  recover: expect.any(Function),
+}
+
+const FABRICATE_OUTPUT = {
+  kind: 'validated-tool-argument',
+  toolName: 'check_determinism',
+  argumentKey: 'source',
+  recover: expect.any(Function),
+}
+
 const context: DirectorStageContext = {
   projectId: 'project-1',
   nodeId: 'node-1',
@@ -171,24 +189,8 @@ describe('createStageRunner', () => {
   it.each([
     ['INGEST', 'script-import', { kind: 'assistant-text' }],
     ['DIRECT', 'shot-split', { kind: 'assistant-text' }],
-    [
-      'SHOT_SPEC',
-      'shot-script',
-      {
-        kind: 'validated-tool-argument',
-        toolName: 'validate_shot_plan',
-        argumentKey: 'shotPlan',
-      },
-    ],
-    [
-      'FABRICATE',
-      'shot-codegen',
-      {
-        kind: 'validated-tool-argument',
-        toolName: 'check_determinism',
-        argumentKey: 'source',
-      },
-    ],
+    ['SHOT_SPEC', 'shot-script', SHOT_SPEC_OUTPUT],
+    ['FABRICATE', 'shot-codegen', FABRICATE_OUTPUT],
     ['ASSEMBLE', 'score', { kind: 'assistant-text' }],
     ['FINALIZE', 'export', { kind: 'assistant-text' }],
   ] as const)(
@@ -341,21 +343,13 @@ describe('createStageRunner', () => {
     expect(harness.session.run.mock.calls[1]?.[0]).toEqual(
       expect.objectContaining({
         prompt: expect.stringContaining('set-interval@457'),
-        output: {
-          kind: 'validated-tool-argument',
-          toolName: 'check_determinism',
-          argumentKey: 'source',
-        },
+        output: FABRICATE_OUTPUT,
       })
     )
     expect(harness.session.run.mock.calls[2]?.[0]).toEqual(
       expect.objectContaining({
         prompt: expect.stringContaining('date-now@99'),
-        output: {
-          kind: 'validated-tool-argument',
-          toolName: 'check_determinism',
-          argumentKey: 'source',
-        },
+        output: FABRICATE_OUTPUT,
       })
     )
     expect(harness.calls.filter((call) => call === 'commit')).toHaveLength(1)
@@ -409,11 +403,7 @@ describe('createStageRunner', () => {
     expect(harness.session.run.mock.calls[1]?.[0]).toEqual(
       expect.objectContaining({
         prompt: expect.stringContaining('完整 JSON'),
-        output: {
-          kind: 'validated-tool-argument',
-          toolName: 'validate_shot_plan',
-          argumentKey: 'shotPlan',
-        },
+        output: SHOT_SPEC_OUTPUT,
       })
     )
   })

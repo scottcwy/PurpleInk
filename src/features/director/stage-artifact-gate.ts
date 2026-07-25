@@ -2,6 +2,10 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 import type { DirectorSession, DirectorTool } from './pi-session'
 import type { DirectorOutputPolicy } from './pi-output'
+import {
+  recoverDeterministicSourceArgument,
+  recoverShotPlanArgument,
+} from './output-recovery'
 import type { DirectorStageContext } from './runtime-repository'
 import type { PreparedStageResult } from './stage-result'
 import { createCheckDeterminismTool } from './tools/check-determinism'
@@ -31,11 +35,13 @@ const STAGE_OUTPUT: Record<PipelineStage, DirectorOutputPolicy> = {
     kind: 'validated-tool-argument',
     toolName: 'validate_shot_plan',
     argumentKey: 'shotPlan',
+    recover: recoverShotPlanArgument,
   },
   FABRICATE: {
     kind: 'validated-tool-argument',
     toolName: 'check_determinism',
     argumentKey: 'source',
+    recover: recoverDeterministicSourceArgument,
   },
   ASSEMBLE: { kind: 'assistant-text' },
   FINALIZE: { kind: 'assistant-text' },

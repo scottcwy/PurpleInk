@@ -44,7 +44,10 @@ ${JSON.stringify(parsed.scriptUnits)}
 audio allocation：
 ${JSON.stringify(parsed.audioAllocation)}
 
-输出必须可由项目原生 shotPlanSchema 直接解析，不要添加额外键或 Markdown 围栏。`
+提交方式：必须调用 validate_shot_plan 工具，把完整 shot plan 作为 shotPlan 实参提交，不要把实参当作普通文本输出。
+工具返回校验失败时，按返回的错误逐条修订后再次调用同一工具。
+
+shot plan 必须可由项目原生 shotPlanSchema 直接解析，不要添加额外键或 Markdown 围栏。`
 }
 
 /** 把可信 shot-plan schema 门禁错误反馈回同一 SHOT_SPEC 会话。 */

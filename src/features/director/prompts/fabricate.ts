@@ -54,7 +54,10 @@ ${JSON.stringify(parsed.audioAllocation)}
 style bible：
 ${parsed.styleBible}
 
-只返回完整、自包含且可被确定性守卫扫描的 HTML。`
+提交方式：必须调用 check_determinism 工具，把完整 HTML 作为 source 实参提交，不要把实参当作普通文本输出。
+工具返回违规时，按返回的错误逐条修订后再次调用同一工具。
+
+提交的必须是完整、自包含且可被确定性守卫扫描的 HTML。`
 }
 
 /** 把可信确定性门禁的逐条违规反馈回同一 FABRICATE 会话。 */

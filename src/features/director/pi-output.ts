@@ -26,6 +26,11 @@ export type DirectorOutputPolicy =
       kind: 'validated-tool-argument'
       toolName: string
       argumentKey: string
+      /**
+       * 工具未提交可用实参时，从 assistant 文本抢救等价产物内容的可信校验器。
+       * 返回 `null` 表示文本不合规，提取仍按缺失失败。不提供时完全不做抢救。
+       */
+      recover?: (assistantText: string) => string | null
     }
 
 export interface DirectorOutput {
@@ -34,6 +39,7 @@ export interface DirectorOutput {
   provenance:
     | { kind: 'assistant-text'; timestamp?: number }
     | { kind: 'tool-argument'; toolName: string; toolCallId: string }
+    | { kind: 'assistant-text-recovery'; toolName: string }
 }
 
 class DirectorToolOutputError extends Error {
@@ -63,37 +69,51 @@ export function extractDirectorOutput(
   return extractValidatedToolArgument(messages, policy)
 }
 
+type ToolArgumentPolicy = Extract<
+  DirectorOutputPolicy,
+  { kind: 'validated-tool-argument' }
+>
+
 function extractValidatedToolArgument(
   messages: readonly DirectorAgentMessage[],
-  policy: Extract<DirectorOutputPolicy, { kind: 'validated-tool-argument' }>
+  policy: ToolArgumentPolicy
 ): DirectorOutput {
+  return (
+    fromValidatedToolCall(messages, policy) ??
+    fromRecoveredAssistantText(messages, policy) ??
+    raiseMissing(policy.toolName)
+  )
+}
+
+function fromValidatedToolCall(
+  messages: readonly DirectorAgentMessage[],
+  policy: ToolArgumentPolicy
+): DirectorOutput | null {
   const resultIndex = findValidatedResult(messages, policy.toolName)
-  if (resultIndex < 0) throw new DirectorToolOutputError(policy.toolName)
+  if (resultIndex < 0) return null
   const result = messages[resultIndex]
   if (
     !result ||
     result.role !== 'toolResult' ||
     typeof result.toolCallId !== 'string'
   ) {
-    throw new DirectorToolOutputError(policy.toolName)
+    return null
   }
   const toolCall = findMatchingToolCall(
     messages.slice(0, resultIndex),
     result.toolCallId,
     policy.toolName
   )
-  if (!toolCall) throw new DirectorToolOutputError(policy.toolName)
+  if (!toolCall) return null
   const rawArguments: unknown = toolCall.arguments
   if (
     !isRecord(rawArguments) ||
     !Object.hasOwn(rawArguments, policy.argumentKey)
   ) {
-    throw new DirectorToolOutputError(policy.toolName)
+    return null
   }
-  const artifactContent = serializeArgument(
-    rawArguments[policy.argumentKey],
-    policy.toolName
-  )
+  const artifactContent = serializeArgument(rawArguments[policy.argumentKey])
+  if (artifactContent === null) return null
   return {
     artifactContent,
     displayText: lastAssistantText(messages)?.text ?? '',
@@ -103,6 +123,30 @@ function extractValidatedToolArgument(
       toolCallId: result.toolCallId,
     },
   }
+}
+
+/**
+ * 模型把工具实参当作文本输出时的抢救路径。
+ * 内容仍必须通过 policy 提供的可信校验器，否则按缺失失败——不降级门禁。
+ */
+function fromRecoveredAssistantText(
+  messages: readonly DirectorAgentMessage[],
+  policy: ToolArgumentPolicy
+): DirectorOutput | null {
+  if (!policy.recover) return null
+  const assistant = lastAssistantText(messages)
+  if (!assistant) return null
+  const artifactContent = policy.recover(assistant.text)
+  if (artifactContent === null) return null
+  return {
+    artifactContent,
+    displayText: assistant.text,
+    provenance: { kind: 'assistant-text-recovery', toolName: policy.toolName },
+  }
+}
+
+function raiseMissing(toolName: string): never {
+  throw new DirectorToolOutputError(toolName)
 }
 
 function findValidatedResult(
@@ -164,15 +208,15 @@ function lastAssistantText(
   return undefined
 }
 
-function serializeArgument(value: unknown, toolName: string): string {
+/** 不可序列化的实参返回 null，由调用方统一映射为缺失错误，避免泄露原始 Tool 参数。 */
+function serializeArgument(value: unknown): string | null {
   if (typeof value === 'string') return value
   try {
     const serialized = JSON.stringify(value)
-    if (typeof serialized === 'string') return serialized
+    return typeof serialized === 'string' ? serialized : null
   } catch {
-    // 统一映射为稳定的业务错误，避免泄露原始 Tool 参数。
+    return null
   }
-  throw new DirectorToolOutputError(toolName)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
