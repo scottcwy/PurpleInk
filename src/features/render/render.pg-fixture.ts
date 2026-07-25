@@ -21,11 +21,27 @@ export interface RenderFixture {
   projectAttemptId: string
 }
 
+export interface RenderFixtureOptions {
+  /**
+   * 是否写入 `director-fabricate` 产物记录 + `renderSpec`，默认 true（已渲染
+   * 成功的分镜，覆盖既有场景）。传 false 还原「首次入队」的真实状态：
+   * `materializeShotLanes` 播种的节点只有 `laneKey`/`laneRole`，既没有
+   * `director-fabricate` 产物也没有 `renderSpec`（该字段只在 FABRICATE 成功
+   * 提交后才写入，见 `stage-result.ts` FABRICATE 分支）。
+   */
+  withFabricateArtifact?: boolean
+  /** `shot-codegen` 节点的初始状态，默认 `'succeeded'`。 */
+  codegenStatus?: string
+}
+
 export async function seedRenderFixture(
   db: Db,
   workspaceId = TEST_WORKSPACE_ID,
-  projectId: string = randomUUID()
+  projectId: string = randomUUID(),
+  options: RenderFixtureOptions = {}
 ): Promise<RenderFixture> {
+  const withFabricateArtifact = options.withFabricateArtifact ?? true
+  const codegenStatus = options.codegenStatus ?? 'succeeded'
   const codegenNodeId = randomUUID()
   const qaNodeId = randomUUID()
   await db
@@ -55,15 +71,21 @@ export async function seedRenderFixture(
       logicalKey: 'shot:S001:shot-codegen',
       type: 'shot-codegen',
       stage: 'FABRICATE',
-      status: 'succeeded',
-      data: nodeData('S001', 'shot-codegen', {
-        renderSpec: {
-          fps: 30,
-          durationInFrames: 60,
-          width: 1920,
-          height: 1080,
-        },
-      }),
+      status: codegenStatus,
+      data: nodeData(
+        'S001',
+        'shot-codegen',
+        withFabricateArtifact
+          ? {
+              renderSpec: {
+                fps: 30,
+                durationInFrames: 60,
+                width: 1920,
+                height: 1080,
+              },
+            }
+          : {}
+      ),
     },
     {
       workspaceId,
@@ -93,15 +115,17 @@ export async function seedRenderFixture(
     attempt(workspaceId, qaAttemptId, runId, qaNodeId, 'node', 2),
     attempt(workspaceId, projectAttemptId, runId, projectId, 'project', 3),
   ])
-  await insertArtifact(db, {
-    workspaceId,
-    projectId,
-    aggregateId: codegenNodeId,
-    attemptId: nodeAttemptId,
-    kind: 'director-fabricate',
-    storageKey: 'director/S001.html',
-    contentHash: 'b'.repeat(64),
-  })
+  if (withFabricateArtifact) {
+    await insertArtifact(db, {
+      workspaceId,
+      projectId,
+      aggregateId: codegenNodeId,
+      attemptId: nodeAttemptId,
+      kind: 'director-fabricate',
+      storageKey: 'director/S001.html',
+      contentHash: 'b'.repeat(64),
+    })
+  }
   return {
     projectId,
     codegenNodeId,

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { and, eq } from 'drizzle-orm'
 import { artifacts, canvasNodes } from '@/lib/db/schema/index'
@@ -57,6 +58,58 @@ describe('RenderRepository Postgres', () => {
         fixture.codegenNodeId
       )
     ).rejects.toThrow('不可入队：success')
+  })
+
+  it('allows enqueue admission on a genuine first-time node with neither director-fabricate nor renderSpec', async () => {
+    const projectId = randomUUID()
+    const awaiting = await seedRenderFixture(database.db, TEST_WORKSPACE_ID, projectId, {
+      withFabricateArtifact: false,
+      codegenStatus: 'idle',
+    })
+    const repository = new RenderRepository(database.db)
+
+    await expect(
+      repository.hasFabricateArtifact(projectId, awaiting.codegenNodeId)
+    ).resolves.toBe(false)
+
+    const admission = await repository.loadRenderAdmissionContext(
+      projectId,
+      awaiting.codegenNodeId
+    )
+    expect(admission.job).toBeNull()
+    expect(admission.enqueue).toEqual({
+      projectId,
+      nodeId: awaiting.codegenNodeId,
+      shotId: 'S001',
+    })
+
+    // 首次入队上下文不解析 renderSpec；真正渲染时才要求它存在（此处尚未生成）。
+    await expect(
+      repository.loadRenderContext(projectId, awaiting.codegenNodeId)
+    ).rejects.toThrow('必须处于 running')
+  })
+
+  it('surfaces a render-ready job for enqueue admission when the artifact already exists (retry path)', async () => {
+    const projectId = randomUUID()
+    const retryable = await seedRenderFixture(database.db, TEST_WORKSPACE_ID, projectId, {
+      codegenStatus: 'failed',
+    })
+    const repository = new RenderRepository(database.db)
+
+    await expect(
+      repository.hasFabricateArtifact(projectId, retryable.codegenNodeId)
+    ).resolves.toBe(true)
+
+    const admission = await repository.loadRenderAdmissionContext(
+      projectId,
+      retryable.codegenNodeId
+    )
+    expect(admission.job).toMatchObject({
+      projectId,
+      nodeId: retryable.codegenNodeId,
+      htmlKey: 'director/S001.html',
+      frames: { fps: 30, durationInFrames: 60, width: 1920, height: 1080 },
+    })
   })
 
   it('keeps export plans isolated by workspace and maps succeeded to success', async () => {

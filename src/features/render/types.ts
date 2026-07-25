@@ -14,6 +14,31 @@ export interface RenderJob {
   seed?: number
 }
 
+/**
+ * 入队校验用的最小上下文：不解析 `renderSpec`。
+ *
+ * `renderSpec` 只在 FABRICATE 成功提交后才存在（`stage-result.ts` FABRICATE 分支 +
+ * `runtime-artifact-writer.recordStageOutput`）。`shot-codegen` 节点首次由
+ * `materializeShotLanes` 播种时的 payload 只有 `laneKey`/`laneRole`/`sourceUnit`，
+ * 不含 `renderSpec`。入队若强制解析 `renderSpec` 会在首次路径上必然失败，
+ * 因此入队上下文只承载「找到哪个节点」，不承载「怎么渲染」。
+ */
+export interface RenderEnqueueContext {
+  projectId: string
+  nodeId: string
+  shotId: string
+}
+
+/**
+ * `loadRenderAdmissionContext` 的返回值：`enqueue` 始终可用；
+ * `job` 只在 `director-fabricate` 产物已存在时（重跑场景）才非空，
+ * 供调用方决定是否能在入队前跑一次 `assertRenderAdmission` 预检。
+ */
+export interface RenderAdmissionContext {
+  enqueue: RenderEnqueueContext
+  job: RenderJob | null
+}
+
 export interface RenderResult {
   shotId: string
   /** 输出 mp4 的存储 key。 */

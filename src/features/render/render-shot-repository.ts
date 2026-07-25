@@ -3,8 +3,18 @@ import { and, desc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { getDb, LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
 import { artifacts, canvasNodes } from '@/lib/db/schema/index'
-import { laneKeyOf, legacyNodeStatus, readPayload } from './persistence'
-import type { RenderJob, ThumbnailContext } from './types'
+import {
+  laneKeyOf,
+  legacyNodeStatus,
+  readPayload,
+  withoutPayloadKeys,
+} from './persistence'
+import type {
+  RenderAdmissionContext,
+  RenderEnqueueContext,
+  RenderJob,
+  ThumbnailContext,
+} from './types'
 
 const renderSpecSchema = z
   .object({
@@ -17,7 +27,8 @@ const renderSpecSchema = z
   .strict()
 
 const ENQUEUEABLE_STATUSES = new Set(['idle', 'failed', 'stale'])
-type RenderContextMode = 'enqueueable' | 'running' | 'completed'
+type RenderContextMode = 'running' | 'completed'
+type RenderStatusMode = RenderContextMode | 'enqueueable'
 
 /** Demo render-shot 的运行上下文、source pointer 与失败投影。 */
 export class RenderShotRepository {
@@ -27,11 +38,45 @@ export class RenderShotRepository {
     return this.suppliedDb ? Promise.resolve(this.suppliedDb) : getDb()
   }
 
-  loadRenderAdmissionContext(
+  /**
+   * 入队校验用的最小上下文，不解析 `renderSpec`（首次入队时该字段不存在，见类型注释）。
+   * `job` 只在 `director-fabricate` 产物已存在时（重跑场景）才非空，用于入队前预检。
+   */
+  async loadRenderAdmissionContext(
     projectId: string,
     nodeId: string
-  ): Promise<RenderJob> {
-    return this.buildRenderJob(projectId, nodeId, 'enqueueable')
+  ): Promise<RenderAdmissionContext> {
+    const node = await this.getRenderNode(projectId, nodeId)
+    assertRenderStatus(legacyNodeStatus(node.status), 'enqueueable')
+    const enqueue: RenderEnqueueContext = {
+      projectId,
+      nodeId,
+      shotId: node.laneKey,
+    }
+    const htmlKey = await this.findFabricateArtifact(projectId, nodeId)
+    if (htmlKey === null) return { enqueue, job: null }
+    const spec = parseRenderSpec(node.data)
+    return {
+      enqueue,
+      job: {
+        projectId,
+        nodeId,
+        shotId: node.laneKey,
+        htmlKey,
+        frames: {
+          fps: spec.fps,
+          durationInFrames: spec.durationInFrames,
+          width: spec.width,
+          height: spec.height,
+        },
+        ...(spec.seed === undefined ? {} : { seed: spec.seed }),
+      },
+    }
+  }
+
+  /** 幂等门槛：已存在 `director-fabricate` 产物时，render handler 不应重新生成 HTML。 */
+  async hasFabricateArtifact(projectId: string, nodeId: string): Promise<boolean> {
+    return (await this.findFabricateArtifact(projectId, nodeId)) !== null
   }
 
   loadRenderContext(projectId: string, nodeId: string): Promise<RenderJob> {
@@ -59,7 +104,10 @@ export class RenderShotRepository {
           data: {
             schemaVersion: 1,
             payload: {
-              ...readPayload(node.data),
+              // 清掉可能残留的 directorError：本次失败发生在渲染阶段（HTML 已
+              // 存在），任何更早一次 FABRICATE 失败已经过时，不应与本次渲染
+              // 失败同时展示在 Inspector 里。
+              ...withoutPayloadKeys(readPayload(node.data), ['directorError']),
               renderError: {
                 message: error instanceof Error ? error.message : String(error),
               },
@@ -142,6 +190,17 @@ export class RenderShotRepository {
     projectId: string,
     nodeId: string
   ): Promise<string> {
+    const storageKey = await this.findFabricateArtifact(projectId, nodeId)
+    if (storageKey === null) {
+      throw new Error(`节点缺少 director-fabricate 产物：${nodeId}`)
+    }
+    return storageKey
+  }
+
+  private async findFabricateArtifact(
+    projectId: string,
+    nodeId: string
+  ): Promise<string | null> {
     const database = await this.database()
     const [artifact] = await database
       .select({ storageKey: artifacts.storageKey })
@@ -157,10 +216,7 @@ export class RenderShotRepository {
       )
       .orderBy(desc(artifacts.version), desc(artifacts.createdAt))
       .limit(1)
-    if (!artifact) {
-      throw new Error(`节点缺少 director-fabricate 产物：${nodeId}`)
-    }
-    return artifact.storageKey
+    return artifact?.storageKey ?? null
   }
 }
 
@@ -172,7 +228,7 @@ function parseRenderSpec(data: unknown) {
   return result.data
 }
 
-function assertRenderStatus(status: string, mode: RenderContextMode): void {
+function assertRenderStatus(status: string, mode: RenderStatusMode): void {
   if (mode === 'enqueueable') {
     if (ENQUEUEABLE_STATUSES.has(status)) return
     throw new Error(`渲染节点当前不可入队：${status}`)

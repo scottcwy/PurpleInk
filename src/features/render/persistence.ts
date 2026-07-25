@@ -30,6 +30,16 @@ export function legacyNodeStatus(status: string): string {
   return status
 }
 
+/** 从已读取的 payload 中剔除指定 key（用于清理跨重试残留的失败标记）。 */
+export function withoutPayloadKeys(
+  payload: Record<string, unknown>,
+  keys: readonly string[]
+): Record<string, unknown> {
+  const next = { ...payload }
+  for (const key of keys) delete next[key]
+  return next
+}
+
 export async function writeNodeProjection(
   transaction: TransactionContext,
   nodeId: string,

@@ -7,8 +7,9 @@ import { assertRenderAdmission } from './admission'
 import { openFrameCapture } from './frame-capture'
 import { RenderRepository } from './repository'
 import { HyperframesRenderer, type Renderer } from './renderer'
-import type { RenderJob } from './types'
+import type { RenderAdmissionContext, RenderJob } from './types'
 import { advancePipeline } from '@/features/director/advance'
+import { fabricateShot } from '@/features/director/fabricate'
 
 const renderJobPayloadSchema = z
   .object({
@@ -20,6 +21,7 @@ const renderJobPayloadSchema = z
 export type RenderShotInput = z.infer<typeof renderJobPayloadSchema>
 
 interface HandlerRepository {
+  hasFabricateArtifact(projectId: string, nodeId: string): Promise<boolean>
   loadRenderContext(projectId: string, nodeId: string): Promise<RenderJob>
   recordRenderError(nodeId: string, error: unknown): Promise<void>
 }
@@ -28,6 +30,7 @@ interface HandlerDependencies {
   repository: HandlerRepository
   transitionNodeStatus: typeof transitionNodeStatus
   renderer: Renderer
+  fabricateShot: (projectId: string, nodeId: string) => Promise<void>
   advancePipeline: (
     projectId: string,
     completedNodeId: string
@@ -39,7 +42,7 @@ interface EnqueueDependencies {
   loadAdmissionContext(
     projectId: string,
     nodeId: string
-  ): RenderJob | Promise<RenderJob>
+  ): RenderAdmissionContext | Promise<RenderAdmissionContext>
   assertAdmission(job: RenderJob): Promise<void>
   transitionNodeStatus: typeof transitionNodeStatus
   recordRenderError(nodeId: string, error: unknown): Promise<void>
@@ -53,6 +56,14 @@ export function registerRenderShotHandler(
     const resolved = dependencies ?? createHandlerDependencies()
     const payload = renderJobPayloadSchema.parse(job.payload)
     await resolved.transitionNodeStatus(payload.nodeId, 'running')
+    try {
+      if (!(await resolved.repository.hasFabricateArtifact(payload.projectId, payload.nodeId))) {
+        await resolved.fabricateShot(payload.projectId, payload.nodeId)
+      }
+    } catch (error) {
+      await failFabricate(payload.nodeId, error, resolved)
+      throw error
+    }
     try {
       const context = await resolved.repository.loadRenderContext(
         payload.projectId,
@@ -78,19 +89,23 @@ export async function enqueueRenderShot(
 ): Promise<string> {
   const resolved = dependencies ?? createEnqueueDependencies()
   const payload = renderJobPayloadSchema.parse(input)
-  const job = await resolved.loadAdmissionContext(
-    payload.projectId,
-    payload.nodeId
-  )
-  await resolved.assertAdmission(job)
-  await resolved.transitionNodeStatus(payload.nodeId, 'pending')
+  let pendingSet = false
   try {
+    const admission = await resolved.loadAdmissionContext(
+      payload.projectId,
+      payload.nodeId
+    )
+    if (admission.job) {
+      await resolved.assertAdmission(admission.job)
+    }
+    await resolved.transitionNodeStatus(payload.nodeId, 'pending')
+    pendingSet = true
     return await resolved.queue.enqueue('render-shot', payload, {
       projectId: payload.projectId,
       nodeId: payload.nodeId,
     })
   } catch (error) {
-    await compensateEnqueueFailure(payload.nodeId, error, resolved)
+    await compensateEnqueueFailure(payload.nodeId, pendingSet, error, resolved)
     throw error
   }
 }
@@ -100,6 +115,7 @@ function createHandlerDependencies(): HandlerDependencies {
     repository: new RenderRepository(),
     transitionNodeStatus,
     renderer: new HyperframesRenderer(),
+    fabricateShot,
     advancePipeline,
   }
 }
@@ -142,6 +158,25 @@ function failRender(
   return compensateFailure(nodeId, error, dependencies)
 }
 
+/**
+ * FABRICATE 阶段失败的补偿只转 failed，不再调 `recordRenderError`：
+ * `fabricateShot` 内部已经通过 director 的 `recordStageError` 把
+ * `directorError` 写进节点 payload，这里重复写 `renderError` 会制造
+ * 两条互相独立又描述同一次失败的噪音信号，让 Inspector 无法干净地
+ * 区分「HTML 生成失败」与「渲染失败」。
+ */
+async function failFabricate(
+  nodeId: string,
+  error: unknown,
+  dependencies: Pick<HandlerDependencies, 'transitionNodeStatus'>
+): Promise<void> {
+  try {
+    await dependencies.transitionNodeStatus(nodeId, 'failed')
+  } catch (cleanupError) {
+    throw new AggregateError([error, cleanupError], 'HTML 生成失败补偿不完整')
+  }
+}
+
 async function compensateFailure(
   nodeId: string,
   error: unknown,
@@ -165,19 +200,35 @@ async function compensateFailure(
 
 function compensateEnqueueFailure(
   nodeId: string,
+  pendingSet: boolean,
   error: unknown,
   dependencies: EnqueueDependencies
 ): Promise<void> {
-  return compensateEnqueueFailureAsync(nodeId, error, dependencies)
+  return compensateEnqueueFailureAsync(nodeId, pendingSet, error, dependencies)
 }
 
+/**
+ * 把一次入队失败落成节点 `failed` + `renderError`，不留给 `advance.ts` 的通用
+ * `recordStageError` 兜底（那条路径只写 `directorError`、不转 `failed`，会让节点
+ * 永久停在 `idle` 且 Inspector 因 `STREAMABLE` 只含 running/success/failed 而
+ * 完全不展示任何错误信息）。
+ *
+ * 补偿路径必须匹配失败发生时节点的真实状态：若失败在 `pending` 转换之前
+ * （admission 加载或预检阶段），节点仍是 `idle`，只能走 `idle -> pending ->
+ * running -> failed`；若失败发生在队列写入阶段，节点已是 `pending`，走
+ * `pending -> running -> failed`（原有行为，不变）。
+ */
 async function compensateEnqueueFailureAsync(
   nodeId: string,
+  pendingSet: boolean,
   error: unknown,
   dependencies: EnqueueDependencies
 ): Promise<void> {
   const cleanupErrors: unknown[] = []
-  for (const status of ['running', 'failed'] as const) {
+  const transitions = pendingSet
+    ? (['running', 'failed'] as const)
+    : (['pending', 'running', 'failed'] as const)
+  for (const status of transitions) {
     try {
       await dependencies.transitionNodeStatus(nodeId, status)
     } catch (cleanupError) {
