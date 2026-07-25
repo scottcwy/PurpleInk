@@ -86,6 +86,32 @@ describe('writeValidatedArtifact', () => {
     expect(resolveAttempt).not.toHaveBeenCalled()
   })
 
+  it('does not stage deterministic HTML with a portrait composition contract', async () => {
+    const storage = createStorage()
+    const resolveAttempt = vi.fn()
+    const portrait = `<!doctype html><html><head>
+<meta name="viewport" content="width=1080, height=1920"></head>
+<body><main data-composition-id="shot" data-width="1080" data-height="1920"></main>
+<script>const timeline = gsap.timeline({ paused: true }); timeline.seek(frame / fps);</script>
+</body></html>`
+
+    await expect(
+      writeValidatedArtifact(
+        {
+          projectId: 'project-1',
+          nodeId: 'node-1',
+          kind: 'director-fabricate',
+          key: 'project-1/node-1/shot.html',
+          content: portrait,
+          validation: 'deterministic-html',
+        },
+        { storage, resolveAttempt }
+      )
+    ).rejects.toThrow('composition-width')
+    expect(resolveAttempt).not.toHaveBeenCalled()
+    expect(storage.put).not.toHaveBeenCalled()
+  })
+
   it('does not write bytes when no legal attempt exists', async () => {
     const storage = createStorage()
     const failure = new Error('找不到可归属的 task attempt')

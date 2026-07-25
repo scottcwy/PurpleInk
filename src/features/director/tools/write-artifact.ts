@@ -6,7 +6,7 @@ import {
   LOCAL_WORKSPACE_ID,
 } from '@/lib/db/client'
 import { storage as defaultStorage, type StorageAdapter } from '@/lib/storage'
-import { inspectDeterminism } from './check-determinism'
+import { inspectFabricateSource } from '@/features/canvas/contracts'
 import { validateShotPlanValue } from './validate-shot-plan'
 
 const validationSchema = z.enum(['non-empty', 'shot-plan', 'deterministic-html'])
@@ -135,7 +135,7 @@ function validateArtifact(input: WriteArtifactInput): ArtifactPrevalidation {
       : { ok: false, errors: ['产物内容不能为空'] }
   }
   if (input.validation === 'deterministic-html') {
-    const inspection = inspectDeterminism(input.content)
+    const inspection = inspectFabricateSource(input.content)
     return inspection.ok
       ? { ok: true }
       : {

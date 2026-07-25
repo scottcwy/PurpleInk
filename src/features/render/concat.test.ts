@@ -77,10 +77,13 @@ describe('concatExport', () => {
     ).rejects.toThrow('分镜索引 1')
   })
 
-  it('re-encodes to a non-master resolution via the scale filter', async () => {
-    const output = path.join(directory, 'scaled.mp4')
-    await concatExport(clips, null, output, { width: 540, height: 960 })
-    expect(await probeResolution(output)).toEqual({ width: 540, height: 960 })
+  it.each([
+    { width: 1280, height: 720 },
+    { width: 960, height: 540 },
+  ])('re-encodes to $width×$height via proportional scale', async (resolution) => {
+    const output = path.join(directory, `scaled-${resolution.width}.mp4`)
+    await concatExport(clips, null, output, resolution)
+    expect(await probeResolution(output)).toEqual(resolution)
   }, 30_000)
 })
 
@@ -119,7 +122,7 @@ function probeResolution(file: string): Promise<{ width: number; height: number 
       stderr += chunk
     })
     child.once('close', () => {
-      // 区分分辨率 540x960 与编解码器 tag 0x31637661：宽高限定 2-4 位数字。
+      // 区分分辨率 960x540 与编解码器 tag 0x31637661：宽高限定 2-4 位数字。
       const match = /\b(\d{2,4})x(\d{2,4})\b/.exec(stderr)
       if (!match) reject(new Error(`无法读取分辨率：${stderr}`))
       else resolve({ width: Number(match[1]), height: Number(match[2]) })

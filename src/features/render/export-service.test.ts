@@ -26,7 +26,7 @@ describe('exportProject', () => {
           incompleteNodeIds: ['node-2', 'node-1'],
           shots: [],
           musicKey: null,
-          targetResolution: { width: 1080, height: 1920 },
+          targetResolution: { width: 1920, height: 1080 },
           resolutionPreset: '1920x1080' as const,
           shotQa: {},
         })),
@@ -80,7 +80,7 @@ describe('exportProject', () => {
             { nodeId: 'node-1', laneKey: 'S001', outputKey: 'render/S001.mp4' },
           ],
           musicKey: null,
-          targetResolution: { width: 1080, height: 1920 },
+          targetResolution: { width: 1920, height: 1080 },
           resolutionPreset: '1920x1080' as const,
           shotQa: {},
         })),
@@ -95,7 +95,7 @@ describe('exportProject', () => {
       path.join(tempRoot, 'render/S001.mp4'),
       path.join(tempRoot, 'render/S002.mp4'),
     ])
-    expect(concat.mock.calls[0]?.[3]).toEqual({ width: 1080, height: 1920 })
+    expect(concat.mock.calls[0]?.[3]).toEqual({ width: 1920, height: 1080 })
     expect(storage.put).toHaveBeenCalledOnce()
     expect(registerFinalArtifact).toHaveBeenCalledOnce()
     expect(storage.removeTempDir).toHaveBeenCalledOnce()
@@ -123,7 +123,7 @@ describe('exportProject', () => {
             incompleteNodeIds: [],
             shots: [{ nodeId: 'node-1', laneKey: 'S001', outputKey: 'render/S001.mp4' }],
             musicKey: null,
-            targetResolution: { width: 1080, height: 1920 },
+            targetResolution: { width: 1920, height: 1080 },
             resolutionPreset: '1920x1080' as const,
             shotQa: {},
           })),
@@ -145,7 +145,7 @@ describe('getExportReadiness', () => {
         incompleteNodeIds: [],
         shots: [{ nodeId: 'node-1', laneKey: 'S001', outputKey: 'render/S001.mp4' }],
         musicKey: null,
-        targetResolution: { width: 1080, height: 1920 },
+        targetResolution: { width: 1920, height: 1080 },
         resolutionPreset: '1920x1080' as const,
         shotQa: { S001: true },
       })),

@@ -2,6 +2,7 @@ import 'server-only'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { chromium, type Browser, type BrowserContext, type CDPSession, type Page } from 'playwright'
+import { MASTER_HEIGHT, MASTER_WIDTH } from '@/features/canvas/contracts'
 
 const RUNTIME_VERSION = 1
 
@@ -35,12 +36,47 @@ export async function openFrameCapture(
       await document.fonts.ready
     })
     await assertRuntime(page)
+    await assertMasterCanvasGeometry(page)
     const cdp = await context.newCDPSession(page)
     await cdp.send('Page.enable')
     return createSession(browser, context, page, cdp)
   } catch (error) {
     await browser.close()
     throw error
+  }
+}
+
+async function assertMasterCanvasGeometry(page: Page): Promise<void> {
+  const geometry = await page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>('[data-composition-id]')
+    const rect = root?.getBoundingClientRect()
+    return {
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      rootWidth: rect?.width ?? null,
+      rootHeight: rect?.height ?? null,
+      rootLeft: rect?.left ?? null,
+      rootTop: rect?.top ?? null,
+      scrollWidth: document.documentElement.scrollWidth,
+      scrollHeight: document.documentElement.scrollHeight,
+    }
+  })
+  const valid =
+    geometry.viewportWidth === MASTER_WIDTH &&
+    geometry.viewportHeight === MASTER_HEIGHT &&
+    geometry.rootWidth === MASTER_WIDTH &&
+    geometry.rootHeight === MASTER_HEIGHT &&
+    geometry.rootLeft === 0 &&
+    geometry.rootTop === 0 &&
+    geometry.scrollWidth <= MASTER_WIDTH &&
+    geometry.scrollHeight <= MASTER_HEIGHT
+  if (!valid) {
+    throw new Error(
+      `母版画布几何不匹配：viewport=${geometry.viewportWidth}×${geometry.viewportHeight}，` +
+        `root=${String(geometry.rootWidth)}×${String(geometry.rootHeight)}@` +
+        `${String(geometry.rootLeft)},${String(geometry.rootTop)}，` +
+        `scroll=${geometry.scrollWidth}×${geometry.scrollHeight}`
+    )
   }
 }
 

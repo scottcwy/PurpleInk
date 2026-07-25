@@ -49,3 +49,8 @@ export {
 export { materializeShotLanes } from './fan-out'
 export type { ShotLaneSeed } from './contracts'
 export { transitionNodeStatus } from './status'
+export {
+  inspectFabricateSource,
+  type FabricateSourceInspection,
+  type FabricateSourceViolation,
+} from './fabricate-source-contract'

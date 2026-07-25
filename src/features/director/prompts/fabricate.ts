@@ -36,6 +36,11 @@ export function buildFabricatePrompt(input: FabricatePromptInput): string {
 - 相同 frame、fps、seed 必须得到相同像素。
 
 实现约束：
+- 唯一母版固定 1920×1080；viewport 必须明确写为 width=1920, height=1080。
+- 唯一根画布必须带 data-composition-id、data-width="1920"、data-height="1080"。
+- html、body 与根画布固定为 1920px × 1080px，overflow: hidden，禁止滚动，
+  禁止通过 vw/vh、百分比或媒体查询自适应成其他画幅。
+- TitleRegion、HeroRegion、SupportRegion、VisualRegion 全部必须位于 16:9 横屏安全区内。
 - 一节点只允许一个 transform writer；静态外层与动画内层分离。
 - 画面必须满足 shot 的 mustShow，且不得出现 mustAvoid。
 - 不读取远程运行时素材，不改写镜头职责、音频时长或核心文案。

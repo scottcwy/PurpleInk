@@ -160,6 +160,13 @@ describe('director prompt templates', () => {
       'window.__CVC_RENDER__ = { version: 1, seek(frame, fps) }',
       '第一个字符必须是 <',
       '禁止 Markdown 围栏',
+      '固定 1920×1080',
+      'width=1920, height=1080',
+      'data-composition-id',
+      'data-width="1920"',
+      'data-height="1080"',
+      '禁止滚动',
+      '横屏安全区',
     ]) {
       expect(prompt).toContain(term)
     }

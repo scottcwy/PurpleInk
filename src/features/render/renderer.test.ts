@@ -18,6 +18,10 @@ const job: RenderJob = {
   frames: { fps: 30, durationInFrames: 60, width: 1920, height: 1080 },
   seed: 7,
 }
+const VALID_SOURCE = `<!doctype html><html><head>
+<meta name="viewport" content="width=1920, height=1080"></head>
+<body><main data-composition-id="shot" data-width="1920" data-height="1080"></main></body>
+</html>`
 const directories: string[] = []
 
 describe('HyperframesRenderer', () => {
@@ -32,7 +36,7 @@ describe('HyperframesRenderer', () => {
   it('returns a cache hit without capturing frames', async () => {
     const captureSequence = vi.fn()
     const renderer = new HyperframesRenderer({
-      storage: createStorage('<html>deterministic</html>'),
+      storage: createStorage(VALID_SOURCE),
       lookupCache: vi.fn(async () => ({
         outputKey: 'render/cached.mp4',
         contentHash: 'cached-hash',
@@ -62,7 +66,7 @@ describe('HyperframesRenderer', () => {
       totalFrames: 60,
       cleanup,
     }
-    const storage = createStorage('<html>deterministic</html>')
+    const storage = createStorage(VALID_SOURCE)
     vi.mocked(storage.put).mockImplementation(async (key) => {
       order.push('store')
       return key
@@ -99,7 +103,9 @@ describe('HyperframesRenderer', () => {
     const captureSequence = vi.fn()
     const encode = vi.fn()
     const renderer = new HyperframesRenderer({
-      storage: createStorage('<script>requestAnimationFrame(render)</script>'),
+      storage: createStorage(
+        `${VALID_SOURCE}\n<script>requestAnimationFrame(render)</script>`
+      ),
       lookupCache: vi.fn(),
       writeCache: vi.fn(),
       captureSequence,

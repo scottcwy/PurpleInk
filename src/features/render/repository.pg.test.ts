@@ -142,7 +142,7 @@ describe('RenderRepository Postgres', () => {
     ])
     expect(plan.incompleteNodeIds).toEqual([fixture.qaNodeId])
     expect(plan.resolutionPreset).toBe('1280x720')
-    expect(plan.targetResolution).toEqual({ width: 720, height: 1280 })
+    expect(plan.targetResolution).toEqual({ width: 1280, height: 720 })
   })
 
   it('round-trips rule QA inside the versioned node payload', async () => {

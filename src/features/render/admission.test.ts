@@ -14,6 +14,11 @@ const renderJob: RenderJob = {
   frames: { fps: 30, durationInFrames: 60, width: 1920, height: 1080 },
 }
 
+const VALID_SOURCE = `<!doctype html><html><head>
+<meta name="viewport" content="width=1920, height=1080"></head>
+<body><main data-composition-id="shot" data-width="1920" data-height="1080"></main></body>
+</html>`
+
 function storageOf(source: string): StorageAdapter {
   return {
     put: vi.fn(),
@@ -40,10 +45,10 @@ describe('assertRenderAdmission', () => {
 
     await expect(
       assertRenderAdmission(renderJob, {
-        storage: storageOf('requestAnimationFrame(render)'),
+        storage: storageOf(`${VALID_SOURCE}\n<script>requestAnimationFrame(render)</script>`),
         openFrameCapture,
       })
-    ).rejects.toThrow('确定性违规：raf@1')
+    ).rejects.toThrow('确定性违规：raf@5')
     expect(openFrameCapture).not.toHaveBeenCalled()
   })
 
@@ -57,7 +62,7 @@ describe('assertRenderAdmission', () => {
 
     await expect(
       assertRenderAdmission(renderJob, {
-        storage: storageOf('<html>deterministic</html>'),
+        storage: storageOf(VALID_SOURCE),
         openFrameCapture,
       })
     ).rejects.toThrow(message)
@@ -68,7 +73,7 @@ describe('assertRenderAdmission', () => {
     const openFrameCapture = vi.fn(async () => captureSession(close))
 
     await assertRenderAdmission(renderJob, {
-      storage: storageOf('<html>deterministic</html>'),
+      storage: storageOf(VALID_SOURCE),
       openFrameCapture,
     })
 
@@ -80,7 +85,7 @@ describe('assertRenderAdmission', () => {
   })
 
   it('does not expose local paths from storage or browser failures', async () => {
-    const sourceStorage = storageOf('<html>deterministic</html>')
+    const sourceStorage = storageOf(VALID_SOURCE)
     vi.mocked(sourceStorage.get).mockRejectedValueOnce(
       new Error('ENOENT: C:\\private\\source.html')
     )
@@ -94,7 +99,7 @@ describe('assertRenderAdmission', () => {
 
     await expect(
       assertRenderAdmission(renderJob, {
-        storage: storageOf('<html>deterministic</html>'),
+        storage: storageOf(VALID_SOURCE),
         openFrameCapture: vi.fn(async () => {
           throw new Error('browser failed at C:\\private\\source.html')
         }),
@@ -103,7 +108,7 @@ describe('assertRenderAdmission', () => {
 
     await expect(
       assertRenderAdmission(renderJob, {
-        storage: storageOf('<html>deterministic</html>'),
+        storage: storageOf(VALID_SOURCE),
         openFrameCapture: vi.fn(async () =>
           captureSession(
             vi.fn(async () => {

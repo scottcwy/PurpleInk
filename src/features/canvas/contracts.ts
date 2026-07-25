@@ -30,3 +30,9 @@ export interface ShotLaneSeed {
     speaker?: string
   }
 }
+
+export {
+  inspectFabricateSource,
+  type FabricateSourceInspection,
+  type FabricateSourceViolation,
+} from './fabricate-source-contract'

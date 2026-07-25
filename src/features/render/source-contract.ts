@@ -1,7 +1,8 @@
-import { checkSource } from '@/lib/determinism'
+import { inspectFabricateSource } from '@/features/canvas/contracts'
 
 export function assertDeterministicSource(source: string): void {
-  const violations = checkSource(source)
+  const inspection = inspectFabricateSource(source)
+  const violations = inspection.violations
   if (violations.length === 0) return
   const summary = violations
     .map(({ ruleId, line }) => `${ruleId}@${line}`)

@@ -15,7 +15,7 @@ const job: RenderJob = {
   nodeId: 'node-e2e',
   shotId: 'S001',
   htmlKey: 'director/S001.html',
-  frames: { fps: 24, durationInFrames: 6, width: 320, height: 180 },
+  frames: { fps: 30, durationInFrames: 2, width: 1920, height: 1080 },
   seed: 42,
 }
 

@@ -13,6 +13,9 @@ const fixturePath = fileURLToPath(
 const invalidRuntimePath = fileURLToPath(
   new URL('./__fixtures__/invalid-runtime.html', import.meta.url)
 )
+const portraitCanvasPath = fileURLToPath(
+  new URL('./__fixtures__/portrait-canvas.html', import.meta.url)
+)
 
 describe('frame capture', () => {
   it('captures identical PNG bytes for the same frame', async () => {
@@ -37,6 +40,12 @@ describe('frame capture', () => {
   it('rejects a mismatched shot runtime version', async () => {
     await expect(openFrameCapture(invalidRuntimePath)).rejects.toThrow(
       '__CVC_RENDER__ runtime version'
+    )
+  }, 10_000)
+
+  it('rejects runtime geometry that is not the 1920×1080 master canvas', async () => {
+    await expect(openFrameCapture(portraitCanvasPath)).rejects.toThrow(
+      '母版画布几何不匹配'
     )
   }, 10_000)
 
