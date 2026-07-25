@@ -5,7 +5,14 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
-  serverExternalPackages: ["ffmpeg-static"],
+  // pi-ai/pi-agent-core 的 dist 内含动态 require（provider 懒加载），
+  // 被 Turbopack 打包后抛 MODULE_NOT_FOUND（"expression is too dynamic"），
+  // 导致 Director 全部阶段的模型调用失败；保持外部化走原生 Node 解析。
+  serverExternalPackages: [
+    "ffmpeg-static",
+    "@earendil-works/pi-ai",
+    "@earendil-works/pi-agent-core",
+  ],
   // Disable source maps in production to protect code
   productionBrowserSourceMaps: false,
   // Remove console.log in production
