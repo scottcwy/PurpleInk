@@ -18,7 +18,7 @@ export function ProgressBar({ value, label, className }: ProgressBarProps) {
         {label && <span className="text-[13px] font-medium">{label}</span>}
         <span className="text-xs font-mono text-ds-text-muted">{percent}%</span>
       </div>
-      <div className="h-1.5 w-full rounded-full bg-ds-surface-muted">
+      <div className="h-1.5 w-full rounded-full bg-ds-blue-soft">
         <div
           className="h-1.5 rounded-full bg-ds-blue transition-all"
           style={{ width: `${percent}%` }}

@@ -11,7 +11,7 @@ export default function AppLoading() {
       aria-busy="true"
     >
       <span className="sr-only">加载中</span>
-      <div className="flex h-16 shrink-0 items-center justify-between border-b border-ds-border bg-ds-surface px-4 sm:px-7">
+      <div className="flex h-12 shrink-0 items-center justify-between border-b border-ds-border bg-ds-surface px-4 sm:px-7">
         <div className="flex items-center gap-2">
           <Skeleton className="h-5 w-24" />
           <Skeleton className="h-3 w-36" />

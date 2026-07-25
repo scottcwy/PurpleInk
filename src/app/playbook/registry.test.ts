@@ -48,6 +48,7 @@ const EXPECTED_PENCIL_FAMILIES = [
 const EXPECTED_UI_FAMILIES = [
   ...EXPECTED_PENCIL_FAMILIES,
   "media-viewport",
+  "popover",
   "resize-handle",
   "settings-panel",
   "skeleton",
@@ -57,7 +58,7 @@ describe("Track P playbook registry", () => {
   it("tracks the latest Pencil inventory and every translated application family", () => {
     expect(PENCIL_REUSABLE_SYMBOL_COUNT).toBe(113);
     expect(PENCIL_COMPONENT_FAMILY_COUNT).toBe(35);
-    expect(UI_COMPONENT_FAMILY_COUNT).toBe(39);
+    expect(UI_COMPONENT_FAMILY_COUNT).toBe(40);
     expect(
       entriesByCategory("ui")
         .map(({ id }) => id)

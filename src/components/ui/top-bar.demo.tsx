@@ -13,8 +13,8 @@ export function TopBarDemo() {
           <Button variant="gray" icon={Play} className="text-[13px]">
             全部渲染
           </Button>
-          <Button icon={Download} className="text-[13px]">
-            导出 MP4
+          <Button size="sm" variant="tinted" icon={Download}>
+            导出
           </Button>
         </>
       }

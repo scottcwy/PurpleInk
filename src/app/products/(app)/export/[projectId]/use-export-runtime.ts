@@ -26,13 +26,16 @@ export function useExportRuntime(projectId: string) {
       })
   }, [projectId])
 
-  async function exportVideo() {
+  async function exportVideo(): Promise<string | undefined> {
     setExporting(true)
     setError(undefined)
     try {
-      setOutputUrl(await startProjectExport(projectId))
+      const url = await startProjectExport(projectId)
+      setOutputUrl(url)
+      return url
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '终片导出失败')
+      return undefined
     } finally {
       setExporting(false)
     }

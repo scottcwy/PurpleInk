@@ -1,12 +1,16 @@
 'use client'
 
 import { AudioLines, Captions, Download, Film, Music } from 'lucide-react'
+import { useState } from 'react'
+import { ArtifactChip } from '@/components/ui/artifact-chip'
 import { Button } from '@/components/ui/button'
 import { MediaViewport } from '@/components/ui/media-viewport'
+import { Popover } from '@/components/ui/popover'
 import { TimelineTrack } from '@/components/ui/timeline-track'
 import { TopBar } from '@/components/ui/top-bar'
 import { usePublishNavContext } from '@/features/navigation/nav-context'
-import { ExportReview } from './export-review'
+import { ExportQa } from './export-qa'
+import { ExportSettings } from './export-settings'
 import { buildShotClips, fullTrackClip } from './export-view-model'
 import { useExportRuntime } from './use-export-runtime'
 
@@ -24,17 +28,45 @@ export function ExportWorkspace({
   const runtime = useExportRuntime(projectId)
   const disabled = !runtime.readiness?.ready || runtime.exporting
   const shotClips = buildShotClips(laneKeys)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   usePublishNavContext({ projectId, rendererNodeId })
+
+  async function handleExport() {
+    const url = await runtime.exportVideo()
+    if (url) setSettingsOpen(false)
+  }
 
   return (
     <main className="min-h-0 flex-1 overflow-y-auto text-ds-text">
       <TopBar
         title="合成与导出"
         actions={
-          <Button size="sm" icon={Download} disabled={disabled} onClick={runtime.exportVideo}>
-            导出 MP4
-          </Button>
+          <Popover
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+            dismissible={!runtime.exporting}
+            trigger={
+              <Button
+                size="sm"
+                variant="tinted"
+                icon={Download}
+                aria-expanded={settingsOpen}
+                onClick={() => setSettingsOpen((open) => !open)}
+              >
+                导出
+              </Button>
+            }
+          >
+            <ExportSettings
+              readiness={runtime.readiness}
+              outputUrl={runtime.outputUrl}
+              exporting={runtime.exporting}
+              disabled={disabled}
+              onExport={handleExport}
+              onResolutionChange={runtime.updateResolution}
+            />
+          </Popover>
         }
       />
       <ExportPreview
@@ -43,16 +75,10 @@ export function ExportWorkspace({
         loading={runtime.exporting && !runtime.outputUrl}
       />
       <ExportTimeline laneKeys={laneKeys} shotClips={shotClips} />
-      <ExportReview
+      <ExportQa
         laneKeys={laneKeys}
-        projectId={projectId}
         readiness={runtime.readiness}
-        outputUrl={runtime.outputUrl}
-        exporting={runtime.exporting}
         error={runtime.error}
-        disabled={disabled}
-        onExport={runtime.exportVideo}
-        onResolutionChange={runtime.updateResolution}
       />
     </main>
   )
@@ -77,6 +103,7 @@ function ExportPreview({
         )}
       </MediaViewport>
       <p className="text-xs text-ds-text-muted">{projectTitle} · 成片预览</p>
+      {outputUrl && <ArtifactChip icon={Download} filename="final.mp4" href={outputUrl} />}
     </section>
   )
 }
