@@ -47,10 +47,10 @@ export function Popover({
   )
 
   useLayoutEffect(() => {
-    if (!open) {
-      setCoords(null)
-      return
-    }
+    // 关闭时不清 coords：渲染已由 `open && mounted && coords` 把关，清空只会多一轮
+    // 级联渲染（react-hooks/set-state-in-effect）。重新打开时 updatePosition 在
+    // layout 阶段同步跑完，不会用旧坐标闪一帧。
+    if (!open) return
 
     function updatePosition() {
       const anchor = anchorRef.current
