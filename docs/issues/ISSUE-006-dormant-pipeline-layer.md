@@ -1,7 +1,7 @@
 # ISSUE-006 · `src/features/pipeline/**` 整层休眠，是第三套执行模型
 
 - 优先级：**P2**
-- 状态：`open`
+- 状态：`done`（2026-07-25，选定方案 A，见 §8 实施记录）
 - 范围：`src/features/pipeline/**`、`vitest.config.ts`、`tsconfig.json`
 - 依赖：ISSUE-001（共享 exclude 列表，见 `README.md` §6，001 先落地可省一次 rebase）
 - 性质：**需要先决策，再动手。** 这不是纯 bug 修复
@@ -95,6 +95,12 @@ src/features/pipeline/contracts/task-source-boundary.test.ts:24-58   （自身�
 
 ## 3. 需要先做的决策
 
+> **已决策（2026-07-25）：选定方案 A（删除整层）。**
+> 理由即下方方案 A 所列四条，全部成立且在实施前重新核实：删除前 grep 确认
+> `src/app/**`、`src/features/{director,render,canvas,audio}/**`、`scripts/**`、
+> `docs/`（非 archive）零生产引用，仅剩 fixture 断言与 pipeline 自身测试。
+> 方案 B 在进程内单实例现状下收益为零；方案 C 只是把决策后推。实施见 §8。
+
 有三条路，**必须先选一条并在本文件记录理由，再动手**：
 
 ### 方案 A：删除整层（推荐）
@@ -153,6 +159,16 @@ src/features/pipeline/contracts/task-source-boundary.test.ts:24-58   （自身�
 
 **本 issue 需要给出结论并落地其中一种**，不要继续 exclude 了事。
 
+> **已结论（2026-07-25）：新增 `src/instrumentation.ts`。**
+> `init.ts` 的 globalThis 防 split-brain 设计本就为 instrumentation 预留；缺失它意味着
+> 生产环境「没人访问就不消费队列」。register() 内含 NEXT_RUNTIME/nodejs 与
+> NEXT_PHASE/build 双守卫，模块顶层零副作用；同时修复了 `initQueue()` 失败缓存
+> rejected promise 的毒化缺陷（失败重置 initializing 锚点，API 路由兜底可重试）。
+> 本测试本身另有两处陈旧断言已一并修正：L248/L250 断言 better-sqlite3 以固定版本
+> 存在于 devDependencies，而 package.json 已全面移除 SQLite——改为断言
+> dependencies 与 devDependencies 均缺席（边界收紧）。exclude 已解除，5/5 通过。
+> 「无 HTTP 请求时队列也能启动消费」的实测取证见 `evidence/issue-006/`。
+
 ## 6. 禁区
 
 1. 不在删除的同时「顺手」把 `ProgressSink`、`TaskFailureError` 等挪到别处复用——
@@ -172,3 +188,21 @@ src/features/pipeline/contracts/task-source-boundary.test.ts:24-58   （自身�
 6. `src/lib/db/runtime-boundary.test.ts` 的处置已落地（解除 exclude 并通过，或说明为何仍需 exclude）。
 7. instrumentation 的结论已写入本文件；若决定新增 `src/instrumentation.ts`，
    需验证队列在无 HTTP 请求时也能启动消费。
+
+## 8. 实施记录（2026-07-25）
+
+与 ISSUE-002 在同一工作树并行实施，落点零重叠，全程未 stage 002 的未提交改动。
+
+| Commit | 内容 |
+| --- | --- |
+| `1f545ed` | 删除 `src/features/pipeline` 整层（实数 **20** 文件，含 `services/service-contract.test.ts` 等，本文件 §2.2 记的 14 为低估，-1508 行）；回收 vitest 2 条 pipeline exclude + 失效的 Stage A 注释 + tsconfig 1 条；v3-architecture.test.ts 两处 fixture specifier 改为不含 pipeline 的等价样本 |
+| `42568d2` | 新增 `src/instrumentation.ts`；修复 `initQueue()` 失败毒化（RED→GREEN，init.test.ts 新增失败重试用例） |
+| `efc498f` | 修复 runtime-boundary 陈旧 SQLite 断言，解除最后一条历史 exclude |
+
+验收对照：
+
+- exclude 回收后 `vitest.config.ts` 仅剩 configDefaults + `**/*.pg.test.ts`（pg 分流，非门禁洞）；`tsconfig.json` 不再排除任何源文件。
+- `pnpm test`：基线 108 文件/502 用例 → 删层后 107/492（-service-contract.test.ts 的 10 用例）→ 收口 108/498（+runtime-boundary 5 用例 +init 重试 1 用例）。
+- `pnpm verify:v3`：ok:true 零违规，baseline 未动（fixture 断言不影响真实扫描计数）。
+- `pnpm typecheck` exit 0；`pnpm build` exit 0 且不挂起（NEXT_PHASE 守卫生效）。
+- 验收标准 7 取证：`evidence/issue-006/no-http-queue-consumption.md`（独立取证库，零 HTTP 请求下 attempt 从 queued 到被消费，归因唯一）。

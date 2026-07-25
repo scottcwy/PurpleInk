@@ -121,7 +121,7 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
 
 | ID | 标题 | 状态 | 主要落点 |
 | --- | --- | --- | --- |
-| [ISSUE-006](./ISSUE-006-dormant-pipeline-layer.md) | `src/features/pipeline/**` 整层休眠，是第三套执行模型 | `open` | `src/features/pipeline/**`、`vitest.config.ts`、`tsconfig.json` |
+| [ISSUE-006](./ISSUE-006-dormant-pipeline-layer.md) | `src/features/pipeline/**` 整层休眠，是第三套执行模型 | `done` | 方案 A 删层（实数 20 文件）+ `src/instrumentation.ts` + exclude 全回收（commit `1f545ed` + `42568d2` + `efc498f`，证据 `evidence/issue-006/`） |
 | [ISSUE-007](./ISSUE-007-duplicate-canvas.md) | 两套画布实现并存（`WorkflowCanvas` vs `CanvasView`） | `done` | `src/features/workflow/**`、`src/app/playbook/registry.ts` |
 | [ISSUE-008](./ISSUE-008-canvas-layout-truth.md) | dagre 每次重算布局，覆盖已持久化坐标 | `done` | `src/features/canvas/layout.ts`、`canvas/[projectId]/page.tsx`（方案 A2，删列，commit `6aa3b52` + merge `79ef9b2`，证据 `evidence/issue-008/`） |
 | [ISSUE-009](./ISSUE-009-routing-convergence.md) | routing.md §11 收敛清单未清（编码、robots、sitemap、token） | `done` | `canvas-inspector.tsx`、`robots.ts`、`sitemap.ts`、`empty-state.tsx`、`button.tsx`（commit `94af7d3`，证据 `evidence/issue-009/`） |
@@ -150,7 +150,8 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
 
 第二批（ISSUE-001 已落地，可开工）
   ISSUE-002  fabricateShot 入 render 队列
-  ISSUE-006  接手 vitest/tsconfig 第 14-16 行 / 第 49 行所有权
+  ISSUE-006  done · 1f545ed + 42568d2 + efc498f · 方案 A 删层 + instrumentation 接线
+             · 无 HTTP 队列消费取证 evidence/issue-006/
 
 第三批（依赖前两批）
   ISSUE-005  done · 71f1de4 + 171f692 · 真实 TTS 前移到 INGEST，时长实测取证
@@ -182,6 +183,10 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
 | `tsconfig.json` | 49 | `src/features/pipeline/contracts/contracts.test.ts` | ISSUE-006 |
 
 ISSUE-001 先于 ISSUE-006 落地，可避免两次 rebase。
+
+> 2026-07-25：两个 issue 均已 done，上表全部 exclude 行已回收——`vitest.config.ts`
+> 仅剩 configDefaults + `**/*.pg.test.ts`（pg 分流），`tsconfig.json` 不再排除任何
+> 源文件，本节争用已清零。
 
 ## 7. 环境实测基线（2026-07-25）
 
