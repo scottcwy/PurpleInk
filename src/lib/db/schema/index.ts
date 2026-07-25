@@ -7,6 +7,17 @@ export {
 export type { VersionedPayload } from './core'
 
 export {
+  USER_STATUSES,
+  VERIFICATION_PURPOSES,
+  WORKSPACE_MEMBER_ROLES,
+  authThrottle,
+  emailVerificationCodes,
+  sessions,
+  users,
+  workspaceMembers,
+} from './auth'
+
+export {
   CANVAS_NODE_STAGES,
   CANVAS_NODE_TYPES,
   NODE_STATUSES,
