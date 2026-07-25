@@ -29,6 +29,7 @@
 .DS_Store
 *.pem
 .vscode/
+.claude/worktrees/
 
 # debug
 npm-debug.log*
