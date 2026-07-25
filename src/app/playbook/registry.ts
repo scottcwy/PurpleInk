@@ -114,7 +114,12 @@ export const PLAYBOOK_ENTRIES: PlaybookEntry[] = [
     category: "ui",
     Demo: PipelineNodeDemo,
   },
-  { id: "sidebar", name: "Sidebar", category: "ui", Demo: SidebarDemo },
+  {
+    id: "sidebar",
+    name: "PurpleInkSidebar",
+    category: "ui",
+    Demo: SidebarDemo,
+  },
   {
     id: "sidebar-account",
     name: "SidebarAccount",

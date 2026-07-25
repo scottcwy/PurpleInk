@@ -1,28 +1,23 @@
 import type { Metadata } from "next";
 
 export const siteConfig = {
-  name: "React Bits Pro - AI SaaS Template",
+  name: "PurpleInk",
   description:
-    "Build, deploy, and scale AI-powered applications with enterprise-grade infrastructure. From ideation to production in minutes.",
-  url: "https://nexus-ai.com",
-  ogImage: "/og-image.png",
-  creator: "@nexusai",
+    "本地优先的产品发布视频工作区：从已批准的产品事实与演示流程生成可追溯的视频交付物。",
+  url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  ogImage: "/img/ship.webp",
+  creator: "PurpleInk",
   authors: [
     {
-      name: "Nexus AI",
-      url: "https://nexus-ai.com",
+      name: "PurpleInk",
     },
   ],
   keywords: [
-    "AI",
-    "artificial intelligence",
-    "machine learning",
-    "AI platform",
-    "LLM",
-    "GPT",
-    "AI API",
-    "developer tools",
-    "AI infrastructure",
+    "产品发布视频",
+    "视频工作流",
+    "Product Release",
+    "Artifact",
+    "HyperFrames",
   ],
 } as const;
 
@@ -53,7 +48,7 @@ export const baseMetadata: Metadata = {
   },
   openGraph: {
     type: "website",
-    locale: "en_US",
+    locale: "zh_CN",
     url: siteConfig.url,
     title: siteConfig.name,
     description: siteConfig.description,
@@ -61,8 +56,6 @@ export const baseMetadata: Metadata = {
     images: [
       {
         url: siteConfig.ogImage,
-        width: 1200,
-        height: 630,
         alt: siteConfig.name,
       },
     ],
@@ -75,9 +68,8 @@ export const baseMetadata: Metadata = {
     creator: siteConfig.creator,
   },
   icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon-16x16.png",
-    apple: "/apple-icon.png",
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
   },
   manifest: "/site.webmanifest",
 };
@@ -111,8 +103,6 @@ export function createMetadata({
       images: [
         {
           url: ogImage,
-          width: 1200,
-          height: 630,
           alt: title ?? siteConfig.name,
         },
       ],

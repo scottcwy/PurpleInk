@@ -1,146 +1,131 @@
-import type { CSSProperties, InputHTMLAttributes, ReactNode } from 'react'
-import { Search } from 'lucide-react'
-import { Clapperboard } from 'lucide-react'
-import { cn } from '@/lib/utils'
+'use client'
 
-export interface SidebarProps {
-  children?: ReactNode
-  className?: string
-  style?: CSSProperties
-  /** 图标条态：收窄为 64px，隐藏文字型子件 */
-  compact?: boolean
+import type { LucideIcon } from 'lucide-react'
+import Link from 'next/link'
+import { cn } from '@/lib/utils'
+import { PurpleInkLogo } from './purple-ink-logo'
+import { AccountMenu, SidebarAccount, SidebarToggle } from './sidebar-chrome'
+
+export interface PurpleInkSidebarItem {
+  label: string
+  icon: LucideIcon
+  href?: string
+  active?: boolean
+  disabledReason?: string
 }
 
-/**
- * 侧边栏（SSOT）。
- * canvas.pen: 宽 60（240px）、glass-sidebar 底、右侧 separator 边框、
- * backdrop-blur-[20px]、垂直布局、gap-1、p-4。
- */
-export function Sidebar({ children, className, style, compact }: SidebarProps) {
+export interface PurpleInkSidebarProps {
+  items: readonly PurpleInkSidebarItem[]
+  collapsed: boolean
+  onCollapsedChange: (collapsed: boolean) => void
+  accountOpen: boolean
+  onAccountOpenChange: (open: boolean) => void
+  className?: string
+}
+
+export function PurpleInkSidebar({
+  items,
+  collapsed,
+  onCollapsedChange,
+  accountOpen,
+  onAccountOpenChange,
+  className,
+}: PurpleInkSidebarProps) {
   return (
     <aside
-      data-compact={compact ? 'true' : undefined}
-      style={style}
       className={cn(
-        'flex h-full flex-col gap-1 border-r border-separator bg-glass-sidebar backdrop-blur-[20px]',
-        compact ? 'w-16 items-center px-2 py-4' : 'w-60 p-4',
+        'flex h-full shrink-0 flex-col gap-3.5 border-r border-ds-border p-3 transition-[width] duration-200',
+        'bg-[linear-gradient(180deg,var(--ds-gradient-start),var(--ds-gradient-mid)_52%,var(--ds-gradient-end))]',
+        collapsed ? 'w-[76px]' : 'w-[248px]',
         className,
       )}
     >
-      {children}
+      <header className="flex h-10 items-center justify-between gap-3">
+        <Link href="/dashboard" aria-label="PurpleInk 工作台">
+          <PurpleInkLogo compact={collapsed} />
+        </Link>
+        {!collapsed ? (
+          <SidebarToggle
+            collapsed={false}
+            onClick={() => onCollapsedChange(true)}
+          />
+        ) : null}
+      </header>
+
+      {collapsed ? (
+        <SidebarToggle
+          collapsed
+          className="mx-auto"
+          onClick={() => onCollapsedChange(false)}
+        />
+      ) : null}
+
+      <nav aria-label="产品主导航" className="flex flex-1 flex-col gap-[3px]">
+        {items.map((item) => (
+          <SidebarNavigationItem
+            key={item.label}
+            item={item}
+            collapsed={collapsed}
+          />
+        ))}
+      </nav>
+
+      <div className="relative">
+        {accountOpen && !collapsed ? (
+          <div className="absolute bottom-[66px] left-0 z-40">
+            <AccountMenu />
+          </div>
+        ) : null}
+        <SidebarAccount
+          compact={collapsed}
+          onSettings={() => onAccountOpenChange(!accountOpen)}
+        />
+      </div>
     </aside>
   )
 }
 
-export interface SidebarBrandProps {
-  className?: string
-  compact?: boolean
-}
+function SidebarNavigationItem({
+  item,
+  collapsed,
+}: {
+  item: PurpleInkSidebarItem
+  collapsed: boolean
+}) {
+  const classes = cn(
+    'flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors',
+    collapsed && 'justify-center px-0',
+    item.active
+      ? 'bg-ds-surface-muted font-semibold text-ds-text'
+      : 'text-ds-text-muted hover:bg-ds-surface-muted hover:text-ds-text',
+  )
+  const content = (
+    <>
+      <item.icon aria-hidden className="size-4 shrink-0" />
+      {!collapsed ? item.label : null}
+    </>
+  )
 
-export function SidebarBrand({ className, compact }: SidebarBrandProps) {
-  return (
-    <div
+  return item.href ? (
+    <Link
+      href={item.href}
+      title={collapsed ? item.label : undefined}
+      aria-current={item.active ? 'page' : undefined}
+      className={classes}
+    >
+      {content}
+    </Link>
+  ) : (
+    <button
+      type="button"
+      disabled
+      title={item.disabledReason}
       className={cn(
-        'flex items-center gap-2 py-1',
-        compact ? 'justify-center px-0' : 'px-2.5',
-        className,
+        classes,
+        'cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ds-text-muted',
       )}
     >
-      <Clapperboard className="h-5 w-5 shrink-0 text-accent" />
-      {!compact && (
-        <span className="text-[17px] font-semibold font-sc text-label">CodeVideoCanvas</span>
-      )}
-    </div>
+      {content}
+    </button>
   )
-}
-
-export type SidebarSearchProps = InputHTMLAttributes<HTMLInputElement> & {
-  compact?: boolean
-}
-
-export function SidebarSearch({
-  placeholder = '搜索项目',
-  className,
-  compact,
-  ...props
-}: SidebarSearchProps) {
-  if (compact) return null
-  return (
-    <div
-      className={cn(
-        'flex h-7 items-center gap-1.5 rounded-md bg-fill px-2.5 text-label-tertiary',
-        className,
-      )}
-    >
-      <Search className="h-3.5 w-3.5 shrink-0" />
-      <input
-        className="h-full min-w-0 flex-1 bg-transparent text-[13px] font-sc text-label outline-none placeholder:text-label-tertiary"
-        placeholder={placeholder}
-        {...props}
-      />
-    </div>
-  )
-}
-
-export interface SidebarSectionProps {
-  children: ReactNode
-  className?: string
-  compact?: boolean
-}
-
-export function SidebarSection({ children, className, compact }: SidebarSectionProps) {
-  if (compact) return null
-  return (
-    <div className={cn('px-2.5 py-1 text-xs font-sc text-label-tertiary', className)}>
-      {children}
-    </div>
-  )
-}
-
-export interface SidebarNavProps {
-  children: ReactNode
-  className?: string
-}
-
-export function SidebarNav({ children, className }: SidebarNavProps) {
-  return <nav className={cn('flex flex-1 flex-col gap-0.5', className)}>{children}</nav>
-}
-
-export interface SidebarFooterProps {
-  children: ReactNode
-  className?: string
-}
-
-export function SidebarFooter({ children, className }: SidebarFooterProps) {
-  return <div className={cn('mt-auto', className)}>{children}</div>
-}
-
-export interface SidebarLocalStatusProps {
-  label?: string
-  className?: string
-  compact?: boolean
-}
-
-export function SidebarLocalStatus({
-  label = '本地存储 · 模型直连',
-  className,
-  compact,
-}: SidebarLocalStatusProps) {
-  return (
-    <div
-      className={cn(
-        'flex items-center gap-1.5 py-1',
-        compact ? 'justify-center px-0' : 'px-2.5',
-        className,
-      )}
-      title={compact ? label : undefined}
-    >
-      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-success" />
-      {!compact && <span className="text-xs font-sc text-label-tertiary">{label}</span>}
-    </div>
-  )
-}
-
-export function SidebarDivider({ className }: { className?: string }) {
-  return <div className={cn('h-px w-full bg-separator', className)} />
 }

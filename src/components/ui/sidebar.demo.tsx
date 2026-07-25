@@ -1,46 +1,36 @@
-import {
-  LayoutDashboard,
-  Folder,
-  Waypoints,
-  Film,
-  Download,
-  Settings,
-} from 'lucide-react'
-import { NavItem } from './nav-item'
-import {
-  Sidebar,
-  SidebarBrand,
-  SidebarDivider,
-  SidebarFooter,
-  SidebarLocalStatus,
-  SidebarNav,
-  SidebarSearch,
-  SidebarSection,
-} from './sidebar'
+'use client'
 
-/** Sidebar 示例（/playbook 展示单元）。 */
+import {
+  Download,
+  FolderKanban,
+  LayoutDashboard,
+  PanelTop,
+  Waypoints,
+} from 'lucide-react'
+import { useState } from 'react'
+import { PurpleInkSidebar } from './sidebar'
+
+const DEMO_ITEMS = [
+  { label: '工作台', icon: LayoutDashboard, active: true },
+  { label: '项目', icon: FolderKanban },
+  { label: '画布', icon: Waypoints },
+  { label: '镜头', icon: PanelTop },
+  { label: '导出', icon: Download },
+] as const
+
 export function SidebarDemo() {
+  const [collapsed, setCollapsed] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
+
   return (
-    <div className="h-96">
-      <Sidebar>
-        <SidebarBrand />
-        <SidebarSearch />
-        <SidebarSection>项目</SidebarSection>
-        <SidebarNav>
-          <NavItem icon={LayoutDashboard} active>
-            工作台
-          </NavItem>
-          <NavItem icon={Folder}>项目列表</NavItem>
-          <NavItem icon={Waypoints}>画布编辑器</NavItem>
-          <NavItem icon={Film}>分镜渲染器</NavItem>
-          <NavItem icon={Download}>合成与导出</NavItem>
-        </SidebarNav>
-        <SidebarDivider />
-        <SidebarFooter>
-          <NavItem icon={Settings}>设置</NavItem>
-          <SidebarLocalStatus />
-        </SidebarFooter>
-      </Sidebar>
+    <div className="h-[720px] overflow-hidden rounded-lg border border-ds-border">
+      <PurpleInkSidebar
+        items={DEMO_ITEMS}
+        collapsed={collapsed}
+        onCollapsedChange={setCollapsed}
+        accountOpen={accountOpen}
+        onAccountOpenChange={setAccountOpen}
+      />
     </div>
   )
 }

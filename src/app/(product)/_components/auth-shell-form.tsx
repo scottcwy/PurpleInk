@@ -17,44 +17,51 @@ const FIELDS = {
 export function AuthShellForm({ mode }: { mode: keyof typeof FIELDS }) {
   const isLogin = mode === "login";
   return (
-    <main className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[0.85fr_1.15fr] lg:px-8 lg:py-20">
-      <section>
-        <p className="font-mono text-xs uppercase tracking-[0.2em] text-[#a0442e] dark:text-[#ff8d74]">
+    <main className="mx-auto grid w-full max-w-6xl gap-8 p-5 sm:p-8 lg:grid-cols-[0.85fr_1.15fr] lg:py-16">
+      <section className="border-ds-border bg-ds-surface rounded-lg border p-6 backdrop-blur-xl">
+        <p className="text-ds-text-muted font-mono text-[10px] tracking-[0.16em] uppercase">
           Workspace access
         </p>
-        <h1 className="mt-4 font-serif text-5xl leading-none tracking-[-0.04em] sm:text-6xl">
+        <h1 className="mt-3 text-4xl leading-none font-bold tracking-[-0.04em]">
           {isLogin ? "登录 PurpleInk" : "创建 Workspace"}
         </h1>
-        <p className="mt-5 max-w-lg text-sm leading-7 text-[#655f56] dark:text-[#bbb2a6]">
+        <p className="text-ds-text-muted mt-4 max-w-lg text-sm leading-6">
           {isLogin
             ? "Stage B 将在这里校验会话与 Workspace 成员关系。"
             : "Stage B 将在这里创建 User、Workspace 与成员关系，不会自动虚构 Product 或 Release。"}
         </p>
-        <form className="mt-8 space-y-4" aria-label={isLogin ? "登录表单外观" : "注册表单外观"}>
+        <form
+          className="mt-8 space-y-4"
+          aria-label={isLogin ? "登录表单外观" : "注册表单外观"}
+        >
           {FIELDS[mode].map((field) => (
             <label key={field.label} className="block">
-              <span className="mb-2 block text-sm font-semibold">{field.label}</span>
+              <span className="mb-2 block text-sm font-semibold">
+                {field.label}
+              </span>
               <input
                 disabled
                 type={field.type}
                 autoComplete={field.autoComplete}
-                className="h-12 w-full rounded-xl border border-[#d8d0c4] bg-[#fffdf8] px-4 text-sm opacity-70 dark:border-white/10 dark:bg-white/5"
+                className="border-ds-border bg-ds-surface-muted h-11 w-full rounded-md border px-4 text-sm opacity-70"
               />
             </label>
           ))}
           <button
             type="button"
             disabled
-            className="h-12 w-full rounded-xl bg-[#171511] text-sm font-semibold text-[#fffaf1] opacity-45 dark:bg-[#f4ede2] dark:text-[#171511]"
+            className="ds-primary-button h-11 w-full rounded-md text-sm font-semibold text-white opacity-50"
           >
-            {isLogin ? "登录（Stage B 接线后可用）" : "创建 Workspace（Stage B 接线后可用）"}
+            {isLogin
+              ? "登录（Stage B 接线后可用）"
+              : "创建 Workspace（Stage B 接线后可用）"}
           </button>
         </form>
-        <p className="mt-5 text-sm text-[#655f56] dark:text-[#bbb2a6]">
+        <p className="text-ds-text-muted mt-5 text-sm">
           {isLogin ? "还没有账号？" : "已有账号？"}
           <Link
             href={isLogin ? "/signup" : "/login"}
-            className="ml-2 font-semibold text-[#a0442e] underline underline-offset-4 dark:text-[#ff8d74]"
+            className="text-ds-blue ml-2 font-semibold underline underline-offset-4"
           >
             {isLogin ? "前往注册" : "前往登录"}
           </Link>

@@ -9,15 +9,15 @@ import {
 } from 'lucide-react'
 import { NavItem } from '@/components/ui/nav-item'
 import {
-  Sidebar,
-  SidebarBrand,
-  SidebarDivider,
-  SidebarFooter,
-  SidebarLocalStatus,
-  SidebarNav,
-  SidebarSearch,
-  SidebarSection,
-} from '@/components/ui/sidebar'
+  LegacySidebar,
+  LegacySidebarBrand,
+  LegacySidebarDivider,
+  LegacySidebarFooter,
+  LegacySidebarLocalStatus,
+  LegacySidebarNav,
+  LegacySidebarSearch,
+  LegacySidebarSection,
+} from './legacy-sidebar'
 import { cn } from '@/lib/utils'
 import type { AppSection } from './types'
 
@@ -43,11 +43,11 @@ export function AppSidebar({
       : canvasHref
 
   return (
-    <Sidebar compact={compact} className={cn('shrink-0', className)} style={style}>
-      <SidebarBrand compact={compact} />
-      <SidebarSearch aria-label="搜索项目" compact={compact} />
-      <SidebarSection compact={compact}>项目</SidebarSection>
-      <SidebarNav>
+    <LegacySidebar compact={compact} className={cn('shrink-0', className)} style={style}>
+      <LegacySidebarBrand compact={compact} />
+      <LegacySidebarSearch aria-label="搜索项目" compact={compact} />
+      <LegacySidebarSection compact={compact}>项目</LegacySidebarSection>
+      <LegacySidebarNav>
         <NavItem
           icon={LayoutDashboard}
           href="/legacy"
@@ -88,9 +88,9 @@ export function AppSidebar({
         >
           合成与导出
         </NavItem>
-      </SidebarNav>
-      <SidebarDivider />
-      <SidebarFooter>
+      </LegacySidebarNav>
+      <LegacySidebarDivider />
+      <LegacySidebarFooter>
         <NavItem
           icon={Settings}
           href={projectHref('/legacy/settings', projectId)}
@@ -99,12 +99,12 @@ export function AppSidebar({
         >
           设置
         </NavItem>
-        <SidebarLocalStatus
+        <LegacySidebarLocalStatus
           compact={compact}
           label="本地存储 · 模型直连"
         />
-      </SidebarFooter>
-    </Sidebar>
+      </LegacySidebarFooter>
+    </LegacySidebar>
   )
 }
 

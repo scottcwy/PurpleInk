@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ReleaseStepNav } from "@/app/(product)/_components/release-step-nav";
 import { UnwiredPanel } from "@/app/(product)/_components/unwired-panel";
+import DashboardPage from "@/app/(product)/dashboard/page";
 import {
   STAGE_B_WORKFLOW_NODES,
   WORKFLOW_BLUEPRINT_EDGES,
@@ -95,5 +96,76 @@ describe("M6 route shells", () => {
       "视觉 QA",
       "项目合成",
     ]);
+  });
+
+  it("uses the Pencil shell without retaining the superseded editorial palette", () => {
+    const shellSource = readFileSync(
+      "src/app/(product)/_components/product-app-shell.tsx",
+      "utf8"
+    );
+    const sidebarSource = readFileSync(
+      "src/app/(product)/_components/product-sidebar.tsx",
+      "utf8"
+    );
+    const canonicalSidebarSource = readFileSync(
+      "src/components/ui/sidebar.tsx",
+      "utf8"
+    );
+
+    expect(shellSource).toContain("ds-app-gradient");
+    expect(canonicalSidebarSource).toContain("PurpleInkLogo");
+    for (const label of ["工作台", "项目", "画布", "镜头", "导出"]) {
+      expect(sidebarSource).toMatch(
+        new RegExp(`label:\\s*["']${label}["']`),
+      );
+    }
+    expect(sidebarSource).not.toMatch(/label:\s*["']Release["']/);
+    expect(sidebarSource).not.toContain("label: 'Playbook'");
+    expect(shellSource).not.toContain("#f4f0e8");
+    expect(sidebarSource).not.toContain("#e75c3c");
+  });
+
+  it("renders the workbench structure without inventing dashboard data", () => {
+    const html = renderToStaticMarkup(createElement(DashboardPage));
+
+    expect(html).toContain("WorkspaceStatisticsSnapshotV1");
+    expect(html).toContain("暂无可展示的真实项目");
+    expect(html).toContain("该统计尚未接线（Stage B）");
+    expect(html).not.toContain(">12<");
+    expect(html).not.toContain(">148<");
+  });
+
+  it("mounts the Pencil workflow canvas only on the canonical flow route", () => {
+    const flowSource = readFileSync(
+      "src/app/(product)/releases/[releaseId]/flow/page.tsx",
+      "utf8"
+    );
+
+    expect(flowSource).toContain("WorkflowCanvas");
+    expect(flowSource).toContain('current="flow"');
+  });
+
+  it("exposes PurpleInk metadata instead of the superseded template identity", () => {
+    const metadataSource = readFileSync("src/lib/metadata.ts", "utf8");
+
+    expect(metadataSource).toContain('name: "PurpleInk"');
+    expect(metadataSource).not.toContain("React Bits Pro");
+    expect(metadataSource).not.toContain("nexus-ai.com");
+  });
+
+  it("reuses the same canonical sidebar in Product routes and Playbook", () => {
+    const productSidebar = readFileSync(
+      "src/app/(product)/_components/product-sidebar.tsx",
+      "utf8"
+    );
+    const sidebarDemo = readFileSync(
+      "src/components/ui/sidebar.demo.tsx",
+      "utf8"
+    );
+
+    expect(productSidebar).toContain("@/components/ui/sidebar");
+    expect(productSidebar).toContain("<PurpleInkSidebar");
+    expect(sidebarDemo).toContain("<PurpleInkSidebar");
+    expect(sidebarDemo).not.toContain("CodeVideoCanvas");
   });
 });
