@@ -10,7 +10,8 @@
 - 本报告只记录真实执行结果；失败项不会改写为成功。
 - 未接线页面必须显式标注，不使用假数据、假进度或恒真状态。
 - 敏感配置只记录变量名，不记录或提交其值。
-- 来源仓库只读；最终以迁移前后的 Git 状态一致性自证未写入。
+- 来源仓库只读；最终同时记录 HEAD、迁移前状态和收口时状态。若执行期间出现外部工作区
+  漂移，保持原样并单独标注，不能为了制造“状态一致”而改写来源仓库。
 
 ## M0 安全网与基线
 
@@ -410,4 +411,119 @@ HyperFrames。
 
 ## M7 收口与交接
 
-待执行。
+执行时间：2026-07-25
+
+### 仓库入口与开发约束
+
+- 新增根 `AGENTS.md`，登记 UTF-8/中文保护、本地分阶段提交、无授权不 push/PR、
+  当前路由边界、pnpm workspace、Postgres/Artifact 真值、安全配置、文件规模和
+  完整门禁。
+- 重写根 `README.md`，移除初始文档中的乱码和已经失效的 npm/旧目录说明，改为
+  Stage A 的真实入口、启动方式、目录结构、路由状态与未接线边界。
+- `.env.local`、`.data/`、`out/`、`output/`、`node_modules`、npm lockfile
+  均未进入跟踪；仓库只跟踪值为空的 `.env.example` 与
+  `config/tts.env.example`。
+- `AGENTS.md`、`README.md`、`docs`、`src`、`server`、`scripts`
+  的 U+FFFD 扫描结果为 0。
+
+### 测试分区与显式排除
+
+将 `src/features/audio/runtime-repository.test.ts` 改名为
+`runtime-repository.pg.test.ts`。该测试会访问真实 Postgres，现在只由
+`pnpm test:pg` 串行执行，不再混入默认单元测试。
+
+默认 `pnpm test` 继续显式排除下列历史契约：
+
+| 排除项 | 原因 |
+| --- | --- |
+| `src/features/director/pi-session.test.ts` | 绑定已作废 Pi runtime；Stage A 的生产入口稳定抛 `NOT_AVAILABLE_STAGE_A` |
+| `src/features/director/session-store.test.ts` | 绑定已作废 Pi JSONL session store |
+| `src/features/pipeline/contracts/contracts.test.ts` | 绑定已作废 Trigger 队列 |
+| `src/features/pipeline/contracts/task-source-boundary.test.ts` | 验证已移除的 Trigger task source |
+| `src/lib/db/runtime-boundary.test.ts` | 验证本 Goal 明确不保留的 SQLite runtime |
+| `**/*.pg.test.ts` | 统一交给 `pnpm test:pg`，避免数据库测试并发污染 |
+
+这些排除不是把现行失败藏起来：对应生产能力已经从 Stage A 边界中明确移除或显式
+不可用；其余默认测试 88 个文件、384 项全部执行通过，Postgres 测试 15 个文件、
+72 项全部执行通过。`tests/env.test.ts` 同步到当前 `src/lib/site-config.ts`
+边界，并确认敏感环境变量示例存在但值为空。`next.config.ts` 将
+`ffmpeg-static` 声明为服务端外部包，满足构建和既有配置契约。
+
+### 最终门禁
+
+| 命令或检查 | 最终结果 |
+| --- | --- |
+| `pnpm lint` | 通过 |
+| `pnpm typecheck` | 通过 |
+| `pnpm test` | 88 files / 384 tests 通过 |
+| `pnpm test:pg` | 15 files / 72 tests 通过 |
+| `pnpm build` | 通过，营销、legacy、playbook、产品路由壳和 API 均产出 |
+| `pnpm db:migrate` 第一次 | 退出码 0 |
+| `pnpm db:migrate` 第二次 | 退出码 0，验证迁移幂等 |
+| `git diff --check` | 通过 |
+| U+FFFD 扫描 | 0 |
+| 跟踪文件敏感路径检查 | 未发现 `.env.local`、运行数据、输出目录或 npm lockfile |
+
+一次把 build、默认测试和 PG 测试并行执行的审计中，
+`src/lib/queue/init.test.ts` 因机器高并发负载超过 5 秒超时。记录为
+`KNOWN-VERIFY-CONTENTION`；不调高超时、不隐藏测试，随后按项目门禁顺序串行重跑，
+同一默认测试集在 11.76 秒内 384/384 通过，PG 测试在 33.42 秒内 72/72 通过，
+lint、typecheck 与 build 也分别重新通过。上表采用这组无资源争用的串行证据。
+
+`pnpm verify:v3` 仍是 M4 已登记的非门禁诊断：复制的 CVC 架构阈值与 PurpleInk
+既有营销文件并不完全一致，本 Goal 没有借收口扩大为无关重构。
+
+### 依赖、版本与发布审计
+
+- 根与 `server/` manifest、生产 import 以及
+  `pnpm list --recursive --depth 0 --json` 均未发现 Trigger、Pi 或
+  `better-sqlite*` 运行依赖。
+- HyperFrames manifest 和 workspace 本地 CLI 均为 `0.7.70`。
+- 目标分支没有 remote、upstream，也没有执行 push、PR 或远端写入。
+- 所有提交均为本地分阶段 Conventional Commit。
+
+### 来源仓库只读核对
+
+来源 HEAD 在 M0 与 M7 均为
+`0fd1800d4052ff824ca0a14402d3e6bd14116160`。本次执行对来源仓库只进行
+读取、状态检查和复制单个路由规范文件，没有执行写入或来源 Git 变更命令。
+
+收口时发现来源工作区相较 M0 基线出现 `SOURCE-WORKTREE-DRIFT`：
+状态汇总为 8 个删除、141 个修改、12 个未跟踪项，新增变化集中在
+`.qoder/repowiki` 生成内容；M0 已存在的 pipeline 修改/未跟踪项仍在。该漂移在
+本次长时执行期间由外部产生，HEAD 未变；为遵守只读边界，本次没有清理、还原或
+提交任何来源文件。因此只能证明“本执行未写来源且 HEAD 不变”，不能虚构为
+“来源工作区状态逐项一致”。
+
+### 本地阶段提交
+
+| 阶段 | 本地提交 |
+| --- | --- |
+| 基线 | `1d41aa5 chore: baseline before cvc merge`，tag `pre-merge-baseline` |
+| M0 | `84237bf docs: record m0 migration baseline` |
+| M1 | `8328511 refactor: move purpleink web into src layout` |
+| M2 | `7b9a270 build: unify workspace tooling with pnpm` |
+| M3 | `98da54f feat: import cvc design system foundation` |
+| M4 | `1da0927 feat: import cvc postgres domain layer` |
+| M4 配置边界 | `6b3d083 chore: scope env example tracking` |
+| M5 | `7c37b21 feat: add dual marketing and legacy runtimes` |
+| M6 规范 | `f224893 docs: define product route shell contract` |
+| M6 计划 | `d72cd3b docs: plan m6 product route shells` |
+| M6 实现 | `883504b feat: add product workflow route shells` |
+| M7 | `chore: close stage a migration`（本报告所在最终本地提交） |
+
+### Stage B 建议优先级
+
+1. **P0 — 新域与访问边界**：落地 Product、Release、Workspace 聚合及认证/授权，
+   先定义真实 repository、ownership 和访问守卫，再让当前路由壳读取数据。
+2. **P1 — 六步审批与版本守卫**：为 Brief、Flow、Evidence、Storyboard、
+   Review 建立可审计版本、审批、不变性与回退规则，禁止仅靠 UI 状态推进。
+3. **P2 — 引擎与证据接线**：把 Product/Release 连接到真实 worker、
+   `CaptureRun`、`NodeEvidence` 与 Artifact lineage，保留失败和降级证据。
+4. **P3 — 过渡域迁移**：设计 CVC Project/Canvas 到新域的投影或迁移策略，
+   不直接把 legacy schema 冒充 Product/Release。
+5. **P4 — 退役过渡入口**：只有在功能、数据和浏览器证据达到等价后，才逐步退役
+   `/legacy/*` 与 `/playbook/*`；退役前继续保持可访问且明确标注其过渡性质。
+
+M0–M7 至此完成。Stage A 的营销链路、worker、真实 Postgres/CVC 过渡域、
+Playbook 与新路由壳均在各自声明边界内可验证；Stage B 壳没有被伪装成已接线产品。

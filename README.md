@@ -1,174 +1,91 @@
-# AI SaaS Landing Page Template
+# PurpleInk Stage A
 
-A premium Next.js 16+ landing page template designed for AI products and SaaS applications. Features stunning WebGL effects, smooth animations, and a conversion-focused layout.
+PurpleInk 是一个本地优先的产品发布视频工作区。当前 Stage A 把营销出片链路、CodeVideoCanvas 过渡应用、组件 Playbook 和新 Product/Release 路由骨架合并在一个 Next.js 仓库中。
 
-## Features
+## 当前可用入口
 
-- ✅ **Next.js 16+** with App Router
-- ✅ **TypeScript** (strict mode with noUncheckedIndexedAccess)
-- ✅ **Tailwind CSS v4** with custom design tokens
-- ✅ **Dark Mode** via next-themes with smooth transitions
-- ✅ **WebGL Effects** - Fluid cursor, image bulge effects
-- ✅ **Motion** via motion/react with reduced-motion support
-- ✅ **GSAP Animations** - Scroll-triggered image reveal gallery
-- ✅ **SEO Ready** - metadata, Open Graph, Twitter cards
-- ✅ **Accessibility** - skip links, focus rings, ARIA labels
-- ✅ **Edge Compatible** - no Node-only APIs
+| 入口 | 状态 | 说明 |
+| --- | --- | --- |
+| `/` | 已接线 | PurpleInk 营销页；可向本地 worker 发起出片任务 |
+| `/api/engine/*` | 已接线 | Next 同源反代到 `server/` worker |
+| `/legacy/*` | 过渡应用 | CVC 工作台、项目、画布、导出和设置，读取 Postgres |
+| `/playbook/*` | 过渡应用 | CVC 组件登记与展示 |
+| `/login`、`/signup`、`/dashboard` | 路由壳 | 明确标注 Stage B 未接线 |
+| `/products*`、`/releases*` | 路由壳 | Product/Release 新规范与六步导航，不含假数据 |
 
-## Getting Started
+完整路由、守卫和状态见 [routing.md](docs/conventions/routing.md)，迁移事实与验收证据见 [stage-a-report.md](docs/migration/stage-a-report.md)。
 
-### Install dependencies
+## 环境要求
 
-```bash
-npm install
+- Node.js 24
+- pnpm 10.30.0
+- Docker Desktop（用于本地 Postgres）
+- FFmpeg / ffprobe
+
+## 安装与启动
+
+```powershell
+pnpm install
+docker compose -f docker-compose.dev.yml up -d
+pnpm db:migrate
+pnpm dev
 ```
 
-### Run development server
+另开一个终端启动渲染 worker：
 
-```bash
-npm run dev
+```powershell
+pnpm dev:worker
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+默认地址：
 
-## Scripts
+- Web：`http://localhost:3000`
+- Worker：`http://localhost:8787`
+- Worker 同源健康检查：`http://localhost:3000/api/engine/health`
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Build for production |
-| `npm run start` | Start production server |
-| `npm run lint` | Run ESLint |
-| `npm run lint:fix` | Fix ESLint errors |
-| `npm run format` | Format code with Prettier |
-| `npm run format:check` | Check code formatting |
-| `npm run typecheck` | Run TypeScript type checking |
+本地配置写入被 Git 忽略的 `.env.local`。只复制 `.env.example` 中的变量名并在本机填写，禁止提交或回显 secret。
 
-## Project Structure
+## 常用命令
 
-```
-├── app/
-│   ├── globals.css        # Design tokens & base styles
-│   ├── layout.tsx         # Root layout with providers
-│   ├── page.tsx           # Landing page
-│   ├── robots.ts          # Dynamic robots.txt
-│   ├── sitemap.ts         # Dynamic sitemap
-│   └── icon.svg           # Favicon
-├── components/
-│   ├── bottom-cta.tsx     # Bottom call-to-action section
-│   ├── faq.tsx            # FAQ accordion section
-│   ├── fluid-cursor.tsx   # WebGL fluid cursor effect
-│   ├── footer.tsx         # Site footer with links
-│   ├── header.tsx         # Navigation header
-│   ├── hero.tsx           # Hero section with prompt UI
-│   ├── image-reveal.tsx   # GSAP scroll-triggered gallery
-│   ├── pricing.tsx        # Pricing cards section
-│   ├── providers.tsx      # Theme & motion providers
-│   ├── showcase-cards.tsx # WebGL bulge effect cards
-│   ├── skip-to-content.tsx # Skip link for a11y
-│   ├── smooth-scroll.tsx  # Lenis smooth scrolling
-│   ├── stats.tsx          # Animated statistics bars
-│   ├── testimonials.tsx   # Testimonials carousel
-│   ├── text-reveal.tsx    # Scroll-triggered text animation
-│   ├── theme-switch.tsx   # Floating theme toggle
-│   ├── theme-toggle.tsx   # Button theme toggle
-│   ├── tools-carousel.tsx # Draggable cards carousel
-│   └── trusted-by.tsx     # Logo loop section
-├── lib/
-│   ├── metadata.ts        # SEO metadata utilities
-│   └── motion.tsx         # Motion components & hooks
-└── public/
-    ├── img/               # Image assets
-    ├── svg/               # SVG assets
-    └── site.webmanifest   # PWA manifest
+| 命令 | 用途 |
+| --- | --- |
+| `pnpm lint` | ESLint |
+| `pnpm typecheck` | TypeScript 严格检查 |
+| `pnpm test` | 默认单元与契约测试 |
+| `pnpm test:pg` | 串行 Postgres 集成测试 |
+| `pnpm build` | Next 生产构建 |
+| `pnpm db:migrate` | 应用 Postgres migrations |
+| `pnpm verify:v3` | 过渡架构诊断；Stage A 不作为门禁 |
+
+## 目录结构
+
+```text
+src/
+  app/
+    (marketing)/          PurpleInk 营销首页
+    (product)/            Stage B 产品路由壳
+    legacy/(app)/         CVC 过渡页面
+    playbook/             组件登记页面
+    api/                  Next 自有 API
+  components/
+    marketing/            营销组件
+    ui/                   共享 UI 原语
+  features/               canvas、artifact、render、audio、AI 等领域能力
+  lib/                    DB、storage、queue、config 等基础设施
+server/                   PurpleInk 渲染 worker
+scripts/                  数据库与验证脚本
+tests/                    跨目录契约测试
+docs/                     路由规范、迁移报告和浏览器证据
 ```
 
-## Customization
+TypeScript 别名 `@/*` 映射到 `src/*`。仓库使用 pnpm workspace 管理根应用与 `server/`，不要生成 npm lockfile。
 
-### 1. Update Site Configuration
+## Stage A 边界
 
-Edit `lib/metadata.ts` to update:
-- Site name, description, and URL
-- Social media handles
-- Keywords and authors
+- 新 Product/Release 页面只提供路由、导航、职责和未来数据来源，不做认证、审批、数据库或引擎接线。
+- `/legacy/*` 仍是 CVC 过渡域，不等于新 Product/Release 域模型。
+- 本地 mock 采集必须明确标注，不能宣称为真实外部网站采集。
+- UI 不得显示假统计、假进度、恒真成功或没有真实 Artifact 的下载入口。
+- Artifact 内容哈希来自实际字节；凭据只在服务端使用且不进入 Git。
 
-### 2. Replace Icons
-
-Replace the following files with your brand assets:
-- `app/icon.svg` - Favicon (32x32)
-- `app/apple-icon.svg` - Apple touch icon (180x180)
-- `public/og-image.png` - Open Graph image (1200x630)
-- `public/icon-192.png` - PWA icon (192x192)
-- `public/icon-512.png` - PWA icon (512x512)
-
-### 3. Customize Design Tokens
-
-Edit `app/globals.css` to modify:
-- Color palette (primary, neutral, semantic colors)
-- Spacing scale
-- Border radii
-- Shadows and gradients
-- Typography
-
-### 4. Add Routes
-
-Create new routes in the `app/` directory:
-
-```tsx
-// app/about/page.tsx
-import { createMetadata } from "@/lib/metadata";
-import type { Metadata } from "next";
-
-export const metadata: Metadata = createMetadata({
-  title: "About Us",
-  description: "Learn more about our company.",
-  path: "/about",
-});
-
-export default function AboutPage() {
-  return <main id="main-content">...</main>;
-}
-```
-
-## Design Tokens
-
-The template uses CSS custom properties for theming. Key tokens:
-
-### Colors
-- `--background` / `--foreground` - Page background and text
-- `--muted` / `--muted-foreground` - Subtle backgrounds and text
-- `--accent` / `--accent-foreground` - Primary action colors
-- `--border` / `--ring` - Borders and focus rings
-
-### Shadows
-- `--shadow-sm` through `--shadow-2xl` - Elevation levels
-
-### Gradients
-- `--gradient-primary` - Brand gradient
-- `--gradient-subtle` - Section backgrounds
-- `--gradient-radial` - Hero backgrounds
-
-## Accessibility
-
-The template includes:
-- Skip-to-content link
-- Visible focus rings (keyboard navigation)
-- ARIA labels on interactive elements
-- Reduced motion support
-- Proper heading hierarchy
-- WCAG 2.1 AA contrast compliance
-
-## Edge Runtime
-
-All code is Edge-compatible. No Node.js-only APIs are used in runtime code. The template can be deployed to:
-- Vercel Edge Functions
-- Cloudflare Workers
-- Any edge-capable platform
-
-## License
-
-This template is licensed for use in commercial projects. You may not resell or redistribute the template itself.
-
----
-
-Built with ❤️ using Next.js, Tailwind CSS, and Motion
+详细开发纪律见 [AGENTS.md](AGENTS.md)。

@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: process.cwd(),
   },
+  serverExternalPackages: ["ffmpeg-static"],
   // Disable source maps in production to protect code
   productionBrowserSourceMaps: false,
   // Remove console.log in production
