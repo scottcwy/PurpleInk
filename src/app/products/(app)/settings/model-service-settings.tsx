@@ -14,6 +14,7 @@ import {
   ROUTE_ROWS,
   STEPFUN_FIELDS,
   type GeminiDraft,
+  type LaneQuotasDraft,
   type ReadyModelSettingsController,
   type RouteDraft,
   type SettingsResponse,
@@ -31,11 +32,15 @@ export function ModelServiceSettings() {
   return <ModelServicePanels controller={controller} />
 }
 
-function useModelSettingsController(): ModelSettingsController {
+export function useModelSettingsController(): ModelSettingsController {
   const [data, setData] = useState<SettingsResponse>()
   const [stepfunDraft, setStepfunDraft] = useState<StepfunDraft>()
   const [geminiDraft, setGeminiDraft] = useState<GeminiDraft>()
   const [routes, setRoutes] = useState<RouteDraft>()
+  const [laneQuotasDraft, setLaneQuotasDraft] = useState<LaneQuotasDraft>({
+    directorStageConcurrency: '',
+    renderShotConcurrency: '',
+  })
   const [busy, setBusy] = useState<string>()
   const [error, setError] = useState<string>()
 
@@ -44,6 +49,7 @@ function useModelSettingsController(): ModelSettingsController {
     setStepfunDraft,
     setGeminiDraft,
     setRoutes,
+    setLaneQuotasDraft,
     setError,
   )
   const submit = useSettingsSubmitter(
@@ -51,6 +57,7 @@ function useModelSettingsController(): ModelSettingsController {
     setStepfunDraft,
     setGeminiDraft,
     setRoutes,
+    setLaneQuotasDraft,
     setBusy,
     setError,
   )
@@ -67,6 +74,13 @@ function useModelSettingsController(): ModelSettingsController {
     setGeminiDraft((current) => current && { ...current, [field]: value })
   }
 
+  function setLaneQuotaField(
+    field: keyof LaneQuotasDraft,
+    value: string,
+  ) {
+    setLaneQuotasDraft((current) => ({ ...current, [field]: value }))
+  }
+
   if (!data || !stepfunDraft || !geminiDraft || !routes) {
     return { ready: false }
   }
@@ -76,11 +90,13 @@ function useModelSettingsController(): ModelSettingsController {
     stepfunDraft,
     geminiDraft,
     routes,
+    laneQuotasDraft,
     busy,
     error,
     setStepfunField,
     setGeminiField,
     setRoute,
+    setLaneQuotaField,
     submit,
   }
 }
@@ -90,15 +106,23 @@ function useSettingsLoader(
   setStepfun: (draft: StepfunDraft) => void,
   setGemini: (draft: GeminiDraft) => void,
   setRoutes: (routes: RouteDraft) => void,
+  setLaneQuotasDraft: (draft: LaneQuotasDraft) => void,
   setError: (error: string) => void,
 ) {
   useEffect(() => {
     void loadSettings()
       .then((body) =>
-        applyResponse(body, setData, setStepfun, setGemini, setRoutes),
+        applyResponse(
+          body,
+          setData,
+          setStepfun,
+          setGemini,
+          setRoutes,
+          setLaneQuotasDraft,
+        ),
       )
       .catch(() => setError('模型设置加载失败'))
-  }, [setData, setError, setGemini, setRoutes, setStepfun])
+  }, [setData, setError, setGemini, setLaneQuotasDraft, setRoutes, setStepfun])
 }
 
 function useSettingsSubmitter(
@@ -106,6 +130,7 @@ function useSettingsSubmitter(
   setStepfun: (draft: StepfunDraft) => void,
   setGemini: (draft: GeminiDraft) => void,
   setRoutes: (routes: RouteDraft) => void,
+  setLaneQuotasDraft: (draft: LaneQuotasDraft) => void,
   setBusy: (busy?: string) => void,
   setError: (error?: string) => void,
 ) {
@@ -123,7 +148,7 @@ function useSettingsSubmitter(
         setError(body.error ?? '模型设置保存失败')
         return false
       }
-      applyResponse(body, setData, setStepfun, setGemini, setRoutes)
+      applyResponse(body, setData, setStepfun, setGemini, setRoutes, setLaneQuotasDraft)
       return true
     } catch {
       setError('模型设置请求失败')
@@ -160,6 +185,7 @@ function applyResponse(
   setStepfun: (draft: StepfunDraft) => void,
   setGemini: (draft: GeminiDraft) => void,
   setRoutes: (routes: RouteDraft) => void,
+  setLaneQuotasDraft: (draft: LaneQuotasDraft) => void,
 ) {
   setData(body)
   setStepfun(draftFromView(STEPFUN_FIELDS, body.models))
@@ -172,6 +198,16 @@ function applyResponse(
       ]),
     ) as RouteDraft,
   )
+  setLaneQuotasDraft({
+    directorStageConcurrency:
+      body.laneQuotas?.directorStage.source === 'settings'
+        ? String(body.laneQuotas.directorStage.value)
+        : '',
+    renderShotConcurrency:
+      body.laneQuotas?.renderShot.source === 'settings'
+        ? String(body.laneQuotas.renderShot.value)
+        : '',
+  })
 }
 
 function draftFromView<T extends string>(

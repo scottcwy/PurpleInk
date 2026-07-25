@@ -39,12 +39,44 @@ export const ROUTE_ROWS: Array<[CanvasNodeType, string]> = [
   ['export', '终片交付 / FINALIZE'],
 ]
 
+/**
+ * ISSUE-011 队列并发配额的只读视图。`source` 与 `features/ai/config.ts`
+ * 的 `'settings' | 'env' | 'default'` 口径一致——UI 据此呈现真值来源,
+ * 而不是把内部 env / DB / 默认三套来源混成单一数字。
+ */
+export type LaneQuotaSource = 'settings' | 'env' | 'default'
+
+export interface LaneQuotaFieldView {
+  value: number
+  source: LaneQuotaSource
+}
+
+export interface LaneQuotasView {
+  directorStage: LaneQuotaFieldView
+  renderShot: LaneQuotaFieldView
+}
+
+export type LaneQuotasDraft = {
+  directorStageConcurrency: string
+  renderShotConcurrency: string
+}
+
+/** UI 层提交并发配额时使用的 schema 上限。运行期 renderShot 上限还受 CPU 数约束, 由 route 负责。 */
+export const LANE_QUOTA_LIMITS = {
+  directorStageMin: 1,
+  directorStageMax: 32,
+  renderShotMin: 1,
+  renderShotMax: 128,
+} as const
+
 export interface SettingsResponse {
   configured?: boolean
   models?: StepfunConfigView
   geminiConfigured?: boolean
   gemini?: GeminiConfigView
   routes?: Record<CanvasNodeType, DirectorRouteView>
+  laneQuotas?: LaneQuotasView
+  requiresRestart?: boolean
   error?: string
 }
 
@@ -54,11 +86,16 @@ export interface ReadyModelSettingsController {
   stepfunDraft: StepfunDraft
   geminiDraft: GeminiDraft
   routes: RouteDraft
+  laneQuotasDraft: LaneQuotasDraft
   busy?: string
   error?: string
   setStepfunField: (field: StepfunModelField, value: string) => void
   setGeminiField: (field: GeminiConfigField, value: string) => void
   setRoute: (nodeType: CanvasNodeType, provider: AiProviderId) => void
+  setLaneQuotaField: (
+    field: keyof LaneQuotasDraft,
+    value: string,
+  ) => void
   submit: (
     payload: Record<string, unknown>,
     action: string,

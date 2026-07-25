@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import {
   Bot,
   Cpu,
@@ -9,20 +8,16 @@ import {
   Route,
   ShieldCheck,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
 import { NavItem } from '@/components/ui/nav-item'
-import { SettingsSeparator } from '@/components/ui/settings-group'
 import { SettingsPanel } from '@/components/ui/settings-panel'
 import { SettingsRow } from '@/components/ui/settings-row'
+import { Skeleton } from '@/components/ui/skeleton'
 import { TopBar } from '@/components/ui/top-bar'
 import { usePublishNavContext } from '@/features/navigation/nav-context'
-import { productExportHref } from '@/features/navigation/products-routes'
-import { ModelServiceSettings } from './model-service-settings'
+import { ModelServicePanels } from './model-service-panels'
+import { useModelSettingsController } from './model-service-settings'
+import { RuntimeConcurrencyPanel } from './runtime-concurrency-panel'
 import { ThemeControl } from './theme-control'
-
-interface SettingsResponse {
-  renderConcurrency?: number
-}
 
 const SETTINGS_NAV = [
   { href: '#providers', label: '模型服务', icon: Bot },
@@ -39,16 +34,8 @@ export function SettingsForm({
   projectId?: string
   rendererNodeId?: string
 }) {
-  const [renderConcurrency, setRenderConcurrency] = useState<number>()
-
   usePublishNavContext({ projectId, rendererNodeId })
-
-  useEffect(() => {
-    void fetch('/api/settings')
-      .then((response) => response.json() as Promise<SettingsResponse>)
-      .then((body) => setRenderConcurrency(body.renderConcurrency))
-      .catch(() => undefined)
-  }, [])
+  const controller = useModelSettingsController()
 
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden text-ds-text">
@@ -102,45 +89,17 @@ export function SettingsForm({
               </p>
             </header>
 
-            <ModelServiceSettings />
+            {controller.ready ? (
+              <ModelServicePanels controller={controller} />
+            ) : (
+              <ModelSettingsSkeleton />
+            )}
 
-            <SettingsPanel
-              id="runtime"
-              title="运行与导出"
-              description="本地渲染并发、输出规格与恢复能力"
-              icon={Cpu}
-              summary="3 项"
-            >
-              <SettingsRow
-                label="渲染并发数"
-                value={
-                  renderConcurrency
-                    ? `${renderConcurrency}（CPU 核数，暂不可配置）`
-                    : undefined
-                }
-              />
-              <SettingsSeparator />
-              <SettingsRow label="导出分辨率">
-                {projectId ? (
-                  <Link
-                    href={productExportHref(projectId)}
-                    className="text-[13px] text-ds-blue underline-offset-2 hover:underline"
-                  >
-                    按项目在导出页配置
-                  </Link>
-                ) : (
-                  <span className="text-[13px] text-ds-text-muted">
-                    按项目在导出页配置
-                  </span>
-                )}
-              </SettingsRow>
-              <SettingsSeparator />
-              <SettingsRow label="崩溃续渲">
-                <span className="text-[13px] text-ds-text-muted">
-                  尚未实现（Demo 占位）
-                </span>
-              </SettingsRow>
-            </SettingsPanel>
+            {controller.ready ? (
+              <RuntimeConcurrencyPanel controller={controller} />
+            ) : (
+              <RuntimeSkeleton />
+            )}
 
             <SettingsPanel
               id="appearance"
@@ -163,7 +122,6 @@ export function SettingsForm({
               defaultOpen={false}
             >
               <SettingsRow label="版本" value="0.1.0 (Demo)" />
-              <SettingsSeparator />
               <SettingsRow label="本地模式">
                 <span className="flex items-center gap-2 text-[13px] text-ds-text-muted">
                   <ShieldCheck className="size-3.5 text-ds-green" />
@@ -179,5 +137,35 @@ export function SettingsForm({
         </div>
       </div>
     </main>
+  )
+}
+
+function ModelSettingsSkeleton() {
+  return (
+    <SettingsPanel
+      id="providers"
+      title="模型服务"
+      description="正在读取真实 Provider Registry"
+      icon={Bot}
+    >
+      <SettingsRow label="正在读取真实配置">
+        <Skeleton className="h-9 w-[260px] rounded-md" />
+      </SettingsRow>
+    </SettingsPanel>
+  )
+}
+
+function RuntimeSkeleton() {
+  return (
+    <SettingsPanel
+      id="runtime"
+      title="运行与导出"
+      description="正在读取队列配额"
+      icon={Cpu}
+    >
+      <SettingsRow label="正在读取真实配额">
+        <Skeleton className="h-9 w-[260px] rounded-md" />
+      </SettingsRow>
+    </SettingsPanel>
   )
 }
