@@ -31,6 +31,25 @@ const SIZES: Record<ButtonSize, string> = {
   lg: 'h-11 gap-2 px-5 text-sm rounded-md',
 }
 
+const BASE =
+  'inline-flex items-center justify-center font-medium font-sc transition-[background-color,filter,opacity] disabled:pointer-events-none disabled:opacity-50'
+
+/**
+ * 按钮外观配方（SSOT）。
+ * 供必须渲染成 `<a>` / `<Link>` 的导航型操作复用，避免为链接另造一套按钮视觉。
+ */
+export function buttonClassName({
+  variant = 'primary',
+  size = 'md',
+  className,
+}: {
+  variant?: ButtonVariant
+  size?: ButtonSize
+  className?: string
+} = {}): string {
+  return cn(BASE, VARIANTS[variant], SIZES[size], className)
+}
+
 /**
  * 基础按钮原语（SSOT：全应用统一从此处 import）。
  * 属应用 UI —— 允许 hover / transition 等交互动效（不受视频确定性红线约束）。
@@ -45,12 +64,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={cn(
-        'inline-flex items-center justify-center font-medium font-sc transition-[background-color,filter,opacity] disabled:pointer-events-none disabled:opacity-50',
-        VARIANTS[variant],
-        SIZES[size],
-        className,
-      )}
+      className={buttonClassName({ variant, size, className })}
       {...props}
     >
       {Icon && <Icon className="h-4 w-4 shrink-0" />}
