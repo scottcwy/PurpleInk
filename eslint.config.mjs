@@ -25,6 +25,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 本地运行期数据与取证用隔离构建产物（CVC_NEXT_DIST_DIR），非源码。
+    ".data/**",
   ]),
 ]);
 

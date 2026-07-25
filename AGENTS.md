@@ -1,6 +1,7 @@
 # AGENTS.md — PurpleInk
 
 本文件是本仓库的代理执行入口。所有文本保持 UTF-8，禁止引入 U+FFFD replacement character 或破坏中文。
+**除非用户明确要求，否则禁止切换分支，保持在yusheng/two-part-merge分支**
 
 ## 1. 执行前提
 

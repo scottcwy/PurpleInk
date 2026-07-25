@@ -1,6 +1,11 @@
 import 'server-only'
 import { z } from 'zod'
-import { queue as defaultQueue, type QueueAdapter } from '@/lib/queue'
+import {
+  getJobSnapshot,
+  queue as defaultQueue,
+  type JobSnapshot,
+  type QueueAdapter,
+} from '@/lib/queue'
 import { exportProject } from './export-service'
 
 /**
@@ -53,4 +58,50 @@ export async function enqueueProjectExport(
   return targetQueue.enqueue(EXPORT_PROJECT_KIND, payload, {
     projectId: payload.projectId,
   })
+}
+
+export interface AwaitExportDependencies {
+  enqueue: (input: ExportProjectInput) => Promise<string>
+  getJobSnapshot: (projectId: string, jobId: string) => Promise<JobSnapshot | null>
+  wait: (milliseconds: number) => Promise<void>
+  /** 轮询上限，防止无界等待；超时如实报出，不假装成功。 */
+  maxPolls?: number
+}
+
+/**
+ * 入队并等待成片导出完成。
+ *
+ * autopilot 走这里：FINALIZE 的 `export` 节点要消费 final-mp4，因此拼接必须先完成。
+ * 等待发生在 director-stage 通道内，而导出作业落在独立的兜底通道，两条通道在
+ * `tick()` 里并行 drain，不会互相饿死。
+ */
+export async function runProjectExport(
+  projectId: string,
+  dependencies?: AwaitExportDependencies
+): Promise<void> {
+  const resolved = dependencies ?? defaultAwaitDependencies()
+  const jobId = await resolved.enqueue({ projectId })
+  const maxPolls = resolved.maxPolls ?? DEFAULT_MAX_POLLS
+  for (let poll = 0; poll < maxPolls; poll += 1) {
+    const job = await resolved.getJobSnapshot(projectId, jobId)
+    if (job?.status === 'done') return
+    if (job?.status === 'failed') {
+      throw new Error(job.error ?? '终片导出作业失败')
+    }
+    await resolved.wait(POLL_INTERVAL_MS)
+  }
+  throw new Error(`终片导出作业未在预期时间内完成：${jobId}`)
+}
+
+const POLL_INTERVAL_MS = 1_000
+/** 30 分钟上限：足够长片拼接，又不会无界挂住调用方。 */
+const DEFAULT_MAX_POLLS = 1_800
+
+function defaultAwaitDependencies(): AwaitExportDependencies {
+  return {
+    enqueue: (input) => enqueueProjectExport(input),
+    getJobSnapshot,
+    wait: (milliseconds) =>
+      new Promise((resolve) => setTimeout(resolve, milliseconds)),
+  }
 }

@@ -4,6 +4,7 @@ import {
   EXPORT_PROJECT_KIND,
   enqueueProjectExport,
   registerExportProjectHandler,
+  runProjectExport,
 } from './export-queue-handler'
 
 vi.mock('server-only', () => ({}))
@@ -51,6 +52,45 @@ describe('enqueueProjectExport', () => {
       enqueueProjectExport({ projectId: '' }, adapter)
     ).rejects.toThrow()
     expect(enqueue).not.toHaveBeenCalled()
+  })
+})
+
+describe('runProjectExport', () => {
+  function awaitDeps(
+    snapshots: Array<{ status: string; error?: string } | null>
+  ) {
+    const queued = [...snapshots]
+    return {
+      enqueue: vi.fn(async () => 'job-1'),
+      getJobSnapshot: vi.fn(async () => (queued.shift() ?? null) as never),
+      wait: vi.fn(async () => {}),
+      maxPolls: 5,
+    }
+  }
+
+  it('resolves once the export job reaches done', async () => {
+    const deps = awaitDeps([{ status: 'pending' }, { status: 'done' }])
+
+    await expect(runProjectExport('project-1', deps)).resolves.toBeUndefined()
+    expect(deps.enqueue).toHaveBeenCalledWith({ projectId: 'project-1' })
+    expect(deps.wait).toHaveBeenCalledTimes(1)
+  })
+
+  it('propagates the job failure message', async () => {
+    const deps = awaitDeps([{ status: 'failed', error: '配乐 artifact 文件不存在' }])
+
+    await expect(runProjectExport('project-1', deps)).rejects.toThrow(
+      '配乐 artifact 文件不存在'
+    )
+  })
+
+  it('reports an honest timeout instead of pretending success', async () => {
+    const deps = awaitDeps([])
+
+    await expect(runProjectExport('project-1', deps)).rejects.toThrow(
+      '未在预期时间内完成'
+    )
+    expect(deps.getJobSnapshot).toHaveBeenCalledTimes(5)
   })
 })
 

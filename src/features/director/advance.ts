@@ -178,14 +178,17 @@ async function createDefaultDependencies(): Promise<AdvanceDependencies> {
     repository: new AdvanceRepositoryImpl(await getDb()),
     enqueueDirectorStage,
     enqueueRenderShot,
+    /**
+     * 成片必须先存在，`export` 节点的 FINALIZE 阶段才有 final-mp4 可消费。
+     * 拼接经项目级队列作业执行——final-mp4 按项目聚合提交，只有 project 级
+     * attempt 才能归属；直接在这里调 exportProject 会落在上游节点的 attempt 上
+     * 而必然提交失败（ffmpeg 白跑一遍后回滚）。
+     */
     prepareFinalExport: async (projectId) => {
-      const { exportProject } = await import('@/features/render/export-service')
-      const result = await exportProject(projectId)
-      if (!result.ok) {
-        throw new Error(
-          `终片导出前置未完成：${result.incompleteNodeIds.join(', ')}`
-        )
-      }
+      const { runProjectExport } = await import(
+        '@/features/render/export-queue-handler'
+      )
+      await runProjectExport(projectId)
     },
   }
 }
