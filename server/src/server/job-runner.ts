@@ -5,6 +5,7 @@ import { renderFromCapture, urlToVideo } from "../compose/run-pipeline"
 import type { UrlToVideoOptions } from "../compose/run-pipeline"
 import { updateJob, type Job, type JobPhase } from "./job-store"
 import { logger } from "../lib/logger"
+import { errorMessage } from "../lib/error-message"
 
 /** POST /render 的请求体（url 与 captureDir 二选一） */
 export interface RenderRequest {
@@ -72,9 +73,10 @@ export function runJob(job: Job, req: RenderRequest): void {
       updateJob(job.id, {
         status: "failed",
         phase: "failed",
-        error: String(err?.stack || err),
+        error: errorMessage(err),
         elapsedSec: Number(((Date.now() - startedAt) / 1000).toFixed(1)),
       })
-      logger.error("job:failed", { id: job.id, error: String(err) })
+      // 对外只留 message；完整栈只进服务端日志，便于排障又不外泄本机路径。
+      logger.error("job:failed", { id: job.id, stack: String(err?.stack || err) })
     })
 }

@@ -11,6 +11,7 @@ import { stat } from "node:fs/promises"
 import { createJob, getJob, listJobs, toPublicJob } from "./job-store"
 import { runJob, type RenderRequest } from "./job-runner"
 import { logger } from "../lib/logger"
+import { errorMessage } from "../lib/error-message"
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const data = JSON.stringify(body)
@@ -138,7 +139,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       try {
         await streamVideo(res, req, job.videoPath)
       } catch (err) {
-        sendJson(res, 500, { error: String(err) })
+        logger.error("api:video_stream_failed", { id: job.id, error: String(err) })
+        sendJson(res, 500, { error: errorMessage(err) })
       }
       return
     }
@@ -153,8 +155,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 export function startServer(port: number): void {
   const server = createServer((req, res) => {
     handle(req, res).catch((err) => {
-      logger.error("api:unhandled", { error: String(err) })
-      if (!res.headersSent) sendJson(res, 500, { error: String(err) })
+      logger.error("api:unhandled", { stack: String(err?.stack || err) })
+      if (!res.headersSent) sendJson(res, 500, { error: errorMessage(err) })
     })
   })
   server.listen(port, () => {
