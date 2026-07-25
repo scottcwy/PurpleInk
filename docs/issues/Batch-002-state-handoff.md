@@ -238,7 +238,206 @@ schema 改动必须与 migration 同批提交，否则会横向阻塞所有其�
 
 ---
 
-## 补充交接：ISSUE-011 设置页占位项与并发配额（截至 commit `d63d89d`）
+
+
+# ISSUE-006 · 休眠 pipeline 层删除 + instrumentation 接线（done）
+
+- 执行时间：2026-07-25（与 ISSUE-002 在同一工作树并行，落点零重叠）
+- 最终状态：`done`，验收 §7 七项全过，取证留档 `docs/issues/evidence/issue-006/`
+- 两项决策：issue §3 选**方案 A（删除整层）**；issue §5 选**新增 `src/instrumentation.ts`**（而非改测试了事）
+
+### 提交链（4 个 commit，全部落在本地 master）
+
+| Commit | 内容 |
+| --- | --- |
+| `1f545ed` | refactor(pipeline)：删除 `src/features/pipeline` 整层（**实数 20 文件、-1508 行**，issue 文件 §2.2 记的 14 为低估，多出的含 `services/service-contract.test.ts`、`contracts/tags.ts` 等）；回收 vitest 2 条 pipeline exclude + 已失效的 Stage A 注释 + tsconfig 1 条 exclude；`v3-architecture.test.ts` L132/L166 两处 fixture specifier 改为 `@/features/foo/*` 等价合成样本（断言强度不变，只是不再引用已删模块名） |
+| `42568d2` | feat(runtime)：新增 `src/instrumentation.ts`；修复 `initQueue()` 失败缓存 rejected promise 的毒化缺陷（RED→GREEN，`init.test.ts` 新增失败重试用例） |
+| `efc498f` | test(db)：修复 `runtime-boundary.test.ts` 陈旧 SQLite 断言，解除最后一条历史 exclude——**至此 README §2 所述门禁洞全部回收** |
+| `1105acc` | docs：issue 文件记录两项决策 + §8 实施记录；README 状态/派发顺序/争用表同步；取证入档 |
+
+### 规划期实测发现（三处与 issue 文件/直觉不符，已入档，下次不要重新踩）
+
+1. **`runtime-boundary.test.ts` 解除 exclude 必红，与 instrumentation 无关**：L248/L250 断言
+   `better-sqlite3@12.1.0` / `@types/better-sqlite3@7.6.13` 存在于 devDependencies，而
+   package.json 已全面移除 SQLite。已改为断言 dependencies 与 devDependencies 均缺席（边界收紧，
+   与 AGENTS.md「不得新增 SQLite 运行依赖」同口径）。`LEGACY_MIGRATION_FILES` 断言的是「不在 git
+   跟踪中」，现状即过，未动。
+2. **`v3-architecture-baseline.json` 无需任何改动**：L132/L166 是临时目录 fixture 断言，测的是扫描器
+   规则本身，不影响真实仓库扫描计数；删 pipeline 后 canvasForbiddenImports 仍是原 15 条 db 债务。
+3. **ISSUE-001 已提前回收自己的 exclude 行**：开工时 vitest exclude 只剩 3 条、tsconfig 只剩 1 条，
+   全部归 006；README §6 的行号表已过时（已在该节追加清零标注）。
+
+### instrumentation 设计要点（下一位不要推翻的点）
+
+1. **register() 双守卫缺一不可**：`NEXT_RUNTIME !== 'nodejs'` 直接返回（edge 不承载进程内队列）；
+   `NEXT_PHASE === 'phase-production-build'` 直接返回——build 期预渲染 worker 也会触发 register，
+   此时 `queue.start()` 的 setInterval 会挂住构建进程。`pnpm build` exit 0 已实测验证守卫生效。
+2. **模块顶层零副作用**：所有依赖在 register() 内动态 import。这不是风格偏好，是
+   `runtime-boundary.test.ts` 的 import-safe 契约（`@/instrumentation` 在 IMPORT_SAFE_ENTRIES 里，
+   import 时不得碰 FS/DB），现在该测试在默认测试池内常年把守。
+3. **initQueue 失败可重试是配套修复，不是顺手优化**：旧实现失败后 `__cvcQueueInitializing`
+   永久持有 rejected promise，API 路由兜底会永远拿到同一个失败直到重启进程；instrumentation
+   把首次调用提前到启动期（DB 可能未就绪）会放大该缺陷。现在失败重置锚点，行为由
+   `init.test.ts` 的「首次失败→第二次重试成功」用例锁定。register 内 try/catch 不阻断 Next 启动。
+4. **API 路由里的 `initQueue()` 兜底调用不要删**：dev 模式 instrumentation 有时不触发
+   （init.ts 注释已登记），兜底仍是必要路径；幂等由 globalThis 锚点保证，不会双消费。
+
+### 验收证据摘要
+
+| 项 | 结果 |
+| --- | --- |
+| `pnpm lint` / `pnpm typecheck` / `pnpm build` / `git diff --check` | 全部 exit 0；build 不挂起 |
+| `pnpm test` | 108 文件 / 498 用例全绿。文件数变化可解释：基线 108/502 → 删层 107/492（-`service-contract.test.ts` 10 用例，它原本未被 exclude）→ 收口 108/498（+runtime-boundary 5 用例 +init 重试 1 用例） |
+| `pnpm verify:v3` | `ok: true` 零违规；triggerTaskForbiddenImports 仍为空；baseline 未动 |
+| 验收标准 7（无 HTTP 队列消费） | 独立取证库 + `pnpm start --port 3100` 生产模式，零 HTTP 请求下种子 attempt `8d2ec4d6…` 从 queued → 被领取 → failed（`no handler for kind: noop`，fallback lane 如实拒绝），归因唯一。详见 `evidence/issue-006/no-http-queue-consumption.md` |
+| `pnpm test:pg` | **1 failed / 79 passed，失败项非本 issue 引入**（见下「遗留红项归因」） |
+
+### 并发会话实录（与 ISSUE-002 同树并行）
+
+1. **零文件重叠得以成立的前提是开工前逐文件核对**：002 的 16 个未提交修改全在
+   `render/**`、`director/runtime-repository.ts`、`canvas/**`、`app/products/**`；006 的落点
+   （pipeline、两个根配置、architecture/db 两个测试、instrumentation、queue/init）与之无交集。
+   每次 commit 前 `git diff --cached --name-status` 逐条核对，全程未 stage 对方文件。
+2. **Next 16 的 dev 锁是新发现的硬约束**：同一项目目录第二个 `pnpm dev` 直接拒绝
+   （`Another next dev server is already running`，报出对方 PID），**换端口也没用**。
+   以后并行取证要么等对方释放，要么用 `pnpm start`（无此锁），要么独立 worktree。
+3. **取证隔离方式可复用**：主库上有对方 dev 进程在消费，无法归因，故在同一 Postgres 容器内
+   新建取证库 `purpleink_issue006_evidence`（建库→`DATABASE_URL` 进程级覆盖→`pnpm db:migrate`→
+   种子→观察）。取证后 3100 进程已杀，对方进程（3000/63424）与主库全程未受影响。
+4. **沙箱内 git 写操作会被拒**（`git rm`/`add`/`commit` 需提权重跑），且首次失败时 `git rm`
+   实际已生效——碰到同样报错先 `git status` 确认真实状态，不要盲目重跑删除类命令。
+
+### 遗留红项归因（不是本 issue 的，但已查到根）
+
+`pnpm test:pg` 唯一失败：`src/features/director/runtime-repository.pg.test.ts` 的
+「assembles score input from versioned lane payload and artifact rows」，zod 报
+`audioManifest` / `audioAllocation` 「expected nonoptional, received undefined」。
+归因链：该必填契约由 ISSUE-005 的 `171f692`（已在 master）引入，而这个 pg 测试的 fixture
+自 `1da0927` 后未跟进——与 ISSUE-011 交接「已知边界」第 6 条记录的是同一项。006 的三个代码
+commit 与 director/pg 配置零交集，未越界代修。**应由 002/005 收尾时补 fixture 的
+`audioManifest`/`audioAllocation` 字段**（参照 `audio-timing.ts` 的真实形状）。
+
+### 已知边界与下一位执行者注意事项
+
+1. **pipeline 层已死，不要以任何形式复活**：不要把 `ProgressSink`、`TaskFailureError`、
+   `CVC_TASK_IDS` 等概念搬到别处「预留」；真需要任务服务层（外部队列/多进程）时从生产路径
+   的需求重新设计，那是新 issue。`legacy.*` task_id 前缀与 `cvc.*` 常量已分属两个世界：
+   前者是现行队列真实在用的，后者已随 pipeline 层消失。
+2. **exclude 列表已归零，这是新的基线**：`vitest.config.ts` 只剩 configDefaults +
+   `**/*.pg.test.ts`（pg 分流，非门禁洞）；`tsconfig.json` 不再排除任何源文件。
+   任何新增 exclude 都应被视为开新门禁洞，需走 issue 登记，不得静默塞入。
+3. **`v3-architecture.test.ts` 的 `@/features/foo/*` 是合成样本**，不对应真实模块；
+   它们测的是 `isCanvasForbidden` 的 trigger 正则与 allowed 路径不误伤，不要「修复」成存在的路径。
+4. **取证遗留物**：取证库 `purpleink_issue006_evidence` 仍在 `purpleink-dev-postgres-1` 容器内
+   （只含 1 条已消费的种子记录，不影响主库；可随时 `drop database` 清理，未代删）；
+   `.data/issue-006-evidence.mjs`、`.data/issue-006-{dev,start}.log` 留在 .data（gitignore，不入库）。
+5. **若需复验**：`git show 1f545ed / 42568d2 / efc498f / 1105acc`；
+   `pnpm vitest run src/lib/queue/init.test.ts` 应 6/6；
+   `pnpm vitest run src/lib/db/runtime-boundary.test.ts` 应 5/5；
+   `pnpm test` 应 108 文件/498 用例；`pnpm verify:v3` 应 `ok: true`。
+
+### 全项目影响（本次之后的盘面）
+
+- 未完成 issue 只剩：**ISSUE-002（在途，同树未提交）**、**ISSUE-013（in-progress 收尾）**、
+  **ISSUE-014（等 002 后跑端测）**；其余全部 done。
+- instrumentation 接线后，生产模式下队列不再依赖首个 HTTP 请求；ISSUE-014 端测时
+  可直接依赖「进程起 = 消费起」这个语义，不需要预热请求。
+- 第三套执行模型已清除，仓库内只剩 stage-runner（director）与 queue-handler（render）
+  两条生产执行路径，与 README §0 的双系统边界一致。
+
+
+
+# 交接：ISSUE-008 dagre 布局真值（截至 commit `10088e5`）
+
+### 状态
+
+**已完成，已合并 `master`。** 坐标只有一个真值来源：`layout.ts` 的 `computeLayout()`。
+`canvas_nodes.position_x/y` 两列已从 schema 和数据库彻底删除，不是「停止读」而是「物理不存在」。
+
+### 决策：方案 A2（彻底删列），非方案 B/C
+
+issue 原文给了 A/B/C 三条路，本次核实后选 A 的加强版（A2 = 删列，而非「保留列但停止写」）：
+
+| 待核实项 | 结论 |
+| --- | --- |
+| 设计稿是否规定可拖动 / 有自动布局控件 | 未连上 Pencil 实例，退查 `Design-system-inventory.md`：S3 屏主操作只有 `Run ready nodes`，全文搜"拖/drag/自动布局"零命中。方案 B 不成立。 |
+| `position_x/y` 是否 `NOT NULL` 无 default | 是。这意味着 issue 原文设想的「不删列但停止写」实际不可执行——不写值会违反约束，成本和删列相当，故选删列。 |
+| issue §2.3 引用的 `nodesDraggable={false}`（`canvas-view.tsx:114`） | **过时证据**。`git log -p -S nodesDraggable` 证实这行属于已被 ISSUE-007 删除的 `workflow-canvas.tsx`（旧重复画布），不是现生产 `CanvasView`。现生产代码根本没设这个 prop，默认 `true`——节点表面可拖，因未接 `onNodesChange` 回写，下次父组件重渲染（1.5s 轮询）就弹回原位，比"硬禁用"更容易迷惑用户。已在 issue 文件里改正。 |
+| share snapshot 白名单是否引用坐标 | 否，`routing.md §8.3` 白名单只提「节点、连线、节点类型」，删列不影响分享快照。 |
+
+### 已落地改动
+
+- `schema/canvas.ts` 删 `positionX`/`positionY`；新 migration `0003_drop_canvas_node_position.sql`（`DROP COLUMN` ×2），双跑验证幂等
+- `actions.ts` / `fan-out.ts` 停止写坐标
+- `queries.ts` 不再 select 坐标；新增 `PositionedCanvasNode = CanvasGraphNode & { position }` 类型，把「坐标只来自 `computeLayout`」编码进类型系统而非靠约定
+- `page.tsx` 删掉 `positions.get(node.id) ?? node.position` 里那条永远走不到的 DB 坐标兜底分支
+- `layout.test.ts` 新增两个测试：多泳道 AABB 包围盒不重叠、新增泳道不位移已有泳道
+- 同步 8 处测试 fixture（`canvas-*.pg.test.ts`、`schema.pg.test.ts`、`render.pg-fixture.ts` 等）
+
+真实截图证据：5 泳道 29 节点项目，Playwright/Chromium 截图 3 次（首次 + 刷新 2 次），
+29 个节点 DOM 坐标逐一比对**完全一致**，控制台零报错。`docs/issues/evidence/issue-008/`。
+
+### 并发处理实录（给下一位执行者的硬提醒）
+
+动手时发现仓库有另一并发会话正在实时改 `audio/**`、`director/**`、`render/**`
+（就是本文件里 ISSUE-005 那条线），且 `master` 在修复过程中前后推进了 **6 次**。
+处理方式，供后续类似情况参考：
+
+1. **改动前先切独立 `git worktree` + 独立 Postgres 容器**（不同端口的 docker 容器），
+   避免自己的 migration/测试跑动摇了对方正在用的共享 Postgres。
+2. **合并时 `master` 已经动过**：本 issue 的 migration 原打算用 `0002`，但对方已用掉这个序号
+   （`0002_workspace_settings.sql`，ISSUE-011）。改为 rebase 到最新 `master` 后重新生成 `0003`。
+   `drizzle-kit generate` 对对方那份 `0002_snapshot.json` 报 `data is malformed`
+   （已确认在干净 `master` 上单独复现，不是我引入的，未修，只是绕过去手工派生了 `0003_snapshot.json`）。
+3. **合并那一刻主目录里有对方未提交的改动**，且和本 issue 改的文件真实重叠
+   （`render.pg-fixture.ts`、`queries.ts`）。用 `git stash push -u -m <带时间戳的标签>`
+   暂存后完成合并；尝试把 stash 放回去时两个文件产生真实文本冲突，**没有替对方决定怎么取舍**，
+   用 `git reset --hard` 干净撤回，**stash 条目原样保留未 drop**（SHA
+   `8b1e43ef3a2d43aa3f9c7ac8a51cc9d9ae55e818`，标签
+   `concurrent-session-wip-before-issue008-merge-20260725`）。截至本文档更新时**这个 stash 仍未被取回**，
+   如果你是那条线的后续执行者，先 `git stash list` 确认还在，再
+   `git stash apply 8b1e43ef3a2d43aa3f9c7ac8a51cc9d9ae55e818` 拿回去重新接上，
+   然后自己决定要不要 `git stash drop`。
+4. **反向教训**：本次修复最早几步是直接在主目录改的（尚未发现并发），
+   已确认造成过一次真实破坏——`canvas.ts` 摘掉 `positionX/positionY` 但配套 migration 还没写完时，
+   短暂让共享 Postgres 上所有 `canvas_nodes` 插入路径（含对方的 pg 测试）报
+   `null value in column "position_x" violates not-null constraint`（对方在 commit `f2601bd`
+   里自己绕开了，见上文「并发会话实录」）。**教训固化**：schema 改动必须和 migration 同一批落地，
+   不能拆两步在共享环境里过渡。
+
+### 验证结果
+
+| 项 | 结果 |
+| --- | --- |
+| `pnpm typecheck`（合并后，主目录） | exit 0 |
+| `pnpm verify:v3` | `ok: true`，0 违规 |
+| `pnpm test` | 458 passed / 3 failed；失败项全在 `tests/job-phase-contract.test.ts`，已确认在本 issue 任何改动之前即失败（`server/**` 范围外，正则解析 `JobPhase` 联合类型对不上 `job-store.ts` 当前格式），未修 |
+| `pnpm test:pg`（隔离 Postgres） | 画布相关 5 个文件单独重跑 **27/27 全绿**；全量跑还会看到 `schema-metadata.pg.test.ts` 3 个失败（`workspace_settings` 新表后表/外键计数断言未同步更新）和 `runtime-repository.pg.test.ts` 1 个失败（ISSUE-005 `audioManifest` 遗留）——均已确认在干净 `master` 上独立于本 issue 存在，未修 |
+| `pnpm db:migrate` 双跑（清空重建后） | 两次均成功；`\d canvas_nodes` 确认两列已删且不受 `workspace_settings` 影响 |
+| grep `positionX`/`position_x`/`position_y` | 全仓库零命中（仅历史 migration `0000`/`0001` 保留，不可变历史） |
+
+### 关键文件
+
+| 文件 | 职责 |
+| --- | --- |
+| `src/features/canvas/layout.ts` | 坐标唯一来源，`computeLayout()`；`NODE_WIDTH`/`NODE_HEIGHT` 现已导出供测试校验重叠 |
+| `src/features/canvas/queries.ts` | `PositionedCanvasNode` 类型定义处；`CanvasGraphNode` 本身不含 `position` |
+| `src/lib/db/migrations/pg/0003_drop_canvas_node_position.sql` | 已应用的生产 migration，不要删除或手改 |
+
+### 已知边界与下一位执行者注意事项
+
+1. **不要再往 `canvas_nodes` 加坐标类列。** 任何"记住用户手动排过的布局"需求，
+   必须先做 issue 里否决的方案 B 的前置条件（`nodesDraggable={true}` + 回写 API + 自动布局降级为按钮），
+   而不是复活 `position_x/y`。
+2. **`layout.ts` 的节点尺寸/间距是常量，不是按类型 hack。** 布局不好看不要在这里塞特例分支。
+3. **ISSUE-008 与「画布靠 1.5s 轮询驱动状态」（ISSUE-012）在语义上相关但代码不重叠**：
+   本 issue 只管坐标怎么算，不管什么时候重渲染；`router.refresh()` 轮询逻辑完全没动。
+4. **stash `8b1e43ef3a2d43aa3f9c7ac8a51cc9d9ae55e818` 是否已被取回，请先确认**（见上文「并发处理实录」第 3 条），
+   避免那部分 `render.pg-fixture.ts`/`queries.ts` 的改动被误认为已经丢失。
+
+---
+
+# 交接：ISSUE-011 设置页占位项与并发配额（截至 commit `d63d89d`）
 
 ### 状态
 
@@ -313,7 +512,9 @@ schema 改动必须与 migration 同批提交，否则会横向阻塞所有其�
 
 ---
 
-## ISSUE-012 · 画布状态改为项目级 SSE 推送（done）
+
+
+# ISSUE-012 · 画布状态改为项目级 SSE 推送（done）
 
 - 执行时间：2026-07-25（本批次最后一个收尾 issue）
 - 最终状态：`done`，验收 §8 四项全过，前后取证留档 `docs/issues/evidence/issue-012/`
@@ -385,3 +586,167 @@ schema 改动必须与 migration 同批提交，否则会横向阻塞所有其�
    两个总线一起换，事件协议（snapshot/node-status/topology + seq）可以原样平移。
 4. **全链路（含 render 泳道）前后对比数据未补**，被 ISSUE-002（open）与上文第 3 条上游缺陷卡住；
    ISSUE-014 端测批次补齐时，基线与修复后的测量方法在 evidence/issue-012 两份 metrics 文档里可直接复用。
+
+---
+
+---
+
+# 交接：ISSUE-002 FABRICATE→render 接缝（done，取代本文件最初一节的分析请求）
+
+- 执行时间：2026-07-25（在 ISSUE-006/008/011/012 均已落地的仓库状态上执行，与它们零文件重叠）
+- 最终状态：`done`，issue 文件 §7 五项验收标准全过，取证留档 `docs/issues/evidence/issue-002/`
+- 本节承接文件开头「Batch-002 交接提示词」提出的分析任务：先做系统性分析产出报告，
+  经确认后实现。以下按「分析结论 → 实现方案 → 新发现的额外缺口 → 验证证据 → 边界与后续」组织。
+
+## 分析结论：issue 原文与并行改动都被证伪
+
+开工前重新核实了 handoff 提示词 §3 描述的工作区 WIP（当时未提交的 `render/**` 改动），
+发现该 WIP 已在后续 ISSUE-008 合并冲突处理中被 `git reset --hard` 撤回并转交给 stash
+（SHA `8b1e43ef3a2d43aa3f9c7ac8a51cc9d9ae55e818`，见本文件上方 ISSUE-008 交接 §「并发处理实录」
+第 3 条）。因此实际开工时 `src/features/render/**` 是**干净的 HEAD 状态**，等同于
+handoff 提示词描述的「HEAD 断点」，WIP 那条分析线作废，直接从 HEAD 出发重新设计。
+
+进一步核实发现 issue 原文 §4「入队只校验 `renderSpec` 与节点可入队性」这条修复方向
+**本身就有矛盾**：ISSUE-005（commit `171f692`）落地后，`shot-codegen` 节点首次由
+`materializeShotLanes` 播种时的 payload 只有 `laneKey`/`laneRole`/`sourceUnit`，
+**没有 `renderSpec`**——它只在 FABRICATE 成功提交后才写入节点 `data`
+（`stage-result.ts` FABRICATE 分支 + `runtime-artifact-writer.recordStageOutput`）。
+若入队仍要求解析 `renderSpec`，首次路径会在比原文描述的
+「缺 director-fabricate 产物」更早的一步（`parseRenderSpec`）抛错，`fabricateShot`
+永远不会被调用到——这是一个「鸡生蛋」结构性断点，原 issue 文档与此前的并行分析都没有
+发现它（`docs/issues/Batch-002-state-handoff.md` 开头交接提示词第 3.3 节倒是准确预见到了
+这个风险并要求下一位模型独立核实，本次核实证实其成立）。
+
+## 实现方案：与 issue 原文的偏差
+
+采用的方案是 issue §4 修复方向的加强版：入队上下文（新增 `RenderEnqueueContext` 类型）
+**完全不解析 `renderSpec`**，只携带 `{projectId, nodeId, shotId}`；`frames`/`htmlKey`
+的解析完全下沉到 `loadRenderContext`（节点已处于 `running`、`fabricateShot` 已跑完之后）。
+`loadRenderAdmissionContext` 返回 `{ enqueue, job }`：`job` 只在 `director-fabricate`
+产物已存在时（重跑场景）才非空，供调用方决定是否要在入队前跑一次 `assertRenderAdmission`
+运行时预检。
+
+## 额外发现并修复的 P0 缺口（原 issue 未提及，比 handoff 描述更严重）
+
+`enqueueRenderShot` 原实现里 `loadAdmissionContext` 的调用在 `try` 块之外。任何在此阶段
+抛出的异常（包括首次路径必然出现的 `renderSpec` 缺失）都会绕过 render 自己的补偿链
+（`compensateEnqueueFailure`：正确地转 `idle→pending→running→failed` 并写
+`recordRenderError`），直接冒泡给 `advance.ts` 的通用 `recordStageError`——那条路径
+**只写 `directorError`、不转 `failed`**。而画布 Inspector 的 `StreamingLogCard`
+组件的 `STREAMABLE` 集合只含 `{running, success, failed}`，`resolveVisibleStageError`
+也只在 `status === 'failed'` 时才返回非 undefined。三者叠加的结果：节点永久停留在
+`idle`，Inspector **完全不渲染任何错误 UI**——不是 issue 原文 §2.4 描述的「节点瞬间
+变红」，而是「什么都没发生，用户只能查数据库才能发现问题」。这是本次系统性分析新增的
+发现，已在实现里一并修复：把 admission 加载纳入统一 try 块，按失败发生时点
+（`pendingSet` 是否已置为 true）选择正确的补偿转移序列（`idle` 起点走
+`idle→pending→running→failed`，`pending` 起点走 `pending→running→failed`）。
+
+## UI 可见性缺口一并解决（issue §4 第 3 条要求但未落地的部分）
+
+新增 `renderError` 字段（对称于既有 `directorError`），贯穿
+`render-shot-repository.ts`（写入）→ `canvas/queries.ts`（解析、新增 `RenderNodeError`
+类型）→ `streaming-log-card.tsx`（展示，标签「渲染失败」区别于「阶段失败」）。两个错误
+字段互斥维护——`recordStageError` 写 `directorError` 时清掉残留 `renderError`，
+`recordRenderError` 反之——避免同一次失败在 Inspector 上同时展示两条互相独立又指向
+同一事件的噪音信号。新增 `withoutPayloadKeys` 工具函数（`persistence.ts`）承担这个清理。
+
+## 实际改动文件（12 个，零 re-export 壳）
+
+| 文件 | 动作 |
+| --- | --- |
+| `src/features/render/types.ts` | 新增 `RenderEnqueueContext`（不含 `frames`）、`RenderAdmissionContext { enqueue, job }` |
+| `src/features/render/render-shot-repository.ts` | `loadRenderAdmissionContext` 改返回 `RenderAdmissionContext`；新增 `hasFabricateArtifact` |
+| `src/features/render/queue-handler.ts` | handler 按需调用 `fabricateShot`；`enqueueRenderShot` 统一补偿路径；新增 `failFabricate`（只转 failed，不写 `renderError`） |
+| `src/features/render/render.pg-fixture.ts` | `withFabricateArtifact:false` 时同步不再预置 `renderSpec`，还原真实首次入队状态 |
+| `src/features/render/repository.pg.test.ts` | 新增「首次入队无 renderSpec 无产物」+「重跑产物已存在可预检」两个用例 |
+| `src/features/render/queue-handler.test.ts` | 重写为三分支覆盖 + 补偿序列断言（10 个用例） |
+| `src/features/render/persistence.ts` | 新增 `withoutPayloadKeys` |
+| `src/features/director/runtime-repository.ts` | `recordStageError` 清掉残留 `renderError` |
+| `src/features/canvas/queries.ts`、`index.ts` | 新增 `RenderNodeError`、`parseRenderError` |
+| `src/app/products/(app)/canvas/[projectId]/streaming-log-card.tsx`、`streaming-log-card.test.ts`、`canvas-inspector.tsx` | Inspector 展示 `renderError`，与 `directorError` 分标签 |
+
+不改：`fabricate.ts` 行为语义、`advance.ts` 分流逻辑、`admission.ts` 签名、
+确定性门禁、`shot-codegen` 状态机语义——issue §6 六条禁区全部遵守。
+
+## 验证结果
+
+| 命令 | 结果 |
+| --- | --- |
+| `pnpm typecheck`（全仓库） | exit 0；唯一红是 `live-status.test.ts`（ISSUE-012 并行遗留的未提交文件，与本 issue 无关，见下「已知边界」第 1 条） |
+| `pnpm test` | 108 files / 498 passed |
+| `pnpm test:pg src/features/render` | 3 files / 15 passed |
+| `pnpm verify:v3` | `ok: true`，0 违规 |
+
+## 真实端到端证据（Gemini + StepFun 真实 API，非 mock 非 fixture）
+
+用户明确要求「必须用真实 API，优先谷歌的」。在 `purpleink-dev-postgres-1`（共享容器，
+非隔离）上用真实生产代码路径（`POST /api/projects` → `POST /api/director/pipeline`）
+跑通 INGEST → DIRECT → SHOT_SPEC → 两条 `shot-codegen` 首次入队 → `fabricateShot`
+生成 HTML → 真实渲染出 MP4：
+
+| 泳道 | `renderSpec.durationInFrames` | `director-fabricate` | `render-mp4` | `ffprobe` 时长 |
+| --- | --- | --- | --- | --- |
+| S001 | 119（30fps） | version 1 | version 1 | 3.97s（≈119/30） |
+| S002 | 227（30fps） | version 1 | version 1 | 7.57s（≈227/30） |
+
+`ffprobe` 分辨率/fps（1080x1920 @30fps）与两个节点的 `renderSpec` 完全一致；两条泳道
+时长不同且各自吻合——**同时补齐了 ISSUE-005 §9.4 遗留的「单镜 MP4 时长对比」运行时观测
+缺口**（本文件 ISSUE-005 一节原文明确标注该项待 ISSUE-002 打通后补）。
+
+**幂等**：对已成功节点重跑 `POST /api/render`，`director-fabricate`/`render-mp4` 均保持
+`version=1`，未触发二次 `fabricateShot`（无二次 Gemini 调用）。
+
+**负向验证**（issue §7 第 5 条）：手动删除 storage 里的 HTML 字节（保留 DB 记录）后重跑，
+入队 admission 阶段如实报 `渲染 source 读取失败`（HTTP 409），未静默重新生成；节点落
+`renderError` 而非 `directorError`，验证了本次新增的错误来源区分能力。测试后已恢复原字节。
+
+证据文件：`docs/issues/evidence/issue-002/first-run.json`。
+
+## 过程中处理的无关问题（据实记录，未纳入本 issue 代码改动）
+
+1. **本地开发 DB 的 `model_routes` 表存有早前设置页测试遗留的路由覆盖**：把
+   `shot-spec`/`fabricate` 指向 `gemini-3.1-flash-lite`，该轻量模型对
+   `validate_shot_plan` 工具调用不稳定（反复触发 `Director Tool 输出缺失或无效`），
+   已删除这两条覆盖记录使其回退到代码默认 `gemini-3.6-flash`。**仅本地 DB 数据调整，
+   不是代码改动，不影响任何 schema 或迁移**。
+2. **`gemini-3.6-flash` 在 DIRECT 阶段偶发把全部输出预算耗在隐藏 reasoning token 上
+   返回空文本**（`pi-ai` 的 `google-generative-ai.js:201` 把该情形归一为
+   `An unknown error occurred`，日志里的 `usage.reasoning` 字段显示 2826/3775 token
+   全花在推理上）。这是 pi-ai/gemini 侧的既有行为，与本 issue 改动无关，重试后即成功。
+3. **两条泳道的 `shot-qa`（FINALIZE）下游节点均失败**：QA 阶段消费 `render-mp4` 之后的
+   规则检测/视觉核对，属下游阶段自身问题，不在本 issue 范围，据实记录不处理。
+
+## 已知边界与下一位执行者注意事项
+
+1. **`live-status.test.ts` 是 ISSUE-012 并行会话遗留的未提交、未追踪文件**
+   （`src/app/products/(app)/canvas/[projectId]/live-status.test.ts`），引用了
+   ISSUE-008 已删除的 `position` 字段和一个类型不兼容的 `directorError: null`，
+   导致全仓库 `pnpm typecheck` 有且只有这一处红。本次**未清理**（不是本 issue 职责，
+   且用户已明确指示不清理无关改动）；由 ISSUE-012 后续执行者或该文件的原作者处理。
+2. **`.gitignore`（新增 `.claude/worktrees/`）与 `src/lib/db/migrations/pg/meta/_journal.json`
+   （0003 迁移时间戳修正）是 ISSUE-008/006 交接里已经记录过的在途改动**，本次未触碰，
+   随其所属批次一并提交即可，不属于 ISSUE-002。
+3. **不要再往 `RenderEnqueueContext` 加 `frames`/`seed` 等渲染字段**——这正是本次修复
+   要拆掉的耦合。任何「入队时想预检画幅」的新需求，应该先确认此时 `renderSpec` 是否
+   已存在（重跑场景下 `admission.job` 非空即可预检），不要把它做成入队上下文的必填字段。
+4. **`directorError`/`renderError` 互斥清理逻辑分散在两个 repository 里**
+   （`runtime-repository.ts` 清 `renderError`，`render-shot-repository.ts` 清
+   `directorError`），没有抽成第三个共享模块——两处逻辑各自只有一行 `delete`，
+   抽象成本大于收益，如果未来两个 repository 之外还需要写这两个字段，再考虑上提。
+5. **`docs/issues/evidence/issue-002/first-run.json` 里的 `codegenNodeId` 是本地
+   `purpleink-dev-postgres-1` 容器里真实存在的数据**（项目
+   `c9ad9ea8-64fe-4eb8-82b1-e5ba486556b8`），不是伪造 ID；该项目及其产物仍留在共享
+   开发库里，未清理，供后续复核。
+6. **若需复验**：`pnpm vitest run src/features/render` 应 13 files / 64 passed；
+   `pnpm test:pg src/features/render` 应 3 files / 15 passed；
+   `pnpm verify:v3` 应 `ok: true`；真实 e2e 需重新走
+   `POST /api/projects` → `POST /api/director/pipeline` → 轮询 `shot-codegen` 状态。
+
+## 全项目影响（本次之后的盘面）
+
+- 未完成 issue 只剩：**ISSUE-013（in-progress 收尾）**、**ISSUE-014（现在可以开工，
+  第一个真实单镜 MP4 已产出，两条泳道）**。
+- `docs/issues/README.md` §1「3 个断点」表、§4 Issue 清单、§5 依赖顺序已同步更新为
+  ISSUE-002 `done`。
+- 「文本 → 切分 → 实测旁白 → 真实帧数 → HTML 生成 → 真实渲染」全链路首次在本次证据里
+  端到端跑通，且是用真实 Google Gemini API + StepFun TTS API 验证的，没有一步 mock。
