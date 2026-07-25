@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, eq, lt, sql } from 'drizzle-orm'
+import { and, eq, gt, lt, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db/client'
 import {
   authThrottle,
@@ -26,6 +26,7 @@ export interface SessionOwner {
   workspaceId: string
   email: string
   name: string
+  workspaceName: string
   sessionId: string
 }
 
@@ -158,13 +159,17 @@ export async function findSessionOwner(
       workspaceId: sessions.workspaceId,
       email: users.email,
       name: users.name,
+      workspaceName: workspaces.name,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
+    .innerJoin(workspaces, eq(workspaces.id, sessions.workspaceId))
     .where(
       and(
         eq(sessions.tokenHash, tokenHash),
-        sql`${sessions.expiresAt} > ${now}`,
+        // 用 drizzle 操作符而不是 sql 模板：模板里的裸 Date 不会走列的类型映射，
+        // postgres.js 会直接抛 ERR_INVALID_ARG_TYPE。
+        gt(sessions.expiresAt, now),
         eq(users.status, 'active'),
         sql`${users.passwordUpdatedAt} <= ${sessions.createdAt}`,
       ),
@@ -191,7 +196,6 @@ export async function deleteSessionByTokenHash(tokenHash: string): Promise<void>
 export async function updatePasswordAndRevokeSessions(input: {
   userId: string
   passwordHash: string
-  now: Date
 }): Promise<void> {
   const database = await getDb()
   await withTransaction(database, async (tx) => {
@@ -199,8 +203,11 @@ export async function updatePasswordAndRevokeSessions(input: {
       .update(users)
       .set({
         passwordHash: input.passwordHash,
-        passwordUpdatedAt: input.now,
-        updatedAt: input.now,
+        // 时间戳取 DB 时钟，与 `sessions.createdAt` 的 defaultNow() 同源。
+        // 用应用时钟会引入时钟偏移：只要应用快于 DB，新签发的会话就会因
+        // `passwordUpdatedAt <= createdAt` 校验而当场失效。
+        passwordUpdatedAt: sql`now()`,
+        updatedAt: sql`now()`,
       })
       .where(eq(users.id, input.userId))
     await tx.delete(sessions).where(eq(sessions.userId, input.userId))

@@ -43,3 +43,27 @@ export type { VerificationPurpose } from './verification-code'
 
 export { createArithmeticChallenge, renderChallengeSvg } from './human-check'
 export type { ArithmeticChallenge } from './human-check'
+
+export { authenticate, registerAccount, resetPassword } from './account-service'
+export type { RequestFingerprint } from './account-service'
+
+export {
+  consumeVerificationCodeFor,
+  requestVerificationCode,
+} from './verification-service'
+
+export { issueChallenge, passesHumanCheck } from './human-check-service'
+export type { IssuedChallenge } from './human-check-service'
+
+export {
+  AUTH_FAILURE_MESSAGE,
+  AUTH_FAILURE_STATUS,
+  VERIFICATION_CODE_SENT_MESSAGE,
+  authFailure,
+  isAuthFailure,
+} from './errors'
+export type { AuthFailure, AuthFailureCode } from './errors'
+
+export { authFailureResponse, readJsonBody, requestFingerprint } from './http'
+
+export { isMailChannelConfigured } from './mailer'

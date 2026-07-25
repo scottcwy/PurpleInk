@@ -1,6 +1,6 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, gt, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db/client'
 import { authThrottle } from '@/lib/db/schema/index'
 
@@ -67,7 +67,10 @@ export async function consumeThrottleSlot(input: {
 }): Promise<ThrottleDecision> {
   const { limit, windowMs } = THROTTLE_RULES[input.rule]
   const key = throttleKey(input.rule, input.dimension, input.value)
-  const windowStart = new Date(input.now.getTime() - windowMs)
+  // sql 模板里的参数不走列类型映射，裸 Date 会让 postgres.js 抛
+  // ERR_INVALID_ARG_TYPE；显式给 ISO 字符串，由 Postgres 按 timestamptz 解析。
+  const windowStart = new Date(input.now.getTime() - windowMs).toISOString()
+  const now = input.now.toISOString()
   const database = await getDb()
   const [row] = await database
     .insert(authThrottle)
@@ -76,7 +79,7 @@ export async function consumeThrottleSlot(input: {
       target: authThrottle.key,
       set: {
         windowStartedAt: sql`case when ${authThrottle.windowStartedAt} <= ${windowStart}
-          then ${input.now} else ${authThrottle.windowStartedAt} end`,
+          then ${now}::timestamptz else ${authThrottle.windowStartedAt} end`,
         count: sql`case when ${authThrottle.windowStartedAt} <= ${windowStart}
           then 1 else ${authThrottle.count} + 1 end`,
       },
@@ -115,7 +118,7 @@ export async function readThrottleCount(input: {
     .where(
       and(
         eq(authThrottle.key, throttleKey(input.rule, input.dimension, input.value)),
-        sql`${authThrottle.windowStartedAt} > ${new Date(input.now.getTime() - windowMs)}`,
+        gt(authThrottle.windowStartedAt, new Date(input.now.getTime() - windowMs)),
       ),
     )
     .limit(1)
