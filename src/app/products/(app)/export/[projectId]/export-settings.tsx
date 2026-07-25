@@ -58,7 +58,7 @@ export function ExportSettings({
       <SettingsSeparator />
       <SettingsRow label="字幕烧录" value="暂不支持（P1）" />
       <div className="flex flex-col gap-3 p-4">
-        <Button variant="tinted" icon={Download} disabled={disabled} onClick={onExport}>
+        <Button icon={Download} disabled={disabled} onClick={onExport}>
           开始导出
         </Button>
         {exporting ? (

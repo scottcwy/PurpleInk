@@ -19,10 +19,11 @@
   --ds-magenta: #f23886;
   --ds-canvas: #e8ecfa;
   --ds-scrim: #10183a70;
-  --ds-button-start: #3a4788;
-  --ds-button-end: #1c244f;
+  /* Light primary CTA: soft indigo gradient (dark mode keeps deep purple below). */
+  --ds-button-start: #8b9ad8;
+  --ds-button-end: #5a6bb5;
   --ds-shadow: 0 10px 28px #25305a1f;
-  --ds-button-shadow: 0 6px 16px #25305a1f;
+  --ds-button-shadow: 0 6px 16px #5a6bb528;
 }
 
 .dark {

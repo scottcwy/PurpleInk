@@ -75,7 +75,7 @@ export function ShotDetail({
             <ShotLink label="上一镜" nodeId={previousNodeId} projectId={projectId} />
             <ShotLink label="下一镜" nodeId={nextNodeId} projectId={projectId} />
             <Button
-              variant="tinted"
+              variant="destructive"
               size="sm"
               icon={RefreshCw}
               onClick={runtime.render}
@@ -85,7 +85,9 @@ export function ShotDetail({
             </Button>
             {runtime.outputUrl && (
               <a href={runtime.outputUrl} download>
-                <Button size="sm" icon={Download}>导出 MP4</Button>
+                <Button size="sm" icon={Download}>
+                  导出 MP4
+                </Button>
               </a>
             )}
           </>

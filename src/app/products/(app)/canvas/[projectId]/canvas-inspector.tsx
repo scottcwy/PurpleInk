@@ -278,7 +278,12 @@ function InspectorBody({
         onRetry={onExecute}
         retrying={submitting}
       />
-      <Button variant="tinted" icon={RefreshCw} onClick={onExecute} disabled={submitting}>
+      <Button
+        variant={node.type === 'shot-codegen' ? 'destructive' : 'tinted'}
+        icon={RefreshCw}
+        onClick={onExecute}
+        disabled={submitting}
+      >
         {node.type === 'shot-codegen' ? '重渲此镜' : '执行此阶段'}
       </Button>
       {node.type === 'shot-codegen' && (

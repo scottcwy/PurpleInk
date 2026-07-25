@@ -120,11 +120,11 @@ Pencil reusable symbol
 | Token | Light | Dark | 用途 |
 |---|---|---|---|
 | `ds-primary` | `#202A5B` | `#403778` | Toggle、品牌标及非渐变主色 |
-| `ds-primary-start` | `#3A4788` | `#4B4383` | Primary gradient start |
-| `ds-primary-end` | `#1C244F` | `#292642` | Primary gradient end |
+| `ds-primary-start` | `#8B9AD8` | `#594F94` | Primary gradient start（浅色模式为浅色系主 CTA） |
+| `ds-primary-end` | `#5A6BB5` | `#302762` | Primary gradient end（暗色模式保持深色系） |
 | `ds-primary-fg` | `#F8FAFF` | `#F8FAFF` | 主操作前景 |
 
-Primary 按钮使用 `135°` 的 `ds-primary-start → ds-primary-end` 渐变。除 S6 两个 Save 实例外，页面不得局部替换 Primary 配色。
+Primary 按钮使用 `135°` 的 `ds-primary-start → ds-primary-end` 渐变，随主题切换深浅。业务页通过 `Button` 变体选用配色，不得本地覆写渐变。语义约定：`primary` = 新建 / 导出等主 CTA；`tinted` = 执行阶段等次主操作；`destructive` = 重渲此镜等高代价操作；`gray` = 取消 / 次级。
 
 ### 4.4 信息与状态
 

@@ -101,7 +101,7 @@ L3 的壳只有一处实现：`src/features/navigation/app-shell.tsx`。`(auth)`
 | `/products/shots/[shotId]` | `wired` | 真实镜头合同与产物；`projectId` 缺失即 404 |
 | `/products/export/[projectId]` | `wired` | 真实导出就绪度与成片 Artifact |
 | `/products/settings` | `wired` | 凭据先验证后保存，失败返回 422 不覆盖 |
-| `/playbook/*` | `wired` | 37 个 UI 组件族 + 1 icons（`patterns` 分类已于 ISSUE-007 移除） |
+| `/playbook/*` | `wired` | 40 个 UI 组件族 + 1 icons（`patterns` 分类已于 ISSUE-007 移除；计数以 `UI_COMPONENT_FAMILY_COUNT` 为准） |
 | `/login`、`/signup` | `shell` | 表单外观，输入与提交全部 disabled |
 | `/release` | `shell` | 单页占位，禁止提前落子路由 |
 | `/artifacts`、`/artifacts/[caseSlug]`、`/share/[shareId]` | `planned` | 依赖尚未建立的 `ShareSnapshot` 模型，见规范 §8 |

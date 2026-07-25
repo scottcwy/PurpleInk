@@ -1,4 +1,4 @@
-import { Play, Download } from 'lucide-react'
+import { Download, Play, RefreshCw } from 'lucide-react'
 import { Button } from './button'
 import { TopBar } from './top-bar'
 
@@ -10,10 +10,13 @@ export function TopBarDemo() {
       meta="8 节点 · 已自动保存"
       actions={
         <>
-          <Button variant="gray" icon={Play} className="text-[13px]">
+          <Button variant="gray" size="sm" icon={Play}>
             全部渲染
           </Button>
-          <Button size="sm" variant="tinted" icon={Download}>
+          <Button variant="destructive" size="sm" icon={RefreshCw}>
+            重渲此镜
+          </Button>
+          <Button size="sm" icon={Download}>
             导出
           </Button>
         </>

@@ -49,12 +49,7 @@ export function ShotNode({
   const color = nodeTypeColorToken(nodeType)
   const actions = ops === undefined ? (
     <>
-      <Button
-        type="button"
-        variant="tinted"
-        icon={RefreshCw}
-        onClick={onRerender}
-      >
+      <Button type="button" variant="destructive" icon={RefreshCw} onClick={onRerender}>
         重渲此镜
       </Button>
       <span className="text-xs text-ds-text-muted">{cachedLabel}</span>

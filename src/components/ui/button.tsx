@@ -2,11 +2,11 @@ import type { ButtonHTMLAttributes, ComponentType } from 'react'
 import { cn } from '@/lib/utils'
 
 /**
- * 设计系统 4 变体（见 design-system-inventory §4 B1）：
- * - primary: 主 CTA（accent 底 + on-accent 字）
- * - tinted: 次主操作（accent-fill 底 + accent 字）
- * - gray: 取消 / 次级（fill 底 + label 字）
- * - destructive: 破坏性（danger 底 + on-accent 字）
+ * 设计系统 4 变体（见 design-system-inventory §4.3）：
+ * - primary: 主 CTA（主题化渐变：浅色模式浅色系 / 暗色模式深色系）— 新建项目、导出
+ * - tinted: 次主操作（blue-soft 底 + blue 字）— 执行此阶段、生成分镜代码
+ * - gray: 取消 / 次级
+ * - destructive: 高代价操作（red）— 重渲此镜、删除
  */
 export type ButtonVariant = 'primary' | 'tinted' | 'gray' | 'destructive'
 export type ButtonSize = 'sm' | 'md' | 'lg'

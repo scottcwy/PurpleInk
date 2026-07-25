@@ -88,7 +88,7 @@
 | 路由 | 文件 | 状态 |
 | --- | --- | --- |
 | `/playbook` | `src/app/playbook/page.tsx` | `wired` |
-| `/playbook/ui` | `src/app/playbook/ui/page.tsx` | `wired`（37 组件族） |
+| `/playbook/ui` | `src/app/playbook/ui/page.tsx` | `wired`（40 组件族，与 `UI_COMPONENT_FAMILY_COUNT` 同步） |
 | `/playbook/icons` | `src/app/playbook/icons/page.tsx` | `wired`（Pencil A4 图标白名单） |
 | `/playbook/foundations` | `src/app/playbook/foundations/page.tsx` | `wired`，但无 registry 分类 |
 
@@ -329,6 +329,8 @@ Project（可变，L3 内部）
 - `/products/*` 与全部 `/api/*` 在当前状态下是**未授权可访问**的。
 - 所有 API 的作用域只有「调用方自己传的 `projectId`」，没有归属校验。
 - 本节的守卫是目标状态，不是已实现状态。在认证落地前，本应用只能跑在本地或受信网络内，不得直接暴露公网。
+
+**入站边界现由部署层保证（ISSUE-015 P-2，`docs/deployment/access.md`）**：生产环境反代（Caddy）在网络层 IP 过滤 + Basic Auth over TLS 两道防线拒绝未授权入站请求，`next` 容器本身不 publish 任何端口。但这只是把「公网任意人」收敛成「受信网络内 + 拿到共享口令的任意人」——**不等于应用内认证已实现**：拿到凭据的任何人仍是全权管理员（无租户、无角色、无审计），产物 URL 仍携带内部 `projectId`，`LOCAL_WORKSPACE_ID` 仍是硬编码单工作区。应用内认证是独立议题，见 `PLAN-002-auth-system.md`。
 
 ### 9.2 目标守卫矩阵
 

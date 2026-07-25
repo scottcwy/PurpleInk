@@ -12,13 +12,13 @@ export function PopoverDemo() {
       open={open}
       onOpenChange={setOpen}
       trigger={
-        <Button size="sm" variant="tinted" onClick={() => setOpen((value) => !value)}>
+        <Button size="sm" onClick={() => setOpen((value) => !value)}>
           导出
         </Button>
       }
     >
       <p className="px-1 py-2 text-sm text-ds-text-muted">锚定在触发按钮下方的二次交互面板。</p>
-      <Button size="sm" variant="tinted" className="w-full" onClick={() => setOpen(false)}>
+      <Button size="sm" className="w-full" onClick={() => setOpen(false)}>
         开始导出
       </Button>
     </Popover>

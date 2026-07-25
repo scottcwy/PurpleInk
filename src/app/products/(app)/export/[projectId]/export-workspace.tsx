@@ -49,7 +49,6 @@ export function ExportWorkspace({
             trigger={
               <Button
                 size="sm"
-                variant="tinted"
                 icon={Download}
                 aria-expanded={settingsOpen}
                 onClick={() => setSettingsOpen((open) => !open)}

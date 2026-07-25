@@ -3,6 +3,7 @@ import {
   PENCIL_COMPONENT_FAMILY_COUNT,
   PENCIL_CONSOLIDATION_NOTE,
   PENCIL_REUSABLE_SYMBOL_COUNT,
+  UI_COMPONENT_FAMILY_COUNT,
 } from "./registry";
 
 const CATEGORIES = [
@@ -11,7 +12,11 @@ const CATEGORIES = [
     title: "Foundations",
     desc: "设计 token：色板 / 字体 / 圆角 / 间距",
   },
-  { id: "ui", title: "UI 组件", desc: "已进入应用公共边界的 37 个组件族" },
+  {
+    id: "ui",
+    title: "UI 组件",
+    desc: `已进入应用公共边界的 ${UI_COMPONENT_FAMILY_COUNT} 个组件族`,
+  },
   { id: "icons", title: "Icons", desc: "Pencil A4 · Lucide 白名单" },
 ] as const;
 

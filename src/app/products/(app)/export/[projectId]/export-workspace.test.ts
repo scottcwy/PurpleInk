@@ -19,12 +19,12 @@ describe('Export workspace composition', () => {
     expect(workspace).toContain('Popover')
     expect(workspace).toMatch(/>\s*导出\s*</)
     expect(workspace).not.toContain('导出 MP4')
-    expect(workspace).toContain('variant="tinted"')
     expect(workspace).toContain('ExportSettings')
     expect(workspace).toContain('ExportQa')
     expect(workspace).not.toContain('ExportReview')
     expect(workspace).not.toContain('DrawerOverlay')
     expect(workspace).not.toContain('useResizablePanel')
+    expect(workspace).not.toContain('variant="tinted"')
   })
 
   it('keeps Final QA as a full-width section under the pipeline timeline', () => {
@@ -45,9 +45,10 @@ describe('Export workspace composition', () => {
     expect(workspace).toContain('dismissible={!runtime.exporting}')
   })
 
-  it('keeps start-export CTA on the tinted light-mode family', () => {
-    expect(settings).toContain('variant="tinted"')
+  it('keeps start-export CTA on the theme-aware primary Button family', () => {
     expect(settings).toContain('开始导出')
     expect(settings).toContain('ProgressBar')
+    expect(settings).not.toContain('variant="tinted"')
+    expect(settings).not.toContain('variant="destructive"')
   })
 })
