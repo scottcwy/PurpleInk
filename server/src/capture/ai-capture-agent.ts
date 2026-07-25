@@ -286,18 +286,8 @@ export class AiCaptureAgent {
         if (this.driver.settle) {
           try { await this.driver.settle() } catch { /* ignore */ }
         }
-        // 前 3 张截图使用全页长截图（分配给 ch3-showcase），其余保持 viewport
-        const useFullPage = screenshots.length < 3 && !authWall
+        // 统一使用 viewport 截图（移除全页长截图，效果差且浪费镜头）
         let buf: Buffer | null = null
-        if (useFullPage) {
-          try {
-            buf = await this.driver.screenshot({ fullPage: true })
-            logger.info("ai_capture:fullpage_screenshot", { index: screenshots.length })
-          } catch (e) {
-            logger.warn("ai_capture:fullpage_failed_fallback", { error: String(e) })
-            buf = null
-          }
-        }
         // ④ 优先元素级紧裁：AI 指定了目标容器 ref 时单独截该元素(整帧留白由 compose 层兑底)
         if (!buf) {
           if (decision && typeof decision.ref === "number" && this.driver.screenshotElement) {

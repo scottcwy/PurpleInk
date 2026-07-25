@@ -862,7 +862,7 @@ export async function buildVideoModel(captureDir: string, options: BuildModelOpt
   const shots: ShotMaterial[] = assetPaths.slice(0, 8).map((src, i) => ({
     src,
     caption: captionPool[i % captionPool.length] || captionFallback(i),
-    tall: true,
+    tall: false,
   }))
 
   // 从可见文本 / 结构化内容里取真实统计数字：优先采集到的结构化 stats，不足再从可见文本

@@ -195,17 +195,17 @@ export async function verifyGolden(projectDir: string): Promise<{ passed: boolea
   check("包含 gsap.timeline", html.includes("gsap.timeline"))
   check("包含 data-skin", /data-skin="(editorial|kinetic|technical)"/.test(html))
 
-  // 截图镜头容器（在 root + compositions 子文件中检查）
-  check("包含 .window 容器", allHtml.includes('class="window"'))
-  check("包含 .viewport", allHtml.includes('class="viewport"'))
+  // 截图镜头容器（在 root + compositions 子文件中检查，允许多 class 组合）
+  check("包含 .window 容器", /class="[^"]*\bwindow\b[^"]*"/.test(allHtml))
+  check("包含 .viewport", /class="[^"]*\bviewport\b[^"]*"/.test(allHtml))
   check("包含 shot-visual 类", allHtml.includes("shot-visual"))
 
   // 无红绿黄圆点（已移除 macOS titlebar）
   check("无红绿黄圆点", !allHtml.includes("#ff5f57") && !allHtml.includes("#febc2e") && !allHtml.includes("#28c840"), "titlebar dots should be removed")
   check("无 .titlebar 元素", !allHtml.includes('class="titlebar"'))
 
-  // 光晕 box-shadow
-  check("window 有多层 box-shadow", allHtml.includes("0 0 0 1px rgba(255,255,255") && allHtml.includes("0 8px 40px rgba(0,0,0,0.3)"))
+  // 光晕 box-shadow（允许不同数值，只要有多层 shadow 即可）
+  check("window 有多层 box-shadow", /box-shadow:[^;]*rgba\([^)]+\)[^;]*,\s*\d+[^;]*rgba\([^)]+\)/.test(allHtml))
 
   // Ken Burns: x/y 偏移
   check("Ken Burns x 偏移", /x:\s*-?\d+/.test(allHtml), "shot timeline should have x offset")

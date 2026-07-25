@@ -291,7 +291,5 @@ Each screenshot MUST be wrapped in its own window/viewport container:
 ${domExamples}
 
 Each .shot-visual MUST have Ken Burns animation (scale + translate, power1.inOut) and opacity fade-in.
-Spread screenshots across multiple scenes within this chapter for visual variety.
-
-Note: These screenshots may be full-page captures (tall images). Use Ken Burns animation with vertical translate (y offset drifting from top to bottom of the image) to simulate scrolling through the page content. Do NOT just show the top portion.`
+Spread screenshots across multiple scenes within this chapter for visual variety.`
 }
