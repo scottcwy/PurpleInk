@@ -1,7 +1,7 @@
 # ISSUE-013 · `features/ai` 适配器与 pi-ai 会形成第二套 provider 客户端
 
 - 优先级：**P2**
-- 状态：`in-progress`（第一步分析已完成，见 §5 结论；第二步等 ISSUE-001 验收）
+- 状态：`in-progress`（第一步分析 + 第二步代码收缩已完成；仅剩 §8.4 shot-qa 回归证据被 ISSUE-002 阻塞，见 §9）
 - 范围：`src/features/ai/**`、`src/features/render/vision-qa.ts`、`src/features/audio/stepfun-audio-client.ts`
 - 依赖：**分析可立即做（第一批）；改动必须等 ISSUE-001 落地**
 - 性质：职责边界界定，先出结论文档再动代码
@@ -230,3 +230,23 @@ mock 了 `@/features/ai/model-routing`，复用决策层是预期设计，§3 �
 4. `shot-qa` 的视觉 QA 仍能真实工作：用一个真实渲好的镜头跑一次，
    确认返回真实判定（不是恒真），证据留档到 `docs/issues/evidence/issue-013/`。
 5. 全仓库 grep `from 'openai'` 的命中数与 baseline 一致。
+
+## 9. 第二步执行记录（2026-07-25）
+
+代码收缩已落地，证据归档 `docs/issues/evidence/issue-013/`：
+
+- 删除 `GeminiAdapter` / `StepfunAdapter` / `createLlmFromSettings` / `features/ai/types.ts`；
+  `index.ts` 收敛到「schemas + key 校验/凭据存取 + config」。
+- `validateGeminiKey` / `validateKey` 改为 fetch 最小 chat 探测（语义不降级：
+  key + baseUrl + model 组合、`max_tokens:1`、`AbortSignal.timeout(15_000)`、0 重试；
+  新增可选 `fetcher` 尾参供测试注入，route 调用点零改动）。
+- baseline `directOpenAiClientImports` 3 → 1（仅剩 `vision-qa.ts:3`）。
+
+验收核销：§8.1 ✅（verify:v3 exit 0，实际 1 == cap 1）；§8.2 ✅（lint/typecheck/test 435 通过/build
+全绿）；§8.3 ✅（两家 provider 真实错误 key 均 HTTP 422，before/after `verifiedAt` 一致未覆盖）；
+§8.5 ✅（全仓 1 命中 == baseline）；**§8.4 待补**：DB 中 shot 节点全为 idle、无渲染产物，
+且 ISSUE-002（FABRICATE→render 接缝）仍 `open`，pipeline 无法推进到 shot-qa。
+vision-qa.ts 本次零改动；待 ISSUE-002 落地后补一次真实 vision QA 报告即可改 `done`。
+
+已登记的可接受漂移：超时异常名 `APIConnectionTimeoutError` → `TimeoutError`；非 2xx 日志
+`errorType` 统一为 `HttpError`（`status` 仍为真实状态码）。布尔结果与「日志绝不含 Key」不变。

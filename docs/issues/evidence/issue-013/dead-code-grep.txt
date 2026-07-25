@@ -1,0 +1,4 @@
+﻿== git grep -n "from 'openai'" -- src ==
+src/features/render/vision-qa.ts:3:import OpenAI from 'openai'
+
+== git grep -nE 'GeminiAdapter|StepfunAdapter|createLlmFromSettings' -- src (excl tests) ==
