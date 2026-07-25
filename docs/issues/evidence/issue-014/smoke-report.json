@@ -1,1031 +1,932 @@
 {
-  "startedAt": "2026-07-25T14:34:53.401Z",
-  "commit": "a03b7975cf7846fe23887a49fbf48dcc5e48d8c7",
+  "startedAt": "2026-07-25T14:50:26.765Z",
+  "commit": "bb6edbb607d4faf7c731a83f848abae6f4b66e21",
   "baseUrl": "http://localhost:3100",
   "script": {
     "characters": 110
   },
-  "projectId": "d0e40e52-a99f-48b4-90af-3eaf82da724b",
+  "projectId": "659a834f-c5fc-475e-a833-02af43370733",
   "pipelineStart": {
     "ok": true,
     "autopilot": true,
     "enqueuedNodeIds": [
-      "ed7e86e9-8e88-4f2e-bb50-a6bc6a9c03b9"
+      "384a7a63-ac80-43cb-b296-549b0c48fb74"
     ],
     "failedNodeIds": []
   },
   "nodes": [
     {
-      "id": "0de7aed5-2636-54b9-bbb6-b23f0d1cb2c6",
-      "type": "shot-qa",
-      "status": "succeeded",
-      "logicalKey": "shot:S004:shot-qa"
-    },
-    {
-      "id": "1a1f189e-bab8-598c-9a8b-0f5386766d4d",
-      "type": "shot-script",
-      "status": "succeeded",
-      "logicalKey": "shot:S001:shot-script"
-    },
-    {
-      "id": "1ed58af4-5f66-5510-959e-ae84b81b4eff",
-      "type": "shot-qa",
-      "status": "succeeded",
-      "logicalKey": "shot:S001:shot-qa"
-    },
-    {
-      "id": "37759d15-80f6-5dfe-88e6-a375449afbab",
-      "type": "shot-subtitle",
-      "status": "succeeded",
-      "logicalKey": "shot:S004:shot-subtitle"
-    },
-    {
-      "id": "3d69171e-9894-5c6c-81cc-0dc01d4ca60f",
-      "type": "shot-subtitle",
-      "status": "succeeded",
-      "logicalKey": "shot:S003:shot-subtitle"
-    },
-    {
-      "id": "4313c224-37da-5889-8fb0-31280bafacfb",
-      "type": "shot-codegen",
-      "status": "succeeded",
-      "logicalKey": "shot:S003:shot-codegen"
-    },
-    {
-      "id": "528d8fc0-8a62-55ec-aedf-4b30406a65d0",
-      "type": "shot-subtitle",
-      "status": "succeeded",
-      "logicalKey": "shot:S002:shot-subtitle"
-    },
-    {
-      "id": "5644b682-d752-5e11-81f8-e1fc6834ba56",
-      "type": "shot-qa",
-      "status": "succeeded",
-      "logicalKey": "shot:S002:shot-qa"
-    },
-    {
-      "id": "5d5b303e-04ff-5868-bd10-519f3fef928a",
-      "type": "shot-subtitle",
-      "status": "succeeded",
-      "logicalKey": "shot:S001:shot-subtitle"
-    },
-    {
-      "id": "67aaca6e-fa6e-5493-81dc-813d990f0866",
-      "type": "shot-codegen",
-      "status": "succeeded",
-      "logicalKey": "shot:S002:shot-codegen"
-    },
-    {
-      "id": "6e54e6ae-789e-5598-927c-1b27d56e9555",
+      "id": "2a347201-62b9-5a24-a653-9a7164eb67ae",
       "type": "shot-qa",
       "status": "succeeded",
       "logicalKey": "shot:S003:shot-qa"
     },
     {
-      "id": "796daab7-ab7b-4dab-8a51-d00a2f4c77f3",
+      "id": "2cdc8a0c-84d0-4e4b-8ef8-15a502e84fc0",
       "type": "score",
       "status": "succeeded",
       "logicalKey": "global:score"
     },
     {
-      "id": "837ae6f6-7003-5d25-a902-e761ab65608b",
-      "type": "shot-sfx",
+      "id": "34016031-3bea-53bc-b893-b5056c87824d",
+      "type": "shot-subtitle",
       "status": "succeeded",
-      "logicalKey": "shot:S001:shot-sfx"
+      "logicalKey": "shot:S003:shot-subtitle"
     },
     {
-      "id": "8b1d57f7-561a-51b5-99a9-6a4cc9220cd4",
-      "type": "shot-codegen",
-      "status": "succeeded",
-      "logicalKey": "shot:S001:shot-codegen"
-    },
-    {
-      "id": "91d58844-25d8-5c57-922c-4978dbcd3fbd",
-      "type": "shot-sfx",
-      "status": "succeeded",
-      "logicalKey": "shot:S003:shot-sfx"
-    },
-    {
-      "id": "941b2fd3-4e87-4d76-85df-4a0545e24eb7",
-      "type": "export",
-      "status": "succeeded",
-      "logicalKey": "global:export"
-    },
-    {
-      "id": "a520c360-77b4-4714-8e0f-98f46f0108e6",
-      "type": "shot-split",
-      "status": "succeeded",
-      "logicalKey": "global:shot-split"
-    },
-    {
-      "id": "a66e5a90-749c-54fa-a396-902860acc07d",
-      "type": "shot-script",
-      "status": "succeeded",
-      "logicalKey": "shot:S004:shot-script"
-    },
-    {
-      "id": "b7f05f30-c630-5785-b8ec-5c2fc6610c36",
-      "type": "shot-codegen",
-      "status": "succeeded",
-      "logicalKey": "shot:S004:shot-codegen"
-    },
-    {
-      "id": "dca535e2-4b58-5817-9580-01cf2a997ed1",
-      "type": "shot-script",
-      "status": "succeeded",
-      "logicalKey": "shot:S002:shot-script"
-    },
-    {
-      "id": "ed7e86e9-8e88-4f2e-bb50-a6bc6a9c03b9",
+      "id": "384a7a63-ac80-43cb-b296-549b0c48fb74",
       "type": "script-import",
       "status": "succeeded",
       "logicalKey": "global:script-import"
     },
     {
-      "id": "ef942d95-923d-5e79-b741-6409bff743da",
+      "id": "495c32f6-1461-57bc-b20d-6d40aa599b3b",
+      "type": "shot-sfx",
+      "status": "succeeded",
+      "logicalKey": "shot:S003:shot-sfx"
+    },
+    {
+      "id": "4c6b3df5-bb10-49a1-924d-8c42900fc935",
+      "type": "shot-split",
+      "status": "succeeded",
+      "logicalKey": "global:shot-split"
+    },
+    {
+      "id": "56fd06b5-26b0-5551-8b28-84de26e6870f",
+      "type": "shot-codegen",
+      "status": "succeeded",
+      "logicalKey": "shot:S001:shot-codegen"
+    },
+    {
+      "id": "68ae8437-c691-5645-9182-a3dddf4a64d3",
+      "type": "shot-sfx",
+      "status": "succeeded",
+      "logicalKey": "shot:S002:shot-sfx"
+    },
+    {
+      "id": "7ab65c11-1c9f-56f3-8de7-a9edd14a742a",
+      "type": "shot-script",
+      "status": "succeeded",
+      "logicalKey": "shot:S001:shot-script"
+    },
+    {
+      "id": "84d655b6-dcee-575e-8531-1a6584243da6",
+      "type": "shot-subtitle",
+      "status": "succeeded",
+      "logicalKey": "shot:S001:shot-subtitle"
+    },
+    {
+      "id": "9cd04bec-6a40-5545-8710-1dbe34be102d",
       "type": "shot-script",
       "status": "succeeded",
       "logicalKey": "shot:S003:shot-script"
     },
     {
-      "id": "f41ac450-ac5e-51ee-b266-e5f280b94f39",
-      "type": "shot-sfx",
+      "id": "9d5ee69e-1463-410c-a971-28573a42bea7",
+      "type": "export",
       "status": "succeeded",
-      "logicalKey": "shot:S004:shot-sfx"
+      "logicalKey": "global:export"
     },
     {
-      "id": "fd2473b5-313d-58ed-bc06-6b013432a32b",
+      "id": "a051a6bc-d154-5152-9886-7ac7fec4095a",
+      "type": "shot-script",
+      "status": "succeeded",
+      "logicalKey": "shot:S002:shot-script"
+    },
+    {
+      "id": "be6afd3a-8264-5ad5-a4a3-68bd2c934a26",
+      "type": "shot-codegen",
+      "status": "succeeded",
+      "logicalKey": "shot:S002:shot-codegen"
+    },
+    {
+      "id": "c2404c6f-17ce-59d9-896d-880527691c6c",
+      "type": "shot-codegen",
+      "status": "succeeded",
+      "logicalKey": "shot:S003:shot-codegen"
+    },
+    {
+      "id": "c8b2dcc6-a044-5630-9060-9ba5889b3280",
+      "type": "shot-qa",
+      "status": "succeeded",
+      "logicalKey": "shot:S001:shot-qa"
+    },
+    {
+      "id": "dea810d8-653a-5bd4-b067-16f728652401",
       "type": "shot-sfx",
       "status": "succeeded",
-      "logicalKey": "shot:S002:shot-sfx"
+      "logicalKey": "shot:S001:shot-sfx"
+    },
+    {
+      "id": "f7dc3e57-e227-588a-83ee-afd7c109416f",
+      "type": "shot-subtitle",
+      "status": "succeeded",
+      "logicalKey": "shot:S002:shot-subtitle"
+    },
+    {
+      "id": "f8acaa0f-bbb5-5b82-a9ff-d32a6bc40b96",
+      "type": "shot-qa",
+      "status": "succeeded",
+      "logicalKey": "shot:S002:shot-qa"
     }
   ],
   "failedNodes": [],
   "artifacts": [
     {
-      "id": "02127421-5c4a-458f-971c-daaf7fb52b25",
-      "kind": "narration-audio:U002",
-      "version": 1,
-      "sizeBytes": 117802,
-      "contentHash": "bc1271363737394d2cd4f3c712095a6500f4aa711b086c01436d2875422774f9",
-      "hashMatches": true,
-      "actualSize": 117802
-    },
-    {
-      "id": "02c9ec17-1e00-4291-a650-6ffb17c82e96",
-      "kind": "render-mp4",
-      "version": 1,
-      "sizeBytes": 641882,
-      "contentHash": "c24e203d78afd9e8ec6aeec52329e6eb2aec88c280c9ebb4a94283875a446c2c",
-      "hashMatches": true,
-      "actualSize": 641882
-    },
-    {
-      "id": "0af0c6b0-23fe-49e6-b7bf-2344e10a4f38",
-      "kind": "frame-thumbnail",
-      "version": 1,
-      "sizeBytes": 142993,
-      "contentHash": "5855d449fd4db490b63af65142646787c15e6e2d4bead927fc4f284a58f3685a",
-      "hashMatches": true,
-      "actualSize": 142993
-    },
-    {
-      "id": "0d994425-2e47-418a-b5e7-e29e7402149c",
-      "kind": "director-fabricate",
-      "version": 1,
-      "sizeBytes": 22686,
-      "contentHash": "5e30e64cccc9238bd6365fe7929108920d0cdde88ca27a8889320ff919c5f671",
-      "hashMatches": true,
-      "actualSize": 22686
-    },
-    {
-      "id": "0dc562b0-efd3-42d2-a0ce-d905db4b729d",
-      "kind": "director-assemble",
-      "version": 1,
-      "sizeBytes": 3164,
-      "contentHash": "5c7f93bba3eaec5b7b0c4373a83428e7f0d711e315135567730b72c5550827ab",
-      "hashMatches": true,
-      "actualSize": 3164
-    },
-    {
-      "id": "11e1b741-f2ba-459e-a380-643d98fa46c1",
-      "kind": "director-stream-log",
-      "version": 1,
-      "sizeBytes": 367,
-      "contentHash": "6d5abc90504a34c0b0228047c0fecb4d28e58dd7db7eec2ad43d3293a4a106b4",
-      "hashMatches": true,
-      "actualSize": 367
-    },
-    {
-      "id": "12cb1b45-a8d4-4afe-9400-34c9e74e57b8",
-      "kind": "director-assemble",
-      "version": 1,
-      "sizeBytes": 630,
-      "contentHash": "2a458fea418ac4a2de45a5f5ca7513427e09f0ce6c50d4d7d656bc43eedf8844",
-      "hashMatches": true,
-      "actualSize": 630
-    },
-    {
-      "id": "14cb7c6d-6edd-4706-aa73-3539b61ab4c9",
-      "kind": "director-shot-spec",
-      "version": 1,
-      "sizeBytes": 10924,
-      "contentHash": "ef446b982f5f18246e7025093a2cddf7aa594b5aa330c993be9916a433323016",
-      "hashMatches": true,
-      "actualSize": 10924
-    },
-    {
-      "id": "1564996a-215c-4a63-82e5-b483a6d92edc",
-      "kind": "director-direct",
-      "version": 1,
-      "sizeBytes": 8598,
-      "contentHash": "73f3e0a243034f75290d75f200a9ad757a07fe4324d67f9a43e57c8bf93e5e84",
-      "hashMatches": true,
-      "actualSize": 8598
-    },
-    {
-      "id": "17ed3cc6-7330-4ec0-a8e7-fd7172b8e905",
-      "kind": "director-assemble",
-      "version": 1,
-      "sizeBytes": 224,
-      "contentHash": "ea4564df394f1fd36d676ed45d0f5666f9331244ae3f8ea644c9f44d75e5883b",
-      "hashMatches": true,
-      "actualSize": 224
-    },
-    {
-      "id": "2389e26c-39dc-4992-a3ee-c98543aa2094",
-      "kind": "pi-session",
-      "version": 1,
-      "sizeBytes": 192,
-      "contentHash": "0ed4ccf0e79e122157fd3a526d07c3fa861446ec9c74b2bc744366ce5b1d132d",
-      "hashMatches": false,
-      "actualSize": 66026
-    },
-    {
-      "id": "258413f9-e0e8-4b8e-b6df-58849e38a0a6",
-      "kind": "qa-vision-report",
-      "version": 1,
-      "sizeBytes": 1406,
-      "contentHash": "b93ec60f72f7d7a574655dbc9b7cde494e26bd3c3b922e037cd5009ed5e5fe6c",
-      "hashMatches": true,
-      "actualSize": 1406
-    },
-    {
-      "id": "283b20fe-20be-47db-9216-33532af1be6f",
-      "kind": "frame-thumbnail",
-      "version": 2,
-      "sizeBytes": 307053,
-      "contentHash": "9a5034e4ddab5c5a5cc1764d1a6e5afb929ade60feaef999ac45ead6c774606f",
-      "hashMatches": true,
-      "actualSize": 307053
-    },
-    {
-      "id": "2a3e0fa7-dd0d-4aba-abfa-677f14c98b73",
-      "kind": "director-assemble",
-      "version": 1,
-      "sizeBytes": 1491,
-      "contentHash": "b17de54a9a8dbb4779164c303483de6e189144818de9a007908eb90f0318714a",
-      "hashMatches": true,
-      "actualSize": 1491
-    },
-    {
-      "id": "2d018dfc-8c61-4db4-a4a0-ab1571ebc6aa",
-      "kind": "frame-thumbnail",
-      "version": 1,
-      "sizeBytes": 243387,
-      "contentHash": "9b3e85fd11b3ed20abdeee7744b2a619af5931c013b1507f9fa6fc3838c867c1",
-      "hashMatches": true,
-      "actualSize": 243387
-    },
-    {
-      "id": "332216a4-0343-411e-989b-a7856be7a413",
-      "kind": "director-stream-log",
-      "version": 1,
-      "sizeBytes": 950,
-      "contentHash": "715798d87fb570be1815254dfa39ba0b10460cf20a449d0ff2fd21bfa8dc76a1",
-      "hashMatches": true,
-      "actualSize": 950
-    },
-    {
-      "id": "360627bc-3d8f-42a9-b6ec-5897dfe5c19c",
-      "kind": "director-shot-spec",
-      "version": 1,
-      "sizeBytes": 8984,
-      "contentHash": "600b0506887982991f98c3b80c7e74f0ff96e3d49c448a888aff443e2c121729",
-      "hashMatches": true,
-      "actualSize": 8984
-    },
-    {
-      "id": "3dc0a349-cc46-4665-8c0d-9e7af640e553",
-      "kind": "subtitle-track",
-      "version": 1,
-      "sizeBytes": 1065,
-      "contentHash": "4a76cecad86519fc5e65e3e6a416c1fb8355689c7ea9e0ce852664556dd5268f",
-      "hashMatches": true,
-      "actualSize": 1065
-    },
-    {
-      "id": "3ddc8d21-595e-48ba-bd17-722e4e037ecb",
-      "kind": "director-stream-log",
-      "version": 1,
-      "sizeBytes": 224,
-      "contentHash": "ea4564df394f1fd36d676ed45d0f5666f9331244ae3f8ea644c9f44d75e5883b",
-      "hashMatches": true,
-      "actualSize": 224
-    },
-    {
-      "id": "3e30cabb-5ea3-4b4a-bc7b-9d96c800a2cc",
-      "kind": "director-stream-log",
-      "version": 1,
-      "sizeBytes": 317,
-      "contentHash": "ad200cca60a34b95a668211e25835f7843cb1206364c2aa339dffbbf5dff6ff0",
-      "hashMatches": true,
-      "actualSize": 317
-    },
-    {
-      "id": "3fb0b2a4-3a0c-44ee-9978-53f70895bb5f",
-      "kind": "pi-session",
-      "version": 1,
-      "sizeBytes": 192,
-      "contentHash": "2e6dcc1c95cd36254744ffe30478709ed8763f8a6ae49082a5757ef97ec23550",
-      "hashMatches": false,
-      "actualSize": 63469
-    },
-    {
-      "id": "3ffd4a93-d637-4823-b48a-a60fa9cc7f49",
-      "kind": "qa-vision-report",
-      "version": 1,
-      "sizeBytes": 1495,
-      "contentHash": "5cc2db34bfc0a058c4feabefc947d3dbdcbf48340cd798cc794f5846f2a73e5a",
-      "hashMatches": true,
-      "actualSize": 1495
-    },
-    {
-      "id": "439d4bbf-123d-455f-9d9c-2551ef5cb7df",
-      "kind": "frame-thumbnail",
-      "version": 2,
-      "sizeBytes": 141824,
-      "contentHash": "4f2827f9c1126541e25d561aeb033de3e3ab4516dca57a3d8ac83c6a68481aed",
-      "hashMatches": true,
-      "actualSize": 141824
-    },
-    {
-      "id": "44ec4b3f-0d22-46a5-bb3a-2fcdb2adc8c6",
-      "kind": "director-shot-spec",
-      "version": 1,
-      "sizeBytes": 10866,
-      "contentHash": "e19873012f336baad7f333a4a5d84ffd1061974306b0a3b669920bf7d8c3190d",
-      "hashMatches": true,
-      "actualSize": 10866
-    },
-    {
-      "id": "4612a895-6dfd-4e86-926b-06146aa5b5eb",
-      "kind": "subtitle-track",
-      "version": 1,
-      "sizeBytes": 2009,
-      "contentHash": "07750989292bba312374f7dfafa36c6f64f3a11f045d17fe655a1049d99c609f",
-      "hashMatches": true,
-      "actualSize": 2009
-    },
-    {
-      "id": "488777b7-bf2e-4336-9989-79054053b913",
-      "kind": "director-stream-log",
-      "version": 1,
-      "sizeBytes": 593,
-      "contentHash": "749d16f8008f90124bc812f3f84cd625df474bbf5420c7948ba62976f67e0daa",
-      "hashMatches": true,
-      "actualSize": 593
-    },
-    {
-      "id": "4a18851e-1001-413f-bc03-75f9fbab3bd1",
+      "id": "0868976f-3513-4a01-829b-544ac55a9de7",
       "kind": "director-finalize",
       "version": 1,
-      "sizeBytes": 975,
-      "contentHash": "f3fbabb723d366aa722be4738d108209e1117edf9bef98d461461cb70bb3c228",
+      "sizeBytes": 862,
+      "contentHash": "68d346a902c9e9dd0f062946ee2f2def6e38a750f89d15a7d4170149151e2d03",
       "hashMatches": true,
-      "actualSize": 975
+      "actualSize": 862
     },
     {
-      "id": "4a5f7657-6621-4fc8-bdc9-c3fe4539b01a",
-      "kind": "director-fabricate",
-      "version": 1,
-      "sizeBytes": 21982,
-      "contentHash": "bb202321b489be2d112eea9df875bc07c95f765c56ccbefb7f061e3ebad5af02",
-      "hashMatches": true,
-      "actualSize": 21982
-    },
-    {
-      "id": "4da3aa2a-af23-4e72-b9ca-1ad8917735ba",
+      "id": "0f2308e3-5b08-4762-ac72-7d254be19665",
       "kind": "pi-session",
       "version": 1,
       "sizeBytes": 192,
-      "contentHash": "65bf68e250653a5aa6e703a149853a239141a5698a181b55092cbc83b03f8914",
+      "contentHash": "453201671ee06cfcb4d12bc6209e86e2888e22ae361ad16228871b5d1c728519",
       "hashMatches": false,
-      "actualSize": 4921
+      "actualSize": 47760
     },
     {
-      "id": "4dea1427-0c76-476e-9294-eed4a7a17dbb",
-      "kind": "pi-session",
-      "version": 1,
-      "sizeBytes": 192,
-      "contentHash": "02cbcdbbb82e9aee6b6830340bb6dfe4e823b502c45d4eb8db47d8b050993c0b",
-      "hashMatches": false,
-      "actualSize": 12574
-    },
-    {
-      "id": "4e05a9cf-7e43-4ea9-a87d-bce2cc64f3f3",
-      "kind": "frame-thumbnail",
-      "version": 1,
-      "sizeBytes": 308445,
-      "contentHash": "f48f2b6f3fe348888ab46e01e48d2ff3a020731464d21dc0202405221b601abf",
-      "hashMatches": true,
-      "actualSize": 308445
-    },
-    {
-      "id": "5014beb4-d4cb-45f3-b3ac-e58d27cd14c5",
-      "kind": "director-stream-log",
-      "version": 1,
-      "sizeBytes": 487,
-      "contentHash": "dc3842536732d828d4f8f900d8c84f89cccd29eda7120761cd8d25ed85c558d5",
-      "hashMatches": true,
-      "actualSize": 487
-    },
-    {
-      "id": "5b8aeca4-e284-4ae8-9536-98a35e361818",
-      "kind": "pi-session",
-      "version": 1,
-      "sizeBytes": 192,
-      "contentHash": "405849f22402872bdbfd9a49213d39040f217ef4056796ca5d30b342e5c98b2b",
-      "hashMatches": false,
-      "actualSize": 5553
-    },
-    {
-      "id": "5b91ae7b-48ee-439c-b932-545b4ba63957",
-      "kind": "director-stream-log",
-      "version": 1,
-      "sizeBytes": 1448,
-      "contentHash": "d4f1cccd5b54c89a95f0d27e3a7216a0617d3e0ba69e1eb2b718510f6d78dff4",
-      "hashMatches": true,
-      "actualSize": 1448
-    },
-    {
-      "id": "64850573-7926-4f05-a285-f53f423e1c37",
+      "id": "0ffeb349-5366-418b-8a32-3da40225b241",
       "kind": "render-mp4",
       "version": 1,
-      "sizeBytes": 359579,
-      "contentHash": "296464a6c16f430720b9bbfde01bbcf0337cf471ceefb61c7ba944942443646f",
+      "sizeBytes": 201712,
+      "contentHash": "ba5dd112e666117fd640272dbbea6f2db79a9c1bb514403b01a67c52d85f0517",
       "hashMatches": true,
-      "actualSize": 359579
+      "actualSize": 201712
     },
     {
-      "id": "699bac59-f554-4fd9-b89d-e2975abaed8d",
-      "kind": "director-stream-log",
-      "version": 1,
-      "sizeBytes": 8475,
-      "contentHash": "c2445bf49a7edb491a018f62eaf2c7471f56a7e1e3fd18362f9b001a59836ea9",
-      "hashMatches": true,
-      "actualSize": 8475
-    },
-    {
-      "id": "69b5d4c6-f091-4aad-bb44-c9b86795c3c2",
-      "kind": "director-stream-log",
-      "version": 1,
-      "sizeBytes": 3164,
-      "contentHash": "5c7f93bba3eaec5b7b0c4373a83428e7f0d711e315135567730b72c5550827ab",
-      "hashMatches": true,
-      "actualSize": 3164
-    },
-    {
-      "id": "6cdbc6a5-4f9b-400e-947a-7cf364d7607c",
-      "kind": "director-ingest",
-      "version": 1,
-      "sizeBytes": 4486,
-      "contentHash": "adb00b08f26d5c45eb577e3c7ec207542b0aef1811005e3db1a6f33e40b9d9f3",
-      "hashMatches": true,
-      "actualSize": 4486
-    },
-    {
-      "id": "6e441083-6b09-457b-8414-876017c27775",
+      "id": "152e19df-9efb-4945-b225-84d34d95443b",
       "kind": "frame-thumbnail",
       "version": 3,
-      "sizeBytes": 137593,
-      "contentHash": "c2dd12f825d82c1c4283f12c76a0e8b53eae9e0b22d1e05bbb30495760ebee2c",
+      "sizeBytes": 360953,
+      "contentHash": "f61fe4245222cfd2a38926f4d5afc457176472434fd00cf10e7039537503718c",
       "hashMatches": true,
-      "actualSize": 137593
+      "actualSize": 360953
     },
     {
-      "id": "708de897-fe08-4193-a278-112a0c7b8580",
-      "kind": "director-stream-log",
+      "id": "157efdc1-d6e8-44ea-8028-8ab4abe62643",
+      "kind": "frame-thumbnail",
       "version": 1,
-      "sizeBytes": 1491,
-      "contentHash": "b17de54a9a8dbb4779164c303483de6e189144818de9a007908eb90f0318714a",
+      "sizeBytes": 147363,
+      "contentHash": "6f6e1a0130be86590022e4b28f0f8bc3c419e4f0ab93887e3b45555dafcb3d64",
       "hashMatches": true,
-      "actualSize": 1491
+      "actualSize": 147363
     },
     {
-      "id": "734220b7-715a-4051-a875-97a5834232a8",
+      "id": "1d08867c-0cfe-4498-8c97-fa6a18241184",
+      "kind": "frame-thumbnail",
+      "version": 1,
+      "sizeBytes": 73091,
+      "contentHash": "2a73863699c98692fc820c5caffd39732b7c8bd976c3a5c909bba8cad8a81dc0",
+      "hashMatches": true,
+      "actualSize": 73091
+    },
+    {
+      "id": "244ed707-3fb4-48a6-acb0-aa28df2612c0",
       "kind": "pi-session",
       "version": 1,
       "sizeBytes": 192,
-      "contentHash": "76abd2ea517dd63e77149de8a87e7cc581a359d720ac96a54e546eda24c6f443",
+      "contentHash": "d0eaf635a05f56647df4cc3f5492fc2e7f19ce42b9914bc612304868f959eaad",
       "hashMatches": false,
-      "actualSize": 11839
+      "actualSize": 5559
     },
     {
-      "id": "73ef7492-db1e-4635-b2db-4f3226692ccd",
-      "kind": "subtitle-track",
+      "id": "2ae589cd-9230-4054-b45c-dac3d789af4d",
+      "kind": "director-finalize",
       "version": 1,
-      "sizeBytes": 1022,
-      "contentHash": "05f9328a59b8356a8776018f8592ef6e7b5a6c2636379ad05360219f8eb0f9a9",
+      "sizeBytes": 728,
+      "contentHash": "81aabcf15dfa292fbcac45fdbcb268243f5efbe0c899420c6cea5629f3835a7a",
       "hashMatches": true,
-      "actualSize": 1022
+      "actualSize": 728
     },
     {
-      "id": "81cb92e9-5a19-4901-a4e2-e8d7a9d2bb93",
-      "kind": "frame-thumbnail",
+      "id": "2bbcd03c-eb40-4117-a935-113721a82c80",
+      "kind": "pi-session",
       "version": 1,
-      "sizeBytes": 408789,
-      "contentHash": "fe34bccf543169b063fc277d51218a7b1b10ddedeb8d2c9a9c5eee1caf70563c",
-      "hashMatches": true,
-      "actualSize": 408789
+      "sizeBytes": 192,
+      "contentHash": "b481f2f3ba250eb25fe39e8fa570d1b33e3ee9991d099f688a2da06fde4da9bb",
+      "hashMatches": false,
+      "actualSize": 11840
     },
     {
-      "id": "82660a23-ea8d-4278-9d85-ef8abc5bb25d",
+      "id": "368a630d-5d47-464c-808e-8efd66881e60",
+      "kind": "qa-vision-report",
+      "version": 1,
+      "sizeBytes": 1315,
+      "contentHash": "7c04e1cd32c8fa6ac770afd5d2fdac4e2bfcd579b6625430190bfda2ea0452e0",
+      "hashMatches": true,
+      "actualSize": 1315
+    },
+    {
+      "id": "39f06096-d239-42e9-8006-b96c6ec7c505",
+      "kind": "director-shot-spec",
+      "version": 1,
+      "sizeBytes": 10131,
+      "contentHash": "8190a5b9368e93cae92f925b60df4a9c3eaf057459db7560926050d38cc34a20",
+      "hashMatches": true,
+      "actualSize": 10131
+    },
+    {
+      "id": "3a602e6f-5e0e-4702-8d47-5fc20bdd517c",
+      "kind": "pi-session",
+      "version": 1,
+      "sizeBytes": 192,
+      "contentHash": "9d700df4571bcd17b6429e36f5bb933e4900539bd2f0c8fcf3dd7c5ca80e6746",
+      "hashMatches": false,
+      "actualSize": 9085
+    },
+    {
+      "id": "3c29f835-b74d-4494-b76d-ea28c654db03",
+      "kind": "pi-session",
+      "version": 1,
+      "sizeBytes": 192,
+      "contentHash": "cec73d3f31cd2e01275dc6918012bc0b082f109bb5ec7e7926631fa4c7dec8bf",
+      "hashMatches": false,
+      "actualSize": 85899
+    },
+    {
+      "id": "4759f1a1-61a8-47da-84fc-7824e8e8781b",
+      "kind": "director-stream-log",
+      "version": 1,
+      "sizeBytes": 3129,
+      "contentHash": "88a6316150287f36dd01ca4bf239e139dc665d67bcf3a451e5e73e9f63c31e67",
+      "hashMatches": true,
+      "actualSize": 3129
+    },
+    {
+      "id": "49e4d7b3-7841-4537-8af7-de66c42b13db",
+      "kind": "director-shot-spec",
+      "version": 1,
+      "sizeBytes": 8240,
+      "contentHash": "a3f8e073202cfb27bea3d5b39db299c08e3df60f527b7f11141d57ba99ecae8b",
+      "hashMatches": true,
+      "actualSize": 8240
+    },
+    {
+      "id": "4c18dab5-646d-42d1-a681-b2618a6d6988",
+      "kind": "narration-audio:U001",
+      "version": 1,
+      "sizeBytes": 49452,
+      "contentHash": "8c391c97b98012f4b8aad166355a9a40ff69486cb2aacf37ef6abe209a6d2d81",
+      "hashMatches": true,
+      "actualSize": 49452
+    },
+    {
+      "id": "4ccd65ff-f2f8-4a90-b9d0-aab4d8a9e765",
+      "kind": "director-stream-log",
+      "version": 1,
+      "sizeBytes": 5913,
+      "contentHash": "e9e23678de4c52095d2e9cd1d54cfa2c1597b18fab8cbcfdbca1ea1614b967b2",
+      "hashMatches": true,
+      "actualSize": 5913
+    },
+    {
+      "id": "4e09f7a4-8c89-41e8-a743-4dd1717c4b64",
+      "kind": "director-stream-log",
+      "version": 1,
+      "sizeBytes": 2746,
+      "contentHash": "79d8cd615833d5f6641e11ade8df0465a531cbedc5b54129b9bcf345adbe51bd",
+      "hashMatches": true,
+      "actualSize": 2746
+    },
+    {
+      "id": "524d3dc6-a307-423b-9b75-c4a156014546",
+      "kind": "director-stream-log",
+      "version": 1,
+      "sizeBytes": 1030,
+      "contentHash": "3af16d99b9b6b3de1de230b8f12ba151397ec4cda8c8c46acdbabaecad5f7f64",
+      "hashMatches": true,
+      "actualSize": 1030
+    },
+    {
+      "id": "52aed7ba-17c0-4dd5-8efb-6cc69eca2972",
+      "kind": "director-finalize",
+      "version": 1,
+      "sizeBytes": 610,
+      "contentHash": "cf5905788f57ccae74cdd056adcbfd1153239c5dd035d3a363f58f027202461f",
+      "hashMatches": true,
+      "actualSize": 610
+    },
+    {
+      "id": "538fa736-2ac7-4e0e-a21b-efd02b7fd95a",
+      "kind": "director-stream-log",
+      "version": 1,
+      "sizeBytes": 559,
+      "contentHash": "3c067d538410545c455ea92a5d29139b4dabd4ac206003a2f82c2fe1bbac8e2d",
+      "hashMatches": true,
+      "actualSize": 559
+    },
+    {
+      "id": "58dcfc0a-a12f-486b-81d5-9661fc594243",
       "kind": "director-assemble",
       "version": 1,
-      "sizeBytes": 950,
-      "contentHash": "715798d87fb570be1815254dfa39ba0b10460cf20a449d0ff2fd21bfa8dc76a1",
+      "sizeBytes": 300,
+      "contentHash": "87e81646c785f0982e6c15442c4b0218252e8f15e0c423ae3f5a59072e1db860",
       "hashMatches": true,
-      "actualSize": 950
+      "actualSize": 300
     },
     {
-      "id": "82d6dcf5-08ee-4f6b-a7ed-5f638fa12fc5",
+      "id": "607b124d-0f19-43be-8c78-317917f3c537",
+      "kind": "pi-session",
+      "version": 1,
+      "sizeBytes": 192,
+      "contentHash": "329ded28ddf4e6002917645723116dfe4b3647e4348c7b6fba8ffde226d6de8f",
+      "hashMatches": false,
+      "actualSize": 57683
+    },
+    {
+      "id": "6ba33d77-77fa-47b0-b433-7fb963950605",
+      "kind": "qa-vision-report",
+      "version": 1,
+      "sizeBytes": 1305,
+      "contentHash": "2bdd66071f24000200ddb7eebf5322ccf885494777de8238bfe6dfc604bf45a4",
+      "hashMatches": true,
+      "actualSize": 1305
+    },
+    {
+      "id": "71b06810-4765-4bf8-a2ae-4fe1ea59185d",
+      "kind": "director-stream-log",
+      "version": 1,
+      "sizeBytes": 300,
+      "contentHash": "87e81646c785f0982e6c15442c4b0218252e8f15e0c423ae3f5a59072e1db860",
+      "hashMatches": true,
+      "actualSize": 300
+    },
+    {
+      "id": "7565585e-9d2a-44f5-a025-0d37401f94ae",
+      "kind": "director-stream-log",
+      "version": 1,
+      "sizeBytes": 728,
+      "contentHash": "81aabcf15dfa292fbcac45fdbcb268243f5efbe0c899420c6cea5629f3835a7a",
+      "hashMatches": true,
+      "actualSize": 728
+    },
+    {
+      "id": "7a2f873a-bb36-4cc7-bd90-ddf2ae2c0897",
+      "kind": "pi-session",
+      "version": 1,
+      "sizeBytes": 192,
+      "contentHash": "3aeac7bb6cd913a7ad39fd136568b190a30ca6ff5c60c3b152f29defe89ca99a",
+      "hashMatches": false,
+      "actualSize": 4735
+    },
+    {
+      "id": "7a312a72-7aa4-493a-a1e8-6908a0981c23",
+      "kind": "director-fabricate",
+      "version": 1,
+      "sizeBytes": 14412,
+      "contentHash": "22f91a14176899e6558cce2e625fb7be6651163d30d9c57b2c5257283cd77aed",
+      "hashMatches": true,
+      "actualSize": 14412
+    },
+    {
+      "id": "7af61b8b-ea24-4b8d-893e-dba70feee0b2",
+      "kind": "frame-thumbnail",
+      "version": 1,
+      "sizeBytes": 358688,
+      "contentHash": "b7811cab619d85c04486b737948a1e3132aff8a6c63e0ec08c5038d9029c2948",
+      "hashMatches": true,
+      "actualSize": 358688
+    },
+    {
+      "id": "7ee66ef1-df42-403b-9459-c5ac3fe0d148",
+      "kind": "subtitle-track",
+      "version": 1,
+      "sizeBytes": 2700,
+      "contentHash": "b22753f8438e438afcb7ef24810493858cf6b96a27d805babc335d6b122a2049",
+      "hashMatches": true,
+      "actualSize": 2700
+    },
+    {
+      "id": "815e023f-cccd-45be-a514-f36e1180bdee",
+      "kind": "pi-session",
+      "version": 1,
+      "sizeBytes": 192,
+      "contentHash": "01cc3a459f36d253025b88cbaa67c49bc7d22c5c6ea6c65d31d1b65c4095cf96",
+      "hashMatches": false,
+      "actualSize": 5996
+    },
+    {
+      "id": "82e2ceed-0a92-4c08-ba93-943fd4f51e07",
+      "kind": "director-stream-log",
+      "version": 1,
+      "sizeBytes": 2124,
+      "contentHash": "1ea683f18013886257caf6a8633e7412780641f2fcd9dae4cf21cd7927311b5c",
+      "hashMatches": true,
+      "actualSize": 2124
+    },
+    {
+      "id": "8638e862-a5bb-4d15-b2d7-911500f89b40",
+      "kind": "director-stream-log",
+      "version": 1,
+      "sizeBytes": 1372,
+      "contentHash": "5a3bb43a1f1994dcd27789bd7edad17e29660d26f90111bf64836e10ea065056",
+      "hashMatches": true,
+      "actualSize": 1372
+    },
+    {
+      "id": "89085500-3c02-4818-8d57-06adfa18d066",
+      "kind": "pi-session",
+      "version": 1,
+      "sizeBytes": 192,
+      "contentHash": "53207a4fcc222de4348e47894481e11caac29ed89040ee3d8613d5df6964d300",
+      "hashMatches": false,
+      "actualSize": 17843
+    },
+    {
+      "id": "8a422318-9ca0-4369-bebb-fec35fa9e29e",
+      "kind": "director-stream-log",
+      "version": 1,
+      "sizeBytes": 610,
+      "contentHash": "cf5905788f57ccae74cdd056adcbfd1153239c5dd035d3a363f58f027202461f",
+      "hashMatches": true,
+      "actualSize": 610
+    },
+    {
+      "id": "8a878d29-15e9-4657-a111-881d9e8b672a",
       "kind": "frame-thumbnail",
       "version": 3,
-      "sizeBytes": 253542,
-      "contentHash": "34a4f0b072dc4751c0bcc415a31d1bb07def6af21ad83033e6be644dda3040c6",
+      "sizeBytes": 148051,
+      "contentHash": "8f1dc751436edf799169e977458e7db8b7642ffd9991582c7a588d93e0c8c8a4",
       "hashMatches": true,
-      "actualSize": 253542
+      "actualSize": 148051
     },
     {
-      "id": "862d0d14-ccac-487a-950f-b3118e436658",
-      "kind": "director-stream-log",
+      "id": "8e2057e8-760a-477f-a21f-6b22773b17d5",
+      "kind": "subtitle-track",
       "version": 1,
-      "sizeBytes": 630,
-      "contentHash": "2a458fea418ac4a2de45a5f5ca7513427e09f0ce6c50d4d7d656bc43eedf8844",
+      "sizeBytes": 1067,
+      "contentHash": "a07b251fb03e23121f31734d2f12ea29dc39bc320c415d920f5b0d9001561846",
       "hashMatches": true,
-      "actualSize": 630
+      "actualSize": 1067
     },
     {
-      "id": "86b1d801-baca-4e5f-a85f-7e4f512b68e0",
-      "kind": "final-mp4",
-      "version": 1,
-      "sizeBytes": 1533090,
-      "contentHash": "f0caa3640e74c7c5f52d5b1eec97f345b31216ec632b3a5d5c351f298fed248c",
-      "hashMatches": true,
-      "actualSize": 1533090
-    },
-    {
-      "id": "88eeab34-483f-4b71-a554-c65cdad6254d",
-      "kind": "director-stream-log",
-      "version": 1,
-      "sizeBytes": 4063,
-      "contentHash": "6ac345ade93f023987d9ffa111a426405eb78318802a3fbcee112547da2d62d6",
-      "hashMatches": true,
-      "actualSize": 4063
-    },
-    {
-      "id": "89f13e86-c569-4c2c-9687-8a10a03ab28c",
-      "kind": "render-mp4",
-      "version": 1,
-      "sizeBytes": 338623,
-      "contentHash": "b224ae8335354a32194dece378a0ec9d847169dc5e349bc5e349b7dd536e2323",
-      "hashMatches": true,
-      "actualSize": 338623
-    },
-    {
-      "id": "8b3dbf65-4cca-4a8a-bb4e-50890b66ef5e",
+      "id": "9169c7b9-7159-486a-afff-41ea577d24ea",
       "kind": "subtitle-track",
       "version": 1,
       "sizeBytes": 2114,
-      "contentHash": "f982a359bbaea583d069d6c655b3a04b87b198a83f7f0116dd5acfdb55006c7e",
+      "contentHash": "c9a087783a5045b416eea1134aa25c250f35836b151578c6d676840955cdb105",
       "hashMatches": true,
       "actualSize": 2114
     },
     {
-      "id": "8e989a90-9759-4309-8be9-872c9ddd28b3",
-      "kind": "frame-thumbnail",
-      "version": 3,
-      "sizeBytes": 310719,
-      "contentHash": "96087824ef16bbd2d8dbae32ee6d2a4fc508afb98fa861fea41d5b296d546dd5",
-      "hashMatches": true,
-      "actualSize": 310719
-    },
-    {
-      "id": "91c3c9aa-5aec-406e-9c4d-5947f5d25c95",
-      "kind": "frame-thumbnail",
-      "version": 3,
-      "sizeBytes": 496792,
-      "contentHash": "6579a32ae9560dd018b1e756071b2aa51647a02670cb105574e44949bbce0348",
-      "hashMatches": true,
-      "actualSize": 496792
-    },
-    {
-      "id": "965311c8-a373-45e0-a428-0e8031208723",
-      "kind": "qa-vision-report",
+      "id": "91b6ae7b-8408-4cf1-9669-170e2f3b88da",
+      "kind": "pi-session",
       "version": 1,
-      "sizeBytes": 1387,
-      "contentHash": "716822c85a83fd362373c3ee9aef56a961639b660f8831f6eef78549a17b9957",
-      "hashMatches": true,
-      "actualSize": 1387
+      "sizeBytes": 192,
+      "contentHash": "efb6353db133a7ea72b272c2e1382eeee93751ba840d2de5a431084f9f5f07f9",
+      "hashMatches": false,
+      "actualSize": 5998
     },
     {
-      "id": "9b231120-f678-4ea3-bd65-fbebb4114714",
-      "kind": "director-finalize",
-      "version": 1,
-      "sizeBytes": 593,
-      "contentHash": "749d16f8008f90124bc812f3f84cd625df474bbf5420c7948ba62976f67e0daa",
-      "hashMatches": true,
-      "actualSize": 593
-    },
-    {
-      "id": "9b26c6f6-22b2-45f7-a05f-2b311beab882",
+      "id": "93eb667b-a095-4de9-946e-adca9cddd1d8",
       "kind": "director-stream-log",
       "version": 1,
-      "sizeBytes": 2376,
-      "contentHash": "8bf4eb21133d0873a64050f7efa7d0e16faa1bfdba42188fd28885e1b8fd18c3",
+      "sizeBytes": 238,
+      "contentHash": "c4f2d9f2f4dfc7507adf1268cefe1473897f7e6ce3a957eb1c7c97f01bd2748e",
       "hashMatches": true,
-      "actualSize": 2376
+      "actualSize": 238
     },
     {
-      "id": "a372969d-ce5a-453b-a683-9ccc14a6cf7e",
+      "id": "956f81df-3c12-4eb3-9f01-1955e62dfb76",
       "kind": "pi-session",
       "version": 1,
       "sizeBytes": 192,
-      "contentHash": "66a6e96aa1c0b09e5d56e799d3d79a31c57b337979b8909868675516b39acf7f",
+      "contentHash": "a1ddd2e9a666535c29cd4a878a8ec4f16de6a9d33d0447d015077c0954014ae9",
       "hashMatches": false,
-      "actualSize": 22694
+      "actualSize": 48996
     },
     {
-      "id": "a4c2b430-a561-45d0-86a1-dcea46033b5d",
-      "kind": "pi-session",
+      "id": "998c9c60-fc74-4936-a7fa-f69e08e73fe7",
+      "kind": "director-ingest",
       "version": 1,
-      "sizeBytes": 192,
-      "contentHash": "e09e9b0f822dcf90edc4820f2ab24ff88e09d2aa1bd44fb9da6c350302f22af2",
-      "hashMatches": false,
-      "actualSize": 60846
-    },
-    {
-      "id": "a4d48372-e013-4ca2-929d-88c546b462d1",
-      "kind": "director-finalize",
-      "version": 1,
-      "sizeBytes": 1448,
-      "contentHash": "d4f1cccd5b54c89a95f0d27e3a7216a0617d3e0ba69e1eb2b718510f6d78dff4",
+      "sizeBytes": 3770,
+      "contentHash": "860820caf03e0e5729ff7483b98f12fbfbe2704706582577bc3bc036ae6bf74e",
       "hashMatches": true,
-      "actualSize": 1448
+      "actualSize": 3770
     },
     {
-      "id": "a5f39568-41a5-4abc-b10e-942f861adbc4",
-      "kind": "pi-session",
-      "version": 1,
-      "sizeBytes": 192,
-      "contentHash": "c58054e9fd09c12874c0ba507cf15f833deab72b325d42eb9bae15843ad4dbea",
-      "hashMatches": false,
-      "actualSize": 6472
-    },
-    {
-      "id": "ac203f7b-d874-4e3e-bd69-72729fc2cd76",
+      "id": "9e73c3e3-355b-49d7-ae38-3ae38c8e07f6",
       "kind": "director-assemble",
       "version": 1,
-      "sizeBytes": 367,
-      "contentHash": "6d5abc90504a34c0b0228047c0fecb4d28e58dd7db7eec2ad43d3293a4a106b4",
+      "sizeBytes": 238,
+      "contentHash": "c4f2d9f2f4dfc7507adf1268cefe1473897f7e6ce3a957eb1c7c97f01bd2748e",
       "hashMatches": true,
-      "actualSize": 367
+      "actualSize": 238
     },
     {
-      "id": "aecc0294-76f3-436a-b128-bdcc939e5670",
-      "kind": "director-assemble",
-      "version": 1,
-      "sizeBytes": 4063,
-      "contentHash": "6ac345ade93f023987d9ffa111a426405eb78318802a3fbcee112547da2d62d6",
-      "hashMatches": true,
-      "actualSize": 4063
-    },
-    {
-      "id": "af1cabed-55dd-4c41-afd7-943961cd6cac",
+      "id": "a5336ec0-f4e7-4487-be32-a32bf24b5b45",
       "kind": "director-fabricate",
       "version": 1,
-      "sizeBytes": 21532,
-      "contentHash": "efca76196af6b00afdb6c310d77fca0d92c69fe069a44af8bb289fc87c43d4c6",
+      "sizeBytes": 23143,
+      "contentHash": "4856cda0c2d53f0a2ffd5d4751139f5928e84adb3d2e4d5e95af2f522662b6e8",
       "hashMatches": true,
-      "actualSize": 21532
+      "actualSize": 23143
     },
     {
-      "id": "afc924d1-b94c-4259-9042-c79ecd6196b4",
-      "kind": "pi-session",
-      "version": 1,
-      "sizeBytes": 192,
-      "contentHash": "7f4f63b077853a5aab8af5da80ebf015dce3635d90bf2fa70f3c985b5e8d8dd8",
-      "hashMatches": false,
-      "actualSize": 4714
-    },
-    {
-      "id": "b05aaae7-38c1-43ae-9c10-a77d59bdd57c",
-      "kind": "pi-session",
-      "version": 1,
-      "sizeBytes": 192,
-      "contentHash": "fa9b40c6c94ad745a1d9140c07dd4169d02b0703434d3f8ee50ed148c091babd",
-      "hashMatches": false,
-      "actualSize": 110819
-    },
-    {
-      "id": "b0a48b4d-dc4b-4591-9961-1694a1e50f7b",
-      "kind": "pi-session",
-      "version": 1,
-      "sizeBytes": 192,
-      "contentHash": "b69ef3142f08df3e02069568e11fc508dd75ee25c2534831ccb753b905373cce",
-      "hashMatches": false,
-      "actualSize": 5798
-    },
-    {
-      "id": "b0f6ced2-0a0e-4da4-a813-53e8faeb79f4",
-      "kind": "narration-audio:U004",
-      "version": 1,
-      "sizeBytes": 52520,
-      "contentHash": "c46521ac972f34da4704f30562af69aa254f768369a8333114ab9580b5e34e40",
-      "hashMatches": true,
-      "actualSize": 52520
-    },
-    {
-      "id": "b2a90f53-2b25-43e7-aa7f-687f391fce49",
-      "kind": "director-fabricate",
-      "version": 1,
-      "sizeBytes": 22194,
-      "contentHash": "28955ec2d7165878f61ff2f7c53daaf74d35b68ad24472418840b0d0b84d641b",
-      "hashMatches": true,
-      "actualSize": 22194
-    },
-    {
-      "id": "bca295e3-9299-4e0b-9065-548de48b4124",
-      "kind": "director-finalize",
-      "version": 1,
-      "sizeBytes": 891,
-      "contentHash": "d8096862fcdc9aaef7096b9713b351864fa7230112adc0d1093bef52aeff0dc4",
-      "hashMatches": true,
-      "actualSize": 891
-    },
-    {
-      "id": "bcc63dfd-2084-45ca-8c62-eb756be3a179",
-      "kind": "director-assemble",
-      "version": 1,
-      "sizeBytes": 2376,
-      "contentHash": "8bf4eb21133d0873a64050f7efa7d0e16faa1bfdba42188fd28885e1b8fd18c3",
-      "hashMatches": true,
-      "actualSize": 2376
-    },
-    {
-      "id": "bf4c3331-4e98-4b56-85f5-83d891e34ecc",
-      "kind": "director-stream-log",
-      "version": 1,
-      "sizeBytes": 783,
-      "contentHash": "e607545e4dcaadf82bb8bdeb1ac83a51d4b6149bdce1bd7722790d61421b1b32",
-      "hashMatches": true,
-      "actualSize": 783
-    },
-    {
-      "id": "bf72132b-5650-4f57-b246-6e02a384b6e2",
-      "kind": "pi-session",
-      "version": 1,
-      "sizeBytes": 192,
-      "contentHash": "3d91838616604f32e237c35b8cddd7a9f8e6db28c6e92863b6f7767717d28120",
-      "hashMatches": false,
-      "actualSize": 32041
-    },
-    {
-      "id": "bfdacd60-2e77-4790-baf2-87654e09b659",
-      "kind": "pi-session",
-      "version": 1,
-      "sizeBytes": 192,
-      "contentHash": "5d5735009436067635e7d0e8154c67cc07b661a2452fedc45dc0cc685893df37",
-      "hashMatches": false,
-      "actualSize": 2671
-    },
-    {
-      "id": "c30d1c49-39c3-42ab-b1f9-6c96e466b3ca",
-      "kind": "director-stream-log",
-      "version": 1,
-      "sizeBytes": 975,
-      "contentHash": "f3fbabb723d366aa722be4738d108209e1117edf9bef98d461461cb70bb3c228",
-      "hashMatches": true,
-      "actualSize": 975
-    },
-    {
-      "id": "cd4db77f-e97b-40f8-a039-1de966fefd0a",
-      "kind": "pi-session",
-      "version": 1,
-      "sizeBytes": 192,
-      "contentHash": "3f20a2e9373665928d78e3832d30a29d2ad40ec461c4ab475f9bbf978047ce35",
-      "hashMatches": false,
-      "actualSize": 56673
-    },
-    {
-      "id": "cf911b5d-b04d-4279-9790-11c2408499e3",
+      "id": "a58d3843-102e-46bc-8c3b-ed72d5f80335",
       "kind": "frame-thumbnail",
       "version": 2,
-      "sizeBytes": 252704,
-      "contentHash": "e807c56519b90e17be7d70a54fbbe30141da12a67f4395771a3b75ae562dc6bc",
+      "sizeBytes": 363450,
+      "contentHash": "f390349a0ffd7c215c186010999a83acdf4836383a45933deddc556ea9df67b7",
       "hashMatches": true,
-      "actualSize": 252704
+      "actualSize": 363450
     },
     {
-      "id": "d2216d27-d06a-404b-b6e6-fe2d4ba59ffc",
-      "kind": "director-shot-spec",
-      "version": 1,
-      "sizeBytes": 12078,
-      "contentHash": "38ee11d7145ea41f331d1d3d7cd2a30d33426b5d172a04c005871f9a9ee7492f",
+      "id": "b1163c9d-4843-4f35-baed-e43d9a688131",
+      "kind": "frame-thumbnail",
+      "version": 3,
+      "sizeBytes": 82192,
+      "contentHash": "185e723ebf60f20fca77ce399a44b0e9c4b306de47f328fb3e8e51c941d0d048",
       "hashMatches": true,
-      "actualSize": 12078
+      "actualSize": 82192
     },
     {
-      "id": "d32ae05f-7eea-42f8-9ff1-2b1267187674",
+      "id": "b3058658-74de-4be5-9c93-b0d4c37dd758",
       "kind": "pi-session",
       "version": 1,
       "sizeBytes": 192,
-      "contentHash": "23261737903f8073f391daa74df848e8433aa09f6ff6e7de9a327a0487597cc3",
+      "contentHash": "de6094322c5e92f504175b854e168564bb5cc4ed0d7d535ec4461145ea01ca3a",
       "hashMatches": false,
-      "actualSize": 6234
+      "actualSize": 77136
     },
     {
-      "id": "d3716430-9cb6-4741-932b-1628c49993d6",
+      "id": "b4c2c8db-3725-46f9-a1d3-58626d3da7bf",
       "kind": "pi-session",
       "version": 1,
       "sizeBytes": 192,
-      "contentHash": "1a56e516988b716084959da2aed53dc38eebf78a04853f7b0428d48ec285619a",
+      "contentHash": "27e4a21e9cad835ccfa1c3481d04fd90e8815f8b1b3aa4a27ab1178e14ebb814",
       "hashMatches": false,
-      "actualSize": 83699
+      "actualSize": 30119
     },
     {
-      "id": "dbbfbdbd-cfdd-4ed0-a89e-b2a242cefd49",
-      "kind": "qa-vision-report",
-      "version": 1,
-      "sizeBytes": 1736,
-      "contentHash": "40ff8a28163a4a211432fb4570b7ec44cf776295b653042c3dcfa3f60c086129",
-      "hashMatches": true,
-      "actualSize": 1736
-    },
-    {
-      "id": "dc364cc7-c51a-4dfb-8c9b-f2240c9b11bc",
-      "kind": "director-finalize",
-      "version": 1,
-      "sizeBytes": 783,
-      "contentHash": "e607545e4dcaadf82bb8bdeb1ac83a51d4b6149bdce1bd7722790d61421b1b32",
-      "hashMatches": true,
-      "actualSize": 783
-    },
-    {
-      "id": "dc6d7d91-04d1-4d2c-aeb6-f166bd8c2359",
+      "id": "b6ef1697-01b4-450f-b7bc-cef384f5da1e",
       "kind": "director-assemble",
       "version": 1,
-      "sizeBytes": 317,
-      "contentHash": "ad200cca60a34b95a668211e25835f7843cb1206364c2aa339dffbbf5dff6ff0",
+      "sizeBytes": 1372,
+      "contentHash": "5a3bb43a1f1994dcd27789bd7edad17e29660d26f90111bf64836e10ea065056",
       "hashMatches": true,
-      "actualSize": 317
+      "actualSize": 1372
     },
     {
-      "id": "e1226037-5fa2-4611-bd36-068d0ac0398c",
-      "kind": "pi-session",
-      "version": 1,
-      "sizeBytes": 192,
-      "contentHash": "4282128a5685f7afc9639f5ac67fdfe0908d666a978b64fa05832e95e89b3442",
-      "hashMatches": false,
-      "actualSize": 12806
-    },
-    {
-      "id": "e1b25490-98b3-49a0-9306-d915a9768072",
-      "kind": "pi-session",
-      "version": 1,
-      "sizeBytes": 192,
-      "contentHash": "7516314eaeb6bd514849616417757debfd3cfc356b081de0fa50e9a5a271dddb",
-      "hashMatches": false,
-      "actualSize": 9975
-    },
-    {
-      "id": "e2170978-8eeb-4ad6-8972-f19f0d321c2b",
-      "kind": "narration-audio:U003",
-      "version": 1,
-      "sizeBytes": 119720,
-      "contentHash": "56043728135b0934a23c5f046f3399b40351f2779c902cd3b46c53f9c0d5aacb",
-      "hashMatches": true,
-      "actualSize": 119720
-    },
-    {
-      "id": "e26cc324-127b-4514-ab27-a9237caade20",
-      "kind": "narration-audio:U001",
-      "version": 1,
-      "sizeBytes": 48298,
-      "contentHash": "d7a9f3624bd34d58e59970bb8eeaedc9a7e4fc438665bc78887f9d2f0feba4a4",
-      "hashMatches": true,
-      "actualSize": 48298
-    },
-    {
-      "id": "e484bcff-69cf-49f9-9e56-0561f8013814",
-      "kind": "pi-session",
-      "version": 1,
-      "sizeBytes": 192,
-      "contentHash": "0ab472a3d36caedf793e38f3bce20ccc734086ab56b4feba4b5a496d0633d192",
-      "hashMatches": false,
-      "actualSize": 93200
-    },
-    {
-      "id": "e508ed0d-b1fd-4305-ad87-31685f7246f7",
-      "kind": "director-stream-log",
-      "version": 1,
-      "sizeBytes": 891,
-      "contentHash": "d8096862fcdc9aaef7096b9713b351864fa7230112adc0d1093bef52aeff0dc4",
-      "hashMatches": true,
-      "actualSize": 891
-    },
-    {
-      "id": "f03fc02b-fb73-4aa1-b661-f80dc8cc0b4f",
-      "kind": "pi-session",
-      "version": 1,
-      "sizeBytes": 192,
-      "contentHash": "da85b020ed3b32bd6a640e75fa36e1d9b2147b88d7dd01ae029fd0f310a21034",
-      "hashMatches": false,
-      "actualSize": 6352
-    },
-    {
-      "id": "f504e58d-36c8-46ac-adb6-5b27b8607396",
-      "kind": "frame-thumbnail",
-      "version": 2,
-      "sizeBytes": 508459,
-      "contentHash": "11c6d590d2bc0a605c445d959eaeea4e8e31d1e73067a2753c219376ece12041",
-      "hashMatches": true,
-      "actualSize": 508459
-    },
-    {
-      "id": "f6556cfb-afbe-4500-8b0b-ee371e5495b5",
-      "kind": "pi-session",
-      "version": 1,
-      "sizeBytes": 192,
-      "contentHash": "5160921f4e6118d9c6b5d769e44495f98b6cfa080a6513a73972242747a380d3",
-      "hashMatches": false,
-      "actualSize": 5089
-    },
-    {
-      "id": "fa1d34c5-c9dd-43e3-94d7-4522fb5854e1",
+      "id": "b9155e5a-33c4-4f2d-af3d-8c5fde5fe4f5",
       "kind": "render-mp4",
       "version": 1,
-      "sizeBytes": 195250,
-      "contentHash": "c61990bc1fa6f9f9ed0bc18f29e7f91997f06ba92190dadb9469030f0354f311",
+      "sizeBytes": 683914,
+      "contentHash": "c8f0a5f01e72534d66cb0143c65c1f2072904cf195f32980edc8f6f8d2ca6b18",
       "hashMatches": true,
-      "actualSize": 195250
+      "actualSize": 683914
     },
     {
-      "id": "fad95e78-a294-4906-a744-f4c3d09c9b62",
+      "id": "bb2b013b-0bf9-40df-8985-bd075edfb692",
+      "kind": "frame-thumbnail",
+      "version": 2,
+      "sizeBytes": 68007,
+      "contentHash": "8ef9bf08847df73e0b450cdba1f063ee6254d7e0cd9c5c281819a42422745619",
+      "hashMatches": true,
+      "actualSize": 68007
+    },
+    {
+      "id": "bb441d69-6434-4bef-a5ab-2f2aec229c5d",
+      "kind": "director-finalize",
+      "version": 1,
+      "sizeBytes": 1030,
+      "contentHash": "3af16d99b9b6b3de1de230b8f12ba151397ec4cda8c8c46acdbabaecad5f7f64",
+      "hashMatches": true,
+      "actualSize": 1030
+    },
+    {
+      "id": "bbb0d059-4141-4930-b2b0-5e3784c6747e",
       "kind": "pi-session",
       "version": 1,
       "sizeBytes": 192,
-      "contentHash": "ee2fc5d2d7913bf081adedf9cf3642e49fd39e4704a804ff1f40c8a8e326a1f8",
+      "contentHash": "41940de0f6e20dce33998186640818f54eb488d35ed0e5c2f5893e8d35c5baea",
       "hashMatches": false,
-      "actualSize": 55453
+      "actualSize": 6861
     },
     {
-      "id": "fea0bf3f-0a00-4a73-8e9c-080228a9477c",
+      "id": "c49edb22-a438-458b-a72c-e57b4acd6163",
+      "kind": "director-assemble",
+      "version": 1,
+      "sizeBytes": 3129,
+      "contentHash": "88a6316150287f36dd01ca4bf239e139dc665d67bcf3a451e5e73e9f63c31e67",
+      "hashMatches": true,
+      "actualSize": 3129
+    },
+    {
+      "id": "cd6ccfc6-47d3-4f5c-9920-b484327085f8",
       "kind": "pi-session",
       "version": 1,
       "sizeBytes": 192,
-      "contentHash": "50fd827aea39cd3d70afc530e5a1dc520067a31547fe3536e938a45de0f36847",
+      "contentHash": "16a3d9f21ef8e6c7b47f2f57ee4a74c0537017ef558772a55918ff122d26f89b",
       "hashMatches": false,
-      "actualSize": 28711
+      "actualSize": 5309
+    },
+    {
+      "id": "ce96545f-6358-4e59-aeb3-fad29cbc081b",
+      "kind": "pi-session",
+      "version": 1,
+      "sizeBytes": 192,
+      "contentHash": "2716c685693a2a824e9d6e101cc02bb7626b2ecb8382252f444093d7cb8c839b",
+      "hashMatches": false,
+      "actualSize": 10532
+    },
+    {
+      "id": "d2f83a3d-b5fe-4c23-89ee-39686396b064",
+      "kind": "narration-audio:U002",
+      "version": 1,
+      "sizeBytes": 134698,
+      "contentHash": "d483c6f40a5b42b4001ff59500ab27a6d5b6f1a2d9d58ce35abd54da39ac7c97",
+      "hashMatches": true,
+      "actualSize": 134698
+    },
+    {
+      "id": "d4c593d7-99a6-4c5a-8e02-85cbc2ac9dab",
+      "kind": "pi-session",
+      "version": 1,
+      "sizeBytes": 192,
+      "contentHash": "431a901cccdb2b55df222c132d59bacd198d764c78c73aec04dd65ace8985dcb",
+      "hashMatches": false,
+      "actualSize": 22659
+    },
+    {
+      "id": "d4cf366c-dcf6-40a8-88f5-ca7d0a1fd1af",
+      "kind": "qa-vision-report",
+      "version": 1,
+      "sizeBytes": 1437,
+      "contentHash": "42ce90fa6457ed39d07f51f4c09540d8197c5c5b9b3b8e43041323e7bd34b6aa",
+      "hashMatches": true,
+      "actualSize": 1437
+    },
+    {
+      "id": "d61d715c-c5d5-401e-8e76-f6b5d0070a74",
+      "kind": "render-mp4",
+      "version": 1,
+      "sizeBytes": 202277,
+      "contentHash": "a5f92ae18b2218980e08f7e26dcff14c1df6f413dda410a8e42c23d265fa8a87",
+      "hashMatches": true,
+      "actualSize": 202277
+    },
+    {
+      "id": "dad6303a-1a7a-4104-8737-98b1fdfdd0ab",
+      "kind": "director-stream-log",
+      "version": 1,
+      "sizeBytes": 479,
+      "contentHash": "8f36e12f6294c3b5f5b03d20f9ca811127fbcfc2fef5fba361793d898e3e4e4d",
+      "hashMatches": true,
+      "actualSize": 479
+    },
+    {
+      "id": "dcc00ef3-38ef-4fc1-9d55-7a4586ec395f",
+      "kind": "final-mp4",
+      "version": 1,
+      "sizeBytes": 1086470,
+      "contentHash": "5478d8152f114972d53d6a37f7d8e64cf084f91311b9f6c9ee8adfd38a13fc89",
+      "hashMatches": true,
+      "actualSize": 1086470
+    },
+    {
+      "id": "def18a55-281c-4ac0-a2e2-ff2495854dc9",
+      "kind": "director-stream-log",
+      "version": 1,
+      "sizeBytes": 862,
+      "contentHash": "68d346a902c9e9dd0f062946ee2f2def6e38a750f89d15a7d4170149151e2d03",
+      "hashMatches": true,
+      "actualSize": 862
+    },
+    {
+      "id": "dfc126fa-40ab-4e04-acb7-e653ca77a538",
+      "kind": "director-assemble",
+      "version": 1,
+      "sizeBytes": 479,
+      "contentHash": "8f36e12f6294c3b5f5b03d20f9ca811127fbcfc2fef5fba361793d898e3e4e4d",
+      "hashMatches": true,
+      "actualSize": 479
+    },
+    {
+      "id": "e192d6cc-6b77-40c0-8ad6-6aeb38371b30",
+      "kind": "pi-session",
+      "version": 1,
+      "sizeBytes": 192,
+      "contentHash": "d92c142272431f022ba7defc98c2328b68aa3a785d01e1e7bdb7ed11cde49009",
+      "hashMatches": false,
+      "actualSize": 27113
+    },
+    {
+      "id": "e5699fec-4215-4c3d-a966-5ad6baf5caa0",
+      "kind": "director-fabricate",
+      "version": 1,
+      "sizeBytes": 21837,
+      "contentHash": "ed56e6b4c2ce153809427b4a88b4e4d7e17f0249ee1b43d67d09c3bdf98e37b5",
+      "hashMatches": true,
+      "actualSize": 21837
+    },
+    {
+      "id": "e61d9237-f35e-4982-b2a0-b469f84f2bd5",
+      "kind": "pi-session",
+      "version": 1,
+      "sizeBytes": 192,
+      "contentHash": "0f70cafadff0b942f2337616e1ff960453ee9eebdac052d57ea0dde7562ebca8",
+      "hashMatches": false,
+      "actualSize": 2751
+    },
+    {
+      "id": "e8343d69-2c36-4117-888a-7fcd5e0f55ac",
+      "kind": "director-assemble",
+      "version": 1,
+      "sizeBytes": 2124,
+      "contentHash": "1ea683f18013886257caf6a8633e7412780641f2fcd9dae4cf21cd7927311b5c",
+      "hashMatches": true,
+      "actualSize": 2124
+    },
+    {
+      "id": "efd2d469-2dd7-4922-898e-3a0344338ae4",
+      "kind": "director-shot-spec",
+      "version": 1,
+      "sizeBytes": 7697,
+      "contentHash": "c0777622b8800145968bfd7e9e66a6016110d39d2761eeb1b81801095103c027",
+      "hashMatches": true,
+      "actualSize": 7697
+    },
+    {
+      "id": "f3917069-1536-4a51-87d6-6658265d2b8a",
+      "kind": "director-direct",
+      "version": 1,
+      "sizeBytes": 5988,
+      "contentHash": "a5e0d7451d30b92cd46236ab3f7bd7e85a6843b8b59dc2c42c52ea71fcdbda60",
+      "hashMatches": true,
+      "actualSize": 5988
+    },
+    {
+      "id": "f50e4d68-dd2e-408b-859b-669bab06b721",
+      "kind": "frame-thumbnail",
+      "version": 2,
+      "sizeBytes": 147824,
+      "contentHash": "d827ff514b05650f457dec19beca5cb4c20ba221eadff997799d7de5790289ce",
+      "hashMatches": true,
+      "actualSize": 147824
+    },
+    {
+      "id": "f5af8fd8-98fb-4738-bc9e-541276a635d5",
+      "kind": "narration-audio:U003",
+      "version": 1,
+      "sizeBytes": 159658,
+      "contentHash": "38bdbd012207686398e44e8e1fc992a8375166936b5955fc5006dedeb1e1481f",
+      "hashMatches": true,
+      "actualSize": 159658
+    },
+    {
+      "id": "f68b820b-b88b-429e-b871-61589dacb19b",
+      "kind": "director-assemble",
+      "version": 1,
+      "sizeBytes": 2746,
+      "contentHash": "79d8cd615833d5f6641e11ade8df0465a531cbedc5b54129b9bcf345adbe51bd",
+      "hashMatches": true,
+      "actualSize": 2746
     }
   ],
-  "hashMismatches": [
-    "2389e26c-39dc-4992-a3ee-c98543aa2094",
-    "3fb0b2a4-3a0c-44ee-9978-53f70895bb5f",
-    "4da3aa2a-af23-4e72-b9ca-1ad8917735ba",
-    "4dea1427-0c76-476e-9294-eed4a7a17dbb",
-    "5b8aeca4-e284-4ae8-9536-98a35e361818",
-    "734220b7-715a-4051-a875-97a5834232a8",
-    "a372969d-ce5a-453b-a683-9ccc14a6cf7e",
-    "a4c2b430-a561-45d0-86a1-dcea46033b5d",
-    "a5f39568-41a5-4abc-b10e-942f861adbc4",
-    "afc924d1-b94c-4259-9042-c79ecd6196b4",
-    "b05aaae7-38c1-43ae-9c10-a77d59bdd57c",
-    "b0a48b4d-dc4b-4591-9961-1694a1e50f7b",
-    "bf72132b-5650-4f57-b246-6e02a384b6e2",
-    "bfdacd60-2e77-4790-baf2-87654e09b659",
-    "cd4db77f-e97b-40f8-a039-1de966fefd0a",
-    "d32ae05f-7eea-42f8-9ff1-2b1267187674",
-    "d3716430-9cb6-4741-932b-1628c49993d6",
-    "e1226037-5fa2-4611-bd36-068d0ac0398c",
-    "e1b25490-98b3-49a0-9306-d915a9768072",
-    "e484bcff-69cf-49f9-9e56-0561f8013814",
-    "f03fc02b-fb73-4aa1-b661-f80dc8cc0b4f",
-    "f6556cfb-afbe-4500-8b0b-ee371e5495b5",
-    "fad95e78-a294-4906-a744-f4c3d09c9b62",
-    "fea0bf3f-0a00-4a73-8e9c-080228a9477c"
+  "hashMismatches": [],
+  "immutableArtifactCount": 54,
+  "liveLogs": [
+    {
+      "id": "0f2308e3-5b08-4762-ac72-7d254be19665",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 47760,
+      "hashMatches": false
+    },
+    {
+      "id": "244ed707-3fb4-48a6-acb0-aa28df2612c0",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 5559,
+      "hashMatches": false
+    },
+    {
+      "id": "2bbcd03c-eb40-4117-a935-113721a82c80",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 11840,
+      "hashMatches": false
+    },
+    {
+      "id": "3a602e6f-5e0e-4702-8d47-5fc20bdd517c",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 9085,
+      "hashMatches": false
+    },
+    {
+      "id": "3c29f835-b74d-4494-b76d-ea28c654db03",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 85899,
+      "hashMatches": false
+    },
+    {
+      "id": "607b124d-0f19-43be-8c78-317917f3c537",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 57683,
+      "hashMatches": false
+    },
+    {
+      "id": "7a2f873a-bb36-4cc7-bd90-ddf2ae2c0897",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 4735,
+      "hashMatches": false
+    },
+    {
+      "id": "815e023f-cccd-45be-a514-f36e1180bdee",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 5996,
+      "hashMatches": false
+    },
+    {
+      "id": "89085500-3c02-4818-8d57-06adfa18d066",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 17843,
+      "hashMatches": false
+    },
+    {
+      "id": "91b6ae7b-8408-4cf1-9669-170e2f3b88da",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 5998,
+      "hashMatches": false
+    },
+    {
+      "id": "956f81df-3c12-4eb3-9f01-1955e62dfb76",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 48996,
+      "hashMatches": false
+    },
+    {
+      "id": "b3058658-74de-4be5-9c93-b0d4c37dd758",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 77136,
+      "hashMatches": false
+    },
+    {
+      "id": "b4c2c8db-3725-46f9-a1d3-58626d3da7bf",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 30119,
+      "hashMatches": false
+    },
+    {
+      "id": "bbb0d059-4141-4930-b2b0-5e3784c6747e",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 6861,
+      "hashMatches": false
+    },
+    {
+      "id": "cd6ccfc6-47d3-4f5c-9920-b484327085f8",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 5309,
+      "hashMatches": false
+    },
+    {
+      "id": "ce96545f-6358-4e59-aeb3-fad29cbc081b",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 10532,
+      "hashMatches": false
+    },
+    {
+      "id": "d4c593d7-99a6-4c5a-8e02-85cbc2ac9dab",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 22659,
+      "hashMatches": false
+    },
+    {
+      "id": "e192d6cc-6b77-40c0-8ad6-6aeb38371b30",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 27113,
+      "hashMatches": false
+    },
+    {
+      "id": "e61d9237-f35e-4982-b2a0-b469f84f2bd5",
+      "kind": "pi-session",
+      "registeredSize": 192,
+      "actualSize": 2751,
+      "hashMatches": false
+    }
   ],
-  "durationMs": 284633,
-  "ok": false
+  "durationMs": 223918,
+  "ok": true
 }
