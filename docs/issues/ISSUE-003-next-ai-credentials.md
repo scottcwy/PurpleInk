@@ -1,10 +1,11 @@
 # ISSUE-003 · Next 应用进程内无 AI 凭据，配置真值不对称
 
 - 优先级：**P0（阻断）**
-- 状态：`in-progress`（深度修复中）
+- 状态：`done`（深度修复完成；§8 全验收通过 + 证据归档于 `docs/issues/evidence/issue-003/`）
 - 范围：**`docs/**` + `scripts/**` + `.env.example` + `tests/env.test.ts`，不改任何 `src/**` 代码**
 - 依赖：无。可与其他 issue 完全并行
 - 阻塞：ISSUE-001 的运行时验收、ISSUE-002、ISSUE-005、ISSUE-014
+- Fixed-in commits：`21373af` `dba0fe3` `473486c` `d65d6d6` `7d25dba` `74e2e66`
 
 > 修订纪要（2026-07-25）：原版误判:`getGeminiConfig()`/`getStepfunConfig()` 的
 > `apiKey` **只从 DB `provider_credentials` 读取，没有任何 env 兜底**（这是
