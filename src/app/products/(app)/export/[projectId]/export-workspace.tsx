@@ -2,6 +2,7 @@
 
 import { AudioLines, Captions, Download, Film, Music } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { MediaViewport } from '@/components/ui/media-viewport'
 import { TimelineTrack } from '@/components/ui/timeline-track'
 import { TopBar } from '@/components/ui/top-bar'
 import { usePublishNavContext } from '@/features/navigation/nav-context'
@@ -36,7 +37,11 @@ export function ExportWorkspace({
           </Button>
         }
       />
-      <ExportPreview projectTitle={projectTitle} outputUrl={runtime.outputUrl} />
+      <ExportPreview
+        projectTitle={projectTitle}
+        outputUrl={runtime.outputUrl}
+        loading={runtime.exporting && !runtime.outputUrl}
+      />
       <ExportTimeline laneKeys={laneKeys} shotClips={shotClips} />
       <ExportReview
         laneKeys={laneKeys}
@@ -56,19 +61,21 @@ export function ExportWorkspace({
 function ExportPreview({
   projectTitle,
   outputUrl,
+  loading,
 }: {
   projectTitle: string
   outputUrl?: string
+  loading: boolean
 }) {
   return (
-    <section className="flex h-[257px] flex-col items-center gap-2 p-4">
-      <div className="flex h-[200px] w-full max-w-[480px] items-center justify-center overflow-hidden rounded-lg bg-player-bg">
+    <section className="flex flex-col items-center gap-2 p-4">
+      <MediaViewport className="max-w-[640px]" loading={loading}>
         {outputUrl ? (
-          <video src={outputUrl} controls className="h-full w-full" />
+          <video src={outputUrl} controls className="absolute inset-0 h-full w-full object-contain" />
         ) : (
           <Film className="h-10 w-10 text-text-inverse" />
         )}
-      </div>
+      </MediaViewport>
       <p className="text-xs text-ds-text-muted">{projectTitle} · 成片预览</p>
     </section>
   )

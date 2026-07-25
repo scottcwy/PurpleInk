@@ -10,7 +10,7 @@ export interface ContactSheetThumbProps {
 
 /**
  * QA 抽帧联系表缩略图（SSOT）。
- * canvas.pen: 160 宽、垂直布局；上方 3 个 52×30 小帧 + 底部标签/勾选。
+ * 160 宽、垂直布局；上方 3 个等宽 16:9 小帧 + 底部标签/勾选。
  * checked 无默认值：调用方必须显式传入真实 QA 状态，undefined/false 时不渲染已通过勾选。
  */
 export function ContactSheetThumb({
@@ -25,7 +25,7 @@ export function ContactSheetThumb({
         {frames.map((pct, i) => (
           <div
             key={i}
-            className="flex h-[30px] w-[52px] flex-col justify-end rounded bg-ds-surface-muted p-0.5"
+            className="flex aspect-video min-w-0 flex-1 flex-col justify-end rounded bg-ds-surface-muted p-0.5"
           >
             <span className="text-center text-[9px] font-mono text-ds-text-muted">{pct}</span>
           </div>

@@ -1,6 +1,6 @@
 # Purplelnk Design System Inventory
 
-> Created: 2026-07-23 · Updated: 2026-07-25 · Status: accepted
+> Created: 2026-07-23 · Updated: 2026-07-26 · Status: accepted
 > Visual SSOT: [`canvas.pen`](./canvas.pen) · Runtime governance: [Architecture Conventions §10](../conventions/architecture-conventions.md#ui-design-ssot)
 
 本文是 `canvas.pen` 的文字索引，记录当前 Canonical 视觉体系、主题变量、组件母版、组合模块、正式页面及同步规则。若本文与设计稿像素或实例树不一致，以已在 Pencil 编辑器中打开的 `canvas.pen` 为准，并在同一次设计变更中回写本文。
@@ -156,6 +156,11 @@ Primary 按钮使用 `135°` 的 `ds-primary-start → ds-primary-end` 渐变。
 
 中性 Save 是唯一批准的页面级按钮色彩例外，但仍通过主题变量实现，不使用实例硬编码 hex。
 
+媒体画幅当前只有一套合同：`1920×1080 @ 30fps` 的 16:9 横屏母版。`MediaViewport`
+统一视频、FABRICATE HTML、占位和加载态的黑色 16:9 表面；最终交付只提供
+`1920×1080（高清）`、`1280×720（标清）`、`960×540（流畅）` 三档同比例分辨率。
+本阶段不提供 9:16 状态或横竖切换控件。
+
 ### 4.6 字体与密度
 
 | Token | 值 | 用途 |
@@ -205,7 +210,7 @@ Primary 按钮使用 `135°` 的 `ds-primary-start → ds-primary-end` 渐变。
 |---|---|---|
 | C1 Workbench | Primary Button、ProjectCard | S1、S2 背景 |
 | C2 Pipeline | PipelineNode、QueueBar | S3 |
-| C3 Inspector | InspectorTabs、Progress、状态与预览表面 | S3、S4 |
+| C3 Inspector | InspectorTabs、Progress、MediaViewport、状态与预览表面 | S3、S4 |
 
 C 只负责稳定布局与业务组合，不定义新颜色。任何可复用的新 viewer、trace、gate、source、run control 或 status bar，必须先按 N6 顺序加入 B0/B 区，再进入 C/S。
 
@@ -228,6 +233,8 @@ C 只负责稳定布局与业务组合，不定义新颜色。任何可复用的
 - 唯一应用壳为 `AppSidebar/Canonical`；页面不得复制 Sidebar 或 TopNav。
 - S2 是 S1 上的模态状态，不是独立路由。
 - Inspector 固定为 `Data / Source / Gates / Execution`。
+- S4 主预览、8 帧条、S5 成片预览与 Final QA 单元统一使用 16:9；固定
+  `1920×1080` FABRICATE iframe 只能由父媒体框等比缩放，不修改 Artifact HTML。
 - 可见字段必须追溯到 Snapshot、Realtime、artifact/API DTO 或明确的本地 optimistic command state。
 - Artifact 外观可点击时必须有真实下载 URL；控件必须有 handler，能力不可用时明确 disabled/empty。
 - 不显示 raw assistant delta、Tool 参数值、prompt、credential、provider raw error 或 hidden reasoning。

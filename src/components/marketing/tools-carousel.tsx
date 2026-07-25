@@ -32,7 +32,7 @@ const tools: Tool[] = [
   {
     title: "Publish",
     description:
-      "Export channel-ready 16:9 and 9:16 Launch Video variants for every release.",
+      "Export channel-ready 16:9 landscape Launch Videos for every release.",
     image: "/img/ship.webp",
   },
 ];

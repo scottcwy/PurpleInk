@@ -28,7 +28,7 @@ const faqs: FAQItem[] = [
   {
     question: "Which launch formats does PurpleInk support?",
     answer:
-      "A single approved story can produce channel-ready 16:9 and 9:16 video variants while reusing the same verified product evidence and brand rules.",
+      "A single approved story produces a channel-ready 16:9 landscape launch video while reusing the same verified product evidence and brand rules.",
   },
   {
     question: "Does PurpleInk need access to production data?",

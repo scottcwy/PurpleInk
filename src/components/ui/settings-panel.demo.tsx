@@ -17,7 +17,7 @@ export function SettingsPanelDemo() {
       >
         <SettingsRow label="渲染并发数" value="8" />
         <SettingsSeparator />
-        <SettingsRow label="导出分辨率" value="1080×1920" />
+        <SettingsRow label="导出分辨率" value="1920×1080" />
       </SettingsPanel>
     </div>
   )
