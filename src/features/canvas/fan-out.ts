@@ -7,6 +7,7 @@ import {
   withTransaction,
   type TransactionContext,
 } from '@/lib/db/transaction'
+import { statusBus } from '@/lib/stream/status-bus'
 import type { ShotLaneSeed } from './contracts'
 import type { ShotLaneNodeType } from './types'
 
@@ -37,10 +38,11 @@ export async function materializeShotLanes(
   if (uniqueShots.length === 0) return
 
   const database = await getDb()
-  await withTransaction(database, async (tx) => {
+  const insertedLanes = await withTransaction(database, async (tx) => {
     const anchors = await findAnchors(tx, projectId)
     const existingKeys = await findExistingLaneKeys(tx, projectId, uniqueShots)
 
+    let inserted = 0
     for (const shot of uniqueShots) {
       const shotId = shot.shotId
       const existingCount = LANE_ROLES.filter((role) =>
@@ -49,10 +51,22 @@ export async function materializeShotLanes(
       if (existingCount !== 0 && existingCount !== LANE_ROLES.length) {
         throw new Error(`分镜通道数据不完整，拒绝继续物化：${shotId}`)
       }
-      if (existingCount === 0) await insertLaneNodes(tx, projectId, shot)
+      if (existingCount === 0) {
+        await insertLaneNodes(tx, projectId, shot)
+        inserted += 1
+      }
       await insertLaneEdges(tx, projectId, shotId, anchors)
     }
+    return inserted
   })
+  // 事务提交后才广播拓扑变化；幂等重放（泳道已存在）不发事件。
+  if (insertedLanes > 0) {
+    try {
+      statusBus.publishTopology(projectId)
+    } catch {
+      // 推送是体验增强，不反向阻断扇出。
+    }
+  }
 }
 
 async function findAnchors(

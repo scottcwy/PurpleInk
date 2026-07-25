@@ -7,6 +7,7 @@ import {
   withTransaction,
   type TransactionContext,
 } from '@/lib/db/transaction'
+import { statusBus } from '@/lib/stream/status-bus'
 import type { NodeStatus } from './types'
 
 export type { NodeStatus } from './types'
@@ -41,10 +42,11 @@ export async function transitionNodeStatus(
   next: NodeStatus
 ): Promise<void> {
   const database = await getDb()
-  await withTransaction(database, async (tx) => {
+  const projectId = await withTransaction(database, async (tx) => {
     const [node] = await tx
       .select({
         id: canvasNodes.id,
+        projectId: canvasNodes.projectId,
         status: canvasNodes.status,
         data: canvasNodes.data,
       })
@@ -73,7 +75,14 @@ export async function transitionNodeStatus(
           eq(canvasNodes.id, nodeId)
         )
       )
+    return node.projectId
   })
+  // 严格在事务提交之后发布（回滚路径零事件）；发布失败不影响状态迁移。
+  try {
+    statusBus.publishStatus(projectId, nodeId, next)
+  } catch {
+    // 推送是体验增强，不反向阻断状态机。
+  }
 }
 
 /**
