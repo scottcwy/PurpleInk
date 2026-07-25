@@ -349,7 +349,64 @@ HyperFrames。
 
 ## M6 统一路由骨架
 
-待执行。
+执行时间：2026-07-25
+
+### 规范与实现结构
+
+- 将来源仓库 `docs/conventions/新路由统一规范.md` 按字节一致复制为
+  `docs/conventions/routing.md`，再补充路由文件映射、六步守卫矩阵和
+  `shell` / `wired` / `legacy` 实现状态表。
+- 新路由统一放在 `src/app/(product)`，由 `ProductAppShell` 提供
+  Dashboard、Products、Releases、Login 的真实导航入口。
+- `UnwiredPanel` 统一展示精确文案“该页尚未接线（Stage B）”、未来进入前置和
+  未来数据来源；不展示假统计、假进度、假审批或连接状态。
+- `ReleaseStepNav` 只维护 Brief → Flow → Evidence → Storyboard → Review →
+  Artifacts 六步，使用编码后的 `releaseId` 构造链接，并只给当前步骤设置
+  `aria-current="step"`。
+- `/login` 与 `/signup` 只渲染禁用的表单外观和未接线说明，不提交凭据、不推断会话，
+  注册页也不创建示例 Product/Release。
+- 所有动态页面均 `await params`；全部 `page.tsx` 不超过 200 行。
+
+### 路由验收
+
+生产构建下逐条请求 12 条正式新路由，全部返回 200：
+
+`/login`、`/signup`、`/dashboard`、`/products`、
+`/products/product-acceptance`、`/releases`，以及
+`/releases/release-acceptance/{brief,flow,evidence,storyboard,review,artifacts}`。
+
+旧路由结果：
+
+| 旧路由 | 状态 | Location |
+| --- | ---: | --- |
+| `/releases/release-acceptance/sources` | 308 | `/releases/release-acceptance/evidence` |
+| `/releases/release-acceptance/render` | 308 | `/releases/release-acceptance/artifacts` |
+
+`/legacy/*` 未增加任何重定向，M5 的 CVC 页面继续可访问。
+
+### TDD 与浏览器证据
+
+- `tests/m6-route-shells.test.tsx` 首次因共享组件不存在而失败。
+- 实现共享组件后，组件真值测试通过、14 个路由文件清单继续失败。
+- 页面与重定向文件落盘后，路由文件、规范表一致性、六步链接/单步高亮、
+  Stage B 文案与数据来源共 4/4 通过。
+- Chromium 打开 `/releases/release-acceptance/evidence`，显示六步导航、
+  `CaptureRun` / `NodeEvidence` 等未来来源和明确未接线文案；点击 Review 后 URL
+  与页面内容同步更新，DOM 中只有 `05Review` 一项带 `aria-current="step"`。
+- 浏览器控制台仅保留基线已知的 `favicon-16x16.png` 404。
+- 截图：`docs/migration/evidence/m6-evidence-shell.png`。
+
+### M6 退出门
+
+| 命令或检查 | 结果 |
+| --- | --- |
+| `pnpm exec vitest run tests/m6-route-shells.test.tsx` | 4/4 通过 |
+| 12 条正式路由 HTTP 验收 | 12/12 返回 200 |
+| 2 条旧路由 | 2/2 返回 308，Location 正确 |
+| `pnpm lint` | 通过 |
+| `pnpm typecheck` | 通过 |
+| `pnpm build` | 通过，构建路由表与规范一致 |
+| 页面行数 | 全部 `page.tsx` ≤ 200 行 |
 
 ## M7 收口与交接
 

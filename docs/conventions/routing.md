@@ -354,4 +354,3 @@ Stage A 只展示这些前置条件，不执行认证、数据库查询或自动
 | `shell` | 页面、参数等待、导航与明确 Stage B 占位已落盘；无数据库、引擎或认证接线 | `/login`、`/signup`、`/dashboard`、`/products*`、`/releases*` 新规范路由 |
 | `wired` | 有真实运行链路并在 Stage A 做过运行验收 | `/`、`/api/engine/*`、CVC Next API |
 | `legacy` | Stage A 保留的 CVC 过渡 UI；不代表新 Product/Release 域已实现 | `/legacy*`、`/playbook*` |
-
