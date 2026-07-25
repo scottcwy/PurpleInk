@@ -1,0 +1,7 @@
+<svg width="167" height="47" viewBox="0 0 167 47" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>PurpleInk</title>
+  <rect x="3.5" y="4.5" width="38" height="38" rx="10.5" stroke="white" stroke-width="3"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M13 13H24.7C32 13 36.5 16.8 36.5 23.1C36.5 29.4 32 33.2 24.7 33.2H19.2V37H13V13ZM19.2 18.5V27.7H24.3C28.1 27.7 30.2 26.2 30.2 23.1C30.2 20 28.1 18.5 24.3 18.5H19.2Z" fill="white"/>
+  <circle cx="36.5" cy="10.5" r="3.5" fill="#00C37A"/>
+  <text x="51" y="31.5" fill="white" font-family="Geist, ui-sans-serif, system-ui, sans-serif" font-size="24" font-weight="650" letter-spacing="0">PurpleInk</text>
+</svg>
