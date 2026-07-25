@@ -46,19 +46,19 @@ describe('AppSidebar', () => {
       })
     )
 
-    expect(html).toContain('/canvas?projectId=project%2F1')
+    expect(html).toContain('/legacy/canvas?projectId=project%2F1')
     expect(html).toContain(
-      '/canvas/shot/node%2F1?projectId=project%2F1'
+      '/legacy/canvas/shot/node%2F1?projectId=project%2F1'
     )
-    expect(html).toContain('/canvas/export?projectId=project%2F1')
-    expect(html).toContain('/settings?projectId=project%2F1')
+    expect(html).toContain('/legacy/canvas/export?projectId=project%2F1')
+    expect(html).toContain('/legacy/settings?projectId=project%2F1')
   })
 
   it('does not link context-only pages to a guaranteed 404 without a project', () => {
     const html = renderToStaticMarkup(
       createElement(AppSidebar, { active: 'workbench' })
     )
-    expect(html).not.toContain('href="/canvas/export"')
+    expect(html).not.toContain('href="/legacy/canvas/export"')
   })
 
   it('keeps nav labels in the DOM when compact (via Tooltip)', () => {

@@ -364,7 +364,7 @@ IMPORTANT: Output each chapter separated by exactly:
  */
 export function extractHtmlFromResponse(response: string): string {
   // Remove markdown code fences if present
-  let html = response
+  const html = response
     .replace(/^```(?:html|HTML)?\s*\n?/gm, "")
     .replace(/```\s*$/gm, "")
     .trim()

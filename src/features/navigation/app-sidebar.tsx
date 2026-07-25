@@ -36,10 +36,10 @@ export function AppSidebar({
   className?: string
   style?: CSSProperties
 }) {
-  const canvasHref = projectHref('/canvas', projectId)
+  const canvasHref = projectHref('/legacy/canvas', projectId)
   const rendererHref =
     projectId && rendererNodeId
-      ? `/canvas/shot/${encodeURIComponent(rendererNodeId)}?projectId=${encodeURIComponent(projectId)}`
+      ? `/legacy/canvas/shot/${encodeURIComponent(rendererNodeId)}?projectId=${encodeURIComponent(projectId)}`
       : canvasHref
 
   return (
@@ -50,7 +50,7 @@ export function AppSidebar({
       <SidebarNav>
         <NavItem
           icon={LayoutDashboard}
-          href="/"
+          href="/legacy"
           active={active === 'workbench'}
           compact={compact}
         >
@@ -58,7 +58,7 @@ export function AppSidebar({
         </NavItem>
         <NavItem
           icon={Folder}
-          href="/projects"
+          href="/legacy/projects"
           active={active === 'projects'}
           compact={compact}
         >
@@ -82,7 +82,7 @@ export function AppSidebar({
         </NavItem>
         <NavItem
           icon={Download}
-          href={projectId ? projectHref('/canvas/export', projectId) : canvasHref}
+          href={projectId ? projectHref('/legacy/canvas/export', projectId) : canvasHref}
           active={active === 'export'}
           compact={compact}
         >
@@ -93,7 +93,7 @@ export function AppSidebar({
       <SidebarFooter>
         <NavItem
           icon={Settings}
-          href={projectHref('/settings', projectId)}
+          href={projectHref('/legacy/settings', projectId)}
           active={active === 'settings'}
           compact={compact}
         >

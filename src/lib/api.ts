@@ -4,11 +4,14 @@
  * 这样浏览器无跨域；如需直连后端可用 NEXT_PUBLIC_API_BASE 覆盖。
  */
 export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") || "/api";
+  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") || "/api/engine";
 
 export type JobPhase =
   | "queued"
   | "capturing"
+  | "scripting"
+  | "synthesizing"
+  | "timing"
   | "composing"
   | "rendering"
   | "verifying"

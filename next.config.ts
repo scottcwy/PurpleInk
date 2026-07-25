@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
   // 好处：浏览器无跨域；生产环境单域名部署，worker 不对外暴露（走内网 BACKEND_ORIGIN）。
   async rewrites() {
     const backend = process.env.BACKEND_ORIGIN || "http://localhost:8787";
-    return [{ source: "/api/:path*", destination: `${backend}/:path*` }];
+    return [{ source: "/api/engine/:path*", destination: `${backend}/:path*` }];
   },
 };
 

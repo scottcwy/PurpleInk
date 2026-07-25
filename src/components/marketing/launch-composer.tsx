@@ -23,6 +23,9 @@ type Quality = "draft" | "standard" | "high";
 const PHASE_LABEL: Record<JobPhase, string> = {
   queued: "排队中…",
   capturing: "正在采集网站…",
+  scripting: "正在编写旁白…",
+  synthesizing: "正在合成语音…",
+  timing: "正在对齐音画…",
   composing: "正在合成分镜…",
   rendering: "正在渲染视频…",
   verifying: "正在校验金样本…",
@@ -33,9 +36,12 @@ const PHASE_LABEL: Record<JobPhase, string> = {
 /** 各阶段进度带 [起, 止, 时间常数τ(秒)]：τ 越大爬得越慢。采集不稳定所以带最宽、τ 最大 */
 const PHASE_BAND: Record<JobPhase, [number, number, number]> = {
   queued: [2, 8, 4],
-  capturing: [8, 62, 150],
-  composing: [62, 70, 8],
-  rendering: [70, 93, 70],
+  capturing: [8, 55, 150],
+  scripting: [55, 60, 10],
+  synthesizing: [60, 68, 20],
+  timing: [68, 72, 8],
+  composing: [72, 78, 8],
+  rendering: [78, 93, 70],
   verifying: [93, 98, 4],
   done: [100, 100, 1],
   failed: [0, 0, 1],

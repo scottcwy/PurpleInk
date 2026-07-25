@@ -284,7 +284,68 @@ M4 复制真实依赖后必须移除这三条排除并重新 typecheck。
 
 ## M5 路由并存
 
-待执行。
+执行时间：2026-07-25
+
+### 双入口与 worker 命名空间
+
+- 营销首页移动到 `src/app/(marketing)/page.tsx`，公开路径仍为 `/`。
+- CVC `(app)` 路由组通过 `robocopy /E` 原样复制到
+  `src/app/legacy/(app)`；`AppShell` 只在该路由组的 `layout.tsx` 挂载。
+- CVC 工作台、项目、画布、分镜、导出、设置分别发布在
+  `/legacy`、`/legacy/projects`、`/legacy/canvas`、
+  `/legacy/canvas/shot/[id]`、`/legacy/canvas/export`、
+  `/legacy/settings`。
+- `playbook` 原样复制到 `/playbook`，不带 `AppShell`。
+- CVC 侧边栏、新建项目跳转和页面内深链均改为 `/legacy/*`；导航测试先红后绿，
+  最终 2 个测试文件、17 项测试通过。
+- Next rewrite 从宽泛的 `/api/:path*` 收窄为 `/api/engine/:path*`；
+  CVC 的 Next API 继续使用 `/api/projects`、`/api/settings`、
+  `/api/artifacts/[id]` 等原路径。营销 worker 客户端默认基址改为
+  `/api/engine`。
+
+### 真实运行验收
+
+验收使用生产构建、Next `3000`、worker `8787` 和目标仓库独立 Postgres
+`54328`。由于本次不依赖外部站点可用性，worker 使用
+`BROWSER_DRIVER=mock` 与 `PURPLEINK_COMPOSE_MODE=template`，记录为
+`KNOWN-ENV-BLOCK` 的允许降级；渲染、轮询、视频下载仍走真实本地 worker 与
+HyperFrames。
+
+| 检查项 | 结果 | 证据摘要 |
+| --- | --- | --- |
+| `GET /api/engine/health` | 200 | `ok=true`，rewrite 到 worker 成功 |
+| 营销 Launch Composer | 通过 | 浏览器真实点击；任务 `127ddc4a-52ec-4e03-95ba-8c98a2174a2e` 完成，`hasVideo=true`，耗时 132.4 秒 |
+| 视频端点 | 200 | `video/mp4`，15.000 秒，352987 bytes；浏览器自动下载 `purpleink-localhost.mp4` |
+| HyperFrames 结果 | 完成 | `goldenVerified=true`；静态 check 有告警，UI 如实显示且未伪装通过 |
+| 真实 PG 项目 | 通过 | 项目 `292ad565-99ab-46d3-98d0-b83af8cf4a1a`，`/legacy/canvas` 显示 4 个真实节点 |
+| 设置页 | 通过 | 显示未配置状态与真实路由；API 只返回描述字段，未返回明文或密文 |
+| 验收产物 | 200 | `/api/artifacts/c5dcb510-5e88-451b-9082-6b01eb7d13f2` 下载哈希与本地存储一致 |
+| `/playbook` | 200 | Foundations、UI、Icons 三个入口可见 |
+
+验收过程中发现 worker 还会上报 `scripting`、`synthesizing`、`timing`，
+而营销进度组件原先未覆盖这些阶段，导致 250ms 定时器重复抛错。新增
+`tests/job-phase-contract.test.ts` 先复现失败，再统一前端 `JobPhase`、
+阶段标签和进度区间。修复后的完整任务从语音合成到完成仅保留基线已知的
+`favicon-16x16.png` 404，无阶段映射异常。
+
+截图证据：
+
+- `docs/migration/evidence/m5-marketing.png`
+- `docs/migration/evidence/m5-marketing-job-done.png`
+- `docs/migration/evidence/m5-legacy-canvas.png`
+- `docs/migration/evidence/m5-legacy-settings.png`
+- `docs/migration/evidence/m5-playbook.png`
+
+### M5 退出门
+
+| 命令或检查 | 结果 |
+| --- | --- |
+| `pnpm exec vitest run src/features/navigation/app-shell.test.ts src/features/navigation/app-sidebar-shell.test.ts` | 17/17 通过 |
+| `pnpm exec vitest run tests/job-phase-contract.test.ts` | 1/1 通过 |
+| `pnpm lint` | 通过 |
+| `pnpm typecheck` | 通过 |
+| `pnpm build` | 通过，双入口、六个 legacy 页面、四个 playbook 页面和 API 路由全部产出 |
+| U+FFFD 扫描 | 0 |
 
 ## M6 统一路由骨架
 

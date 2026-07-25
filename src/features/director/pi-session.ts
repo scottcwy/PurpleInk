@@ -26,7 +26,7 @@ export interface DirectorRunInput {
   output: DirectorOutputPolicy;
 }
 
-export interface DirectorRunResult extends DirectorOutput {}
+export type DirectorRunResult = DirectorOutput;
 
 export interface DirectorSession {
   id: string;
