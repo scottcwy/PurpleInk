@@ -114,7 +114,7 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
 
 | ID | 标题 | 状态 | 主要落点 |
 | --- | --- | --- | --- |
-| [ISSUE-004](./ISSUE-004-queue-concurrency-lanes.md) | 队列单一并发数字混用 LLM 与渲染两类负载 | `open` | `src/lib/queue/in-process-queue.ts`、`types.ts` |
+| [ISSUE-004](./ISSUE-004-queue-concurrency-lanes.md) | 队列单一并发数字混用 LLM 与渲染两类负载 | `done` | `src/lib/queue/in-process-queue.ts`、`types.ts`、`init.ts`、`index.ts`（commit `97b741e`） |
 | [ISSUE-005](./ISSUE-005-audio-timing-truth.md) | `audio-demo` 编造固定 8 秒/镜时长，TTS 时序颠倒 | `open` | `src/features/director/audio-demo.ts`、`stage-result.ts`、`schemas/ingest.ts`、`src/features/audio/**` |
 
 ### P2 架构收敛与体验
@@ -124,7 +124,7 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
 | [ISSUE-006](./ISSUE-006-dormant-pipeline-layer.md) | `src/features/pipeline/**` 整层休眠，是第三套执行模型 | `open` | `src/features/pipeline/**`、`vitest.config.ts`、`tsconfig.json` |
 | [ISSUE-007](./ISSUE-007-duplicate-canvas.md) | 两套画布实现并存（`WorkflowCanvas` vs `CanvasView`） | `done` | `src/features/workflow/**`、`src/app/playbook/registry.ts` |
 | [ISSUE-008](./ISSUE-008-canvas-layout-truth.md) | dagre 每次重算布局，覆盖已持久化坐标 | `open` | `src/features/canvas/layout.ts`、`canvas/[projectId]/page.tsx` |
-| [ISSUE-009](./ISSUE-009-routing-convergence.md) | routing.md §11 收敛清单未清（编码、robots、sitemap、token） | `open` | `canvas-inspector.tsx`、`robots.ts`、`sitemap.ts`、`empty-state.tsx`、`button.tsx` |
+| [ISSUE-009](./ISSUE-009-routing-convergence.md) | routing.md §11 收敛清单未清（编码、robots、sitemap、token） | `done` | `canvas-inspector.tsx`、`robots.ts`、`sitemap.ts`、`empty-state.tsx`、`button.tsx`（commit `94af7d3`，证据 `evidence/issue-009/`） |
 | [ISSUE-010](./ISSUE-010-oversized-files.md) | 2 个超硬上限文件使 `verify:v3` 恒红 | `done` | `export-workspace.tsx`、`shot-detail.tsx` |
 | [ISSUE-011](./ISSUE-011-settings-placeholders.md) | 设置页占位项与只读并发数 | `open` | `settings-form.tsx` |
 | [ISSUE-012](./ISSUE-012-canvas-live-updates.md) | 画布靠 1.5s `router.refresh()` 轮询驱动状态 | `open` | `canvas-view.tsx`、`src/lib/stream/**` |
@@ -139,20 +139,22 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
 ## 5. 依赖与派发顺序
 
 ```text
-第一批（可完全并行，文件零重叠）
-  ISSUE-003  env，纯配置，不碰代码
-  ISSUE-004  只碰 src/lib/queue
-  ISSUE-007  只碰 src/features/workflow + playbook registry
-  ISSUE-009  只碰 4 个已登记的收敛点
-  ISSUE-010  只碰 2 个超行文件
-  ISSUE-013  先出职责边界结论（分析先行，改动等 ISSUE-001 落地）
+第一批（可完全并行，文件零重叠）—— 已全部落地
+  ISSUE-001  done · commit 847722d + 4b621fe · 真实 INGEST 运行取证
+  ISSUE-003  done · 7 commits · bootstrap 凭据写入 DB 加密存储
+  ISSUE-004  done · commit 97b741e · 队列分轨 + 队头阻塞回归测试
+  ISSUE-007  done · commit cfcc52a · 删除 WorkflowCanvas
+  ISSUE-009  done · commit 94af7d3 · routing §11 收敛清单全清
+  ISSUE-010  done · 5 commits · verify:v3 转绿，前后截图 SHA-256 一致
+  ISSUE-013  in-progress · 分析完成，实施收尾中（释放 openai 债务空间）
 
-第二批（ISSUE-001 是拱心石，先它）
-  ISSUE-001  ->  ISSUE-002  ->  ISSUE-006
+第二批（ISSUE-001 已落地，可开工）
+  ISSUE-002  fabricateShot 入 render 队列
+  ISSUE-006  接手 vitest/tsconfig 第 14-16 行 / 第 49 行所有权
 
 第三批（依赖前两批）
   ISSUE-005  需要 001 + 002 先能跑通，才能验真实音频时长
-  ISSUE-011  需要 004 才有真实可配的并发数
+  ISSUE-011  需要 004 才有真实可配的并发数（004 已 done，可提前）
   ISSUE-008  ISSUE-012  独立收尾
 
 全程
