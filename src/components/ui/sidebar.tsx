@@ -20,6 +20,8 @@ export interface PurpleInkSidebarProps {
   onCollapsedChange: (collapsed: boolean) => void
   accountOpen: boolean
   onAccountOpenChange: (open: boolean) => void
+  brandHref?: string
+  settingsHref?: string
   className?: string
 }
 
@@ -29,6 +31,8 @@ export function PurpleInkSidebar({
   onCollapsedChange,
   accountOpen,
   onAccountOpenChange,
+  brandHref = '/products/dashboard',
+  settingsHref,
   className,
 }: PurpleInkSidebarProps) {
   return (
@@ -41,7 +45,7 @@ export function PurpleInkSidebar({
       )}
     >
       <header className="flex h-10 items-center justify-between gap-3">
-        <Link href="/dashboard" aria-label="PurpleInk 工作台">
+        <Link href={brandHref} aria-label="PurpleInk 首页">
           <PurpleInkLogo compact={collapsed} />
         </Link>
         {!collapsed ? (
@@ -73,7 +77,7 @@ export function PurpleInkSidebar({
       <div className="relative">
         {accountOpen && !collapsed ? (
           <div className="absolute bottom-[66px] left-0 z-40">
-            <AccountMenu />
+            <AccountMenu settingsHref={settingsHref} />
           </div>
         ) : null}
         <SidebarAccount
@@ -110,6 +114,7 @@ function SidebarNavigationItem({
     <Link
       href={item.href}
       title={collapsed ? item.label : undefined}
+      aria-label={collapsed ? item.label : undefined}
       aria-current={item.active ? 'page' : undefined}
       className={classes}
     >
@@ -120,6 +125,7 @@ function SidebarNavigationItem({
       type="button"
       disabled
       title={item.disabledReason}
+      aria-label={collapsed ? item.label : undefined}
       className={cn(
         classes,
         'cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ds-text-muted',

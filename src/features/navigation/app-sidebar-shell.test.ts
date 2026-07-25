@@ -22,15 +22,15 @@ describe('resolveSidebarMode', () => {
 
 describe('resolveActiveSection', () => {
   it('matches canvas sub-routes before the canvas root', () => {
-    expect(resolveActiveSection('/legacy/canvas/shot/node-1')).toBe('renderer')
-    expect(resolveActiveSection('/legacy/canvas/export')).toBe('export')
-    expect(resolveActiveSection('/legacy/canvas')).toBe('canvas')
+    expect(resolveActiveSection('/products/shots/node-1')).toBe('renderer')
+    expect(resolveActiveSection('/products/export/project-1')).toBe('export')
+    expect(resolveActiveSection('/products/canvas/project-1')).toBe('canvas')
   })
 
   it('matches top-level sections', () => {
-    expect(resolveActiveSection('/legacy')).toBe('workbench')
-    expect(resolveActiveSection('/legacy/projects')).toBe('projects')
-    expect(resolveActiveSection('/legacy/settings')).toBe('settings')
+    expect(resolveActiveSection('/products/dashboard')).toBe('workbench')
+    expect(resolveActiveSection('/products/projects')).toBe('projects')
+    expect(resolveActiveSection('/products/settings')).toBe('settings')
   })
 
   it('falls back to workbench for unknown paths', () => {

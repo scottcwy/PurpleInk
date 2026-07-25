@@ -5,7 +5,10 @@ import { cn } from '@/lib/utils'
 export interface RecentProject {
   id: string
   title: string
+  href: string
   meta: string
+  updatedAt: Date
+  shotCount: number
 }
 
 export function RecentProjectsPanel({
@@ -25,7 +28,7 @@ export function RecentProjectsPanel({
           </span>
         </div>
         <Link
-          href="/products"
+          href="/products/projects"
           className="flex items-center gap-1.5 text-[11px] text-ds-text-muted hover:text-ds-text"
         >
           查看全部
@@ -35,18 +38,21 @@ export function RecentProjectsPanel({
       {projects.length > 0 ? (
         <div className="grid flex-1 gap-3.5 md:grid-cols-3">
           {projects.map((project) => (
-            <article
+            <Link
               key={project.id}
+              href={project.href}
               className="overflow-hidden rounded-lg border border-ds-border bg-ds-surface"
             >
-              <div className="flex h-[150px] items-center justify-center bg-ds-surface-muted">
-                <Play aria-hidden className="size-7 text-ds-text-muted" />
-              </div>
-              <div className="p-4">
-                <h3 className="text-[15px] font-semibold">{project.title}</h3>
-                <p className="mt-2 text-xs text-ds-text-muted">{project.meta}</p>
-              </div>
-            </article>
+              <article>
+                <div className="flex h-[150px] items-center justify-center bg-ds-surface-muted">
+                  <Play aria-hidden className="size-7 text-ds-text-muted" />
+                </div>
+                <div className="p-4">
+                  <h3 className="text-[15px] font-semibold">{project.title}</h3>
+                  <p className="mt-2 text-xs text-ds-text-muted">{project.meta}</p>
+                </div>
+              </article>
+            </Link>
           ))}
         </div>
       ) : (

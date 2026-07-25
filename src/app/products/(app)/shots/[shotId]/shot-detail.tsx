@@ -25,6 +25,10 @@ import { TopBar } from '@/components/ui/top-bar'
 import { Toast } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
 import { usePublishNavContext } from '@/features/navigation/nav-context'
+import {
+  productCanvasHref,
+  productShotHref,
+} from '@/features/navigation/products-routes'
 import { ShotPanelChrome, useShotPanelState } from './shot-panels'
 import {
   activeThumbIndex,
@@ -77,7 +81,10 @@ export function ShotDetail({
         <TopBar
           title={
             <span className="flex items-center gap-2">
-              <Link href={`/legacy/canvas?projectId=${projectId}`} aria-label="返回画布">
+              <Link
+                href={productCanvasHref(projectId)}
+                aria-label="返回画布"
+              >
                 <ArrowLeft className="h-4 w-4" />
               </Link>
               {laneKey} · {projectTitle}
@@ -227,7 +234,7 @@ function ShotLink({
 }) {
   if (!nodeId) return <Button variant="gray" size="sm" disabled>{label}</Button>
   return (
-    <Link href={`/legacy/canvas/shot/${nodeId}?projectId=${projectId}`}>
+    <Link href={productShotHref(nodeId, projectId)}>
       <Button variant="gray" size="sm">{label}</Button>
     </Link>
   )

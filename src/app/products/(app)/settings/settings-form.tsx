@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { SettingsGroup, SettingsSeparator } from '@/components/ui/settings-group'
 import { SettingsRow } from '@/components/ui/settings-row'
 import { usePublishNavContext } from '@/features/navigation/nav-context'
+import { productExportHref } from '@/features/navigation/products-routes'
 import { ModelServiceSettings } from './model-service-settings'
 import { ThemeControl } from './theme-control'
 
@@ -46,7 +47,7 @@ export function SettingsForm({
           <SettingsRow label="导出分辨率">
             {projectId ? (
               <Link
-                href={`/legacy/canvas/export?projectId=${encodeURIComponent(projectId)}`}
+                href={productExportHref(projectId)}
                 className="text-[13px] text-accent underline-offset-2 hover:underline"
               >
                 按项目在导出页配置

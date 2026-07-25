@@ -10,7 +10,6 @@ const SECTIONS: AppSection[] = [
   'canvas',
   'renderer',
   'export',
-  'settings',
 ]
 
 describe('AppSidebar', () => {
@@ -19,21 +18,19 @@ describe('AppSidebar', () => {
       createElement(AppSidebar, { active: 'workbench' })
     )
 
-    for (const label of [
-      '工作台',
-      '项目列表',
-      '画布编辑器',
-      '分镜渲染器',
-      '合成与导出',
-      '设置',
-      '本地存储 · 模型直连',
-    ]) {
-      expect(html.match(new RegExp(label, 'g'))).toHaveLength(1)
+    for (const label of ['工作台', '项目', '画布', '镜头', '导出']) {
+      expect(html.match(new RegExp(`>${label}<`, 'g'))).toHaveLength(1)
     }
   })
 
   it.each(SECTIONS)('marks only %s as the active destination', (active) => {
-    const html = renderToStaticMarkup(createElement(AppSidebar, { active }))
+    const html = renderToStaticMarkup(
+      createElement(AppSidebar, {
+        active,
+        projectId: 'project-1',
+        rendererNodeId: 'shot-1',
+      }),
+    )
     expect(html.match(/aria-current="page"/g)).toHaveLength(1)
   })
 
@@ -46,30 +43,27 @@ describe('AppSidebar', () => {
       })
     )
 
-    expect(html).toContain('/legacy/canvas?projectId=project%2F1')
+    expect(html).toContain('/products/canvas/project%2F1')
     expect(html).toContain(
-      '/legacy/canvas/shot/node%2F1?projectId=project%2F1'
+      '/products/shots/node%2F1?projectId=project%2F1'
     )
-    expect(html).toContain('/legacy/canvas/export?projectId=project%2F1')
-    expect(html).toContain('/legacy/settings?projectId=project%2F1')
+    expect(html).toContain('/products/export/project%2F1')
   })
 
   it('does not link context-only pages to a guaranteed 404 without a project', () => {
     const html = renderToStaticMarkup(
       createElement(AppSidebar, { active: 'workbench' })
     )
-    expect(html).not.toContain('href="/legacy/canvas/export"')
+    expect(html).not.toContain('href="/products/export')
   })
 
   it('keeps nav labels in the DOM when compact (via Tooltip)', () => {
     const html = renderToStaticMarkup(
       createElement(AppSidebar, { active: 'workbench', compact: true })
     )
-    for (const label of ['工作台', '项目列表', '画布编辑器', '分镜渲染器', '合成与导出', '设置']) {
-      expect(html.match(new RegExp(label, 'g'))).toHaveLength(1)
+    for (const label of ['工作台', '项目', '画布', '镜头', '导出']) {
+      expect(html).toContain(`aria-label="${label}"`)
     }
-    // compact 态状态文案仅保留为 title，不作为可见文本节点重复渲染
-    expect(html).toContain('title="本地存储 · 模型直连"')
     expect(html.match(/aria-current="page"/g)).toHaveLength(1)
   })
 })

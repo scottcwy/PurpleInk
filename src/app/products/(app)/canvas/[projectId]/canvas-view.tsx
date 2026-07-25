@@ -19,6 +19,7 @@ import { TopBar } from '@/components/ui/top-bar'
 import type { CanvasGraphEdge, CanvasGraphNode } from '@/features/canvas'
 import { fadeInUp } from '@/lib/motion/variants'
 import { usePublishNavContext } from '@/features/navigation/nav-context'
+import { productExportHref } from '@/features/navigation/products-routes'
 import { CanvasInspector } from './canvas-inspector'
 import { startPipeline, stopPipeline } from './canvas-action-api'
 import {
@@ -138,7 +139,7 @@ export function CanvasView({
               >
                 {autopilot ? '停止自动推进' : '一键启动'}
               </Button>
-              <Link href={`/legacy/canvas/export?projectId=${projectId}`}>
+              <Link href={productExportHref(projectId)}>
                 <Button size="sm" icon={Download}>导出 MP4</Button>
               </Link>
             </>

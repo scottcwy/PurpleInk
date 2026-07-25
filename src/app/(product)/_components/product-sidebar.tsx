@@ -13,6 +13,7 @@ import {
   PurpleInkSidebar,
   type PurpleInkSidebarItem,
 } from "@/components/ui/sidebar";
+import { PRODUCTS_ROUTES } from "@/features/navigation/products-routes";
 
 export function ProductSidebar() {
   const pathname = usePathname();
@@ -21,16 +22,16 @@ export function ProductSidebar() {
   const releaseId = pathname.match(/^\/releases\/([^/]+)/)?.[1];
   const items: readonly PurpleInkSidebarItem[] = [
     {
-      href: "/dashboard",
+      href: PRODUCTS_ROUTES.dashboard,
       label: "工作台",
       icon: LayoutDashboard,
-      active: pathname === "/dashboard",
+      active: pathname === PRODUCTS_ROUTES.dashboard,
     },
     {
-      href: "/products",
+      href: PRODUCTS_ROUTES.projects,
       label: "项目",
       icon: FolderKanban,
-      active: pathname.startsWith("/products"),
+      active: pathname.startsWith(PRODUCTS_ROUTES.projects),
     },
     {
       href: releaseId ? `/releases/${releaseId}/flow` : "/releases",

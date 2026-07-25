@@ -4,7 +4,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ReleaseStepNav } from "@/app/(product)/_components/release-step-nav";
 import { UnwiredPanel } from "@/app/(product)/_components/unwired-panel";
-import DashboardPage from "@/app/(product)/dashboard/page";
 import {
   STAGE_B_WORKFLOW_NODES,
   WORKFLOW_BLUEPRINT_EDGES,
@@ -13,9 +12,6 @@ import {
 const ROUTE_FILES = [
   "src/app/(product)/login/page.tsx",
   "src/app/(product)/signup/page.tsx",
-  "src/app/(product)/dashboard/page.tsx",
-  "src/app/(product)/products/page.tsx",
-  "src/app/(product)/products/[productId]/page.tsx",
   "src/app/(product)/releases/page.tsx",
   "src/app/(product)/releases/[releaseId]/brief/page.tsx",
   "src/app/(product)/releases/[releaseId]/flow/page.tsx",
@@ -123,16 +119,6 @@ describe("M6 route shells", () => {
     expect(sidebarSource).not.toContain("label: 'Playbook'");
     expect(shellSource).not.toContain("#f4f0e8");
     expect(sidebarSource).not.toContain("#e75c3c");
-  });
-
-  it("renders the workbench structure without inventing dashboard data", () => {
-    const html = renderToStaticMarkup(createElement(DashboardPage));
-
-    expect(html).toContain("WorkspaceStatisticsSnapshotV1");
-    expect(html).toContain("暂无可展示的真实项目");
-    expect(html).toContain("该统计尚未接线（Stage B）");
-    expect(html).not.toContain(">12<");
-    expect(html).not.toContain(">148<");
   });
 
   it("mounts the Pencil workflow canvas only on the canonical flow route", () => {

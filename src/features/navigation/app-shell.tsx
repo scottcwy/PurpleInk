@@ -26,7 +26,12 @@ export interface AppShellProps {
 export function AppShell({ children, className }: AppShellProps) {
   return (
     <NavContextProvider>
-      <div className={cn('flex h-screen w-screen overflow-hidden bg-bg text-label', className)}>
+      <div
+        className={cn(
+          'ds-app-gradient flex h-screen w-screen overflow-hidden text-ds-text',
+          className,
+        )}
+      >
         <AppSidebarShell />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
       </div>

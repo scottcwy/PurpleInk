@@ -12,6 +12,7 @@ import { SettingsRow } from '@/components/ui/settings-row'
 import { StatusPill } from '@/components/ui/status-pill'
 import { Toast } from '@/components/ui/toast'
 import { AnimatedAside, DrawerOverlay } from '@/features/navigation/collapsible-panel'
+import { productShotHref } from '@/features/navigation/products-routes'
 import type { CanvasGraphNode } from '@/features/canvas'
 import { useMediaQuery } from '@/lib/hooks/use-media-query'
 import { usePersistentToggle } from '@/lib/hooks/use-persistent-toggle'
@@ -280,7 +281,7 @@ function InspectorBody({
         {node.type === 'shot-codegen' ? '重渲此镜' : '执行此阶段'}
       </Button>
       {node.type === 'shot-codegen' && (
-        <Link href={`/legacy/canvas/shot/${node.id}?projectId=${projectId}`}>
+        <Link href={productShotHref(node.id, projectId)}>
           <Button variant="gray">查看代码</Button>
         </Link>
       )}

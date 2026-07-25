@@ -8,6 +8,7 @@ import { Dialog } from '@/components/ui/dialog'
 import { TextArea } from '@/components/ui/text-area'
 import { TextField } from '@/components/ui/text-field'
 import { Toast } from '@/components/ui/toast'
+import { productCanvasHref } from '@/features/navigation/products-routes'
 import { createProjectAndStartIngest } from './new-project-api'
 
 const SCRIPT_PLACEHOLDER =
@@ -40,7 +41,7 @@ export function NewProjectDialog({ featured = false }: NewProjectDialogProps) {
     setError(undefined)
     try {
       const { projectId } = await createProjectAndStartIngest({ title, script })
-      router.push(`/legacy/canvas?projectId=${encodeURIComponent(projectId)}`)
+      router.push(productCanvasHref(projectId))
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '请稍后重试')
       setSubmitting(false)
@@ -104,7 +105,14 @@ export function NewProjectDialog({ featured = false }: NewProjectDialogProps) {
               <span>配音（可选）</span>
               <span className="text-xs text-label-tertiary">作为全片时间地基</span>
             </div>
-            <Button type="button" variant="gray" size="sm" icon={Upload}>
+            <Button
+              type="button"
+              variant="gray"
+              size="sm"
+              icon={Upload}
+              disabled
+              title="音频上传尚未接线"
+            >
               上传音频
             </Button>
           </div>

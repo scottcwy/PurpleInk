@@ -18,10 +18,10 @@ export function resolveSidebarMode(
  * 切页时侧栏据此高亮，不依赖页面传参；canvas 子路由必须先于 canvas 根匹配。
  */
 export function resolveActiveSection(pathname: string): AppSection {
-  if (pathname.startsWith('/legacy/canvas/shot')) return 'renderer'
-  if (pathname.startsWith('/legacy/canvas/export')) return 'export'
-  if (pathname.startsWith('/legacy/canvas')) return 'canvas'
-  if (pathname.startsWith('/legacy/projects')) return 'projects'
-  if (pathname.startsWith('/legacy/settings')) return 'settings'
+  if (pathname.startsWith('/products/shots/')) return 'renderer'
+  if (pathname.startsWith('/products/export/')) return 'export'
+  if (pathname.startsWith('/products/canvas/')) return 'canvas'
+  if (pathname.startsWith('/products/projects')) return 'projects'
+  if (pathname.startsWith('/products/settings')) return 'settings'
   return 'workbench'
 }

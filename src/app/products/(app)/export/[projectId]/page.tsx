@@ -5,12 +5,11 @@ import { ExportWorkspace } from './export-workspace'
 export const dynamic = 'force-dynamic'
 
 export default async function ExportPage({
-  searchParams,
+  params,
 }: {
-  searchParams: Promise<{ projectId?: string }>
+  params: Promise<{ projectId: string }>
 }) {
-  const { projectId } = await searchParams
-  if (!projectId) notFound()
+  const { projectId } = await params
   const project = (await listProjects()).find(
     (candidate) => candidate.id === projectId
   )

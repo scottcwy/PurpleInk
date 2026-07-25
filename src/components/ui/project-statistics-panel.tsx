@@ -7,8 +7,17 @@ export interface ProjectMetric {
   source: string
 }
 
+export interface ProjectStatusDistribution {
+  running: number
+  failed: number
+  succeeded: number
+  idle: number
+}
+
 export interface ProjectStatisticsPanelProps {
   metrics?: readonly ProjectMetric[]
+  statusDistribution?: ProjectStatusDistribution
+  trendUnavailableLabel?: string
   updatedLabel?: string
   className?: string
 }
@@ -20,8 +29,17 @@ const EMPTY_METRICS: readonly ProjectMetric[] = [
   { label: '平均镜头数', source: 'shots.average' },
 ]
 
+const EMPTY_STATUS: ProjectStatusDistribution = {
+  running: 0,
+  failed: 0,
+  succeeded: 0,
+  idle: 0,
+}
+
 export function ProjectStatisticsPanel({
   metrics = EMPTY_METRICS,
+  statusDistribution = EMPTY_STATUS,
+  trendUnavailableLabel = '暂无可用历史快照',
   updatedLabel = '等待 WorkspaceStatisticsSnapshotV1',
   className,
 }: ProjectStatisticsPanelProps) {
@@ -76,15 +94,15 @@ export function ProjectStatisticsPanel({
           ))}
         </div>
         <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
-          <EmptyTrend />
-          <EmptyStatus />
+          <EmptyTrend label={trendUnavailableLabel} />
+          <StatusDistribution distribution={statusDistribution} />
         </div>
       </div>
     </section>
   )
 }
 
-function EmptyTrend() {
+function EmptyTrend({ label }: { label: string }) {
   return (
     <div className="flex min-h-40 flex-col gap-1.5">
       <div>
@@ -93,24 +111,46 @@ function EmptyTrend() {
       </div>
       <div className="ds-dot-grid flex flex-1 items-center justify-center rounded-md border border-ds-border">
         <span className="rounded-full bg-ds-surface px-3 py-1.5 text-[10px] text-ds-text-muted">
-          该统计尚未接线（Stage B）
+          {label}
         </span>
       </div>
     </div>
   )
 }
 
-function EmptyStatus() {
+const STATUS_ROWS: readonly [
+  keyof ProjectStatusDistribution,
+  string,
+][] = [
+  ['running', '运行中'],
+  ['failed', '失败'],
+  ['succeeded', '已完成'],
+  ['idle', '待执行'],
+]
+
+function StatusDistribution({
+  distribution,
+}: {
+  distribution: ProjectStatusDistribution
+}) {
   return (
     <div className="flex min-h-40 flex-col rounded-md bg-ds-surface-muted p-3">
       <div className="flex items-center justify-between">
         <h3 className="text-[11px] font-semibold">状态分布</h3>
-        <span className="text-[8px] text-ds-text-muted">最近 7 天</span>
+        <span className="text-[8px] text-ds-text-muted">当前快照</span>
       </div>
-      <div className="flex flex-1 items-center justify-center text-center text-[10px] text-ds-text-muted">
-        等待 projectStats.status7d
+      <div className="grid flex-1 content-center gap-2 py-3">
+        {STATUS_ROWS.map(([key, label]) => (
+          <div
+            key={key}
+            className="flex items-center justify-between border-b border-ds-border pb-1 text-[10px] last:border-b-0"
+          >
+            <span className="text-ds-text-muted">{label}</span>
+            <strong className="font-mono text-ds-text">{distribution[key]}</strong>
+          </div>
+        ))}
       </div>
-      <code className="text-[7px] text-ds-text-muted">projectStats.status7d</code>
+      <code className="text-[7px] text-ds-text-muted">pipeline.currentStatus</code>
     </div>
   )
 }

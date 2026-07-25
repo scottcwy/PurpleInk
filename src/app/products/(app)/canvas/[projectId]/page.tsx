@@ -1,4 +1,5 @@
 import { Clapperboard } from 'lucide-react'
+import { notFound } from 'next/navigation'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
   computeLayout,
@@ -12,14 +13,14 @@ import { CanvasLoader } from './canvas-loader'
 export const dynamic = 'force-dynamic'
 
 interface CanvasPageProps {
-  searchParams: Promise<{ projectId?: string }>
+  params: Promise<{ projectId: string }>
 }
 
-export default async function CanvasPage({ searchParams }: CanvasPageProps) {
-  const requestedProjectId = (await searchParams).projectId
+export default async function CanvasPage({ params }: CanvasPageProps) {
+  const { projectId } = await params
   const projects = await listProjects()
-  const projectId = requestedProjectId ?? projects[0]?.id
-  if (!projectId) return <CanvasEmptyState description="请先创建一个项目，再进入节点画布。" />
+  const project = projects.find((candidate) => candidate.id === projectId)
+  if (!project) notFound()
 
   const graph = await getCanvasGraph(projectId)
   if (graph.nodes.length === 0) {
@@ -32,11 +33,10 @@ export default async function CanvasPage({ searchParams }: CanvasPageProps) {
     position: positions.get(node.id) ?? node.position,
   }))
 
-  const projectTitle = projects.find(({ id }) => id === projectId)?.title ?? 'RAG 十分钟入门'
   return (
     <CanvasLoader
       projectId={projectId}
-      projectTitle={projectTitle}
+      projectTitle={project.title}
       autopilot={await getProjectAutopilot(projectId)}
       nodes={nodes}
       edges={graph.edges}

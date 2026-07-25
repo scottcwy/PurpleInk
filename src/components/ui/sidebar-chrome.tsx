@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import Link from 'next/link'
 import {
   Info,
   LogOut,
@@ -106,7 +107,13 @@ const ACCOUNT_ITEMS = [
   [Info, '帮助与反馈'],
 ] as const
 
-export function AccountMenu({ footer }: { footer?: ReactNode }) {
+export function AccountMenu({
+  footer,
+  settingsHref,
+}: {
+  footer?: ReactNode
+  settingsHref?: string
+}) {
   return (
     <div className="w-56 rounded-lg border border-ds-border bg-ds-surface p-1.5 text-ds-text shadow-[var(--ds-shadow)] backdrop-blur-xl">
       <div className="flex items-center gap-2.5 p-2">
@@ -119,18 +126,29 @@ export function AccountMenu({ footer }: { footer?: ReactNode }) {
         </span>
       </div>
       <div className="my-0.5 h-px bg-ds-border" />
-      {ACCOUNT_ITEMS.map(([Icon, label]) => (
-        <button
-          key={label}
-          type="button"
-          disabled
-          title="该操作将在 Stage B 接线"
-          className="flex h-9 w-full items-center gap-2.5 px-2.5 text-left text-xs text-ds-text opacity-70"
-        >
-          <Icon aria-hidden className="size-4 text-ds-text-muted" />
-          {label}
-        </button>
-      ))}
+      {ACCOUNT_ITEMS.map(([Icon, label]) =>
+        label === '工作区设置' && settingsHref ? (
+          <Link
+            key={label}
+            href={settingsHref}
+            className="flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-xs text-ds-text hover:bg-ds-surface-muted"
+          >
+            <Icon aria-hidden className="size-4 text-ds-text-muted" />
+            {label}
+          </Link>
+        ) : (
+          <button
+            key={label}
+            type="button"
+            disabled
+            title="该操作将在 Stage B 接线"
+            className="flex h-9 w-full items-center gap-2.5 px-2.5 text-left text-xs text-ds-text opacity-70"
+          >
+            <Icon aria-hidden className="size-4 text-ds-text-muted" />
+            {label}
+          </button>
+        ),
+      )}
       <div className="my-0.5 h-px bg-ds-border" />
       <button
         type="button"

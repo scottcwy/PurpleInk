@@ -2,6 +2,10 @@ import Link from 'next/link'
 import { Card, CardBody, CardTitle } from '@/components/ui/card'
 import { getCanvasGraph, listProjects } from '@/features/canvas'
 import { PublishNavContext } from '@/features/navigation/nav-context'
+import {
+  productCanvasHref,
+  PRODUCTS_ROUTES,
+} from '@/features/navigation/products-routes'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,7 +29,7 @@ export default async function ProjectsPage() {
         ) : (
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             {projects.map((project) => (
-              <Link key={project.id} href={`/legacy/canvas?projectId=${project.id}`}>
+              <Link key={project.id} href={productCanvasHref(project.id)}>
                 <Card>
                   <CardTitle>{project.title}</CardTitle>
                   <CardBody>{new Date(project.updatedAt).toLocaleString('zh-CN')}</CardBody>
@@ -36,7 +40,10 @@ export default async function ProjectsPage() {
         )}
 
         <div className="mt-6">
-          <Link href="/legacy" className="text-sm text-label-secondary underline">
+          <Link
+            href={PRODUCTS_ROUTES.dashboard}
+            className="text-sm text-label-secondary underline"
+          >
             返回工作台
           </Link>
         </div>
