@@ -1,4 +1,4 @@
-import { Providers } from "@/components/marketing/providers";
+import { RootProviders } from "@/app/providers";
 import { SkipToContent } from "@/components/marketing/skip-to-content";
 import { baseMetadata } from "@/lib/metadata";
 import { AppMotionConfig } from "@/lib/motion/config";
@@ -56,10 +56,10 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} bg-background text-foreground min-h-screen font-sans antialiased`}
       >
         <AppMotionConfig>
-          <Providers>
+          <RootProviders>
             <SkipToContent />
             {children}
-          </Providers>
+          </RootProviders>
         </AppMotionConfig>
       </body>
     </html>

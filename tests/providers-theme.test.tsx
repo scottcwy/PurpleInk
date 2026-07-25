@@ -19,26 +19,18 @@ vi.mock('next-themes', () => ({
   },
 }))
 
-vi.mock('@/components/marketing/smooth-scroll', () => ({
-  SmoothScroll: ({ children }: { children: ReactNode }) => children,
-}))
+import { RootProviders } from '@/app/providers'
 
-vi.mock('@/lib/marketing-motion', () => ({
-  ReducedMotionProvider: ({ children }: { children: ReactNode }) => children,
-}))
-
-import { Providers } from '@/components/marketing/providers'
-
-describe('Providers theme contract', () => {
+describe('RootProviders theme contract', () => {
   beforeEach(() => {
     themeProviderProps.current = {}
   })
 
   it('shares the theme-mode storage contract used by Products settings', () => {
     renderToStaticMarkup(
-      <Providers>
+      <RootProviders>
         <span>content</span>
-      </Providers>,
+      </RootProviders>,
     )
 
     expect(themeProviderProps.current).toMatchObject({

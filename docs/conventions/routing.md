@@ -30,6 +30,8 @@
 - **L3 只允许一套壳。** `src/features/navigation/app-shell.tsx` + `app-sidebar-shell.tsx` + `app-sidebar.tsx` 是唯一实现。禁止再出现第二个 app shell、第二个 sidebar 组件或第二套 pathname→高亮映射。
 - L1、L2 不挂 `AppSidebar`。分享页与案例页不得出现制作侧导航、项目切换器或任何写操作入口。
 - L4 不在任何业务壳内，且不得被 L1/L3 页面链接。
+- **滚动 Provider 按路由分层。** 根 `src/app/providers.tsx` 只负责全站主题协议；`src/app/(marketing)/layout.tsx` 独占营销动效与 Lenis。L2、L3、L4 和 L1 的非营销公开页使用原生滚动，禁止引用营销 Provider。
+- **L3 的滚动归 AppShell 内部容器所有。** `AppShell` 保持全屏固定壳，各产品页面的 `main` 或领域面板负责自己的原生滚动；不得在根布局重新挂载会接管 wheel 事件的全局平滑滚动。
 
 ## 2. 页面路由表
 

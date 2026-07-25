@@ -7,6 +7,7 @@ import { UnwiredPanel } from '@/app/_components/unwired-panel'
 /** docs/conventions/routing.md §2 的路由表。改路由必须先改文档，再改这里。 */
 const ROUTE_FILES = [
   // L1 公开
+  'src/app/(marketing)/layout.tsx',
   'src/app/(marketing)/page.tsx',
   'src/app/(public)/layout.tsx',
   'src/app/(public)/release/page.tsx',
@@ -92,6 +93,25 @@ describe('src/app 路由契约', () => {
       const source = readFileSync(file, 'utf8')
       expect(source).not.toContain("from '@/features/navigation")
       expect(source).not.toMatch(/<\w*(AppShell|Sidebar)\b/)
+    }
+  })
+
+  it('只有营销路由组挂平滑滚动 Provider', () => {
+    const marketingLayout = readFileSync(
+      'src/app/(marketing)/layout.tsx',
+      'utf8',
+    )
+    expect(marketingLayout).toContain('@/components/marketing/providers')
+
+    for (const file of [
+      'src/app/(auth)/layout.tsx',
+      'src/app/(public)/layout.tsx',
+      'src/app/products/(app)/layout.tsx',
+      'src/app/playbook/page.tsx',
+    ]) {
+      const source = readFileSync(file, 'utf8')
+      expect(source).not.toContain('@/components/marketing/providers')
+      expect(source).not.toContain('SmoothScroll')
     }
   })
 
