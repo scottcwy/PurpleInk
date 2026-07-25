@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Facebook, Twitter, Linkedin } from "lucide-react";
+import { MessageCircle, Network, Share2 } from "lucide-react";
 
 const footerLinks = {
   Product: [
@@ -25,9 +25,9 @@ const footerLinks = {
 };
 
 const socialLinks = [
-  { icon: Facebook, href: "#", label: "Facebook" },
-  { icon: Twitter, href: "#", label: "Twitter" },
-  { icon: Linkedin, href: "#", label: "LinkedIn" },
+  { icon: MessageCircle, href: "#", label: "Facebook" },
+  { icon: Share2, href: "#", label: "Twitter" },
+  { icon: Network, href: "#", label: "LinkedIn" },
 ];
 
 export function Footer(): ReactNode {

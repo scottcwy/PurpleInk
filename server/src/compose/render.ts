@@ -3,10 +3,17 @@
 import { spawn } from "node:child_process"
 import { readdir, stat, readFile } from "node:fs/promises"
 import { existsSync } from "node:fs"
-import { join, delimiter } from "node:path"
+import { delimiter, dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { logger } from "../lib/logger"
 
-const HF_VERSION = "0.7.68"
+export const HYPERFRAMES_VERSION = "0.7.70"
+
+export function getHyperframesCliPath(): string {
+  const moduleDir = dirname(fileURLToPath(import.meta.url))
+  const executable = process.platform === "win32" ? "hyperframes.cmd" : "hyperframes"
+  return join(moduleDir, "..", "..", "..", "node_modules", ".bin", executable)
+}
 
 export interface RenderOptions {
   /** hyperframes render --quality（默认 standard） */
@@ -134,7 +141,8 @@ export async function renderProject(projectDir: string, options: RenderOptions =
   let checkOutput = ""
   if (!options.skipCheck) {
     logger.info("render:check_start", { projectDir })
-    const check = await runCommand(`npx --yes hyperframes@${HF_VERSION} check`, projectDir, env, timeoutMs)
+    const hyperframesCli = `"${getHyperframesCliPath()}"`
+    const check = await runCommand(`${hyperframesCli} check`, projectDir, env, timeoutMs)
     checkPassed = check.code === 0
     checkOutput = check.output
     logger.info("render:check_done", { checkPassed })
@@ -142,7 +150,7 @@ export async function renderProject(projectDir: string, options: RenderOptions =
 
   const quality = options.quality || "standard"
   logger.info("render:render_start", { projectDir, quality, fps: options.fps })
-  let renderCmd = `npx --yes hyperframes@${HF_VERSION} render --quality ${quality}`
+  let renderCmd = `"${getHyperframesCliPath()}" render --quality ${quality}`
   if (options.fps) renderCmd += ` --fps ${options.fps}`
   const render = await runCommand(renderCmd, projectDir, env, timeoutMs)
   const videoPath = await findNewestMp4(projectDir)

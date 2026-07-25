@@ -92,7 +92,63 @@
 
 ## M2 包与工具链统一
 
-待执行。
+执行时间：2026-07-25
+
+### Workspace 与锁文件
+
+- 新增 `pnpm-workspace.yaml`，成员为根包与 `server`。
+- `pnpm import` 成功生成根 `pnpm-lock.yaml`；随后 `pnpm install` 在 58 秒内完成。
+- 根与 `server/` 的 `package-lock.json` 已在同一阶段删除。
+- 实际包管理器固定为 `pnpm@10.30.0`，未触发 `WS-PNPM-WAIVED`。
+
+### 版本决策
+
+| 包 | manifest 约束 | 实际安装版本 | 决策 |
+| --- | --- | --- | --- |
+| Next.js | `^16.2.0` | `16.2.11` | 按计划升级 |
+| React / React DOM | `19.2.x` | `19.2.3` | 保持 19.2 系列 |
+| lucide-react | `^1.26.0` | `1.26.0` | 升级；3 个已移除品牌图标换为通用 glyph |
+| motion | `^12.42.2` | `12.42.2` | 按计划升级 |
+| gsap | `^3.15.0` | `3.15.0` | 按计划升级 |
+| zod | `^4.4.3` | `4.4.3` | 按计划统一 |
+| playwright | `^1.61.1` | `1.62.0` | 根与 worker 统一范围 |
+| hyperframes | `0.7.70` | `0.7.70` | 精确固定、本地执行 |
+| postgres | `3.4.9` | `3.4.9` | 精确固定 |
+
+其余计划依赖 `@xyflow/react`、`@dagrejs/dagre`、`clsx`、`tailwind-merge`、
+`drizzle-orm`、`ffmpeg-static`、`jimp`、`openai`、`drizzle-kit`、`tsx`、`vitest`
+均已写入根 manifest 和 lock。
+
+### 被放弃的依赖
+
+| 依赖族 | 状态 | 原因 |
+| --- | --- | --- |
+| Trigger.dev 相关包 | 未引入 | Master Goal 明确作废 |
+| Pi Agent 相关包 | 未引入 | Master Goal 明确作废 |
+| better-sqlite3 | 未引入 | 统一使用 Postgres |
+
+`pnpm list/why better-sqlite3` 均为空；lock 中仅保留 `drizzle-orm` 自身声明的可选 peer 名称，
+不对应已解析或已安装的包。
+
+### HyperFrames 本地化
+
+- `server/src/compose/render.ts` 的版本常量集中为 `HYPERFRAMES_VERSION = "0.7.70"`。
+- `check` 与 `render` 均从 workspace 的 `node_modules/.bin/hyperframes` 调用，不再动态下载。
+- 新增单元测试 `tests/hyperframes-local-command.test.ts`；先观察缺少本地解析函数的失败，
+  再实现并验证通过。
+
+### 退出门
+
+| 命令或检查 | 退出码/结果 | 证据摘要 |
+| --- | --- | --- |
+| `pnpm import` | 0 | 成功导入 npm lock |
+| `pnpm install` | 0 | 两个 workspace 包安装成功 |
+| `pnpm typecheck` | 0 | lucide 兼容修正后通过 |
+| `pnpm build` | 0 | Next 16.2.11 构建成功 |
+| `pnpm exec next dev -p 3100` | 运行成功 | 首页返回 200 |
+| `pnpm --filter purpleink-server dev` | 运行成功 | worker 监听 8787 |
+| `GET http://127.0.0.1:8787/health` | 200 | `{"ok":true,"jobs":0}` |
+| HyperFrames 本地命令测试 | 0 | 1/1 通过 |
 
 ## M3 CVC 视觉层与基础库
 
