@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { Download, Play } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Background,
@@ -18,10 +18,12 @@ import { Toast } from '@/components/ui/toast'
 import { TopBar } from '@/components/ui/top-bar'
 import type { CanvasGraphEdge, PositionedCanvasNode } from '@/features/canvas'
 import { fadeInUp } from '@/lib/motion/variants'
+import { useProjectStatusStream } from '@/lib/hooks/use-project-status-stream'
 import { usePublishNavContext } from '@/features/navigation/nav-context'
 import { productExportHref } from '@/features/navigation/products-routes'
 import { CanvasInspector } from './canvas-inspector'
 import { startPipeline, stopPipeline } from './canvas-action-api'
+import { applyStatusOverlay } from './live-status'
 import {
   describePipelineResult,
   type PipelineFeedback,
@@ -54,11 +56,22 @@ export function CanvasView({
   const [pipelineFeedback, setPipelineFeedback] = useState<PipelineFeedback>()
   const [collapsedLanes, setCollapsedLanes] = useState<Set<string>>(() => new Set())
   const [selectedNodeId, setSelectedNodeId] = useState(nodes[0]?.id)
-  const laneSummaries = useMemo(() => buildLaneSummaries(nodes), [nodes])
+  // SSE 状态覆盖层：props 是全量真值基线，覆盖层只做逐节点 status 替换。
+  const hasActiveBaseline = nodes.some(
+    ({ status }) => status === 'pending' || status === 'running'
+  )
+  const live = useProjectStatusStream(projectId, hasActiveBaseline || autopilot)
+  const overlay = useMemo(
+    () => applyStatusOverlay(nodes, live.statuses),
+    [live.statuses, nodes]
+  )
+  const liveNodes = overlay.nodes
+  const topologyHandled = useRef(0)
+  const laneSummaries = useMemo(() => buildLaneSummaries(liveNodes), [liveNodes])
   const hiddenNodeIds = useMemo(
     () =>
       new Set(
-        nodes
+        liveNodes
           .filter(
             (node) =>
               node.laneKey &&
@@ -67,31 +80,47 @@ export function CanvasView({
           )
           .map((node) => node.id)
       ),
-    [collapsedLanes, nodes]
+    [collapsedLanes, liveNodes]
   )
   const flowNodes = useMemo(
-    () => nodes.map((node) => toFlowNode(node, hiddenNodeIds, collapsedLanes)),
-    [collapsedLanes, hiddenNodeIds, nodes]
+    () => liveNodes.map((node) => toFlowNode(node, hiddenNodeIds, collapsedLanes)),
+    [collapsedLanes, hiddenNodeIds, liveNodes]
   )
   const flowEdges = useMemo(
     () => edges.map((edge) => toFlowEdge(edge, hiddenNodeIds)),
     [edges, hiddenNodeIds]
   )
-  const selectedNode = nodes.find(({ id }) => id === selectedNodeId)
-  const completed = nodes.filter(({ status }) => status === 'success').length
-  const active = nodes.filter(
+  const selectedNode = liveNodes.find(({ id }) => id === selectedNodeId)
+  const completed = liveNodes.filter(({ status }) => status === 'success').length
+  const active = liveNodes.filter(
     ({ status }) => status === 'pending' || status === 'running'
   ).length
-  const failed = nodes.filter(({ status }) => status === 'failed').length
-  const rendererNodeId = nodes.find(({ type }) => type === 'shot-codegen')?.id
+  const failed = liveNodes.filter(({ status }) => status === 'failed').length
+  const rendererNodeId = liveNodes.find(({ type }) => type === 'shot-codegen')?.id
 
   usePublishNavContext({ projectId, rendererNodeId })
 
+  // 兜底轮询：仅在 SSE 不健康时接管（二者硬互斥），行为与修复前一致。
   useEffect(() => {
-    if (!nodes.some(({ status }) => status === 'pending' || status === 'running')) return
+    if (live.connected) return
+    if (!liveNodes.some(({ status }) => status === 'pending' || status === 'running')) return
     const timeout = window.setTimeout(() => router.refresh(), 1500)
     return () => window.clearTimeout(timeout)
-  }, [nodes, router])
+  }, [live.connected, liveNodes, router])
+
+  // refresh 收敛：拓扑变化 / 覆盖层出现未知节点 / 节点进入 props 尚未见到的终态
+  // 时才重拉全图（同步新泳道与 artifacts）；短防抖合并密集事件。
+  useEffect(() => {
+    const topologyChanged = live.topologyTick > topologyHandled.current
+    if (!topologyChanged && overlay.unknownNodeIds.length === 0 && !overlay.terminalDrift) {
+      return
+    }
+    const timeout = window.setTimeout(() => {
+      topologyHandled.current = live.topologyTick
+      router.refresh()
+    }, 400)
+    return () => window.clearTimeout(timeout)
+  }, [live.topologyTick, overlay, router])
 
   function toggleLane(laneKey: string): void {
     setCollapsedLanes((current) => {
@@ -127,7 +156,7 @@ export function CanvasView({
       <section className="flex min-w-0 flex-1 flex-col">
         <TopBar
           title={projectTitle}
-          meta={`${nodes.length} 节点`}
+          meta={`${liveNodes.length} 节点`}
           actions={
             <>
               <Button
@@ -179,7 +208,7 @@ export function CanvasView({
           completed={completed}
           active={active}
           failed={failed}
-          total={nodes.length}
+          total={liveNodes.length}
         />
       </section>
       <CanvasInspector projectId={projectId} node={selectedNode} onQueued={() => router.refresh()} />
