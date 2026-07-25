@@ -1,7 +1,7 @@
 # ISSUE-011 · 设置页占位项与只读并发数
 
 - 优先级：**P2**
-- 状态：`done`（5 commits · 8baee2e / b9696a0 / 0c89855 / 3a502a1 + 本提交）
+- 状态：`done`（6 commits · 8baee2e / b9696a0 / 0c89855 / 3a502a1 / 9734dcd / 67f5fcb）
 - 范围：`src/app/products/(app)/settings/**`、`src/lib/queue/**`、`src/app/api/settings/**`
 - 依赖：**ISSUE-004**（已 done · commit 97b741e）
 - 性质：先决策「删掉还是接线」，再动手
@@ -137,9 +137,17 @@ render-shot    : max(1, floor(cpus / 2))
 - `pnpm test:pg -- runtime-config` → 7/7 pass（默认回落、env 覆盖、DB > env、`saveLaneQuotas` 幂等 upsert、`saveLaneQuotas` 拒绝 0/负/非整数、`loadLaneQuotasForStart` DB/env 合并）。
 - `pnpm test -- src/app/api/settings/route.test.ts` → 17/17 pass（含合法值 200、0/负 400、`1.5` 非整数 400、`directorStage=33` 超静态 max 400、`renderShot=5` 超运行时 cpu=4 400、StepFun key 校验失败 422 时 `saveLaneQuotas` 未调用、key 与 laneQuotas 同请求成功 200）。
 - `pnpm test -- tests/products-settings-layout.test.ts` → 4/4 pass（含 ISSUE-011 §3.1 的双 lane、账号级标注、重启提示三项断言）。
+- `pnpm test:pg -- schema-metadata` → 6/6 pass。`workspace_settings` 已同步进入数据库 inventory（13 张表、24 个外键、复合主键 `(workspace_id, key)`、UUID / timestamptz 计数）。
 - `pnpm verify:v3` → `violations: []`，无新增超限文件（`model-service-panels.tsx` 保持 324 行未触及，禁区第 4 条守住）。
 - 触摸文件无 U+FFFD replacement character；新文件均 ≤ 216 行。
 - `workspace_settings` 表在 Postgres `information_schema` 中确认存在，列结构与 migration SQL 一致。
+- 最终全量 `pnpm build` 通过，`pnpm typecheck` 无错误输出。
+
+### 并行任务的独立失败（不归 ISSUE-011）
+
+- `pnpm test:pg`：15 files / 83 tests passed；仅余 `src/features/director/runtime-repository.pg.test.ts` 的 score input fixture 失败，属 Director runtime 并行改动。
+- `pnpm test`：102 files / 471 tests passed；仅余 `src/lib/stream/status-bus.test.ts` 的订阅者错误隔离用例失败，属 stream/status-bus 并行改动。
+- 上述两个文件和 ISSUE-011 的 migration、queue runtime config、settings API/UI 无重叠；本 issue 不修改或掩盖它们。
 
 ### 仍待补的端到端证据（依赖 ISSUE-001 + ISSUE-002 + ISSUE-003）
 
