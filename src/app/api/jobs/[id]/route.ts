@@ -1,8 +1,23 @@
 import { NextResponse } from 'next/server'
-import { getLatestArtifact } from '@/features/artifacts'
-import { getJobSnapshot } from '@/lib/queue'
+import { getLatestArtifact, type ArtifactDescriptor } from '@/features/artifacts'
+import { getJobSnapshot, type JobSnapshot } from '@/lib/queue'
 
 export const dynamic = 'force-dynamic'
+
+/** 作业完成后可下载的产物：单镜作业挂节点聚合，项目级导出作业挂项目聚合。 */
+async function completedArtifact(
+  projectId: string,
+  job: JobSnapshot
+): Promise<ArtifactDescriptor | null> {
+  if (job.status !== 'done') return null
+  if (job.kind === 'render-shot' && job.nodeId) {
+    return getLatestArtifact(projectId, job.nodeId, 'render-mp4')
+  }
+  if (job.kind === 'export-project') {
+    return getLatestArtifact(projectId, null, 'final-mp4')
+  }
+  return null
+}
 
 export async function GET(
   request: Request,
@@ -16,10 +31,7 @@ export async function GET(
   if (!job) {
     return NextResponse.json({ ok: false, error: '作业不存在或不属于该项目' }, { status: 404 })
   }
-  const artifact =
-    job.status === 'done' && job.kind === 'render-shot' && job.nodeId
-      ? await getLatestArtifact(projectId, job.nodeId, 'render-mp4')
-      : null
+  const artifact = await completedArtifact(projectId, job)
   return NextResponse.json({
     ok: true,
     job,

@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { enqueueProjectExport } from '@/features/render/export-queue-handler'
 import {
   ensureShotQaChecked,
-  exportProject,
   getExportReadiness,
 } from '@/features/render/export-service'
+import { initQueue } from '@/lib/queue/init'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,12 +49,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: '请求体无效' }, { status: 400 })
   }
   try {
-    const result = await exportProject(parsed.data.projectId)
-    if (!result.ok) return NextResponse.json(result, { status: 409 })
+    await initQueue()
+    // 未就绪在入队前如实拒绝，保持既有 409 + incompleteNodeIds 契约；
+    // 拼接与产物提交交给项目级队列作业（需要 project 级 attempt 才能提交 final-mp4）。
+    const readiness = await getExportReadiness(parsed.data.projectId)
+    if (!readiness.ready) {
+      return NextResponse.json(
+        { ok: false, incompleteNodeIds: readiness.incompleteNodeIds },
+        { status: 409 }
+      )
+    }
     return NextResponse.json({
       ok: true,
-      contentHash: result.contentHash,
-      artifactUrl: `/api/artifacts/${result.artifactId}?projectId=${encodeURIComponent(parsed.data.projectId)}`,
+      jobId: await enqueueProjectExport({ projectId: parsed.data.projectId }),
     })
   } catch (error) {
     return NextResponse.json(

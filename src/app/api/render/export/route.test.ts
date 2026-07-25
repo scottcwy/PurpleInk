@@ -3,55 +3,86 @@ import { GET, POST } from './route'
 
 const mocks = vi.hoisted(() => ({
   ensureShotQaChecked: vi.fn(),
-  exportProject: vi.fn(),
   getExportReadiness: vi.fn(),
+  enqueueProjectExport: vi.fn(),
+  initQueue: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
 vi.mock('@/features/render/export-service', () => ({
   ensureShotQaChecked: mocks.ensureShotQaChecked,
-  exportProject: mocks.exportProject,
   getExportReadiness: mocks.getExportReadiness,
 }))
+vi.mock('@/features/render/export-queue-handler', () => ({
+  enqueueProjectExport: mocks.enqueueProjectExport,
+}))
+vi.mock('@/lib/queue/init', () => ({ initQueue: mocks.initQueue }))
+
+function readiness(overrides: Record<string, unknown> = {}) {
+  return {
+    ready: true,
+    incompleteNodeIds: [],
+    shotCount: 1,
+    shotQa: { S001: true },
+    resolutionPreset: '1080x1920',
+    finalArtifactId: null,
+    ...overrides,
+  }
+}
 
 describe('POST /api/render/export', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.enqueueProjectExport.mockResolvedValue('job-export-1')
   })
 
   it('returns 400 for invalid input', async () => {
     const response = await POST(request({ projectId: '' }))
     expect(response.status).toBe(400)
-    expect(mocks.exportProject).not.toHaveBeenCalled()
+    expect(mocks.enqueueProjectExport).not.toHaveBeenCalled()
   })
 
-  it('returns every incomplete node with status 409', async () => {
-    mocks.exportProject.mockResolvedValue({
-      ok: false,
-      incompleteNodeIds: ['node-1', 'node-2'],
-    })
+  it('returns every incomplete node with status 409 and does not enqueue', async () => {
+    mocks.getExportReadiness.mockResolvedValue(
+      readiness({ ready: false, incompleteNodeIds: ['node-1', 'node-2'] })
+    )
+
     const response = await POST(request({ projectId: 'project-1' }))
+
     expect(response.status).toBe(409)
     await expect(response.json()).resolves.toEqual({
       ok: false,
       incompleteNodeIds: ['node-1', 'node-2'],
     })
+    expect(mocks.enqueueProjectExport).not.toHaveBeenCalled()
   })
 
-  it('returns the trusted export result', async () => {
-    mocks.exportProject.mockResolvedValue({
-      ok: true,
-      artifactId: 'artifact-final',
-      outputKey: 'exports/project-1/final.mp4',
-      contentHash: 'hash',
-    })
+  it('enqueues a project-level export job and returns its id', async () => {
+    mocks.getExportReadiness.mockResolvedValue(readiness())
+
     const response = await POST(request({ projectId: 'project-1' }))
+
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toMatchObject({
+    await expect(response.json()).resolves.toEqual({
       ok: true,
-      artifactUrl: '/api/artifacts/artifact-final?projectId=project-1',
+      jobId: 'job-export-1',
     })
-    expect(mocks.exportProject).toHaveBeenCalledWith('project-1')
+    expect(mocks.enqueueProjectExport).toHaveBeenCalledWith({
+      projectId: 'project-1',
+    })
+  })
+
+  it('maps an enqueue failure to 409 without leaking the raw cause', async () => {
+    mocks.getExportReadiness.mockResolvedValue(readiness())
+    mocks.enqueueProjectExport.mockRejectedValueOnce(new Error('队列不可用'))
+
+    const response = await POST(request({ projectId: 'project-1' }))
+
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      error: '队列不可用',
+    })
   })
 })
 
@@ -61,14 +92,9 @@ describe('GET /api/render/export', () => {
   })
 
   it('returns a controlled URL for the latest final artifact', async () => {
-    mocks.getExportReadiness.mockReturnValue({
-      ready: true,
-      incompleteNodeIds: [],
-      shotCount: 1,
-      shotQa: { S001: true },
-      resolutionPreset: '1080x1920',
-      finalArtifactId: 'artifact-final',
-    })
+    mocks.getExportReadiness.mockReturnValue(
+      readiness({ finalArtifactId: 'artifact-final' })
+    )
 
     const response = await GET(
       new Request('http://localhost/api/render/export?projectId=project-1')
