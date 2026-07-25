@@ -2,6 +2,7 @@ export {
   PROJECT_STATUSES,
   projects,
   workspaces,
+  workspaceSettings,
 } from './core'
 export type { VersionedPayload } from './core'
 
