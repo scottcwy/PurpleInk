@@ -10,7 +10,10 @@ export class LocalFsStorage implements StorageAdapter {
   /** 把 key 解析到 root 内；越界（../、绝对路径）直接拒绝，防路径穿越。 */
   private resolve(key: string): string {
     const rootPath = path.resolve(this.root)
-    const resolved = path.resolve(rootPath, key)
+    if (path.posix.isAbsolute(key) || path.win32.isAbsolute(key)) {
+      throw new Error(`storage key 越出 root 目录: ${key}`)
+    }
+    const resolved = path.resolve(rootPath, key.replaceAll('\\', '/'))
     if (resolved !== rootPath && !resolved.startsWith(rootPath + path.sep)) {
       throw new Error(`storage key 越出 root 目录: ${key}`)
     }
