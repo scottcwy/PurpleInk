@@ -6,12 +6,12 @@ import {
   useScroll,
   useMotionValueEvent,
 } from "motion/react";
-import Image from "next/image";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { PRODUCTS_ROUTES } from "@/features/navigation/products-routes";
+import { PurpleInkLogo } from "@/components/ui/purple-ink-logo";
 
-const navLinks = [{ href: "#community", label: "Community" }];
+const navLinks = [{ href: "/community", label: "Community" }];
 
 const authLinks = [
   { href: "", label: "Contact" },
@@ -76,13 +76,7 @@ export function Header(): ReactNode {
               className="focus-ring flex items-center"
               aria-label="PurpleInk home"
             >
-              <Image
-                src="/svg/logo.svg"
-                alt="PurpleInk"
-                width={120}
-                height={34}
-                priority
-              />
+              <PurpleInkLogo className="text-white" />
             </Link>
           </motion.div>
 

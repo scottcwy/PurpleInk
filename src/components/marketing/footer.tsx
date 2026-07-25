@@ -20,7 +20,7 @@ const footerLinks = {
   Resources: [
     { label: "Documentation", href: "#" },
     { label: "Help Center", href: "#" },
-    { label: "Community", href: "#" },
+    { label: "Community", href: "/community" },
   ],
 };
 
