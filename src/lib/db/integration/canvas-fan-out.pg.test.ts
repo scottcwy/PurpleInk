@@ -201,8 +201,6 @@ function globalNode(
     logicalKey: `global:${type}`,
     type,
     stage,
-    positionX: 0,
-    positionY: 0,
     data: { schemaVersion: 1, payload: {} },
   }
 }

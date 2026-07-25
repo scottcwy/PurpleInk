@@ -1,8 +1,9 @@
 import dagre from '@dagrejs/dagre'
 import type { CanvasNodeType } from './types'
 
-const NODE_WIDTH = 220
-const NODE_HEIGHT = 100
+/** 固定节点尺寸/间距，供 `layout.test.ts` 校验重叠；不得按节点类型分叉。 */
+export const NODE_WIDTH = 220
+export const NODE_HEIGHT = 100
 const LANE_GAP = 80
 
 const GLOBAL_TYPES = new Set<CanvasNodeType>([
@@ -28,7 +29,10 @@ export interface NodePosition {
   y: number
 }
 
-/** 计算可直接赋给 React Flow/canvas_nodes.position 的左上角坐标。 */
+/**
+ * 计算可直接赋给 React Flow 的节点左上角坐标。这是坐标的唯一来源——
+ * `canvas_nodes` 不持久化坐标，每次渲染都由 DAG 结构在此重新派生（ISSUE-008）。
+ */
 export function computeLayout(
   nodes: LayoutNode[],
   edges: LayoutEdge[]

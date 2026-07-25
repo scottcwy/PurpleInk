@@ -314,8 +314,6 @@ function node(
     type,
     stage,
     status,
-    positionX: 0,
-    positionY: 0,
     data: { schemaVersion: 1, payload },
   }
 }

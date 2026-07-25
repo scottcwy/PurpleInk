@@ -59,13 +59,11 @@ export async function createProject(input: unknown): Promise<Project> {
       })
     if (!project) throw new Error('项目创建失败')
 
-    const nodes = GLOBAL_NODE_DEFINITIONS.map((definition, index) => ({
+    const nodes = GLOBAL_NODE_DEFINITIONS.map((definition) => ({
       workspaceId: LOCAL_WORKSPACE_ID,
       id: randomUUID(),
       projectId: project.id,
       ...definition,
-      positionX: index * 260,
-      positionY: 80,
       data: {
         schemaVersion: 1,
         payload:

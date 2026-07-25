@@ -253,8 +253,6 @@ async function seedNode(
     type: overrides.type ?? 'shot-split',
     stage: overrides.stage ?? 'DIRECT',
     status: overrides.status ?? 'idle',
-    positionX: 0,
-    positionY: 0,
     data: { schemaVersion: 1, payload: overrides.payload ?? {} },
   })
   return id

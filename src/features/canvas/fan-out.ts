@@ -116,15 +116,13 @@ async function insertLaneNodes(
   await tx
     .insert(canvasNodes)
     .values(
-      LANE_ROLES.map((role, index) => ({
+      LANE_ROLES.map((role) => ({
         workspaceId: LOCAL_WORKSPACE_ID,
         id: stableId('node', projectId, shot.shotId, role),
         projectId,
         logicalKey: shotLogicalKey(shot.shotId, role),
         type: role,
         stage: LANE_STAGES[role],
-        positionX: index * 260,
-        positionY: 240,
         data: {
           schemaVersion: 1,
           payload: {

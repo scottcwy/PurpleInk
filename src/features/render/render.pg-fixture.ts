@@ -56,8 +56,6 @@ export async function seedRenderFixture(
       type: 'shot-codegen',
       stage: 'FABRICATE',
       status: 'succeeded',
-      positionX: 0,
-      positionY: 0,
       data: nodeData('S001', 'shot-codegen', {
         renderSpec: {
           fps: 30,
@@ -75,8 +73,6 @@ export async function seedRenderFixture(
       type: 'shot-qa',
       stage: 'FINALIZE',
       status: 'idle',
-      positionX: 260,
-      positionY: 0,
       data: nodeData('S001', 'shot-qa'),
     },
   ])

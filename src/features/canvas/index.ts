@@ -31,6 +31,7 @@ export {
   type CanvasGraphNode,
   type DirectorNodeError,
   type NodeStreamContext,
+  type PositionedCanvasNode,
 } from './queries'
 export {
   computeLayout,
