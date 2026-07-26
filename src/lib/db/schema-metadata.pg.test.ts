@@ -5,8 +5,14 @@ const TABLES = [
   'workspaces', 'projects', 'canvas_nodes', 'canvas_edges', 'pipeline_runs',
   'task_attempts', 'artifacts', 'command_receipts', 'model_routes',
   'media_routes', 'provider_credentials', 'ai_invocations', 'workspace_settings',
+  'users', 'workspace_members', 'sessions', 'email_verification_codes',
+  'auth_throttle',
 ] as const
-const BUSINESS_TABLES = TABLES.filter((table) => table !== 'workspaces')
+const WORKSPACE_TABLES = [
+  'projects', 'canvas_nodes', 'canvas_edges', 'pipeline_runs', 'task_attempts',
+  'artifacts', 'command_receipts', 'model_routes', 'media_routes',
+  'provider_credentials', 'ai_invocations', 'workspace_settings',
+] as const
 const ENUM_CHECKS = {
   projects_status_check: ['active', 'archived'],
   canvas_nodes_type_check: [
@@ -32,6 +38,9 @@ const ENUM_CHECKS = {
   ],
   media_routes_media_task_kind_check: ['tts', 'asr'],
   ai_invocations_status_check: ['running', 'succeeded', 'failed', 'cancelled'],
+  users_status_check: ['active', 'disabled'],
+  workspace_members_role_check: ['owner', 'member'],
+  email_verification_codes_purpose_check: ['signup', 'password_reset'],
 } as const
 const NUMERIC_CHECKS = [
   'projects_revision_check', 'canvas_nodes_revision_check',
@@ -42,6 +51,7 @@ const NUMERIC_CHECKS = [
   'provider_credentials_nonce_length_check',
   'provider_credentials_auth_tag_length_check',
   'ai_invocations_invocation_no_check', 'ai_invocations_repair_no_check',
+  'email_verification_codes_attempt_check', 'auth_throttle_count_check',
 ] as const
 const REQUIRED_UNIQUES = [
   'workspaces:slug',
@@ -57,9 +67,10 @@ const REQUIRED_UNIQUES = [
   'media_routes:workspace_id,media_task_kind',
   'provider_credentials:workspace_id,provider',
   'ai_invocations:workspace_id,attempt_id,invocation_no,repair_no',
+  'sessions:token_hash',
 ] as const
 const EXPECTED_FOREIGN_KEYS = [
-  ...BUSINESS_TABLES.map((table) => `${table}->workspaces:workspace_id=>id`),
+  ...WORKSPACE_TABLES.map((table) => `${table}->workspaces:workspace_id=>id`),
   'canvas_nodes->projects:workspace_id,project_id=>workspace_id,id',
   'canvas_edges->projects:workspace_id,project_id=>workspace_id,id',
   'canvas_edges->canvas_nodes:workspace_id,project_id,source=>workspace_id,project_id,id',
@@ -72,6 +83,10 @@ const EXPECTED_FOREIGN_KEYS = [
   'ai_invocations->pipeline_runs:workspace_id,run_id=>workspace_id,id',
   'ai_invocations->task_attempts:workspace_id,attempt_id=>workspace_id,id',
   'ai_invocations->artifacts:workspace_id,trace_artifact_id=>workspace_id,id',
+  'workspace_members->workspaces:workspace_id=>id',
+  'workspace_members->users:user_id=>id',
+  'sessions->workspaces:workspace_id=>id',
+  'sessions->users:user_id=>id',
 ] as const
 
 interface ConstraintRow {
@@ -145,7 +160,7 @@ beforeAll(async () => Object.assign(database, await createPgTestDatabase()))
 beforeEach(async () => database.reset())
 afterAll(async () => database.close())
 
-it('creates exactly thirteen tables with workspace-scoped primary keys', async () => {
+it('creates exactly eighteen tables with their scoped primary keys', async () => {
   const rows = await database.sql<{ table_name: string }[]>`
     SELECT table_name FROM information_schema.tables
     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
@@ -155,17 +170,22 @@ it('creates exactly thirteen tables with workspace-scoped primary keys', async (
   const signatures = (await constraints('p')).map(constraintSignature).sort()
   const expected = [
     'workspaces:id',
-    ...BUSINESS_TABLES
+    ...WORKSPACE_TABLES
       .filter((table) => table !== 'workspace_settings')
       .map((table) => `${table}:workspace_id,id`),
     'workspace_settings:workspace_id,key',
+    'users:id',
+    'workspace_members:workspace_id,user_id',
+    'sessions:id',
+    'email_verification_codes:id',
+    'auth_throttle:key',
   ].sort()
   expect(signatures).toEqual(expected)
 })
 
-it('locks the exact set of twenty-four workspace-safe foreign keys', async () => {
+it('locks the exact set of twenty-eight workspace and identity foreign keys', async () => {
   const signatures = (await foreignKeys()).map(foreignKeySignature).sort()
-  expect(EXPECTED_FOREIGN_KEYS).toHaveLength(24)
+  expect(EXPECTED_FOREIGN_KEYS).toHaveLength(28)
   expect(signatures).toEqual([...EXPECTED_FOREIGN_KEYS].sort())
 })
 
@@ -221,7 +241,7 @@ it('uses UUID identities, bigint revisions, and timestamptz suffixes', async () 
     SELECT table_name, data_type FROM information_schema.columns
     WHERE table_schema = 'public' AND column_name IN ('id', 'workspace_id')
   `
-  expect(identities).toHaveLength(24)
+  expect(identities).toHaveLength(29)
   expect(identities.every((row) => row.data_type === 'uuid')).toBe(true)
   const revisions = await database.sql<{ table_name: string; data_type: string }[]>`
     SELECT table_name, data_type FROM information_schema.columns
@@ -233,7 +253,7 @@ it('uses UUID identities, bigint revisions, and timestamptz suffixes', async () 
     SELECT table_name, data_type FROM information_schema.columns
     WHERE table_schema = 'public' AND right(column_name, 3) = '_at'
   `
-  expect(times).toHaveLength(32)
+  expect(times).toHaveLength(44)
   expect(new Set(times.map((row) => row.table_name))).toEqual(new Set(TABLES))
   expect(times.every((row) => row.data_type === 'timestamp with time zone')).toBe(true)
 })
