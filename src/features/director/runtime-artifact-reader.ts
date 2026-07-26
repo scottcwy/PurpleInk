@@ -57,7 +57,11 @@ export class DirectorArtifactReader {
       this.source.loadDirectArtifact(row.nodeProjectId),
     ])
     const payload = readPayload(row.data)
-    const sourceUnitId = z.string().regex(/^U\d{3}$/).parse(payload.sourceUnitId)
+    const sourceUnitId = await this.resolveSourceUnitId(
+      row.nodeProjectId,
+      row.laneKey,
+      payload.sourceUnitId
+    )
     const sourceUnit = ingest.scriptUnits.find((unit) => unit.unitId === sourceUnitId)
     if (!sourceUnit) {
       throw new Error(`script units 中找不到 ${sourceUnitId}`)
@@ -72,6 +76,17 @@ export class DirectorArtifactReader {
       masterPlan: direct.masterPlan,
       styleBible: direct.styleBible,
     }
+  }
+
+  private async resolveSourceUnitId(
+    projectId: string,
+    laneKey: string,
+    persisted: unknown
+  ): Promise<string> {
+    const parsed = z.string().regex(/^U\d{3}$/).safeParse(persisted)
+    if (parsed.success) return parsed.data
+    const ingestAudio = await this.source.loadIngestAudioArtifact(projectId)
+    return requireShotAllocation(ingestAudio.audioAllocation, laneKey).audioUnitId
   }
 
   private async resolveFabricateInput(row: StageContextRow): Promise<unknown> {

@@ -236,7 +236,7 @@ Run: `pnpm test:pg`
 Run: `pnpm verify:v3`
 Run: `pnpm build`
 Run: `git diff --check`
-Run: `rg -n \"�\" AGENTS.md README.md docs src server scripts`
+Run: `rg -n \"\\x{FFFD}\" AGENTS.md README.md docs src server scripts`
 
 - [ ] **Step 4: 真实浏览器与媒体证据**
 

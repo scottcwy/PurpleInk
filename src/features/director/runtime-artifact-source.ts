@@ -45,7 +45,8 @@ export class DirectorArtifactSource {
   }> {
     const nodeId = await this.findNodeId(projectId, 'script-import')
     const raw = await this.loadArtifactJson(projectId, nodeId, 'director-ingest')
-    return ingestStageResultSchema.parse(raw)
+    const parsed = z.object({ scriptUnits: z.unknown() }).parse(raw)
+    return ingestStageResultSchema.parse({ scriptUnits: parsed.scriptUnits })
   }
 
   async loadIngestAudioArtifact(projectId: string): Promise<{
