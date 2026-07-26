@@ -1,5 +1,26 @@
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { classifyWorkflowError } from './workflow-error'
+
+/**
+ * 复刻真实 SHOT_SPEC 事故：`target.sourceUnit` 是 strict 对象，上游多带了
+ * 一个 `order` 键，zod 在任何模型调用之前抛错。
+ */
+function stageInputError(): unknown {
+  const schema = z.object({
+    target: z.object({
+      sourceUnit: z.object({ unitId: z.string(), text: z.string() }).strict(),
+    }),
+  })
+  try {
+    schema.parse({
+      target: { sourceUnit: { unitId: 'U001', text: '原稿正文', order: 0 } },
+    })
+    throw new Error('该输入本应校验失败')
+  } catch (error) {
+    return error
+  }
+}
 
 describe('classifyWorkflowError', () => {
   it('turns missing upstream artifacts into a safe retryable projection', () => {
@@ -64,5 +85,43 @@ describe('classifyWorkflowError', () => {
       message: 'StepFun 配音请求被拒绝。请检查端点、模型、音色与账户套餐是否匹配。',
       retryable: false,
     })
+  })
+
+  it('names the failing contract field for a schema failure and stops pointless retries', () => {
+    const projection = classifyWorkflowError(stageInputError(), {
+      stage: 'SHOT_SPEC',
+    })
+    expect(projection.code).toBe('STAGE_INPUT_INVALID')
+    expect(projection.stage).toBe('SHOT_SPEC')
+    expect(projection.retryable).toBe(false)
+    expect(projection.message).toContain('SHOT_SPEC')
+    expect(projection.message).toContain('target.sourceUnit.order')
+    expect(projection.message).not.toContain('原稿正文')
+  })
+
+  it('never labels a non-render stage failure as a render failure', () => {
+    for (const stage of ['INGEST', 'DIRECT', 'SHOT_SPEC', 'ASSEMBLE', 'FINALIZE']) {
+      const projection = classifyWorkflowError(new Error('未知内部失败'), { stage })
+      expect(projection.code).toBe('STAGE_FAILED')
+      expect(projection.message).toContain(stage)
+      expect(projection.message).not.toContain('渲染')
+    }
+  })
+
+  it('keeps render, fabricate, queue and narration fallbacks on their own stages', () => {
+    expect(classifyWorkflowError(new Error('未知内部失败'), { stage: 'RENDER' })).toMatchObject({
+      code: 'RENDER_FAILED',
+      message: '镜头渲染或媒体处理失败，可以稍后重试。',
+      retryable: true,
+    })
+    expect(
+      classifyWorkflowError(new Error('未知内部失败'), { stage: 'FABRICATE' })
+    ).toMatchObject({ code: 'FABRICATE_FAILED', retryable: true })
+    expect(
+      classifyWorkflowError(new Error('未知内部失败'), { stage: 'QUEUE' })
+    ).toMatchObject({ code: 'QUEUE_FAILED', retryable: true })
+    expect(
+      classifyWorkflowError(new Error('未知内部失败'), { stage: 'MEDIA_NARRATION' })
+    ).toMatchObject({ code: 'MEDIA_FAILED', retryable: true })
   })
 })
