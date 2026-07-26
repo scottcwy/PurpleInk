@@ -27,6 +27,7 @@ export function buildMeasuredAudioManifest(
 ): AudioManifest {
   const units = scriptUnits.map((unit) => {
     const measured = requireMeasured(narration.units, unit)
+    const anchors = nativeAnchors(measured)
     return {
       unitId: unit.unitId,
       text: unit.text,
@@ -37,14 +38,18 @@ export function buildMeasuredAudioManifest(
       sampleCount: measured.sampleCount,
       sha256: `sha256:${measured.contentHash}`,
       alignment: {
-        mode: 'unit-file' as const,
+        mode: anchors ? ('tts-native' as const) : ('unit-file' as const),
         coverage: 1,
         confidence: 1,
         sourceStartSample: 0,
         sourceEndSample: measured.sampleCount,
       },
+      ...(anchors ? { anchors } : {}),
     }
   })
+  const allNative = units.every(
+    (unit) => unit.alignment.mode === 'tts-native'
+  )
   return audioManifestSchema.parse({
     version: 1,
     contractVersion: 'vnext-audio-v1',
@@ -54,12 +59,53 @@ export function buildMeasuredAudioManifest(
     units,
     totalMs: units.reduce((total, unit) => total + unit.durationMs, 0),
     alignmentReport: {
-      policy: 'unit-files',
+      policy: allNative ? 'tts-native' : 'unit-files',
       scriptCoverage: 1,
       continuousCoverage: true,
       lowConfidenceUnitIds: [],
     },
   })
+}
+
+function nativeAnchors(
+  narration: NarrationUnit
+): Array<{
+  startChar: number
+  endChar: number
+  startSample: number
+  endSample: number
+  confidence: number
+}> | null {
+  if (narration.nativeCaptions.length === 0) return null
+  let cursor = 0
+  let previousEndMs = 0
+  const anchors = []
+  for (const caption of narration.nativeCaptions) {
+    if (
+      caption.startMs < previousEndMs ||
+      caption.endMs <= caption.startMs ||
+      caption.endMs > narration.durationMs ||
+      !narration.text.startsWith(caption.text, cursor)
+    ) {
+      return null
+    }
+    const endChar = cursor + caption.text.length
+    anchors.push({
+      startChar: cursor,
+      endChar,
+      startSample: Math.round(
+        (caption.startMs * narration.sampleRateHz) / 1_000
+      ),
+      endSample: Math.min(
+        narration.sampleCount,
+        Math.round((caption.endMs * narration.sampleRateHz) / 1_000)
+      ),
+      confidence: 1,
+    })
+    cursor = endChar
+    previousEndMs = caption.endMs
+  }
+  return cursor === narration.text.length ? anchors : null
 }
 
 export function buildMeasuredAudioAllocation(
