@@ -7,14 +7,17 @@ import { SettingsRow } from '@/components/ui/settings-row'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { StepfunModelField } from '@/features/ai/config'
 import type { GeminiConfigField } from '@/features/ai/gemini-config'
+import type { MimoConfigField } from '@/features/ai/mimo-config'
 import type { AiProviderId } from '@/features/ai/model-routing'
 import type { CanvasNodeType } from '@/features/canvas/types'
 import {
   GEMINI_FIELDS,
-  MODEL_ROUTE_ROWS,
+  MIMO_FIELDS,
+  ROUTE_ROWS,
   STEPFUN_FIELDS,
   type GeminiDraft,
   type LaneQuotasDraft,
+  type MimoDraft,
   type OpenAiCompatibleDraft,
   type ReadyModelSettingsController,
   type RouteDraft,
@@ -37,6 +40,7 @@ export function useModelSettingsController(): ModelSettingsController {
   const [data, setData] = useState<SettingsResponse>()
   const [stepfunDraft, setStepfunDraft] = useState<StepfunDraft>()
   const [geminiDraft, setGeminiDraft] = useState<GeminiDraft>()
+  const [mimoDraft, setMimoDraft] = useState<MimoDraft>()
   const [customOpenAiDraft, setCustomOpenAiDraft] = useState<OpenAiCompatibleDraft>()
   const [routes, setRoutes] = useState<RouteDraft>()
   const [laneQuotasDraft, setLaneQuotasDraft] = useState<LaneQuotasDraft>({
@@ -50,6 +54,7 @@ export function useModelSettingsController(): ModelSettingsController {
     setData,
     setStepfunDraft,
     setGeminiDraft,
+    setMimoDraft,
     setCustomOpenAiDraft,
     setRoutes,
     setLaneQuotasDraft,
@@ -59,6 +64,7 @@ export function useModelSettingsController(): ModelSettingsController {
     setData,
     setStepfunDraft,
     setGeminiDraft,
+    setMimoDraft,
     setCustomOpenAiDraft,
     setRoutes,
     setLaneQuotasDraft,
@@ -77,6 +83,9 @@ export function useModelSettingsController(): ModelSettingsController {
   function setGeminiField(field: GeminiConfigField, value: string) {
     setGeminiDraft((current) => current && { ...current, [field]: value })
   }
+  function setMimoField(field: MimoConfigField, value: string) {
+    setMimoDraft((current) => current && { ...current, [field]: value })
+  }
   function setCustomOpenAiField(field: keyof OpenAiCompatibleDraft, value: string) {
     setCustomOpenAiDraft((current) => current && { ...current, [field]: value })
   }
@@ -88,7 +97,7 @@ export function useModelSettingsController(): ModelSettingsController {
     setLaneQuotasDraft((current) => ({ ...current, [field]: value }))
   }
 
-  if (!data || !stepfunDraft || !geminiDraft || !customOpenAiDraft || !routes) {
+  if (!data || !stepfunDraft || !geminiDraft || !mimoDraft || !customOpenAiDraft || !routes) {
     return { ready: false }
   }
   return {
@@ -96,6 +105,7 @@ export function useModelSettingsController(): ModelSettingsController {
     data,
     stepfunDraft,
     geminiDraft,
+    mimoDraft,
     customOpenAiDraft,
     routes,
     laneQuotasDraft,
@@ -103,6 +113,7 @@ export function useModelSettingsController(): ModelSettingsController {
     error,
     setStepfunField,
     setGeminiField,
+    setMimoField,
     setCustomOpenAiField,
     setRoute,
     setLaneQuotaField,
@@ -114,6 +125,7 @@ function useSettingsLoader(
   setData: (body: SettingsResponse) => void,
   setStepfun: (draft: StepfunDraft) => void,
   setGemini: (draft: GeminiDraft) => void,
+  setMimo: (draft: MimoDraft) => void,
   setCustomOpenAi: (draft: OpenAiCompatibleDraft) => void,
   setRoutes: (routes: RouteDraft) => void,
   setLaneQuotasDraft: (draft: LaneQuotasDraft) => void,
@@ -127,19 +139,21 @@ function useSettingsLoader(
           setData,
           setStepfun,
           setGemini,
+          setMimo,
           setCustomOpenAi,
           setRoutes,
           setLaneQuotasDraft,
         ),
       )
       .catch(() => setError('模型设置加载失败'))
-  }, [setCustomOpenAi, setData, setError, setGemini, setLaneQuotasDraft, setRoutes, setStepfun])
+  }, [setCustomOpenAi, setData, setError, setGemini, setLaneQuotasDraft, setMimo, setRoutes, setStepfun])
 }
 
 function useSettingsSubmitter(
   setData: (body: SettingsResponse) => void,
   setStepfun: (draft: StepfunDraft) => void,
   setGemini: (draft: GeminiDraft) => void,
+  setMimo: (draft: MimoDraft) => void,
   setCustomOpenAi: (draft: OpenAiCompatibleDraft) => void,
   setRoutes: (routes: RouteDraft) => void,
   setLaneQuotasDraft: (draft: LaneQuotasDraft) => void,
@@ -160,7 +174,7 @@ function useSettingsSubmitter(
         setError(body.error ?? '模型设置保存失败')
         return false
       }
-      applyResponse(body, setData, setStepfun, setGemini, setCustomOpenAi, setRoutes, setLaneQuotasDraft)
+      applyResponse(body, setData, setStepfun, setGemini, setMimo, setCustomOpenAi, setRoutes, setLaneQuotasDraft)
       return true
     } catch {
       setError('模型设置请求失败')
@@ -196,6 +210,7 @@ function applyResponse(
   setData: (body: SettingsResponse) => void,
   setStepfun: (draft: StepfunDraft) => void,
   setGemini: (draft: GeminiDraft) => void,
+  setMimo: (draft: MimoDraft) => void,
   setCustomOpenAi: (draft: OpenAiCompatibleDraft) => void,
   setRoutes: (routes: RouteDraft) => void,
   setLaneQuotasDraft: (draft: LaneQuotasDraft) => void,
@@ -203,13 +218,14 @@ function applyResponse(
   setData(body)
   setStepfun(draftFromView(STEPFUN_FIELDS, body.models))
   setGemini(draftFromView(GEMINI_FIELDS, body.gemini))
+  setMimo(draftFromView(MIMO_FIELDS, body.mimo))
   setCustomOpenAi({
     baseUrl: body.customOpenAi?.baseUrl?.value ?? '',
     defaultModel: body.customOpenAi?.defaultModel?.value ?? '',
   })
   setRoutes(
     Object.fromEntries(
-      MODEL_ROUTE_ROWS.map(([nodeType]) => [
+      ROUTE_ROWS.map(([nodeType]) => [
         nodeType,
         body.routes?.[nodeType]?.provider ?? 'stepfun',
       ]),

@@ -25,10 +25,32 @@ describe('Products settings workspace', () => {
       'src/app/products/(app)/settings/model-service-panels.tsx',
       'utf8',
     )
+    const routeSource = readFileSync(
+      'src/app/products/(app)/settings/workflow-route-panel.tsx',
+      'utf8',
+    )
 
     expect(formSource).toContain("@/components/ui/settings-panel")
-    expect(modelSource).toContain("@/components/ui/settings-panel")
-    expect(modelSource).toContain('defaultOpen={false}')
+    expect(modelSource).toContain('ProviderRegistryPanel')
+    expect(routeSource).toContain("@/components/ui/settings-panel")
+    expect(routeSource).toContain('defaultOpen={false}')
+  })
+
+  it('shows four provider identities and routes media capabilities explicitly', () => {
+    const providerSource = readFileSync(
+      'src/app/products/(app)/settings/provider-registry-panel.tsx',
+      'utf8',
+    )
+    const routeSource = readFileSync(
+      'src/app/products/(app)/settings/workflow-route-panel.tsx',
+      'utf8',
+    )
+
+    expect(providerSource).toContain('AI_PROVIDER_IDS')
+    expect(providerSource).toContain("useState<AiProviderId>('mimo')")
+    expect(routeSource).toContain("nodeType === 'shot-sfx'")
+    expect(routeSource).toContain("nodeType === 'shot-subtitle'")
+    expect(routeSource).not.toContain('TTS/ASR 始终使用阶跃星辰')
   })
 
   it('does not keep ISSUE-011 demo placeholders or read-only render concurrency in settings', () => {

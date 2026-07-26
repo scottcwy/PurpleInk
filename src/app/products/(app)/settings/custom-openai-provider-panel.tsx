@@ -29,7 +29,7 @@ export function CustomOpenAiProviderPanel({
     <SettingsPanel
       id="provider-openai-compatible"
       title="OpenAI 兼容模型服务"
-      description="用于文本与视觉节点；TTS 配音和 ASR 字幕时间轴仍固定使用阶跃星辰。"
+      description="用于文本与视觉节点；配音和语音识别请在工作流能力路由中选择 MiMo 或阶跃星辰。"
       icon={KeyRound}
       summary={configured ? '已配置' : '未配置'}
     >

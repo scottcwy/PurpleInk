@@ -8,10 +8,12 @@ import type {
   DirectorRouteView,
 } from '@/features/ai/model-routing'
 import type { OpenAiCompatibleProfileView } from '@/features/ai/openai-compatible-config'
+import type { MimoConfigField, MimoConfigView } from '@/features/ai/mimo-config'
 import type { CanvasNodeType } from '@/features/canvas/types'
 
 export type StepfunDraft = Record<StepfunModelField, string>
 export type GeminiDraft = Record<GeminiConfigField, string>
+export type MimoDraft = Record<MimoConfigField, string>
 export type OpenAiCompatibleDraft = {
   baseUrl: string
   defaultModel: string
@@ -30,6 +32,14 @@ export const GEMINI_FIELDS: Array<[GeminiConfigField, string]> = [
   ['baseUrl', 'OpenAI 兼容端点'],
   ['primaryModel', '主模型'],
   ['fastModel', '低延迟模型'],
+]
+
+export const MIMO_FIELDS: Array<[MimoConfigField, string]> = [
+  ['baseUrl', '产品 API 端点'],
+  ['textModel', '文本模型'],
+  ['visionModel', '视觉模型'],
+  ['ttsModel', '配音模型'],
+  ['asrModel', '语音识别模型'],
 ]
 
 export const OPENAI_COMPATIBLE_FIELDS: Array<[keyof OpenAiCompatibleDraft, string]> = [
@@ -88,6 +98,8 @@ export interface SettingsResponse {
   models?: StepfunConfigView
   geminiConfigured?: boolean
   gemini?: GeminiConfigView
+  mimoCredential?: { configured: boolean }
+  mimo?: MimoConfigView
   customOpenAi?: OpenAiCompatibleProfileView
   routes?: Record<CanvasNodeType, DirectorRouteView>
   laneQuotas?: LaneQuotasView
@@ -100,6 +112,7 @@ export interface ReadyModelSettingsController {
   data: SettingsResponse
   stepfunDraft: StepfunDraft
   geminiDraft: GeminiDraft
+  mimoDraft: MimoDraft
   customOpenAiDraft: OpenAiCompatibleDraft
   routes: RouteDraft
   laneQuotasDraft: LaneQuotasDraft
@@ -107,6 +120,7 @@ export interface ReadyModelSettingsController {
   error?: string
   setStepfunField: (field: StepfunModelField, value: string) => void
   setGeminiField: (field: GeminiConfigField, value: string) => void
+  setMimoField: (field: MimoConfigField, value: string) => void
   setCustomOpenAiField: (field: keyof OpenAiCompatibleDraft, value: string) => void
   setRoute: (nodeType: CanvasNodeType, provider: AiProviderId) => void
   setLaneQuotaField: (
