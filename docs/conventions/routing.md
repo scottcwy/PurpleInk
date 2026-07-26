@@ -20,7 +20,7 @@
 | 层 | 前缀 | 壳 | 认证 | 可索引 | 用途 |
 | --- | --- | --- | --- | --- | --- |
 | L1 公开 | `/`、`/artifacts*`、`/share/*`、`/release` | 营销壳 / 只读分享壳 | 匿名 | `/`、`/artifacts*` 是；`/share/*` 否 | 获客、案例、对外分享 |
-| L2 认证 | `/login`、`/signup` | 认证壳（无侧栏） | 匿名 | 否 | 进入 L3 |
+| L2 认证 | `/login`、`/signup`、`/password/reset` | 认证壳（无侧栏，左海报 + 右表单） | 匿名 | 否 | 进入 L3 |
 | L3 制作应用 | `/products/*` | `AppShell` + `AppSidebarShell` | 必须登录（见 §9） | 否 | 全部真实制作功能 |
 | L4 内部 | `/playbook/*` | 独立无业务壳 | 仅非生产环境 | 否 | 组件登记与视觉验收 |
 | API | `/api/*` | 无 | 见 §4 | 否（robots 已 disallow） | 数据与引擎 |
@@ -49,16 +49,19 @@
 
 `(public)` 组的壳是 `src/app/(public)/layout.tsx`：无侧栏、无写操作入口。
 
-`/` 右上角 **Try it** 已接线到 `PRODUCTS_ROUTES.projects`（`/products/projects`），是进入 L3 的主 CTA。Contact 与 footer 仍多为 `#` / 空串；`/login` 入口尚未接线，属已知缺口。
+`/` 右上角 **Try it** 已接线到 `PRODUCTS_ROUTES.projects`（`/products/projects`），是进入 L3 的主 CTA。未登录点击会被 §9 的守卫收敛到 `/login?next=/products/projects`。Contact 与 footer 仍多为 `#` / 空串。
 
 ### 2.2 L2 认证
 
-| 路由 | 文件 | 状态 |
-| --- | --- | --- |
-| `/login` | `src/app/(auth)/login/page.tsx` | `shell` |
-| `/signup` | `src/app/(auth)/signup/page.tsx` | `shell` |
+| 路由 | 文件 | 状态 | 提交目标 |
+| --- | --- | --- | --- |
+| `/login` | `src/app/(auth)/login/page.tsx` | `wired` | `POST /api/auth/login` |
+| `/signup` | `src/app/(auth)/signup/page.tsx` | `wired` | `POST /api/auth/signup/code` → `POST /api/auth/signup` |
+| `/password/reset` | `src/app/(auth)/password/reset/page.tsx` | `wired` | `POST /api/auth/password/code` → `POST /api/auth/password/reset` |
 
-两页是 `AuthShellForm` 的禁用态占位（无提交、无校验），挂 `src/app/(auth)/layout.tsx` 的无侧栏认证壳。
+三页共用 `src/app/(auth)/layout.tsx` 的无侧栏认证壳：`lg` 及以上左半屏通栏海报（`public/img/login.webp`）+ 右半屏表单栏，移动端单栏、海报折叠。海报走 `next/image` 且 `sizes="(min-width: 1024px) 50vw, 1px"`，移动端落到最小候选档（实测 12,292 B）。视觉归属见 `docs/designs/Design-system-inventory.md` 的登录页条目。
+
+三页均 `noIndex`。`/password/reset` 只接受「邮箱 + 邮件验证码 + 新口令」三件套，不接受任何形式的重置链接 token —— 验证码通道已经存在，再加一套一次性链接就是第二套真值。
 
 ### 2.3 L3 制作应用
 

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { HONEYPOT_FIELD_NAME } from './honeypot'
 import { VERIFICATION_CODE_LENGTH } from './verification-code'
 
 /** RFC 5321 的 path 上限。超长邮箱一律拒，避免把垃圾写进唯一索引。 */
@@ -53,7 +54,7 @@ export const verificationCodeSchema = z
 export const humanCheckSchema = z.object({
   humanCheckToken: z.string().min(1).max(256),
   humanCheckAnswer: z.string().trim().max(16),
-  contactReference: z.string().max(256).optional(),
+  [HONEYPOT_FIELD_NAME]: z.string().max(256).optional(),
 })
 
 export const requestVerificationCodeSchema = humanCheckSchema.extend({

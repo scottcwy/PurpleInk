@@ -48,18 +48,20 @@ const EXPECTED_PENCIL_FAMILIES = [
 const EXPECTED_UI_FAMILIES = [
   ...EXPECTED_PENCIL_FAMILIES,
   "hover-preview",
+  "human-check-field",
   "media-viewport",
   "popover",
   "resize-handle",
   "settings-panel",
   "skeleton",
+  "verification-code-field",
 ] as const;
 
 describe("Track P playbook registry", () => {
   it("tracks the latest Pencil inventory and every translated application family", () => {
     expect(PENCIL_REUSABLE_SYMBOL_COUNT).toBe(113);
     expect(PENCIL_COMPONENT_FAMILY_COUNT).toBe(35);
-    expect(UI_COMPONENT_FAMILY_COUNT).toBe(41);
+    expect(UI_COMPONENT_FAMILY_COUNT).toBe(43);
     expect(
       entriesByCategory("ui")
         .map(({ id }) => id)
@@ -73,12 +75,18 @@ describe("Track P playbook registry", () => {
     ]);
   });
 
-  it("keeps icon-bearing SettingsPanel demos on the client boundary", () => {
-    const source = readFileSync(
+  /**
+   * /playbook/ui 是静态预渲染的 Server Component。任何往 DOM 元素传事件处理器的
+   * demo 必须自己声明客户端边界，否则 `next build` 会在 prerender 阶段直接失败
+   * （实测报 "Event handlers cannot be passed to Client Component props"）。
+   */
+  it("keeps interactive demos on the client boundary", () => {
+    for (const file of [
       "src/components/ui/settings-panel.demo.tsx",
-      "utf8",
-    );
-
-    expect(source.startsWith("'use client'")).toBe(true);
+      "src/components/ui/human-check-field.demo.tsx",
+      "src/components/ui/verification-code-field.demo.tsx",
+    ]) {
+      expect(readFileSync(file, "utf8").startsWith("'use client'")).toBe(true);
+    }
   });
 });

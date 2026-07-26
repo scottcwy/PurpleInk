@@ -32,10 +32,11 @@ src/app/
 │   └── release/page.tsx        → /release（占位）
 │
 ├── (auth)/                     L2 认证
-│   ├── layout.tsx              认证壳，无侧栏
-│   ├── _components/auth-shell-form.tsx
-│   ├── login/page.tsx          → /login（未接线）
-│   └── signup/page.tsx         → /signup（未接线）
+│   ├── layout.tsx              认证壳，无侧栏；lg 左半屏海报 + 右半屏表单
+│   ├── _components/            海报、表单外壳、三个表单、客户端出口
+│   ├── login/page.tsx          → /login
+│   ├── signup/page.tsx         → /signup
+│   └── password/reset/page.tsx → /password/reset
 │
 ├── products/                   L3 制作应用
 │   ├── page.tsx                → /products，308 到 /products/dashboard

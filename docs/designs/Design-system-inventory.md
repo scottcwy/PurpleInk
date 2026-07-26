@@ -227,6 +227,42 @@ C 只负责稳定布局与业务组合，不定义新颜色。任何可复用的
 | S5 | `/export/[projectId]` | 验证并交付输出 | Compose project |
 | S6 | `/settings` | 验证 workspace providers/defaults | Save settings |
 
+### 7.1 认证页（L2）的视觉归属
+
+`canvas.pen` 里没有认证屏 —— 登录体系（PLAN-002）落地时新增，此处是它的文字真值。
+
+| 屏 | 路由 | 主目的 | 主操作 |
+|---|---|---|---|
+| A1 | `/login` | 用已有账号进入 workspace | 登录 |
+| A2 | `/signup` | 创建账号与独立 workspace | 创建账号并进入 |
+| A3 | `/password/reset` | 用邮件验证码重置口令 | 设置新密码并登录 |
+
+**归属结论：三页用应用侧 `ds-*` token，不用营销侧 token。** PLAN-002 §4.1 原本推荐
+营销侧，实施时按实测改为应用侧，依据三条：
+
+1. `--ds-gradient-start` 在浅色是 `#ffffff`、深色是 `#03040a`，与营销侧 `--background`
+   **数值相同**。右栏顶部与落地页首屏本来就连续，不需要换阵营才能满足「与落地页风格一致」。
+2. `components/ui/*` 的全部控件只认 `ds-*`，且 `canonical-components.test.ts` 断言死了
+   这些 class。选营销侧就必须覆盖组件内部 token 或另造一套输入框，正是 AGENTS.md §3
+   明令禁止的平行原语。
+3. 营销 `Header` 是 `fixed` + `mix-blend-difference` + 全白字，依赖深色 hero 背景，
+   搬到认证页会直接失效。因此认证壳自带一行轻量品牌头（`PurpleInkLogo` + 返回首页链接），
+   不复用营销 Header，也不构成第二个 shell。
+
+版式：`lg` 及以上左右各半屏，左栏 `public/img/login.webp` 通栏铺满视口高度（`object-cover`），
+右栏表单区独立滚动；移动端单栏、海报折叠。三页共用 `(auth)/layout.tsx` 与
+`_components/auth-form-shell.tsx`，不复制三份布局。
+
+新增两个组件族（已登记 `/playbook`，只用 `ds-*` token）：
+
+| 组件 | 责任 | 纪律 |
+|---|---|---|
+| `HumanCheckField` | 算术人机验证的题面 + 答案输入 | 纯呈现；题目与 SVG 由服务端下发，客户端不生成、不校验 |
+| `VerificationCodeField` | 邮件验证码输入 + 重发按钮 | 纯呈现；倒计时由父级驱动，与服务端 `auth_throttle` 同一份真值 |
+
+两者都提供非视觉替代：验证题以文本同时呈现并带 `aria-label`，倒计时带
+`aria-live="polite"` 文本，不只靠禁用态的视觉变化表达状态（§8）。
+
 共同约束：
 
 - 每屏 1440×900、`clip:true`，Light/Dark 同构。

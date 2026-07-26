@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { createMetadata } from '@/lib/metadata'
-import { AuthShellForm } from '../_components/auth-shell-form'
+import { redirectIfAuthenticated } from '@/features/auth/page-session'
+import { SignupForm } from '../_components/signup-form'
 
 export const metadata: Metadata = createMetadata({
   title: '创建 Workspace',
@@ -9,6 +11,16 @@ export const metadata: Metadata = createMetadata({
   noIndex: true,
 })
 
-export default function SignupPage() {
-  return <AuthShellForm mode="signup" />
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>
+}) {
+  const { next } = await searchParams
+  await redirectIfAuthenticated(next)
+  return (
+    <Suspense fallback={null}>
+      <SignupForm />
+    </Suspense>
+  )
 }

@@ -19,6 +19,8 @@ export type { IssuedSession, SessionOwner } from './session'
 
 export { DEFAULT_POST_LOGIN_PATH, safeNextPath } from './next-path'
 
+export { HONEYPOT_FIELD_NAME } from './honeypot'
+
 export {
   emailSchema,
   loginSchema,

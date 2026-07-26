@@ -15,6 +15,7 @@ const ROUTE_FILES = [
   'src/app/(auth)/layout.tsx',
   'src/app/(auth)/login/page.tsx',
   'src/app/(auth)/signup/page.tsx',
+  'src/app/(auth)/password/reset/page.tsx',
   // L3 制作应用
   'src/app/products/page.tsx',
   'src/app/products/(app)/layout.tsx',
