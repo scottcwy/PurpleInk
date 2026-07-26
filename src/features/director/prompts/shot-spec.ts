@@ -23,7 +23,7 @@ export const shotSpecPromptInputSchema = z
   .object({
     target: shotSpecTargetSchema,
     scriptUnits: scriptUnitsSchema,
-    audioAllocation: audioAllocationSchema,
+    audioAllocation: audioAllocationSchema.optional(),
     masterPlan: z.string().min(1),
     styleBible: z.string().min(1),
   })
@@ -64,8 +64,8 @@ style bible：
 ${parsed.styleBible}
 script units：
 ${JSON.stringify(parsed.scriptUnits)}
-audio allocation：
-${JSON.stringify(parsed.audioAllocation)}
+音频时序（异步生成；未就绪时只绑定来源文本，不得编造时长）：
+${JSON.stringify(parsed.audioAllocation ?? { status: 'pending' })}
 
 提交方式：必须调用 validate_shot_plan 工具，把完整 shot plan 作为 shotPlan 实参提交，不要把实参当作普通文本输出。
 工具返回校验失败时，按返回的错误逐条修订后再次调用同一工具。

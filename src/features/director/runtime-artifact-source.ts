@@ -42,26 +42,32 @@ export class DirectorArtifactSource {
 
   async loadIngestArtifact(projectId: string): Promise<{
     scriptUnits: ScriptUnit[]
+  }> {
+    const nodeId = await this.findNodeId(projectId, 'script-import')
+    const raw = await this.loadArtifactJson(projectId, nodeId, 'director-ingest')
+    return ingestStageResultSchema.parse(raw)
+  }
+
+  async loadIngestAudioArtifact(projectId: string): Promise<{
     audioManifest: AudioManifest
     audioAllocation: AudioAllocation
   }> {
     const nodeId = await this.findNodeId(projectId, 'script-import')
-    const raw = await this.loadArtifactJson(projectId, nodeId, 'director-ingest')
-    // 音频时序没有回退口径：INGEST 必须已写入实测 manifest/allocation，缺失即失败。
+    const splitKey = await this.resolveLatestArtifactKey(
+      projectId,
+      nodeId,
+      'director-ingest-audio'
+    )
+    const raw = splitKey
+      ? await this.loadArtifactJson(projectId, nodeId, 'director-ingest-audio')
+      : await this.loadArtifactJson(projectId, nodeId, 'director-ingest')
     const parsed = z
       .object({
-        scriptUnits: z.unknown(),
-        audioManifest: z.unknown(),
-        audioAllocation: z.unknown(),
+        audioManifest: audioManifestSchema,
+        audioAllocation: audioAllocationSchema,
       })
       .parse(raw)
-    return {
-      scriptUnits: ingestStageResultSchema.parse({
-        scriptUnits: parsed.scriptUnits,
-      }).scriptUnits,
-      audioManifest: audioManifestSchema.parse(parsed.audioManifest),
-      audioAllocation: audioAllocationSchema.parse(parsed.audioAllocation),
-    }
+    return parsed
   }
 
   async loadDirectArtifact(projectId: string) {

@@ -116,6 +116,9 @@ function createHarness(
   const advancePipeline = vi.fn(async () => {
     calls.push('advance')
   })
+  const scheduleMediaNarration = vi.fn(async () => {
+    calls.push('media')
+  })
   const runner = createStageRunner({
     repository,
     transitionNodeStatus,
@@ -126,6 +129,7 @@ function createHarness(
     commitResult,
     runStageEffect,
     advancePipeline,
+    scheduleMediaNarration,
   })
   return {
     calls,
@@ -137,6 +141,7 @@ function createHarness(
     commitResult,
     runStageEffect,
     advancePipeline,
+    scheduleMediaNarration,
     runner,
   }
 }
@@ -156,6 +161,7 @@ describe('createStageRunner', () => {
       'effect',
       'close',
       'success',
+      'media',
       'advance',
     ])
     expect(harness.writeArtifact).toHaveBeenCalledWith(
@@ -184,6 +190,23 @@ describe('createStageRunner', () => {
       '展示完成'
     )
     expect(harness.advancePipeline).toHaveBeenCalledWith('project-1', 'node-1')
+    expect(harness.scheduleMediaNarration).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+    })
+  })
+
+  it('keeps INGEST successful when the asynchronous media queue is unavailable', async () => {
+    const harness = createHarness()
+    harness.scheduleMediaNarration.mockRejectedValueOnce(new Error('媒体队列不可用'))
+
+    await expect(
+      harness.runner('project-1', 'node-1', 'INGEST')
+    ).resolves.toBeUndefined()
+
+    expect(harness.transitionNodeStatus).toHaveBeenCalledWith('node-1', 'success')
+    expect(harness.advancePipeline).toHaveBeenCalledWith('project-1', 'node-1')
+    expect(harness.repository.recordStageError).not.toHaveBeenCalled()
   })
 
   it.each([

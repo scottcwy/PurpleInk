@@ -66,10 +66,11 @@ export async function initQueue(): Promise<void> {
   if (globalStore.__cvcQueueInitializing) return globalStore.__cvcQueueInitializing
   globalStore.__cvcQueueInitializing = (async () => {
     try {
-      const [directorMod, renderMod, exportMod, lanes] = await Promise.all([
+      const [directorMod, renderMod, exportMod, mediaMod, lanes] = await Promise.all([
         import('@/features/director/queue-handler'),
         import('@/features/render/queue-handler'),
         import('@/features/render/export-queue-handler'),
+        import('@/features/audio/narration-queue-handler'),
         loadLaneQuotasForStart(),
       ])
       if (typeof directorMod.registerDirectorStageHandler === 'function') {
@@ -80,6 +81,9 @@ export async function initQueue(): Promise<void> {
       }
       if (typeof exportMod.registerExportProjectHandler === 'function') {
         exportMod.registerExportProjectHandler(queue)
+      }
+      if (typeof mediaMod.registerMediaNarrationHandler === 'function') {
+        mediaMod.registerMediaNarrationHandler(queue)
       }
       queue.start(lanes)
       globalStore.__cvcQueueInitialized = true

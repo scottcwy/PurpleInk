@@ -33,6 +33,7 @@ function harness(
     ),
     isNodeStale: vi.fn(async () => false),
     markNodeStale: vi.fn(async () => {}),
+    isMediaReady: vi.fn(async () => true),
     recordStageError: vi.fn(async () => {}),
   }
   const enqueueDirectorStage =
@@ -96,6 +97,19 @@ describe('advancePipeline', () => {
       stage: 'ASSEMBLE',
     })
     expect(result.enqueuedNodeIds).toEqual(['codegen', 'subtitle'])
+  })
+
+  it('keeps codegen idle while asynchronous narration is not ready', async () => {
+    const test = harness([
+      candidate({ id: 'codegen', type: 'shot-codegen', stage: 'FABRICATE' }),
+    ])
+    vi.mocked(test.repository.isMediaReady).mockResolvedValue(false)
+
+    const result = await advancePipeline('project-1', 'shot-script', test.dependencies)
+
+    expect(result).toEqual({ enqueuedNodeIds: [], failedNodeIds: [] })
+    expect(test.enqueueRenderShot).not.toHaveBeenCalled()
+    expect(test.repository.recordStageError).not.toHaveBeenCalled()
   })
 
   it('creates the trusted final MP4 before enqueuing export FINALIZE', async () => {

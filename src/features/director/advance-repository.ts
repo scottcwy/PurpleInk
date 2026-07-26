@@ -12,14 +12,17 @@ import { DirectorRuntimeRepository } from './runtime-repository'
 import { fromPersistedNodeStatus } from './runtime-node-data'
 import type { PipelineStage } from './types'
 import { isStale, transitionNodeStatus } from '@/features/canvas/status'
+import { DirectorArtifactSource } from './runtime-artifact-source'
 
 export class AdvanceRepositoryImpl
   implements AdvanceRepository, PipelineRepository
 {
   private readonly directorRepository: DirectorRuntimeRepository
+  private readonly artifactSource: DirectorArtifactSource
 
   constructor(private readonly db: Db) {
     this.directorRepository = new DirectorRuntimeRepository(db, storage)
+    this.artifactSource = new DirectorArtifactSource(db, storage)
   }
 
   async isAutopilotEnabled(projectId: string): Promise<boolean> {
@@ -140,6 +143,15 @@ export class AdvanceRepositoryImpl
       upstreams.length === sourceIds.length &&
       upstreams.every(({ status }) => status === 'succeeded')
     )
+  }
+
+  async isMediaReady(projectId: string): Promise<boolean> {
+    try {
+      await this.artifactSource.loadIngestAudioArtifact(projectId)
+      return true
+    } catch {
+      return false
+    }
   }
 
   async isProjectComplete(projectId: string): Promise<boolean> {

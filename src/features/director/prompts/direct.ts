@@ -14,8 +14,8 @@ export const directPromptInputSchema = z
   .object({
     projectTitle: z.string().min(1),
     scriptUnits: scriptUnitsSchema,
-    audioManifest: audioManifestSchema,
-    audioAllocation: audioAllocationSchema,
+    audioManifest: audioManifestSchema.optional(),
+    audioAllocation: audioAllocationSchema.optional(),
     visualTheme: visualThemeSchema.default(DEFAULT_VISUAL_THEME),
   })
   .strict()
@@ -45,10 +45,12 @@ export function buildDirectPrompt(
 
 script units：
 ${JSON.stringify(parsed.scriptUnits)}
-audio manifest：
-${JSON.stringify(parsed.audioManifest)}
-audio allocation：
-${JSON.stringify(parsed.audioAllocation)}
+音频时序（异步生成；未就绪时只按文本规划，不得编造时长）：
+${JSON.stringify(
+  parsed.audioManifest && parsed.audioAllocation
+    ? { audioManifest: parsed.audioManifest, audioAllocation: parsed.audioAllocation }
+    : { status: 'pending' }
+)}
 
 输出两个有明确标题的文本区块：MASTER_PLAN 与 STYLE_BIBLE。`
 }

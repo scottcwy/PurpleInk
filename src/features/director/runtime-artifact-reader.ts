@@ -40,8 +40,6 @@ export class DirectorArtifactReader {
       return {
         projectTitle: row.projectTitle,
         scriptUnits: ingest.scriptUnits,
-        audioManifest: ingest.audioManifest,
-        audioAllocation: ingest.audioAllocation,
         visualTheme,
       }
     }
@@ -58,15 +56,11 @@ export class DirectorArtifactReader {
       this.source.loadIngestArtifact(row.nodeProjectId),
       this.source.loadDirectArtifact(row.nodeProjectId),
     ])
-    const shotAllocation = requireShotAllocation(
-      ingest.audioAllocation,
-      row.laneKey
-    )
-    const sourceUnit = ingest.scriptUnits.find(
-      (unit) => unit.unitId === shotAllocation.audioUnitId
-    )
+    const payload = readPayload(row.data)
+    const sourceUnitId = z.string().regex(/^U\d{3}$/).parse(payload.sourceUnitId)
+    const sourceUnit = ingest.scriptUnits.find((unit) => unit.unitId === sourceUnitId)
     if (!sourceUnit) {
-      throw new Error(`script units 中找不到 ${shotAllocation.audioUnitId}`)
+      throw new Error(`script units 中找不到 ${sourceUnitId}`)
     }
     return {
       target: {
@@ -75,7 +69,6 @@ export class DirectorArtifactReader {
         sourceUnit,
       },
       scriptUnits: ingest.scriptUnits,
-      audioAllocation: ingest.audioAllocation,
       masterPlan: direct.masterPlan,
       styleBible: direct.styleBible,
     }
@@ -83,15 +76,15 @@ export class DirectorArtifactReader {
 
   private async resolveFabricateInput(row: StageContextRow): Promise<unknown> {
     if (!row.laneKey) throw new Error('FABRICATE 节点缺少 laneKey')
-    const [ingest, direct, shot, visualTheme] = await Promise.all([
-      this.source.loadIngestArtifact(row.nodeProjectId),
+    const [ingestAudio, direct, shot, visualTheme] = await Promise.all([
+      this.source.loadIngestAudioArtifact(row.nodeProjectId),
       this.source.loadDirectArtifact(row.nodeProjectId),
       this.loadShot(row.nodeProjectId, row.laneKey),
       this.source.loadVisualTheme(row.nodeProjectId),
     ])
     return {
       shot,
-      audioAllocation: ingest.audioAllocation,
+      audioAllocation: ingestAudio.audioAllocation,
       styleBible: direct.styleBible,
       visualTheme,
     }
@@ -100,15 +93,15 @@ export class DirectorArtifactReader {
   private async resolveAssembleInput(row: StageContextRow): Promise<unknown> {
     const direct = await this.source.loadDirectArtifact(row.nodeProjectId)
     if (row.nodeType === 'score') {
-      const [ingest, shotPlan, rendered] = await Promise.all([
-        this.source.loadIngestArtifact(row.nodeProjectId),
+      const [ingestAudio, shotPlan, rendered] = await Promise.all([
+        this.source.loadIngestAudioArtifact(row.nodeProjectId),
         this.source.loadAllShotSpecs(row.nodeProjectId),
         this.source.loadAllRenderedArtifactKeys(row.nodeProjectId),
       ])
       return {
         styleBible: direct.styleBible,
         shotPlan,
-        audioAllocation: ingest.audioAllocation,
+        audioAllocation: ingestAudio.audioAllocation,
         renderedArtifactKeys: rendered.map((item) => item.storageKey),
       }
     }
@@ -116,12 +109,13 @@ export class DirectorArtifactReader {
       throw new Error(`未知 ASSEMBLE 节点类型：${row.nodeType}`)
     }
     if (!row.laneKey) throw new Error(`${row.nodeType} 节点缺少 laneKey`)
-    const [ingest, shot] = await Promise.all([
+    const [ingest, ingestAudio, shot] = await Promise.all([
       this.source.loadIngestArtifact(row.nodeProjectId),
+      this.source.loadIngestAudioArtifact(row.nodeProjectId),
       this.loadShot(row.nodeProjectId, row.laneKey),
     ])
     const shotAllocation = requireShotAllocation(
-      ingest.audioAllocation,
+      ingestAudio.audioAllocation,
       row.laneKey
     )
     const scriptUnit = ingest.scriptUnits.find(
@@ -158,15 +152,15 @@ export class DirectorArtifactReader {
       throw new Error(`未知 FINALIZE 节点类型：${row.nodeType}`)
     }
     if (!row.laneKey) throw new Error('shot-qa 节点缺少 laneKey')
-    const [ingest, shot, renderedArtifactKey] = await Promise.all([
-      this.source.loadIngestArtifact(row.nodeProjectId),
+    const [ingestAudio, shot, renderedArtifactKey] = await Promise.all([
+      this.source.loadIngestAudioArtifact(row.nodeProjectId),
       this.loadShot(row.nodeProjectId, row.laneKey),
       this.source.loadRenderedArtifactKey(row.nodeProjectId, row.laneKey),
     ])
     return {
       shot,
       renderedArtifactKey,
-      shotAllocation: requireShotAllocation(ingest.audioAllocation, row.laneKey),
+      shotAllocation: requireShotAllocation(ingestAudio.audioAllocation, row.laneKey),
     }
   }
 

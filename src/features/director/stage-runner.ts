@@ -77,6 +77,10 @@ interface StageRunnerDependencies {
     projectId: string,
     completedNodeId: string
   ) => Promise<unknown>
+  scheduleMediaNarration?: (input: {
+    projectId: string
+    nodeId: string
+  }) => Promise<unknown>
 }
 
 type StageRunner = (
@@ -116,6 +120,12 @@ async function createDefaultRunner(): Promise<StageRunner> {
       await runDirectorStageEffect(context)
     },
     advancePipeline,
+    scheduleMediaNarration: async (input) => {
+      const { enqueueMediaNarration } = await import(
+        '@/features/audio/narration-queue-handler'
+      )
+      return enqueueMediaNarration(input)
+    },
   })
 }
 
@@ -167,6 +177,12 @@ export function createStageRunner(
       await session.close()
       closed = true
       await dependencies.transitionNodeStatus(nodeId, 'success')
+      if (stage === 'INGEST' && dependencies.scheduleMediaNarration) {
+        await scheduleMediaWithoutMasking(dependencies.scheduleMediaNarration, {
+          projectId,
+          nodeId,
+        })
+      }
       await advanceWithoutMasking(
         dependencies.advancePipeline,
         projectId,
@@ -209,6 +225,21 @@ export function createStageRunner(
       }
       throw error
     }
+  }
+}
+
+async function scheduleMediaWithoutMasking(
+  schedule: NonNullable<StageRunnerDependencies['scheduleMediaNarration']>,
+  input: { projectId: string; nodeId: string }
+): Promise<void> {
+  try {
+    await schedule(input)
+  } catch (error) {
+    console.error('[director] 异步媒体入队失败', {
+      projectId: input.projectId,
+      nodeId: input.nodeId,
+      message: error instanceof Error ? error.message : String(error),
+    })
   }
 }
 

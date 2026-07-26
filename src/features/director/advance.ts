@@ -21,6 +21,7 @@ export interface AdvanceRepository {
   areAllUpstreamsSuccessful(projectId: string, nodeId: string): Promise<boolean>
   isNodeStale(nodeId: string): Promise<boolean>
   markNodeStale(nodeId: string): Promise<void>
+  isMediaReady(projectId: string): Promise<boolean>
   recordStageError(
     nodeId: string,
     stage: PipelineStage,
@@ -119,6 +120,7 @@ export async function advancePipeline(
     }
     try {
       if (candidate.type === 'shot-codegen') {
+        if (!(await resolved.repository.isMediaReady(projectId))) continue
         await resolved.enqueueRenderShot({ projectId, nodeId: candidate.id })
       } else {
         if (candidate.type === 'export') {
