@@ -129,6 +129,35 @@ describe('prepareStageResult', () => {
     })
     expect(result.renderSpec?.seed).toEqual(expect.any(Number))
   })
+
+  it('rejects a SHOT_SPEC artifact that belongs to another lane', async () => {
+    await expect(
+      prepareStageResult(
+        {
+          ...baseContext,
+          nodeType: 'shot-script',
+          stage: 'SHOT_SPEC',
+          directorInput: {
+            target: {
+              laneKey: 'S002',
+              sourceUnitId: 'U002',
+              sourceUnit: { unitId: 'U002', text: '第二句。' },
+            },
+          },
+        },
+        JSON.stringify({
+          schemaVersion: 1,
+          shots: [
+            {
+              id: 'S001',
+              sourceUnitIds: ['U001'],
+              audioBinding: { unitId: 'U001' },
+            },
+          ],
+        })
+      )
+    ).rejects.toThrow('S002')
+  })
 })
 
 function fabricateContext(): DirectorStageContext {

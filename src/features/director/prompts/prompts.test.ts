@@ -16,6 +16,11 @@ import {
 
 const digest = `sha256:${'a'.repeat(64)}`
 const scriptUnits = [{ unitId: 'U001' as const, text: '测试文稿', order: 0 }]
+const shotSpecTarget = {
+  laneKey: 'S001' as const,
+  sourceUnitId: 'U001' as const,
+  sourceUnit: { unitId: 'U001' as const, text: '测试文稿' },
+}
 const audioManifest = {
   version: 1,
   engine: 'stepfun-tts',
@@ -83,6 +88,7 @@ describe('director prompt templates', () => {
     ).toContain('MASTER_PLAN')
     expect(
       buildShotSpecPrompt({
+        target: shotSpecTarget,
         scriptUnits,
         audioAllocation,
         masterPlan: '导演总纲',
@@ -137,6 +143,7 @@ describe('director prompt templates', () => {
     const prompts = [
       buildDirectPrompt({ projectTitle: '测试', scriptUnits, audioManifest, audioAllocation }),
       buildShotSpecPrompt({
+        target: shotSpecTarget,
         scriptUnits,
         audioAllocation,
         masterPlan: '导演总纲',

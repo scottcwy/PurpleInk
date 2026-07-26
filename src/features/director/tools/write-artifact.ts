@@ -7,7 +7,10 @@ import {
 } from '@/lib/db/client'
 import { storage as defaultStorage, type StorageAdapter } from '@/lib/storage'
 import { inspectFabricateSource } from '@/features/canvas/contracts'
+import { ArtifactValidationError } from '../artifact-validation-error'
 import { validateShotPlanValue } from './validate-shot-plan'
+
+export { ArtifactValidationError } from '../artifact-validation-error'
 
 const validationSchema = z.enum(['non-empty', 'shot-plan', 'deterministic-html'])
 const inputSchema = z
@@ -53,13 +56,6 @@ export interface ArtifactCommitResult {
   contentHash: string
   attemptId: string
   storageKeyAlreadyExisted: boolean
-}
-
-export class ArtifactValidationError extends Error {
-  constructor(readonly errors: string[]) {
-    super(`产物校验失败：${errors.join('；')}`)
-    this.name = 'ArtifactValidationError'
-  }
 }
 
 /**

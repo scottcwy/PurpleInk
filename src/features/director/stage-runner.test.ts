@@ -385,24 +385,24 @@ describe('createStageRunner', () => {
     expect(harness.advancePipeline).not.toHaveBeenCalled()
   })
 
-  it('applies the same bounded feedback mechanism to SHOT_SPEC validation', async () => {
+  it('retries SHOT_SPEC semantic validation before any invalid artifact is written', async () => {
     const harness = createHarness()
     harness.repository.loadStageContext.mockResolvedValue({
       ...context,
       nodeType: 'shot-script',
       stage: 'SHOT_SPEC',
     })
-    harness.writeArtifact.mockImplementationOnce(async () => {
-      harness.calls.push('artifact')
-      throw new ArtifactValidationError(['shots.0.mustShow: Required'])
+    harness.prepareResult.mockImplementationOnce(() => {
+      throw new ArtifactValidationError(['shots.0.id 必须为 S002'])
     })
 
     await harness.runner('project-1', 'node-1', 'SHOT_SPEC')
 
     expect(harness.session.run).toHaveBeenCalledTimes(2)
+    expect(harness.writeArtifact).toHaveBeenCalledTimes(1)
     expect(harness.session.run.mock.calls[1]?.[0]).toEqual(
       expect.objectContaining({
-        prompt: expect.stringContaining('完整 JSON'),
+        prompt: expect.stringContaining('shots.0.id 必须为 S002'),
         output: SHOT_SPEC_OUTPUT,
       })
     )

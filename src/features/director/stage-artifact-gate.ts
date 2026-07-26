@@ -76,11 +76,11 @@ export async function generateValidatedArtifact(
       tools: toolsForStage(input.stage),
       output: STAGE_OUTPUT[input.stage],
     })
-    const prepared = await input.prepareResult(
-      input.context,
-      result.artifactContent
-    )
     try {
+      const prepared = await input.prepareResult(
+        input.context,
+        result.artifactContent
+      )
       const artifact = await input.writeArtifact(
         outputArtifact(input.context, prepared.content)
       )

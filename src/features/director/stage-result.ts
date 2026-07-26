@@ -15,6 +15,8 @@ import {
 import { ingestStageResultSchema, type ScriptUnit } from './schemas/ingest'
 import { directorShotPlanSchema } from './schemas/director-shot-plan'
 import type { DirectorStageContext } from './runtime-repository'
+import { ArtifactValidationError } from './artifact-validation-error'
+import { shotSpecTargetSchema } from './prompts/shot-spec'
 
 const renderSpecSchema = z
   .object({
@@ -80,10 +82,56 @@ export async function prepareStageResult(
 
   if (context.stage === 'SHOT_SPEC') {
     const parsed = directorShotPlanSchema.parse(parseJsonObject(rawContent))
+    const { target } = z
+      .object({ target: shotSpecTargetSchema })
+      .passthrough()
+      .parse(context.directorInput)
+    const errors = validateShotSpecTarget(parsed.shots, target)
+    if (errors.length > 0) throw new ArtifactValidationError(errors)
     return { content: JSON.stringify(parsed) }
   }
 
   return { content: rawContent }
+}
+
+function validateShotSpecTarget(
+  shots: Array<{
+    id: string
+    sourceUnitIds?: unknown
+    audioBinding?: unknown
+  }>,
+  target: {
+    laneKey: string
+    sourceUnitId: string
+  }
+): string[] {
+  const errors: string[] = []
+  if (shots.length !== 1) {
+    errors.push(`shots 必须且只能包含当前镜头 ${target.laneKey}`)
+    return errors
+  }
+  const [shot] = shots
+  if (!shot || shot.id !== target.laneKey) {
+    errors.push(`shots.0.id 必须为 ${target.laneKey}`)
+    return errors
+  }
+  if (
+    !Array.isArray(shot.sourceUnitIds) ||
+    shot.sourceUnitIds.length !== 1 ||
+    shot.sourceUnitIds[0] !== target.sourceUnitId
+  ) {
+    errors.push(`shots.0.sourceUnitIds 必须且只能包含 ${target.sourceUnitId}`)
+  }
+  const binding =
+    shot.audioBinding &&
+    typeof shot.audioBinding === 'object' &&
+    !Array.isArray(shot.audioBinding)
+      ? shot.audioBinding as Record<string, unknown>
+      : null
+  if (binding?.unitId !== target.sourceUnitId) {
+    errors.push(`shots.0.audioBinding.unitId 必须为 ${target.sourceUnitId}`)
+  }
+  return errors
 }
 
 async function prepareIngestResult(

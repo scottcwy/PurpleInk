@@ -2,8 +2,26 @@ import { z } from 'zod'
 import { audioAllocationSchema, scriptUnitsSchema } from '../schemas/ingest'
 import { compositionModeSchema } from '../schemas/shot-plan'
 
+export const shotSpecTargetSchema = z
+  .object({
+    laneKey: z.string().regex(/^S\d{3}$/),
+    sourceUnitId: z.string().regex(/^U\d{3}$/),
+    sourceUnit: z
+      .object({
+        unitId: z.string().regex(/^U\d{3}$/),
+        text: z.string().min(1),
+      })
+      .strict(),
+  })
+  .strict()
+  .refine((target) => target.sourceUnit.unitId === target.sourceUnitId, {
+    message: 'sourceUnit 必须与 sourceUnitId 一致',
+    path: ['sourceUnit'],
+  })
+
 export const shotSpecPromptInputSchema = z
   .object({
+    target: shotSpecTargetSchema,
     scriptUnits: scriptUnitsSchema,
     audioAllocation: audioAllocationSchema,
     masterPlan: z.string().min(1),
@@ -26,7 +44,12 @@ export function buildShotSpecPrompt(input: ShotSpecPromptInput): string {
   const parsed = shotSpecPromptInputSchema.parse(input)
   return `你正在执行 CodeVideoCanvas 的 SHOT-SPEC 阶段。
 
-只生成一份 canonical shot plan；每镜必须完整填写职责、音频绑定、视觉增幅、构图、hero anatomy、屏幕文字、运动阶段、关键帧、能力、素材、音效与 mustShow/mustAvoid。
+当前唯一目标镜头：${parsed.target.laneKey}
+当前唯一来源单元：${parsed.target.sourceUnitId}
+来源原文：${parsed.target.sourceUnit.text}
+
+只生成当前镜头的一份 canonical shot plan；shots 必须且只能包含一个镜头，只允许包含 ${parsed.target.laneKey}。该镜头的 sourceUnitIds 与 audioBinding.unitId 必须绑定 ${parsed.target.sourceUnitId}。
+必须完整填写职责、音频绑定、视觉增幅、构图、hero anatomy、屏幕文字、运动阶段、关键帧、能力、素材、音效与 mustShow/mustAvoid。
 
 可用构图模式仅限：${compositionModeSchema.options.join('、')}。
 
@@ -60,6 +83,6 @@ export function buildShotSpecRetryPrompt(
 可信门禁逐条错误：
 ${parsed.errors.map((error, index) => `${index + 1}. ${error}`).join('\n')}
 
-只修正这些 schema 错误及其直接影响，不改写 master plan、style bible、原稿事实或已正确的镜头合同。
+只修正这些 schema 或当前镜头绑定错误及其直接影响，不改写 master plan、style bible、原稿事实或已正确的镜头合同。
 重新输出一份可直接解析的完整 JSON，不要输出补丁、解释、Markdown 围栏或省略内容。`
 }

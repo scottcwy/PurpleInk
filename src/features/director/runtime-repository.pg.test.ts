@@ -130,6 +130,42 @@ describe('DirectorRuntimeRepository Postgres', () => {
       )
   })
 
+  it('binds SHOT_SPEC context to the lane audio allocation and source unit', async () => {
+    await db
+      .update(canvasNodes)
+      .set({ status: 'queued' })
+      .where(
+        and(
+          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.id, SHOT_SCRIPT_ID)
+        )
+      )
+
+    const context = await repository.loadStageContext(
+      PROJECT_ID,
+      SHOT_SCRIPT_ID,
+      'SHOT_SPEC'
+    )
+
+    expect(context.directorInput).toMatchObject({
+      target: {
+        laneKey: 'S001',
+        sourceUnitId: 'U001',
+        sourceUnit: { unitId: 'U001', text: '第一句。' },
+      },
+    })
+
+    await db
+      .update(canvasNodes)
+      .set({ status: 'succeeded' })
+      .where(
+        and(
+          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.id, SHOT_SCRIPT_ID)
+        )
+      )
+  })
+
   it('commits stream bytes with real hash/size and skips empty text', async () => {
     await repository.persistStreamLog(
       PROJECT_ID,

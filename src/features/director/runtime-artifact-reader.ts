@@ -53,11 +53,27 @@ export class DirectorArtifactReader {
   }
 
   private async resolveShotSpecInput(row: StageContextRow): Promise<unknown> {
+    if (!row.laneKey) throw new Error('SHOT_SPEC 节点缺少 laneKey')
     const [ingest, direct] = await Promise.all([
       this.source.loadIngestArtifact(row.nodeProjectId),
       this.source.loadDirectArtifact(row.nodeProjectId),
     ])
+    const shotAllocation = requireShotAllocation(
+      ingest.audioAllocation,
+      row.laneKey
+    )
+    const sourceUnit = ingest.scriptUnits.find(
+      (unit) => unit.unitId === shotAllocation.audioUnitId
+    )
+    if (!sourceUnit) {
+      throw new Error(`script units 中找不到 ${shotAllocation.audioUnitId}`)
+    }
     return {
+      target: {
+        laneKey: row.laneKey,
+        sourceUnitId: sourceUnit.unitId,
+        sourceUnit,
+      },
       scriptUnits: ingest.scriptUnits,
       audioAllocation: ingest.audioAllocation,
       masterPlan: direct.masterPlan,
