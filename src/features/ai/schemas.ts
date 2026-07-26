@@ -50,6 +50,17 @@ export const stepfunSettingsSchema = z.object({
     })
     .strict()
     .optional(),
+  mimo: z
+    .object({
+      apiKey: z.string().min(1, 'MiMo API Key 不能为空').optional(),
+      baseUrl: z.string().optional(),
+      textModel: z.string().optional(),
+      visionModel: z.string().optional(),
+      ttsModel: z.string().optional(),
+      asrModel: z.string().optional(),
+    })
+    .strict()
+    .optional(),
   customOpenAi: z
     .object({
       apiKey: z.string().min(1, 'OpenAI 兼容 API Key 不能为空'),

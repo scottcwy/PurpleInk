@@ -10,6 +10,17 @@ export {
   type ProviderCapability,
 } from './provider-registry'
 export {
+  MIMO_PROVIDER,
+  MIMO_TTS_MODELS,
+  describeMimoConfig,
+  getMimoConfig,
+  saveMimoApiKey,
+  saveMimoSettings,
+  type MimoConfig,
+  type MimoConfigView,
+  type MimoSettingsInput,
+} from './mimo-config'
+export {
   getStoredApiKey,
   saveApiKey,
   validateKey,

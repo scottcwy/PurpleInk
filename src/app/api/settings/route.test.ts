@@ -11,6 +11,10 @@ const mocks = vi.hoisted(() => ({
   saveGeminiSettings: vi.fn(),
   saveGeminiApiKey: vi.fn(),
   validateGeminiKey: vi.fn(),
+  describeMimoConfig: vi.fn(),
+  saveMimoSettings: vi.fn(),
+  saveMimoApiKey: vi.fn(),
+  validateMimoKey: vi.fn(),
   describeDirectorRoutes: vi.fn(),
   saveDirectorRoutes: vi.fn(),
   describeLaneQuotas: vi.fn(),
@@ -58,6 +62,14 @@ vi.mock('@/features/ai/gemini-config', () => ({
 }))
 vi.mock('@/features/ai/gemini-adapter', () => ({
   validateGeminiKey: mocks.validateGeminiKey,
+}))
+vi.mock('@/features/ai/mimo-config', () => ({
+  describeMimoConfig: mocks.describeMimoConfig,
+  saveMimoSettings: mocks.saveMimoSettings,
+  saveMimoApiKey: mocks.saveMimoApiKey,
+}))
+vi.mock('@/features/ai/mimo-adapter', () => ({
+  validateMimoKey: mocks.validateMimoKey,
 }))
 vi.mock('@/features/ai/model-routing', () => ({
   describeDirectorRoutes: mocks.describeDirectorRoutes,
@@ -114,6 +126,13 @@ describe('GET /api/settings', () => {
       baseUrl: null,
       defaultModel: null,
     })
+    mocks.describeMimoConfig.mockResolvedValue({
+      baseUrl: { value: 'https://api.xiaomimimo.com/v1', source: 'default' },
+      textModel: { value: 'mimo-v2.5', source: 'default' },
+      visionModel: { value: 'mimo-v2.5', source: 'default' },
+      ttsModel: { value: 'mimo-v2.5-tts', source: 'default' },
+      asrModel: { value: 'mimo-v2.5-asr', source: 'default' },
+    })
 
     const response = await GET()
     const body = await response.json()
@@ -130,9 +149,11 @@ describe('GET /api/settings', () => {
       updatedAt: null,
     })
     expect(body.gemini.primaryModel.value).toBe('gemini-3.6-flash')
+    expect(body.mimo.textModel.value).toBe('mimo-v2.5')
+    expect(body.mimoCredential.configured).toBe(false)
     expect(body.routes['shot-codegen'].provider).toBe('gemini')
     expect(body.laneQuotas).toEqual(MOCK_DEFAULT_LANE_VIEW)
-    expect(mocks.describeCredential).toHaveBeenCalledTimes(2)
+    expect(mocks.describeCredential).toHaveBeenCalledTimes(3)
   })
 })
 
@@ -146,13 +167,16 @@ describe('POST /api/settings', () => {
     })
     mocks.describeStepfunConfig.mockResolvedValue({})
     mocks.describeGeminiConfig.mockResolvedValue({})
+    mocks.describeMimoConfig.mockResolvedValue({})
     mocks.describeDirectorRoutes.mockResolvedValue({})
     mocks.describeLaneQuotas.mockResolvedValue(MOCK_DEFAULT_LANE_VIEW)
     mocks.saveStepfunModelSettings.mockResolvedValue(undefined)
     mocks.saveGeminiSettings.mockResolvedValue(undefined)
+    mocks.saveMimoSettings.mockResolvedValue(undefined)
     mocks.saveDirectorRoutes.mockResolvedValue(undefined)
     mocks.saveApiKey.mockResolvedValue(undefined)
     mocks.saveGeminiApiKey.mockResolvedValue(undefined)
+    mocks.saveMimoApiKey.mockResolvedValue(undefined)
     mocks.saveLaneQuotas.mockResolvedValue(undefined)
     mocks.saveOpenAiCompatibleProfile.mockResolvedValue(undefined)
   })
@@ -172,6 +196,51 @@ describe('POST /api/settings', () => {
     expect(mocks.validateOpenAiCompatibleProfile).toHaveBeenCalledWith(input)
     expect(mocks.saveOpenAiCompatibleProfile).toHaveBeenCalledWith(input, expect.anything())
     expect(body).not.toContain('candidate-secret')
+  })
+
+  it('rejects a MiMo Token Plan key without replacing the stored credential', async () => {
+    mocks.validateMimoKey.mockResolvedValue({
+      ok: false,
+      reason: 'token-plan-not-for-backend',
+    })
+
+    const response = await POST(request({
+      mimo: { apiKey: 'tp-not-for-product-backend' },
+    }))
+    const body = await response.json()
+
+    expect(response.status).toBe(422)
+    expect(body.error).toContain('Token Plan')
+    expect(mocks.saveMimoApiKey).not.toHaveBeenCalled()
+  })
+
+  it('validates and saves a MiMo product API key and model settings', async () => {
+    mocks.validateMimoKey.mockResolvedValue({ ok: true })
+    const response = await POST(request({
+      mimo: {
+        apiKey: 'sk-product-api-key',
+        textModel: 'mimo-v2.5',
+        ttsModel: 'mimo-v2.5-tts',
+      },
+      routes: {
+        'shot-codegen': 'mimo',
+        'shot-sfx': 'mimo',
+      },
+    }))
+
+    expect(response.status).toBe(200)
+    expect(mocks.validateMimoKey).toHaveBeenCalledWith(
+      'sk-product-api-key',
+      {
+        textModel: 'mimo-v2.5',
+        ttsModel: 'mimo-v2.5-tts',
+      }
+    )
+    expect(mocks.saveMimoApiKey).toHaveBeenCalledWith('sk-product-api-key')
+    expect(mocks.saveMimoSettings).toHaveBeenCalledWith({
+      textModel: 'mimo-v2.5',
+      ttsModel: 'mimo-v2.5-tts',
+    })
   })
 
   it('validates before saving a StepFun Key', async () => {

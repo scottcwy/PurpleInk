@@ -9,11 +9,11 @@ import {
   getStepfunConfig,
 } from './config'
 import { getGeminiConfig } from './gemini-config'
+import { getMimoConfig } from './mimo-config'
 import { CUSTOM_OPENAI_PROVIDER } from './openai-compatible-config'
 import {
   AI_PROVIDER_IDS,
   assertProviderCapability,
-  defaultModelFor,
   type AiProviderId,
   type ProviderCapability,
 } from './provider-registry'
@@ -159,11 +159,12 @@ async function fallbackTarget(
     }
   }
   if (provider === 'mimo') {
+    const config = await getMimoConfig(deps)
     return {
       provider,
-      baseUrl: 'https://api.xiaomimimo.com/v1',
-      modelId: defaultModelFor(provider, capability),
-      apiKey: await deps.credentials.loadSecret(LOCAL_WORKSPACE_ID, provider),
+      baseUrl: config.baseUrl,
+      modelId: capability === 'vision' ? config.visionModel : config.textModel,
+      apiKey: config.apiKey,
     }
   }
   const config = await getGeminiConfig(deps)
@@ -251,7 +252,11 @@ async function modelForProvider(
     return profile.defaultModel
   }
   if (provider === 'mimo') {
-    return defaultModelFor(provider, capability)
+    const config = await getMimoConfig(deps)
+    if (target.domain === 'media') {
+      return target.kind === 'tts' ? config.ttsModel : config.asrModel
+    }
+    return target.kind === 'vision-qa' ? config.visionModel : config.textModel
   }
   const config = await getGeminiConfig(deps)
   return target.domain === 'ai' && target.kind !== 'project-plan'

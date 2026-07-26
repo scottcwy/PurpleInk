@@ -202,6 +202,29 @@ describe('Director provider routing', () => {
     })
   })
 
+  it('resolves MiMo as an independent built-in provider', async () => {
+    const { dependencies, models, secrets } = createDependencies()
+    secrets.set('mimo', 'stored-mimo-key')
+    models.set('fabricate', {
+      workspaceId: 'workspace',
+      aiTaskKind: 'fabricate',
+      provider: 'mimo',
+      model: 'mimo-v2.5',
+      revision: 0,
+    })
+
+    await expect(resolveDirectorModelTarget(
+      'shot-codegen',
+      'text',
+      dependencies,
+    )).resolves.toEqual({
+      provider: 'mimo',
+      baseUrl: 'https://api.xiaomimimo.com/v1',
+      modelId: 'mimo-v2.5',
+      apiKey: 'stored-mimo-key',
+    })
+  })
+
   it('keeps Gemini fast/primary defaults and describes all visible routes', async () => {
     const { dependencies, secrets } = createDependencies()
     secrets.set('gemini', 'gemini-key')

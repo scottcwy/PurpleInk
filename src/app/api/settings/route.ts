@@ -11,6 +11,12 @@ import {
   saveGeminiSettings,
 } from '@/features/ai/gemini-config'
 import { validateGeminiKey } from '@/features/ai/gemini-adapter'
+import { validateMimoKey } from '@/features/ai/mimo-adapter'
+import {
+  describeMimoConfig,
+  saveMimoApiKey,
+  saveMimoSettings,
+} from '@/features/ai/mimo-config'
 import {
   describeOpenAiCompatibleProfile,
   saveOpenAiCompatibleProfile,
@@ -35,16 +41,20 @@ export async function GET() {
   const [
     stepfunCredential,
     geminiCredential,
+    mimoCredential,
     models,
     gemini,
+    mimo,
     routes,
     laneQuotas,
     customOpenAi,
   ] = await Promise.all([
     credentials.describe(LOCAL_WORKSPACE_ID, 'stepfun'),
     credentials.describe(LOCAL_WORKSPACE_ID, 'gemini'),
+    credentials.describe(LOCAL_WORKSPACE_ID, 'mimo'),
     describeStepfunConfig(),
     describeGeminiConfig(),
+    describeMimoConfig(),
     describeDirectorRoutes(),
     describeLaneQuotas(),
     describeCustomOpenAi(),
@@ -55,6 +65,8 @@ export async function GET() {
     geminiConfigured: geminiCredential.configured,
     geminiCredential,
     gemini,
+    mimoCredential,
+    mimo,
     routes,
     // ISSUE-011: 队列并发配额真值。优先级 DB > env > 代码默认，由 `runtime-config.ts` 统一提供。
     // `source = 'settings' | 'env' | 'default'` 让 UI 能透出真值来自哪里。
@@ -78,6 +90,7 @@ export async function POST(request: Request) {
   const {
     apiKey,
     gemini,
+    mimo,
     routes,
     laneQuotas,
     customOpenAi,
@@ -108,6 +121,11 @@ export async function POST(request: Request) {
   ) {
     return keyValidationError('Gemini')
   }
+  const { apiKey: mimoApiKey, ...mimoSettings } = mimo ?? {}
+  if (mimoApiKey !== undefined) {
+    const validation = await validateMimoKey(mimoApiKey, mimoSettings)
+    if (!validation.ok) return mimoValidationError(validation.reason)
+  }
   if (customOpenAi) {
     const validated = await validateOpenAiCompatibleProfile(customOpenAi)
     if (!validated.ok) {
@@ -120,9 +138,11 @@ export async function POST(request: Request) {
 
   await saveStepfunModelSettings(modelSettings)
   await saveGeminiSettings(geminiSettings)
+  await saveMimoSettings(mimoSettings)
   if (routes) await saveDirectorRoutes(routes)
   if (apiKey !== undefined) await saveApiKey(apiKey)
   if (geminiApiKey !== undefined) await saveGeminiApiKey(geminiApiKey)
+  if (mimoApiKey !== undefined) await saveMimoApiKey(mimoApiKey)
   if (customOpenAi) {
     await saveOpenAiCompatibleProfile(customOpenAi, customOpenAiDependencies())
   }
@@ -134,12 +154,14 @@ export async function POST(request: Request) {
   }
 
   const credentials = getAiConfigDependencies().credentials
-  const [stepfunCredential, geminiCredential, models, geminiView, routeView, laneQuotasView, customOpenAiView] =
+  const [stepfunCredential, geminiCredential, mimoCredential, models, geminiView, mimoView, routeView, laneQuotasView, customOpenAiView] =
     await Promise.all([
       credentials.describe(LOCAL_WORKSPACE_ID, 'stepfun'),
       credentials.describe(LOCAL_WORKSPACE_ID, 'gemini'),
+      credentials.describe(LOCAL_WORKSPACE_ID, 'mimo'),
       describeStepfunConfig(),
       describeGeminiConfig(),
+      describeMimoConfig(),
       describeDirectorRoutes(),
       describeLaneQuotas(),
       describeCustomOpenAi(),
@@ -152,6 +174,8 @@ export async function POST(request: Request) {
     geminiConfigured: geminiCredential.configured,
     geminiCredential,
     gemini: geminiView,
+    mimoCredential,
+    mimo: mimoView,
     routes: routeView,
     // 配额改动落在 DB 后，需要重启 dev 进程才会被 InProcessQueue.lanes 重新读取——
     // 显式回传 `requiresRestart: true`，UI 必须据此如实说明，不得让用户以为已热生效。
@@ -183,6 +207,23 @@ function keyValidationError(provider: 'StepFun' | 'Gemini') {
       valid: false,
       error: `${provider} Key 校验失败 · 请检查 Key 是否正确`,
     },
+    { status: 422 }
+  )
+}
+
+function mimoValidationError(
+  reason:
+    | 'token-plan-not-for-backend'
+    | 'invalid-key-format'
+    | 'provider-failed'
+) {
+  const error = reason === 'token-plan-not-for-backend'
+    ? 'MiMo Token Plan Key 仅用于编程工具，PurpleInk 后端请使用 sk- 产品 API Key'
+    : reason === 'invalid-key-format'
+      ? 'MiMo 产品 API Key 格式无效，请使用 sk- Key'
+      : 'MiMo Key 校验失败，请检查产品 API Key、额度和端点'
+  return NextResponse.json(
+    { ok: false, valid: false, error },
     { status: 422 }
   )
 }
