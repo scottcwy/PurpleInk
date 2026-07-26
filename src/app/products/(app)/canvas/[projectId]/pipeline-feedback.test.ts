@@ -63,4 +63,17 @@ describe('Canvas pipeline feedback wiring', () => {
     expect(inspectorSource).toContain('variant="info"')
     expect(inspectorSource).not.toContain(fixedProgressValue)
   })
+
+  it('pipeline 反馈锚定在画布主区右上角，避开左侧泳道折叠与顶栏', () => {
+    const feedbackMount = canvasViewSource.match(
+      /data-slot="pipeline-feedback"[\s\S]{0,280}className="([^"]+)"/,
+    )
+    expect(feedbackMount?.[1]).toBeTruthy()
+    const className = feedbackMount?.[1] ?? ''
+    expect(className).toContain('absolute')
+    expect(className).toContain('right-')
+    expect(className).toMatch(/top-(?:1[4-9]|[2-9]\d)/)
+    expect(className).not.toContain('inset-x-0')
+    expect(className).toContain('max-w-')
+  })
 })

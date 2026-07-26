@@ -178,11 +178,15 @@ export function CanvasView({
           }
         />
         {pipelineFeedback && (
-          <div className="pointer-events-none absolute inset-x-0 top-4 z-20 px-4">
+          <div
+            data-slot="pipeline-feedback"
+            className="pointer-events-none absolute right-3 top-14 z-20 max-w-[calc(100%-1.5rem)] sm:right-4 sm:max-w-[calc(100%-2rem)]"
+          >
             <Toast
               variant={pipelineFeedback.variant}
               title={pipelineFeedback.title}
               body={pipelineFeedback.body}
+              className="w-full max-w-[360px]"
             />
           </div>
         )}
