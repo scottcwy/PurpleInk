@@ -243,10 +243,6 @@ function assertActionAllowed(node: CanvasGraphNode): void {
   if (node.status === 'pending' || node.status === 'running') {
     throw new Error('当前节点已在排队或执行中')
   }
-  const error = node.directorError ?? node.renderError
-  if (error?.retryable === false) {
-    throw new Error('当前错误不可自动恢复，请先检查项目设置')
-  }
 }
 
 function findNode(graph: CanvasGraph, nodeId: string): CanvasGraphNode {

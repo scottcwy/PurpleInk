@@ -71,7 +71,7 @@ describe('executeNodeAction', () => {
     expect(result.action).toBe('rerender')
   })
 
-  it('does not retry a non-retryable configuration failure', async () => {
+  it('allows one explicit repair after a configuration failure', async () => {
     const test = harness(true)
     test.graph.nodes[1] = node({
       id: 'codegen-s002',
@@ -92,8 +92,11 @@ describe('executeNodeAction', () => {
         { projectId: 'project-1', nodeId: 'codegen-s002', intent: 'repair' },
         test.dependencies
       )
-    ).rejects.toThrow('项目设置')
-    expect(test.enqueueRenderShot).not.toHaveBeenCalled()
+    ).resolves.toMatchObject({ action: 'execute', queuedNodeId: 'codegen-s002' })
+    expect(test.enqueueRenderShot).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      nodeId: 'codegen-s002',
+    })
   })
 })
 

@@ -18,7 +18,7 @@ function node(overrides: Partial<CanvasGraphNode>): CanvasGraphNode {
 }
 
 describe('node action presentation', () => {
-  it('blocks non-retryable failures and points users to project settings', () => {
+  it('keeps configuration failures available for one explicit recheck', () => {
     const blocked = node({
       status: 'failed',
       directorError: {
@@ -29,8 +29,8 @@ describe('node action presentation', () => {
       },
     })
 
-    expect(isNodeActionBlocked(blocked)).toBe(true)
-    expect(nodeActionLabel(blocked)).toBe('请先检查项目设置')
+    expect(isNodeActionBlocked(blocked)).toBe(false)
+    expect(nodeActionLabel(blocked)).toBe('重新检查配置并继续')
   })
 
   it('keeps retryable failures available for repair', () => {
