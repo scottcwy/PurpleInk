@@ -33,6 +33,20 @@ function classify(
   error: unknown,
   stage: string
 ): Pick<WorkflowErrorProjection, 'code' | 'message' | 'retryable'> {
+  if (/StepFun\s+TTS.*HTTP\s*402/i.test(message)) {
+    return {
+      code: 'CONFIGURATION_BLOCKED',
+      message: 'StepFun 配音服务返回 HTTP 402。请核对当前 Key 所属平台，以及该平台的 TTS 余额和权限。',
+      retryable: false,
+    }
+  }
+  if (/StepFun\s+TTS.*HTTP\s*400/i.test(message)) {
+    return {
+      code: 'CONFIGURATION_BLOCKED',
+      message: 'StepFun 配音请求被拒绝。请检查端点、模型、音色与账户套餐是否匹配。',
+      retryable: false,
+    }
+  }
   if (
     /API\s*Key|credential|凭据|未配置|配置.+不可用|quota(?:_exceeded)?|billing|payment|required|HTTP\s*402|\b402\b|额度|配额|余额不足/i.test(
       message

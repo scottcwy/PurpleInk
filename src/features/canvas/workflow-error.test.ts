@@ -41,4 +41,28 @@ describe('classifyWorkflowError', () => {
       retryable: false,
     })
   })
+
+  it('names a StepFun TTS 402 without exposing provider response details', () => {
+    expect(
+      classifyWorkflowError(new Error('StepFun TTS 请求失败（HTTP 402）'), {
+        stage: 'INGEST',
+      })
+    ).toMatchObject({
+      code: 'CONFIGURATION_BLOCKED',
+      message: 'StepFun 配音服务返回 HTTP 402。请核对当前 Key 所属平台，以及该平台的 TTS 余额和权限。',
+      retryable: false,
+    })
+  })
+
+  it('reports an invalid StepFun TTS contract as a configuration block', () => {
+    expect(
+      classifyWorkflowError(new Error('StepFun TTS 请求失败（HTTP 400）'), {
+        stage: 'INGEST',
+      })
+    ).toMatchObject({
+      code: 'CONFIGURATION_BLOCKED',
+      message: 'StepFun 配音请求被拒绝。请检查端点、模型、音色与账户套餐是否匹配。',
+      retryable: false,
+    })
+  })
 })
