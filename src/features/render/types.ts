@@ -12,6 +12,7 @@ export interface RenderJob {
   htmlKey: string
   frames: FrameSpec
   seed?: number
+  forceRender?: boolean
 }
 
 /**

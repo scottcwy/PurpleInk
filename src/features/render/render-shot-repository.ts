@@ -102,6 +102,42 @@ export class RenderShotRepository {
     })
   }
 
+  async recordOutputHash(nodeId: string, contentHash: string): Promise<void> {
+    const database = await this.database()
+    await database.transaction(async (transaction) => {
+      const [node] = await transaction
+        .select({ data: canvasNodes.data })
+        .from(canvasNodes)
+        .where(
+          and(
+            eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+            eq(canvasNodes.id, nodeId)
+          )
+        )
+        .limit(1)
+        .for('update')
+      if (!node) throw new Error(`节点不存在：${nodeId}`)
+      await transaction
+        .update(canvasNodes)
+        .set({
+          data: {
+            schemaVersion: 1,
+            payload: {
+              ...readPayload(node.data),
+              outputContentHash: contentHash,
+            },
+          },
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+            eq(canvasNodes.id, nodeId)
+          )
+        )
+    })
+  }
+
   private async recordErrorProjection(
     nodeId: string,
     projection: {

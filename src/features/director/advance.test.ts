@@ -31,6 +31,8 @@ function harness(
     areAllUpstreamsSuccessful: vi.fn(
       async (_projectId, nodeId) => ready[nodeId] ?? true
     ),
+    isNodeStale: vi.fn(async () => false),
+    markNodeStale: vi.fn(async () => {}),
     recordStageError: vi.fn(async () => {}),
   }
   const enqueueDirectorStage =
@@ -115,7 +117,7 @@ describe('advancePipeline', () => {
     expect(result.enqueuedNodeIds).toEqual(['export'])
   })
 
-  it.each(['pending', 'running', 'success', 'failed', 'stale'] as const)(
+  it.each(['pending', 'running', 'success'] as const)(
     'does not enqueue a %s target',
     async (status) => {
       const test = harness([candidate({ status })])
@@ -126,6 +128,28 @@ describe('advancePipeline', () => {
       expect(test.enqueueRenderShot).not.toHaveBeenCalled()
     }
   )
+
+  it.each(['failed', 'stale'] as const)(
+    're-enqueues a ready %s target exactly once when autopilot advances',
+    async (status) => {
+      const test = harness([candidate({ status })])
+
+      const result = await advancePipeline('project-1', 'node-1', test.dependencies)
+
+      expect(result.enqueuedNodeIds).toEqual(['node-2'])
+      expect(test.enqueueDirectorStage).toHaveBeenCalledOnce()
+    }
+  )
+
+  it('marks a succeeded target stale and re-enqueues it when its inputs changed', async () => {
+    const test = harness([candidate({ status: 'success' })])
+    vi.mocked(test.repository.isNodeStale).mockResolvedValue(true)
+
+    const result = await advancePipeline('project-1', 'node-1', test.dependencies)
+
+    expect(test.repository.markNodeStale).toHaveBeenCalledWith('node-2')
+    expect(result.enqueuedNodeIds).toEqual(['node-2'])
+  })
 
   it('records one enqueue failure and continues other ready branches', async () => {
     const test = harness([

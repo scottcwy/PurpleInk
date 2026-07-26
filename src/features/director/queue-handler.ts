@@ -1,6 +1,9 @@
 import 'server-only'
 import { z } from 'zod'
-import { transitionNodeStatus } from '@/features/canvas'
+import {
+  captureNodeInputFingerprint,
+  transitionNodeStatus,
+} from '@/features/canvas'
 import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 import { getDb } from '@/lib/db/client'
 import { storage } from '@/lib/storage'
@@ -28,6 +31,7 @@ type RunStage = (
 interface EnqueueDependencies {
   queue: QueueAdapter
   assertEnqueueable(input: DirectorStageJobInput): Promise<void>
+  captureInputFingerprint?(nodeId: string): Promise<unknown>
   transitionNodeStatus: typeof transitionNodeStatus
   recordStageError(
     nodeId: string,
@@ -62,6 +66,7 @@ export async function enqueueDirectorStage(
   if (!dependencies) await assertProjectWorkflowSupported(payload.projectId)
   const resolved = dependencies ?? (await createDefaultEnqueueDependencies())
   await resolved.assertEnqueueable(payload)
+  await resolved.captureInputFingerprint?.(payload.nodeId)
   await resolved.transitionNodeStatus(payload.nodeId, 'pending')
   try {
     return await resolved.queue.enqueue('director-stage', payload, {
@@ -80,6 +85,7 @@ async function createDefaultEnqueueDependencies(): Promise<EnqueueDependencies> 
     queue: defaultQueue,
     assertEnqueueable: (input) =>
       repository.assertEnqueueable(input.projectId, input.nodeId, input.stage),
+    captureInputFingerprint: captureNodeInputFingerprint,
     transitionNodeStatus,
     recordStageError: (nodeId, stage, error) =>
       repository.recordStageError(nodeId, stage, error),

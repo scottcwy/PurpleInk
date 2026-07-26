@@ -59,11 +59,13 @@ describe('render queue handler', () => {
         contentHash: 'hash',
       })),
     }
+    const recordOutputHash = vi.fn(async () => {})
     registerRenderShotHandler(harness.queue, {
       repository: {
         hasFabricateArtifact: vi.fn(async () => false),
         loadRenderContext: vi.fn(async () => renderJob),
         recordRenderError: vi.fn(async () => {}),
+        recordOutputHash,
       },
       transitionNodeStatus: vi.fn(async (_nodeId, status) => {
         statuses.push(status)
@@ -83,6 +85,7 @@ describe('render queue handler', () => {
 
     expect(fabricateShot).toHaveBeenCalledWith('project-1', 'node-1')
     expect(renderer.render).toHaveBeenCalledWith(renderJob)
+    expect(recordOutputHash).toHaveBeenCalledWith('node-1', 'hash')
     expect(statuses).toEqual(['running', 'fabricate', 'success', 'advance'])
   })
 
@@ -265,6 +268,9 @@ describe('render queue handler', () => {
           return enqueueContext
         }),
         assertAdmission,
+        captureInputFingerprint: vi.fn(async () => {
+          order.push('fingerprint')
+        }),
         transitionNodeStatus: vi.fn(async (_nodeId, status) => {
           order.push(status)
         }),
@@ -275,7 +281,7 @@ describe('render queue handler', () => {
     expect(jobId).toBe('job-1')
     // 首次入队没有已存在的 director-fabricate 产物：admission.job 为 null，
     // 不应触发 assertAdmission（那需要 htmlKey，首次还没有）。
-    expect(order).toEqual(['load', 'pending', 'enqueue'])
+    expect(order).toEqual(['load', 'fingerprint', 'pending', 'enqueue'])
     expect(assertAdmission).not.toHaveBeenCalled()
     expect(harness.queue.enqueue).toHaveBeenCalledWith(
       'render-shot',

@@ -70,13 +70,16 @@ describe('director queue handler', () => {
         assertEnqueueable: vi.fn(async () => {
           order.push('validate')
         }),
+        captureInputFingerprint: vi.fn(async () => {
+          order.push('fingerprint')
+        }),
         transitionNodeStatus,
         recordStageError: vi.fn(async () => {}),
       }
     )
 
     expect(jobId).toBe('job-1')
-    expect(order).toEqual(['validate', 'pending', 'enqueue'])
+    expect(order).toEqual(['validate', 'fingerprint', 'pending', 'enqueue'])
     expect(harness.queue.enqueue).toHaveBeenCalledWith(
       'director-stage',
       { projectId: 'project-1', nodeId: 'node-1', stage: 'INGEST' },

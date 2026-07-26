@@ -147,7 +147,11 @@ export async function getCanvasGraph(projectId: string): Promise<CanvasGraph> {
         status: fromPersistedStatus(node.status),
         stage: node.stage,
         contentHash:
-          typeof data.contentHash === 'string' ? data.contentHash : null,
+          typeof data.outputContentHash === 'string'
+            ? data.outputContentHash
+            : typeof data.contentHash === 'string'
+              ? data.contentHash
+              : null,
         data,
         laneKey: typeof data.laneKey === 'string' ? data.laneKey : null,
         laneRole: typeof data.laneRole === 'string' ? data.laneRole : null,

@@ -134,6 +134,7 @@ export class DirectorArtifactWriter {
             .set({
               data: patchNodePayload(node.data, {
                 directorArtifactId: artifactId,
+                outputContentHash: artifact.contentHash,
                 ...(result.renderSpec ? { renderSpec: result.renderSpec } : {}),
               }),
               updatedAt: new Date(),

@@ -1,6 +1,9 @@
 import 'server-only'
 import { z } from 'zod'
-import { transitionNodeStatus } from '@/features/canvas'
+import {
+  captureNodeInputFingerprint,
+  transitionNodeStatus,
+} from '@/features/canvas'
 import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 import { queue as defaultQueue, type QueueAdapter } from '@/lib/queue'
 import { storage } from '@/lib/storage'
@@ -16,6 +19,7 @@ const renderJobPayloadSchema = z
   .object({
     projectId: z.string().min(1),
     nodeId: z.string().min(1),
+    forceRender: z.boolean().optional(),
   })
   .strict()
 
@@ -30,6 +34,7 @@ interface HandlerRepository {
     stage: 'FABRICATE',
     error: unknown
   ): Promise<void>
+  recordOutputHash?(nodeId: string, contentHash: string): Promise<void>
 }
 
 interface HandlerDependencies {
@@ -50,6 +55,7 @@ interface EnqueueDependencies {
     nodeId: string
   ): RenderAdmissionContext | Promise<RenderAdmissionContext>
   assertAdmission(job: RenderJob): Promise<void>
+  captureInputFingerprint?(nodeId: string): Promise<unknown>
   transitionNodeStatus: typeof transitionNodeStatus
   recordRenderError(nodeId: string, error: unknown): Promise<void>
 }
@@ -75,7 +81,14 @@ export function registerRenderShotHandler(
         payload.projectId,
         payload.nodeId
       )
-      await resolved.renderer.render(context)
+      const result = await resolved.renderer.render({
+        ...context,
+        ...(payload.forceRender ? { forceRender: true } : {}),
+      })
+      await resolved.repository.recordOutputHash?.(
+        payload.nodeId,
+        result.contentHash
+      )
       await resolved.transitionNodeStatus(payload.nodeId, 'success')
       await advanceWithoutMasking(
         resolved.advancePipeline,
@@ -105,6 +118,7 @@ export async function enqueueRenderShot(
     if (admission.job) {
       await resolved.assertAdmission(admission.job)
     }
+    await resolved.captureInputFingerprint?.(payload.nodeId)
     await resolved.transitionNodeStatus(payload.nodeId, 'pending')
     pendingSet = true
     return await resolved.queue.enqueue('render-shot', payload, {
@@ -151,6 +165,7 @@ function createEnqueueDependencies(): EnqueueDependencies {
       repository.loadRenderAdmissionContext(projectId, nodeId),
     assertAdmission: (job) =>
       assertRenderAdmission(job, { storage, openFrameCapture }),
+    captureInputFingerprint: captureNodeInputFingerprint,
     transitionNodeStatus,
     recordRenderError: (nodeId, error) =>
       repository.recordRenderError(nodeId, error),

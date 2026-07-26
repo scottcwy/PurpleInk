@@ -19,6 +19,8 @@ export interface AdvanceRepository {
     completedNodeId: string
   ): Promise<AdvanceCandidate[]>
   areAllUpstreamsSuccessful(projectId: string, nodeId: string): Promise<boolean>
+  isNodeStale(nodeId: string): Promise<boolean>
+  markNodeStale(nodeId: string): Promise<void>
   recordStageError(
     nodeId: string,
     stage: PipelineStage,
@@ -87,8 +89,16 @@ export async function advancePipeline(
     completedNodeId
   )
   for (const candidate of candidates) {
+    let status = candidate.status
     if (
-      candidate.status !== 'idle' ||
+      status === 'success' &&
+      (await resolved.repository.isNodeStale(candidate.id))
+    ) {
+      await resolved.repository.markNodeStale(candidate.id)
+      status = 'stale'
+    }
+    if (
+      !['idle', 'failed', 'stale'].includes(status) ||
       !isPipelineStage(candidate.stage) ||
       !(await resolved.repository.areAllUpstreamsSuccessful(
         projectId,

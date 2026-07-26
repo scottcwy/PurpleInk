@@ -69,7 +69,9 @@ export class HyperframesRenderer implements Renderer {
       nodeId: job.nodeId,
       renderKey,
     }
-    const cached = await this.dependencies.lookupCache(cacheLookup)
+    const cached = job.forceRender
+      ? null
+      : await this.dependencies.lookupCache(cacheLookup)
     if (cached) return { shotId: job.shotId, ...cached }
 
     let sequence: FrameSequence | undefined

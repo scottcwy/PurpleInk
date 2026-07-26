@@ -115,19 +115,103 @@ export async function isStale(nodeId: string): Promise<boolean> {
   })
 }
 
+/** 在节点入队前记录本次将消费的真实上游输出指纹。 */
+export async function captureNodeInputFingerprint(nodeId: string): Promise<string | null> {
+  const database = await getDb()
+  return withTransaction(database, async (tx) => {
+    const [node] = await tx
+      .select({ id: canvasNodes.id, data: canvasNodes.data })
+      .from(canvasNodes)
+      .where(
+        and(
+          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.id, nodeId)
+        )
+      )
+      .for('update')
+    if (!node) throw new Error(`节点不存在：${nodeId}`)
+    const dependencies = await dependencyHashes(tx, nodeId)
+    if (dependencies.length === 0) return null
+    const inputFingerprint = computeContentHash(dependencies)
+    await tx
+      .update(canvasNodes)
+      .set({
+        data: patchPayload(node.data, { inputFingerprint }),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.id, nodeId)
+        )
+      )
+    return inputFingerprint
+  })
+}
+
+/** 显式重新生成使用的受控失效，不伪造上游变化，也不放宽通用状态转换。 */
+export async function invalidateNodeForRegeneration(
+  nodeId: string,
+  reason: 'manual-regenerate' | 'repair-upstream'
+): Promise<void> {
+  const database = await getDb()
+  const projectId = await withTransaction(database, async (tx) => {
+    const [node] = await tx
+      .select({
+        projectId: canvasNodes.projectId,
+        status: canvasNodes.status,
+        data: canvasNodes.data,
+      })
+      .from(canvasNodes)
+      .where(
+        and(
+          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.id, nodeId)
+        )
+      )
+      .for('update')
+    if (!node) throw new Error(`节点不存在：${nodeId}`)
+    if (fromPersistedStatus(node.status) !== 'success') {
+      throw new Error(`只有成功节点可以显式失效：${nodeId}`)
+    }
+    await tx
+      .update(canvasNodes)
+      .set({
+        status: 'stale',
+        data: patchPayload(node.data, {
+          invalidationReason: reason,
+          invalidatedAt: new Date().toISOString(),
+        }),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.id, nodeId)
+        )
+      )
+    return node.projectId
+  })
+  try {
+    statusBus.publishStatus(projectId, nodeId, 'stale')
+  } catch {
+    // 推送失败不反向破坏已提交状态。
+  }
+}
+
 async function isStaleInTransaction(
   tx: TransactionContext,
   node: { id: string; data: unknown }
 ): Promise<boolean> {
   const dependencies = await dependencyHashes(tx, node.id)
   if (dependencies.length === 0) return false
-  return readContentHash(node.data) !== computeContentHash(dependencies)
+  return readInputFingerprint(node.data) !== computeContentHash(dependencies)
 }
 
 async function dependencyHashes(
   tx: TransactionContext,
   nodeId: string
-): Promise<Array<{ id: string; contentHash: string | null }>> {
+): Promise<Array<{ id: string; outputContentHash: string | null }>> {
   const incoming = await tx
     .select({ source: canvasEdges.source })
     .from(canvasEdges)
@@ -154,7 +238,7 @@ async function dependencyHashes(
   return nodes
     .map((node) => ({
       id: node.id,
-      contentHash: readContentHash(node.data),
+      outputContentHash: readOutputContentHash(node.data),
     }))
     .sort((left, right) => left.id.localeCompare(right.id))
 }
@@ -182,12 +266,37 @@ function withoutStageErrors(value: VersionedPayload): VersionedPayload | null {
   return { ...value, payload: nextPayload }
 }
 
-function readContentHash(value: unknown): string | null {
+function readPayloadHash(value: unknown, key: string): string | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const payload = (value as Record<string, unknown>).payload
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null
-  const contentHash = (payload as Record<string, unknown>).contentHash
+  const contentHash = (payload as Record<string, unknown>)[key]
   return typeof contentHash === 'string' ? contentHash : null
+}
+
+function patchPayload(
+  value: VersionedPayload,
+  patch: Record<string, unknown>
+): VersionedPayload {
+  const current =
+    value.payload && typeof value.payload === 'object' && !Array.isArray(value.payload)
+      ? value.payload as Record<string, unknown>
+      : {}
+  return { ...value, payload: { ...current, ...patch } }
+}
+
+function readOutputContentHash(value: unknown): string | null {
+  return (
+    readPayloadHash(value, 'outputContentHash') ??
+    readPayloadHash(value, 'contentHash')
+  )
+}
+
+function readInputFingerprint(value: unknown): string | null {
+  return (
+    readPayloadHash(value, 'inputFingerprint') ??
+    readPayloadHash(value, 'contentHash')
+  )
 }
 
 function toPersistedStatus(status: NodeStatus): string {

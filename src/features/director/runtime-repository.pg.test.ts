@@ -245,6 +245,7 @@ describe('DirectorRuntimeRepository Postgres', () => {
     ).payload
     expect(payload).toMatchObject({
       directorArtifactId: staged.id,
+      outputContentHash: staged.contentHash,
       renderSpec: { seed: 42 },
     })
     await expect(

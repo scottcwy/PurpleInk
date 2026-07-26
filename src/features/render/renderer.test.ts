@@ -54,6 +54,38 @@ describe('HyperframesRenderer', () => {
     expect(captureSequence).not.toHaveBeenCalled()
   })
 
+  it('bypasses an existing cache entry for an explicit rerender', async () => {
+    const tempRoot = await createTempRoot()
+    const sequence: FrameSequence = {
+      directory: path.join(tempRoot, 'frames'),
+      pattern: path.join(tempRoot, 'frames/frame-%08d.png'),
+      totalFrames: 60,
+      cleanup: vi.fn(async () => {}),
+    }
+    const captureSequence = vi.fn(async () => sequence)
+    const writeCache = vi.fn(async () => 'artifact-rerender')
+    const renderer = new HyperframesRenderer({
+      storage: createStorage(VALID_SOURCE),
+      lookupCache: vi.fn(async () => ({
+        outputKey: 'render/cached.mp4',
+        contentHash: 'cached-hash',
+      })),
+      writeCache,
+      captureSequence,
+      encode: vi.fn(async (_sequence, _fps, outputPath) => {
+        await writeFile(outputPath, Buffer.from('rerendered-mp4'))
+        return outputPath
+      }),
+      tempRoot,
+    })
+
+    const result = await renderer.render({ ...job, forceRender: true })
+
+    expect(captureSequence).toHaveBeenCalledOnce()
+    expect(writeCache).toHaveBeenCalledOnce()
+    expect(result.contentHash).not.toBe('cached-hash')
+  })
+
   it('captures, encodes, commits, indexes, and cleans a cache miss in order', async () => {
     const tempRoot = await createTempRoot()
     const order: string[] = []

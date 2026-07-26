@@ -11,6 +11,7 @@ import type {
 import { DirectorRuntimeRepository } from './runtime-repository'
 import { fromPersistedNodeStatus } from './runtime-node-data'
 import type { PipelineStage } from './types'
+import { isStale, transitionNodeStatus } from '@/features/canvas/status'
 
 export class AdvanceRepositoryImpl
   implements AdvanceRepository, PipelineRepository
@@ -139,6 +140,14 @@ export class AdvanceRepositoryImpl
       upstreams.length === sourceIds.length &&
       upstreams.every(({ status }) => status === 'succeeded')
     )
+  }
+
+  isNodeStale(nodeId: string): Promise<boolean> {
+    return isStale(nodeId)
+  }
+
+  markNodeStale(nodeId: string): Promise<void> {
+    return transitionNodeStatus(nodeId, 'stale')
   }
 
   async recordStageError(
