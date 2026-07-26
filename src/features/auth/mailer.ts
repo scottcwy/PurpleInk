@@ -1,5 +1,10 @@
 import 'server-only'
 import { createTransport, type Transporter } from 'nodemailer'
+import {
+  classifyMailSendFailure,
+  mailErrorCode,
+  type MailSendFailureReason,
+} from './mail-failure'
 import { maskMailbox, verificationCodeMail } from './mail-templates'
 import type { VerificationPurpose } from './verification-code'
 
@@ -61,9 +66,7 @@ function transport(config: MailConfig): Transporter {
   return globalStore.__cvcMailTransport
 }
 
-export type MailSendResult =
-  | { ok: true }
-  | { ok: false; reason: 'not-configured' | 'send-failed' }
+export type MailSendResult = { ok: true } | { ok: false; reason: MailSendFailureReason }
 
 /**
  * 发送验证码邮件。
@@ -92,11 +95,14 @@ export async function sendVerificationCodeEmail(input: {
     })
     return { ok: true }
   } catch (error) {
+    const reason = classifyMailSendFailure(error)
     console.error('[auth] 验证码邮件发送失败', {
       purpose: input.purpose,
       mailbox: maskMailbox(input.to),
-      cause: error instanceof Error ? error.name : 'unknown',
+      reason,
+      // 只记错误码，不记 provider 原始 response 文本（AGENTS.md §6）。
+      cause: mailErrorCode(error),
     })
-    return { ok: false, reason: 'send-failed' }
+    return { ok: false, reason }
   }
 }

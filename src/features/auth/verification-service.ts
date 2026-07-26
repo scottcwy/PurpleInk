@@ -2,6 +2,7 @@ import 'server-only'
 import { authFailure, type AuthFailure } from './errors'
 import { findUserByEmail } from './auth-repository'
 import { passesHumanCheck } from './human-check-service'
+import { shouldHideFailureFromCaller } from './mail-failure'
 import { sendVerificationCodeEmail } from './mailer'
 import { authSigningKey } from './signing-key'
 import { consumeThrottleSlot } from './throttle'
@@ -84,9 +85,16 @@ export async function requestVerificationCode(
     purpose: input.purpose,
     code,
   })
-  if (!sent.ok && sent.reason === 'not-configured') return authFailure('mail-unavailable')
-  // 发信失败（网络 / 对端拒收）仍回成功：此时码已入库，用户可重试发送；
-  // 把 SMTP 故障映射成可区分的响应会重新打开枚举通道。
+  if (!sent.ok && !shouldHideFailureFromCaller(sent.reason)) {
+    // 通道未配置 / 连不上 / 认证失败：对任何邮箱都是同一结果，与「该邮箱是否
+    // 注册过」无关，因此如实回 503。不这么做的话 SMTP 挂掉时用户会一直等一封
+    // 永远不来的信，而服务端只在日志里留痕（`errors.ts` 的既有口径：如实告知，
+    // 不假装已发送）。
+    return authFailure('mail-unavailable')
+  }
+  // 对端在信封阶段拒收这个地址：**与收件人强相关**，必须表现成成功。
+  // 注册流程里 shouldSend 取决于邮箱是否已注册，一旦把拒收映射成可区分的响应，
+  // 「是否被拒」就成了账号存在性探针（§3.4）。此时码已入库，用户可重试。
   return { ok: true }
 }
 
