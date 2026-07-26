@@ -129,7 +129,17 @@ that ingress timing, narration artifacts, and subtitle timing share one media
 contract. GET `/api/settings` returns configured state, endpoint, model and
 verification time, never the encrypted key.
 
-## 6. Security invariants (mirror AGENTS.md §7)
+## 6. StepFun endpoint and plan scope
+
+The StepFun API key and the configured `baseUrl` are a pair. The ordinary
+Open Platform endpoint is `https://api.stepfun.com/v1`; a Step Plan key must
+use `https://api.stepfun.com/step_plan/v1` for both TTS and ASR. A successful
+chat validation does not prove TTS entitlement, because voice synthesis is a
+separately billed media capability. The settings page shows the Step Plan
+endpoint explicitly so an operator can correct that pairing without changing
+the encrypted key.
+
+## 7. Security invariants (mirror AGENTS.md §7)
 
 1. `.env.local` may carry `GEMINI_API_KEY` / `STEPFUN_API_KEY` as **values**;
    they're git-ignored and never committed.
@@ -148,7 +158,7 @@ verification time, never the encrypted key.
    is currently a manual operation; do not delete it casually — encrypted
    blobs become unrecoverable.
 
-## 7. What does **not** belong here
+## 8. What does **not** belong here
 
 - **YAML config files**. The truth ordering (DB > env > default) plus the
   bootstrap script and the `/api/settings` mutation surface already cover

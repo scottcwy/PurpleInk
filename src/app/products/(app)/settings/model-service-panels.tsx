@@ -256,6 +256,11 @@ function ProviderFooter({
             label="固定音频能力"
             value="TTS 配音 · ASR 字幕时间轴"
           />
+          <SettingsSeparator />
+          <SettingsRow
+            label="Step Plan 端点"
+            value="https://api.stepfun.com/step_plan/v1"
+          />
         </>
       )}
     </>

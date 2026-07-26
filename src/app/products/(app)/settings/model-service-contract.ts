@@ -19,7 +19,7 @@ export type OpenAiCompatibleDraft = {
 export type RouteDraft = Record<CanvasNodeType, AiProviderId>
 
 export const STEPFUN_FIELDS: Array<[StepfunModelField, string]> = [
-  ['baseUrl', '端点'],
+  ['baseUrl', '端点（普通 v1 或 Step Plan）'],
   ['chatModel', 'Chat 模型'],
   ['ttsModel', 'TTS 模型'],
   ['asrModel', 'ASR 模型'],
