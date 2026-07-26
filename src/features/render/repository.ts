@@ -97,12 +97,14 @@ export class RenderRepository extends RenderArtifactRepository {
           eq(canvasNodes.projectId, projectId)
         )
       )
-    const nodes = rows.flatMap((row) => {
-      const laneKey = laneKeyOf(row.data)
-      return laneKey
-        ? [{ ...row, laneKey, payload: readPayload(row.data) }]
-        : []
-    })
+    const allNodes = rows.map((row) => ({
+      ...row,
+      laneKey: laneKeyOf(row.data),
+      payload: readPayload(row.data),
+    }))
+    const nodes = allNodes.flatMap((row) =>
+      row.laneKey ? [{ ...row, laneKey: row.laneKey }] : []
+    )
     const renderArtifacts = await database
       .select({
         nodeId: artifacts.aggregateId,
@@ -150,7 +152,7 @@ export class RenderRepository extends RenderArtifactRepository {
       database,
       storage: this.suppliedStorage,
       projectId,
-      nodes: nodes.map((node) => ({
+      nodes: allNodes.map((node) => ({
         nodeId: node.id,
         type: node.type,
         status: legacyNodeStatus(node.status),

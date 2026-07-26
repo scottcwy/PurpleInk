@@ -18,7 +18,7 @@ interface AssemblyNode {
   nodeId: string
   type: string
   status: string
-  laneKey: string
+  laneKey: string | null
 }
 
 interface LoadInput {
@@ -76,13 +76,19 @@ export async function loadMediaAssembly(
   }
 
   const ingest = await readJsonArtifact(input.storage, ingestArtifact)
+  if (ingest.status !== 'ok') {
+    return blocked(
+      input.nodes,
+      ingest.status === 'missing' ? 'artifact-missing' : 'artifact-invalid'
+    )
+  }
   const parsedIngest = z
     .object({
       audioManifest: audioManifestSchema,
       audioAllocation: audioAllocationSchema,
     })
     .passthrough()
-    .safeParse(ingest)
+    .safeParse(ingest.value)
   if (!parsedIngest.success) {
     return blocked(input.nodes, 'artifact-invalid')
   }
@@ -91,19 +97,32 @@ export async function loadMediaAssembly(
     string,
     z.infer<typeof subtitleLineageSchema>
   > = {}
+  const storageIssues: ExportBlockingIssue[] = []
   for (const node of input.nodes.filter(
     (candidate) => candidate.type === 'shot-subtitle'
   )) {
     const artifact = latest(rows, node.nodeId, 'subtitle-track')
     if (!artifact) continue
-    const parsed = subtitleLineageSchema.safeParse(
-      await readJsonArtifact(input.storage, artifact)
-    )
+    const loaded = await readJsonArtifact(input.storage, artifact)
+    if (loaded.status !== 'ok') {
+      storageIssues.push({
+        laneKey: node.laneKey,
+        kind: 'subtitle',
+        code:
+          loaded.status === 'missing'
+            ? 'artifact-missing'
+            : 'artifact-invalid',
+      })
+      continue
+    }
+    const parsed = subtitleLineageSchema.safeParse(loaded.value)
     if (parsed.success) subtitleTracks[artifact.artifactId] = parsed.data
   }
 
   const result = assembleTrustedMediaPlan({
-    nodes: input.nodes,
+    nodes: input.nodes.flatMap((node) =>
+      node.laneKey ? [{ ...node, laneKey: node.laneKey }] : []
+    ),
     artifacts: rows,
     subtitleTracks,
     audioManifest: parsedIngest.data.audioManifest,
@@ -111,7 +130,7 @@ export async function loadMediaAssembly(
     targetResolution: input.targetResolution,
     musicKey: input.musicKey,
   })
-  const issues = [...result.blockingIssues]
+  const issues = mergeIssues(storageIssues, result.blockingIssues)
   if (result.plan) {
     await validateFiles(input.storage, result.plan, issues)
   }
@@ -142,14 +161,41 @@ function latest<T extends {
 async function readJsonArtifact(
   storage: StorageAdapter,
   artifact: { storageKey: string; contentHash: string }
-): Promise<unknown> {
+): Promise<
+  | { status: 'ok'; value: unknown }
+  | { status: 'missing' | 'invalid' }
+> {
+  if (!(await storage.exists(artifact.storageKey))) {
+    return { status: 'missing' }
+  }
   try {
     const bytes = await storage.get(artifact.storageKey)
-    if (digest(bytes) !== artifact.contentHash) return null
-    return JSON.parse(bytes.toString('utf-8')) as unknown
+    if (digest(bytes) !== artifact.contentHash) return { status: 'invalid' }
+    return {
+      status: 'ok',
+      value: JSON.parse(bytes.toString('utf-8')) as unknown,
+    }
   } catch {
-    return null
+    return { status: 'invalid' }
   }
+}
+
+function mergeIssues(
+  preferred: ExportBlockingIssue[],
+  remaining: ExportBlockingIssue[]
+): ExportBlockingIssue[] {
+  const result = [...preferred]
+  for (const issue of remaining) {
+    if (
+      !result.some(
+        (current) =>
+          current.laneKey === issue.laneKey && current.kind === issue.kind
+      )
+    ) {
+      result.push(issue)
+    }
+  }
+  return result
 }
 
 async function validateFiles(

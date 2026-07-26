@@ -56,7 +56,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
       aggregateType: 'project',
       aggregateId: input.projectId,
       kind: 'final-mp4',
-      schemaVersion: 'cvc.final-video/v1',
+      schemaVersion: 'cvc.final-video/v2',
       storageKey: input.outputKey,
       sizeBytes: input.sizeBytes,
       contentHash: input.contentHash,

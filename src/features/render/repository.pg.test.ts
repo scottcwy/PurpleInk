@@ -249,6 +249,26 @@ describe('RenderRepository Postgres', () => {
     )
   })
 
+  it('registers new exports as immutable final-video/v2 artifacts', async () => {
+    const artifactId = await new RenderRepository(database.db).registerFinalArtifact({
+      projectId: fixture.projectId,
+      outputKey: 'exports/final-v2.mp4',
+      contentHash: '9'.repeat(64),
+      sizeBytes: 123,
+    })
+    const [row] = await database.db
+      .select({ schemaVersion: artifacts.schemaVersion })
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.workspaceId, TEST_WORKSPACE_ID),
+          eq(artifacts.id, artifactId)
+        )
+      )
+
+    expect(row?.schemaVersion).toBe('cvc.final-video/v2')
+  })
+
   it('commits Vision report and node projection in one transaction', async () => {
     const repository = new RenderRepository(database.db)
     const result = await repository.registerVisionReport({

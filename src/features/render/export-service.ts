@@ -1,9 +1,11 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
-import { storage as defaultStorage, type StorageAdapter } from '@/lib/storage'
+import { z } from 'zod'
 import type { ResolutionPreset } from '@/features/canvas'
+import { buildAssDocument } from '@/features/audio/subtitle-ass'
 import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
+import { storage as defaultStorage, type StorageAdapter } from '@/lib/storage'
 import { concatExport } from './concat'
 import { runShotQaChecks } from './qa-check'
 import {
@@ -37,6 +39,20 @@ interface ExportReadinessRepository {
   findLatestFinalArtifact(projectId: string): Promise<FinalArtifactRecord | null>
 }
 
+const subtitleTrackSchema = z
+  .object({
+    shotId: z.string().min(1),
+    sourceText: z.string().min(1),
+    captions: z.array(
+      z.object({
+        text: z.string(),
+        startMs: z.number(),
+        endMs: z.number(),
+      })
+    ),
+  })
+  .passthrough()
+
 export async function exportProject(
   projectId: string,
   dependencies: ExportDependencies = {}
@@ -47,34 +63,37 @@ export async function exportProject(
   const repository = dependencies.repository ?? new RenderRepository()
   const storage = dependencies.storage ?? defaultStorage
   const concat = dependencies.concat ?? concatExport
-  const plan = await repository.getExportPlan(projectId)
-  if (plan.incompleteNodeIds.length > 0) {
-    return incomplete(plan.incompleteNodeIds)
+  const exportPlan = await repository.getExportPlan(projectId)
+  if (exportPlan.incompleteNodeIds.length > 0) {
+    return incomplete(exportPlan.incompleteNodeIds)
   }
-  if (plan.blockingIssues.length > 0 || !plan.mediaAssemblyPlan) {
+  if (exportPlan.blockingIssues.length > 0 || !exportPlan.mediaAssemblyPlan) {
     return {
       ok: false,
       incompleteNodeIds: [],
-      blockingIssues: plan.blockingIssues,
+      blockingIssues: exportPlan.blockingIssues,
     }
   }
-  const orderedShots = [...plan.shots].sort((left, right) =>
-    left.laneKey.localeCompare(right.laneKey)
-  )
-  const missing = await missingShotIds(orderedShots, storage)
-  if (missing.length > 0) return incomplete(missing)
-  if (plan.musicKey && !(await storage.exists(plan.musicKey))) {
-    throw new Error(`配乐 artifact 文件不存在：${plan.musicKey}`)
-  }
-
+  const assembly = exportPlan.mediaAssemblyPlan
+  const subtitleAss = await buildSubtitleAss(assembly, storage)
   const workDirectory = await storage.tempDir('cvc-export-')
   try {
     const temporaryOutput = path.join(workDirectory, 'final.mp4')
     await concat(
-      orderedShots.map((shot) => storage.localPath(shot.outputKey)),
-      plan.musicKey ? storage.localPath(plan.musicKey) : null,
-      temporaryOutput,
-      plan.targetResolution
+      assembly,
+      {
+        videoPaths: assembly.shots.map((shot) =>
+          storage.localPath(shot.video.storageKey)
+        ),
+        narrationPaths: assembly.shots.map((shot) =>
+          storage.localPath(shot.narration.artifact.storageKey)
+        ),
+        musicPath: assembly.musicKey
+          ? storage.localPath(assembly.musicKey)
+          : null,
+      },
+      subtitleAss,
+      temporaryOutput
     )
     const bytes = await storage.readLocalFile(temporaryOutput)
     const contentHash = createHash('sha256').update(bytes).digest('hex')
@@ -129,26 +148,45 @@ export async function getExportReadiness(
   }
 }
 
-/**
- * 幂等触发分镜 Final QA 检测并写回 shot-qa 节点（内部逐 shot 已容错、
- * contentHash 未变自动跳过）。供 readiness 路由在返回前调用，使 shotQa 反映真实结果。
- */
+/** 幂等触发分镜 Final QA 检测并写回 shot-qa 节点。 */
 export async function ensureShotQaChecked(projectId: string): Promise<void> {
   await assertProjectWorkflowSupported(projectId)
   await runShotQaChecks(projectId)
 }
 
-async function missingShotIds(
-  shots: RenderExportPlan['shots'],
+async function buildSubtitleAss(
+  plan: NonNullable<RenderExportPlan['mediaAssemblyPlan']>,
   storage: StorageAdapter
-): Promise<string[]> {
-  const checks = await Promise.all(
-    shots.map(async (shot) => ({
-      nodeId: shot.nodeId,
-      exists: await storage.exists(shot.outputKey),
-    }))
+): Promise<string> {
+  const shots = await Promise.all(
+    plan.shots.map(async (shot) => {
+      let parsed: z.infer<typeof subtitleTrackSchema>
+      try {
+        parsed = subtitleTrackSchema.parse(
+          JSON.parse(
+            (await storage.get(shot.subtitle.storageKey)).toString('utf-8')
+          ) as unknown
+        )
+      } catch {
+        throw new Error(`分镜 ${shot.laneKey} 的字幕产物无效`)
+      }
+      if (parsed.shotId !== shot.laneKey) {
+        throw new Error(`分镜 ${shot.laneKey} 的字幕 lane 不匹配`)
+      }
+      return {
+        laneKey: shot.laneKey,
+        durationInFrames: shot.durationInFrames,
+        sourceText: parsed.sourceText,
+        audioDurationMs: shot.narration.endInUnitMs,
+        captions: parsed.captions,
+      }
+    })
   )
-  return checks.filter((item) => !item.exists).map((item) => item.nodeId).sort()
+  return buildAssDocument({
+    fps: plan.fps,
+    targetResolution: plan.targetResolution,
+    shots,
+  })
 }
 
 function incomplete(nodeIds: string[]): ExportProjectResult {

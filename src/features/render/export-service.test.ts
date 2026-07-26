@@ -3,6 +3,7 @@ import path from 'node:path'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { StorageAdapter } from '@/lib/storage'
+import type { MediaAssemblyPlan } from './media-assembly'
 import { exportProject, getExportReadiness } from './export-service'
 
 vi.mock('server-only', () => ({}))
@@ -95,14 +96,12 @@ describe('exportProject', () => {
       rm(absolutePath, { recursive: true, force: true })
     )
     const registerFinalArtifact = vi.fn(async () => 'artifact-final')
-    const concat = vi.fn<
-      (
-        shots: string[],
-        music: string | null,
-        outputPath: string,
-        targetResolution?: { width: number; height: number } | null
-      ) => Promise<string>
-    >(async (_shots, _music, outputPath) => {
+    const concat = vi.fn(async (
+      _plan: MediaAssemblyPlan,
+      _paths: unknown,
+      _subtitleAss: string,
+      outputPath: string
+    ) => {
       await writeFile(outputPath, Buffer.from('deterministic-final-mp4'))
       return outputPath
     })
@@ -128,11 +127,17 @@ describe('exportProject', () => {
     })
 
     expect(result).toMatchObject({ ok: true, artifactId: 'artifact-final' })
-    expect(concat.mock.calls[0]?.[0]).toEqual([
-      path.join(tempRoot, 'render/S001.mp4'),
-      path.join(tempRoot, 'render/S002.mp4'),
-    ])
-    expect(concat.mock.calls[0]?.[3]).toEqual({ width: 1920, height: 1080 })
+    expect(concat.mock.calls[0]?.[1]).toMatchObject({
+      videoPaths: [
+        path.join(tempRoot, 'render/S001.mp4'),
+        path.join(tempRoot, 'render/S002.mp4'),
+      ],
+      narrationPaths: [
+        path.join(tempRoot, 'audio/U001.mp3'),
+        path.join(tempRoot, 'audio/U002.mp3'),
+      ],
+    })
+    expect(concat.mock.calls[0]?.[2]).toContain('Dialogue:')
     expect(storage.put).toHaveBeenCalledOnce()
     expect(registerFinalArtifact).toHaveBeenCalledOnce()
     expect(storage.removeTempDir).toHaveBeenCalledOnce()
@@ -205,7 +210,18 @@ describe('getExportReadiness', () => {
 function createStorage(): StorageAdapter {
   return {
     put: vi.fn(),
-    get: vi.fn(),
+    get: vi.fn(async (key: string) => {
+      const laneKey = key.includes('S002') ? 'S002' : 'S001'
+      return Buffer.from(
+        JSON.stringify({
+          shotId: laneKey,
+          sourceText: `字幕${laneKey}`,
+          captions: [
+            { text: `字幕${laneKey}`, startMs: 0, endMs: 900 },
+          ],
+        })
+      )
+    }),
     exists: vi.fn(),
     localPath: vi.fn(),
     delete: vi.fn(),
@@ -222,11 +238,34 @@ async function createTempRoot(): Promise<string> {
   return directory
 }
 
-function completeMediaPlan() {
+function completeMediaPlan(): MediaAssemblyPlan {
   return {
     fps: 30 as const,
-    totalFrames: 30,
-    shots: [],
+    totalFrames: 60,
+    shots: ['S001', 'S002'].map((laneKey, index) => ({
+      laneKey,
+      video: {
+        artifactId: `video-${laneKey}`,
+        storageKey: `render/${laneKey}.mp4`,
+        contentHash: String(index + 1).repeat(64),
+      },
+      durationInFrames: 30,
+      narration: {
+        unitId: `U00${index + 1}`,
+        artifact: {
+          artifactId: `audio-${laneKey}`,
+          storageKey: `audio/U00${index + 1}.mp3`,
+          contentHash: String(index + 3).repeat(64),
+        },
+        startInUnitMs: 0,
+        endInUnitMs: 1_000,
+      },
+      subtitle: {
+        artifactId: `subtitle-${laneKey}`,
+        storageKey: `subtitle/${laneKey}.json`,
+        contentHash: String(index + 5).repeat(64),
+      },
+    })),
     targetResolution: { width: 1920, height: 1080 },
     musicKey: null,
   }
