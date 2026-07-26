@@ -266,7 +266,7 @@ describe('createStageRunner', () => {
     ])
   })
 
-  it('does not start the model when repository preconditions reject the node', async () => {
+  it('persists a failed node and stage error when runtime context loading fails', async () => {
     const harness = createHarness()
     const createSession = vi.fn()
     harness.repository.loadStageContext.mockImplementation(() => {
@@ -286,7 +286,15 @@ describe('createStageRunner', () => {
 
     await expect(runner('project-1', 'node-1', 'INGEST')).rejects.toThrow('pending')
     expect(createSession).not.toHaveBeenCalled()
-    expect(harness.transitionNodeStatus).not.toHaveBeenCalled()
+    expect(harness.transitionNodeStatus.mock.calls.map((call) => call[1])).toEqual([
+      'running',
+      'failed',
+    ])
+    expect(harness.repository.recordStageError).toHaveBeenCalledWith(
+      'node-1',
+      'INGEST',
+      expect.any(Error)
+    )
   })
 
   it('fails the stage when an application side effect cannot produce its real artifact', async () => {

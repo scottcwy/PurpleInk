@@ -15,6 +15,7 @@ import type {
   RenderJob,
   ThumbnailContext,
 } from './types'
+import { classifyWorkflowError } from '@/features/canvas/workflow-error'
 
 const renderSpecSchema = z
   .object({
@@ -84,6 +85,30 @@ export class RenderShotRepository {
   }
 
   async recordRenderError(nodeId: string, error: unknown): Promise<void> {
+    return this.recordErrorProjection(nodeId, {
+      renderError: classifyWorkflowError(error, { stage: 'RENDER' }),
+      directorError: undefined,
+    })
+  }
+
+  async recordStageError(
+    nodeId: string,
+    stage: 'FABRICATE',
+    error: unknown
+  ): Promise<void> {
+    return this.recordErrorProjection(nodeId, {
+      directorError: classifyWorkflowError(error, { stage }),
+      renderError: undefined,
+    })
+  }
+
+  private async recordErrorProjection(
+    nodeId: string,
+    projection: {
+      directorError?: unknown
+      renderError?: unknown
+    }
+  ): Promise<void> {
     const database = await this.database()
     await database.transaction(async (transaction) => {
       const [node] = await transaction
@@ -104,13 +129,11 @@ export class RenderShotRepository {
           data: {
             schemaVersion: 1,
             payload: {
-              // 清掉可能残留的 directorError：本次失败发生在渲染阶段（HTML 已
-              // 存在），任何更早一次 FABRICATE 失败已经过时，不应与本次渲染
-              // 失败同时展示在 Inspector 里。
-              ...withoutPayloadKeys(readPayload(node.data), ['directorError']),
-              renderError: {
-                message: error instanceof Error ? error.message : String(error),
-              },
+              ...withoutPayloadKeys(readPayload(node.data), [
+                'directorError',
+                'renderError',
+              ]),
+              ...projection,
             },
           },
           updatedAt: new Date(),

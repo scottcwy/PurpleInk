@@ -18,6 +18,7 @@ import {
   type WriteArtifactInput,
 } from './tools/write-artifact'
 import type { PipelineStage } from './types'
+import { classifyWorkflowError } from '@/features/canvas/workflow-error'
 import { advancePipeline } from './advance'
 
 export { MAX_GATE_RETRIES } from './stage-artifact-gate'
@@ -122,12 +123,16 @@ export function createStageRunner(
   dependencies: StageRunnerDependencies
 ): StageRunner {
   return async (projectId, nodeId, stage) => {
-    const context = await dependencies.repository.loadStageContext(projectId, nodeId, stage)
     const streamKey = `${projectId}:${nodeId}`
-    await dependencies.transitionNodeStatus(nodeId, 'running')
     let session: DirectorSession | undefined
     let closed = false
     try {
+      await dependencies.transitionNodeStatus(nodeId, 'running')
+      const context = await dependencies.repository.loadStageContext(
+        projectId,
+        nodeId,
+        stage
+      )
       const prompt = dependencies.buildPrompt(stage, context)
       session = await dependencies.createSession({
         projectId,
@@ -191,9 +196,10 @@ export function createStageRunner(
       } catch (cleanupError) {
         cleanupErrors.push(cleanupError)
       }
+      const projected = classifyWorkflowError(error, { stage })
       streamBus.markError(streamKey, {
         stage,
-        message: error instanceof Error ? error.message : String(error),
+        message: projected.message,
       })
       if (cleanupErrors.length > 0) {
         throw new AggregateError(

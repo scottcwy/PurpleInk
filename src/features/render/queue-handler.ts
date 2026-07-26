@@ -25,6 +25,11 @@ interface HandlerRepository {
   hasFabricateArtifact(projectId: string, nodeId: string): Promise<boolean>
   loadRenderContext(projectId: string, nodeId: string): Promise<RenderJob>
   recordRenderError(nodeId: string, error: unknown): Promise<void>
+  recordStageError?(
+    nodeId: string,
+    stage: 'FABRICATE',
+    error: unknown
+  ): Promise<void>
 }
 
 interface HandlerDependencies {
@@ -161,21 +166,34 @@ function failRender(
 }
 
 /**
- * FABRICATE 阶段失败的补偿只转 failed，不再调 `recordRenderError`：
- * `fabricateShot` 内部已经通过 director 的 `recordStageError` 把
- * `directorError` 写进节点 payload，这里重复写 `renderError` 会制造
- * 两条互相独立又描述同一次失败的噪音信号，让 Inspector 无法干净地
- * 区分「HTML 生成失败」与「渲染失败」。
+ * FABRICATE 阶段失败只写 Director 错误，不写 renderError。即使失败发生在
+ * Director context 加载阶段，也必须由这里补齐可见错误投影。
  */
 async function failFabricate(
   nodeId: string,
   error: unknown,
-  dependencies: Pick<HandlerDependencies, 'transitionNodeStatus'>
+  dependencies: Pick<HandlerDependencies, 'transitionNodeStatus' | 'repository'>
 ): Promise<void> {
+  const cleanupErrors: unknown[] = []
   try {
     await dependencies.transitionNodeStatus(nodeId, 'failed')
   } catch (cleanupError) {
-    throw new AggregateError([error, cleanupError], 'HTML 生成失败补偿不完整')
+    cleanupErrors.push(cleanupError)
+  }
+  try {
+    await dependencies.repository.recordStageError?.(
+      nodeId,
+      'FABRICATE',
+      error
+    )
+  } catch (cleanupError) {
+    cleanupErrors.push(cleanupError)
+  }
+  if (cleanupErrors.length > 0) {
+    throw new AggregateError(
+      [error, ...cleanupErrors],
+      'HTML 生成失败补偿不完整'
+    )
   }
 }
 

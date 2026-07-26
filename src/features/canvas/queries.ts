@@ -26,12 +26,18 @@ export interface CanvasNodeArtifact {
 export interface DirectorNodeError {
   stage: string
   message: string
+  code?: string
+  retryable?: boolean
+  sourceNodeId?: string
 }
 
 /** 可展示的渲染阶段失败信息（源自 canvas_nodes.data.renderError）；与 `directorError`
  *  互斥存在——render handler 与 fabricate 各自成功时会清掉对方残留的失败标记。 */
 export interface RenderNodeError {
   message: string
+  code?: string
+  retryable?: boolean
+  sourceNodeId?: string
 }
 
 export interface CanvasGraphNode {
@@ -209,7 +215,11 @@ export function parseDirectorError(
   if (typeof record.stage !== 'string' || typeof record.message !== 'string') {
     return undefined
   }
-  return { stage: record.stage, message: record.message }
+  return {
+    stage: record.stage,
+    message: record.message,
+    ...optionalErrorFields(record),
+  }
 }
 
 /** 从节点 data 收窄出可展示的渲染失败信息（无 / 形状不符时返回 undefined）。 */
@@ -220,7 +230,23 @@ export function parseRenderError(
   if (!raw || typeof raw !== 'object') return undefined
   const record = raw as Record<string, unknown>
   if (typeof record.message !== 'string') return undefined
-  return { message: record.message }
+  return { message: record.message, ...optionalErrorFields(record) }
+}
+
+function optionalErrorFields(record: Record<string, unknown>): {
+  code?: string
+  retryable?: boolean
+  sourceNodeId?: string
+} {
+  return {
+    ...(typeof record.code === 'string' ? { code: record.code } : {}),
+    ...(typeof record.retryable === 'boolean'
+      ? { retryable: record.retryable }
+      : {}),
+    ...(typeof record.sourceNodeId === 'string'
+      ? { sourceNodeId: record.sourceNodeId }
+      : {}),
+  }
 }
 
 export interface NodeStreamContext {

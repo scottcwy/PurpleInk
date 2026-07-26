@@ -22,6 +22,7 @@ import {
 import type { PreparedStageResult } from './stage-result'
 import type { ArtifactCommitResult } from './tools/write-artifact'
 import type { PipelineStage } from './types'
+import { classifyWorkflowError } from '@/features/canvas/workflow-error'
 
 export type { ArtifactPointerInput } from './runtime-artifact-writer'
 
@@ -115,9 +116,9 @@ export class DirectorRuntimeRepository {
       throw new Error(`Director 节点阶段不匹配：${row.nodeStage} != ${stage}`)
     }
     const status = fromPersistedNodeStatus(row.status)
-    if (status !== 'pending' && !(status === 'running' && stage === 'FABRICATE')) {
+    if (status !== 'pending' && status !== 'running') {
       throw new Error(
-        `Director 节点必须为 pending 或 FABRICATE 运行中，当前为：${status}`
+        `Director 节点必须为 pending 或 running，当前为：${status}`
       )
     }
     const contextRow: StageContextRow = {
@@ -155,12 +156,12 @@ export class DirectorRuntimeRepository {
     stage: PipelineStage,
     error: unknown
   ): Promise<void> {
-    const message = error instanceof Error ? error.message : String(error)
+    const projected = classifyWorkflowError(error, { stage })
     // 清掉可能残留的 renderError：本次失败发生在 director 阶段（含 render
     // handler 内的 fabricate 子步骤），任何更早一次渲染失败已经过时，
     // 不应与本次失败同时展示在 Inspector 里。
     await this.updateNodePayload(nodeId, {
-      directorError: { stage, message },
+      directorError: projected,
       renderError: undefined,
     })
   }

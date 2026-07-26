@@ -120,13 +120,14 @@ describe('render queue handler', () => {
     expect(renderer.render).toHaveBeenCalledWith(renderJob)
   })
 
-  it('fails the node without recording renderError when fabricateShot fails', async () => {
+  it('records a Director FABRICATE error instead of a render error when fabricateShot fails', async () => {
     const harness = createQueue()
     const failure = new Error('FABRICATE 阶段失败')
     const transitionNodeStatus = vi.fn(
       async (...args: [string, string]) => void args
     )
     const recordRenderError = vi.fn(async () => {})
+    const recordStageError = vi.fn(async () => {})
     const renderer = { render: vi.fn() }
     const loadRenderContext = vi.fn()
     registerRenderShotHandler(harness.queue, {
@@ -134,6 +135,7 @@ describe('render queue handler', () => {
         hasFabricateArtifact: vi.fn(async () => false),
         loadRenderContext,
         recordRenderError,
+        recordStageError,
       },
       transitionNodeStatus,
       renderer,
@@ -157,6 +159,11 @@ describe('render queue handler', () => {
       'failed',
     ])
     expect(recordRenderError).not.toHaveBeenCalled()
+    expect(recordStageError).toHaveBeenCalledWith(
+      'node-1',
+      'FABRICATE',
+      failure
+    )
     expect(loadRenderContext).not.toHaveBeenCalled()
     expect(renderer.render).not.toHaveBeenCalled()
   })
