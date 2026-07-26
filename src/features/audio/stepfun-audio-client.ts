@@ -248,16 +248,23 @@ async function request(
   init: RequestInit | undefined,
   operation: string,
 ): Promise<Response> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
   try {
-    return await fetcher(url, {
-      ...init,
-      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+    const signal = AbortSignal.timeout(PROVIDER_TIMEOUT_MS)
+    const response = fetcher(url, { ...init, signal })
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(Object.assign(new Error('request timeout'), { name: 'TimeoutError' }))
+      }, PROVIDER_TIMEOUT_MS)
     })
+    return await Promise.race([response, timeout])
   } catch (error) {
     if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
       throw new Error(`${operation} 请求超时（${PROVIDER_TIMEOUT_MS / 1000} 秒）`)
     }
     throw error
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
   }
 }
 
