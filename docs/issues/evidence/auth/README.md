@@ -120,7 +120,26 @@ env 再作为 props 下传——值仍会到浏览器（本来就是要给评委
 的 `DEFAULT_PROVIDER` 与 `config.ts` / `gemini-config.ts` 的 `DEFAULTS` 提供代码默认值。
 唯一必须预置的就是 `provider_credentials` 里的 apiKey。
 
-未做（明确记录，不当作已验证）：**生产 compose 未实跑**。以上只做了
-`docker compose config` 的解析验证与本地脚本行为验证，没有在真实生产栈里跑过
-`bootstrap-credentials` 容器。它需要构建环境能出网（脚本会真实调用 stepfun / gemini
-校验 Key）。首次部署时必须盯这一步的容器日志。
+### bootstrap 脚本的三条分支实测
+
+| 分支 | 命令 | 结果 |
+| --- | --- | --- |
+| 有 Key | `pnpm tsx scripts/setup/bootstrap-credentials.ts --allow-empty` | `written=2 skipped=0 failed=0`，exit 0；`provider_credentials` 出现 gemini / stepfun 两行且 `verified_at` 非空；`GET /api/settings` 回 `configured=true` 与 `geminiConfigured=true` |
+| 无 Key + `--allow-empty` | 同上，env 置空 | 如实提示后 exit **0**，不阻断启动 |
+| 无 Key 不带 flag | 去掉 flag | exit **2**（保持既有本地契约） |
+| 体验账号 `--from-env` 未设变量 | `seed-owner-account.ts --from-env` | 原地提示后 exit 0，不建号 |
+
+期间修掉一个**会阻断生产启动**的缺陷：`bootstrap-credentials.ts` 打印完结果后
+不退出（`getDb()` 的连接锚在 globalThis 上，脚本侧没有关闭出口），实测挂住 300s
+未结束。在 compose 里这意味着 `service_completed_successfully` 永远不触发、`next`
+永远起不来。已补显式 `process.exit(process.exitCode ?? 0)`，失败路径同样改为
+`process.exit(1)`。
+
+同时修掉 `seed-owner-account.ts` 的 env 加载顺序：`--from-env` 原先在
+`loadEnvConfig()` **之前**读 `process.env`，容器里（env 直接注入）能工作但本地
+（值来自 `.env.local`）会误判为「未设置」。已把 `loadEnvConfig()` 提到解析参数之前。
+
+未做（明确记录，不当作已验证）：**生产 compose 栈未实跑**。上表是在本地宿主直接
+跑脚本得到的，`docker compose config` 只验证了编排解析与嵌套默认值。真实生产栈里
+`bootstrap-credentials` 容器需要能出网（脚本会真实调用 stepfun / gemini 校验 Key），
+首次部署必须盯这一步的容器日志。

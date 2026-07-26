@@ -176,8 +176,20 @@ async function ensureLocalWorkspace(database: Awaited<ReturnType<typeof business
     .onConflictDoNothing()
 }
 
-void main().catch((error) => {
+/**
+ * 显式退出。`getDb()` 的连接锚在 globalThis 上、由 Next 进程长期复用，脚本侧
+ * 没有关闭出口，不退出会让进程一直挂着（实测 300s 未结束）。
+ *
+ * 这在容器编排里是**阻断级**的：生产 compose 把本脚本作为 `next` 的
+ * `service_completed_successfully` 前置，进程不退出就等于该条件永远不满足，
+ * 整个栈起不来。
+ */
+function exitWithCurrentCode(): never {
+  process.exit(process.exitCode ?? 0)
+}
+
+void main().then(exitWithCurrentCode).catch((error) => {
   const message = error instanceof Error ? error.message : String(error)
   process.stderr.write(`[bootstrap-credentials] fatal: ${message}\n`)
-  process.exitCode = 1
+  process.exit(1)
 })

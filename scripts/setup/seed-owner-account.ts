@@ -87,6 +87,19 @@ function parseArgs(argv: readonly string[]): Options | null {
 }
 
 async function main(): Promise<void> {
+  const [{ loadEnvConfig }, { eq, sql }, dbClient, schema, { hashPassword }] =
+    await Promise.all([
+      import('@next/env'),
+      import('drizzle-orm'),
+      import('@/lib/db/client'),
+      import('@/lib/db/schema/index'),
+      import('@/features/auth/password'),
+    ])
+  // 必须在 parseArgs 之前：`--from-env` 读 CVC_DEMO_ACCOUNT_*，容器里这些变量由
+  // 编排直接注入，本地则来自 .env.local。若先解析参数，本地跑就会看不到
+  // .env.local 里的值而误判为「未设置」。
+  loadEnvConfig(process.cwd())
+
   const options = parseArgs(process.argv.slice(2))
   if (!options) {
     process.stdout.write(
@@ -96,16 +109,6 @@ async function main(): Promise<void> {
     process.exit(0)
   }
   const email = options.email.trim().toLowerCase()
-
-  const [{ loadEnvConfig }, { eq, sql }, dbClient, schema, { hashPassword }] =
-    await Promise.all([
-      import('@next/env'),
-      import('drizzle-orm'),
-      import('@/lib/db/client'),
-      import('@/lib/db/schema/index'),
-      import('@/features/auth/password'),
-    ])
-  loadEnvConfig(process.cwd())
 
   const database = await dbClient.getDb()
   await database.execute(sql`select 1`)
