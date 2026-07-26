@@ -41,7 +41,8 @@ const ttsResponseSchema = z
               })
               .passthrough()
           )
-          .min(1),
+          .optional()
+          .default([]),
       })
       .passthrough(),
   })
@@ -113,13 +114,21 @@ export async function synthesizeSpeech(
         input: parsed.text,
         response_format: 'mp3',
         return_url: true,
-        timestamp: true,
       }),
     },
     'StepFun TTS',
   )
   if (!response.ok) {
     throw new Error(`StepFun TTS 请求失败（HTTP ${response.status}）`)
+  }
+  if (response.headers.get('content-type')?.startsWith('audio/')) {
+    return {
+      audioBytes: Buffer.from(await response.arrayBuffer()),
+      audioFormat: 'mp3',
+      durationMs: 0,
+      model: config.ttsModel,
+      nativeCaptions: [],
+    }
   }
   const body = ttsResponseSchema.parse(await response.json())
   const nativeCaptions = body.data.subtitles.flatMap(({ items }) =>
@@ -129,9 +138,6 @@ export async function synthesizeSpeech(
       endMs: end_time,
     }))
   )
-  if (nativeCaptions.length === 0) {
-    throw new Error('StepFun TTS 未返回可用的词级时间戳')
-  }
   const audioResponse = await request(
     dependencies.fetcher,
     body.data.url,
@@ -144,7 +150,9 @@ export async function synthesizeSpeech(
   return {
     audioBytes: Buffer.from(await audioResponse.arrayBuffer()),
     audioFormat: 'mp3',
-    durationMs: Math.max(...nativeCaptions.map(({ endMs }) => endMs)),
+    durationMs: nativeCaptions.length > 0
+      ? Math.max(...nativeCaptions.map(({ endMs }) => endMs))
+      : 0,
     model: config.ttsModel,
     nativeCaptions,
   }
