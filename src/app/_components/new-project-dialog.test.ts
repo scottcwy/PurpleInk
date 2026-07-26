@@ -6,7 +6,19 @@ describe('createProjectAndStartIngest', () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse({ ok: true, project: { id: 'project-1' }, ingestNodeId: 'node-1' }, 201))
-      .mockResolvedValueOnce(jsonResponse({ ok: true, jobId: 'job-1' }, 200))
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            ok: true,
+            action: 'execute',
+            requestedNodeId: 'node-1',
+            queuedNodeId: 'node-1',
+            jobId: 'job-1',
+            message: '已排队执行此阶段',
+          },
+          200
+        )
+      )
 
     await expect(
       createProjectAndStartIngest(
@@ -34,7 +46,7 @@ describe('createProjectAndStartIngest', () => {
         body: JSON.stringify({
           projectId: 'project-1',
           nodeId: 'node-1',
-          stage: 'INGEST',
+          intent: 'execute',
         }),
       })
     )

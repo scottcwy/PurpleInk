@@ -9,7 +9,7 @@ export async function createProjectAndStartIngest(
   const nodeId = readString(creation, 'ingestNodeId')
   const queued = await fetcher(
     '/api/director/stage',
-    jsonRequest({ projectId, nodeId, stage: 'INGEST' })
+    jsonRequest({ projectId, nodeId, intent: 'execute' })
   )
   const queueResult = await readJson(queued)
   if (!queued.ok) throw new Error(readError(queueResult, '分镜触发失败，可在画布重试'))
