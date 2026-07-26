@@ -58,7 +58,11 @@ export async function POST(request: Request) {
     const readiness = await getExportReadiness(parsed.data.projectId)
     if (!readiness.ready) {
       return NextResponse.json(
-        { ok: false, incompleteNodeIds: readiness.incompleteNodeIds },
+        {
+          ok: false,
+          incompleteNodeIds: readiness.incompleteNodeIds,
+          blockingIssues: readiness.blockingIssues,
+        },
         { status: 409 }
       )
     }

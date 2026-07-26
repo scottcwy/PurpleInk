@@ -8,6 +8,12 @@ import {
 import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
 import { artifacts, canvasNodes, projects } from '@/lib/db/schema/index'
 import { withTransaction } from '@/lib/db/transaction'
+import { storage as defaultStorage, type StorageAdapter } from '@/lib/storage'
+import {
+  loadMediaAssembly,
+  type LoadedMediaAssembly,
+} from './media-assembly-loader'
+import type { ExportBlockingIssue, MediaAssemblyPlan } from './media-assembly'
 import {
   laneKeyOf,
   legacyNodeStatus,
@@ -36,6 +42,14 @@ export interface RenderExportPlan {
   targetResolution: { width: number; height: number }
   resolutionPreset: ResolutionPreset
   shotQa: Record<string, boolean | null>
+  mediaAssemblyPlan: MediaAssemblyPlan | null
+  blockingIssues: ExportBlockingIssue[]
+  media: {
+    narrationReadyCount: number
+    subtitleReadyCount: number
+    requiredShotCount: number
+    delivery: 'legacy-silent-v1' | 'narration-hard-subtitle-v2'
+  }
 }
 
 export interface ShotQaTarget {
@@ -46,6 +60,13 @@ export interface ShotQaTarget {
 
 /** Render 持久化端口；集中处理画布顺序、QA 投影与 artifact 指针。 */
 export class RenderRepository extends RenderArtifactRepository {
+  constructor(
+    suppliedDb?: ConstructorParameters<typeof RenderArtifactRepository>[0],
+    private readonly suppliedStorage: StorageAdapter = defaultStorage
+  ) {
+    super(suppliedDb)
+  }
+
   async getExportPlan(projectId: string): Promise<RenderExportPlan> {
     const database = await this.database()
     const [project] = await database
@@ -125,13 +146,29 @@ export class RenderRepository extends RenderArtifactRepository {
         shotQa[node.laneKey] = qaPassedOf(node.payload)
       }
     }
+    const media = await loadMediaAssembly({
+      database,
+      storage: this.suppliedStorage,
+      projectId,
+      nodes: nodes.map((node) => ({
+        nodeId: node.id,
+        type: node.type,
+        status: legacyNodeStatus(node.status),
+        laneKey: node.laneKey,
+      })),
+      targetResolution: resolutionForPreset(settings.resolutionPreset),
+      musicKey: await this.latestMusicKey(projectId),
+    })
     return {
       incompleteNodeIds: [...incomplete].sort(),
       shots,
-      musicKey: await this.latestMusicKey(projectId),
+      musicKey: media.plan?.musicKey ?? null,
       targetResolution: resolutionForPreset(settings.resolutionPreset),
       resolutionPreset: settings.resolutionPreset,
       shotQa,
+      mediaAssemblyPlan: media.plan,
+      blockingIssues: media.blockingIssues,
+      media: mediaReadiness(media),
     }
   }
 
@@ -209,6 +246,15 @@ export class RenderRepository extends RenderArtifactRepository {
     await withTransaction(database, (transaction) =>
       writeNodeProjection(transaction, nodeId, 'qaVision', qaVision)
     )
+  }
+}
+
+function mediaReadiness(media: LoadedMediaAssembly): RenderExportPlan['media'] {
+  return {
+    narrationReadyCount: media.narrationReadyCount,
+    subtitleReadyCount: media.subtitleReadyCount,
+    requiredShotCount: media.requiredShotCount,
+    delivery: 'narration-hard-subtitle-v2',
   }
 }
 

@@ -14,7 +14,11 @@ import {
 } from './repository'
 
 export type ExportProjectResult =
-  | { ok: false; incompleteNodeIds: string[] }
+  | {
+      ok: false
+      incompleteNodeIds: string[]
+      blockingIssues?: RenderExportPlan['blockingIssues']
+    }
   | { ok: true; artifactId: string; outputKey: string; contentHash: string }
 
 interface ExportRepository {
@@ -46,6 +50,13 @@ export async function exportProject(
   const plan = await repository.getExportPlan(projectId)
   if (plan.incompleteNodeIds.length > 0) {
     return incomplete(plan.incompleteNodeIds)
+  }
+  if (plan.blockingIssues.length > 0 || !plan.mediaAssemblyPlan) {
+    return {
+      ok: false,
+      incompleteNodeIds: [],
+      blockingIssues: plan.blockingIssues,
+    }
   }
   const orderedShots = [...plan.shots].sort((left, right) =>
     left.laneKey.localeCompare(right.laneKey)
@@ -98,16 +109,23 @@ export async function getExportReadiness(
   shotQa: Record<string, boolean | null>
   resolutionPreset: ResolutionPreset
   finalArtifactId: string | null
+  blockingIssues: RenderExportPlan['blockingIssues']
+  media: RenderExportPlan['media']
 }> {
   const plan = await repository.getExportPlan(projectId)
   const finalArtifact = await repository.findLatestFinalArtifact(projectId)
   return {
-    ready: plan.incompleteNodeIds.length === 0,
+    ready:
+      plan.incompleteNodeIds.length === 0 &&
+      plan.blockingIssues.length === 0 &&
+      plan.mediaAssemblyPlan !== null,
     incompleteNodeIds: plan.incompleteNodeIds,
     shotCount: plan.shots.length,
     shotQa: plan.shotQa,
     resolutionPreset: plan.resolutionPreset,
     finalArtifactId: finalArtifact?.artifactId ?? null,
+    blockingIssues: plan.blockingIssues,
+    media: plan.media,
   }
 }
 

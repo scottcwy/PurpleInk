@@ -49,8 +49,15 @@ describe('POST /api/render/export', () => {
   })
 
   it('returns every incomplete node with status 409 and does not enqueue', async () => {
+    const blockingIssues = [
+      { laneKey: 'S001', kind: 'narration', code: 'artifact-missing' },
+    ]
     mocks.getExportReadiness.mockResolvedValue(
-      readiness({ ready: false, incompleteNodeIds: ['node-1', 'node-2'] })
+      readiness({
+        ready: false,
+        incompleteNodeIds: ['node-1', 'node-2'],
+        blockingIssues,
+      })
     )
 
     const response = await POST(request({ projectId: 'project-1' }))
@@ -59,6 +66,7 @@ describe('POST /api/render/export', () => {
     await expect(response.json()).resolves.toEqual({
       ok: false,
       incompleteNodeIds: ['node-1', 'node-2'],
+      blockingIssues,
     })
     expect(mocks.enqueueProjectExport).not.toHaveBeenCalled()
   })

@@ -29,6 +29,7 @@ describe('exportProject', () => {
           targetResolution: { width: 1920, height: 1080 },
           resolutionPreset: '1920x1080' as const,
           shotQa: {},
+          ...mediaFields(null),
         })),
         registerFinalArtifact: vi.fn(async () => 'unused'),
       },
@@ -39,6 +40,41 @@ describe('exportProject', () => {
     expect(result).toEqual({
       ok: false,
       incompleteNodeIds: ['node-1', 'node-2'],
+    })
+    expect(concat).not.toHaveBeenCalled()
+  })
+
+  it('refuses media-blocked plans without invoking ffmpeg', async () => {
+    const concat = vi.fn()
+    const blockingIssues = [
+      {
+        laneKey: 'S001',
+        kind: 'subtitle' as const,
+        code: 'artifact-invalid' as const,
+      },
+    ]
+    const result = await exportProject('project-1', {
+      repository: {
+        getExportPlan: vi.fn(async () => ({
+          incompleteNodeIds: [],
+          shots: [],
+          musicKey: null,
+          targetResolution: { width: 1920, height: 1080 },
+          resolutionPreset: '1920x1080' as const,
+          shotQa: {},
+          ...mediaFields(null),
+          blockingIssues,
+        })),
+        registerFinalArtifact: vi.fn(async () => 'unused'),
+      },
+      storage: createStorage(),
+      concat,
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      incompleteNodeIds: [],
+      blockingIssues,
     })
     expect(concat).not.toHaveBeenCalled()
   })
@@ -83,6 +119,7 @@ describe('exportProject', () => {
           targetResolution: { width: 1920, height: 1080 },
           resolutionPreset: '1920x1080' as const,
           shotQa: {},
+          ...mediaFields(completeMediaPlan()),
         })),
         registerFinalArtifact,
       },
@@ -126,6 +163,7 @@ describe('exportProject', () => {
             targetResolution: { width: 1920, height: 1080 },
             resolutionPreset: '1920x1080' as const,
             shotQa: {},
+            ...mediaFields(completeMediaPlan()),
           })),
           registerFinalArtifact: vi.fn(async () => 'unused'),
         },
@@ -148,6 +186,7 @@ describe('getExportReadiness', () => {
         targetResolution: { width: 1920, height: 1080 },
         resolutionPreset: '1920x1080' as const,
         shotQa: { S001: true },
+        ...mediaFields(completeMediaPlan()),
       })),
       findLatestFinalArtifact: vi.fn(async () => ({
         artifactId: 'artifact-final',
@@ -181,4 +220,27 @@ async function createTempRoot(): Promise<string> {
   directories.push(directory)
   await mkdir(directory, { recursive: true })
   return directory
+}
+
+function completeMediaPlan() {
+  return {
+    fps: 30 as const,
+    totalFrames: 30,
+    shots: [],
+    targetResolution: { width: 1920, height: 1080 },
+    musicKey: null,
+  }
+}
+
+function mediaFields(mediaAssemblyPlan: ReturnType<typeof completeMediaPlan> | null) {
+  return {
+    mediaAssemblyPlan,
+    blockingIssues: [],
+    media: {
+      narrationReadyCount: mediaAssemblyPlan ? 1 : 0,
+      subtitleReadyCount: mediaAssemblyPlan ? 1 : 0,
+      requiredShotCount: 1,
+      delivery: 'narration-hard-subtitle-v2' as const,
+    },
+  }
 }
