@@ -124,7 +124,7 @@ model are non-secret profile data in `workspace_settings` under
 `/chat/completions` request, then writes both records only after validation.
 
 This provider is available only to Director text and vision routes. It never
-owns narration TTS or subtitle ASR: those media routes remain StepFun-only so
+owns narration TTS or subtitle ASR: those media routes can use MiMo or StepFun, so
 that ingress timing, narration artifacts, and subtitle timing share one media
 contract. GET `/api/settings` returns configured state, endpoint, model and
 verification time, never the encrypted key.

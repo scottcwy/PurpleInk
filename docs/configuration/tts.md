@@ -1,62 +1,59 @@
-# TTS Configuration
+# TTS 与 ASR 配置
 
-PurpleInk currently selects ListenHub FlowSpeech for narration synthesis. TTS
-configuration is parsed independently from the web application's database and
-authentication environment so ordinary web routes do not require TTS secrets.
+PurpleInk 的媒体能力与文本模型分别路由。旁白 TTS 和字幕 ASR 可选择
+小米 MiMo 或阶跃星辰；音频失败不会撤销已经提交的文本与分镜合同。
 
-## Current Selection
+## 供应商
 
-| Setting         | Value                             |
-| --------------- | --------------------------------- |
-| Provider        | `listenhub-flowspeech`            |
-| API base URL    | `https://api.marswave.ai/openapi` |
-| Endpoint        | `/v1/tts`                         |
-| Voice           | `振松` (`nanzhongyin-4897116a`)   |
-| Response format | `mp3`                             |
+| 供应商 | TTS 默认模型 | ASR 默认模型 | 音频格式 |
+| --- | --- | --- | --- |
+| 小米 MiMo | `mimo-v2.5-tts` | `mimo-v2.5-asr` | WAV |
+| 阶跃星辰 | `stepaudio-2.5-tts` | `stepaudio-2.5-asr` | MP3 |
 
-FlowSpeech does not expose a model selector on this endpoint. Do not add a
-`model` variable: the stable integration contract is the provider and endpoint.
+MiMo 还允许显式选择 `mimo-v2.5-tts-voicedesign` 或
+`mimo-v2.5-tts-voiceclone`。具体模型能否调用仍取决于产品 API 账户权限。
 
-## Local Secret
+## MiMo 凭据边界
 
-Use [`config/tts.env.example`](../../config/tts.env.example) as the public
-template and put the real `LISTENHUB_API_KEY` plus the other TTS values in the
-ignored `.env.local` file. Application code must read the configuration through
-`getTtsEnv()` from `lib/tts/config.ts`.
+业务后端必须使用 MiMo 产品 API 的 `sk-` Key，默认端点为
+`https://api.xiaomimimo.com/v1`。`tp-` Token Plan Key 面向编码工具，
+不得保存为 PurpleInk 的 MiMo 业务凭据；设置 API 会在验证前拒绝它。
 
-## Runtime Boundary
+本地非密钥覆盖项如下：
 
-Server render tasks generate one independent narration segment per visual
-scene. The narration prompt uses structured product copy and scene kinds; it
-does not use screenshot captions or asset paths. The synchronous render flow
-is:
-
-```text
-VideoModel -> duration-budgeted narration script -> FlowSpeech
-           -> ffprobe duration -> pad/tempo-fit fixed scene windows
-           -> unchanged visual composition/render -> FFmpeg narration mux
+```dotenv
+MIMO_BASE_URL=https://api.xiaomimimo.com/v1
+MIMO_TEXT_MODEL=mimo-v2.5
+MIMO_VISION_MODEL=mimo-v2.5
+MIMO_TTS_MODEL=mimo-v2.5-tts
+MIMO_ASR_MODEL=mimo-v2.5-asr
 ```
 
-The generated project stores `narration-plan.json`, `audio_meta.json`, segment
-audio under `audio/segments/`, and the normalized `audio/narration.wav` track.
-The visual `VideoModel`, scene timing, Agent/template input, and final video
-duration remain unchanged. Short narration is padded with silence; narration
-that exceeds its scene window is tempo-fitted in the audio layer before muxing.
+真实 Key 只通过设置页验证后加密保存，不写入仓库、浏览器状态、产物或日志。
 
-The server and render CLI load the ignored root `.env.local`; ordinary web
-routes do not parse TTS configuration. The browser never calls ListenHub and no
-TTS secret is written to generated artifacts. A separate narration worker, R2
-persistence, and long-video orchestration remain out of scope.
+## 异步媒体边界
 
-## Commit Boundary
-
-The TTS configuration can be submitted independently with:
+INGEST 只提交可信 `scriptUnits` 并展开镜头；随后在同一持久队列中创建独立
+`media-narration` 作业：
 
 ```text
-config/tts.env.example
-docs/configuration/tts.md
-lib/tts/config.ts
-tests/tts-config.test.ts
+INGEST 文本成功
+  ├─ DIRECT -> SHOT_SPEC（立即继续）
+  └─ media-narration -> 真实 TTS -> 实测音频时长
+                     -> director-ingest-audio Artifact
+                     -> 唤醒等待中的 FABRICATE
 ```
 
-The repository-level `.env.example` intentionally contains no TTS settings.
+- 不写静音占位，不估算虚假时长。
+- TTS/ASR 错误投影到入口节点的媒体状态，不把成功的 INGEST 改成失败。
+- FABRICATE 必须读取真实 `audioAllocation`；媒体未就绪时保持 idle。
+- 历史项目若旧 `director-ingest` 已包含有效音频合同，读取时仍兼容。
+- 每段音频和组合时序都按不可变 Artifact 版本保存，保留 lineage。
+
+## MiMo 协议
+
+- TTS 使用 Chat Completions 的 `audio` 请求字段，从
+  `message.audio.data` 读取 base64 音频。
+- ASR 使用 `input_audio` data URL 与 `asr_options.language=auto`。
+- 当前 MiMo 非流式 ASR 没有 StepFun 式逐词时间戳，因此字幕以实测音频时长
+  生成整段时间边界，不伪造逐词对齐。
