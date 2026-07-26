@@ -49,7 +49,11 @@ export function resolveVisibleStageError(
   if (status !== 'failed') return undefined
   if (persistedError) return persistedError
   if (persistedRenderError) {
-    return { stage: RENDER_STAGE_LABEL, message: persistedRenderError.message }
+    return {
+      stage: RENDER_STAGE_LABEL,
+      message: persistedRenderError.message,
+      retryable: persistedRenderError.retryable,
+    }
   }
   return streamError
 }
@@ -147,6 +151,7 @@ export function StreamingLogCard({
           onRetry()
         }}
         retrying={retrying}
+        retryable={error?.retryable !== false}
       />
     </>
   )

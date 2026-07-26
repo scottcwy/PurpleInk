@@ -33,7 +33,11 @@ function classify(
   error: unknown,
   stage: string
 ): Pick<WorkflowErrorProjection, 'code' | 'message' | 'retryable'> {
-  if (/API\s*Key|credential|凭据|未配置|配置.+不可用/i.test(message)) {
+  if (
+    /API\s*Key|credential|凭据|未配置|配置.+不可用|quota(?:_exceeded)?|billing|payment|required|HTTP\s*402|\b402\b|额度|配额|余额不足/i.test(
+      message
+    )
+  ) {
     return {
       code: 'CONFIGURATION_BLOCKED',
       message: '运行配置或服务凭据不可用，请先检查项目设置。',

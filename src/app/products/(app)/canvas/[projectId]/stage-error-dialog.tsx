@@ -13,6 +13,7 @@ export interface StageErrorDialogProps {
   onClose: () => void
   onRetry: () => void
   retrying?: boolean
+  retryable?: boolean
 }
 
 /**
@@ -26,6 +27,7 @@ export function StageErrorDialog({
   onClose,
   onRetry,
   retrying,
+  retryable = true,
 }: StageErrorDialogProps) {
   return (
     <Dialog
@@ -43,9 +45,11 @@ export function StageErrorDialog({
           <Button variant="gray" onClick={onClose}>
             关闭
           </Button>
-          <Button variant="tinted" icon={RefreshCw} onClick={onRetry} disabled={retrying}>
-            重试
-          </Button>
+          {retryable && (
+            <Button variant="tinted" icon={RefreshCw} onClick={onRetry} disabled={retrying}>
+              重试
+            </Button>
+          )}
         </>
       }
     >

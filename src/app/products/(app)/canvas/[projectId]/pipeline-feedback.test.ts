@@ -72,6 +72,14 @@ describe('Canvas pipeline feedback wiring', () => {
     new URL('./canvas-inspector.tsx', import.meta.url),
     'utf8'
   )
+  const streamingLogSource = readFileSync(
+    new URL('./streaming-log-card.tsx', import.meta.url),
+    'utf8'
+  )
+  const stageErrorDialogSource = readFileSync(
+    new URL('./stage-error-dialog.tsx', import.meta.url),
+    'utf8'
+  )
 
   it('消费真实 pipeline 返回值且不显示无来源的自动保存状态', () => {
     expect(canvasViewSource).toContain('describePipelineResult(result)')
@@ -83,6 +91,13 @@ describe('Canvas pipeline feedback wiring', () => {
     expect(inspectorSource).toContain('title="已入队"')
     expect(inspectorSource).toContain('variant="info"')
     expect(inspectorSource).not.toContain(fixedProgressValue)
+  })
+
+  it('配置阻塞时禁用画布动作且错误弹窗不提供无效重试', () => {
+    expect(inspectorSource).toContain('请先检查项目设置')
+    expect(inspectorSource).toContain('?.retryable === false')
+    expect(streamingLogSource).toContain('retryable={error?.retryable !== false}')
+    expect(stageErrorDialogSource).toContain('{retryable && (')
   })
 
   it('pipeline 反馈锚定在画布主区右上角，避开左侧泳道折叠与顶栏', () => {

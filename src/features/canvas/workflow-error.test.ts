@@ -28,4 +28,17 @@ describe('classifyWorkflowError', () => {
       retryable: false,
     })
   })
+
+  it('treats exhausted provider quota as a non-retryable configuration block', () => {
+    expect(
+      classifyWorkflowError(
+        new Error('provider request failed: 402 quota_exceeded; billing account unavailable'),
+        { stage: 'INGEST' }
+      )
+    ).toMatchObject({
+      code: 'CONFIGURATION_BLOCKED',
+      message: '运行配置或服务凭据不可用，请先检查项目设置。',
+      retryable: false,
+    })
+  })
 })
