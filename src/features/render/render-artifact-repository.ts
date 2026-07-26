@@ -27,6 +27,7 @@ export interface FinalArtifactRecord {
   artifactId: string
   path: string
   contentHash: string
+  schemaVersion: string
 }
 
 export interface ThumbnailRegistration {
@@ -74,6 +75,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
         id: artifacts.id,
         storageKey: artifacts.storageKey,
         contentHash: artifacts.contentHash,
+        schemaVersion: artifacts.schemaVersion,
       })
       .from(artifacts)
       .where(
@@ -92,6 +94,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
           artifactId: row.id,
           path: row.storageKey,
           contentHash: row.contentHash,
+          schemaVersion: row.schemaVersion,
         }
       : null
   }

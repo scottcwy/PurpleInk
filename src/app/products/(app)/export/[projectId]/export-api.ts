@@ -12,6 +12,25 @@ export interface ExportReadiness {
   shotQa: Record<string, boolean | null>
   resolutionPreset: ResolutionPreset
   artifactUrl?: string
+  blockingIssues: ExportBlockingIssue[]
+  media: ExportMediaReadiness
+  artifactDelivery:
+    | 'none'
+    | 'legacy-silent-v1'
+    | 'narration-hard-subtitle-v2'
+}
+
+export interface ExportBlockingIssue {
+  laneKey: string | null
+  kind: 'render' | 'narration' | 'subtitle'
+  code: 'node-incomplete' | 'artifact-missing' | 'artifact-invalid'
+}
+
+export interface ExportMediaReadiness {
+  narrationReadyCount: number
+  subtitleReadyCount: number
+  requiredShotCount: number
+  delivery: 'legacy-silent-v1' | 'narration-hard-subtitle-v2'
 }
 
 export async function loadExportReadiness(
@@ -39,6 +58,11 @@ export async function loadExportReadiness(
     resolutionPreset: isResolutionPreset(body.resolutionPreset)
       ? body.resolutionPreset
       : DEFAULT_EXPORT_SETTINGS.resolutionPreset,
+    blockingIssues: toBlockingIssues(body.blockingIssues),
+    media: toMediaReadiness(body.media, body.shotCount),
+    artifactDelivery: isArtifactDelivery(body.artifactDelivery)
+      ? body.artifactDelivery
+      : 'none',
     ...(typeof body.artifactUrl === 'string' ? { artifactUrl: body.artifactUrl } : {}),
   }
 }
@@ -102,6 +126,8 @@ function exportStartError(body: Record<string, unknown>): string {
   if (Array.isArray(incomplete) && incomplete.length > 0) {
     return `还有 ${incomplete.length} 个节点未产出可用分镜，无法导出成片`
   }
+  const issue = toBlockingIssues(body.blockingIssues)[0]
+  if (issue) return blockingIssueLabel(issue)
   return errorOf(body, '终片导出失败')
 }
 
@@ -149,4 +175,82 @@ function toShotQa(value: unknown): Record<string, boolean | null> {
 
 function isResolutionPreset(value: unknown): value is ResolutionPreset {
   return typeof value === 'string' && value in EXPORT_RESOLUTION_PRESETS
+}
+
+function toBlockingIssues(value: unknown): ExportBlockingIssue[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+    const raw = item as Record<string, unknown>
+    const laneKey =
+      raw.laneKey === null || typeof raw.laneKey === 'string'
+        ? raw.laneKey
+        : undefined
+    if (
+      laneKey === undefined ||
+      !['render', 'narration', 'subtitle'].includes(String(raw.kind)) ||
+      !['node-incomplete', 'artifact-missing', 'artifact-invalid'].includes(
+        String(raw.code)
+      )
+    ) {
+      return []
+    }
+    return [
+      {
+        laneKey,
+        kind: raw.kind as ExportBlockingIssue['kind'],
+        code: raw.code as ExportBlockingIssue['code'],
+      },
+    ]
+  })
+}
+
+function toMediaReadiness(
+  value: unknown,
+  shotCount: unknown
+): ExportMediaReadiness {
+  const fallbackCount = typeof shotCount === 'number' ? shotCount : 0
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {
+      narrationReadyCount: 0,
+      subtitleReadyCount: 0,
+      requiredShotCount: fallbackCount,
+      delivery: 'narration-hard-subtitle-v2',
+    }
+  }
+  const raw = value as Record<string, unknown>
+  return {
+    narrationReadyCount: countOf(raw.narrationReadyCount),
+    subtitleReadyCount: countOf(raw.subtitleReadyCount),
+    requiredShotCount: countOf(raw.requiredShotCount, fallbackCount),
+    delivery:
+      raw.delivery === 'legacy-silent-v1'
+        ? 'legacy-silent-v1'
+        : 'narration-hard-subtitle-v2',
+  }
+}
+
+function countOf(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0
+    ? value
+    : fallback
+}
+
+function isArtifactDelivery(
+  value: unknown
+): value is ExportReadiness['artifactDelivery'] {
+  return (
+    value === 'none' ||
+    value === 'legacy-silent-v1' ||
+    value === 'narration-hard-subtitle-v2'
+  )
+}
+
+export function blockingIssueLabel(issue: ExportBlockingIssue): string {
+  const target = issue.laneKey ?? '项目'
+  if (issue.code === 'artifact-invalid') return `${target} 产物无效`
+  if (issue.code === 'node-incomplete') return `${target} 节点未完成`
+  if (issue.kind === 'narration') return `${target} 缺旁白`
+  if (issue.kind === 'subtitle') return `${target} 缺字幕`
+  return `${target} 缺渲染产物`
 }

@@ -123,6 +123,26 @@ describe('registerExportProjectHandler', () => {
     ).rejects.toThrow('node-a、node-b')
   })
 
+  it('fails with lane-scoped media reasons when artifacts block assembly', async () => {
+    const { adapter, handlers } = queueStub()
+    const exportProject = vi.fn(async () => ({
+      ok: false as const,
+      incompleteNodeIds: [],
+      blockingIssues: [
+        {
+          laneKey: 'S003',
+          kind: 'subtitle' as const,
+          code: 'artifact-invalid' as const,
+        },
+      ],
+    }))
+    registerExportProjectHandler(adapter, { exportProject })
+
+    await expect(
+      handlers.get(EXPORT_PROJECT_KIND)?.(job({ projectId: 'project-1' }))
+    ).rejects.toThrow('S003 字幕产物无效')
+  })
+
   it('rejects an untrusted job payload', async () => {
     const { adapter, handlers } = queueStub()
     const exportProject = vi.fn()

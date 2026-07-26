@@ -42,6 +42,23 @@ export function registerExportProjectHandler(
     const payload = exportJobPayloadSchema.parse(job.payload)
     const result = await dependencies.exportProject(payload.projectId)
     if (!result.ok) {
+      const mediaIssue = result.blockingIssues?.[0]
+      if (mediaIssue) {
+        const target = mediaIssue.laneKey ?? '项目'
+        const media =
+          mediaIssue.kind === 'narration'
+            ? '旁白'
+            : mediaIssue.kind === 'subtitle'
+              ? '字幕'
+              : '渲染'
+        const reason =
+          mediaIssue.code === 'artifact-invalid'
+            ? '产物无效'
+            : mediaIssue.code === 'artifact-missing'
+              ? '产物缺失'
+              : '节点未完成'
+        throw new Error(`终片导出失败：${target} ${media}${reason}`)
+      }
       throw new Error(
         `终片导出失败：以下节点尚未产出可用分镜 ${result.incompleteNodeIds.join('、')}`
       )

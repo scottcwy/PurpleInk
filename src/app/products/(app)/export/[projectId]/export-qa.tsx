@@ -5,7 +5,7 @@ import { ArtifactChip } from '@/components/ui/artifact-chip'
 import { ContactSheetThumb } from '@/components/ui/contact-sheet-thumb'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Toast } from '@/components/ui/toast'
-import { type ExportReadiness } from './export-api'
+import { blockingIssueLabel, type ExportReadiness } from './export-api'
 
 export interface ExportQaProps {
   laneKeys: string[]
@@ -46,6 +46,15 @@ export function ExportQa({ laneKeys, readiness, error }: ExportQaProps) {
             {readiness.incompleteNodeIds.map((id) => (
               <ArtifactChip key={id} filename={id} />
             ))}
+            {readiness.blockingIssues.map((issue) => {
+              const label = blockingIssueLabel(issue)
+              return (
+                <ArtifactChip
+                  key={`${String(issue.laneKey)}-${issue.kind}`}
+                  filename={label}
+                />
+              )
+            })}
           </div>
         </>
       )}

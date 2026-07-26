@@ -197,12 +197,14 @@ describe('getExportReadiness', () => {
         artifactId: 'artifact-final',
         path: 'exports/project-1/final.mp4',
         contentHash: 'hash-final',
+        schemaVersion: 'cvc.final-video/v2',
       })),
     })
 
     expect(result).toMatchObject({
       ready: true,
       finalArtifactId: 'artifact-final',
+      artifactDelivery: 'narration-hard-subtitle-v2',
     })
   })
 })

@@ -130,6 +130,10 @@ export async function getExportReadiness(
   finalArtifactId: string | null
   blockingIssues: RenderExportPlan['blockingIssues']
   media: RenderExportPlan['media']
+  artifactDelivery:
+    | 'none'
+    | 'legacy-silent-v1'
+    | 'narration-hard-subtitle-v2'
 }> {
   const plan = await repository.getExportPlan(projectId)
   const finalArtifact = await repository.findLatestFinalArtifact(projectId)
@@ -145,6 +149,7 @@ export async function getExportReadiness(
     finalArtifactId: finalArtifact?.artifactId ?? null,
     blockingIssues: plan.blockingIssues,
     media: plan.media,
+    artifactDelivery: finalDelivery(finalArtifact),
   }
 }
 
@@ -191,4 +196,13 @@ async function buildSubtitleAss(
 
 function incomplete(nodeIds: string[]): ExportProjectResult {
   return { ok: false, incompleteNodeIds: [...new Set(nodeIds)].sort() }
+}
+
+function finalDelivery(
+  artifact: FinalArtifactRecord | null
+): 'none' | 'legacy-silent-v1' | 'narration-hard-subtitle-v2' {
+  if (!artifact) return 'none'
+  return artifact.schemaVersion === 'cvc.final-video/v2'
+    ? 'narration-hard-subtitle-v2'
+    : 'legacy-silent-v1'
 }

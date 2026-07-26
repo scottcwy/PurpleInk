@@ -11,6 +11,16 @@ describe('export API client', () => {
         shotCount: 1,
         shotQa: { S001: null, S002: true },
         resolutionPreset: '1280x720',
+        blockingIssues: [
+          { laneKey: 'S001', kind: 'subtitle', code: 'artifact-missing' },
+        ],
+        media: {
+          narrationReadyCount: 1,
+          subtitleReadyCount: 0,
+          requiredShotCount: 1,
+          delivery: 'narration-hard-subtitle-v2',
+        },
+        artifactDelivery: 'legacy-silent-v1',
         artifactUrl: '/api/artifacts/final?projectId=project-1',
       })
     )
@@ -20,6 +30,16 @@ describe('export API client', () => {
       shotCount: 1,
       shotQa: { S001: null, S002: true },
       resolutionPreset: '1280x720',
+      blockingIssues: [
+        { laneKey: 'S001', kind: 'subtitle', code: 'artifact-missing' },
+      ],
+      media: {
+        narrationReadyCount: 1,
+        subtitleReadyCount: 0,
+        requiredShotCount: 1,
+        delivery: 'narration-hard-subtitle-v2',
+      },
+      artifactDelivery: 'legacy-silent-v1',
       artifactUrl: '/api/artifacts/final?projectId=project-1',
     })
   })
@@ -34,6 +54,14 @@ describe('export API client', () => {
       shotCount: 0,
       shotQa: {},
       resolutionPreset: '1920x1080',
+      blockingIssues: [],
+      media: {
+        narrationReadyCount: 0,
+        subtitleReadyCount: 0,
+        requiredShotCount: 0,
+        delivery: 'narration-hard-subtitle-v2',
+      },
+      artifactDelivery: 'none',
     })
   })
 
@@ -83,6 +111,25 @@ describe('export API client', () => {
     await expect(
       startProjectExport('project-1', fetcher, async () => {})
     ).rejects.toThrow('还有 2 个节点未产出可用分镜')
+  })
+
+  it('explains media blocking issues without exposing artifact paths', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      json(
+        {
+          ok: false,
+          incompleteNodeIds: [],
+          blockingIssues: [
+            { laneKey: 'S002', kind: 'narration', code: 'artifact-missing' },
+          ],
+        },
+        409
+      )
+    )
+
+    await expect(
+      startProjectExport('project-1', fetcher, async () => {})
+    ).rejects.toThrow('S002 缺旁白')
   })
 
   it('rejects a completed job that has no downloadable artifact', async () => {

@@ -36,6 +36,13 @@ export function ExportSettings({
   onResolutionChange,
 }: ExportSettingsProps) {
   const currentPreset = readiness?.resolutionPreset ?? MASTER_RESOLUTION_PRESET
+  const delivery = readiness
+    ? readiness.artifactDelivery === 'legacy-silent-v1' && outputUrl
+      ? '旧版静音成片'
+      : readiness.media.delivery === 'narration-hard-subtitle-v2'
+        ? '旁白 + 硬字幕烧录'
+        : '旧版静音成片'
+    : '等待媒体就绪'
   return (
     <SettingsGroup>
       <div className="flex flex-col gap-2 px-4 py-3">
@@ -54,9 +61,9 @@ export function ExportSettings({
       <SettingsSeparator />
       <SettingsRow label="帧率" value="30 fps" />
       <SettingsSeparator />
-      <SettingsRow label="格式" value="MP4 (H.264)" />
+      <SettingsRow label="格式" value="MP4 (H.264 + AAC)" />
       <SettingsSeparator />
-      <SettingsRow label="字幕烧录" value="暂不支持（P1）" />
+      <SettingsRow label="字幕交付" value={delivery} />
       <div className="flex flex-col gap-3 p-4">
         <Button icon={Download} disabled={disabled} onClick={onExport}>
           开始导出

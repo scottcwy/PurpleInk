@@ -1,6 +1,6 @@
 'use client'
 
-import { AudioLines, Captions, Download, Film, Music } from 'lucide-react'
+import { AudioLines, Captions, Download, Film, Music, Volume2 } from 'lucide-react'
 import { useState } from 'react'
 import { ArtifactChip } from '@/components/ui/artifact-chip'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,8 @@ import { TopBar } from '@/components/ui/top-bar'
 import { usePublishNavContext } from '@/features/navigation/nav-context'
 import { ExportQa } from './export-qa'
 import { ExportSettings } from './export-settings'
-import { buildShotClips, fullTrackClip } from './export-view-model'
+import { buildShotClips } from './export-view-model'
+import type { ExportReadiness } from './export-api'
 import { useExportRuntime } from './use-export-runtime'
 
 export function ExportWorkspace({
@@ -73,7 +74,11 @@ export function ExportWorkspace({
         outputUrl={runtime.outputUrl}
         loading={runtime.exporting && !runtime.outputUrl}
       />
-      <ExportTimeline laneKeys={laneKeys} shotClips={shotClips} />
+      <ExportTimeline
+        laneKeys={laneKeys}
+        shotClips={shotClips}
+        readiness={runtime.readiness}
+      />
       <ExportQa
         laneKeys={laneKeys}
         readiness={runtime.readiness}
@@ -110,10 +115,14 @@ function ExportPreview({
 function ExportTimeline({
   laneKeys,
   shotClips,
+  readiness,
 }: {
   laneKeys: string[]
   shotClips: ReturnType<typeof buildShotClips>
+  readiness?: ExportReadiness
 }) {
+  const subtitleLanes = readyMediaLanes(laneKeys, readiness, 'subtitle')
+  const narrationLanes = readyMediaLanes(laneKeys, readiness, 'narration')
   return (
     <section className="flex flex-col gap-1 px-4 sm:px-6">
       <div className="flex h-5 justify-between border-b border-ds-border text-[11px] font-mono text-ds-text-muted">
@@ -122,19 +131,46 @@ function ExportTimeline({
         ))}
       </div>
       <TimelineTrack icon={Film} label="分镜" clips={shotClips} />
-      <TimelineTrack icon={Captions} label="字幕" clips={shotClips} color="bg-stage-direct" />
+      <TimelineTrack
+        icon={Captions}
+        label={`字幕（字幕就绪 ${subtitleLanes.length}/${laneKeys.length}）`}
+        clips={buildShotClips(subtitleLanes)}
+        color="bg-stage-direct"
+      />
       <TimelineTrack
         icon={AudioLines}
-        label="配音"
-        clips={fullTrackClip('配音', laneKeys.length)}
+        label={`配音（旁白就绪 ${narrationLanes.length}/${laneKeys.length}）`}
+        clips={buildShotClips(narrationLanes)}
         color="bg-stage-audio"
       />
       <TimelineTrack
         icon={Music}
-        label="BGM"
-        clips={fullTrackClip('配乐', laneKeys.length)}
+        label="BGM（未接线）"
+        clips={[]}
         color="bg-stage-assemble"
       />
+      <TimelineTrack icon={Volume2} label="SFX（未接线）" clips={[]} />
     </section>
   )
+}
+
+function readyMediaLanes(
+  laneKeys: string[],
+  readiness: ExportReadiness | undefined,
+  kind: 'narration' | 'subtitle'
+): string[] {
+  if (!readiness) return []
+  const blocked = new Set(
+    readiness.blockingIssues
+      .filter((issue) => issue.kind === kind && issue.laneKey)
+      .map((issue) => issue.laneKey)
+  )
+  const count =
+    kind === 'narration'
+      ? readiness.media.narrationReadyCount
+      : readiness.media.subtitleReadyCount
+  return [...laneKeys]
+    .sort((left, right) => left.localeCompare(right))
+    .filter((laneKey) => !blocked.has(laneKey))
+    .slice(0, count)
 }
