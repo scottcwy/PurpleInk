@@ -23,6 +23,7 @@ function createDependencies() {
   const models = new Map<ModelKind, ModelRoute>()
   const media = new Map<MediaKind, MediaRoute>()
   const secrets = new Map<string, string>()
+  let customProfile: { baseUrl: string; defaultModel: string } | null = null
   const credentials: AiConfigDependencies['credentials'] = {
     save: vi.fn(async ({ provider, secret }) => {
       secrets.set(provider, secret)
@@ -77,7 +78,17 @@ function createDependencies() {
     }),
   }
   return {
-    dependencies: { credentials, mediaRoutes, modelRoutes },
+    dependencies: {
+      credentials,
+      mediaRoutes,
+      modelRoutes,
+      openAiCompatibleProfiles: {
+        find: vi.fn(async () => customProfile),
+        save: vi.fn(async (_workspaceId, profile) => {
+          customProfile = profile
+        }),
+      },
+    },
     media,
     models,
     secrets,
@@ -150,6 +161,33 @@ describe('Director provider routing', () => {
       expect.any(String),
       'stepfun',
     )
+  })
+
+  it('resolves a custom OpenAI-compatible route with its endpoint and route model', async () => {
+    const { dependencies, models, secrets } = createDependencies()
+    secrets.set('openai-compatible', 'custom-key')
+    await dependencies.openAiCompatibleProfiles!.save('workspace', {
+      baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
+      defaultModel: 'mimo-v2.5-pro',
+    })
+    models.set('project-plan', {
+      workspaceId: 'workspace',
+      aiTaskKind: 'project-plan',
+      provider: 'openai-compatible',
+      model: 'mimo-v2.5-pro',
+      revision: 0,
+    })
+
+    await expect(resolveDirectorModelTarget(
+      'script-import',
+      'text',
+      dependencies,
+    )).resolves.toEqual({
+      provider: 'openai-compatible',
+      baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
+      modelId: 'mimo-v2.5-pro',
+      apiKey: 'custom-key',
+    })
   })
 
   it('keeps Gemini fast/primary defaults and describes all visible routes', async () => {

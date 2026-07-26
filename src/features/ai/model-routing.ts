@@ -9,8 +9,9 @@ import {
   getStepfunConfig,
 } from './config'
 import { getGeminiConfig } from './gemini-config'
+import { CUSTOM_OPENAI_PROVIDER } from './openai-compatible-config'
 
-export const AI_PROVIDER_IDS = ['stepfun', 'gemini'] as const
+export const AI_PROVIDER_IDS = ['stepfun', 'gemini', CUSTOM_OPENAI_PROVIDER] as const
 export type AiProviderId = (typeof AI_PROVIDER_IDS)[number]
 export type ModelCapability = 'text' | 'vision'
 
@@ -129,6 +130,23 @@ async function fallbackTarget(
       apiKey: config.apiKey,
     }
   }
+  if (provider === CUSTOM_OPENAI_PROVIDER) {
+    const profiles = deps.openAiCompatibleProfiles
+    if (!profiles) throw new Error('OpenAI 兼容模型配置存储不可用')
+    const [profile, apiKey] = await Promise.all([
+      profiles.find(LOCAL_WORKSPACE_ID),
+      deps.credentials.loadSecret(LOCAL_WORKSPACE_ID, CUSTOM_OPENAI_PROVIDER),
+    ])
+    if (!profile) {
+      throw new Error('OpenAI 兼容模型服务尚未配置')
+    }
+    return {
+      provider,
+      baseUrl: profile.baseUrl,
+      modelId: profile.defaultModel,
+      apiKey,
+    }
+  }
   const config = await getGeminiConfig(deps)
   return {
     provider,
@@ -194,6 +212,16 @@ async function modelForProvider(
       return target.kind === 'tts' ? config.ttsModel : config.asrModel
     }
     return target.kind === 'vision-qa' ? config.visionModel : config.chatModel
+  }
+  if (provider === CUSTOM_OPENAI_PROVIDER) {
+    if (target.domain !== 'ai') {
+      throw new Error('OpenAI 兼容模型服务不支持 TTS 或 ASR 路由')
+    }
+    const profiles = deps.openAiCompatibleProfiles
+    if (!profiles) throw new Error('OpenAI 兼容模型配置存储不可用')
+    const profile = await profiles.find(LOCAL_WORKSPACE_ID)
+    if (!profile) throw new Error('OpenAI 兼容模型服务尚未配置')
+    return profile.defaultModel
   }
   const config = await getGeminiConfig(deps)
   return target.domain === 'ai' && target.kind !== 'project-plan'

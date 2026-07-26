@@ -123,7 +123,7 @@ export interface VisionRequirementResult {
 export interface VisionQaReport {
   version: 1
   shotId: string
-  provider: 'stepfun' | 'gemini'
+  provider: 'stepfun' | 'gemini' | 'openai-compatible'
   model: string
   passed: boolean
   summary: string
@@ -138,7 +138,7 @@ export interface ShotQaVisionData {
   passed: boolean
   checkedAt: number
   thumbnailContentHash: string
-  provider: 'stepfun' | 'gemini'
+  provider: 'stepfun' | 'gemini' | 'openai-compatible'
   model: string
   summary: string
   reportArtifactId: string

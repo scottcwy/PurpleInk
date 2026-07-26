@@ -24,7 +24,11 @@ const STAGE_FALLBACK_NODE_TYPE: Record<PipelineStage, CanvasNodeType> = {
   FINALIZE: 'export',
 }
 
-const PROVIDER_LABEL = { gemini: 'Gemini', stepfun: 'StepFun' } as const
+const PROVIDER_LABEL = {
+  gemini: 'Gemini',
+  stepfun: 'StepFun',
+  'openai-compatible': 'OpenAI 兼容模型服务',
+} as const
 
 /**
  * 请求整形上限：只用于本地 maxTokens 裁剪与上下文预算估算，
@@ -33,6 +37,7 @@ const PROVIDER_LABEL = { gemini: 'Gemini', stepfun: 'StepFun' } as const
 const REQUEST_SHAPE = {
   gemini: { contextWindow: 1_048_576, maxTokens: 65_536 },
   stepfun: { contextWindow: 131_072, maxTokens: 32_768 },
+  'openai-compatible': { contextWindow: 131_072, maxTokens: 32_768 },
 } as const
 
 export interface DirectorModelRuntime {
@@ -86,7 +91,11 @@ export async function createDirectorModelRuntime(input: {
       auth: {
         apiKey: envApiKeyAuth(
           `${label} API Key`,
-          target.provider === 'gemini' ? ['GEMINI_API_KEY'] : ['STEP_API_KEY'],
+          target.provider === 'gemini'
+            ? ['GEMINI_API_KEY']
+            : target.provider === 'stepfun'
+              ? ['STEP_API_KEY']
+              : ['OPENAI_COMPATIBLE_API_KEY'],
         ),
       },
       api: target.provider === 'gemini'

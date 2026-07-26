@@ -9,6 +9,10 @@ import {
   PostgresModelRouteRepository,
 } from '@/features/routing'
 import { getDb, LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import {
+  PostgresOpenAiCompatibleProfileStore,
+  type OpenAiCompatibleProfileStore,
+} from './openai-compatible-profile-store'
 
 export type StepfunModelField =
   | 'baseUrl'
@@ -44,6 +48,7 @@ export interface AiConfigDependencies {
     PostgresMediaRouteRepository,
     'find' | 'remove' | 'resolve' | 'save'
   >
+  openAiCompatibleProfiles?: OpenAiCompatibleProfileStore
 }
 
 const credentials = new PostgresProviderCredentialStore(getDb)
@@ -51,6 +56,7 @@ const dependencies: AiConfigDependencies = {
   credentials,
   modelRoutes: new PostgresModelRouteRepository(getDb, credentials),
   mediaRoutes: new PostgresMediaRouteRepository(getDb, credentials),
+  openAiCompatibleProfiles: new PostgresOpenAiCompatibleProfileStore(getDb),
 }
 
 const DEFAULTS: Record<StepfunModelField, string> = {

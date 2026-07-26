@@ -52,7 +52,7 @@ export interface VisionQaAnalysisInput {
 }
 
 interface VisionQaAnalysis {
-  provider: 'stepfun' | 'gemini'
+  provider: 'stepfun' | 'gemini' | 'openai-compatible'
   model: string
   report: z.infer<typeof modelReportSchema>
 }
