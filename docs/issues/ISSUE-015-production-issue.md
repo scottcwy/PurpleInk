@@ -1,7 +1,7 @@
 # ISSUE-015 · Docker 生产部署前置问题与分批修复清单
 
 - 优先级：**P0（阻断上线）**
-- 状态：`in-progress`（P-1/P-2/P-6/P-7 已完成，见 §9）
+- 状态：`in-progress`（P-1/P-2/P-3/P-6/P-7 已完成，见 §9）
 - 范围：`next.config.ts`、`.dockerignore`、`Dockerfile`、生产 compose、
   `src/lib/queue/**`、`src/features/render/{encode,concat}.ts`、
   `src/app/api/settings/route.ts`、`scripts/verify/`、`docs/deployment/`
@@ -15,11 +15,11 @@
 「文本 → 成片」链路本身已经端到端跑通（ISSUE-014 §9）。**部署面已落盘**
 （P-6/P-7，见 §9）：`Dockerfile`、`server/Dockerfile`、
 `docker-compose.prod.yml`、反代（`deploy/reverse-proxy/`）均已构建并实测通过；
-入站边界已由部署层收敛（P-2）。**剩余阻塞项为成片音轨（P-3）**。除此之外
-还有一类问题：
+入站边界已由部署层收敛（P-2）。**成片音轨与硬字幕阻塞项（P-3）已核销**。
+除此之外还有一类问题：
 
-1. **一个真正的上线阻塞项**——成片无音轨（P-3，`decision`，未启动）。零认证
-   已由 P-2 在部署层收敛为"受信网络 + Basic Auth"，应用内认证仍是独立议题
+1. **已核销的上线阻塞项**——P-3 已选择旁白混音方案，并同时交付硬字幕；
+   零认证已由 P-2 在部署层收敛为"受信网络 + Basic Auth"，应用内认证仍是独立议题
    （见 §2.1「当前处置」与 `PLAN-002-auth-system.md`）。
 2. **一批在开发机成立、在容器里不成立的运行时假设**——CPU 核数（P-4，`todo`）、
    Chromium 沙箱与 CJK 字体（P-6，`done`）、生产构建的日志剥离（P-1，`done`）、
@@ -38,7 +38,7 @@
 | `engines` 字段 | 已补 `"node": ">=22.11.0"`（commit `6e34a01`），容器实测 `node -v` = `v22.23.1` |
 | `packageManager` | `pnpm@10.30.0` |
 | 认证守卫 | **分层表述**：入站边界已由部署层保证（反代 IP 过滤 + Basic Auth over TLS，commit `f5a7ab3`）；应用内认证仍未落地，详见 §2.1「当前处置」与 `PLAN-002-auth-system.md` |
-| `final-mp4` 音轨 | 无（详见 §2.2，P-3 未启动） |
+| `final-mp4` 音轨 | `cvc.final-video/v2` 含 H.264 视频、AAC 旁白与烧录硬字幕；旧 `v1` 静音成片保持不可变（详见 §2.2） |
 | 队列位置 | 不变，仍在 Next 进程内（`src/instrumentation.ts` → `initQueue()`） |
 
 ## 2. 阻塞项
@@ -80,20 +80,20 @@
 因此**第一步不是写 Dockerfile**，而是先定接入策略。真正的应用内认证是独立议题，
 不要在部署批次里顺手做（会同时牵动 routing.md §9 的守卫矩阵与工作区模型）。
 
-### 2.2 成片目前没有音轨
+### 2.2 成片音轨与硬字幕（已修复）
 
-实测最新一条 `final-mp4` 的流信息只有 `0,h264,video`。
+修复前实测 `final-mp4` 的流信息只有 `0,h264,video`，原因不是偶发：
 
-代码层面是明确的、不是偶发：
-
-- `src/features/render/encode.ts:36` 单镜编码写死 `-an`；
-- `src/features/render/concat.ts:109` 只在存在 `score-audio`（配乐）时才
-  `-map 1:a:0`，否则 `-an`；
-- 旁白 `narration-audio:U00N` 从不参与混音，全库也没有任何 `score-audio` 产物。
+- 单镜编码只生产无声 `render-mp4`；
+- 旧导出只拼接视频，旁白 `narration-audio:U00N` 从不参与最终装配；
+- 字幕 Artifact 已存在，但没有进入视频烧录。
 
 ISSUE-005 的交接文档已把它登记为遗留观察（当时判断混音属 ASSEMBLE / 导出范围）。
-但迁生产改变了它的性质：**真实 TTS 花了钱、时长被实测、帧数按它分配，
-最终交付的却是静音视频**。上线前必须先定交付口径，见 §9 的 P-3。
+P-3 已通过“最终导出阶段统一媒体装配”修复：导出前按 lane/unit/hash 校验
+`render-mp4`、旁白和字幕 Artifact，按 `audioAllocation` 裁剪旁白并生成全局 ASS，
+再由一次 ffmpeg 输出 H.264 + AAC + 硬字幕的 `cvc.final-video/v2`。任一必需媒体
+缺失或不可信时 fail-closed；没有改写已实测的 `durationInFrames`。实测证据见
+`docs/issues/evidence/issue-015/p3/README.md`。
 
 ## 3. 架构与运行时约束
 
@@ -291,19 +291,18 @@ model routing 与 job 状态机——不要在 Dockerfile 里图省事共用一�
 
 ---
 
-### P-3 · 定成片音轨口径 —— `decision`
+### P-3 · 成片旁白与硬字幕闭环 —— `done`
 
-见 §2.2。两条路，先选再做：
+已选择方案 A，并把字幕作为同一确定性媒体装配阶段的硬字幕交付：
 
-- **方案 A：接旁白混音（推荐）**。落点 `encode.ts` / `concat.ts`，把
+- **已完成**：导出层把
   `narration-audio:U00N` 按 allocation 的 `startInUnitMs` / `endInUnitMs` 混入。
-  注意 ISSUE-005 的禁区仍然有效：**时长真值只能来自 `measureMp3()`**，
-  混音不得反过来改写 allocation 或帧数。
-- **方案 B：明确交付无声版**。则必须在导出页与产物下载处显式标注「无音轨」，
-  不能让用户以为拿到的是带旁白的成片（AGENTS.md §6：UI 可见字段必须可追溯）。
-- **验收（方案 A）**：`ffprobe` 显示 `final-mp4` 含 aac 音轨；音轨时长与视频时长
-  相差在一帧公差内；逐镜旁白与 `audioAllocation` 的 unit 对应关系可核对。
-- **禁区**：不得为了「让音轨对上」而调整已实测的 `durationInFrames`。
+  字幕用原稿文本和可信时间锚点生成 ASS 后烧录；旧 `v1` 静音成片不覆盖。
+- **验收**：完整历史项目 7/7 旁白与 7/7 字幕复用成功，两次导出 SHA-256 一致；
+  极小真实 E2E 的全部节点成功，`ffprobe` 显示 H.264 + AAC，音画时差小于一帧，
+  中点抽帧的中文硬字幕清晰。详见 `evidence/issue-015/p3/README.md`。
+- **提交**：`c2fc524`、`2f47aae`、`583d0e3`、`bbbe91e`。
+- **禁区保持**：没有为了让音轨对齐而调整已实测的 `durationInFrames`。
 
 ---
 
@@ -422,7 +421,7 @@ install chromium`（浏览器版本按 `node_modules` 实际安装版本对齐�
 - **验收**：
   - 全部节点 `succeeded`，不可变产物哈希逐条一致；
   - `ffprobe` 核对成片帧数 = 各镜帧数之和；分辨率 / fps 与 `renderSpec` 一致；
-  - 若 P-3 选了方案 A，成片含 aac 音轨；
+  - 成片沿用 P-3 的 v2 合同，必须含 AAC 旁白与可见的中文硬字幕；
   - 中文字形正确（抽一帧目视 + 视觉 QA 报告非恒真）；
   - 容器日志里能看到应用层 `console.error` 诊断（验证 P-1 在真实生产环境生效）。
 - **禁区**：不得把 mock、fixture 或开发机产物当作生产证据（沿用 ISSUE-014 §4 口径）。
