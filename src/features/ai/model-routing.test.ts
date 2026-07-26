@@ -117,17 +117,35 @@ describe('Director provider routing', () => {
       .resolves.toMatchObject({ provider: 'stepfun' })
   })
 
-  it('only persists text and vision routes; media remains fixed to StepFun', async () => {
+  it('persists AI and capability-compatible media routes', async () => {
     const { dependencies, media, models } = createDependencies()
-    await saveDirectorRoutes({ 'shot-codegen': 'stepfun' }, dependencies)
+    await saveDirectorRoutes({
+      'shot-codegen': 'stepfun',
+      'shot-sfx': 'mimo',
+      'shot-subtitle': 'mimo',
+    }, dependencies)
 
     expect(models.get('fabricate')).toMatchObject({
       provider: 'stepfun',
       model: 'step-3.5-flash',
     })
-    expect(media.get('tts')).toBeUndefined()
+    expect(media.get('tts')).toMatchObject({
+      provider: 'mimo',
+      model: 'mimo-v2.5-tts',
+    })
+    expect(media.get('asr')).toMatchObject({
+      provider: 'mimo',
+      model: 'mimo-v2.5-asr',
+    })
     await expect(getDirectorProvider('shot-codegen', dependencies))
       .resolves.toEqual({ provider: 'stepfun', source: 'settings' })
+  })
+
+  it('rejects providers that do not own the selected node capability', async () => {
+    const { dependencies } = createDependencies()
+    await expect(saveDirectorRoutes({
+      'shot-sfx': 'gemini',
+    }, dependencies)).rejects.toThrow('不支持 TTS')
   })
 
   it('resolves configured model and secret through the shared credential store', async () => {

@@ -8,6 +8,7 @@ import {
   resolveDirectorModelTarget,
   type DirectorModelTarget,
 } from '@/features/ai/model-routing'
+import { PROVIDER_REGISTRY } from '@/features/ai/provider-registry'
 import type { DirectorShot } from '@/features/director/schemas/director-shot-plan'
 import { captureThumbnails } from './thumbnail'
 import { QA_THUMBNAIL_FRACTIONS } from './qa-check'
@@ -52,7 +53,7 @@ export interface VisionQaAnalysisInput {
 }
 
 interface VisionQaAnalysis {
-  provider: 'stepfun' | 'gemini' | 'openai-compatible'
+  provider: 'stepfun' | 'gemini' | 'mimo' | 'openai-compatible'
   model: string
   report: z.infer<typeof modelReportSchema>
 }
@@ -196,8 +197,9 @@ export async function analyzeVision(
 ): Promise<VisionQaAnalysis> {
   const target = await dependencies.resolveTarget()
   if (!target.apiKey) {
-    const provider = target.provider === 'gemini' ? 'Gemini' : 'StepFun'
-    throw new Error(`${provider} API Key 未配置，无法执行 Vision QA`)
+    throw new Error(
+      `${PROVIDER_REGISTRY[target.provider].label} API Key 未配置，无法执行 Vision QA`
+    )
   }
   const content = await dependencies.complete(target, [
       {

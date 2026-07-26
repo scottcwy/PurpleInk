@@ -27,6 +27,7 @@ const STAGE_FALLBACK_NODE_TYPE: Record<PipelineStage, CanvasNodeType> = {
 const PROVIDER_LABEL = {
   gemini: 'Gemini',
   stepfun: 'StepFun',
+  mimo: '小米 MiMo',
   'openai-compatible': 'OpenAI 兼容模型服务',
 } as const
 
@@ -37,6 +38,7 @@ const PROVIDER_LABEL = {
 const REQUEST_SHAPE = {
   gemini: { contextWindow: 1_048_576, maxTokens: 65_536 },
   stepfun: { contextWindow: 131_072, maxTokens: 32_768 },
+  mimo: { contextWindow: 1_048_576, maxTokens: 131_072 },
   'openai-compatible': { contextWindow: 131_072, maxTokens: 32_768 },
 } as const
 
@@ -95,7 +97,9 @@ export async function createDirectorModelRuntime(input: {
             ? ['GEMINI_API_KEY']
             : target.provider === 'stepfun'
               ? ['STEP_API_KEY']
-              : ['OPENAI_COMPATIBLE_API_KEY'],
+              : target.provider === 'mimo'
+                ? ['MIMO_API_KEY']
+                : ['OPENAI_COMPATIBLE_API_KEY'],
         ),
       },
       api: target.provider === 'gemini'

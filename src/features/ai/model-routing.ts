@@ -10,10 +10,16 @@ import {
 } from './config'
 import { getGeminiConfig } from './gemini-config'
 import { CUSTOM_OPENAI_PROVIDER } from './openai-compatible-config'
+import {
+  AI_PROVIDER_IDS,
+  assertProviderCapability,
+  defaultModelFor,
+  type AiProviderId,
+  type ProviderCapability,
+} from './provider-registry'
 
-export const AI_PROVIDER_IDS = ['stepfun', 'gemini', CUSTOM_OPENAI_PROVIDER] as const
-export type AiProviderId = (typeof AI_PROVIDER_IDS)[number]
-export type ModelCapability = 'text' | 'vision'
+export { AI_PROVIDER_IDS, type AiProviderId }
+export type ModelCapability = Extract<ProviderCapability, 'text' | 'vision'>
 
 export const DIRECTOR_NODE_TYPES = [
   'script-import',
@@ -83,8 +89,9 @@ async function findRoute(
   deps: AiConfigDependencies,
 ): Promise<{ provider: string; model: string } | null> {
   const target = ROUTE_TARGET[nodeType]
-  if (target.domain === 'media') return null
-  return deps.modelRoutes.find(LOCAL_WORKSPACE_ID, target.kind)
+  return target.domain === 'media'
+    ? deps.mediaRoutes.find(LOCAL_WORKSPACE_ID, target.kind)
+    : deps.modelRoutes.find(LOCAL_WORKSPACE_ID, target.kind)
 }
 
 async function resolveRoute(
@@ -92,14 +99,20 @@ async function resolveRoute(
   deps: AiConfigDependencies,
 ): Promise<ResolvedRoute | null> {
   const target = ROUTE_TARGET[nodeType]
-  if (target.domain === 'media') return null
-  const route = await deps.modelRoutes.resolve(LOCAL_WORKSPACE_ID, target.kind)
+  const route = target.domain === 'media'
+    ? await deps.mediaRoutes.resolve(LOCAL_WORKSPACE_ID, target.kind)
+    : await deps.modelRoutes.resolve(LOCAL_WORKSPACE_ID, target.kind)
   if (!route) return null
   return {
     provider: providerSchema.parse(route.provider),
     model: route.model,
     secret: route.secret,
   }
+}
+
+function capabilityForTarget(target: RouteTarget): ProviderCapability {
+  if (target.domain === 'media') return target.kind
+  return target.kind === 'vision-qa' ? 'vision' : 'text'
 }
 
 export async function getDirectorProvider(
@@ -145,6 +158,14 @@ async function fallbackTarget(
       apiKey,
     }
   }
+  if (provider === 'mimo') {
+    return {
+      provider,
+      baseUrl: 'https://api.xiaomimimo.com/v1',
+      modelId: defaultModelFor(provider, capability),
+      apiKey: await deps.credentials.loadSecret(LOCAL_WORKSPACE_ID, provider),
+    }
+  }
   const config = await getGeminiConfig(deps)
   return {
     provider,
@@ -162,6 +183,9 @@ export async function resolveDirectorModelTarget(
   capability: ModelCapability = 'text',
   deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<DirectorModelTarget> {
+  if (ROUTE_TARGET[nodeType].domain !== 'ai') {
+    throw new Error(`${nodeType} 是媒体节点，不能解析为 Director 模型`)
+  }
   const configured = await resolveRoute(nodeType, deps)
   if (configured) {
     const fallback = await fallbackTarget(
@@ -185,8 +209,14 @@ export async function describeDirectorRoutes(
 ): Promise<Record<CanvasNodeType, DirectorRouteView>> {
   const entries = await Promise.all(DIRECTOR_NODE_TYPES.map(async (nodeType) => {
     const provider = await getDirectorProvider(nodeType, deps)
-    const target = await resolveDirectorModelTarget(nodeType, 'text', deps)
-    return [nodeType, { ...provider, model: target.modelId }] as const
+    const routeTarget = ROUTE_TARGET[nodeType]
+    const configured = await findRoute(nodeType, deps)
+    const model = configured?.model ?? await modelForProvider(
+      provider.provider,
+      routeTarget,
+      deps,
+    )
+    return [nodeType, { ...provider, model }] as const
   }))
   return Object.fromEntries(entries) as Record<CanvasNodeType, DirectorRouteView>
 }
@@ -204,6 +234,8 @@ async function modelForProvider(
   target: RouteTarget,
   deps: AiConfigDependencies,
 ): Promise<string> {
+  const capability = capabilityForTarget(target)
+  assertProviderCapability(provider, capability)
   if (provider === 'stepfun') {
     const config = await getStepfunConfig(deps)
     if (target.domain === 'media') {
@@ -212,14 +244,14 @@ async function modelForProvider(
     return target.kind === 'vision-qa' ? config.visionModel : config.chatModel
   }
   if (provider === CUSTOM_OPENAI_PROVIDER) {
-    if (target.domain !== 'ai') {
-      throw new Error('OpenAI 兼容模型服务不支持 TTS 或 ASR 路由')
-    }
     const profiles = deps.openAiCompatibleProfiles
     if (!profiles) throw new Error('OpenAI 兼容模型配置存储不可用')
     const profile = await profiles.find(LOCAL_WORKSPACE_ID)
     if (!profile) throw new Error('OpenAI 兼容模型服务尚未配置')
     return profile.defaultModel
+  }
+  if (provider === 'mimo') {
+    return defaultModelFor(provider, capability)
   }
   const config = await getGeminiConfig(deps)
   return target.domain === 'ai' && target.kind !== 'project-plan'
@@ -233,25 +265,35 @@ export async function saveDirectorRoutes(
 ): Promise<void> {
   const selected = new Map<
     string,
-    { target: Extract<RouteTarget, { domain: 'ai' }>; provider: AiProviderId }
+    { target: RouteTarget; provider: AiProviderId }
   >()
   for (const nodeType of DIRECTOR_NODE_TYPES) {
     const provider = input[nodeType]
     if (provider === undefined) continue
     const target = ROUTE_TARGET[nodeType]
-    if (target.domain === 'media') continue
+    const parsedProvider = providerSchema.parse(provider)
+    assertProviderCapability(parsedProvider, capabilityForTarget(target))
     selected.set(targetKey(target), {
       target,
-      provider: providerSchema.parse(provider),
+      provider: parsedProvider,
     })
   }
   await Promise.all([...selected.values()].map(async ({ target, provider }) => {
     const model = await modelForProvider(provider, target, deps)
-    await deps.modelRoutes.save({
-      workspaceId: LOCAL_WORKSPACE_ID,
-      aiTaskKind: target.kind,
-      provider,
-      model,
-    })
+    if (target.domain === 'media') {
+      await deps.mediaRoutes.save({
+        workspaceId: LOCAL_WORKSPACE_ID,
+        mediaTaskKind: target.kind,
+        provider,
+        model,
+      })
+    } else {
+      await deps.modelRoutes.save({
+        workspaceId: LOCAL_WORKSPACE_ID,
+        aiTaskKind: target.kind,
+        provider,
+        model,
+      })
+    }
   }))
 }

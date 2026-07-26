@@ -1,6 +1,8 @@
 import { z } from 'zod'
+import { AI_PROVIDER_IDS } from './provider-registry'
 
-const textProviderSchema = z.enum(['stepfun', 'gemini', 'openai-compatible'])
+const textProviderSchema = z.enum(AI_PROVIDER_IDS)
+const mediaProviderSchema = z.enum(['stepfun', 'mimo'])
 
 /**
  * ISSUE-011 队列并发配额输入：
@@ -64,8 +66,8 @@ export const stepfunSettingsSchema = z.object({
       export: textProviderSchema.optional(),
       'shot-script': textProviderSchema.optional(),
       'shot-codegen': textProviderSchema.optional(),
-      'shot-sfx': z.literal('stepfun').optional(),
-      'shot-subtitle': z.literal('stepfun').optional(),
+      'shot-sfx': mediaProviderSchema.optional(),
+      'shot-subtitle': mediaProviderSchema.optional(),
       'shot-qa': textProviderSchema.optional(),
     })
     .strict()
