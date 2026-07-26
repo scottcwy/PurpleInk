@@ -90,6 +90,7 @@ export interface TranscribedSpeech {
 }
 
 const DEFAULT_VOICE_ID = 'cixingnansheng'
+const PROVIDER_TIMEOUT_MS = 45_000
 
 export async function synthesizeSpeech(
   input: z.input<typeof speechInputSchema>,
@@ -97,7 +98,8 @@ export async function synthesizeSpeech(
 ): Promise<SynthesizedSpeech> {
   const parsed = speechInputSchema.parse(input)
   const config = requireKey(await dependencies.getConfig())
-  const response = await dependencies.fetcher(
+  const response = await request(
+    dependencies.fetcher,
     endpoint(config.baseUrl, 'audio/speech'),
     {
       method: 'POST',
@@ -113,7 +115,8 @@ export async function synthesizeSpeech(
         return_url: true,
         timestamp: true,
       }),
-    }
+    },
+    'StepFun TTS',
   )
   if (!response.ok) {
     throw new Error(`StepFun TTS 请求失败（HTTP ${response.status}）`)
@@ -129,7 +132,12 @@ export async function synthesizeSpeech(
   if (nativeCaptions.length === 0) {
     throw new Error('StepFun TTS 未返回可用的词级时间戳')
   }
-  const audioResponse = await dependencies.fetcher(body.data.url)
+  const audioResponse = await request(
+    dependencies.fetcher,
+    body.data.url,
+    undefined,
+    'StepFun TTS 音频下载',
+  )
   if (!audioResponse.ok) {
     throw new Error(`StepFun TTS 音频下载失败（HTTP ${audioResponse.status}）`)
   }
@@ -148,7 +156,8 @@ export async function transcribeSpeech(
 ): Promise<TranscribedSpeech> {
   const parsed = transcriptionInputSchema.parse(input)
   const config = requireKey(await dependencies.getConfig())
-  const response = await dependencies.fetcher(
+  const response = await request(
+    dependencies.fetcher,
     endpoint(config.baseUrl, 'audio/asr/sse'),
     {
       method: 'POST',
@@ -171,7 +180,8 @@ export async function transcribeSpeech(
           },
         },
       }),
-    }
+    },
+    'StepFun ASR',
   )
   if (!response.ok) {
     throw new Error(`StepFun ASR 请求失败（HTTP ${response.status}）`)
@@ -230,6 +240,25 @@ function requireKey(config: StepfunConfig): StepfunConfig & { apiKey: string } {
 
 function endpoint(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/+$/, '')}/${path}`
+}
+
+async function request(
+  fetcher: typeof fetch,
+  url: string,
+  init: RequestInit | undefined,
+  operation: string,
+): Promise<Response> {
+  try {
+    return await fetcher(url, {
+      ...init,
+      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+    })
+  } catch (error) {
+    if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
+      throw new Error(`${operation} 请求超时（${PROVIDER_TIMEOUT_MS / 1000} 秒）`)
+    }
+    throw error
+  }
 }
 
 function defaultDependencies(): StepfunAudioDependencies {

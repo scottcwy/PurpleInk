@@ -69,6 +69,7 @@ describe('synthesizeSpeech', () => {
         'content-type': 'application/json',
       }),
     })
+    expect(request?.[1]?.signal).toBeInstanceOf(AbortSignal)
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({
       model: 'stepaudio-2.5-tts',
       voice: 'cixingnansheng',
@@ -77,7 +78,11 @@ describe('synthesizeSpeech', () => {
       return_url: true,
       timestamp: true,
     })
-    expect(fetcher).toHaveBeenNthCalledWith(2, 'https://audio.stepfun.test/voice.mp3')
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      'https://audio.stepfun.test/voice.mp3',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
     expect(result).toEqual({
       audioBytes: Buffer.from([1, 2, 3]),
       audioFormat: 'mp3',
@@ -118,6 +123,15 @@ describe('synthesizeSpeech', () => {
     await expect(
       synthesizeSpeech({ text: '你好' }, dependencies(fetcher))
     ).rejects.toThrow('词级时间戳')
+  })
+
+  it('turns an upstream TTS timeout into an actionable failure', async () => {
+    const timeout = Object.assign(new Error('aborted'), { name: 'TimeoutError' })
+    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(timeout)
+
+    await expect(
+      synthesizeSpeech({ text: '你好' }, dependencies(fetcher))
+    ).rejects.toThrow('TTS 请求超时')
   })
 })
 
