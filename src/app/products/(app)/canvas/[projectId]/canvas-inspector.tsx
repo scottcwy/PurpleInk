@@ -44,6 +44,7 @@ export function CanvasInspector({
   const [queuedJob, setQueuedJob] = useState<{
     nodeId: string
     jobId: string
+    message: string
   }>()
   const [submitting, setSubmitting] = useState(false)
   const autoCollapse = useMediaQuery(`(max-width: ${BP_SECONDARY_PANEL_COLLAPSE - 1}px)`)
@@ -78,9 +79,13 @@ export function CanvasInspector({
     setError(undefined)
     setQueuedJob(undefined)
     try {
-      const jobId = await triggerNodeAction(projectId, node)
-      setQueuedJob({ nodeId: node.id, jobId })
-      onQueued(jobId)
+      const result = await triggerNodeAction(projectId, node)
+      setQueuedJob({
+        nodeId: node.id,
+        jobId: result.jobId,
+        message: result.message,
+      })
+      onQueued(result.jobId)
     } catch (cause) {
       setError({
         nodeId: node.id,
@@ -91,13 +96,8 @@ export function CanvasInspector({
     }
   }
 
-  const queuedJobId =
-    node &&
-    queuedJob?.nodeId === node.id &&
-    node.status !== 'success' &&
-    node.status !== 'failed'
-      ? queuedJob.jobId
-      : undefined
+  const queuedFeedback =
+    node && queuedJob?.nodeId === node.id ? queuedJob : undefined
 
   const body = node ? (
     <InspectorBody
@@ -105,7 +105,7 @@ export function CanvasInspector({
       projectId={projectId}
       submitting={submitting}
       error={error?.nodeId === node.id ? error.message : undefined}
-      queuedJobId={queuedJobId}
+      queuedFeedback={queuedFeedback}
       onExecute={execute}
       onCollapse={() => {
         setManualCollapsed(true)
@@ -206,7 +206,7 @@ function InspectorBody({
   projectId,
   submitting,
   error,
-  queuedJobId,
+  queuedFeedback,
   onExecute,
   onCollapse,
   showCollapse,
@@ -215,7 +215,7 @@ function InspectorBody({
   projectId: string
   submitting: boolean
   error?: string
-  queuedJobId?: string
+  queuedFeedback?: { jobId: string; message: string }
   onExecute: () => void
   onCollapse: () => void
   showCollapse: boolean
@@ -283,26 +283,40 @@ function InspectorBody({
         variant={node.type === 'shot-codegen' ? 'destructive' : 'tinted'}
         icon={RefreshCw}
         onClick={onExecute}
-        disabled={submitting}
+        disabled={
+          submitting || node.status === 'pending' || node.status === 'running'
+        }
       >
-        {node.type === 'shot-codegen' ? '重渲此镜' : '执行此阶段'}
+        {nodeActionLabel(node)}
       </Button>
       {node.type === 'shot-codegen' && (
         <Link href={productShotHref(node.id, projectId)}>
           <Button variant="gray">查看代码</Button>
         </Link>
       )}
-      {queuedJobId && (
+      {queuedFeedback && (
         <Toast
           variant="info"
           title="已入队"
-          body={`作业 ${queuedJobId} 已提交，最终状态以服务端为准。`}
+          body={`${queuedFeedback.message}（作业 ${queuedFeedback.jobId}）`}
           className="w-full"
         />
       )}
       {error && <Toast variant="error" title="失败" body={error} className="w-full" />}
     </div>
   )
+}
+
+function nodeActionLabel(node: CanvasGraphNode): string {
+  if (node.status === 'pending') return '等待执行'
+  if (node.status === 'running') return '正在执行'
+  if (node.status === 'failed' || node.status === 'stale') return '修复并继续'
+  if (node.status === 'success') {
+    return node.type === 'shot-codegen'
+      ? '重新渲染并更新下游'
+      : '重新生成并更新下游'
+  }
+  return '执行此阶段'
 }
 
 /** 已知产物 kind 的展示层友好文件名；真实 key 内含内容哈希，直接展示会破坏布局。 */

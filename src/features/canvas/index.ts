@@ -49,6 +49,11 @@ export {
 export { materializeShotLanes } from './fan-out'
 export type { ShotLaneSeed } from './contracts'
 export {
+  classifyWorkflowError,
+  type WorkflowErrorCode,
+  type WorkflowErrorProjection,
+} from './workflow-error'
+export {
   captureNodeInputFingerprint,
   invalidateNodeForRegeneration,
   isStale,

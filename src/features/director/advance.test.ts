@@ -253,8 +253,11 @@ describe('startProjectPipeline', () => {
       })
       expect(result).toEqual({
         autopilot: true,
+        status: 'started',
         enqueuedNodeIds: ['ingest'],
+        repairRootNodeIds: [],
         failedNodeIds: [],
+        blockedNodes: [],
       })
     }
   )
@@ -297,8 +300,11 @@ describe('startProjectPipeline', () => {
     ])
     expect(result).toEqual({
       autopilot: true,
+      status: 'started',
       enqueuedNodeIds: ['shot-2', 'shot-3'],
+      repairRootNodeIds: [],
       failedNodeIds: ['bad'],
+      blockedNodes: [],
     })
   })
 
@@ -326,5 +332,38 @@ describe('startProjectPipeline', () => {
 
     expect(test.enqueueDirectorStage).not.toHaveBeenCalled()
     expect(result.enqueuedNodeIds).toEqual([])
+    expect(result.status).toBe('blocked')
+    expect(result.blockedNodes).toEqual([
+      {
+        nodeId: 'ingest',
+        code: 'QUEUE_FAILED',
+        message: '项目尚未完成，但当前没有可入队节点',
+      },
+    ])
+  })
+
+  it('reports complete instead of a false start when every node succeeded', async () => {
+    const test = harness([])
+    const repository = {
+      ...test.repository,
+      setAutopilot: vi.fn(async () => true),
+      getEntryNode: vi.fn(async () =>
+        candidate({
+          id: 'ingest',
+          type: 'script-import',
+          stage: 'INGEST',
+          status: 'success',
+        })
+      ),
+      listSuccessfulNodeIds: vi.fn(async () => ['ingest']),
+      isProjectComplete: vi.fn(async () => true),
+    }
+    const result = await startProjectPipeline('project-1', {
+      repository,
+      enqueueDirectorStage: test.enqueueDirectorStage,
+      advance: vi.fn(async () => ({ enqueuedNodeIds: [], failedNodeIds: [] })),
+    })
+    expect(result.status).toBe('complete')
+    expect(result.blockedNodes).toEqual([])
   })
 })

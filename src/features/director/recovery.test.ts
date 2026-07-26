@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CanvasGraph, CanvasGraphNode } from '@/features/canvas'
-import { executeNodeAction, type NodeRecoveryDependencies } from './recovery'
+import {
+  executeNodeAction,
+  repairProjectFrontier,
+  type NodeRecoveryDependencies,
+} from './recovery'
 
 vi.mock('server-only', () => ({}))
 
@@ -90,6 +94,25 @@ describe('executeNodeAction', () => {
       )
     ).rejects.toThrow('项目设置')
     expect(test.enqueueRenderShot).not.toHaveBeenCalled()
+  })
+})
+
+describe('repairProjectFrontier', () => {
+  it('repairs a historical invalid shot producer before normal project advancement', async () => {
+    const test = harness(false)
+
+    const result = await repairProjectFrontier('project-1', test.dependencies)
+
+    expect(result).toMatchObject({
+      enqueuedNodeIds: ['script-s002'],
+      repairRootNodeIds: ['script-s002'],
+      handledSuccessfulNodeIds: ['script-s002'],
+      blockedNodes: [],
+    })
+    expect(test.invalidate).toHaveBeenCalledWith(
+      'script-s002',
+      'repair-upstream'
+    )
   })
 })
 

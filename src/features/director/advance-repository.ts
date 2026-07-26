@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, ne } from 'drizzle-orm'
 import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
 import { canvasEdges, canvasNodes, projects } from '@/lib/db/schema/index'
 import { storage } from '@/lib/storage'
@@ -140,6 +140,21 @@ export class AdvanceRepositoryImpl
       upstreams.length === sourceIds.length &&
       upstreams.every(({ status }) => status === 'succeeded')
     )
+  }
+
+  async isProjectComplete(projectId: string): Promise<boolean> {
+    const [unfinished] = await this.db
+      .select({ id: canvasNodes.id })
+      .from(canvasNodes)
+      .where(
+        and(
+          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.projectId, projectId),
+          ne(canvasNodes.status, 'succeeded')
+        )
+      )
+      .limit(1)
+    return !unfinished
   }
 
   isNodeStale(nodeId: string): Promise<boolean> {

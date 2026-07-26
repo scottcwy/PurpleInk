@@ -1,13 +1,17 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getCanvasGraph } from '@/features/canvas'
+import { classifyWorkflowError } from '@/features/canvas'
+import { executeNodeAction } from '@/features/director'
 import { initQueue } from '@/lib/queue/init'
-import { enqueueRenderShot } from '@/features/render/queue-handler'
 
 export const dynamic = 'force-dynamic'
 
 const requestSchema = z
-  .object({ projectId: z.string().min(1), nodeId: z.string().min(1) })
+  .object({
+    projectId: z.string().min(1),
+    nodeId: z.string().min(1),
+    intent: z.enum(['execute', 'repair', 'rerender']),
+  })
   .strict()
 
 export async function POST(request: Request) {
@@ -16,27 +20,13 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: '请求体无效' }, { status: 400 })
   }
-  const { projectId, nodeId } = parsed.data
-  const graph = await getCanvasGraph(projectId)
-  if (!graph.nodes.some((node) => node.id === nodeId)) {
-    return NextResponse.json(
-      { ok: false, error: '节点不存在或不属于该项目' },
-      { status: 404 }
-    )
-  }
   try {
-    return NextResponse.json({
-      ok: true,
-      jobId: await enqueueRenderShot({ projectId, nodeId }),
-    })
+    return NextResponse.json(await executeNodeAction(parsed.data))
   } catch (error) {
+    const projected = classifyWorkflowError(error, { stage: 'QUEUE' })
     return NextResponse.json(
-      { ok: false, error: messageOf(error) },
+      { ok: false, error: projected.message, code: projected.code },
       { status: 409 }
     )
   }
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : '渲染作业入队失败'
 }

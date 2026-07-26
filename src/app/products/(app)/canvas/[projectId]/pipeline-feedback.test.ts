@@ -3,6 +3,27 @@ import { describe, expect, it } from 'vitest'
 import { describePipelineResult } from './pipeline-feedback'
 
 describe('describePipelineResult', () => {
+  it('零入队且未完成时明确显示工作流被阻塞', () => {
+    expect(
+      describePipelineResult({
+        autopilot: true,
+        status: 'blocked',
+        enqueuedNodeIds: [],
+        blockedNodes: [
+          {
+            nodeId: 'n1',
+            code: 'CONFIGURATION_BLOCKED',
+            message: '请先完成模型配置',
+          },
+        ],
+      })
+    ).toEqual({
+      variant: 'error',
+      title: '工作流被阻塞',
+      body: '请先完成模型配置',
+    })
+  })
+
   it('保留部分入队失败的真实结果', () => {
     expect(
       describePipelineResult({
@@ -58,7 +79,7 @@ describe('Canvas pipeline feedback wiring', () => {
   })
 
   it('将 jobId 明确传给本地已入队反馈且不显示固定百分比', () => {
-    expect(inspectorSource).toContain('onQueued(jobId)')
+    expect(inspectorSource).toContain('onQueued(result.jobId)')
     expect(inspectorSource).toContain('title="已入队"')
     expect(inspectorSource).toContain('variant="info"')
     expect(inspectorSource).not.toContain(fixedProgressValue)

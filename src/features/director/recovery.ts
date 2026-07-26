@@ -37,6 +37,72 @@ export interface NodeRecoveryDependencies {
   enqueueRenderShot(input: RenderShotInput): Promise<string>
 }
 
+export interface ProjectRepairResult {
+  enqueuedNodeIds: string[]
+  repairRootNodeIds: string[]
+  handledSuccessfulNodeIds: string[]
+  blockedNodes: Array<{ nodeId: string; code: string; message: string }>
+}
+
+export async function repairProjectFrontier(
+  projectId: string,
+  dependencies?: NodeRecoveryDependencies
+): Promise<ProjectRepairResult> {
+  const resolved = dependencies ?? await createDependencies()
+  const graph = await resolved.getGraph(projectId)
+  const result: ProjectRepairResult = {
+    enqueuedNodeIds: [],
+    repairRootNodeIds: [],
+    handledSuccessfulNodeIds: [],
+    blockedNodes: [],
+  }
+  await resolved.setAutopilot(projectId, true)
+  for (const node of graph.nodes) {
+    if (
+      node.type !== 'shot-codegen' ||
+      (node.status !== 'failed' && node.status !== 'stale')
+    ) {
+      continue
+    }
+    const error = node.directorError ?? node.renderError
+    if (error?.retryable === false) {
+      result.blockedNodes.push({
+        nodeId: node.id,
+        code: error.code ?? 'CONFIGURATION_BLOCKED',
+        message: error.message,
+      })
+      continue
+    }
+    const producer = await findInvalidShotSpecProducer(
+      resolved,
+      graph,
+      projectId,
+      node
+    )
+    if (!producer || result.repairRootNodeIds.includes(producer.id)) continue
+    try {
+      if (producer.status === 'success') {
+        await resolved.invalidate(producer.id, 'repair-upstream')
+      }
+      await resolved.enqueueDirectorStage({
+        projectId,
+        nodeId: producer.id,
+        stage: 'SHOT_SPEC',
+      })
+      result.enqueuedNodeIds.push(producer.id)
+      result.repairRootNodeIds.push(producer.id)
+      result.handledSuccessfulNodeIds.push(producer.id)
+    } catch {
+      result.blockedNodes.push({
+        nodeId: producer.id,
+        code: 'QUEUE_FAILED',
+        message: '上游镜头合同修复入队失败',
+      })
+    }
+  }
+  return result
+}
+
 export async function executeNodeAction(
   input: {
     projectId: string

@@ -155,11 +155,11 @@
 | `/api/projects/[id]` | PATCH | `id` path | `@/features/canvas` `updateExportSettings` | `wired` |
 | `/api/artifacts/[id]` | GET | `id` path + `projectId` query（必填） | `@/features/artifacts` | `wired` |
 | `/api/jobs/[id]` | GET | `id` path + `projectId` query | `@/lib/queue`、`@/features/artifacts` | `wired` |
-| `/api/render` | POST | body `{projectId,nodeId}` | `@/features/render/queue-handler` | `wired` |
+| `/api/render` | POST | body `{projectId,nodeId,intent}`；`intent=execute|repair|rerender` | `@/features/director/recovery` | `wired` |
 | `/api/render/export` | GET, POST | `projectId` | `@/features/render/export-service` | `wired` |
 | `/api/render/thumbnails` | GET | `projectId`、`nodeId` | `@/features/render` | `wired` |
-| `/api/director/pipeline` | POST, DELETE | body `{projectId}` | `@/features/director/advance` | `wired` |
-| `/api/director/stage` | POST | body `{projectId,nodeId,stage}` | `@/features/director/queue-handler` | `wired` |
+| `/api/director/pipeline` | POST, DELETE | body `{projectId}`；POST 返回 `started|blocked|complete` 与修复根/阻塞明细 | `@/features/director/advance` | `wired` |
+| `/api/director/stage` | POST | body `{projectId,nodeId,intent}`；`intent=execute|repair|regenerate`，阶段由服务端节点投影决定 | `@/features/director/recovery` | `wired` |
 | `/api/director/stream/[nodeId]` | GET (SSE) | `nodeId` path + `projectId` query | `@/lib/stream/stream-bus` | `wired` |
 | `/api/director/stream/project/[projectId]` | GET (SSE) | `projectId` path | `@/lib/stream/status-bus` | `wired` |
 | `/api/share/[shareId]` | GET | `shareId` path | `@/features/share`（待建） | `planned` |

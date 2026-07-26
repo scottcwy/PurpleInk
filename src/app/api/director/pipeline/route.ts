@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { classifyWorkflowError } from '@/features/canvas'
 import {
   startProjectPipeline,
   stopProjectPipeline,
@@ -18,10 +19,12 @@ export async function POST(request: Request) {
     const result = await startProjectPipeline(parsed.projectId)
     return NextResponse.json({ ok: true, ...result })
   } catch (error) {
+    const projected = classifyWorkflowError(error, { stage: 'QUEUE' })
     return NextResponse.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : '工作流启动失败',
+        error: projected.message,
+        code: projected.code,
       },
       { status: 409 }
     )

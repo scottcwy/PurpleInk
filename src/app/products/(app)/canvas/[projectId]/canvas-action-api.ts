@@ -13,18 +13,17 @@ export async function triggerNodeAction(
   projectId: string,
   node: CanvasGraphNode,
   fetcher: typeof fetch = fetch
-): Promise<string> {
+): Promise<NodeActionResult> {
+  if (node.status === 'pending' || node.status === 'running') {
+    throw new Error('当前节点已在排队或执行中')
+  }
   const render = node.type === 'shot-codegen'
   if (!render && (!node.stage || !DIRECTOR_STAGES.has(node.stage))) {
     throw new Error('当前节点没有可执行阶段')
   }
   const response = await fetcher(
     render ? '/api/render' : '/api/director/stage',
-    jsonRequest(
-      render
-        ? { projectId, nodeId: node.id }
-        : { projectId, nodeId: node.id, stage: node.stage }
-    )
+    jsonRequest({ projectId, nodeId: node.id, intent: resolveIntent(node) })
   )
   const body: unknown = await response.json()
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -34,14 +33,41 @@ export async function triggerNodeAction(
   if (!response.ok) {
     throw new Error(typeof result.error === 'string' ? result.error : '作业入队失败')
   }
-  if (typeof result.jobId !== 'string') throw new Error('作业响应缺少 jobId')
-  return result.jobId
+  if (
+    typeof result.jobId !== 'string' ||
+    typeof result.requestedNodeId !== 'string' ||
+    typeof result.queuedNodeId !== 'string' ||
+    typeof result.message !== 'string' ||
+    !isNodeAction(result.action)
+  ) {
+    throw new Error('作业响应缺少恢复结果')
+  }
+  return {
+    ok: true,
+    action: result.action,
+    requestedNodeId: result.requestedNodeId,
+    queuedNodeId: result.queuedNodeId,
+    jobId: result.jobId,
+    message: result.message,
+  }
+}
+
+export interface NodeActionResult {
+  ok: true
+  action: 'execute' | 'repair-upstream' | 'regenerate' | 'rerender'
+  requestedNodeId: string
+  queuedNodeId: string
+  jobId: string
+  message: string
 }
 
 export interface PipelineControlResult {
   autopilot: boolean
+  status?: 'started' | 'blocked' | 'complete'
   enqueuedNodeIds?: string[]
+  repairRootNodeIds?: string[]
   failedNodeIds?: string[]
+  blockedNodes?: Array<{ nodeId: string; code: string; message: string }>
 }
 
 export async function startPipeline(
@@ -88,7 +114,50 @@ async function controlPipeline(
     ...(Array.isArray(result.failedNodeIds)
       ? { failedNodeIds: result.failedNodeIds.filter(isString) }
       : {}),
+    ...(isPipelineStatus(result.status) ? { status: result.status } : {}),
+    ...(Array.isArray(result.repairRootNodeIds)
+      ? { repairRootNodeIds: result.repairRootNodeIds.filter(isString) }
+      : {}),
+    ...(Array.isArray(result.blockedNodes)
+      ? {
+          blockedNodes: result.blockedNodes
+            .filter(isRecord)
+            .flatMap((item) =>
+              typeof item.nodeId === 'string' &&
+              typeof item.code === 'string' &&
+              typeof item.message === 'string'
+                ? [{ nodeId: item.nodeId, code: item.code, message: item.message }]
+                : []
+            ),
+        }
+      : {}),
   }
+}
+
+function resolveIntent(
+  node: CanvasGraphNode
+): 'execute' | 'repair' | 'regenerate' | 'rerender' {
+  if (node.status === 'failed' || node.status === 'stale') return 'repair'
+  if (node.status === 'success') {
+    return node.type === 'shot-codegen' ? 'rerender' : 'regenerate'
+  }
+  return 'execute'
+}
+
+function isNodeAction(value: unknown): value is NodeActionResult['action'] {
+  return ['execute', 'repair-upstream', 'regenerate', 'rerender'].includes(
+    String(value)
+  )
+}
+
+function isPipelineStatus(
+  value: unknown
+): value is NonNullable<PipelineControlResult['status']> {
+  return ['started', 'blocked', 'complete'].includes(String(value))
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 function isString(value: unknown): value is string {

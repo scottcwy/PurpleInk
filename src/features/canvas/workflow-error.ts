@@ -64,6 +64,13 @@ function classify(
       retryable: true,
     }
   }
+  if (stage === 'QUEUE') {
+    return {
+      code: 'QUEUE_FAILED',
+      message: '作业暂时无法进入执行队列，请稍后重试。',
+      retryable: true,
+    }
+  }
   if (/provider|模型|网络|timeout|超时|ASR|TTS/i.test(message)) {
     return {
       code: 'PROVIDER_FAILED',

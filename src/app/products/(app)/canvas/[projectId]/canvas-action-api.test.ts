@@ -9,7 +9,7 @@ import {
 describe('triggerNodeAction', () => {
   it('uses the persisted stage for Director nodes', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-      response({ ok: true, jobId: 'job-1' })
+      response(actionResult('job-1', 'execute'))
     )
     await expect(
       triggerNodeAction(
@@ -17,32 +17,82 @@ describe('triggerNodeAction', () => {
         node({ type: 'script-import', stage: 'INGEST' }),
         fetcher
       )
-    ).resolves.toBe('job-1')
+    ).resolves.toMatchObject({ jobId: 'job-1', action: 'execute' })
 
     expect(fetcher).toHaveBeenCalledWith(
       '/api/director/stage',
       expect.objectContaining({
-        body: JSON.stringify({ projectId: 'project-1', nodeId: 'node-1', stage: 'INGEST' }),
+        body: JSON.stringify({
+          projectId: 'project-1',
+          nodeId: 'node-1',
+          intent: 'execute',
+        }),
       })
     )
   })
 
   it('routes shot-codegen through the render API', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-      response({ ok: true, jobId: 'render-1' })
+      response(actionResult('render-1', 'rerender'))
     )
     await expect(
       triggerNodeAction(
         'project-1',
-        node({ type: 'shot-codegen', stage: 'FABRICATE' }),
+        node({ type: 'shot-codegen', stage: 'FABRICATE', status: 'success' }),
         fetcher
       )
-    ).resolves.toBe('render-1')
+    ).resolves.toMatchObject({ jobId: 'render-1', action: 'rerender' })
 
     expect(fetcher).toHaveBeenCalledWith(
       '/api/render',
       expect.objectContaining({
-        body: JSON.stringify({ projectId: 'project-1', nodeId: 'node-1' }),
+        body: JSON.stringify({
+          projectId: 'project-1',
+          nodeId: 'node-1',
+          intent: 'rerender',
+        }),
+      })
+    )
+  })
+
+  it('requests bounded repair for failed nodes', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      response(actionResult('repair-1', 'repair-upstream', 'script-s002'))
+    )
+    await triggerNodeAction(
+      'project-1',
+      node({ type: 'shot-codegen', stage: 'FABRICATE', status: 'failed' }),
+      fetcher
+    )
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/render',
+      expect.objectContaining({
+        body: JSON.stringify({
+          projectId: 'project-1',
+          nodeId: 'node-1',
+          intent: 'repair',
+        }),
+      })
+    )
+  })
+
+  it('requests regeneration for a successful Director node', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      response(actionResult('regenerate-1', 'regenerate'))
+    )
+    await triggerNodeAction(
+      'project-1',
+      node({ type: 'shot-script', stage: 'SHOT_SPEC', status: 'success' }),
+      fetcher
+    )
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/director/stage',
+      expect.objectContaining({
+        body: JSON.stringify({
+          projectId: 'project-1',
+          nodeId: 'node-1',
+          intent: 'regenerate',
+        }),
       })
     )
   })
@@ -54,15 +104,21 @@ describe('pipeline controls', () => {
       response({
         ok: true,
         autopilot: true,
+        status: 'started',
         enqueuedNodeIds: ['node-1'],
+        repairRootNodeIds: ['node-1'],
         failedNodeIds: ['node-2'],
+        blockedNodes: [],
       })
     )
 
     await expect(startPipeline('project-1', fetcher)).resolves.toEqual({
       autopilot: true,
+      status: 'started',
       enqueuedNodeIds: ['node-1'],
+      repairRootNodeIds: ['node-1'],
       failedNodeIds: ['node-2'],
+      blockedNodes: [],
     })
     expect(fetcher).toHaveBeenCalledWith(
       '/api/director/pipeline',
@@ -111,4 +167,19 @@ function response(body: unknown): Response {
     status: 200,
     headers: { 'content-type': 'application/json' },
   })
+}
+
+function actionResult(
+  jobId: string,
+  action: 'execute' | 'repair-upstream' | 'regenerate' | 'rerender',
+  queuedNodeId = 'node-1'
+) {
+  return {
+    ok: true,
+    action,
+    requestedNodeId: 'node-1',
+    queuedNodeId,
+    jobId,
+    message: '已排队',
+  }
 }

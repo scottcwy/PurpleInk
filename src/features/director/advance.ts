@@ -32,6 +32,7 @@ export interface PipelineRepository extends AdvanceRepository {
   setAutopilot(projectId: string, enabled: boolean): Promise<boolean>
   getEntryNode(projectId: string): Promise<AdvanceCandidate>
   listSuccessfulNodeIds(projectId: string): Promise<string[]>
+  isProjectComplete?(projectId: string): Promise<boolean>
 }
 
 type EnqueueDirectorStage = (input: {
@@ -59,6 +60,9 @@ export interface AdvanceResult {
 
 export interface PipelineStartResult extends AdvanceResult {
   autopilot: true
+  status: 'started' | 'blocked' | 'complete'
+  repairRootNodeIds: string[]
+  blockedNodes: Array<{ nodeId: string; code: string; message: string }>
 }
 
 interface PipelineControlDependencies {
@@ -68,6 +72,12 @@ interface PipelineControlDependencies {
     projectId: string,
     completedNodeId: string
   ) => Promise<AdvanceResult>
+  repairFrontier?: (projectId: string) => Promise<{
+    enqueuedNodeIds: string[]
+    repairRootNodeIds: string[]
+    handledSuccessfulNodeIds: string[]
+    blockedNodes: Array<{ nodeId: string; code: string; message: string }>
+  }>
 }
 
 /**
@@ -144,11 +154,24 @@ export async function startProjectPipeline(
   const entry = await resolved.repository.getEntryNode(projectId)
   const enqueued = new Set<string>()
   const failed = new Set<string>()
+  const repairRoots = new Set<string>()
+  const blockedNodes: PipelineStartResult['blockedNodes'] = []
+  const handledSuccessfulNodes = new Set<string>()
 
   if (entry.status === 'success') {
+    if (resolved.repairFrontier) {
+      const repair = await resolved.repairFrontier(projectId)
+      repair.enqueuedNodeIds.forEach((nodeId) => enqueued.add(nodeId))
+      repair.repairRootNodeIds.forEach((nodeId) => repairRoots.add(nodeId))
+      repair.handledSuccessfulNodeIds.forEach((nodeId) =>
+        handledSuccessfulNodes.add(nodeId)
+      )
+      blockedNodes.push(...repair.blockedNodes)
+    }
     for (const completedNodeId of await resolved.repository.listSuccessfulNodeIds(
       projectId
     )) {
+      if (handledSuccessfulNodes.has(completedNodeId)) continue
       const result = await resolved.advance(projectId, completedNodeId)
       result.enqueuedNodeIds.forEach((nodeId) => enqueued.add(nodeId))
       result.failedNodeIds.forEach((nodeId) => failed.add(nodeId))
@@ -165,10 +188,25 @@ export async function startProjectPipeline(
     enqueued.add(entry.id)
   }
 
+  const complete =
+    enqueued.size === 0 &&
+    failed.size === 0 &&
+    blockedNodes.length === 0 &&
+    (await resolved.repository.isProjectComplete?.(projectId)) === true
+  if (enqueued.size === 0 && !complete && blockedNodes.length === 0) {
+    blockedNodes.push({
+      nodeId: entry.id,
+      code: 'QUEUE_FAILED',
+      message: '项目尚未完成，但当前没有可入队节点',
+    })
+  }
   return {
     autopilot: true,
+    status: complete ? 'complete' : enqueued.size > 0 ? 'started' : 'blocked',
     enqueuedNodeIds: [...enqueued],
+    repairRootNodeIds: [...repairRoots],
     failedNodeIds: [...failed],
+    blockedNodes,
   }
 }
 
@@ -207,11 +245,13 @@ async function createDefaultDependencies(): Promise<AdvanceDependencies> {
 }
 
 async function createDefaultControlDependencies(): Promise<PipelineControlDependencies> {
+  const { repairProjectFrontier } = await import('./recovery')
   const advanceDependencies = await createDefaultDependencies()
   const repository = advanceDependencies.repository as PipelineRepository
   return {
     repository,
     enqueueDirectorStage: advanceDependencies.enqueueDirectorStage,
+    repairFrontier: repairProjectFrontier,
     advance: (projectId, completedNodeId) =>
       advancePipeline(projectId, completedNodeId, advanceDependencies),
   }

@@ -2,51 +2,61 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST } from './route'
 
 const mocks = vi.hoisted(() => ({
-  getCanvasGraph: vi.fn(),
-  enqueueDirectorStage: vi.fn(),
+  executeNodeAction: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
-vi.mock('@/features/canvas', () => ({ getCanvasGraph: mocks.getCanvasGraph }))
-vi.mock('@/features/director/queue-handler', () => ({
-  enqueueDirectorStage: mocks.enqueueDirectorStage,
+vi.mock('@/features/director', () => ({
+  executeNodeAction: mocks.executeNodeAction,
 }))
 
 describe('POST /api/director/stage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.getCanvasGraph.mockReturnValue({
-      nodes: [{ id: 'node-1' }],
-      edges: [],
+    mocks.executeNodeAction.mockResolvedValue({
+      ok: true,
+      action: 'execute',
+      requestedNodeId: 'node-1',
+      queuedNodeId: 'node-1',
+      jobId: 'job-1',
+      message: '已排队执行此阶段',
     })
-    mocks.enqueueDirectorStage.mockReturnValue('job-1')
   })
 
   it('returns 400 with a clear message for invalid input', async () => {
-    const response = await POST(request({ projectId: '', stage: 'UNKNOWN' }))
+    const response = await POST(request({ projectId: '', intent: 'execute' }))
 
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toMatchObject({ ok: false })
-    expect(mocks.enqueueDirectorStage).not.toHaveBeenCalled()
+    expect(mocks.executeNodeAction).not.toHaveBeenCalled()
   })
 
-  it('returns 404 when the node is not in the requested project', async () => {
-    mocks.getCanvasGraph.mockReturnValue({ nodes: [], edges: [] })
+  it('returns a conflict when recovery admission rejects the action', async () => {
+    mocks.executeNodeAction.mockRejectedValue(new Error('节点不存在：missing'))
     const response = await POST(
-      request({ projectId: 'project-1', nodeId: 'missing', stage: 'INGEST' })
+      request({ projectId: 'project-1', nodeId: 'missing', intent: 'repair' })
     )
 
-    expect(response.status).toBe(404)
-    expect(mocks.enqueueDirectorStage).not.toHaveBeenCalled()
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      error: '上游产物缺失或不包含当前镜头，需要先修复上游阶段。',
+      code: 'UPSTREAM_ARTIFACT_MISSING',
+    })
   })
 
-  it('returns the accepted job id', async () => {
-    const input = { projectId: 'project-1', nodeId: 'node-1', stage: 'INGEST' }
+  it('returns the actual recovery action and queued node', async () => {
+    const input = { projectId: 'project-1', nodeId: 'node-1', intent: 'repair' }
     const response = await POST(request(input))
 
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({ ok: true, jobId: 'job-1' })
-    expect(mocks.enqueueDirectorStage).toHaveBeenCalledWith(input)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      action: 'execute',
+      queuedNodeId: 'node-1',
+      jobId: 'job-1',
+    })
+    expect(mocks.executeNodeAction).toHaveBeenCalledWith(input)
   })
 })
 

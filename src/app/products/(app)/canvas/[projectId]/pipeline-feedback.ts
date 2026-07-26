@@ -11,6 +11,22 @@ export function describePipelineResult(
 ): PipelineFeedback {
   const enqueued = result.enqueuedNodeIds?.length ?? 0
   const failed = result.failedNodeIds?.length ?? 0
+  if (result.status === 'blocked') {
+    return {
+      variant: 'error',
+      title: '工作流被阻塞',
+      body:
+        result.blockedNodes?.[0]?.message ??
+        '项目尚未完成，但当前没有可执行节点。',
+    }
+  }
+  if (result.status === 'complete') {
+    return {
+      variant: 'success',
+      title: '工作流已完成',
+      body: '全部节点已有有效产物。',
+    }
+  }
   if (failed > 0) {
     return {
       variant: 'error',

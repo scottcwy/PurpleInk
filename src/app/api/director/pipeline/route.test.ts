@@ -19,8 +19,11 @@ describe('/api/director/pipeline', () => {
     vi.clearAllMocks()
     mocks.startProjectPipeline.mockResolvedValue({
       autopilot: true,
+      status: 'started',
       enqueuedNodeIds: ['ingest'],
+      repairRootNodeIds: [],
       failedNodeIds: [],
+      blockedNodes: [],
     })
     mocks.stopProjectPipeline.mockReturnValue({ autopilot: false })
   })
@@ -40,11 +43,37 @@ describe('/api/director/pipeline', () => {
     await expect(response.json()).resolves.toEqual({
       ok: true,
       autopilot: true,
+      status: 'started',
       enqueuedNodeIds: ['ingest'],
+      repairRootNodeIds: [],
       failedNodeIds: [],
+      blockedNodes: [],
     })
     expect(mocks.initQueue).toHaveBeenCalledOnce()
     expect(mocks.startProjectPipeline).toHaveBeenCalledWith('project-1')
+  })
+
+  it('returns blocked instead of claiming a zero-enqueue start', async () => {
+    mocks.startProjectPipeline.mockResolvedValue({
+      autopilot: true,
+      status: 'blocked',
+      enqueuedNodeIds: [],
+      repairRootNodeIds: [],
+      failedNodeIds: [],
+      blockedNodes: [
+        {
+          nodeId: 'codegen-s002',
+          code: 'CONFIGURATION_BLOCKED',
+          message: '请先检查模型配置',
+        },
+      ],
+    })
+    const response = await POST(request('POST', { projectId: 'project-1' }))
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      status: 'blocked',
+      enqueuedNodeIds: [],
+    })
   })
 
   it('returns a conflict without leaking an internal stack', async () => {
@@ -55,7 +84,8 @@ describe('/api/director/pipeline', () => {
     expect(response.status).toBe(409)
     await expect(response.json()).resolves.toEqual({
       ok: false,
-      error: '入口节点当前不可入队',
+      error: '作业暂时无法进入执行队列，请稍后重试。',
+      code: 'QUEUE_FAILED',
     })
   })
 
