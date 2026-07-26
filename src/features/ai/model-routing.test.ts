@@ -117,21 +117,15 @@ describe('Director provider routing', () => {
       .resolves.toMatchObject({ provider: 'stepfun' })
   })
 
-  it('persists node settings through the fixed AI/media route kinds', async () => {
+  it('only persists text and vision routes; media remains fixed to StepFun', async () => {
     const { dependencies, media, models } = createDependencies()
-    await saveDirectorRoutes({
-      'shot-codegen': 'stepfun',
-      'shot-sfx': 'gemini',
-    }, dependencies)
+    await saveDirectorRoutes({ 'shot-codegen': 'stepfun' }, dependencies)
 
     expect(models.get('fabricate')).toMatchObject({
       provider: 'stepfun',
       model: 'step-3.5-flash',
     })
-    expect(media.get('tts')).toMatchObject({
-      provider: 'gemini',
-      model: 'gemini-3.1-flash-lite',
-    })
+    expect(media.get('tts')).toBeUndefined()
     await expect(getDirectorProvider('shot-codegen', dependencies))
       .resolves.toEqual({ provider: 'stepfun', source: 'settings' })
   })

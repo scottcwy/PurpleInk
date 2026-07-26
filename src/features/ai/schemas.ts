@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+const textProviderSchema = z.enum(['stepfun', 'gemini', 'openai-compatible'])
+
 /**
  * ISSUE-011 队列并发配额输入：
  *   - `directorStageConcurrency` 影响纯 LLM I/O 阶段，硬上限 32（实测 Gemini 16
@@ -46,17 +48,25 @@ export const stepfunSettingsSchema = z.object({
     })
     .strict()
     .optional(),
+  customOpenAi: z
+    .object({
+      apiKey: z.string().min(1, 'OpenAI 兼容 API Key 不能为空'),
+      baseUrl: z.string().min(1, 'OpenAI 兼容端点不能为空'),
+      defaultModel: z.string().min(1, 'OpenAI 兼容默认模型不能为空'),
+    })
+    .strict()
+    .optional(),
   routes: z
     .object({
-      'script-import': z.enum(['stepfun', 'gemini']).optional(),
-      'shot-split': z.enum(['stepfun', 'gemini']).optional(),
-      score: z.enum(['stepfun', 'gemini']).optional(),
-      export: z.enum(['stepfun', 'gemini']).optional(),
-      'shot-script': z.enum(['stepfun', 'gemini']).optional(),
-      'shot-codegen': z.enum(['stepfun', 'gemini']).optional(),
-      'shot-sfx': z.enum(['stepfun', 'gemini']).optional(),
-      'shot-subtitle': z.enum(['stepfun', 'gemini']).optional(),
-      'shot-qa': z.enum(['stepfun', 'gemini']).optional(),
+      'script-import': textProviderSchema.optional(),
+      'shot-split': textProviderSchema.optional(),
+      score: textProviderSchema.optional(),
+      export: textProviderSchema.optional(),
+      'shot-script': textProviderSchema.optional(),
+      'shot-codegen': textProviderSchema.optional(),
+      'shot-sfx': z.literal('stepfun').optional(),
+      'shot-subtitle': z.literal('stepfun').optional(),
+      'shot-qa': textProviderSchema.optional(),
     })
     .strict()
     .optional(),

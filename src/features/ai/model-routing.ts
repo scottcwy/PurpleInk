@@ -83,9 +83,8 @@ async function findRoute(
   deps: AiConfigDependencies,
 ): Promise<{ provider: string; model: string } | null> {
   const target = ROUTE_TARGET[nodeType]
-  return target.domain === 'ai'
-    ? deps.modelRoutes.find(LOCAL_WORKSPACE_ID, target.kind)
-    : deps.mediaRoutes.find(LOCAL_WORKSPACE_ID, target.kind)
+  if (target.domain === 'media') return null
+  return deps.modelRoutes.find(LOCAL_WORKSPACE_ID, target.kind)
 }
 
 async function resolveRoute(
@@ -93,9 +92,8 @@ async function resolveRoute(
   deps: AiConfigDependencies,
 ): Promise<ResolvedRoute | null> {
   const target = ROUTE_TARGET[nodeType]
-  const route = target.domain === 'ai'
-    ? await deps.modelRoutes.resolve(LOCAL_WORKSPACE_ID, target.kind)
-    : await deps.mediaRoutes.resolve(LOCAL_WORKSPACE_ID, target.kind)
+  if (target.domain === 'media') return null
+  const route = await deps.modelRoutes.resolve(LOCAL_WORKSPACE_ID, target.kind)
   if (!route) return null
   return {
     provider: providerSchema.parse(route.provider),
@@ -233,11 +231,15 @@ export async function saveDirectorRoutes(
   input: DirectorRouteSettingsInput,
   deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<void> {
-  const selected = new Map<string, { target: RouteTarget; provider: AiProviderId }>()
+  const selected = new Map<
+    string,
+    { target: Extract<RouteTarget, { domain: 'ai' }>; provider: AiProviderId }
+  >()
   for (const nodeType of DIRECTOR_NODE_TYPES) {
     const provider = input[nodeType]
     if (provider === undefined) continue
     const target = ROUTE_TARGET[nodeType]
+    if (target.domain === 'media') continue
     selected.set(targetKey(target), {
       target,
       provider: providerSchema.parse(provider),
@@ -245,18 +247,9 @@ export async function saveDirectorRoutes(
   }
   await Promise.all([...selected.values()].map(async ({ target, provider }) => {
     const model = await modelForProvider(provider, target, deps)
-    if (target.domain === 'ai') {
-      await deps.modelRoutes.save({
-        workspaceId: LOCAL_WORKSPACE_ID,
-        aiTaskKind: target.kind,
-        provider,
-        model,
-      })
-      return
-    }
-    await deps.mediaRoutes.save({
+    await deps.modelRoutes.save({
       workspaceId: LOCAL_WORKSPACE_ID,
-      mediaTaskKind: target.kind,
+      aiTaskKind: target.kind,
       provider,
       model,
     })

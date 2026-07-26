@@ -12,9 +12,10 @@ import { TextField } from '@/components/ui/text-field'
 import { Toast } from '@/components/ui/toast'
 import type { AiProviderId, DirectorRouteView } from '@/features/ai/model-routing'
 import type { CanvasNodeType } from '@/features/canvas/types'
+import { CustomOpenAiProviderPanel } from './custom-openai-provider-panel'
 import {
   GEMINI_FIELDS,
-  ROUTE_ROWS,
+  MODEL_ROUTE_ROWS,
   STEPFUN_FIELDS,
   type ReadyModelSettingsController,
   type RouteDraft,
@@ -23,6 +24,7 @@ import {
 const PROVIDER_OPTIONS = [
   { value: 'gemini', label: 'Gemini' },
   { value: 'stepfun', label: '阶跃星辰' },
+  { value: 'openai-compatible', label: '自定义兼容模型' },
 ]
 
 export function ModelServicePanels({
@@ -50,6 +52,7 @@ export function ModelServicePanels({
             controller.submit(controller.stepfunDraft, 'stepfun-fields')
           }
         />
+        <CustomOpenAiProviderPanel controller={controller} />
         <ProviderSection
           title="Gemini 模型服务"
           provider="Gemini"
@@ -278,10 +281,10 @@ function RoutingPanel({
       title="节点模型路由"
       description="按 Pipeline 节点选择 Director 与 Vision Provider"
       icon={Route}
-      summary={`${ROUTE_ROWS.length} 个节点`}
+      summary={`${MODEL_ROUTE_ROWS.length} 个节点`}
       defaultOpen={false}
     >
-      {ROUTE_ROWS.map(([nodeType, label], index) => (
+      {MODEL_ROUTE_ROWS.map(([nodeType, label], index) => (
         <div key={nodeType} data-testid={`route-${nodeType}`}>
           {index > 0 && <SettingsSeparator />}
           <SettingsRow

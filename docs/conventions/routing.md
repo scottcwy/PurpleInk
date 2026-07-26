@@ -168,7 +168,7 @@
 约定：
 
 1. 写操作一律 POST/PATCH/DELETE + 严格 JSON schema 校验；校验失败返回 400 且**不落任何写入**。
-   `/api/settings` POST 承载字段范围：StepFun/Gemini 凭据与模型、Director 节点路由、`laneQuotas.{directorStageConcurrency, renderShotConcurrency}`（ISSUE-011）。
+   `/api/settings` POST 承载字段范围：StepFun/Gemini 凭据与模型、OpenAI-compatible 文本模型配置、Director 文本/视觉节点路由、`laneQuotas.{directorStageConcurrency, renderShotConcurrency}`（ISSUE-011）。OpenAI-compatible 不可用于 TTS/ASR；媒体路由固定为 StepFun。
    `laneQuotas` 子字段做两层校验：schema 静态 max（directorStage≤32、renderShot≤128）+ route 运行时 `os.cpus().length` 上限；任一失败回 400 且不落任何 secret / route / 配额写入。
 2. 状态码语义固定：400 参数非法、404 资源不存在或不属于当前作用域、409 状态冲突（队列已存在、前置未就绪、旧 workflow 暂不支持执行）、422 外部凭据校验失败。项目设置、Director、单镜渲染、缩略图与成片导出的写/执行入口必须在任何数据库、Artifact 或队列变更前拒绝旧 workflow。
 3. 凭据类 POST 必须先验证后保存；验证失败返回 422 且不覆盖已有值。

@@ -12,6 +12,11 @@ import {
 } from '@/features/ai/gemini-config'
 import { validateGeminiKey } from '@/features/ai/gemini-adapter'
 import {
+  describeOpenAiCompatibleProfile,
+  saveOpenAiCompatibleProfile,
+  validateOpenAiCompatibleProfile,
+} from '@/features/ai/openai-compatible-config'
+import {
   describeDirectorRoutes,
   saveDirectorRoutes,
 } from '@/features/ai/model-routing'
@@ -34,6 +39,7 @@ export async function GET() {
     gemini,
     routes,
     laneQuotas,
+    customOpenAi,
   ] = await Promise.all([
     credentials.describe(LOCAL_WORKSPACE_ID, 'stepfun'),
     credentials.describe(LOCAL_WORKSPACE_ID, 'gemini'),
@@ -41,6 +47,7 @@ export async function GET() {
     describeGeminiConfig(),
     describeDirectorRoutes(),
     describeLaneQuotas(),
+    describeCustomOpenAi(),
   ])
   return NextResponse.json({
     ...stepfunCredential,
@@ -52,6 +59,7 @@ export async function GET() {
     // ISSUE-011: 队列并发配额真值。优先级 DB > env > 代码默认，由 `runtime-config.ts` 统一提供。
     // `source = 'settings' | 'env' | 'default'` 让 UI 能透出真值来自哪里。
     laneQuotas,
+    customOpenAi,
     // 渲染队列默认并发数 = CPU 核数（`in-process-queue.ts` 的 `start()` 默认值）。ISSUE-011 之后由
     // `laneQuotas.renderShot` 表达并可在 UI 配置；保留此字段为确保旧 settings-form 引用不破。
     renderConcurrency: Math.max(1, os.cpus().length),
@@ -72,6 +80,7 @@ export async function POST(request: Request) {
     gemini,
     routes,
     laneQuotas,
+    customOpenAi,
     ...modelSettings
   } = parsed.data
   // ISSUE-011: renderShot 上限依赖运行期 CPU 数，schema 无法静态表达上限——
@@ -99,12 +108,24 @@ export async function POST(request: Request) {
   ) {
     return keyValidationError('Gemini')
   }
+  if (customOpenAi) {
+    const validated = await validateOpenAiCompatibleProfile(customOpenAi)
+    if (!validated.ok) {
+      return NextResponse.json(
+        { ok: false, error: 'OpenAI 兼容模型服务校验失败，请检查端点、模型和 Key' },
+        { status: 422 },
+      )
+    }
+  }
 
   await saveStepfunModelSettings(modelSettings)
   await saveGeminiSettings(geminiSettings)
   if (routes) await saveDirectorRoutes(routes)
   if (apiKey !== undefined) await saveApiKey(apiKey)
   if (geminiApiKey !== undefined) await saveGeminiApiKey(geminiApiKey)
+  if (customOpenAi) {
+    await saveOpenAiCompatibleProfile(customOpenAi, customOpenAiDependencies())
+  }
   if (laneQuotas) {
     await saveLaneQuotas({
       directorStage: laneQuotas.directorStageConcurrency,
@@ -113,7 +134,7 @@ export async function POST(request: Request) {
   }
 
   const credentials = getAiConfigDependencies().credentials
-  const [stepfunCredential, geminiCredential, models, geminiView, routeView, laneQuotasView] =
+  const [stepfunCredential, geminiCredential, models, geminiView, routeView, laneQuotasView, customOpenAiView] =
     await Promise.all([
       credentials.describe(LOCAL_WORKSPACE_ID, 'stepfun'),
       credentials.describe(LOCAL_WORKSPACE_ID, 'gemini'),
@@ -121,6 +142,7 @@ export async function POST(request: Request) {
       describeGeminiConfig(),
       describeDirectorRoutes(),
       describeLaneQuotas(),
+      describeCustomOpenAi(),
     ])
   return NextResponse.json({
     ok: true,
@@ -134,8 +156,24 @@ export async function POST(request: Request) {
     // 配额改动落在 DB 后，需要重启 dev 进程才会被 InProcessQueue.lanes 重新读取——
     // 显式回传 `requiresRestart: true`，UI 必须据此如实说明，不得让用户以为已热生效。
     laneQuotas: laneQuotasView,
+    customOpenAi: customOpenAiView,
     requiresRestart: Boolean(laneQuotas),
   })
+}
+
+function customOpenAiDependencies() {
+  const dependencies = getAiConfigDependencies()
+  if (!dependencies.openAiCompatibleProfiles) {
+    throw new Error('OpenAI 兼容模型配置存储不可用')
+  }
+  return {
+    credentials: dependencies.credentials,
+    profileStore: dependencies.openAiCompatibleProfiles,
+  }
+}
+
+async function describeCustomOpenAi() {
+  return describeOpenAiCompatibleProfile(customOpenAiDependencies())
 }
 
 function keyValidationError(provider: 'StepFun' | 'Gemini') {

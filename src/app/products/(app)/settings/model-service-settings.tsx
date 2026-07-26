@@ -11,10 +11,11 @@ import type { AiProviderId } from '@/features/ai/model-routing'
 import type { CanvasNodeType } from '@/features/canvas/types'
 import {
   GEMINI_FIELDS,
-  ROUTE_ROWS,
+  MODEL_ROUTE_ROWS,
   STEPFUN_FIELDS,
   type GeminiDraft,
   type LaneQuotasDraft,
+  type OpenAiCompatibleDraft,
   type ReadyModelSettingsController,
   type RouteDraft,
   type SettingsResponse,
@@ -36,6 +37,7 @@ export function useModelSettingsController(): ModelSettingsController {
   const [data, setData] = useState<SettingsResponse>()
   const [stepfunDraft, setStepfunDraft] = useState<StepfunDraft>()
   const [geminiDraft, setGeminiDraft] = useState<GeminiDraft>()
+  const [customOpenAiDraft, setCustomOpenAiDraft] = useState<OpenAiCompatibleDraft>()
   const [routes, setRoutes] = useState<RouteDraft>()
   const [laneQuotasDraft, setLaneQuotasDraft] = useState<LaneQuotasDraft>({
     directorStageConcurrency: '',
@@ -48,6 +50,7 @@ export function useModelSettingsController(): ModelSettingsController {
     setData,
     setStepfunDraft,
     setGeminiDraft,
+    setCustomOpenAiDraft,
     setRoutes,
     setLaneQuotasDraft,
     setError,
@@ -56,6 +59,7 @@ export function useModelSettingsController(): ModelSettingsController {
     setData,
     setStepfunDraft,
     setGeminiDraft,
+    setCustomOpenAiDraft,
     setRoutes,
     setLaneQuotasDraft,
     setBusy,
@@ -73,6 +77,9 @@ export function useModelSettingsController(): ModelSettingsController {
   function setGeminiField(field: GeminiConfigField, value: string) {
     setGeminiDraft((current) => current && { ...current, [field]: value })
   }
+  function setCustomOpenAiField(field: keyof OpenAiCompatibleDraft, value: string) {
+    setCustomOpenAiDraft((current) => current && { ...current, [field]: value })
+  }
 
   function setLaneQuotaField(
     field: keyof LaneQuotasDraft,
@@ -81,7 +88,7 @@ export function useModelSettingsController(): ModelSettingsController {
     setLaneQuotasDraft((current) => ({ ...current, [field]: value }))
   }
 
-  if (!data || !stepfunDraft || !geminiDraft || !routes) {
+  if (!data || !stepfunDraft || !geminiDraft || !customOpenAiDraft || !routes) {
     return { ready: false }
   }
   return {
@@ -89,12 +96,14 @@ export function useModelSettingsController(): ModelSettingsController {
     data,
     stepfunDraft,
     geminiDraft,
+    customOpenAiDraft,
     routes,
     laneQuotasDraft,
     busy,
     error,
     setStepfunField,
     setGeminiField,
+    setCustomOpenAiField,
     setRoute,
     setLaneQuotaField,
     submit,
@@ -105,6 +114,7 @@ function useSettingsLoader(
   setData: (body: SettingsResponse) => void,
   setStepfun: (draft: StepfunDraft) => void,
   setGemini: (draft: GeminiDraft) => void,
+  setCustomOpenAi: (draft: OpenAiCompatibleDraft) => void,
   setRoutes: (routes: RouteDraft) => void,
   setLaneQuotasDraft: (draft: LaneQuotasDraft) => void,
   setError: (error: string) => void,
@@ -117,18 +127,20 @@ function useSettingsLoader(
           setData,
           setStepfun,
           setGemini,
+          setCustomOpenAi,
           setRoutes,
           setLaneQuotasDraft,
         ),
       )
       .catch(() => setError('模型设置加载失败'))
-  }, [setData, setError, setGemini, setLaneQuotasDraft, setRoutes, setStepfun])
+  }, [setCustomOpenAi, setData, setError, setGemini, setLaneQuotasDraft, setRoutes, setStepfun])
 }
 
 function useSettingsSubmitter(
   setData: (body: SettingsResponse) => void,
   setStepfun: (draft: StepfunDraft) => void,
   setGemini: (draft: GeminiDraft) => void,
+  setCustomOpenAi: (draft: OpenAiCompatibleDraft) => void,
   setRoutes: (routes: RouteDraft) => void,
   setLaneQuotasDraft: (draft: LaneQuotasDraft) => void,
   setBusy: (busy?: string) => void,
@@ -148,7 +160,7 @@ function useSettingsSubmitter(
         setError(body.error ?? '模型设置保存失败')
         return false
       }
-      applyResponse(body, setData, setStepfun, setGemini, setRoutes, setLaneQuotasDraft)
+      applyResponse(body, setData, setStepfun, setGemini, setCustomOpenAi, setRoutes, setLaneQuotasDraft)
       return true
     } catch {
       setError('模型设置请求失败')
@@ -184,15 +196,20 @@ function applyResponse(
   setData: (body: SettingsResponse) => void,
   setStepfun: (draft: StepfunDraft) => void,
   setGemini: (draft: GeminiDraft) => void,
+  setCustomOpenAi: (draft: OpenAiCompatibleDraft) => void,
   setRoutes: (routes: RouteDraft) => void,
   setLaneQuotasDraft: (draft: LaneQuotasDraft) => void,
 ) {
   setData(body)
   setStepfun(draftFromView(STEPFUN_FIELDS, body.models))
   setGemini(draftFromView(GEMINI_FIELDS, body.gemini))
+  setCustomOpenAi({
+    baseUrl: body.customOpenAi?.baseUrl?.value ?? '',
+    defaultModel: body.customOpenAi?.defaultModel?.value ?? '',
+  })
   setRoutes(
     Object.fromEntries(
-      ROUTE_ROWS.map(([nodeType]) => [
+      MODEL_ROUTE_ROWS.map(([nodeType]) => [
         nodeType,
         body.routes?.[nodeType]?.provider ?? 'stepfun',
       ]),

@@ -36,7 +36,8 @@ This boundary mirrors `docs/issues/README.md` §0 and is enforced by:
 
 ## 2. Why API keys are DB-only on the Next side
 
-`src/features/ai/gemini-config.ts:59-77` and `src/features/ai/config.ts:102-124`
+`src/features/ai/gemini-config.ts`, `src/features/ai/config.ts`, and
+`src/features/ai/model-routing.ts`
 set `apiKey` exclusively from `deps.credentials.loadSecret(...)` against the
 `provider_credentials` table. The `ENV_KEYS` maps on lines
 `gemini-config.ts:21-25` and `config.ts:64-70` cover **only** `*_BASE_URL` and
@@ -113,7 +114,22 @@ This matches the routing convention §4.1 commit-3 invariant.
 have no `apiKey` key at all (`gemini-config.ts:79-95`, `config.ts:126-146`),
 so GET `/api/settings` cannot leak a secret to a browser.
 
-## 5. Security invariants (mirror AGENTS.md §7)
+## 5. OpenAI-compatible text providers
+
+The settings page may register one workspace-scoped `openai-compatible`
+provider. Its API key follows exactly the same encrypted
+`provider_credentials` path as Gemini and StepFun; its endpoint and default
+model are non-secret profile data in `workspace_settings` under
+`ai.openai-compatible`. `POST /api/settings` first makes a minimal
+`/chat/completions` request, then writes both records only after validation.
+
+This provider is available only to Director text and vision routes. It never
+owns narration TTS or subtitle ASR: those media routes remain StepFun-only so
+that ingress timing, narration artifacts, and subtitle timing share one media
+contract. GET `/api/settings` returns configured state, endpoint, model and
+verification time, never the encrypted key.
+
+## 6. Security invariants (mirror AGENTS.md §7)
 
 1. `.env.local` may carry `GEMINI_API_KEY` / `STEPFUN_API_KEY` as **values**;
    they're git-ignored and never committed.
@@ -132,7 +148,7 @@ so GET `/api/settings` cannot leak a secret to a browser.
    is currently a manual operation; do not delete it casually — encrypted
    blobs become unrecoverable.
 
-## 6. What does **not** belong here
+## 7. What does **not** belong here
 
 - **YAML config files**. The truth ordering (DB > env > default) plus the
   bootstrap script and the `/api/settings` mutation surface already cover

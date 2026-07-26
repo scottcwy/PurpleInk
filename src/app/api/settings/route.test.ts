@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
   saveDirectorRoutes: vi.fn(),
   describeLaneQuotas: vi.fn(),
   saveLaneQuotas: vi.fn(),
+  describeOpenAiCompatibleProfile: vi.fn(),
+  saveOpenAiCompatibleProfile: vi.fn(),
+  validateOpenAiCompatibleProfile: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
@@ -41,6 +44,10 @@ vi.mock('@/features/ai/config', () => ({
   describeStepfunConfig: mocks.describeStepfunConfig,
   getAiConfigDependencies: () => ({
     credentials: { describe: mocks.describeCredential },
+    openAiCompatibleProfiles: {
+      find: vi.fn(),
+      save: vi.fn(),
+    },
   }),
   saveStepfunModelSettings: mocks.saveStepfunModelSettings,
 }))
@@ -55,6 +62,11 @@ vi.mock('@/features/ai/gemini-adapter', () => ({
 vi.mock('@/features/ai/model-routing', () => ({
   describeDirectorRoutes: mocks.describeDirectorRoutes,
   saveDirectorRoutes: mocks.saveDirectorRoutes,
+}))
+vi.mock('@/features/ai/openai-compatible-config', () => ({
+  describeOpenAiCompatibleProfile: mocks.describeOpenAiCompatibleProfile,
+  saveOpenAiCompatibleProfile: mocks.saveOpenAiCompatibleProfile,
+  validateOpenAiCompatibleProfile: mocks.validateOpenAiCompatibleProfile,
 }))
 vi.mock('@/lib/queue/runtime-config', () => ({
   describeLaneQuotas: mocks.describeLaneQuotas,
@@ -96,6 +108,12 @@ describe('GET /api/settings', () => {
       },
     })
     mocks.describeLaneQuotas.mockResolvedValue(MOCK_DEFAULT_LANE_VIEW)
+    mocks.describeOpenAiCompatibleProfile.mockResolvedValue({
+      configured: false,
+      verifiedAt: null,
+      baseUrl: null,
+      defaultModel: null,
+    })
 
     const response = await GET()
     const body = await response.json()
@@ -136,6 +154,24 @@ describe('POST /api/settings', () => {
     mocks.saveApiKey.mockResolvedValue(undefined)
     mocks.saveGeminiApiKey.mockResolvedValue(undefined)
     mocks.saveLaneQuotas.mockResolvedValue(undefined)
+    mocks.saveOpenAiCompatibleProfile.mockResolvedValue(undefined)
+  })
+
+  it('validates and saves a custom OpenAI-compatible profile without returning its key', async () => {
+    mocks.validateOpenAiCompatibleProfile.mockResolvedValue({ ok: true })
+    const input = {
+      apiKey: 'candidate-secret',
+      baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
+      defaultModel: 'mimo-v2.5-pro',
+    }
+
+    const response = await POST(request({ customOpenAi: input }))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(mocks.validateOpenAiCompatibleProfile).toHaveBeenCalledWith(input)
+    expect(mocks.saveOpenAiCompatibleProfile).toHaveBeenCalledWith(input, expect.anything())
+    expect(body).not.toContain('candidate-secret')
   })
 
   it('validates before saving a StepFun Key', async () => {
