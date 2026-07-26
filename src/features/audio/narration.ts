@@ -1,7 +1,6 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import { getStepfunConfig } from '@/features/ai/config'
 import { measureMp3, type MeasuredAudio } from './measure'
 import {
   registerNarrationAudio,
@@ -9,9 +8,11 @@ import {
   type NarrationAudioRecord,
 } from './narration-repository'
 import {
-  synthesizeSpeech,
+  resolveNarrationEngine,
+  synthesizeRoutedSpeech,
+  type NarrationEngine,
   type SynthesizedSpeech,
-} from './stepfun-audio-client'
+} from './media-provider'
 import type { Caption } from './types'
 
 /**
@@ -63,7 +64,7 @@ export interface NarrationResult {
 }
 
 export interface NarrationDependencies {
-  resolveEngine: () => Promise<string>
+  resolveEngine: () => Promise<NarrationEngine>
   synthesize: (input: {
     text: string
     voiceId?: string
@@ -80,7 +81,7 @@ export interface NarrationDependencies {
   }) => Promise<NarrationAudioRecord>
 }
 
-/** StepFun TTS 默认音色；音色参与缓存键，换音色不会复用旧字节。 */
+/** 兼容旧调用的 StepFun 默认音色；实际默认值由当前媒体供应商决定。 */
 export const NARRATION_VOICE_ID = 'cixingnansheng'
 
 /**
@@ -95,8 +96,8 @@ export async function synthesizeNarration(
 ): Promise<NarrationResult> {
   const parsed = inputSchema.parse(input)
   assertUniqueUnitIds(parsed.units)
-  const voice = parsed.voiceId ?? NARRATION_VOICE_ID
   const engine = await dependencies.resolveEngine()
+  const voice = parsed.voiceId ?? engine.voice
   const units = new Array<NarrationUnit | undefined>(parsed.units.length)
   const requests = parsed.units
   let cursor = 0
@@ -111,7 +112,8 @@ export async function synthesizeNarration(
         {
           projectId: parsed.projectId,
           nodeId: parsed.nodeId,
-          engine,
+          engine: engine.model,
+          audioFormat: engine.audioFormat,
           voice,
           request,
         },
@@ -125,7 +127,7 @@ export async function synthesizeNarration(
     requests.length
   )
   await Promise.all(Array.from({ length: lanes }, worker))
-  return { engine, voice, units: units.map(requireUnit) }
+  return { engine: engine.model, voice, units: units.map(requireUnit) }
 }
 
 /** 内容寻址：同模型 + 同音色 + 同文本命中同一字节，不重复计费。 */
@@ -134,11 +136,12 @@ export function narrationAudioKey(input: {
   engine: string
   voice: string
   text: string
+  audioFormat?: 'mp3' | 'wav'
 }): string {
   const digest = createHash('sha256')
     .update([input.engine, input.voice, input.text].join('\u0000'))
     .digest('hex')
-  return `narration/${input.projectId}/${digest}.mp3`
+  return `narration/${input.projectId}/${digest}.${input.audioFormat ?? 'mp3'}`
 }
 
 async function synthesizeUnit(
@@ -147,6 +150,7 @@ async function synthesizeUnit(
     nodeId: string
     engine: string
     voice: string
+    audioFormat: 'mp3' | 'wav'
     request: z.infer<typeof unitSchema>
   },
   dependencies: NarrationDependencies
@@ -156,6 +160,7 @@ async function synthesizeUnit(
     engine: context.engine,
     voice: context.voice,
     text: context.request.text,
+    audioFormat: context.audioFormat,
   })
   const cached = await dependencies.reuseAudio(audioKey)
   const speech = cached
@@ -219,8 +224,8 @@ function assertUniqueUnitIds(units: readonly { unitId: string }[]): void {
 
 function defaultDependencies(): NarrationDependencies {
   return {
-    resolveEngine: async () => (await getStepfunConfig()).ttsModel,
-    synthesize: synthesizeSpeech,
+    resolveEngine: resolveNarrationEngine,
+    synthesize: synthesizeRoutedSpeech,
     measure: measureMp3,
     reuseAudio: reuseNarrationAudio,
     registerAudio: registerNarrationAudio,

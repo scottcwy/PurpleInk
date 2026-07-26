@@ -33,7 +33,12 @@ function harness(overrides: Partial<NarrationDependencies> = {}) {
     })
   )
   const dependencies: NarrationDependencies = {
-    resolveEngine: async () => ENGINE,
+    resolveEngine: async () => ({
+      provider: 'stepfun',
+      model: ENGINE,
+      voice: 'cixingnansheng',
+      audioFormat: 'mp3',
+    }),
     synthesize,
     measure,
     reuseAudio,

@@ -49,7 +49,7 @@ export interface SubtitleResult {
   captions: Caption[]
   transcript: string
   model: string
-  alignmentSource: 'stepfun-asr'
+  alignmentSource: 'stepfun-asr' | 'mimo-asr-segment'
   trackArtifactId: string
   trackKey: string
 }

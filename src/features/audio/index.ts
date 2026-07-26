@@ -13,6 +13,15 @@ export { generateScore } from './score'
 export { generateSfx } from './sfx'
 export { generateSubtitle } from './subtitle'
 export {
+  describeMediaProvider,
+  resolveNarrationEngine,
+  synthesizeRoutedSpeech,
+  transcribeRoutedSpeech,
+  type NarrationEngine,
+  type RoutedTranscribedSpeech,
+  type SubtitleAlignmentSource,
+} from './media-provider'
+export {
   AudioRuntimeRepository,
   type LoadedNarration,
 } from './runtime-repository'

@@ -78,7 +78,7 @@ export interface StepfunAudioDependencies {
 
 export interface SynthesizedSpeech {
   audioBytes: Buffer
-  audioFormat: 'mp3'
+  audioFormat: 'mp3' | 'wav'
   durationMs: number
   model: string
   nativeCaptions: Caption[]

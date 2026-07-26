@@ -1,8 +1,11 @@
 import { z } from 'zod'
 import {
-  transcribeSpeech,
+  transcribeRoutedSpeech,
+  type RoutedTranscribedSpeech,
+  type SubtitleAlignmentSource,
   type TranscribedSpeech,
-} from './stepfun-audio-client'
+} from './media-provider'
+import { measureMp3, type MeasuredAudio } from './measure'
 import {
   storeAudioArtifact,
   type StoreAudioArtifactInput,
@@ -27,17 +30,19 @@ interface SubtitleDependencies {
   transcribe: (input: {
     audioBytes: Buffer
     audioFormat: 'mp3' | 'wav' | 'ogg' | 'pcm'
-  }) => Promise<TranscribedSpeech>
+  }) => Promise<TranscribedSpeech | RoutedTranscribedSpeech>
+  measure?: (bytes: Buffer) => Promise<MeasuredAudio>
   storeArtifact: (
     input: StoreAudioArtifactInput
   ) => Promise<StoredAudioArtifact>
 }
 
-/** PRD F10：用 StepFun ASR 真实时间戳生成可追溯字幕轨道。 */
+/** PRD F10：用真实 ASR 输出和实测音频区间生成可追溯字幕轨道。 */
 export async function generateSubtitle(
   input: SubtitleInput,
   dependencies: SubtitleDependencies = {
-    transcribe: transcribeSpeech,
+    transcribe: transcribeRoutedSpeech,
+    measure: measureMp3,
     storeArtifact: storeAudioArtifact,
   }
 ): Promise<SubtitleResult> {
@@ -46,8 +51,18 @@ export async function generateSubtitle(
     audioBytes: parsed.audioBytes,
     audioFormat: parsed.audioFormat,
   })
-  if (transcription.captions.length === 0) {
-    throw new Error('StepFun ASR 未返回可用的字幕时间戳')
+  const alignmentSource = readAlignmentSource(transcription)
+  let captions = transcription.captions
+  if (captions.length === 0 && alignmentSource === 'mimo-asr-segment') {
+    const measured = await (dependencies.measure ?? measureMp3)(parsed.audioBytes)
+    captions = [{
+      text: transcription.transcript,
+      startMs: 0,
+      endMs: measured.durationMs,
+    }]
+  }
+  if (captions.length === 0) {
+    throw new Error('ASR 未返回可用的字幕时间戳')
   }
   const trackContent = {
     version: 1,
@@ -55,10 +70,10 @@ export async function generateSubtitle(
     sourceText: parsed.script,
     transcript: transcription.transcript,
     model: transcription.model,
-    alignmentSource: 'stepfun-asr' as const,
+    alignmentSource,
     sourceAudioArtifactId: parsed.audioArtifactId,
     sourceAudioKey: parsed.audioKey,
-    captions: transcription.captions,
+    captions,
   }
   const track = await dependencies.storeArtifact({
     projectId: parsed.projectId,
@@ -74,9 +89,17 @@ export async function generateSubtitle(
     shotId: parsed.shotId,
     transcript: transcription.transcript,
     model: transcription.model,
-    alignmentSource: 'stepfun-asr',
-    captions: transcription.captions,
+    alignmentSource,
+    captions,
     trackArtifactId: track.id,
     trackKey: track.storageKey,
   }
+}
+
+function readAlignmentSource(
+  transcription: TranscribedSpeech | RoutedTranscribedSpeech
+): SubtitleAlignmentSource {
+  return 'alignmentSource' in transcription
+    ? transcription.alignmentSource
+    : 'stepfun-asr'
 }

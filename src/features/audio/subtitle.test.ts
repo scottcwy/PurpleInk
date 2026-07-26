@@ -102,4 +102,43 @@ describe('generateSubtitle', () => {
       )
     ).rejects.toThrow('时间戳')
   })
+
+  it('uses the measured whole-shot interval for MiMo segment-level ASR', async () => {
+    const storeArtifact = vi.fn(async () => ({
+      id: 'subtitle-artifact',
+      storageKey: 'subtitle.json',
+      contentHash: 'hash',
+    }))
+    const result = await generateSubtitle(
+      {
+        projectId: 'project-1',
+        nodeId: 'subtitle-node',
+        shotId: 'S001',
+        script: '你好世界',
+        audioArtifactId: 'audio-artifact',
+        audioKey: 'voiceover.wav',
+        audioBytes: Buffer.from([1, 2, 3]),
+        audioFormat: 'wav',
+      },
+      {
+        transcribe: vi.fn(async () => ({
+          transcript: '你好世界',
+          model: 'mimo-v2.5-asr',
+          captions: [],
+          alignmentSource: 'mimo-asr-segment' as const,
+        })),
+        measure: vi.fn(async () => ({
+          durationMs: 1250,
+          sampleRateHz: 24_000,
+          sampleCount: 30_000,
+        })),
+        storeArtifact,
+      }
+    )
+
+    expect(result.alignmentSource).toBe('mimo-asr-segment')
+    expect(result.captions).toEqual([
+      { text: '你好世界', startMs: 0, endMs: 1250 },
+    ])
+  })
 })
