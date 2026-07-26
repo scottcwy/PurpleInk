@@ -26,6 +26,7 @@ import {
 import { cn } from '@/lib/utils'
 import { triggerNodeAction } from './canvas-action-api'
 import { getNodeStatusPresentation } from './flow-elements'
+import { isNodeActionBlocked, nodeActionLabel } from './node-action-presentation'
 import { StreamingLogCard } from './streaming-log-card'
 
 export function CanvasInspector({
@@ -283,13 +284,7 @@ function InspectorBody({
         variant={node.type === 'shot-codegen' ? 'destructive' : 'tinted'}
         icon={RefreshCw}
         onClick={onExecute}
-        disabled={
-          submitting ||
-          node.status === 'pending' ||
-          node.status === 'running' ||
-          (node.status === 'failed' &&
-            (node.directorError ?? node.renderError)?.retryable === false)
-        }
+        disabled={submitting || isNodeActionBlocked(node)}
       >
         {nodeActionLabel(node)}
       </Button>
@@ -309,24 +304,6 @@ function InspectorBody({
       {error && <Toast variant="error" title="失败" body={error} className="w-full" />}
     </div>
   )
-}
-
-function nodeActionLabel(node: CanvasGraphNode): string {
-  if (node.status === 'pending') return '等待执行'
-  if (node.status === 'running') return '正在执行'
-  if (
-    node.status === 'failed' &&
-    (node.directorError ?? node.renderError)?.retryable === false
-  ) {
-    return '请先检查项目设置'
-  }
-  if (node.status === 'failed' || node.status === 'stale') return '修复并继续'
-  if (node.status === 'success') {
-    return node.type === 'shot-codegen'
-      ? '重新渲染并更新下游'
-      : '重新生成并更新下游'
-  }
-  return '执行此阶段'
 }
 
 /** 已知产物 kind 的展示层友好文件名；真实 key 内含内容哈希，直接展示会破坏布局。 */

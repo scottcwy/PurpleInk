@@ -94,8 +94,7 @@ describe('Canvas pipeline feedback wiring', () => {
   })
 
   it('配置阻塞时禁用画布动作且错误弹窗不提供无效重试', () => {
-    expect(inspectorSource).toContain('请先检查项目设置')
-    expect(inspectorSource).toContain('?.retryable === false')
+    expect(inspectorSource).toContain('isNodeActionBlocked(node)')
     expect(streamingLogSource).toContain('retryable={error?.retryable !== false}')
     expect(stageErrorDialogSource).toContain('{retryable && (')
   })
