@@ -52,12 +52,24 @@ interface Options {
   workspace: 'local' | 'new'
 }
 
-function parseArgs(argv: readonly string[]): Options {
+function parseArgs(argv: readonly string[]): Options | null {
   const options: Options = {
     email: DEFAULT_EMAIL,
     password: DEFAULT_PASSWORD,
     name: DEFAULT_NAME,
     workspace: 'local',
+  }
+  // `--from-env` 供容器编排使用：从 CVC_DEMO_ACCOUNT_* 取凭据。
+  // 二者任一缺失即返回 null（不建号、退出 0），这样生产 compose 可以无条件挂这个
+  // 一次性任务，而「是否真的创建一个公开体验账号」由运维显式设置 env 来决定——
+  // 默认不建，避免每次部署都悄悄多一个公开账号。
+  if (argv.includes('--from-env')) {
+    const email = process.env.CVC_DEMO_ACCOUNT_EMAIL?.trim()
+    const password = process.env.CVC_DEMO_ACCOUNT_PASSWORD?.trim()
+    if (!email || !password) return null
+    options.email = email
+    options.password = password
+    options.name = process.env.CVC_DEMO_ACCOUNT_NAME?.trim() || DEFAULT_NAME
   }
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index]
@@ -76,6 +88,13 @@ function parseArgs(argv: readonly string[]): Options {
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2))
+  if (!options) {
+    process.stdout.write(
+      '[seed-owner-account] 未设置 CVC_DEMO_ACCOUNT_EMAIL / '
+      + 'CVC_DEMO_ACCOUNT_PASSWORD，跳过体验账号创建\n',
+    )
+    process.exit(0)
+  }
   const email = options.email.trim().toLowerCase()
 
   const [{ loadEnvConfig }, { eq, sql }, dbClient, schema, { hashPassword }] =

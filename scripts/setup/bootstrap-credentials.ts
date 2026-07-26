@@ -84,6 +84,8 @@ const PROVIDERS: readonly ProviderPlan[] = [
 
 let business: Awaited<ReturnType<typeof loadBusiness>>
 
+const allowEmpty = process.argv.includes('--allow-empty')
+
 async function main(): Promise<void> {
   business = await loadBusiness()
   business.loadEnvConfig(process.cwd())
@@ -104,10 +106,19 @@ async function main(): Promise<void> {
     `\n[bootstrap-credentials] written=${written} skipped=${skipped} failed=${failed}\n`,
   )
   if (written === 0 && failed === 0) {
-    process.stderr.write(
-      '[bootstrap-credentials] no key was written; fill GEMINI_API_KEY and/or '
-        + 'STEPFUN_API_KEY in .env.local before rerunning\n',
-    )
+    // `--allow-empty` 供容器编排使用：生产 compose 把本脚本作为 `next` 的
+    // `service_completed_successfully` 前置，若「没提供 Key」也算失败退出，
+    // 整个栈就起不来了。而应用本身没有凭据也能正常启动（凭据只在跑管线时才
+    // 需要），因此这种情况应当放行并如实提示，而不是阻断部署。
+    // 校验失败（failed > 0）仍然退出 1：那是配置错了，必须响。
+    const message =
+      '[bootstrap-credentials] no key was written; set GEMINI_API_KEY and/or '
+      + 'STEPFUN_API_KEY before rerunning\n'
+    if (allowEmpty) {
+      process.stdout.write(message)
+      return
+    }
+    process.stderr.write(message)
     process.exitCode = 2
     return
   }

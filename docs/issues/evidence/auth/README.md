@@ -10,6 +10,7 @@
 | `signup-{desktop,mobile}.png` | `/signup` 同上 | 同上 |
 | `password-reset-{desktop,mobile}.png` | `/password/reset` 同上 | 同上 |
 | `auth-flow-smoke.txt` | 认证链路真实 HTTP 序列 | `node --env-file=.env.local scripts/verify/auth-flow-smoke.mjs` |
+| `demo-account-dialog.png` | 登录页体验账号弹窗 | `node scripts/verify/demo-account-dialog-shot.mjs` |
 
 两个脚本都打真实 Next dev server 与真实 Postgres，无 mock、无 fixture。
 
@@ -66,3 +67,60 @@ nodemailer 报 `{ code: 'ESOCKET', command: 'CONN' }`。
    的「归属错误一律 404、不泄露对象是否存在」。
 
 阶段 B 收口时必须同时修掉这两点，并重新留证。
+
+## 路演补充：体验账号与零填写 API Key
+
+### 体验账号弹窗
+
+`/login` 在 `CVC_DEMO_ACCOUNT_EMAIL` 与 `CVC_DEMO_ACCOUNT_PASSWORD` **同时非空**时，
+自动弹出体验账号提示，提供「填入并登录」。默认关闭，不设这两个变量即彻底不出现。
+
+刻意**不用 `NEXT_PUBLIC_*`**：那会在构建期把凭据内联进客户端 bundle，之后无法用
+环境变量关掉，也无法在不重新构建的情况下换账号。改为在 Server Component 里读普通
+env 再作为 props 下传——值仍会到浏览器（本来就是要给评委看的），但开关与内容在
+运行期可控。
+
+实测（`node scripts/verify/demo-account-dialog-shot.mjs`）：弹窗自动出现且带
+`aria-modal`；「填入并登录」直达 `/products/dashboard`；「我自己输入」关闭后表单为空、
+不留预填；「查看体验账号」可重新打开；控制台无 error/warning。
+
+账号本身由 `pnpm tsx scripts/setup/seed-owner-account.ts` 创建，绑 `LOCAL_WORKSPACE_ID`，
+因此登录后看到的是真实入库的项目与产物，不是示例数据。
+
+### 评委无需填写 API Key 的实现路径
+
+**核实到的现状**：Next 侧 AI 凭据是 DB-only —— `provider_credentials` 加密表，
+`getStepfunConfig()` / `getGeminiConfig()` 只读 `loadSecret()`，**没有 env fallback**，
+且被 `config.test.ts:119` 与 `gemini-config.test.ts:93` 两个契约测试双向锁死
+（后者显式断言 DB 值胜过 env 值）。运行镜像里也不含 `src/` 与 `scripts/`。
+
+因此「env 里放 Key」不能靠运行时读取，必须在启动前把 env 的明文 Key 转成加密存储。
+原 `docker-compose.prod.yml` **没有这一步**，`next` 服务也不注入任何 provider key，
+结果是终端用户必须自己在设置页填 Key 才能跑 AI。
+
+补齐方式（两个一次性任务，都用 `migrate` target 镜像，因为它含 `tsx` 与源码）：
+
+| 服务 | 入口 | 作用 |
+| --- | --- | --- |
+| `bootstrap-credentials` | `scripts/setup/bootstrap-credentials.ts --allow-empty` | env 明文 Key → 真实 API 校验 → 写入加密存储 |
+| `seed-demo-account` | `scripts/setup/seed-owner-account.ts --from-env` | 建体验账号；未设 demo env 时原地退出 0，什么都不做 |
+
+`next.depends_on` 都加了 `service_completed_successfully`，因此容器起来时凭据已就位。
+
+两条防误伤设计：
+
+- `--allow-empty`：没提供 Key 时如实提示并退出 0，**不阻断整栈启动** —— 应用没有
+  凭据也能正常起（凭据只在跑管线时才需要，见 ISSUE-015:203）。但 Key 校验失败仍
+  退出 1，配置错了必须响。
+- `STEPFUN_API_KEY: ${STEPFUN_API_KEY:-${STEP_API_KEY:-}}`：worker 用 `STEP_API_KEY`、
+  Next 用 `STEPFUN_API_KEY` 是有意的命名隔离，这里让后者默认复用前者的值，
+  避免运维为同一把 Key 填两遍。实测 `docker compose config` 确认嵌套默认值生效。
+
+模型名与 provider 路由**不需要预置**：`model_routes` 空表时 `model-routing.ts:30-40`
+的 `DEFAULT_PROVIDER` 与 `config.ts` / `gemini-config.ts` 的 `DEFAULTS` 提供代码默认值。
+唯一必须预置的就是 `provider_credentials` 里的 apiKey。
+
+未做（明确记录，不当作已验证）：**生产 compose 未实跑**。以上只做了
+`docker compose config` 的解析验证与本地脚本行为验证，没有在真实生产栈里跑过
+`bootstrap-credentials` 容器。它需要构建环境能出网（脚本会真实调用 stepfun / gemini
+校验 Key）。首次部署时必须盯这一步的容器日志。

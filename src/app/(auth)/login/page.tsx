@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { createMetadata } from '@/lib/metadata'
+import { readDemoAccount } from '@/features/auth/demo-account'
 import { redirectIfAuthenticated } from '@/features/auth/page-session'
 import { LoginForm } from '../_components/login-form'
 
@@ -22,9 +23,11 @@ export default async function LoginPage({
 }) {
   const { next } = await searchParams
   await redirectIfAuthenticated(next)
+  // 体验账号提示默认关闭；只有同时设置 CVC_DEMO_ACCOUNT_EMAIL 与
+  // CVC_DEMO_ACCOUNT_PASSWORD 时才下发（`features/auth/demo-account.ts`）。
   return (
     <Suspense fallback={null}>
-      <LoginForm />
+      <LoginForm demoAccount={readDemoAccount()} />
     </Suspense>
   )
 }

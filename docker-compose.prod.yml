@@ -47,12 +47,21 @@ services:
       # OOMKilled。按目标容器的 --cpus 上限调整，不要留空。
       CVC_QUEUE_RENDER_SHOT_CONCURRENCY: ${CVC_QUEUE_RENDER_SHOT_CONCURRENCY:?必须显式设置，见 docs/deployment/runbook.md}
       CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY: ${CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY:?必须显式设置，见 docs/deployment/runbook.md}
+      # 体验账号提示只在这两个变量同时非空时出现（见 .env.example）。
+      # 刻意不是 NEXT_PUBLIC_*：那会在构建期内联进 bundle，之后无法关掉、无法换账号。
+      CVC_DEMO_ACCOUNT_EMAIL: ${CVC_DEMO_ACCOUNT_EMAIL:-}
+      CVC_DEMO_ACCOUNT_PASSWORD: ${CVC_DEMO_ACCOUNT_PASSWORD:-}
+      CVC_DEMO_ACCOUNT_NOTE: ${CVC_DEMO_ACCOUNT_NOTE:-}
     volumes:
       - cvc_data:/app/.data
     depends_on:
       postgres:
         condition: service_healthy
       migrate:
+        condition: service_completed_successfully
+      bootstrap-credentials:
+        condition: service_completed_successfully
+      seed-demo-account:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/ping').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
@@ -118,6 +127,54 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: "no"
+
+  # Next 侧 AI 凭据是 DB-only（`provider_credentials` 加密表，无 env fallback，
+  # 由 config.test.ts:119 / gemini-config.test.ts:93 双向锁定）。运行镜像里没有
+  # `src/` 与 `scripts/`，因此凭据注入必须借 `migrate` target 镜像（含 tsx 与源码）
+  # 作为一次性任务完成：env 的明文 Key 在这里被真实 API 校验后写入加密存储，
+  # 之后运行时只读 DB。这样终端用户不必在设置页填任何 Key。
+  #
+  # `--allow-empty`：未提供 Key 时如实提示并退出 0，不阻断整栈启动——应用没有
+  # 凭据也能正常起，凭据只在跑管线时才需要。Key 校验失败仍退出 1（配置错了必须响）。
+  bootstrap-credentials:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrate
+    entrypoint: ["pnpm", "tsx", "scripts/setup/bootstrap-credentials.ts", "--allow-empty"]
+    environment:
+      DATABASE_URL: postgres://cvc:${POSTGRES_PASSWORD:?生产必须设置强口令，不得沿用 dev 的 cvc_dev_only}@postgres:5432/cvc
+      CVC_CREDENTIAL_MASTER_KEY: ${CVC_CREDENTIAL_MASTER_KEY:?凭据加密主密钥缺失，见 docs/deployment/runbook.md}
+      # 命名隔离是有意的：worker 用 STEP_API_KEY，Next 用 STEPFUN_API_KEY
+      # （docs/configuration/credentials.md）。这里默认复用 STEP_API_KEY 的值，
+      # 避免运维为同一把 Key 填两遍。
+      STEPFUN_API_KEY: ${STEPFUN_API_KEY:-${STEP_API_KEY:-}}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-}
+      STEPFUN_BASE_URL: ${STEPFUN_BASE_URL:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  # 路演 / 评审用的公开体验账号。**默认不创建**：未设置 CVC_DEMO_ACCOUNT_EMAIL
+  # 与 CVC_DEMO_ACCOUNT_PASSWORD 时脚本原地退出 0，什么也不做。正式对外运营时
+  # 不设这两个变量即可，不必改 compose。
+  seed-demo-account:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrate
+    entrypoint: ["pnpm", "tsx", "scripts/setup/seed-owner-account.ts", "--from-env"]
+    environment:
+      DATABASE_URL: postgres://cvc:${POSTGRES_PASSWORD:?生产必须设置强口令，不得沿用 dev 的 cvc_dev_only}@postgres:5432/cvc
+      CVC_DEMO_ACCOUNT_EMAIL: ${CVC_DEMO_ACCOUNT_EMAIL:-}
+      CVC_DEMO_ACCOUNT_PASSWORD: ${CVC_DEMO_ACCOUNT_PASSWORD:-}
+      CVC_DEMO_ACCOUNT_NAME: ${CVC_DEMO_ACCOUNT_NAME:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     restart: "no"
 
   postgres:

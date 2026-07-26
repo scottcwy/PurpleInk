@@ -51,10 +51,46 @@ docker compose -f docker-compose.prod.yml build
 | `CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY` | 同上 |
 | `CVC_ALLOWED_CIDRS` | 反代 IP 过滤网段，留空默认放行所有（不设防），生产必须收紧 |
 | `STEP_API_KEY` / `GEMINI_API_KEY` / `LISTENHUB_API_KEY` 等 | worker 的 provider 凭据，见 `server/.env.example` |
+| `STEPFUN_API_KEY` | **可选**。Next 侧凭据 bootstrap 用；留空则默认复用 `STEP_API_KEY` 的值 |
+| `CVC_DEMO_ACCOUNT_EMAIL` / `CVC_DEMO_ACCOUNT_PASSWORD` | **可选**。设置后登录页出现体验账号弹窗，并自动创建该账号；正式对外运营时不要设 |
+| `CVC_DEMO_ACCOUNT_NAME` / `CVC_DEMO_ACCOUNT_NOTE` | 可选，体验账号显示名与弹窗正文 |
 
-**`next` 服务不需要单独填 `GEMINI_API_KEY` / `STEPFUN_API_KEY`**——Next 侧凭据
-路径是 DB-only（见 `.env.example` 注释与 `docs/configuration/credentials.md`），
-走「先起服务 → 设置页 `POST /api/settings` 写入」，不把 `.env.local` 打进镜像。
+### 3.1 Next 侧 provider 凭据怎么进去
+
+Next 侧凭据路径是 **DB-only**：`provider_credentials` 加密表，`getStepfunConfig()` /
+`getGeminiConfig()` 只读加密存储，**没有 env fallback**，由 `config.test.ts:119` 与
+`gemini-config.test.ts:93` 双向锁死。运行镜像也不含 `src/` 与 `scripts/`，所以运行时
+读 env 这条路根本不存在。
+
+因此把 env 里的明文 Key 转成加密存储，是一个**启动前的一次性任务**，由 compose 的
+`bootstrap-credentials` 服务完成（用 `migrate` target 镜像，它含 `tsx` 与源码）：
+
+```
+migrate → bootstrap-credentials ┐
+       └→ seed-demo-account     ├→ next
+```
+
+两者都是 `next.depends_on` 的 `service_completed_successfully`，所以容器起来时凭据
+已经在库里，**终端用户不需要在设置页填任何 Key**。
+
+- 提供了 Key：脚本先调真实 API 校验，通过才写入；校验失败退出 1，**故意阻断启动**
+  （配置错了必须响）。首次部署要盯这个容器的日志，它需要构建环境能出网。
+- 没提供 Key：`--allow-empty` 让它如实提示并退出 0，不阻断启动。应用没有凭据也能
+  正常起，凭据只在跑管线时才需要；此时用户仍可经设置页自行写入。
+
+轮换 Key 有两条等价路径：改 `.env` 后重跑
+`docker compose -f docker-compose.prod.yml run --rm bootstrap-credentials`，
+或直接在设置页 `POST /api/settings`（真实校验、422 不覆盖已有值）。
+
+### 3.2 体验账号（路演 / 评审）
+
+`seed-demo-account` 服务在 `CVC_DEMO_ACCOUNT_EMAIL` 与 `CVC_DEMO_ACCOUNT_PASSWORD`
+**同时非空**时创建一个 owner 账号并绑到 `LOCAL_WORKSPACE_ID`；任一缺失则原地退出 0，
+什么都不做。登录页据同一对变量决定是否显示体验账号弹窗。
+
+正式对外运营时删掉这两个变量即可，不必改 compose——账号不建、弹窗不出现。
+这两个变量刻意**不是** `NEXT_PUBLIC_*`：那会在构建期内联进客户端 bundle，之后无法
+关掉、也无法在不重新构建的情况下换账号。
 
 `docker compose config` 核对无明文 secret 时，注意上表这几个变量的值不会出现在
 输出里（它们是 `${VAR}` 引用，值来自宿主 `.env`，`compose config` 只回显解析
