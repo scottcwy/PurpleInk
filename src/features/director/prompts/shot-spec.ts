@@ -1,17 +1,23 @@
 import { z } from 'zod'
-import { audioAllocationSchema, scriptUnitsSchema } from '../schemas/ingest'
+import {
+  audioAllocationSchema,
+  scriptUnitSchema,
+  scriptUnitsSchema,
+} from '../schemas/ingest'
 import { compositionModeSchema } from '../schemas/shot-plan'
 
+/**
+ * 目标镜头与来源单元的绑定。
+ *
+ * `sourceUnit` 必须直接复用 INGEST 合同的 `scriptUnitSchema`：上游 script unit
+ * 原样流入本阶段（含 `order` / `speaker` 等可选字段），任何在此处重写的窄版
+ * strict 形状都会让真实 INGEST 产物在构建提示词时硬失败。
+ */
 export const shotSpecTargetSchema = z
   .object({
     laneKey: z.string().regex(/^S\d{3}$/),
     sourceUnitId: z.string().regex(/^U\d{3}$/),
-    sourceUnit: z
-      .object({
-        unitId: z.string().regex(/^U\d{3}$/),
-        text: z.string().min(1),
-      })
-      .strict(),
+    sourceUnit: scriptUnitSchema,
   })
   .strict()
   .refine((target) => target.sourceUnit.unitId === target.sourceUnitId, {

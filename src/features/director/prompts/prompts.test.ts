@@ -1,25 +1,38 @@
 import { describe, expect, it } from 'vitest'
+import { scriptUnitSchema } from '../schemas/ingest'
 import {
   buildScoreAssemblePrompt,
   buildShotSfxPrompt,
   buildShotSubtitlePrompt,
+  shotSfxPromptInputSchema,
+  shotSubtitlePromptInputSchema,
 } from './assemble'
-import { buildDirectPrompt } from './direct'
+import { buildDirectPrompt, directPromptInputSchema } from './direct'
 import { buildFabricatePrompt, buildFabricateRetryPrompt } from './fabricate'
 import { buildExportFinalizePrompt, buildShotQaPrompt } from './finalize'
-import { buildIngestPrompt } from './ingest'
-import { buildShotSpecPrompt, buildShotSpecRetryPrompt } from './shot-spec'
+import { buildIngestPrompt, ingestPromptInputSchema } from './ingest'
+import {
+  buildShotSpecPrompt,
+  buildShotSpecRetryPrompt,
+  shotSpecPromptInputSchema,
+} from './shot-spec'
 import {
   resolveVisualTheme,
   visualThemeConstraint,
 } from './visual-theme'
 
 const digest = `sha256:${'a'.repeat(64)}`
-const scriptUnits = [{ unitId: 'U001' as const, text: '测试文稿', order: 0 }]
+/**
+ * 真实 INGEST 产物形状：`order` 由 INGEST 提示词显式要求，`speaker` 由合同允许。
+ * 下游阶段必须原样接受，fixture 不得退化成 `{ unitId, text }` 的窄形状。
+ */
+const scriptUnits = [
+  { unitId: 'U001' as const, text: '测试文稿', order: 0, speaker: '旁白' },
+]
 const shotSpecTarget = {
   laneKey: 'S001' as const,
   sourceUnitId: 'U001' as const,
-  sourceUnit: { unitId: 'U001' as const, text: '测试文稿' },
+  sourceUnit: scriptUnits[0]!,
 }
 const audioManifest = {
   version: 1,
@@ -230,5 +243,85 @@ describe('director prompt templates', () => {
     expect(shotSpecRetry).toContain('shots.0.mustShow')
     expect(shotSpecRetry).toContain('第 2/2 次')
     expect(shotSpecRetry).toContain('完整 JSON')
+  })
+})
+
+/**
+ * 回归护栏：script unit 的唯一真值是 `schemas/ingest` 的 `scriptUnitSchema`。
+ *
+ * 真实事故——SHOT_SPEC 把 `target.sourceUnit` 重写成只允许 `{ unitId, text }`
+ * 的 strict 形状，导致带 `order` 的真实 INGEST 产物在构建提示词时必然抛
+ * `unrecognized_keys`，模型一次都没被调用。任何下游阶段再收窄这份合同，
+ * 这里必须先红。
+ */
+describe('INGEST script unit 合同跨阶段流通', () => {
+  const fullUnit = {
+    unitId: 'U001' as const,
+    text: '测试文稿',
+    order: 0,
+    speaker: '旁白',
+  }
+
+  it('accepts every optional INGEST field in the shared contract', () => {
+    expect(scriptUnitSchema.parse(fullUnit)).toEqual(fullUnit)
+  })
+
+  it('lets a complete INGEST script unit flow into every downstream consumer', () => {
+    const shotAllocation = audioAllocation.shots[0]!
+    const consumers: ReadonlyArray<readonly [string, () => unknown]> = [
+      [
+        'INGEST',
+        () =>
+          ingestPromptInputSchema.parse({
+            rawScript: '原稿',
+            existingUnits: [fullUnit],
+          }),
+      ],
+      [
+        'DIRECT',
+        () =>
+          directPromptInputSchema.parse({
+            projectTitle: '测试',
+            scriptUnits: [fullUnit],
+          }),
+      ],
+      [
+        'SHOT_SPEC',
+        () =>
+          shotSpecPromptInputSchema.parse({
+            target: {
+              laneKey: 'S001',
+              sourceUnitId: fullUnit.unitId,
+              sourceUnit: fullUnit,
+            },
+            scriptUnits: [fullUnit],
+            masterPlan: '导演总纲',
+            styleBible: '风格圣经',
+          }),
+      ],
+      [
+        'ASSEMBLE·shot-sfx',
+        () =>
+          shotSfxPromptInputSchema.parse({
+            shot,
+            scriptUnit: fullUnit,
+            shotAllocation,
+            renderedArtifactKey: 'shots/S001.mp4',
+            styleBible: '风格圣经',
+          }),
+      ],
+      [
+        'ASSEMBLE·shot-subtitle',
+        () =>
+          shotSubtitlePromptInputSchema.parse({
+            shot,
+            scriptUnit: fullUnit,
+            shotAllocation,
+          }),
+      ],
+    ]
+    for (const [stage, parse] of consumers) {
+      expect(parse, `${stage} 必须原样接受 INGEST script unit`).not.toThrow()
+    }
   })
 })
