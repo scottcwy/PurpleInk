@@ -215,6 +215,19 @@ try {
 
   console.log('\n--- 汇总 ---\n' + log.join('\n'))
 } finally {
+  // 取证账号是一次性的：留在开发库里会污染后续的归属与隔离验证。
+  // 只删本脚本自己造的 kiro-auth-* 账号与其 workspace，不动任何真实数据。
+  const removed = await sql`
+    delete from users where email like 'kiro-auth-%@example.com' returning id
+  `
+  const orphaned = await sql`
+    delete from workspaces
+    where slug like 'kiro-auth-%'
+      and not exists (select 1 from workspace_members m where m.workspace_id = workspaces.id)
+    returning id
+  `
+  await sql`delete from email_verification_codes where email like 'kiro-auth-%@example.com'`
+  console.log(`\n[cleanup] 删除取证账号 ${removed.length} 个，孤立 workspace ${orphaned.length} 个`)
   await sql.end()
 }
 
