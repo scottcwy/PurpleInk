@@ -95,6 +95,9 @@ INGEST / DIRECT / SHOT_SPEC / ASSEMBLE·shot-sfx / ASSEMBLE·shot-subtitle 的�
 
 **已落地护栏**：`src/features/canvas/workflow-error.test.ts` 覆盖
 「非渲染阶段不得称渲染失败」「schema 失败必须点名字段且不可重试」「各阶段兜底归位」。
+内部路由/能力矛盾另有 `RouteContractError`（`src/features/ai/route-contract-error.ts`），
+`classifyByType` 按类型识别为 `ROUTE_CONTRACT_INVALID` 且 `retryable=false`，
+断言见同一测试文件「路由/能力矛盾归类为不可重试的配置问题」。
 
 ---
 
@@ -119,9 +122,16 @@ INGEST / DIRECT / SHOT_SPEC / ASSEMBLE·shot-sfx / ASSEMBLE·shot-subtitle 的�
 - 给任意 dispatcher 加「不支持 / 不能 / 未知」的硬抛之前，先确认现有节点类型里
   没有正在走这条路的。历史成功记录（artifacts 表按 `node.type` 分组）是最快的证据。
 
-**已落地护栏**：暂无（见 §9 待修项）。修复该模式时必须补齐两条断言：
-全部 `DIRECTOR_NODE_TYPES` 都能解析出 Director 模型；`saveDirectorRoutes`
-仍拒绝无 TTS/ASR 能力的供应商接管媒体节点。
+**已落地护栏**：`src/features/ai/route-target.ts` 把 `ROUTE_TARGET`（节点的主职责
+路由）与会话路由分开——`model-routing.ts` 的 `sessionTarget()` 把媒体域节点的
+Director 会话改写为 `project-plan` 文本任务，不再对媒体域抛错。默认供应商改为
+按 `AiTaskKind` / 媒体 kind 声明（不再按节点类型声明，消除双真值），模型推导
+统一收进 `route-provider-defaults.ts` 的 `providerDefaults()`，设置页展示与
+实际执行调用同一份推导。`model-routing.test.ts` 新增三条断言：全部
+`DIRECTOR_NODE_TYPES` 都能解析出 Director 会话模型；媒体泳道节点会话绑定文本
+路由而非 TTS/ASR 路由；展示模型必须等于执行模型。真实链路验证见对应提交记录
+（项目 bd2c8979 的 5 个 shot-sfx + 5 个 shot-subtitle 节点从 failed 转 succeeded，
+产物 content_hash 与磁盘字节核对一致）。
 
 ---
 
@@ -206,13 +216,14 @@ docker exec purpleink-dev-postgres-1 psql -U cvc -d cvc -A -t -F "|" -c `
 
 | 项 | 模式 | 现状 |
 | --- | --- | --- |
-| `shot-sfx` / `shot-subtitle` 无法解析 Director 文本模型 | C | 音效与字幕通道全线失败，`ROUTE_TARGET` 需要能同时表达文本与媒体职责 |
-| `DEFAULT_PROVIDER` 与 `media_routes` 双真值 | A | `DEFAULT_PROVIDER['shot-sfx']='stepfun'`，而实际媒体路由已是 mimo；无路由行时设置页展示值与执行值可能不一致 |
-| 内部路由矛盾仍走文案规则 | B | 含「模型」二字的内部错误仍被归为 `PROVIDER_FAILED` 且可重试 |
 | `docs/issues/ISSUE-005`、`Batch-002` 仍写 `measureMp3` | — | 函数已更名 `measureAudio`，历史文档未同步 |
 | `src/lib/queue/init.test.ts` 全量并行下偶发失败 | — | 卡在 `vi.resetModules()` 的模块隔离；单独执行与重跑均通过 |
 
 修完任一项时，把该行删掉并在对应模式的「已落地护栏」里写清断言位置。
+
+已修：`shot-sfx` / `shot-subtitle` 无法解析 Director 文本模型（模式 C）、
+`DEFAULT_PROVIDER` 与 `media_routes` 双真值（模式 A）、内部路由矛盾仍走文案
+规则（模式 B）——见 §2、§3、§4 的「已落地护栏」。
 
 ---
 
