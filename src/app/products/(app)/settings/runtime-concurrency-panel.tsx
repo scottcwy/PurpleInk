@@ -27,10 +27,14 @@ import {
  */
 export interface RuntimeConcurrencyPanelProps {
   controller: ReadyModelSettingsController
+  openPanels: Record<string, boolean>
+  onPanelOpenChange: (id: string, open: boolean) => void
 }
 
 export function RuntimeConcurrencyPanel({
   controller,
+  openPanels,
+  onPanelOpenChange,
 }: RuntimeConcurrencyPanelProps) {
   const view = controller.data.laneQuotas
   const busy = controller.busy === 'laneQuotas'
@@ -42,6 +46,8 @@ export function RuntimeConcurrencyPanel({
       description="本地渲染并发、输出规格"
       icon={Cpu}
       summary="账号级 · 重启后生效"
+      open={openPanels['runtime'] ?? false}
+      onOpenChange={(open) => onPanelOpenChange('runtime', open)}
     >
       <SettingsRow
         label="Director 阶段并发"

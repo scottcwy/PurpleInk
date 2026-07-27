@@ -35,7 +35,13 @@ type ModelSettingsController =
 export function ModelServiceSettings() {
   const controller = useModelSettingsController()
   if (!controller.ready) return <ModelSettingsSkeleton />
-  return <ModelServicePanels controller={controller} />
+  return (
+    <ModelServicePanels
+      controller={controller}
+      openPanels={{}}
+      onPanelOpenChange={() => undefined}
+    />
+  )
 }
 
 /**

@@ -21,12 +21,16 @@ export function WorkflowRoutePanel({
   busy,
   onChange,
   onSave,
+  openPanels,
+  onPanelOpenChange,
 }: {
   routes: RouteDraft
   effective?: Record<CanvasNodeType, DirectorRouteView>
   busy: boolean
   onChange: (nodeType: CanvasNodeType, provider: AiProviderId) => void
   onSave: () => void
+  openPanels: Record<string, boolean>
+  onPanelOpenChange: (id: string, open: boolean) => void
 }) {
   return (
     <SettingsPanel
@@ -36,6 +40,8 @@ export function WorkflowRoutePanel({
       icon={Route}
       summary={`${ROUTE_ROWS.length} 条路由`}
       defaultOpen={false}
+      open={openPanels['routing'] ?? false}
+      onOpenChange={(open) => onPanelOpenChange('routing', open)}
     >
       {ROUTE_ROWS.map(([nodeType, label], index) => {
         const capability = capabilityFor(nodeType)
