@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiConfigDependencies } from './config'
 import {
+  DIRECTOR_NODE_TYPES,
   describeDirectorRoutes,
   getDirectorProvider,
   resolveDirectorModelTarget,
@@ -253,5 +254,75 @@ describe('Director provider routing', () => {
       source: 'default',
       model: 'gemini-3.1-flash-lite',
     })
+  })
+
+  /**
+   * 真实事故回归：`shot-sfx` / `shot-subtitle` 同时有两个职责——Director 会话用
+   * 文本模型产出音效清单与字幕规划（历史上 77 个节点成功并留下 director-assemble
+   * 产物），媒体路由只覆盖真实 TTS / ASR 调用。曾经因为「媒体域节点直接抛错」
+   * 让整条音效与字幕通道全线失败，而测试完全没有覆盖。
+   */
+  it('resolves a Director session model for every director node type', async () => {
+    const { dependencies, secrets } = createDependencies()
+    secrets.set('gemini', 'gemini-key')
+    for (const nodeType of DIRECTOR_NODE_TYPES) {
+      await expect(
+        resolveDirectorModelTarget(nodeType, 'text', dependencies),
+        `${nodeType} 必须能解析出 Director 会话模型`
+      ).resolves.toMatchObject({ modelId: expect.any(String) })
+    }
+  })
+
+  it('binds a media lane session to the text route, not to the TTS/ASR route', async () => {
+    const { dependencies, media, models, secrets } = createDependencies()
+    secrets.set('gemini', 'gemini-key')
+    secrets.set('mimo', 'mimo-key')
+    models.set('project-plan', {
+      workspaceId: 'workspace',
+      aiTaskKind: 'project-plan',
+      provider: 'gemini',
+      model: 'configured-text-model',
+      revision: 0,
+    })
+    media.set('tts', {
+      workspaceId: 'workspace',
+      mediaTaskKind: 'tts',
+      provider: 'mimo',
+      model: 'mimo-v2.5-tts',
+      revision: 0,
+    })
+
+    // 会话拿文本路由；媒体路由仍然只服务真实 TTS 调用与设置页展示。
+    await expect(
+      resolveDirectorModelTarget('shot-sfx', 'text', dependencies)
+    ).resolves.toMatchObject({
+      provider: 'gemini',
+      modelId: 'configured-text-model',
+      apiKey: 'gemini-key',
+    })
+    const routes = await describeDirectorRoutes(dependencies)
+    expect(routes['shot-sfx']).toMatchObject({
+      provider: 'mimo',
+      source: 'settings',
+      model: 'mimo-v2.5-tts',
+    })
+  })
+
+  /**
+   * 设置页展示值与实际执行值必须来自同一处默认值推导。曾经 describeDirectorRoutes
+   * 按任务种类给 project-plan 返回 fastModel，而执行路径按节点类型给非
+   * script-import 的 project-plan 节点返回 primaryModel：设置页显示一个模型，
+   * 真跑另一个模型。
+   */
+  it('keeps the displayed default model identical to the executed one', async () => {
+    const { dependencies, secrets } = createDependencies()
+    secrets.set('gemini', 'gemini-key')
+    const routes = await describeDirectorRoutes(dependencies)
+    for (const nodeType of ['script-import', 'shot-split', 'score', 'export', 'shot-script', 'shot-codegen'] as const) {
+      const executed = await resolveDirectorModelTarget(nodeType, 'text', dependencies)
+      expect(routes[nodeType]?.model, `${nodeType} 展示值必须等于执行值`).toBe(
+        executed.modelId
+      )
+    }
   })
 })

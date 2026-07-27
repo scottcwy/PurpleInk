@@ -1,22 +1,23 @@
 import 'server-only'
 import { z } from 'zod'
 import type { CanvasNodeType } from '@/features/canvas'
-import type { AiTaskKind, MediaTaskKind } from '@/features/routing'
+import type { AiTaskKind } from '@/features/routing'
 import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
-import {
-  type AiConfigDependencies,
-  getAiConfigDependencies,
-  getStepfunConfig,
-} from './config'
-import { getGeminiConfig } from './gemini-config'
-import { getMimoConfig } from './mimo-config'
-import { CUSTOM_OPENAI_PROVIDER } from './openai-compatible-config'
+import { type AiConfigDependencies, getAiConfigDependencies } from './config'
+import { providerDefaults } from './route-provider-defaults'
 import {
   AI_PROVIDER_IDS,
   assertProviderCapability,
   type AiProviderId,
   type ProviderCapability,
 } from './provider-registry'
+import {
+  ROUTE_TARGET,
+  capabilityForTarget,
+  targetKey,
+  type AiRouteTarget,
+  type RouteTarget,
+} from './route-target'
 
 export { AI_PROVIDER_IDS, type AiProviderId }
 export type ModelCapability = Extract<ProviderCapability, 'text' | 'vision'>
@@ -34,33 +35,36 @@ export const DIRECTOR_NODE_TYPES = [
 ] as const satisfies readonly CanvasNodeType[]
 
 const providerSchema = z.enum(AI_PROVIDER_IDS)
-const DEFAULT_PROVIDER: Record<CanvasNodeType, AiProviderId> = {
-  'script-import': 'gemini',
-  'shot-split': 'gemini',
-  score: 'gemini',
-  export: 'gemini',
-  'shot-script': 'gemini',
-  'shot-codegen': 'gemini',
-  'shot-sfx': 'stepfun',
-  'shot-subtitle': 'stepfun',
-  'shot-qa': 'gemini',
+
+/**
+ * 默认供应商按**路由任务**声明，不按节点类型。
+ *
+ * 路由行本身就是 per task kind（`model_routes.ai_task_kind` /
+ * `media_routes.media_task_kind`）。一旦按节点类型声明默认值，同一条路由就会有
+ * 多个互相矛盾的默认值，设置页展示与实际执行必然分叉。
+ */
+const DEFAULT_AI_PROVIDER: Record<AiTaskKind, AiProviderId> = {
+  'project-plan': 'gemini',
+  'shot-spec': 'gemini',
+  fabricate: 'gemini',
+  'vision-qa': 'gemini',
 }
 
-type RouteTarget =
-  | { domain: 'ai'; kind: AiTaskKind }
-  | { domain: 'media'; kind: MediaTaskKind }
-
-const ROUTE_TARGET: Record<CanvasNodeType, RouteTarget> = {
-  'script-import': { domain: 'ai', kind: 'project-plan' },
-  'shot-split': { domain: 'ai', kind: 'project-plan' },
-  score: { domain: 'ai', kind: 'project-plan' },
-  export: { domain: 'ai', kind: 'project-plan' },
-  'shot-script': { domain: 'ai', kind: 'shot-spec' },
-  'shot-codegen': { domain: 'ai', kind: 'fabricate' },
-  'shot-sfx': { domain: 'media', kind: 'tts' },
-  'shot-subtitle': { domain: 'media', kind: 'asr' },
-  'shot-qa': { domain: 'ai', kind: 'vision-qa' },
+const DEFAULT_MEDIA_PROVIDER: Record<'tts' | 'asr', AiProviderId> = {
+  tts: 'stepfun',
+  asr: 'stepfun',
 }
+
+/**
+ * 媒体泳道节点的 Director 会话文本任务。
+ *
+ * `shot-sfx` / `shot-subtitle` 同时承担两个职责：LLM 会话产出音效清单与字幕规划
+ * （落 `director-assemble` 产物），媒体路由负责真实 TTS / ASR 调用。会话必须拿到
+ * 文本模型，归到与同阶段全局节点 `score` 相同的 `project-plan` 文本路由。
+ *
+ * 真实事故：曾对媒体域节点在解析会话模型时直接抛错，音效与字幕通道全线失败。
+ */
+const MEDIA_LANE_SESSION_TASK = 'project-plan' satisfies AiTaskKind
 
 export interface DirectorProviderView {
   provider: AiProviderId
@@ -84,21 +88,32 @@ interface ResolvedRoute {
   secret: string | null
 }
 
+function sessionTarget(nodeType: CanvasNodeType): AiRouteTarget {
+  const target = ROUTE_TARGET[nodeType]
+  return target.domain === 'ai'
+    ? target
+    : { domain: 'ai', kind: MEDIA_LANE_SESSION_TASK }
+}
+
+function defaultProviderFor(target: RouteTarget): AiProviderId {
+  return target.domain === 'media'
+    ? DEFAULT_MEDIA_PROVIDER[target.kind]
+    : DEFAULT_AI_PROVIDER[target.kind]
+}
+
 async function findRoute(
-  nodeType: CanvasNodeType,
+  target: RouteTarget,
   deps: AiConfigDependencies,
 ): Promise<{ provider: string; model: string } | null> {
-  const target = ROUTE_TARGET[nodeType]
   return target.domain === 'media'
     ? deps.mediaRoutes.find(LOCAL_WORKSPACE_ID, target.kind)
     : deps.modelRoutes.find(LOCAL_WORKSPACE_ID, target.kind)
 }
 
 async function resolveRoute(
-  nodeType: CanvasNodeType,
+  target: RouteTarget,
   deps: AiConfigDependencies,
 ): Promise<ResolvedRoute | null> {
-  const target = ROUTE_TARGET[nodeType]
   const route = target.domain === 'media'
     ? await deps.mediaRoutes.resolve(LOCAL_WORKSPACE_ID, target.kind)
     : await deps.modelRoutes.resolve(LOCAL_WORKSPACE_ID, target.kind)
@@ -110,113 +125,60 @@ async function resolveRoute(
   }
 }
 
-function capabilityForTarget(target: RouteTarget): ProviderCapability {
-  if (target.domain === 'media') return target.kind
-  return target.kind === 'vision-qa' ? 'vision' : 'text'
-}
-
 export async function getDirectorProvider(
   nodeType: CanvasNodeType,
   deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<DirectorProviderView> {
-  const configured = await findRoute(nodeType, deps)
+  const target = ROUTE_TARGET[nodeType]
+  const configured = await findRoute(target, deps)
   const provider = providerSchema.safeParse(configured?.provider)
   return provider.success
     ? { provider: provider.data, source: 'settings' }
-    : { provider: DEFAULT_PROVIDER[nodeType], source: 'default' }
+    : { provider: defaultProviderFor(target), source: 'default' }
 }
 
-async function fallbackTarget(
-  provider: AiProviderId,
-  nodeType: CanvasNodeType,
-  capability: ModelCapability,
-  deps: AiConfigDependencies,
-): Promise<DirectorModelTarget> {
-  if (provider === 'stepfun') {
-    const config = await getStepfunConfig(deps)
-    return {
-      provider,
-      baseUrl: config.baseUrl,
-      modelId: capability === 'vision' ? config.visionModel : config.chatModel,
-      apiKey: config.apiKey,
-    }
-  }
-  if (provider === CUSTOM_OPENAI_PROVIDER) {
-    const profiles = deps.openAiCompatibleProfiles
-    if (!profiles) throw new Error('OpenAI 兼容模型配置存储不可用')
-    const [profile, apiKey] = await Promise.all([
-      profiles.find(LOCAL_WORKSPACE_ID),
-      deps.credentials.loadSecret(LOCAL_WORKSPACE_ID, CUSTOM_OPENAI_PROVIDER),
-    ])
-    if (!profile) {
-      throw new Error('OpenAI 兼容模型服务尚未配置')
-    }
-    return {
-      provider,
-      baseUrl: profile.baseUrl,
-      modelId: profile.defaultModel,
-      apiKey,
-    }
-  }
-  if (provider === 'mimo') {
-    const config = await getMimoConfig(deps)
-    return {
-      provider,
-      baseUrl: config.baseUrl,
-      modelId: capability === 'vision' ? config.visionModel : config.textModel,
-      apiKey: config.apiKey,
-    }
-  }
-  const config = await getGeminiConfig(deps)
-  return {
-    provider,
-    baseUrl: config.baseUrl,
-    modelId:
-      capability === 'vision' || nodeType !== 'script-import'
-        ? config.primaryModel
-        : config.fastModel,
-    apiKey: config.apiKey,
-  }
-}
-
+/**
+ * 解析 Director 会话要用的模型。
+ *
+ * 会话一律走**文本域**路由：媒体泳道节点的 TTS / ASR 路由只覆盖媒体调用，
+ * 不能当作会话模型，也不能因此让整个节点无法执行。
+ */
 export async function resolveDirectorModelTarget(
   nodeType: CanvasNodeType,
   capability: ModelCapability = 'text',
   deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<DirectorModelTarget> {
-  if (ROUTE_TARGET[nodeType].domain !== 'ai') {
-    throw new Error(`${nodeType} 是媒体节点，不能解析为 Director 模型`)
-  }
-  const configured = await resolveRoute(nodeType, deps)
+  const target = sessionTarget(nodeType)
+  const configured = await resolveRoute(target, deps)
   if (configured) {
-    const fallback = await fallbackTarget(
-      configured.provider,
-      nodeType,
-      capability,
-      deps,
-    )
+    const defaults = await providerDefaults(configured.provider, deps)
     return {
-      ...fallback,
+      provider: configured.provider,
+      baseUrl: defaults.baseUrl,
       modelId: configured.model,
       apiKey: configured.secret,
     }
   }
-  const { provider } = await getDirectorProvider(nodeType, deps)
-  return fallbackTarget(provider, nodeType, capability, deps)
+  const provider = defaultProviderFor(target)
+  const defaults = await providerDefaults(provider, deps)
+  return {
+    provider,
+    baseUrl: defaults.baseUrl,
+    modelId: defaults.modelFor(target, capability),
+    apiKey: defaults.apiKey,
+  }
 }
 
 export async function describeDirectorRoutes(
   deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<Record<CanvasNodeType, DirectorRouteView>> {
   const entries = await Promise.all(DIRECTOR_NODE_TYPES.map(async (nodeType) => {
-    const provider = await getDirectorProvider(nodeType, deps)
-    const routeTarget = ROUTE_TARGET[nodeType]
-    const configured = await findRoute(nodeType, deps)
-    const model = configured?.model ?? await modelForProvider(
-      provider.provider,
-      routeTarget,
-      deps,
-    )
+    const target = ROUTE_TARGET[nodeType]
+    const [provider, configured] = await Promise.all([
+      getDirectorProvider(nodeType, deps),
+      findRoute(target, deps),
+    ])
+    const model = configured?.model ?? await defaultModel(provider.provider, target, deps)
     return [nodeType, { ...provider, model }] as const
   }))
   return Object.fromEntries(entries) as Record<CanvasNodeType, DirectorRouteView>
@@ -225,44 +187,6 @@ export async function describeDirectorRoutes(
 export type DirectorRouteSettingsInput = Partial<
   Record<CanvasNodeType, AiProviderId>
 >
-
-function targetKey(target: RouteTarget): string {
-  return `${target.domain}:${target.kind}`
-}
-
-async function modelForProvider(
-  provider: AiProviderId,
-  target: RouteTarget,
-  deps: AiConfigDependencies,
-): Promise<string> {
-  const capability = capabilityForTarget(target)
-  assertProviderCapability(provider, capability)
-  if (provider === 'stepfun') {
-    const config = await getStepfunConfig(deps)
-    if (target.domain === 'media') {
-      return target.kind === 'tts' ? config.ttsModel : config.asrModel
-    }
-    return target.kind === 'vision-qa' ? config.visionModel : config.chatModel
-  }
-  if (provider === CUSTOM_OPENAI_PROVIDER) {
-    const profiles = deps.openAiCompatibleProfiles
-    if (!profiles) throw new Error('OpenAI 兼容模型配置存储不可用')
-    const profile = await profiles.find(LOCAL_WORKSPACE_ID)
-    if (!profile) throw new Error('OpenAI 兼容模型服务尚未配置')
-    return profile.defaultModel
-  }
-  if (provider === 'mimo') {
-    const config = await getMimoConfig(deps)
-    if (target.domain === 'media') {
-      return target.kind === 'tts' ? config.ttsModel : config.asrModel
-    }
-    return target.kind === 'vision-qa' ? config.visionModel : config.textModel
-  }
-  const config = await getGeminiConfig(deps)
-  return target.domain === 'ai' && target.kind !== 'project-plan'
-    ? config.primaryModel
-    : config.fastModel
-}
 
 export async function saveDirectorRoutes(
   input: DirectorRouteSettingsInput,
@@ -278,13 +202,10 @@ export async function saveDirectorRoutes(
     const target = ROUTE_TARGET[nodeType]
     const parsedProvider = providerSchema.parse(provider)
     assertProviderCapability(parsedProvider, capabilityForTarget(target))
-    selected.set(targetKey(target), {
-      target,
-      provider: parsedProvider,
-    })
+    selected.set(targetKey(target), { target, provider: parsedProvider })
   }
   await Promise.all([...selected.values()].map(async ({ target, provider }) => {
-    const model = await modelForProvider(provider, target, deps)
+    const model = await defaultModel(provider, target, deps)
     if (target.domain === 'media') {
       await deps.mediaRoutes.save({
         workspaceId: LOCAL_WORKSPACE_ID,
@@ -292,13 +213,22 @@ export async function saveDirectorRoutes(
         provider,
         model,
       })
-    } else {
-      await deps.modelRoutes.save({
-        workspaceId: LOCAL_WORKSPACE_ID,
-        aiTaskKind: target.kind,
-        provider,
-        model,
-      })
+      return
     }
+    await deps.modelRoutes.save({
+      workspaceId: LOCAL_WORKSPACE_ID,
+      aiTaskKind: target.kind,
+      provider,
+      model,
+    })
   }))
+}
+
+async function defaultModel(
+  provider: AiProviderId,
+  target: RouteTarget,
+  deps: AiConfigDependencies,
+): Promise<string> {
+  const defaults = await providerDefaults(provider, deps)
+  return defaults.modelFor(target, capabilityForTarget(target))
 }
