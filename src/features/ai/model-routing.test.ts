@@ -7,7 +7,7 @@ import {
   resolveDirectorModelTarget,
   saveDirectorRoutes,
 } from './model-routing'
-import type { OpenAiCompatibleProfile } from './openai-compatible-profile-store'
+import type { OpenAiCompatibleProfile } from './openai-compatible-payloads'
 
 vi.mock('server-only', () => ({}))
 

@@ -5,8 +5,8 @@ import {
   normalizeBaseUrl,
   normalizeText,
   type OpenAiCompatibleProfile,
-  type OpenAiCompatibleProfileStore,
-} from './openai-compatible-profile-store'
+} from './openai-compatible-payloads'
+import type { OpenAiCompatibleProfileStore } from './openai-compatible-profile-store'
 
 export const CUSTOM_OPENAI_PROVIDER = 'openai-compatible' as const
 

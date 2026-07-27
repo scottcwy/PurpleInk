@@ -5,7 +5,7 @@ import {
   validateOpenAiCompatibleProfile,
   type OpenAiCompatibleDependencies,
 } from './openai-compatible-config'
-import type { OpenAiCompatibleProfile } from './openai-compatible-profile-store'
+import type { OpenAiCompatibleProfile } from './openai-compatible-payloads'
 
 vi.mock('server-only', () => ({}))
 

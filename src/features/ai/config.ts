@@ -10,6 +10,10 @@ import {
 } from '@/features/routing'
 import { getDb, LOCAL_WORKSPACE_ID } from '@/lib/db/client'
 import {
+  PostgresOpenAiCompatibleAudioProfileStore,
+  type OpenAiCompatibleAudioProfileStore,
+} from './openai-compatible-audio-profile-store'
+import {
   PostgresOpenAiCompatibleProfileStore,
   type OpenAiCompatibleProfileStore,
 } from './openai-compatible-profile-store'
@@ -49,6 +53,7 @@ export interface AiConfigDependencies {
     'find' | 'remove' | 'resolve' | 'save'
   >
   openAiCompatibleProfiles?: OpenAiCompatibleProfileStore
+  openAiCompatibleAudioProfiles?: OpenAiCompatibleAudioProfileStore
 }
 
 const credentials = new PostgresProviderCredentialStore(getDb)
@@ -57,6 +62,8 @@ const dependencies: AiConfigDependencies = {
   modelRoutes: new PostgresModelRouteRepository(getDb, credentials),
   mediaRoutes: new PostgresMediaRouteRepository(getDb, credentials),
   openAiCompatibleProfiles: new PostgresOpenAiCompatibleProfileStore(getDb),
+  openAiCompatibleAudioProfiles:
+    new PostgresOpenAiCompatibleAudioProfileStore(getDb),
 }
 
 const DEFAULTS: Record<StepfunModelField, string> = {
