@@ -69,7 +69,7 @@ export async function loadMediaAssembly(
     .orderBy(desc(artifacts.version), desc(artifacts.createdAt))
   const ingestNode = input.nodes.find((node) => node.type === 'script-import')
   const ingestArtifact = ingestNode
-    ? latest(rows, ingestNode.nodeId, 'director-ingest')
+    ? selectIngestAudioArtifact(rows, ingestNode.nodeId)
     : undefined
   if (!ingestArtifact) {
     return blocked(input.nodes, 'artifact-missing')
@@ -156,6 +156,20 @@ function latest<T extends {
   return rows
     .filter((row) => row.aggregateId === aggregateId && row.kind === kind)
     .sort((left, right) => right.version - left.version)[0]
+}
+
+export function selectIngestAudioArtifact<T extends {
+    aggregateId: string
+    kind: string
+    version: number
+  }>(
+  rows: T[],
+  ingestNodeId: string
+): T | undefined {
+  return (
+    latest(rows, ingestNodeId, 'director-ingest-audio') ??
+    latest(rows, ingestNodeId, 'director-ingest')
+  )
 }
 
 async function readJsonArtifact(
