@@ -7,6 +7,7 @@ import {
   resolveDirectorModelTarget,
   saveDirectorRoutes,
 } from './model-routing'
+import type { OpenAiCompatibleProfile } from './openai-compatible-profile-store'
 
 vi.mock('server-only', () => ({}))
 
@@ -24,7 +25,7 @@ function createDependencies() {
   const models = new Map<ModelKind, ModelRoute>()
   const media = new Map<MediaKind, MediaRoute>()
   const secrets = new Map<string, string>()
-  let customProfile: { baseUrl: string; defaultModel: string } | null = null
+  let customProfile: OpenAiCompatibleProfile | null = null
   const credentials: AiConfigDependencies['credentials'] = {
     save: vi.fn(async ({ provider, secret }) => {
       secrets.set(provider, secret)
@@ -193,7 +194,8 @@ describe('Director provider routing', () => {
     secrets.set('openai-compatible', 'custom-key')
     await dependencies.openAiCompatibleProfiles!.save('workspace', {
       baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
-      defaultModel: 'mimo-v2.5-pro',
+      textModel: 'mimo-v2.5-pro',
+      visionModel: null,
     })
     models.set('project-plan', {
       workspaceId: 'workspace',

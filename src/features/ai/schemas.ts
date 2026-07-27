@@ -61,11 +61,16 @@ export const stepfunSettingsSchema = z.object({
     })
     .strict()
     .optional(),
+  /**
+   * 自定义兼容文本端点。`visionModel` 可选且允许空串——空串表示显式清空，
+   * 该端点随后不能承担视觉路由。
+   */
   customOpenAi: z
     .object({
       apiKey: z.string().min(1, 'OpenAI 兼容 API Key 不能为空'),
       baseUrl: z.string().min(1, 'OpenAI 兼容端点不能为空'),
-      defaultModel: z.string().min(1, 'OpenAI 兼容默认模型不能为空'),
+      textModel: z.string().min(1, 'OpenAI 兼容文本模型不能为空'),
+      visionModel: z.string().optional(),
     })
     .strict()
     .optional(),

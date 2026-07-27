@@ -80,7 +80,15 @@ async function customOpenAiDefaults(
     apiKey,
     modelFor: (_target, capability) => {
       assertProviderCapability(CUSTOM_OPENAI_PROVIDER, capability)
-      return profile.defaultModel
+      if (capability !== 'vision') return profile.textModel
+      // 视觉模型留空表示该端点没有被证明能接受图像输入。这里显式拒绝，让分镜验收
+      // 的路由在保存时就拿到 422，而不是等到 FINALIZE 阶段才失败。
+      if (!profile.visionModel) {
+        throw new RouteContractError(
+          'OpenAI 兼容模型服务尚未配置视觉模型，无法承担视觉路由',
+        )
+      }
+      return profile.visionModel
     },
   }
 }

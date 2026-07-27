@@ -125,7 +125,8 @@ describe('GET /api/settings', () => {
       configured: false,
       verifiedAt: null,
       baseUrl: null,
-      defaultModel: null,
+      textModel: null,
+      visionModel: null,
     })
     mocks.describeMimoConfig.mockResolvedValue({
       baseUrl: { value: 'https://api.xiaomimimo.com/v1', source: 'default' },
@@ -187,7 +188,8 @@ describe('POST /api/settings', () => {
     const input = {
       apiKey: 'candidate-secret',
       baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
-      defaultModel: 'mimo-v2.5-pro',
+      textModel: 'mimo-v2.5-pro',
+      visionModel: 'mimo-v2.5-vision',
     }
 
     const response = await POST(request({ customOpenAi: input }))

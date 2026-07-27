@@ -101,12 +101,7 @@ export async function validateProviderSettings(
 
   if (input.customOpenAi) {
     const validated = await validateOpenAiCompatibleProfile(input.customOpenAi)
-    if (!validated.ok) {
-      return reject(
-        422,
-        'OpenAI 兼容模型服务校验失败，请检查端点、模型和 Key',
-      )
-    }
+    if (!validated.ok) return customOpenAiValidationError(validated)
   }
 
   return OK
@@ -235,6 +230,24 @@ function mimoValidationError(
       ? 'MiMo 产品 API Key 格式无效，请使用 sk- Key'
       : 'MiMo Key 校验失败，请检查产品 API Key、额度和端点'
   return reject(422, error, false)
+}
+
+/**
+ * 文案必须指出是哪个模型被拒：文本模型与视觉模型分别用各自的探针校验，
+ * 合成一句「校验失败」会让用户改错字段。
+ */
+function customOpenAiValidationError(
+  validation: { field: 'textModel' | 'visionModel'; status?: number },
+): ProviderSettingsOutcome {
+  const suffix = validation.status === undefined
+    ? ''
+    : `（HTTP ${validation.status}）`
+  return reject(
+    422,
+    validation.field === 'visionModel'
+      ? `OpenAI 兼容视觉模型未接受图像输入${suffix}，请填写支持图像的模型或清空该字段`
+      : `OpenAI 兼容文本模型校验失败${suffix}，请检查端点、模型和 Key`,
+  )
 }
 
 function customOpenAiDependencies() {

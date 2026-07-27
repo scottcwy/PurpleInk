@@ -221,7 +221,8 @@ function applyResponse(
   setMimo(draftFromView(MIMO_FIELDS, body.mimo))
   setCustomOpenAi({
     baseUrl: body.customOpenAi?.baseUrl?.value ?? '',
-    defaultModel: body.customOpenAi?.defaultModel?.value ?? '',
+    textModel: body.customOpenAi?.textModel?.value ?? '',
+    visionModel: body.customOpenAi?.visionModel?.value ?? '',
   })
   setRoutes(
     Object.fromEntries(

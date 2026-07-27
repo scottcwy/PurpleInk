@@ -16,7 +16,8 @@ export type GeminiDraft = Record<GeminiConfigField, string>
 export type MimoDraft = Record<MimoConfigField, string>
 export type OpenAiCompatibleDraft = {
   baseUrl: string
-  defaultModel: string
+  textModel: string
+  visionModel: string
 }
 export type RouteDraft = Record<CanvasNodeType, AiProviderId>
 
@@ -44,7 +45,8 @@ export const MIMO_FIELDS: Array<[MimoConfigField, string]> = [
 
 export const OPENAI_COMPATIBLE_FIELDS: Array<[keyof OpenAiCompatibleDraft, string]> = [
   ['baseUrl', 'OpenAI 兼容端点'],
-  ['defaultModel', '默认模型'],
+  ['textModel', '默认模型'],
+  ['visionModel', '视觉模型'],
 ]
 
 export const ROUTE_ROWS: Array<[CanvasNodeType, string]> = [
