@@ -97,7 +97,10 @@ INGEST / DIRECT / SHOT_SPEC / ASSEMBLE·shot-sfx / ASSEMBLE·shot-subtitle 的�
 「非渲染阶段不得称渲染失败」「schema 失败必须点名字段且不可重试」「各阶段兜底归位」。
 内部路由/能力矛盾另有 `RouteContractError`（`src/features/ai/route-contract-error.ts`），
 `classifyByType` 按类型识别为 `ROUTE_CONTRACT_INVALID` 且 `retryable=false`，
-断言见同一测试文件「路由/能力矛盾归类为不可重试的配置问题」。
+断言见同一测试文件「路由/能力矛盾归类为不可重试的配置问题」。设置 API 会在任何
+无关设置写入前解析路由合同，`RouteContractError` 映射为带具体配置文案的 422；
+`repairProjectFrontier` 会把所有持久化 `retryable=false` 的失败列为 `blocked`，
+`advancePipeline` 不会自动重排这类失败。
 
 ---
 
@@ -151,6 +154,16 @@ Director 会话改写为 `project-plan` 文本任务，不再对媒体域抛错�
   它的文案里含「缺少」，所以在 `MESSAGE_RULES` 里必须排在「上游产物缺失」规则**之前**。
 - 文本主链不得因为音频未就绪而阻塞：SHOT_SPEC 只绑定来源文本，不得编造时长。
 
+**真实事故（终片变体）**：异步配音已经成功写出 `director-ingest-audio`，但
+`media-assembly-loader.ts` 仍只选择文本期的 `director-ingest`，导致导出 readiness
+错误报告「项目 渲染产物无效」。同一项目的 5 个分镜视频、旁白和字幕都完好，
+项目级导出在 51ms 内失败，证明失败发生在应用内装配输入选择，不在 ffmpeg。
+
+**已落地护栏**：终片装配优先选择 `director-ingest-audio`，只对历史同步项目回退
+`director-ingest`；`media-assembly-loader.test.ts` 同时锁定优先级与历史回退。
+真实项目 `bd2c8979-b6b0-4a3a-b2bb-a1f3a6395568` 已验证项目导出作业成功，
+FINALIZE `export` 节点从 `idle` 到 `succeeded`，最终 MP4 的数据库哈希与磁盘字节一致。
+
 ---
 
 ## 6. 模式 E：fixture 退化成窄形状
@@ -184,6 +197,29 @@ Director 会话改写为 `project-plan` 文本任务，不再对媒体域抛错�
 
 ---
 
+## 7.1 模式 G：先登记可变文件，后续写入让产物哈希失真
+
+**症状**：节点与业务产物均成功，但 `artifacts.size_bytes` / `content_hash` 与
+`storage_key` 当前字节不一致；会话产物尤其明显，数据库常记录一个很小的初始文件。
+
+**真实事故**：stage runner 创建 Pi JSONL 会话后立即登记 `pi-session` artifact，
+此时文件只有初始化元数据；随后模型消息持续 append 到同一路径。一次全库核对中，
+803 个 `pi-session` 草稿里有 802 个与磁盘不一致，唯一一致的是修复后新跑的会话。
+
+**规则**：
+
+- 可追加文件、临时文件和仍由外部进程持有的文件不得提前登记为 artifact。
+- `size_bytes` 与 `content_hash` 必须在生产者关闭/完成后从实际字节计算。
+- 失败会话也要先关闭再登记，保证诊断证据完整；登记失败作为清理错误加入原始失败链，
+  不得悄悄吞掉。
+
+**已落地护栏**：`stage-runner.ts` 在成功与失败路径都先关闭 Pi 会话，再调用
+`registerArtifactPointer`；`stage-runner.test.ts` 断言 `close → pointer` 顺序。
+真实 FINALIZE 重生成后，新 `pi-session` 的大小 26,173 字节，数据库与磁盘 SHA-256
+完全一致。历史 802 条均为本地 draft，保留为事故证据，未伪造回写旧哈希。
+
+---
+
 ## 8. 工作流类改动的提交前清单
 
 在 `AGENTS.md` §8 的通用门禁之外，涉及本文覆盖的链路时补做：
@@ -194,6 +230,7 @@ Director 会话改写为 `project-plan` 文本任务，不再对媒体域抛错�
 - [ ] 新的失败路径落到哪个 `WorkflowErrorCode`？`retryable` 是否诚实（模式 B）。
 - [ ] fixture 是否是真实产物形状（模式 E）。
 - [ ] 验证时是否重启过 dev server，并用节点状态与产物哈希作证据（模式 F）。
+- [ ] artifact 指向的文件是否已经停止写入，哈希是否在生产者关闭后计算（模式 G）。
 - [ ] 真实产物证据：`artifacts.content_hash` 与磁盘字节 SHA-256 逐条核对一致。
 
 真实证据的取法示例：
@@ -214,16 +251,12 @@ docker exec purpleink-dev-postgres-1 psql -U cvc -d cvc -A -t -F "|" -c `
 
 ## 9. 已知未修项
 
-| 项 | 模式 | 现状 |
-| --- | --- | --- |
-| `docs/issues/ISSUE-005`、`Batch-002` 仍写 `measureMp3` | — | 函数已更名 `measureAudio`，历史文档未同步 |
-| `src/lib/queue/init.test.ts` 全量并行下偶发失败 | — | 卡在 `vi.resetModules()` 的模块隔离；单独执行与重跑均通过 |
-
-修完任一项时，把该行删掉并在对应模式的「已落地护栏」里写清断言位置。
+当前无已确认而未修的代码/文档项。
 
 已修：`shot-sfx` / `shot-subtitle` 无法解析 Director 文本模型（模式 C）、
 `DEFAULT_PROVIDER` 与 `media_routes` 双真值（模式 A）、内部路由矛盾仍走文案
-规则（模式 B）——见 §2、§3、§4 的「已落地护栏」。
+规则（模式 B）、文档 `measureMp3` 漂移、队列初始化全量并行抖动、终片异步音频
+读取错误（模式 D）、Pi 会话哈希失真（模式 G）——见各节「已落地护栏」。
 
 ---
 
@@ -242,5 +275,22 @@ docker exec purpleink-dev-postgres-1 psql -U cvc -d cvc -A -t -F "|" -c `
 - **INGEST 旁路字段**：`createProject` 把 `visualTheme` 存在 `payload` 旁路而非
   `directorInput`，且 `stage-prompt.test.ts` 已有反向断言锁死「visualTheme 混进
   directorInput 必须失败」。
-- **渲染域**：`FrameSpec` 等结构用 TS interface + 单个 `renderSpecSchema` 表达，
-  `server/` 侧没有平行 zod schema，不存在多余键硬失败风险。
+- **跨进程渲染合同**：Next 侧 `renderSpecSchema` 只服务当前按节点渲染链；
+  `MediaAssemblyPlan` 是 Next 内部终片装配结构。`server/src/server/api.ts` 的
+  `/render` 是独立的 legacy URL/capture 请求面，字段与消费者职责不同，并不消费
+  上述两个结构；`server/` 未发现对应但分叉的 zod/schema 副本。
+- **队列与 Director 补偿链**：逐条核对 admission、入队、FABRICATE、render、
+  stage run 与 artifact commit 失败路径；均会转入 `failed` 并写对应
+  `directorError` / `renderError`，清理失败通过 `AggregateError` 保留原始错误，
+  未发现会把节点永久留在 `idle` / `running` 的旁路。
+- **全集映射**：仓库内 `Record<CanvasNodeType, …>` / `Record<PipelineStage, …>`
+  包括 route target、node schema、stage metadata、fallback node type、stage output
+  与 UI stage colors。所有生产映射都以类型全集作为键；路由语义另有
+  `DIRECTOR_NODE_TYPES` 全遍历测试，阶段输出由 `PIPELINE_STAGES` 参数化测试覆盖。
+- **异步媒体的其他消费者**：逐一检查 `runtime-artifact-source.ts`、
+  `runtime-artifact-reader.ts` 与导出装配。前两者对未就绪音频走 `safeParse` /
+  `MEDIA_NOT_READY`；唯一遗漏是终片 `media-assembly-loader.ts`，已归入模式 D。
+- **队列初始化并行抖动**：根因不是测试 timeout，而是 `init.ts` 静态加载
+  runtime config、聚合 queue index 与 DB schema，并与 runtime config 形成反向导入。
+  singleton 与 lane-quota env 现已拆到无 DB 的叶子模块，runtime config 改为初始化时
+  动态加载；全量并行测试连续 10 次通过。
