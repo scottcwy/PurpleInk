@@ -155,6 +155,18 @@ describe('advancePipeline', () => {
     }
   )
 
+  it('does not automatically retry a failed non-retryable target', async () => {
+    const test = harness([
+      candidate({ status: 'failed', retryable: false }),
+    ])
+
+    const result = await advancePipeline('project-1', 'node-1', test.dependencies)
+
+    expect(result).toEqual({ enqueuedNodeIds: [], failedNodeIds: [] })
+    expect(test.enqueueDirectorStage).not.toHaveBeenCalled()
+    expect(test.enqueueRenderShot).not.toHaveBeenCalled()
+  })
+
   it('marks a succeeded target stale and re-enqueues it when its inputs changed', async () => {
     const test = harness([candidate({ status: 'success' })])
     vi.mocked(test.repository.isNodeStale).mockResolvedValue(true)

@@ -58,14 +58,11 @@ export async function repairProjectFrontier(
   }
   await resolved.setAutopilot(projectId, true)
   for (const node of graph.nodes) {
-    if (
-      node.type !== 'shot-codegen' ||
-      (node.status !== 'failed' && node.status !== 'stale')
-    ) {
+    if (node.status !== 'failed' && node.status !== 'stale') {
       continue
     }
     const error = node.directorError ?? node.renderError
-    if (error?.retryable === false) {
+    if (node.status === 'failed' && error?.retryable === false) {
       result.blockedNodes.push({
         nodeId: node.id,
         code: error.code ?? 'CONFIGURATION_BLOCKED',
@@ -73,6 +70,7 @@ export async function repairProjectFrontier(
       })
       continue
     }
+    if (node.type !== 'shot-codegen') continue
     const producer = await findInvalidShotSpecProducer(
       resolved,
       graph,

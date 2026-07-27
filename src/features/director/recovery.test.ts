@@ -117,6 +117,33 @@ describe('repairProjectFrontier', () => {
       'repair-upstream'
     )
   })
+
+  it('reports every failed non-retryable node as blocked without re-enqueueing it', async () => {
+    const test = harness(true)
+    test.graph.nodes.push(node({
+      id: 'export',
+      type: 'export',
+      stage: 'FINALIZE',
+      status: 'failed',
+      directorError: {
+        stage: 'FINALIZE',
+        message: '模型路由合同无效',
+        code: 'ROUTE_CONTRACT_INVALID',
+        retryable: false,
+      },
+    }))
+
+    const result = await repairProjectFrontier('project-1', test.dependencies)
+
+    expect(result.blockedNodes).toContainEqual({
+      nodeId: 'export',
+      code: 'ROUTE_CONTRACT_INVALID',
+      message: '模型路由合同无效',
+    })
+    expect(test.enqueueDirectorStage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ nodeId: 'export' })
+    )
+  })
 })
 
 function harness(shotSpecValid: boolean, codegenStatus: CanvasGraphNode['status'] = 'failed') {

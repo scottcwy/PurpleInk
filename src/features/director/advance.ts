@@ -10,6 +10,7 @@ export interface AdvanceCandidate {
   type: CanvasNodeType
   stage: string | null
   status: NodeStatus
+  retryable?: boolean
 }
 
 export interface AdvanceRepository {
@@ -110,6 +111,7 @@ export async function advancePipeline(
     }
     if (
       !['idle', 'failed', 'stale'].includes(status) ||
+      (status === 'failed' && candidate.retryable === false) ||
       !isPipelineStage(candidate.stage) ||
       !(await resolved.repository.areAllUpstreamsSuccessful(
         projectId,

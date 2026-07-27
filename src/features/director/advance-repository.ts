@@ -9,7 +9,7 @@ import type {
   PipelineRepository,
 } from './advance'
 import { DirectorRuntimeRepository } from './runtime-repository'
-import { fromPersistedNodeStatus } from './runtime-node-data'
+import { fromPersistedNodeStatus, readNodePayload } from './runtime-node-data'
 import type { PipelineStage } from './types'
 import { isStale, transitionNodeStatus } from '@/features/canvas/status'
 import { DirectorArtifactSource } from './runtime-artifact-source'
@@ -51,6 +51,7 @@ export class AdvanceRepositoryImpl
         type: canvasNodes.type,
         stage: canvasNodes.stage,
         status: canvasNodes.status,
+        data: canvasNodes.data,
       })
       .from(canvasNodes)
       .where(
@@ -101,6 +102,7 @@ export class AdvanceRepositoryImpl
         type: canvasNodes.type,
         stage: canvasNodes.stage,
         status: canvasNodes.status,
+        data: canvasNodes.data,
       })
       .from(canvasNodes)
       .where(
@@ -191,13 +193,25 @@ function toAdvanceCandidate(node: {
   type: string
   stage: string
   status: string
+  data: unknown
 }): AdvanceCandidate {
+  const payload = readNodePayload(node.data)
+  const error = payload.directorError ?? payload.renderError
   return {
     id: node.id,
     type: node.type as CanvasNodeType,
     stage: node.stage,
     status: fromPersistedNodeStatus(node.status),
+    ...(hasRetryable(error) ? { retryable: error.retryable } : {}),
   }
+}
+
+function hasRetryable(value: unknown): value is { retryable: boolean } {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    typeof (value as Record<string, unknown>).retryable === 'boolean'
+  )
 }
 
 function scope(
