@@ -147,19 +147,19 @@ function createHarness(
 }
 
 describe('createStageRunner', () => {
-  it('registers the session before the model call and commits the validated output', async () => {
+  it('registers the final session bytes after close and commits the validated output', async () => {
     const harness = createHarness()
 
     await harness.runner('project-1', 'node-1', 'INGEST')
 
     expect(harness.calls).toEqual([
       'running',
-      'pointer',
       'run',
       'artifact',
       'commit',
       'effect',
       'close',
+      'pointer',
       'success',
       'media',
       'advance',
@@ -253,9 +253,9 @@ describe('createStageRunner', () => {
     )
     expect(harness.calls).toEqual([
       'running',
-      'pointer',
       'run',
       'close',
+      'pointer',
       'failed',
       'error',
     ])
@@ -330,11 +330,11 @@ describe('createStageRunner', () => {
 
     expect(harness.calls).toEqual([
       'running',
-      'pointer',
       'run',
       'artifact',
       'commit',
       'close',
+      'pointer',
       'failed',
       'error',
     ])

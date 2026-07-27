@@ -136,6 +136,7 @@ export function createStageRunner(
     const streamKey = `${projectId}:${nodeId}`
     let session: DirectorSession | undefined
     let closed = false
+    let sessionPointerAttempted = false
     try {
       await dependencies.transitionNodeStatus(nodeId, 'running')
       const context = await dependencies.repository.loadStageContext(
@@ -150,12 +151,6 @@ export function createStageRunner(
         nodeType: context.nodeType,
         stage,
         resumeSessionKey: context.resumeSessionKey,
-      })
-      await dependencies.repository.registerArtifactPointer({
-        projectId,
-        nodeId,
-        kind: 'pi-session',
-        storageKey: session.storageKey,
       })
       const { displayText, prepared, artifact } = await generateValidatedArtifact({
         stage,
@@ -176,6 +171,13 @@ export function createStageRunner(
       streamBus.markDone(streamKey)
       await session.close()
       closed = true
+      sessionPointerAttempted = true
+      await dependencies.repository.registerArtifactPointer({
+        projectId,
+        nodeId,
+        kind: 'pi-session',
+        storageKey: session.storageKey,
+      })
       await dependencies.transitionNodeStatus(nodeId, 'success')
       if (stage === 'INGEST' && dependencies.scheduleMediaNarration) {
         await scheduleMediaWithoutMasking(dependencies.scheduleMediaNarration, {
@@ -191,6 +193,19 @@ export function createStageRunner(
     } catch (error) {
       if (session && !closed) await closeWithoutMasking(session)
       const cleanupErrors: unknown[] = []
+      if (session && !sessionPointerAttempted) {
+        try {
+          sessionPointerAttempted = true
+          await dependencies.repository.registerArtifactPointer({
+            projectId,
+            nodeId,
+            kind: 'pi-session',
+            storageKey: session.storageKey,
+          })
+        } catch (cleanupError) {
+          cleanupErrors.push(cleanupError)
+        }
+      }
       try {
         await dependencies.transitionNodeStatus(nodeId, 'failed')
       } catch (cleanupError) {
