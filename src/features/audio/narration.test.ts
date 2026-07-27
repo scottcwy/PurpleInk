@@ -23,6 +23,7 @@ function harness(overrides: Partial<NarrationDependencies> = {}) {
     sampleCount: bytes.length * 100,
     sampleRateHz: 24_000,
     durationMs: (bytes.length * 100 * 1000) / 24_000,
+    container: 'mp3' as const,
   }))
   const reuseAudio = vi.fn(async () => null as Buffer | null)
   const registerAudio = vi.fn(

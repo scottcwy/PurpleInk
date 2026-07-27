@@ -1,14 +1,16 @@
 import 'server-only'
 import { spawn } from 'node:child_process'
 import ffmpegPath from 'ffmpeg-static'
-import { readMp3FrameHeader } from './mp3-frame-header'
+import { readAudioStreamInfo, type AudioContainer } from './audio-format'
 
 export interface MeasuredAudio {
   /** 解码得到的单声道采样数（音频真实长度的唯一依据）。 */
   sampleCount: number
-  /** 来自 MPEG 帧头的原生采样率。 */
+  /** 来自容器头的原生采样率。 */
   sampleRateHz: number
   durationMs: number
+  /** 由真实字节判定的容器类型。 */
+  container: AudioContainer
 }
 
 export type DecodeSampleBytes = (
@@ -19,15 +21,16 @@ export type DecodeSampleBytes = (
 /**
  * 实测音频时长：解码真实字节并统计采样数，不使用 TTS 自报时长，也不按字数估算。
  *
- * 采样率取自 MPEG 帧头，采样数取自 ffmpeg 解码输出的 PCM 字节数，
- * 因此 durationMs 完全由字节内容决定（含编码器 gapless 裁剪）。
+ * 容器与采样率都由真实字节判定（MP3 读帧头，WAV 读 fmt chunk），采样数取自
+ * ffmpeg 解码输出的 PCM 字节数，因此 durationMs 完全由字节内容决定
+ * （含编码器 gapless 裁剪）。TTS 供应商声明的格式与时长都不参与。
  */
-export async function measureMp3(
+export async function measureAudio(
   bytes: Buffer,
   decode: DecodeSampleBytes = decodePcmByteCount
 ): Promise<MeasuredAudio> {
   if (bytes.length === 0) throw new Error('音频字节为空，无法实测时长')
-  const { sampleRateHz } = readMp3FrameHeader(bytes)
+  const { container, sampleRateHz } = readAudioStreamInfo(bytes)
   const pcmBytes = await decode(bytes, sampleRateHz)
   const sampleCount = pcmBytes / 2
   if (!Number.isInteger(sampleCount) || sampleCount <= 0) {
@@ -37,6 +40,7 @@ export async function measureMp3(
     sampleCount,
     sampleRateHz,
     durationMs: (sampleCount / sampleRateHz) * 1000,
+    container,
   }
 }
 

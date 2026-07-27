@@ -131,6 +131,7 @@ describe('generateSubtitle', () => {
           durationMs: 1250,
           sampleRateHz: 24_000,
           sampleCount: 30_000,
+          container: 'wav' as const,
         })),
         storeArtifact,
       }

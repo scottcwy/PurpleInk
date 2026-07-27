@@ -1,4 +1,10 @@
-export { measureMp3, type MeasuredAudio } from './measure'
+export { measureAudio, type MeasuredAudio } from './measure'
+export {
+  detectAudioContainer,
+  readAudioStreamInfo,
+  type AudioContainer,
+  type AudioStreamInfo,
+} from './audio-format'
 export {
   NARRATION_CONCURRENCY,
   NARRATION_VOICE_ID,

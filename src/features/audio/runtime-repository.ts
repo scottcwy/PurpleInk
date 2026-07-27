@@ -4,6 +4,7 @@ import { and, desc, eq } from 'drizzle-orm'
 import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
 import { artifacts } from '@/lib/db/schema/index'
 import type { StorageAdapter } from '@/lib/storage'
+import { detectAudioContainer, type AudioContainer } from './audio-format'
 import { narrationArtifactKind } from './narration-repository'
 
 export interface LoadedNarration {
@@ -11,7 +12,8 @@ export interface LoadedNarration {
   audioArtifactId: string
   audioKey: string
   audioBytes: Buffer
-  audioFormat: 'mp3'
+  /** 由真实字节判定，不写死为 MP3：TTS 路由切换后旁白可能是 WAV。 */
+  audioFormat: AudioContainer
   contentHash: string
   sizeBytes: number
 }
@@ -67,7 +69,7 @@ export class AudioRuntimeRepository {
       audioArtifactId: artifact.id,
       audioKey: artifact.storageKey,
       audioBytes,
-      audioFormat: 'mp3',
+      audioFormat: detectAudioContainer(audioBytes),
       contentHash: actualHash,
       sizeBytes: audioBytes.byteLength,
     }

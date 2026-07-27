@@ -5,7 +5,7 @@ import {
   type SubtitleAlignmentSource,
   type TranscribedSpeech,
 } from './media-provider'
-import { measureMp3, type MeasuredAudio } from './measure'
+import { measureAudio, type MeasuredAudio } from './measure'
 import {
   storeAudioArtifact,
   type StoreAudioArtifactInput,
@@ -42,7 +42,7 @@ export async function generateSubtitle(
   input: SubtitleInput,
   dependencies: SubtitleDependencies = {
     transcribe: transcribeRoutedSpeech,
-    measure: measureMp3,
+    measure: measureAudio,
     storeArtifact: storeAudioArtifact,
   }
 ): Promise<SubtitleResult> {
@@ -54,7 +54,7 @@ export async function generateSubtitle(
   const alignmentSource = readAlignmentSource(transcription)
   let captions = transcription.captions
   if (captions.length === 0 && alignmentSource === 'mimo-asr-segment') {
-    const measured = await (dependencies.measure ?? measureMp3)(parsed.audioBytes)
+    const measured = await (dependencies.measure ?? measureAudio)(parsed.audioBytes)
     captions = [{
       text: transcription.transcript,
       startMs: 0,

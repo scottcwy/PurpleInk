@@ -1,7 +1,7 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import { measureMp3, type MeasuredAudio } from './measure'
+import { measureAudio, type MeasuredAudio } from './measure'
 import {
   registerNarrationAudio,
   reuseNarrationAudio,
@@ -226,7 +226,7 @@ function defaultDependencies(): NarrationDependencies {
   return {
     resolveEngine: resolveNarrationEngine,
     synthesize: synthesizeRoutedSpeech,
-    measure: measureMp3,
+    measure: measureAudio,
     reuseAudio: reuseNarrationAudio,
     registerAudio: registerNarrationAudio,
   }
