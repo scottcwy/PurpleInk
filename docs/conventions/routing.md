@@ -168,7 +168,11 @@
 约定：
 
 1. 写操作一律 POST/PATCH/DELETE + 严格 JSON schema 校验；校验失败返回 400 且**不落任何写入**。
-   `/api/settings` POST 承载字段范围：StepFun/Gemini/MiMo 凭据与模型、OpenAI-compatible 文本模型配置、Director 文本/视觉/TTS/ASR 能力路由、`laneQuotas.{directorStageConcurrency, renderShotConcurrency}`（ISSUE-011）。OpenAI-compatible 与 Gemini 不可用于 TTS/ASR；媒体路由可选择 MiMo 或 StepFun。
+   `/api/settings` POST 承载字段范围：StepFun/Gemini/MiMo 凭据与模型、三个 OpenAI-compatible 自定义端点（文本与视觉 / TTS / ASR，各自独立凭据、端点与模型）、Director 文本/视觉/TTS/ASR 能力路由、`laneQuotas.{directorStageConcurrency, renderShotConcurrency}`（ISSUE-011）。
+   自定义端点家族按能力拆成三个 provider id：`openai-compatible`（text + vision）、`openai-compatible-tts`（tts）、`openai-compatible-asr`（asr）。三者的凭据分别存 `provider_credentials`，配置分别存 `workspace_settings` 的 `ai.openai-compatible` / `ai.openai-compatible.tts` / `ai.openai-compatible.asr`；同一 id 不得跨能力路由。
+   Gemini 仍不可用于 TTS/ASR。媒体路由候选为 StepFun、MiMo、`openai-compatible-tts`（配音）、`openai-compatible-asr`（字幕）。
+   `openai-compatible` 的视觉模型独立于文本模型；未填写视觉模型时把分镜验收路由到该端点返回 422。
+   `openai-compatible-asr` 的转写校验被端点拒绝时返回 422 且带 `reason: 'asr-transcription-rejected'`；客户端可改以 `credentialOnly: true` 重新提交，该路径仍需通过 `GET {baseUrl}/models` 凭据校验，并把 `timestampMode` 保守记为 `none`、`verification` 记为 `credential-only`。
    `laneQuotas` 子字段做两层校验：schema 静态 max（directorStage≤32、renderShot≤128）+ route 运行时 `os.cpus().length` 上限；任一失败回 400 且不落任何 secret / route / 配额写入。
 2. 状态码语义固定：400 参数非法、404 资源不存在或不属于当前作用域、409 状态冲突（队列已存在、前置未就绪、旧 workflow 暂不支持执行）、422 外部凭据校验失败。项目设置、Director、单镜渲染、缩略图与成片导出的写/执行入口必须在任何数据库、Artifact 或队列变更前拒绝旧 workflow。
 3. 凭据类 POST 必须先验证后保存；验证失败返回 422 且不覆盖已有值。
