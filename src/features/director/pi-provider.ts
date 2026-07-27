@@ -12,6 +12,7 @@ import {
   DIRECTOR_NODE_TYPES,
   resolveDirectorModelTarget,
 } from '@/features/ai/model-routing'
+import type { AiProviderId } from '@/features/ai/provider-registry'
 import type { PipelineStage } from './types'
 
 /** 阶段兜底节点类型：仅在节点类型缺失/不可信时使用，与全局泳道播种保持一致。 */
@@ -24,23 +25,42 @@ const STAGE_FALLBACK_NODE_TYPE: Record<PipelineStage, CanvasNodeType> = {
   FINALIZE: 'export',
 }
 
-const PROVIDER_LABEL = {
+/**
+ * 显式声明为 `Record<AiProviderId, …>`：注册新供应商时漏补条目会变成编译错误，
+ * 而不是运行期 `undefined` 拼进 routeLabel 或错误文案。
+ */
+const PROVIDER_LABEL: Record<AiProviderId, string> = {
   gemini: 'Gemini',
   stepfun: 'StepFun',
   mimo: '小米 MiMo',
   'openai-compatible': 'OpenAI 兼容模型服务',
-} as const
+}
 
 /**
  * 请求整形上限：只用于本地 maxTokens 裁剪与上下文预算估算，
  * 不是供应商元数据，也不会出现在任何用户可见字段里。
  */
-const REQUEST_SHAPE = {
+const REQUEST_SHAPE: Record<
+  AiProviderId,
+  { contextWindow: number; maxTokens: number }
+> = {
   gemini: { contextWindow: 1_048_576, maxTokens: 65_536 },
   stepfun: { contextWindow: 131_072, maxTokens: 32_768 },
   mimo: { contextWindow: 1_048_576, maxTokens: 131_072 },
   'openai-compatible': { contextWindow: 131_072, maxTokens: 32_768 },
-} as const
+}
+
+/**
+ * pi 的 `envApiKeyAuth` 只用于提示用户「该填哪个环境变量」，真实凭据来自
+ * `resolveDirectorModelTarget` 的加密存储。同样显式按 provider 声明，避免新
+ * 供应商落到某个兜底分支上给出错误的变量名。
+ */
+const AUTH_ENV_KEYS: Record<AiProviderId, readonly string[]> = {
+  gemini: ['GEMINI_API_KEY'],
+  stepfun: ['STEP_API_KEY'],
+  mimo: ['MIMO_API_KEY'],
+  'openai-compatible': ['OPENAI_COMPATIBLE_API_KEY'],
+}
 
 export interface DirectorModelRuntime {
   models: MutableModels
@@ -93,13 +113,7 @@ export async function createDirectorModelRuntime(input: {
       auth: {
         apiKey: envApiKeyAuth(
           `${label} API Key`,
-          target.provider === 'gemini'
-            ? ['GEMINI_API_KEY']
-            : target.provider === 'stepfun'
-              ? ['STEP_API_KEY']
-              : target.provider === 'mimo'
-                ? ['MIMO_API_KEY']
-                : ['OPENAI_COMPATIBLE_API_KEY'],
+          [...AUTH_ENV_KEYS[target.provider]],
         ),
       },
       api: target.provider === 'gemini'

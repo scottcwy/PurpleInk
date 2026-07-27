@@ -8,7 +8,10 @@ import {
   resolveDirectorModelTarget,
   type DirectorModelTarget,
 } from '@/features/ai/model-routing'
-import { PROVIDER_REGISTRY } from '@/features/ai/provider-registry'
+import {
+  PROVIDER_REGISTRY,
+  type AiProviderId,
+} from '@/features/ai/provider-registry'
 import type { DirectorShot } from '@/features/director/schemas/director-shot-plan'
 import { captureThumbnails } from './thumbnail'
 import { QA_THUMBNAIL_FRACTIONS } from './qa-check'
@@ -53,7 +56,7 @@ export interface VisionQaAnalysisInput {
 }
 
 interface VisionQaAnalysis {
-  provider: 'stepfun' | 'gemini' | 'mimo' | 'openai-compatible'
+  provider: AiProviderId
   model: string
   report: z.infer<typeof modelReportSchema>
 }
