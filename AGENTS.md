@@ -168,11 +168,18 @@ git diff --check
 
 无法运行某项验证时必须说明原因，不得声称已验证。
 
+改动 Director / 渲染 / 音频 / 模型路由或任何阶段合同前，先读
+`docs/conventions/workflow-failure-patterns.md`，并按其 §8 清单补做检查。
+排查阶段失败时按其 §1 的顺序取服务端真值：UI 文案只是脱敏投影，原始报文在
+`task_attempts.failure.message`。新发现的复发型失败追加为该文件的新模式，
+不要另开文件。
+
 ## 9. 权威文档
 
 | 文档 | 责任 |
 | --- | --- |
 | `docs/conventions/routing.md` | 全部路由、上下文参数、守卫与状态口径 |
+| `docs/conventions/workflow-failure-patterns.md` | Director / 渲染 / 音频 / 模型路由的复发失败模式、诊断顺序与已落地护栏 |
 | `docs/designs/canvas.pen` | 视觉像素、token、reusable symbol 的 SSOT |
 | `docs/designs/Design-system-inventory.md` | token、组件、页面与同步规则的文字索引 |
 | `docs/designs/README.md` | `docs/designs` 内部权威关系 |
