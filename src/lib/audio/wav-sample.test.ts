@@ -3,7 +3,7 @@ import {
   VALIDATION_SAMPLE_DURATION_MS,
   VALIDATION_SAMPLE_SAMPLE_RATE_HZ,
   buildAsrValidationWav,
-} from './validation-sample'
+} from './wav-sample'
 
 describe('ASR validation sample', () => {
   it('produces a well-formed 1s 16 kHz mono PCM WAV', () => {

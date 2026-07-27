@@ -1,6 +1,10 @@
 /**
  * ASR 端点校验用的音频样本。
  *
+ * 放在 `lib` 而不是 `features/audio`：它是零依赖的字节级工具，消费方在
+ * `features/ai` 的端点校验里。若留在 audio 域，`features/ai` 就得深度 import 另一个
+ * feature 的内部文件（绕过公开导出），或者引入整个 audio 公开面（连带 ffmpeg 等重依赖）。
+ *
  * 在内存里生成而不是提交一个 WAV fixture：仓库里的二进制 fixture 会悄悄和代码期望
  * 脱节（`docs/conventions/workflow-failure-patterns.md` 模式 E），而这段字节完全由
  * 参数决定，可以逐字段断言。

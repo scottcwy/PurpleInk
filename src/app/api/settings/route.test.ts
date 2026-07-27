@@ -23,6 +23,14 @@ const mocks = vi.hoisted(() => ({
   describeOpenAiCompatibleProfile: vi.fn(),
   saveOpenAiCompatibleProfile: vi.fn(),
   validateOpenAiCompatibleProfile: vi.fn(),
+  describeTtsProfile: vi.fn(),
+  describeAsrProfile: vi.fn(),
+  saveTtsProfile: vi.fn(),
+  saveAsrProfile: vi.fn(),
+  validateTtsProfile: vi.fn(),
+  validateAsrProfile: vi.fn(),
+  findMediaRoute: vi.fn(),
+  saveMediaRoute: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
@@ -41,6 +49,24 @@ const MOCK_DEFAULT_LANE_VIEW = {
   directorStage: { value: 12, source: 'default' },
   renderShot: { value: 2, source: 'default' },
 } as const
+
+const UNCONFIGURED_TTS_VIEW = {
+  configured: false,
+  verifiedAt: null,
+  baseUrl: null,
+  model: null,
+  voice: null,
+  audioFormat: null,
+} as const
+
+const UNCONFIGURED_ASR_VIEW = {
+  configured: false,
+  verifiedAt: null,
+  baseUrl: null,
+  model: null,
+  timestampMode: null,
+  verification: null,
+} as const
 vi.mock('@/features/ai/stepfun-adapter', () => ({
   saveApiKey: mocks.saveApiKey,
   validateKey: mocks.validateKey,
@@ -49,12 +75,32 @@ vi.mock('@/features/ai/config', () => ({
   describeStepfunConfig: mocks.describeStepfunConfig,
   getAiConfigDependencies: () => ({
     credentials: { describe: mocks.describeCredential },
+    mediaRoutes: {
+      find: mocks.findMediaRoute,
+      save: mocks.saveMediaRoute,
+    },
     openAiCompatibleProfiles: {
       find: vi.fn(),
       save: vi.fn(),
     },
+    openAiCompatibleAudioProfiles: {
+      findTts: vi.fn(),
+      saveTts: vi.fn(),
+      findAsr: vi.fn(),
+      saveAsr: vi.fn(),
+    },
   }),
   saveStepfunModelSettings: mocks.saveStepfunModelSettings,
+}))
+vi.mock('@/features/ai/openai-compatible-audio-config', () => ({
+  CUSTOM_TTS_PROVIDER: 'openai-compatible-tts',
+  CUSTOM_ASR_PROVIDER: 'openai-compatible-asr',
+  describeTtsProfile: mocks.describeTtsProfile,
+  describeAsrProfile: mocks.describeAsrProfile,
+  saveTtsProfile: mocks.saveTtsProfile,
+  saveAsrProfile: mocks.saveAsrProfile,
+  validateTtsProfile: mocks.validateTtsProfile,
+  validateAsrProfile: mocks.validateAsrProfile,
 }))
 vi.mock('@/features/ai/gemini-config', () => ({
   describeGeminiConfig: mocks.describeGeminiConfig,
@@ -128,6 +174,8 @@ describe('GET /api/settings', () => {
       textModel: null,
       visionModel: null,
     })
+    mocks.describeTtsProfile.mockResolvedValue(UNCONFIGURED_TTS_VIEW)
+    mocks.describeAsrProfile.mockResolvedValue(UNCONFIGURED_ASR_VIEW)
     mocks.describeMimoConfig.mockResolvedValue({
       baseUrl: { value: 'https://api.xiaomimimo.com/v1', source: 'default' },
       textModel: { value: 'mimo-v2.5', source: 'default' },
@@ -181,6 +229,157 @@ describe('POST /api/settings', () => {
     mocks.saveMimoApiKey.mockResolvedValue(undefined)
     mocks.saveLaneQuotas.mockResolvedValue(undefined)
     mocks.saveOpenAiCompatibleProfile.mockResolvedValue(undefined)
+    mocks.describeTtsProfile.mockResolvedValue(UNCONFIGURED_TTS_VIEW)
+    mocks.describeAsrProfile.mockResolvedValue(UNCONFIGURED_ASR_VIEW)
+    mocks.saveTtsProfile.mockResolvedValue(undefined)
+    mocks.saveAsrProfile.mockResolvedValue(undefined)
+    mocks.findMediaRoute.mockResolvedValue(null)
+    mocks.saveMediaRoute.mockResolvedValue(undefined)
+  })
+
+  it('validates and saves a custom TTS endpoint, resyncing a route that points at it', async () => {
+    mocks.validateTtsProfile.mockResolvedValue({ ok: true })
+    mocks.findMediaRoute.mockResolvedValue({
+      workspaceId: 'workspace',
+      mediaTaskKind: 'tts',
+      provider: 'openai-compatible-tts',
+      model: 'stale-model',
+      revision: 3,
+    })
+    const input = {
+      apiKey: 'tts-secret',
+      baseUrl: 'https://example.test/v1',
+      model: 'tts-1',
+      voice: 'alloy',
+      audioFormat: 'mp3',
+    }
+
+    const response = await POST(request({ customOpenAiTts: input }))
+
+    expect(response.status).toBe(200)
+    expect(mocks.validateTtsProfile).toHaveBeenCalledWith(input)
+    expect(mocks.saveTtsProfile).toHaveBeenCalledWith(input, expect.anything())
+    // media_routes.model 是设置页「当前模型」与执行侧的共同真值，必须跟着 profile 走。
+    expect(mocks.saveMediaRoute).toHaveBeenCalledWith(expect.objectContaining({
+      mediaTaskKind: 'tts',
+      provider: 'openai-compatible-tts',
+      model: 'tts-1',
+    }))
+    expect(await response.json()).not.toContain('tts-secret')
+  })
+
+  it('does not touch a media route that points at another provider', async () => {
+    mocks.validateTtsProfile.mockResolvedValue({ ok: true })
+    mocks.findMediaRoute.mockResolvedValue({
+      workspaceId: 'workspace',
+      mediaTaskKind: 'tts',
+      provider: 'stepfun',
+      model: 'stepaudio-2.5-tts',
+      revision: 1,
+    })
+
+    const response = await POST(request({
+      customOpenAiTts: {
+        apiKey: 'tts-secret',
+        baseUrl: 'https://example.test/v1',
+        model: 'tts-1',
+        voice: 'alloy',
+        audioFormat: 'wav',
+      },
+    }))
+
+    expect(response.status).toBe(200)
+    expect(mocks.saveMediaRoute).not.toHaveBeenCalled()
+  })
+
+  it('never persists a TTS endpoint whose synthesis probe fails', async () => {
+    mocks.validateTtsProfile.mockResolvedValue({ ok: false, status: 401 })
+
+    const response = await POST(request({
+      customOpenAiTts: {
+        apiKey: 'tts-secret',
+        baseUrl: 'https://example.test/v1',
+        model: 'tts-1',
+        voice: 'alloy',
+        audioFormat: 'mp3',
+      },
+    }))
+
+    expect(response.status).toBe(422)
+    expect(mocks.saveTtsProfile).not.toHaveBeenCalled()
+    expect((await response.json()).error).toContain('HTTP 401')
+  })
+
+  /** 协商结果必须从校验阶段传到保存阶段，不能在保存时重跑一次真实转写。 */
+  it('persists the negotiated ASR timestamp capability', async () => {
+    mocks.validateAsrProfile.mockResolvedValue({
+      ok: true,
+      timestampMode: 'segment',
+      verification: 'transcription',
+    })
+
+    const response = await POST(request({
+      customOpenAiAsr: {
+        apiKey: 'asr-secret',
+        baseUrl: 'https://example.test/v1',
+        model: 'whisper-1',
+      },
+    }))
+
+    expect(response.status).toBe(200)
+    expect(mocks.saveAsrProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'whisper-1' }),
+      { timestampMode: 'segment', verification: 'transcription' },
+      expect.anything(),
+    )
+  })
+
+  /**
+   * 转写被拒时回 422 + 机器可读的 reason，客户端据此弹窗并提供「仅校验凭据」。
+   * 缺了 reason，UI 无法区分「端点拒收合成音」和「凭据无效」。
+   */
+  it('returns a machine-readable reason when the ASR transcription probe is rejected', async () => {
+    mocks.validateAsrProfile.mockResolvedValue({
+      ok: false,
+      reason: 'transcription-rejected',
+      status: 400,
+    })
+
+    const response = await POST(request({
+      customOpenAiAsr: {
+        apiKey: 'asr-secret',
+        baseUrl: 'https://example.test/v1',
+        model: 'whisper-1',
+      },
+    }))
+    const body = await response.json()
+
+    expect(response.status).toBe(422)
+    expect(body.reason).toBe('asr-transcription-rejected')
+    expect(mocks.saveAsrProfile).not.toHaveBeenCalled()
+  })
+
+  it('rejects credential-only when the endpoint itself is unreachable', async () => {
+    mocks.validateAsrProfile.mockResolvedValue({
+      ok: false,
+      reason: 'credential-rejected',
+      status: 403,
+    })
+
+    const response = await POST(request({
+      customOpenAiAsr: {
+        apiKey: 'asr-secret',
+        baseUrl: 'https://example.test/v1',
+        model: 'whisper-1',
+        credentialOnly: true,
+      },
+    }))
+    const body = await response.json()
+
+    expect(response.status).toBe(422)
+    expect(body.reason).toBeUndefined()
+    expect(body.error).toContain('凭据校验失败')
+    expect(mocks.saveAsrProfile).not.toHaveBeenCalled()
   })
 
   it('validates and saves a custom OpenAI-compatible profile without returning its key', async () => {

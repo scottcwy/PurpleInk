@@ -1,10 +1,8 @@
 import os from 'node:os'
 import { NextResponse } from 'next/server'
-import {
-  applyProviderSettings,
-  describeProviderSettings,
-  validateProviderSettings,
-} from '@/features/ai/provider-settings-service'
+import { applyProviderSettings } from '@/features/ai/provider-settings-apply'
+import { describeProviderSettings } from '@/features/ai/provider-settings-projection'
+import { validateProviderSettings } from '@/features/ai/provider-settings-validation'
 import { stepfunSettingsSchema } from '@/features/ai/schemas'
 
 export const dynamic = 'force-dynamic'
@@ -35,7 +33,7 @@ export async function POST(request: Request) {
     })
   }
 
-  const applied = await applyProviderSettings(parsed.data)
+  const applied = await applyProviderSettings(parsed.data, validated.negotiated)
   if (!applied.ok) {
     return NextResponse.json(applied.rejection.body, {
       status: applied.rejection.status,

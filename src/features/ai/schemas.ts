@@ -1,8 +1,19 @@
 import { z } from 'zod'
+import { AUDIO_FORMATS } from './openai-compatible-payloads'
 import { AI_PROVIDER_IDS } from './provider-registry'
 
 const textProviderSchema = z.enum(AI_PROVIDER_IDS)
-const mediaProviderSchema = z.enum(['stepfun', 'mimo'])
+/**
+ * 媒体路由候选。Gemini 不可用于 TTS/ASR，而两个自定义音频端点各只承担一种能力——
+ * 更细的「TTS 路由不能选 ASR 端点」由 `assertProviderCapability` 在
+ * `saveDirectorRoutes` 里按 capability 兜住。
+ */
+const mediaProviderSchema = z.enum([
+  'stepfun',
+  'mimo',
+  'openai-compatible-tts',
+  'openai-compatible-asr',
+])
 
 /**
  * ISSUE-011 队列并发配额输入：
@@ -71,6 +82,33 @@ export const stepfunSettingsSchema = z.object({
       baseUrl: z.string().min(1, 'OpenAI 兼容端点不能为空'),
       textModel: z.string().min(1, 'OpenAI 兼容文本模型不能为空'),
       visionModel: z.string().optional(),
+    })
+    .strict()
+    .optional(),
+  /**
+   * 自定义兼容 TTS 端点。voice 与 audioFormat 必填：音色表由端点决定无法推断，
+   * 容器格式受 measureAudio 的解码能力约束。
+   */
+  customOpenAiTts: z
+    .object({
+      apiKey: z.string().min(1, '自定义兼容 TTS API Key 不能为空'),
+      baseUrl: z.string().min(1, '自定义兼容 TTS 端点不能为空'),
+      model: z.string().min(1, '自定义兼容 TTS 模型不能为空'),
+      voice: z.string().min(1, '自定义兼容 TTS 音色不能为空'),
+      audioFormat: z.enum(AUDIO_FORMATS),
+    })
+    .strict()
+    .optional(),
+  /**
+   * 自定义兼容 ASR 端点。不收 timestampMode——它是校验时协商出来的结果，
+   * 让用户填等于允许他谎报端点能力。
+   */
+  customOpenAiAsr: z
+    .object({
+      apiKey: z.string().min(1, '自定义兼容 ASR API Key 不能为空'),
+      baseUrl: z.string().min(1, '自定义兼容 ASR 端点不能为空'),
+      model: z.string().min(1, '自定义兼容 ASR 模型不能为空'),
+      credentialOnly: z.boolean().optional(),
     })
     .strict()
     .optional(),

@@ -3,6 +3,10 @@ import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
 import { type AiConfigDependencies, getStepfunConfig } from './config'
 import { getGeminiConfig } from './gemini-config'
 import { getMimoConfig } from './mimo-config'
+import {
+  CUSTOM_ASR_PROVIDER,
+  CUSTOM_TTS_PROVIDER,
+} from './openai-compatible-audio-config'
 import { CUSTOM_OPENAI_PROVIDER } from './openai-compatible-config'
 import { assertProviderCapability, type AiProviderId, type ProviderCapability } from './provider-registry'
 import { RouteContractError } from './route-contract-error'
@@ -30,7 +34,42 @@ export async function providerDefaults(
   if (provider === 'stepfun') return stepfunDefaults(await getStepfunConfig(deps))
   if (provider === 'mimo') return mimoDefaults(await getMimoConfig(deps))
   if (provider === CUSTOM_OPENAI_PROVIDER) return customOpenAiDefaults(deps)
+  if (provider === CUSTOM_TTS_PROVIDER || provider === CUSTOM_ASR_PROVIDER) {
+    return customAudioDefaults(provider, deps)
+  }
   return geminiDefaults(await getGeminiConfig(deps))
+}
+
+/**
+ * 自定义音频端点的端点、凭据与模型全部来自各自的 profile。
+ *
+ * `assertProviderCapability` 先兜住能力：TTS 端点不可能被 ASR 路由取到，
+ * 反之亦然——两者是三份独立凭据里的两份，从未针对对方的能力校验过。
+ */
+async function customAudioDefaults(
+  provider: typeof CUSTOM_TTS_PROVIDER | typeof CUSTOM_ASR_PROVIDER,
+  deps: AiConfigDependencies,
+): Promise<ProviderDefaults> {
+  const store = deps.openAiCompatibleAudioProfiles
+  if (!store) throw new RouteContractError('自定义兼容音频端点配置存储不可用')
+  const isTts = provider === CUSTOM_TTS_PROVIDER
+  const [profile, apiKey] = await Promise.all([
+    isTts ? store.findTts(LOCAL_WORKSPACE_ID) : store.findAsr(LOCAL_WORKSPACE_ID),
+    deps.credentials.loadSecret(LOCAL_WORKSPACE_ID, provider),
+  ])
+  if (!profile) {
+    throw new RouteContractError(
+      isTts ? '自定义兼容 TTS 端点尚未配置' : '自定义兼容 ASR 端点尚未配置',
+    )
+  }
+  return {
+    baseUrl: profile.baseUrl,
+    apiKey,
+    modelFor: (_target, capability) => {
+      assertProviderCapability(provider, capability)
+      return profile.model
+    },
+  }
 }
 
 function stepfunDefaults(
