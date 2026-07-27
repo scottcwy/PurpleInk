@@ -4,6 +4,7 @@ export type WorkflowErrorCode =
   | 'UPSTREAM_ARTIFACT_MISSING'
   | 'UPSTREAM_ARTIFACT_INVALID'
   | 'STAGE_INPUT_INVALID'
+  | 'ROUTE_CONTRACT_INVALID'
   | 'MEDIA_NOT_READY'
   | 'CONFIGURATION_BLOCKED'
   | 'PROVIDER_FAILED'
@@ -74,6 +75,16 @@ function classifyByType(
       code: 'UPSTREAM_ARTIFACT_INVALID',
       message: '上游产物未通过当前阶段的可信合同校验。',
       retryable: true,
+    }
+  }
+  // 路由 / 能力矛盾来自 features/ai；同样只按类型名判定，避免反向依赖。报文里
+  // 常含「模型 / TTS / ASR」，若落进文案规则会被误判成可重试的 PROVIDER_FAILED
+  // （真实事故：shot-sfx 的路由矛盾曾被这样误判）。
+  if (error instanceof Error && error.name === 'RouteContractError') {
+    return {
+      code: 'ROUTE_CONTRACT_INVALID',
+      message: `${stage} 阶段的模型路由配置存在矛盾：${error.message}。重试不会改变结果，需要先在项目设置里修正供应商或模型选择。`,
+      retryable: false,
     }
   }
   return undefined

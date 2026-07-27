@@ -113,6 +113,20 @@ describe('classifyWorkflowError', () => {
     })
   })
 
+  it('marks a route/capability contract mismatch as a non-retryable configuration issue', () => {
+    class RouteContractError extends Error {
+      override readonly name = 'RouteContractError'
+    }
+    const projection = classifyWorkflowError(
+      new RouteContractError('Google Gemini 不支持 TTS 路由'),
+      { stage: 'ASSEMBLE', sourceNodeId: 'shot-sfx-s001' }
+    )
+    expect(projection.code).toBe('ROUTE_CONTRACT_INVALID')
+    expect(projection.retryable).toBe(false)
+    expect(projection.message).toContain('ASSEMBLE')
+    expect(projection.message).toContain('不支持 TTS 路由')
+  })
+
   it('never labels a non-render stage failure as a render failure', () => {
     for (const stage of ['INGEST', 'DIRECT', 'SHOT_SPEC', 'ASSEMBLE', 'FINALIZE']) {
       const projection = classifyWorkflowError(new Error('未知内部失败'), { stage })
