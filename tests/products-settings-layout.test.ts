@@ -12,8 +12,20 @@ describe('Products settings workspace', () => {
     expect(source).toContain(
       'min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain text-ds-text',
     )
-    expect(source).toContain('aria-label="设置分类"')
+    expect(source).toContain('ariaLabel="设置分类"')
     expect(source).toContain('lg:sticky lg:top-0')
+  })
+
+  it('places the section TOC as a right rail, not a second left sidebar', () => {
+    const source = readFileSync(
+      'src/app/products/(app)/settings/settings-form.tsx',
+      'utf8',
+    )
+
+    // Content column comes first, SectionNav column second -> renders on the right.
+    expect(source).toContain('lg:grid-cols-[minmax(0,1fr)_200px]')
+    expect(source).toContain("import { SectionNav } from '@/components/ui/section-nav'")
+    expect(source).not.toContain("from '@/components/ui/nav-item'")
   })
 
   it('composes long setting groups from the public SettingsPanel primitive', () => {
