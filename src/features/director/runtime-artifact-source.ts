@@ -29,6 +29,11 @@ const directArtifactSchema = z
   })
   .strict()
 
+const ingestAudioSchema = z.object({
+  audioManifest: audioManifestSchema,
+  audioAllocation: audioAllocationSchema,
+})
+
 interface NodeLane {
   id: string
   laneKey: string | null
@@ -49,26 +54,36 @@ export class DirectorArtifactSource {
     return ingestStageResultSchema.parse({ scriptUnits: parsed.scriptUnits })
   }
 
+  /**
+   * 读取音频时序合同。
+   *
+   * 配音是异步媒体链：INGEST 成功后才排队合成，`director-ingest-audio` 因此可能
+   * 尚未存在（历史项目把同样的字段写在 `director-ingest` 里，需要继续兼容）。
+   * 两处都拿不到时必须抛出**明确的媒体未就绪**错误，而不是把只含 scriptUnits 的
+   * 文本产物丢给音频 schema——那会让 FABRICATE 显示成 `audioManifest` 合同错误，
+   * 完全指错方向（真实事故）。
+   */
   async loadIngestAudioArtifact(projectId: string): Promise<{
     audioManifest: AudioManifest
     audioAllocation: AudioAllocation
   }> {
     const nodeId = await this.findNodeId(projectId, 'script-import')
-    const splitKey = await this.resolveLatestArtifactKey(
+    const kind = (await this.resolveLatestArtifactKey(
       projectId,
       nodeId,
       'director-ingest-audio'
+    ))
+      ? 'director-ingest-audio'
+      : 'director-ingest'
+    const parsed = ingestAudioSchema.safeParse(
+      await this.loadArtifactJson(projectId, nodeId, kind)
     )
-    const raw = splitKey
-      ? await this.loadArtifactJson(projectId, nodeId, 'director-ingest-audio')
-      : await this.loadArtifactJson(projectId, nodeId, 'director-ingest')
-    const parsed = z
-      .object({
-        audioManifest: audioManifestSchema,
-        audioAllocation: audioAllocationSchema,
-      })
-      .parse(raw)
-    return parsed
+    if (!parsed.success) {
+      throw new Error(
+        `配音媒体尚未就绪：${kind} 产物不含可用的 audioManifest / audioAllocation。请先完成或重试 INGEST 的配音生成，再执行依赖音频时序的阶段。`
+      )
+    }
+    return parsed.data
   }
 
   async loadDirectArtifact(projectId: string) {

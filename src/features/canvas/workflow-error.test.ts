@@ -99,6 +99,20 @@ describe('classifyWorkflowError', () => {
     expect(projection.message).not.toContain('原稿正文')
   })
 
+  it('tells the operator that async narration is not ready yet', () => {
+    expect(
+      classifyWorkflowError(
+        new Error(
+          '配音媒体尚未就绪：director-ingest 产物不含可用的 audioManifest / audioAllocation。'
+        ),
+        { stage: 'FABRICATE' }
+      )
+    ).toMatchObject({
+      code: 'MEDIA_NOT_READY',
+      retryable: true,
+    })
+  })
+
   it('never labels a non-render stage failure as a render failure', () => {
     for (const stage of ['INGEST', 'DIRECT', 'SHOT_SPEC', 'ASSEMBLE', 'FINALIZE']) {
       const projection = classifyWorkflowError(new Error('未知内部失败'), { stage })

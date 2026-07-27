@@ -4,6 +4,7 @@ export type WorkflowErrorCode =
   | 'UPSTREAM_ARTIFACT_MISSING'
   | 'UPSTREAM_ARTIFACT_INVALID'
   | 'STAGE_INPUT_INVALID'
+  | 'MEDIA_NOT_READY'
   | 'CONFIGURATION_BLOCKED'
   | 'PROVIDER_FAILED'
   | 'FABRICATE_FAILED'
@@ -80,6 +81,16 @@ function classifyByType(
 
 /** 有序文案规则：先具体后笼统，命中即返回。 */
 const MESSAGE_RULES: ReadonlyArray<readonly [RegExp, ClassifiedError]> = [
+  [
+    // 必须排在「缺失产物」规则之前：媒体未就绪的文案本身含「缺少」。
+    /配音媒体尚未就绪|媒体尚未就绪/,
+    {
+      code: 'MEDIA_NOT_READY',
+      message:
+        '本项目的配音媒体尚未就绪。配音是异步生成的，请先完成或重试 INGEST 的配音，再执行依赖音频时序的阶段。',
+      retryable: true,
+    },
+  ],
   [
     /StepFun\s+TTS.*HTTP\s*402/i,
     {
