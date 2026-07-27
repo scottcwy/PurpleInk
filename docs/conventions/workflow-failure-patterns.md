@@ -173,6 +173,10 @@ FINALIZE `export` 节点从 `idle` 到 `succeeded`，最终 MP4 的数据库哈�
 **真实事故**：所有 script unit fixture 都写成 `{ unitId, text }`，恰好绕开了
 真实 INGEST 产物里的 `order`；模式 A 的 bug 因此存活到线上。
 
+**音频变体**：`runtime-repository.pg.test.ts` 用 `[1, 2, 3]` 冒充 MP3，
+严格 MPEG 帧头检测落地后 Postgres 集成门禁失败。测试所声称的容器类型也属于合同，
+不能用任意字节绕过真实解析器。
+
 **规则**：
 
 - 阶段输入 fixture 必须使用**真实产物形状**：可选字段能填就填满，尤其是提示词里
@@ -180,6 +184,9 @@ FINALIZE `export` 节点从 `idle` 到 `succeeded`，最终 MP4 的数据库哈�
 - 断言「能跑通」时优先用真实链路能产出的最大合法对象，而不是最小对象。最小对象只用于
   「必填字段缺失必须失败」这类反向断言。
 - 一份 fixture 只在一个地方定义，多个测试复用；不要在每个测试文件里各写一份窄版本。
+
+**已落地护栏**：`mp3.fixture.ts` 提供可验证的最小连续 MPEG1 Layer III 帧，
+`measure.test.ts` 与 `runtime-repository.pg.test.ts` 共用同一份真实形状。
 
 ---
 

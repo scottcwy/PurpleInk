@@ -13,6 +13,7 @@ import {
   type PgTestDatabase,
 } from '@/lib/db/test/pg-test-database'
 import type { StorageAdapter } from '@/lib/storage'
+import { mp3Frames } from './mp3.fixture'
 import { AudioRuntimeRepository } from './runtime-repository'
 
 vi.mock('server-only', () => ({}))
@@ -24,7 +25,7 @@ const RUN_ID = '30000000-0000-4000-8000-000000000001'
 const ATTEMPT_ID = '40000000-0000-4000-8000-000000000001'
 const AUDIO_ID = '50000000-0000-4000-8000-000000000001'
 const AUDIO_KEY = `narration/${PROJECT_ID}/u001.mp3`
-const AUDIO_BYTES = Buffer.from([1, 2, 3])
+const AUDIO_BYTES = mp3Frames(2)
 const AUDIO_HASH = createHash('sha256').update(AUDIO_BYTES).digest('hex')
 const FINGERPRINT = 'a'.repeat(64)
 
@@ -76,7 +77,7 @@ describe('AudioRuntimeRepository', () => {
       audioBytes: AUDIO_BYTES,
       audioFormat: 'mp3',
       contentHash: AUDIO_HASH,
-      sizeBytes: 3,
+      sizeBytes: AUDIO_BYTES.byteLength,
     })
     expect(storage.get).not.toHaveBeenCalledWith(expect.stringContaining('other/'))
   })
