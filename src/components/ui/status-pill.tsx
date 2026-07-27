@@ -1,3 +1,4 @@
+import type { ComponentType } from 'react'
 import { cn } from '@/lib/utils'
 
 export type StatusPillVariant =
@@ -11,6 +12,8 @@ export type StatusPillVariant =
 export interface StatusPillProps {
   variant?: StatusPillVariant
   label?: string
+  /** 提供时以图标替代默认 6px 色点（Lucide 白名单）。 */
+  icon?: ComponentType<{ className?: string }>
   className?: string
 }
 
@@ -31,7 +34,7 @@ const STYLES: Record<StatusPillVariant, { bg: string; color: string; defaultLabe
  * 状态胶囊（SSOT）。
  * canvas.pen: pill 形、*-fill 底、6px 色点 + 11px 标签。
  */
-export function StatusPill({ variant = 'pending', label, className }: StatusPillProps) {
+export function StatusPill({ variant = 'pending', label, icon: Icon, className }: StatusPillProps) {
   const style = STYLES[variant]
   return (
     <div
@@ -41,7 +44,18 @@ export function StatusPill({ variant = 'pending', label, className }: StatusPill
         className,
       )}
     >
-      <span className={cn('h-1.5 w-1.5 rounded-full bg-current', style.color)} />
+      {Icon ? (
+        <Icon className={cn('size-3 shrink-0', style.color)} />
+      ) : (
+        <span
+          className={cn(
+            'h-1.5 w-1.5 rounded-full bg-current',
+            style.color,
+            // 运行中状态附加脉冲动画；语义仍由文本标签承担，不只靠动效表达。
+            variant === 'generating' && 'animate-pulse'
+          )}
+        />
+      )}
       <span className={cn('text-[11px] font-medium', style.color)}>
         {label ?? style.defaultLabel}
       </span>

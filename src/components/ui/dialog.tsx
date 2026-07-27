@@ -12,6 +12,8 @@ export interface DialogProps {
   children?: ReactNode
   actions?: ReactNode
   className?: string
+  /** 弹窗在视口中的定位；默认 'top' 保持原有 108px 顶部偏移。 */
+  placement?: 'top' | 'center'
 }
 
 const subscribeToClient = () => () => undefined
@@ -29,6 +31,7 @@ export function Dialog({
   children,
   actions,
   className,
+  placement = 'top',
 }: DialogProps) {
   const mounted = useSyncExternalStore(
     subscribeToClient,
@@ -44,7 +47,10 @@ export function Dialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[1000] flex items-start justify-center overflow-y-auto bg-[color:var(--ds-scrim)] px-4 py-[108px] backdrop-blur-[20px]"
+      className={cn(
+        'fixed inset-0 z-[1000] flex justify-center overflow-y-auto bg-[color:var(--ds-scrim)] px-4 backdrop-blur-[20px]',
+        placement === 'top' ? 'items-start py-[108px]' : 'items-center py-8',
+      )}
       onClick={handleBackdropClick}
     >
       <div

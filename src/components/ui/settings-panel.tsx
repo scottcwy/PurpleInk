@@ -12,6 +12,10 @@ export interface SettingsPanelProps {
   icon?: LucideIcon
   summary?: ReactNode
   defaultOpen?: boolean
+  /** 受控展开态；提供时组件不自管理开合。 */
+  open?: boolean
+  /** 展开态变化回调。 */
+  onOpenChange?: (open: boolean) => void
   children: ReactNode
   className?: string
 }
@@ -26,12 +30,14 @@ export function SettingsPanel({
   description,
   icon,
   summary,
-  defaultOpen = true,
+  defaultOpen = false,
+  open,
+  onOpenChange,
   children,
   className,
 }: SettingsPanelProps) {
   return (
-    <section id={id} className="min-w-0 scroll-mt-5">
+    <section id={id} className="min-w-0 scroll-mt-5" data-glow>
       <CollapsibleCard
         title={
           <span className="block min-w-0">
@@ -46,6 +52,8 @@ export function SettingsPanel({
         icon={icon}
         meta={summary}
         defaultOpen={defaultOpen}
+        open={open}
+        onOpenChange={onOpenChange}
         className={className}
         bodyClassName="p-0"
       >

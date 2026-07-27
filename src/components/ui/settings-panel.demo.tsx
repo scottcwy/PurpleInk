@@ -14,6 +14,7 @@ export function SettingsPanelDemo() {
         description="渲染并发、输出规格与恢复能力"
         icon={Cpu}
         summary="3 项"
+        defaultOpen
       >
         <SettingsRow label="渲染并发数" value="8" />
         <SettingsSeparator />
