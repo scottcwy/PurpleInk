@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import {
+  needsWholeClipAlignment,
   transcribeRoutedSpeech,
   type RoutedTranscribedSpeech,
   type SubtitleAlignmentSource,
@@ -53,7 +54,9 @@ export async function generateSubtitle(
   })
   const alignmentSource = readAlignmentSource(transcription)
   let captions = transcription.captions
-  if (captions.length === 0 && alignmentSource === 'mimo-asr-segment') {
+  // 用谓词而不是逐个比较取值：新增一种「无逐段时间戳」的 ASR 端点时漏掉这里，
+  // 会产出零 caption 的字幕轨，也就是一个永久空产物。
+  if (captions.length === 0 && needsWholeClipAlignment(alignmentSource)) {
     const measured = await (dependencies.measure ?? measureAudio)(parsed.audioBytes)
     captions = [{
       text: transcription.transcript,
