@@ -10,18 +10,43 @@ import { SettingsRow } from '@/components/ui/settings-row'
 import { StatusPill } from '@/components/ui/status-pill'
 import { TextField } from '@/components/ui/text-field'
 import {
-  AI_PROVIDER_IDS,
   PROVIDER_REGISTRY,
   type AiProviderId,
+  type ProviderCapability,
 } from '@/features/ai/provider-registry'
 import { cn } from '@/lib/utils'
 import { CustomOpenAiProviderPanel } from './custom-openai-provider-panel'
+import {
+  countConfiguredCustomEndpoints,
+  CUSTOM_ENDPOINT_COUNT,
+} from './custom-openai-status'
 import {
   GEMINI_FIELDS,
   MIMO_FIELDS,
   STEPFUN_FIELDS,
   type ReadyModelSettingsController,
 } from './model-service-contract'
+
+/**
+ * 供应商卡片是**家族**，不是 provider id。
+ *
+ * `openai-compatible` 家族在 registry 里是三个 id（文本视觉 / TTS / ASR），因为三份
+ * 独立凭据必须有三个身份。但配置上它们同属「自定义兼容模型」这一个入口，所以网格
+ * 只出四张卡片，三个接入点在卡片展开后的面板里按顺序配置。
+ */
+const PROVIDER_CARDS: readonly AiProviderId[] = [
+  'gemini',
+  'stepfun',
+  'mimo',
+  'openai-compatible',
+]
+
+/** 自定义家族的能力徽章是三个 id 的并集。 */
+const CUSTOM_FAMILY: readonly AiProviderId[] = [
+  'openai-compatible',
+  'openai-compatible-tts',
+  'openai-compatible-asr',
+]
 
 export function ProviderRegistryPanel({
   controller,
@@ -35,12 +60,12 @@ export function ProviderRegistryPanel({
         title="模型供应商"
         description="先连接服务，再按能力分配工作流；密钥仅在校验成功后替换"
         icon={Network}
-        summary="4 个供应商"
+        summary={`${PROVIDER_CARDS.length} 个供应商`}
       >
         <div className="grid gap-2 p-3 sm:grid-cols-2">
-          {AI_PROVIDER_IDS.map((provider) => {
+          {PROVIDER_CARDS.map((provider) => {
             const definition = PROVIDER_REGISTRY[provider]
-            const configured = isConfigured(controller, provider)
+            const status = cardStatus(controller, provider)
             return (
               <button
                 key={provider}
@@ -61,7 +86,7 @@ export function ProviderRegistryPanel({
                     <div>
                       <div className="text-sm font-semibold">{definition.label}</div>
                       <div className="mt-2 flex flex-wrap gap-1">
-                        {definition.capabilities.map((capability) => (
+                        {cardCapabilities(provider).map((capability) => (
                           <span
                             key={capability}
                             className="rounded bg-ds-surface-muted px-1.5 py-1 text-[10px] font-medium uppercase text-ds-text-muted"
@@ -71,10 +96,7 @@ export function ProviderRegistryPanel({
                         ))}
                       </div>
                     </div>
-                    <StatusPill
-                      variant={configured ? 'rendered' : 'pending'}
-                      label={configured ? '已连接' : '未连接'}
-                    />
+                    <StatusPill variant={status.variant} label={status.label} />
                   </div>
                 </Card>
               </button>
@@ -107,8 +129,11 @@ function SelectedProvider({
         view={controller.data.models}
         busy={controller.busy}
         onDraft={controller.setStepfunField}
-        onSaveKey={(apiKey) => controller.submit({ apiKey }, 'stepfun-key')}
-        onSaveFields={() => controller.submit(controller.stepfunDraft, 'stepfun-fields')}
+        onSaveKey={async (apiKey) =>
+          (await controller.submit({ apiKey }, 'stepfun-key')).ok}
+        onSaveFields={() => {
+          void controller.submit(controller.stepfunDraft, 'stepfun-fields')
+        }}
       />
     )
   }
@@ -122,12 +147,13 @@ function SelectedProvider({
         view={controller.data.gemini}
         busy={controller.busy}
         onDraft={controller.setGeminiField}
-        onSaveKey={(apiKey) =>
-          controller.submit({ gemini: { apiKey, ...controller.geminiDraft } }, 'gemini-key')
-        }
-        onSaveFields={() =>
-          controller.submit({ gemini: controller.geminiDraft }, 'gemini-fields')
-        }
+        onSaveKey={async (apiKey) => (await controller.submit(
+          { gemini: { apiKey, ...controller.geminiDraft } },
+          'gemini-key',
+        )).ok}
+        onSaveFields={() => {
+          void controller.submit({ gemini: controller.geminiDraft }, 'gemini-fields')
+        }}
       />
     )
   }
@@ -140,12 +166,13 @@ function SelectedProvider({
       view={controller.data.mimo}
       busy={controller.busy}
       onDraft={controller.setMimoField}
-      onSaveKey={(apiKey) =>
-        controller.submit({ mimo: { apiKey, ...controller.mimoDraft } }, 'mimo-key')
-      }
-      onSaveFields={() =>
-        controller.submit({ mimo: controller.mimoDraft }, 'mimo-fields')
-      }
+      onSaveKey={async (apiKey) => (await controller.submit(
+        { mimo: { apiKey, ...controller.mimoDraft } },
+        'mimo-key',
+      )).ok}
+      onSaveFields={() => {
+        void controller.submit({ mimo: controller.mimoDraft }, 'mimo-fields')
+      }}
     />
   )
 }
@@ -230,14 +257,41 @@ function ProviderDetail<T extends string>(props: ProviderDetailProps<T>) {
   )
 }
 
-function isConfigured(
+/** 家族能力徽章：自定义家族取三个 id 的并集，其余就是自身能力。 */
+function cardCapabilities(provider: AiProviderId): ProviderCapability[] {
+  if (provider !== 'openai-compatible') {
+    return [...PROVIDER_REGISTRY[provider].capabilities]
+  }
+  const merged = new Set<ProviderCapability>()
+  for (const id of CUSTOM_FAMILY) {
+    for (const capability of PROVIDER_REGISTRY[id].capabilities) merged.add(capability)
+  }
+  return [...merged]
+}
+
+/**
+ * 卡片状态。自定义家族有三个接入点，因此是三态——只显示「已连接 / 未连接」会在
+ * 配了 1 个端点时谎报整个家族可用。
+ */
+function cardStatus(
   controller: ReadyModelSettingsController,
-  provider: AiProviderId
-): boolean {
-  if (provider === 'stepfun') return Boolean(controller.data.configured)
-  if (provider === 'gemini') return Boolean(controller.data.geminiConfigured)
-  if (provider === 'mimo') return controller.data.mimoCredential?.configured === true
-  return controller.data.customOpenAi?.configured === true
+  provider: AiProviderId,
+): { variant: 'rendered' | 'pending' | 'stale'; label: string } {
+  if (provider === 'openai-compatible') {
+    const configured = countConfiguredCustomEndpoints(controller.data)
+    if (configured === 0) return { variant: 'pending', label: '未连接' }
+    return configured === CUSTOM_ENDPOINT_COUNT
+      ? { variant: 'rendered', label: '已连接' }
+      : { variant: 'stale', label: `${configured} / ${CUSTOM_ENDPOINT_COUNT} 已配置` }
+  }
+  const configured = provider === 'stepfun'
+    ? Boolean(controller.data.configured)
+    : provider === 'gemini'
+      ? Boolean(controller.data.geminiConfigured)
+      : controller.data.mimoCredential?.configured === true
+  return configured
+    ? { variant: 'rendered', label: '已连接' }
+    : { variant: 'pending', label: '未连接' }
 }
 
 function placeholderFor(field?: { value: string; source: string }): string {

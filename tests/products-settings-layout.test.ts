@@ -48,9 +48,18 @@ describe('Products settings workspace', () => {
     expect(routeSource).toContain('defaultOpen={false}')
   })
 
-  it('shows four provider identities and routes media capabilities explicitly', () => {
+  /**
+   * 供应商网格是**家族**而不是 provider id：自定义兼容家族在 registry 里是三个 id
+   * （文本视觉 / TTS / ASR，三份独立凭据必须有三个身份），但只出一张卡片，三个接入点
+   * 在卡片展开后的面板里按顺序配置。直接遍历 AI_PROVIDER_IDS 会渲染出六张卡片。
+   */
+  it('shows four provider cards and routes media capabilities explicitly', () => {
     const providerSource = readFileSync(
       'src/app/products/(app)/settings/provider-registry-panel.tsx',
+      'utf8',
+    )
+    const customSource = readFileSync(
+      'src/app/products/(app)/settings/custom-openai-provider-panel.tsx',
       'utf8',
     )
     const routeSource = readFileSync(
@@ -58,8 +67,16 @@ describe('Products settings workspace', () => {
       'utf8',
     )
 
-    expect(providerSource).toContain('AI_PROVIDER_IDS')
+    expect(providerSource).toContain('PROVIDER_CARDS')
+    expect(providerSource).not.toContain('AI_PROVIDER_IDS.map')
     expect(providerSource).toContain("useState<AiProviderId>('mimo')")
+    // 三个自定义接入点必须同属一个面板，且按 文本视觉 → TTS → ASR 顺序出现。
+    const textIndex = customSource.indexOf('文本与视觉')
+    const ttsIndex = customSource.indexOf('CustomOpenAiTtsSection controller')
+    const asrIndex = customSource.indexOf('CustomOpenAiAsrSection controller')
+    expect(textIndex).toBeGreaterThan(-1)
+    expect(ttsIndex).toBeGreaterThan(textIndex)
+    expect(asrIndex).toBeGreaterThan(ttsIndex)
     expect(routeSource).toContain("nodeType === 'shot-sfx'")
     expect(routeSource).toContain("nodeType === 'shot-subtitle'")
     expect(routeSource).not.toContain('TTS/ASR 始终使用阶跃星辰')

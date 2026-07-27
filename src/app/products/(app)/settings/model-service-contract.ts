@@ -7,6 +7,11 @@ import type {
   AiProviderId,
   DirectorRouteView,
 } from '@/features/ai/model-routing'
+import type {
+  AsrProfileView,
+  TtsProfileView,
+} from '@/features/ai/openai-compatible-audio-config'
+import type { OpenAiCompatibleAudioFormat } from '@/features/ai/openai-compatible-payloads'
 import type { OpenAiCompatibleProfileView } from '@/features/ai/openai-compatible-config'
 import type { MimoConfigField, MimoConfigView } from '@/features/ai/mimo-config'
 import type { CanvasNodeType } from '@/features/canvas/types'
@@ -18,6 +23,22 @@ export type OpenAiCompatibleDraft = {
   baseUrl: string
   textModel: string
   visionModel: string
+}
+/**
+ * 自定义兼容 TTS / ASR 端点的草稿。
+ *
+ * 三份端点各自独立，所以是三份 draft 而不是一份带可选字段的联合——把它们合成一份会
+ * 让「只保存 TTS」这种操作携带另外两个端点的值。
+ */
+export type OpenAiCompatibleTtsDraft = {
+  baseUrl: string
+  model: string
+  voice: string
+  audioFormat: OpenAiCompatibleAudioFormat
+}
+export type OpenAiCompatibleAsrDraft = {
+  baseUrl: string
+  model: string
 }
 export type RouteDraft = Record<CanvasNodeType, AiProviderId>
 
@@ -47,6 +68,21 @@ export const OPENAI_COMPATIBLE_FIELDS: Array<[keyof OpenAiCompatibleDraft, strin
   ['baseUrl', 'OpenAI 兼容端点'],
   ['textModel', '默认模型'],
   ['visionModel', '视觉模型'],
+]
+
+export const OPENAI_COMPATIBLE_TTS_FIELDS: Array<
+  [Exclude<keyof OpenAiCompatibleTtsDraft, 'audioFormat'>, string]
+> = [
+  ['baseUrl', 'OpenAI 兼容端点'],
+  ['model', 'TTS 模型 ID'],
+  ['voice', '音色'],
+]
+
+export const OPENAI_COMPATIBLE_ASR_FIELDS: Array<
+  [keyof OpenAiCompatibleAsrDraft, string]
+> = [
+  ['baseUrl', 'OpenAI 兼容端点'],
+  ['model', 'ASR 模型 ID'],
 ]
 
 export const ROUTE_ROWS: Array<[CanvasNodeType, string]> = [
@@ -103,10 +139,14 @@ export interface SettingsResponse {
   mimoCredential?: { configured: boolean }
   mimo?: MimoConfigView
   customOpenAi?: OpenAiCompatibleProfileView
+  customOpenAiTts?: TtsProfileView
+  customOpenAiAsr?: AsrProfileView
   routes?: Record<CanvasNodeType, DirectorRouteView>
   laneQuotas?: LaneQuotasView
   requiresRestart?: boolean
   error?: string
+  /** 仅 ASR 转写校验被端点拒绝时出现，客户端据此提供「仅校验凭据」。 */
+  reason?: 'asr-transcription-rejected'
 }
 
 export interface ReadyModelSettingsController {
@@ -116,6 +156,8 @@ export interface ReadyModelSettingsController {
   geminiDraft: GeminiDraft
   mimoDraft: MimoDraft
   customOpenAiDraft: OpenAiCompatibleDraft
+  customOpenAiTtsDraft: OpenAiCompatibleTtsDraft
+  customOpenAiAsrDraft: OpenAiCompatibleAsrDraft
   routes: RouteDraft
   laneQuotasDraft: LaneQuotasDraft
   busy?: string
@@ -124,13 +166,25 @@ export interface ReadyModelSettingsController {
   setGeminiField: (field: GeminiConfigField, value: string) => void
   setMimoField: (field: MimoConfigField, value: string) => void
   setCustomOpenAiField: (field: keyof OpenAiCompatibleDraft, value: string) => void
+  setCustomOpenAiTtsField: <K extends keyof OpenAiCompatibleTtsDraft>(
+    field: K,
+    value: OpenAiCompatibleTtsDraft[K],
+  ) => void
+  setCustomOpenAiAsrField: (
+    field: keyof OpenAiCompatibleAsrDraft,
+    value: string,
+  ) => void
   setRoute: (nodeType: CanvasNodeType, provider: AiProviderId) => void
   setLaneQuotaField: (
     field: keyof LaneQuotasDraft,
     value: string,
   ) => void
+  /**
+   * 回传响应体而不是布尔：ASR 端点被拒时客户端要读 `reason` 决定是否提供
+   * 「仅校验凭据」，只给成功/失败无法区分「转写被拒」和「凭据无效」。
+   */
   submit: (
     payload: Record<string, unknown>,
     action: string,
-  ) => Promise<boolean>
+  ) => Promise<{ ok: boolean; body: SettingsResponse }>
 }

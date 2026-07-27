@@ -1,7 +1,7 @@
 'use client'
 
 import { SlidersHorizontal } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { SettingsPanel } from '@/components/ui/settings-panel'
 import { SettingsRow } from '@/components/ui/settings-row'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -18,7 +18,9 @@ import {
   type GeminiDraft,
   type LaneQuotasDraft,
   type MimoDraft,
+  type OpenAiCompatibleAsrDraft,
   type OpenAiCompatibleDraft,
+  type OpenAiCompatibleTtsDraft,
   type ReadyModelSettingsController,
   type RouteDraft,
   type SettingsResponse,
@@ -36,68 +38,96 @@ export function ModelServiceSettings() {
   return <ModelServicePanels controller={controller} />
 }
 
+/**
+ * 服务端投影 → 客户端 draft 的写入口集合。
+ *
+ * 收成一个对象而不是并排的位置参数：字段增加到十个同类型回调时，位置参数极易错位，
+ * 而这些回调全是 `(value) => void`，编译器帮不上忙。
+ */
+interface DraftSetters {
+  setData: (body: SettingsResponse) => void
+  setStepfun: (draft: StepfunDraft) => void
+  setGemini: (draft: GeminiDraft) => void
+  setMimo: (draft: MimoDraft) => void
+  setCustomOpenAi: (draft: OpenAiCompatibleDraft) => void
+  setCustomOpenAiTts: (draft: OpenAiCompatibleTtsDraft) => void
+  setCustomOpenAiAsr: (draft: OpenAiCompatibleAsrDraft) => void
+  setRoutes: (routes: RouteDraft) => void
+  setLaneQuotas: (draft: LaneQuotasDraft) => void
+}
+
 export function useModelSettingsController(): ModelSettingsController {
   const [data, setData] = useState<SettingsResponse>()
-  const [stepfunDraft, setStepfunDraft] = useState<StepfunDraft>()
-  const [geminiDraft, setGeminiDraft] = useState<GeminiDraft>()
-  const [mimoDraft, setMimoDraft] = useState<MimoDraft>()
-  const [customOpenAiDraft, setCustomOpenAiDraft] = useState<OpenAiCompatibleDraft>()
+  const [stepfunDraft, setStepfun] = useState<StepfunDraft>()
+  const [geminiDraft, setGemini] = useState<GeminiDraft>()
+  const [mimoDraft, setMimo] = useState<MimoDraft>()
+  const [customOpenAiDraft, setCustomOpenAi] = useState<OpenAiCompatibleDraft>()
+  const [customOpenAiTtsDraft, setCustomOpenAiTts] = useState<OpenAiCompatibleTtsDraft>()
+  const [customOpenAiAsrDraft, setCustomOpenAiAsr] = useState<OpenAiCompatibleAsrDraft>()
   const [routes, setRoutes] = useState<RouteDraft>()
-  const [laneQuotasDraft, setLaneQuotasDraft] = useState<LaneQuotasDraft>({
+  const [laneQuotasDraft, setLaneQuotas] = useState<LaneQuotasDraft>({
     directorStageConcurrency: '',
     renderShotConcurrency: '',
   })
   const [busy, setBusy] = useState<string>()
   const [error, setError] = useState<string>()
 
-  useSettingsLoader(
+  const setters = useMemo<DraftSetters>(() => ({
     setData,
-    setStepfunDraft,
-    setGeminiDraft,
-    setMimoDraft,
-    setCustomOpenAiDraft,
+    setStepfun,
+    setGemini,
+    setMimo,
+    setCustomOpenAi,
+    setCustomOpenAiTts,
+    setCustomOpenAiAsr,
     setRoutes,
-    setLaneQuotasDraft,
-    setError,
-  )
-  const submit = useSettingsSubmitter(
-    setData,
-    setStepfunDraft,
-    setGeminiDraft,
-    setMimoDraft,
-    setCustomOpenAiDraft,
-    setRoutes,
-    setLaneQuotasDraft,
-    setBusy,
-    setError,
-  )
+    setLaneQuotas,
+  }), [])
+
+  useSettingsLoader(setters, setError)
+  const submit = useSettingsSubmitter(setters, setBusy, setError)
 
   function setRoute(nodeType: CanvasNodeType, provider: AiProviderId) {
     setRoutes((current) => current && { ...current, [nodeType]: provider })
   }
-
   function setStepfunField(field: StepfunModelField, value: string) {
-    setStepfunDraft((current) => current && { ...current, [field]: value })
+    setStepfun((current) => current && { ...current, [field]: value })
   }
-
   function setGeminiField(field: GeminiConfigField, value: string) {
-    setGeminiDraft((current) => current && { ...current, [field]: value })
+    setGemini((current) => current && { ...current, [field]: value })
   }
   function setMimoField(field: MimoConfigField, value: string) {
-    setMimoDraft((current) => current && { ...current, [field]: value })
+    setMimo((current) => current && { ...current, [field]: value })
   }
   function setCustomOpenAiField(field: keyof OpenAiCompatibleDraft, value: string) {
-    setCustomOpenAiDraft((current) => current && { ...current, [field]: value })
+    setCustomOpenAi((current) => current && { ...current, [field]: value })
   }
-
-  function setLaneQuotaField(
-    field: keyof LaneQuotasDraft,
+  function setCustomOpenAiTtsField<K extends keyof OpenAiCompatibleTtsDraft>(
+    field: K,
+    value: OpenAiCompatibleTtsDraft[K],
+  ) {
+    setCustomOpenAiTts((current) => current && { ...current, [field]: value })
+  }
+  function setCustomOpenAiAsrField(
+    field: keyof OpenAiCompatibleAsrDraft,
     value: string,
   ) {
-    setLaneQuotasDraft((current) => ({ ...current, [field]: value }))
+    setCustomOpenAiAsr((current) => current && { ...current, [field]: value })
+  }
+  function setLaneQuotaField(field: keyof LaneQuotasDraft, value: string) {
+    setLaneQuotas((current) => ({ ...current, [field]: value }))
   }
 
-  if (!data || !stepfunDraft || !geminiDraft || !mimoDraft || !customOpenAiDraft || !routes) {
+  if (
+    !data
+    || !stepfunDraft
+    || !geminiDraft
+    || !mimoDraft
+    || !customOpenAiDraft
+    || !customOpenAiTtsDraft
+    || !customOpenAiAsrDraft
+    || !routes
+  ) {
     return { ready: false }
   }
   return {
@@ -107,6 +137,8 @@ export function useModelSettingsController(): ModelSettingsController {
     geminiDraft,
     mimoDraft,
     customOpenAiDraft,
+    customOpenAiTtsDraft,
+    customOpenAiAsrDraft,
     routes,
     laneQuotasDraft,
     busy,
@@ -115,6 +147,8 @@ export function useModelSettingsController(): ModelSettingsController {
     setGeminiField,
     setMimoField,
     setCustomOpenAiField,
+    setCustomOpenAiTtsField,
+    setCustomOpenAiAsrField,
     setRoute,
     setLaneQuotaField,
     submit,
@@ -122,41 +156,18 @@ export function useModelSettingsController(): ModelSettingsController {
 }
 
 function useSettingsLoader(
-  setData: (body: SettingsResponse) => void,
-  setStepfun: (draft: StepfunDraft) => void,
-  setGemini: (draft: GeminiDraft) => void,
-  setMimo: (draft: MimoDraft) => void,
-  setCustomOpenAi: (draft: OpenAiCompatibleDraft) => void,
-  setRoutes: (routes: RouteDraft) => void,
-  setLaneQuotasDraft: (draft: LaneQuotasDraft) => void,
+  setters: DraftSetters,
   setError: (error: string) => void,
 ) {
   useEffect(() => {
     void loadSettings()
-      .then((body) =>
-        applyResponse(
-          body,
-          setData,
-          setStepfun,
-          setGemini,
-          setMimo,
-          setCustomOpenAi,
-          setRoutes,
-          setLaneQuotasDraft,
-        ),
-      )
+      .then((body) => applyResponse(body, setters))
       .catch(() => setError('模型设置加载失败'))
-  }, [setCustomOpenAi, setData, setError, setGemini, setLaneQuotasDraft, setMimo, setRoutes, setStepfun])
+  }, [setError, setters])
 }
 
 function useSettingsSubmitter(
-  setData: (body: SettingsResponse) => void,
-  setStepfun: (draft: StepfunDraft) => void,
-  setGemini: (draft: GeminiDraft) => void,
-  setMimo: (draft: MimoDraft) => void,
-  setCustomOpenAi: (draft: OpenAiCompatibleDraft) => void,
-  setRoutes: (routes: RouteDraft) => void,
-  setLaneQuotasDraft: (draft: LaneQuotasDraft) => void,
+  setters: DraftSetters,
   setBusy: (busy?: string) => void,
   setError: (error?: string) => void,
 ) {
@@ -172,13 +183,13 @@ function useSettingsSubmitter(
       const body = (await response.json()) as SettingsResponse
       if (!response.ok) {
         setError(body.error ?? '模型设置保存失败')
-        return false
+        return { ok: false as const, body }
       }
-      applyResponse(body, setData, setStepfun, setGemini, setMimo, setCustomOpenAi, setRoutes, setLaneQuotasDraft)
-      return true
+      applyResponse(body, setters)
+      return { ok: true as const, body }
     } catch {
       setError('模型设置请求失败')
-      return false
+      return { ok: false as const, body: {} as SettingsResponse }
     } finally {
       setBusy(undefined)
     }
@@ -205,26 +216,27 @@ async function loadSettings(): Promise<SettingsResponse> {
   return response.json() as Promise<SettingsResponse>
 }
 
-function applyResponse(
-  body: SettingsResponse,
-  setData: (body: SettingsResponse) => void,
-  setStepfun: (draft: StepfunDraft) => void,
-  setGemini: (draft: GeminiDraft) => void,
-  setMimo: (draft: MimoDraft) => void,
-  setCustomOpenAi: (draft: OpenAiCompatibleDraft) => void,
-  setRoutes: (routes: RouteDraft) => void,
-  setLaneQuotasDraft: (draft: LaneQuotasDraft) => void,
-) {
-  setData(body)
-  setStepfun(draftFromView(STEPFUN_FIELDS, body.models))
-  setGemini(draftFromView(GEMINI_FIELDS, body.gemini))
-  setMimo(draftFromView(MIMO_FIELDS, body.mimo))
-  setCustomOpenAi({
+function applyResponse(body: SettingsResponse, setters: DraftSetters) {
+  setters.setData(body)
+  setters.setStepfun(draftFromView(STEPFUN_FIELDS, body.models))
+  setters.setGemini(draftFromView(GEMINI_FIELDS, body.gemini))
+  setters.setMimo(draftFromView(MIMO_FIELDS, body.mimo))
+  setters.setCustomOpenAi({
     baseUrl: body.customOpenAi?.baseUrl?.value ?? '',
     textModel: body.customOpenAi?.textModel?.value ?? '',
     visionModel: body.customOpenAi?.visionModel?.value ?? '',
   })
-  setRoutes(
+  setters.setCustomOpenAiTts({
+    baseUrl: body.customOpenAiTts?.baseUrl?.value ?? '',
+    model: body.customOpenAiTts?.model?.value ?? '',
+    voice: body.customOpenAiTts?.voice?.value ?? '',
+    audioFormat: body.customOpenAiTts?.audioFormat?.value === 'wav' ? 'wav' : 'mp3',
+  })
+  setters.setCustomOpenAiAsr({
+    baseUrl: body.customOpenAiAsr?.baseUrl?.value ?? '',
+    model: body.customOpenAiAsr?.model?.value ?? '',
+  })
+  setters.setRoutes(
     Object.fromEntries(
       ROUTE_ROWS.map(([nodeType]) => [
         nodeType,
@@ -232,7 +244,7 @@ function applyResponse(
       ]),
     ) as RouteDraft,
   )
-  setLaneQuotasDraft({
+  setters.setLaneQuotas({
     directorStageConcurrency:
       body.laneQuotas?.directorStage.source === 'settings'
         ? String(body.laneQuotas.directorStage.value)
