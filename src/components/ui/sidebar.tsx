@@ -110,7 +110,7 @@ function SidebarNavigationItem({
   )
   const content = (
     <>
-      <item.icon aria-hidden className="size-4 shrink-0" />
+      <item.icon aria-hidden className="size-4 shrink-0 translate-y-[-0.5px]" />
       {!collapsed ? item.label : null}
     </>
   )
