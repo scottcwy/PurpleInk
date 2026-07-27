@@ -1,10 +1,20 @@
 import { RouteContractError } from './route-contract-error'
 
+/**
+ * 自定义 OpenAI 兼容端点按能力拆成三个身份。
+ *
+ * 它们不是「同一个端点的三种用法」：`provider_credentials` 以
+ * `(workspace_id, provider)` 唯一，所以一个 id 只能持有一份密钥；三份独立端点
+ * 就必须是三个 id。配置也分别落在 `workspace_settings` 的三个 key 上。
+ * 顺序即设置页与路由下拉的展示顺序，不要随意调整。
+ */
 export const AI_PROVIDER_IDS = [
   'gemini',
   'stepfun',
   'mimo',
   'openai-compatible',
+  'openai-compatible-tts',
+  'openai-compatible-asr',
 ] as const
 
 export type AiProviderId = (typeof AI_PROVIDER_IDS)[number]
@@ -49,10 +59,24 @@ export const PROVIDER_REGISTRY: Record<AiProviderId, ProviderDefinition> = {
       asr: 'mimo-v2.5-asr',
     },
   },
+  // 以下三个自定义端点一律不带 defaultModels：模型由用户 profile 提供，registry
+  // 不得顶一个编造的模型名，否则设置页会显示一个从未被校验过的模型。
   'openai-compatible': {
     id: 'openai-compatible',
     label: '自定义兼容模型',
     capabilities: ['text', 'vision'],
+    defaultModels: {},
+  },
+  'openai-compatible-tts': {
+    id: 'openai-compatible-tts',
+    label: '自定义兼容 TTS',
+    capabilities: ['tts'],
+    defaultModels: {},
+  },
+  'openai-compatible-asr': {
+    id: 'openai-compatible-asr',
+    label: '自定义兼容 ASR',
+    capabilities: ['asr'],
     defaultModels: {},
   },
 }

@@ -13,6 +13,7 @@ import {
   resolveDirectorModelTarget,
 } from '@/features/ai/model-routing'
 import type { AiProviderId } from '@/features/ai/provider-registry'
+import { RouteContractError } from '@/features/ai/route-contract-error'
 import type { PipelineStage } from './types'
 
 /** 阶段兜底节点类型：仅在节点类型缺失/不可信时使用，与全局泳道播种保持一致。 */
@@ -34,6 +35,8 @@ const PROVIDER_LABEL: Record<AiProviderId, string> = {
   stepfun: 'StepFun',
   mimo: '小米 MiMo',
   'openai-compatible': 'OpenAI 兼容模型服务',
+  'openai-compatible-tts': '自定义兼容 TTS',
+  'openai-compatible-asr': '自定义兼容 ASR',
 }
 
 /**
@@ -42,12 +45,16 @@ const PROVIDER_LABEL: Record<AiProviderId, string> = {
  */
 const REQUEST_SHAPE: Record<
   AiProviderId,
-  { contextWindow: number; maxTokens: number }
+  { contextWindow: number; maxTokens: number } | null
 > = {
   gemini: { contextWindow: 1_048_576, maxTokens: 65_536 },
   stepfun: { contextWindow: 131_072, maxTokens: 32_768 },
   mimo: { contextWindow: 1_048_576, maxTokens: 131_072 },
   'openai-compatible': { contextWindow: 131_072, maxTokens: 32_768 },
+  // 纯音频端点不承担 Director 文本会话。`null` 是显式表态而不是漏项：编造一份
+  // token 预算会让一个不可能成功的会话看起来配置齐全。
+  'openai-compatible-tts': null,
+  'openai-compatible-asr': null,
 }
 
 /**
@@ -55,11 +62,13 @@ const REQUEST_SHAPE: Record<
  * `resolveDirectorModelTarget` 的加密存储。同样显式按 provider 声明，避免新
  * 供应商落到某个兜底分支上给出错误的变量名。
  */
-const AUTH_ENV_KEYS: Record<AiProviderId, readonly string[]> = {
+const AUTH_ENV_KEYS: Record<AiProviderId, readonly string[] | null> = {
   gemini: ['GEMINI_API_KEY'],
   stepfun: ['STEP_API_KEY'],
   mimo: ['MIMO_API_KEY'],
   'openai-compatible': ['OPENAI_COMPATIBLE_API_KEY'],
+  'openai-compatible-tts': null,
+  'openai-compatible-asr': null,
 }
 
 export interface DirectorModelRuntime {
@@ -83,6 +92,15 @@ export async function createDirectorModelRuntime(input: {
   const nodeType = trustedNodeType(input.nodeType, input.stage)
   const target = await resolveDirectorModelTarget(nodeType, 'text')
   const label = PROVIDER_LABEL[target.provider]
+  const requestShape = REQUEST_SHAPE[target.provider]
+  const authEnvKeys = AUTH_ENV_KEYS[target.provider]
+  // 纯音频端点不可能承担文本会话。这是设置面矛盾而非外部抖动，用
+  // RouteContractError 让分类器直接判定不可重试，而不是让画布劝用户反复重试。
+  if (!requestShape || !authEnvKeys) {
+    throw new RouteContractError(
+      `${label} 只提供音频能力，不能承担 Director 文本会话`,
+    )
+  }
   if (!target.apiKey) {
     throw new Error(`${label} API Key 未配置，无法执行 Director 阶段`)
   }
@@ -103,7 +121,7 @@ export async function createDirectorModelRuntime(input: {
     input: ['text', 'image'],
     // 成本核算不在本项目范围内，保持 0 而不是编造费率。
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    ...REQUEST_SHAPE[target.provider],
+    ...requestShape,
   }
   const models = createModels()
   models.setProvider(
@@ -111,10 +129,7 @@ export async function createDirectorModelRuntime(input: {
       id: target.provider,
       baseUrl,
       auth: {
-        apiKey: envApiKeyAuth(
-          `${label} API Key`,
-          [...AUTH_ENV_KEYS[target.provider]],
-        ),
+        apiKey: envApiKeyAuth(`${label} API Key`, [...authEnvKeys]),
       },
       api: target.provider === 'gemini'
         ? googleGenerativeAIApi()
