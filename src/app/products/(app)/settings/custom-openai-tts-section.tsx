@@ -54,6 +54,7 @@ export function CustomOpenAiTtsSection({
       extra={
         <SettingsRow
           label="音频格式"
+          chevron={false}
           className="h-auto min-h-11 flex-col items-stretch gap-1 py-2 sm:flex-row sm:items-center"
         >
           <div className="flex min-w-0 flex-1 flex-col items-end gap-1">

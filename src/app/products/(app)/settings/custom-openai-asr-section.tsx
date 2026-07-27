@@ -63,6 +63,7 @@ export function CustomOpenAiAsrSection({
       <Dialog
         open={pendingKey !== undefined}
         onClose={() => setPendingKey(undefined)}
+        placement="center"
         title="该端点拒绝了转写校验"
         description={
           '校验使用一段 1 秒、无语音内容的合成音，只为确认端点、凭据与响应格式可用。'

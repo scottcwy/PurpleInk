@@ -1,7 +1,8 @@
 'use client'
 
-import { KeyRound } from 'lucide-react'
-import { SettingsPanel } from '@/components/ui/settings-panel'
+import { SettingsSeparator } from '@/components/ui/settings-group'
+import { SettingsRow } from '@/components/ui/settings-row'
+import { StatusPill } from '@/components/ui/status-pill'
 import { Toast } from '@/components/ui/toast'
 import { CustomOpenAiAsrSection } from './custom-openai-asr-section'
 import { CustomOpenAiTtsSection } from './custom-openai-tts-section'
@@ -15,8 +16,9 @@ import type { ReadyModelSettingsController } from './model-service-contract'
 /**
  * 自定义 OpenAI 兼容服务面板。
  *
- * 供应商网格里只有一张「自定义兼容模型」卡片，展开后按顺序排三个**独立**接入点：
- * 文本与视觉、TTS、ASR。三者各有自己的端点、模型、凭据与校验，一次保存只动一份。
+ * 供应商网格里只有一张「自定义兼容模型」卡片，选中后在同一张卡片内按顺序排三个
+ * **独立**接入点：文本与视觉、TTS、ASR。三者各有自己的端点、模型、凭据与校验，
+ * 一次保存只动一份。
  */
 export function CustomOpenAiProviderPanel({
   controller,
@@ -25,13 +27,23 @@ export function CustomOpenAiProviderPanel({
 }) {
   const configuredCount = countConfiguredCustomEndpoints(controller.data)
   return (
-    <SettingsPanel
-      id="provider-openai-compatible"
-      title="OpenAI 兼容模型服务"
-      description="三个互相独立的接入点：文本与视觉、TTS、ASR。各自的端点、模型与密钥分开保存与校验。"
-      icon={KeyRound}
-      summary={`${configuredCount} / ${CUSTOM_ENDPOINT_COUNT} 已配置`}
-    >
+    <div id="provider-openai-compatible" className="flex min-w-0 flex-col">
+      <SettingsSeparator />
+      <SettingsRow
+        label="OpenAI 兼容模型服务"
+        chevron={false}
+        className="h-auto min-h-11 flex-col items-stretch gap-1 py-3 sm:flex-row sm:items-center"
+      >
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+          <span className="text-[12px] text-ds-text-muted">
+            三个互相独立的接入点，各自的端点、模型与密钥分开保存与校验
+          </span>
+          <StatusPill
+            variant={configuredCount === CUSTOM_ENDPOINT_COUNT ? 'rendered' : configuredCount > 0 ? 'stale' : 'pending'}
+            label={`${configuredCount} / ${CUSTOM_ENDPOINT_COUNT} 已配置`}
+          />
+        </div>
+      </SettingsRow>
       <OpenAiCompatibleEndpointSection
         title="文本与视觉"
         description="用于脚本、分镜、代码生成与分镜验收"
@@ -83,6 +95,6 @@ export function CustomOpenAiProviderPanel({
       />
       <CustomOpenAiTtsSection controller={controller} />
       <CustomOpenAiAsrSection controller={controller} />
-    </SettingsPanel>
+    </div>
   )
 }

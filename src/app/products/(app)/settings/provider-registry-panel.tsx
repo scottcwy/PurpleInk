@@ -1,7 +1,7 @@
 'use client'
 
-import { Bot, KeyRound, Network } from 'lucide-react'
-import { useState } from 'react'
+import { Network } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { SettingsSeparator } from '@/components/ui/settings-group'
@@ -26,6 +26,7 @@ import {
   STEPFUN_FIELDS,
   type ReadyModelSettingsController,
 } from './model-service-contract'
+import { useSaveFeedback } from './save-feedback'
 
 /**
  * 供应商卡片是**家族**，不是 provider id。
@@ -50,62 +51,78 @@ const CUSTOM_FAMILY: readonly AiProviderId[] = [
 
 export function ProviderRegistryPanel({
   controller,
+  openPanels,
+  onPanelOpenChange,
 }: {
   controller: ReadyModelSettingsController
+  openPanels: Record<string, boolean>
+  onPanelOpenChange: (id: string, open: boolean) => void
 }) {
   const [selected, setSelected] = useState<AiProviderId>('mimo')
+  const detailRef = useRef<HTMLDivElement>(null)
+  const isFirstRender = useRef(true)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    detailRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [selected])
   return (
-    <div id="providers" className="flex min-w-0 scroll-mt-5 flex-col gap-3">
-      <SettingsPanel
-        title="模型供应商"
-        description="先连接服务，再按能力分配工作流；密钥仅在校验成功后替换"
-        icon={Network}
-        summary={`${PROVIDER_CARDS.length} 个供应商`}
-      >
-        <div className="grid gap-2 p-3 sm:grid-cols-2">
-          {PROVIDER_CARDS.map((provider) => {
-            const definition = PROVIDER_REGISTRY[provider]
-            const status = cardStatus(controller, provider)
-            return (
-              <button
-                key={provider}
-                type="button"
-                aria-pressed={selected === provider}
-                onClick={() => setSelected(provider)}
-                className="text-left"
+    <SettingsPanel
+      id="providers"
+      title="模型供应商"
+      description="先连接服务，再按能力分配工作流；密钥仅在校验成功后替换"
+      icon={Network}
+      summary={`${PROVIDER_CARDS.length} 个供应商`}
+      open={openPanels['providers'] ?? false}
+      onOpenChange={(open) => onPanelOpenChange('providers', open)}
+    >
+      <div className="grid gap-2 p-3 sm:grid-cols-2">
+        {PROVIDER_CARDS.map((provider) => {
+          const definition = PROVIDER_REGISTRY[provider]
+          const status = cardStatus(controller, provider)
+          return (
+            <button
+              key={provider}
+              type="button"
+              aria-pressed={selected === provider}
+              onClick={() => setSelected(provider)}
+              className="text-left"
+            >
+              <Card
+                className={cn(
+                  'h-full transition-colors',
+                  selected === provider
+                    ? 'border-ds-blue bg-ds-blue-soft'
+                    : 'hover:border-ds-border-strong'
+                )}
               >
-                <Card
-                  className={cn(
-                    'h-full transition-colors',
-                    selected === provider
-                      ? 'border-ds-blue bg-ds-blue-soft'
-                      : 'hover:border-ds-border-strong'
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="text-sm font-semibold">{definition.label}</div>
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {cardCapabilities(provider).map((capability) => (
-                          <span
-                            key={capability}
-                            className="rounded bg-ds-surface-muted px-1.5 py-1 text-[10px] font-medium uppercase text-ds-text-muted"
-                          >
-                            {capability}
-                          </span>
-                        ))}
-                      </div>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold">{definition.label}</div>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {cardCapabilities(provider).map((capability) => (
+                        <span
+                          key={capability}
+                          className="rounded bg-ds-surface-muted px-1.5 py-1 text-[10px] font-medium uppercase text-ds-text-muted"
+                        >
+                          {capability}
+                        </span>
+                      ))}
                     </div>
-                    <StatusPill variant={status.variant} label={status.label} />
                   </div>
-                </Card>
-              </button>
-            )
-          })}
-        </div>
-      </SettingsPanel>
-      <SelectedProvider controller={controller} provider={selected} />
-    </div>
+                  <StatusPill variant={status.variant} label={status.label} />
+                </div>
+              </Card>
+            </button>
+          )
+        })}
+      </div>
+      <div ref={detailRef}>
+        <SelectedProvider controller={controller} provider={selected} />
+      </div>
+    </SettingsPanel>
   )
 }
 
@@ -191,69 +208,84 @@ interface ProviderDetailProps<T extends string> {
 
 function ProviderDetail<T extends string>(props: ProviderDetailProps<T>) {
   const [apiKey, setApiKey] = useState('')
+  const { state: keyState, report } = useSaveFeedback()
   const keyBusy = props.busy === `${props.provider.toLowerCase()}-key`
   async function saveKey() {
-    if (await props.onSaveKey(apiKey)) setApiKey('')
+    const ok = await props.onSaveKey(apiKey)
+    if (ok) setApiKey('')
+    report(ok)
   }
   return (
-    <SettingsPanel
-      id={`provider-${props.provider.toLowerCase()}`}
-      title={`${props.provider} 连接与模型`}
-      description={
-        props.provider === 'MiMo'
-          ? '业务后端使用 sk- 产品 API Key；tp- Token Plan Key 不可用于此处'
-          : '密钥与模型配置分开保存，便于先验证连接再微调模型'
-      }
-      icon={props.provider === 'Gemini' ? Bot : KeyRound}
-      summary={props.configured ? '已连接' : '未连接'}
-    >
-      <SettingsRow label="API Key" className="h-auto flex-col items-stretch gap-2 py-3 sm:flex-row">
-        <div className="flex min-w-0 flex-1 flex-wrap justify-end gap-2">
+    <div id={`provider-${props.provider.toLowerCase()}`} className="flex min-w-0 flex-col">
+      <SettingsSeparator />
+      <SettingsRow
+        label={`${props.provider} 连接与模型`}
+        chevron={false}
+        className="h-auto min-h-11 flex-col items-stretch gap-1 py-3 sm:flex-row sm:items-center"
+      >
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+          <span className="text-[12px] text-ds-text-muted">
+            {props.provider === 'MiMo'
+              ? '业务后端使用 sk- 产品 API Key；tp- Token Plan Key 不可用于此处'
+              : '密钥与模型配置分开保存，便于先验证连接再微调模型'}
+          </span>
+          <StatusPill
+            variant={props.configured ? 'rendered' : 'pending'}
+            label={props.configured ? '已连接' : '未连接'}
+          />
+        </div>
+      </SettingsRow>
+      <SettingsRow label="API Key" chevron={false} className="h-auto flex-col items-stretch gap-2 py-3 sm:flex-row">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
           <TextField
             aria-label={`${props.provider} API Key`}
             type="password"
+            variant="ghost"
             value={apiKey}
             onChange={(event) => setApiKey(event.target.value)}
             placeholder={props.configured ? '输入新 Key 以重新校验' : '输入 API Key'}
-            className="min-w-[200px] flex-1"
+            className="min-w-[220px] flex-1"
           />
+          {keyState === 'success' && <StatusPill variant="rendered" label="校验成功" />}
+          {keyState === 'error' && <StatusPill variant="failed" label="校验失败" />}
           <Button
             size="sm"
-            variant="gray"
+            variant="tinted"
             disabled={!apiKey.trim() || keyBusy}
             onClick={() => void saveKey()}
           >
-            校验并保存
+            {keyBusy ? '校验中…' : '校验并保存'}
           </Button>
         </div>
       </SettingsRow>
       {props.fields.map(([field, label]) => (
         <div key={field}>
           <SettingsSeparator />
-          <SettingsRow label={label}>
+          <SettingsRow label={label} chevron={false}>
             <TextField
               aria-label={`${props.provider} ${label}`}
+              variant="ghost"
               value={props.draft[field]}
               onChange={(event) => props.onDraft(field, event.target.value)}
               placeholder={placeholderFor(props.view?.[field])}
-              className="w-full max-w-[320px]"
+              className="w-full max-w-[480px]"
             />
           </SettingsRow>
         </div>
       ))}
       <SettingsSeparator />
-      <SettingsRow label="模型配置">
+      <SettingsRow label="模型配置" chevron={false}>
         <span className="text-xs text-ds-text-muted">留空时使用环境变量或内置默认</span>
         <Button
           size="sm"
-          variant="gray"
+          variant="tinted"
           disabled={Boolean(props.busy)}
           onClick={props.onSaveFields}
         >
           保存模型
         </Button>
       </SettingsRow>
-    </SettingsPanel>
+    </div>
   )
 }
 
