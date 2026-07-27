@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { RouteContractError } from './route-contract-error'
 import {
   AI_PROVIDER_IDS,
   assertProviderCapability,
@@ -29,6 +30,9 @@ describe('provider capability registry', () => {
   })
 
   it('rejects unsupported route assignments at the shared boundary', () => {
+    expect(() =>
+      assertProviderCapability('openai-compatible', 'tts')
+    ).toThrow(RouteContractError)
     expect(() =>
       assertProviderCapability('openai-compatible', 'tts')
     ).toThrow('不支持 TTS')

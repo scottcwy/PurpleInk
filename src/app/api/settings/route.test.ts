@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { RouteContractError } from '@/features/ai/route-contract-error'
 import { GET, POST } from './route'
 
 const mocks = vi.hoisted(() => ({
@@ -351,6 +352,27 @@ describe('POST /api/settings', () => {
     expect(mocks.saveGeminiApiKey).not.toHaveBeenCalled()
     expect(mocks.saveGeminiSettings).not.toHaveBeenCalled()
     expect(mocks.saveDirectorRoutes).not.toHaveBeenCalled()
+  })
+
+  it('returns 422 for an invalid route contract before saving unrelated settings', async () => {
+    mocks.saveDirectorRoutes.mockRejectedValueOnce(
+      new RouteContractError('OpenAI 兼容模型服务尚未配置'),
+    )
+
+    const response = await POST(request({
+      chatModel: 'step-3.5-flash',
+      routes: { export: 'openai-compatible' },
+    }))
+
+    expect(response.status).toBe(422)
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      valid: false,
+      error: 'OpenAI 兼容模型服务尚未配置',
+    })
+    expect(mocks.saveStepfunModelSettings).not.toHaveBeenCalled()
+    expect(mocks.saveGeminiSettings).not.toHaveBeenCalled()
+    expect(mocks.saveMimoSettings).not.toHaveBeenCalled()
   })
 })
 

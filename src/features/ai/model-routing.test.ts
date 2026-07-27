@@ -149,6 +149,18 @@ describe('Director provider routing', () => {
     }, dependencies)).rejects.toThrow('不支持 TTS')
   })
 
+  it('resolves every route contract before persisting any route', async () => {
+    const { dependencies } = createDependencies()
+
+    await expect(saveDirectorRoutes({
+      'shot-codegen': 'stepfun',
+      export: 'openai-compatible',
+    }, dependencies)).rejects.toThrow('尚未配置')
+
+    expect(dependencies.modelRoutes.save).not.toHaveBeenCalled()
+    expect(dependencies.mediaRoutes.save).not.toHaveBeenCalled()
+  })
+
   it('resolves configured model and secret through the shared credential store', async () => {
     const { dependencies, models, secrets } = createDependencies()
     secrets.set('stepfun', 'stored-stepfun-key')

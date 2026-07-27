@@ -1,3 +1,5 @@
+import { RouteContractError } from './route-contract-error'
+
 export const AI_PROVIDER_IDS = [
   'gemini',
   'stepfun',
@@ -75,7 +77,7 @@ export function assertProviderCapability(
   capability: ProviderCapability
 ): void {
   if (providerSupports(provider, capability)) return
-  throw new Error(
+  throw new RouteContractError(
     `${PROVIDER_REGISTRY[provider].label} 不支持 ${capability.toUpperCase()} 路由`
   )
 }
@@ -87,7 +89,9 @@ export function defaultModelFor(
   assertProviderCapability(provider, capability)
   const model = PROVIDER_REGISTRY[provider].defaultModels[capability]
   if (!model) {
-    throw new Error(`${PROVIDER_REGISTRY[provider].label} 尚未配置默认模型`)
+    throw new RouteContractError(
+      `${PROVIDER_REGISTRY[provider].label} 尚未配置默认模型`
+    )
   }
   return model
 }

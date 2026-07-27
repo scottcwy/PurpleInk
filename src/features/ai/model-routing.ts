@@ -204,8 +204,14 @@ export async function saveDirectorRoutes(
     assertProviderCapability(parsedProvider, capabilityForTarget(target))
     selected.set(targetKey(target), { target, provider: parsedProvider })
   }
-  await Promise.all([...selected.values()].map(async ({ target, provider }) => {
-    const model = await defaultModel(provider, target, deps)
+  const planned = await Promise.all(
+    [...selected.values()].map(async ({ target, provider }) => ({
+      target,
+      provider,
+      model: await defaultModel(provider, target, deps),
+    }))
+  )
+  await Promise.all(planned.map(async ({ target, provider, model }) => {
     if (target.domain === 'media') {
       await deps.mediaRoutes.save({
         workspaceId: LOCAL_WORKSPACE_ID,

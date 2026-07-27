@@ -26,6 +26,7 @@ import {
   describeDirectorRoutes,
   saveDirectorRoutes,
 } from '@/features/ai/model-routing'
+import { RouteContractError } from '@/features/ai/route-contract-error'
 import { stepfunSettingsSchema } from '@/features/ai/schemas'
 import { saveApiKey, validateKey } from '@/features/ai/stepfun-adapter'
 import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
@@ -136,10 +137,20 @@ export async function POST(request: Request) {
     }
   }
 
+  try {
+    if (routes) await saveDirectorRoutes(routes)
+  } catch (error) {
+    if (error instanceof RouteContractError) {
+      return NextResponse.json(
+        { ok: false, valid: false, error: error.message },
+        { status: 422 },
+      )
+    }
+    throw error
+  }
   await saveStepfunModelSettings(modelSettings)
   await saveGeminiSettings(geminiSettings)
   await saveMimoSettings(mimoSettings)
-  if (routes) await saveDirectorRoutes(routes)
   if (apiKey !== undefined) await saveApiKey(apiKey)
   if (geminiApiKey !== undefined) await saveGeminiApiKey(geminiApiKey)
   if (mimoApiKey !== undefined) await saveMimoApiKey(mimoApiKey)
