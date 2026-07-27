@@ -10,6 +10,27 @@ function clearAnchors(): void {
   delete store.__cvcQueueInitializing
 }
 
+describe('initQueue 模块边界', () => {
+  beforeEach(() => {
+    clearAnchors()
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    clearAnchors()
+    vi.resetModules()
+    vi.doUnmock('./runtime-config')
+  })
+
+  it('导入启动入口时不加载运行时 DB 配额模块', async () => {
+    vi.doMock('./runtime-config', () => {
+      throw new Error('导入 init.ts 时不应加载 runtime-config')
+    })
+
+    await expect(import('./init')).resolves.toBeDefined()
+  })
+})
+
 describe('queue 单例与 initQueue 的 globalThis 锚定', () => {
   beforeEach(() => {
     clearAnchors()
@@ -22,9 +43,9 @@ describe('queue 单例与 initQueue 的 globalThis 锚定', () => {
   })
 
   it('queue 单例锚定 globalThis：模块重求值后仍是同一实例', async () => {
-    const first = await import('./index')
+    const first = await import('./singleton')
     vi.resetModules()
-    const second = await import('./index')
+    const second = await import('./singleton')
 
     // 裸模块单例会在重求值时得到新实例；globalThis 锚定后跨模块图共享同一队列。
     expect(second.queue).toBe(first.queue)
@@ -54,9 +75,11 @@ describe('initQueue 失败可重试', () => {
     vi.resetModules()
     vi.unstubAllEnvs()
     vi.doUnmock('./runtime-config')
-    vi.doUnmock('./index')
+    vi.doUnmock('./singleton')
     vi.doUnmock('@/features/director/queue-handler')
     vi.doUnmock('@/features/render/queue-handler')
+    vi.doUnmock('@/features/render/export-queue-handler')
+    vi.doUnmock('@/features/audio/narration-queue-handler')
   })
 
   it('首次启动失败不缓存 rejected promise，第二次调用可重试成功', async () => {
@@ -65,14 +88,20 @@ describe('initQueue 失败可重试', () => {
       .mockRejectedValueOnce(new Error('DB 未就绪'))
       .mockResolvedValueOnce({})
     vi.doMock('./runtime-config', () => ({ loadLaneQuotasForStart }))
-    vi.doMock('./index', () => ({
-      queue: { register: vi.fn(), start: vi.fn() },
+    vi.doMock('./singleton', () => ({
+      queue: { start: vi.fn() },
     }))
     vi.doMock('@/features/director/queue-handler', () => ({
       registerDirectorStageHandler: vi.fn(),
     }))
     vi.doMock('@/features/render/queue-handler', () => ({
       registerRenderShotHandler: vi.fn(),
+    }))
+    vi.doMock('@/features/render/export-queue-handler', () => ({
+      registerExportProjectHandler: vi.fn(),
+    }))
+    vi.doMock('@/features/audio/narration-queue-handler', () => ({
+      registerMediaNarrationHandler: vi.fn(),
     }))
     // 绕过测试环境短路，走真实启动路径（instrumentation 首跑失败 -> API 路由兜底重试的场景）。
     vi.stubEnv('NODE_ENV', 'development')
@@ -102,7 +131,7 @@ describe('resolveLaneQuotas', () => {
   })
 
   it('returns no overrides when env vars are unset or blank', async () => {
-    const { resolveLaneQuotas } = await import('./init')
+    const { resolveLaneQuotas } = await import('./lane-quota-env')
     expect(resolveLaneQuotas({})).toEqual({})
     expect(
       resolveLaneQuotas({
@@ -113,7 +142,7 @@ describe('resolveLaneQuotas', () => {
   })
 
   it('parses valid env overrides for known lanes', async () => {
-    const { resolveLaneQuotas } = await import('./init')
+    const { resolveLaneQuotas } = await import('./lane-quota-env')
     expect(
       resolveLaneQuotas({
         CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY: '4',
@@ -123,7 +152,7 @@ describe('resolveLaneQuotas', () => {
   })
 
   it('rejects zero, negative, non-integer, and non-numeric overrides', async () => {
-    const { resolveLaneQuotas } = await import('./init')
+    const { resolveLaneQuotas } = await import('./lane-quota-env')
     expect(() =>
       resolveLaneQuotas({ CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY: '0' })
     ).toThrow()

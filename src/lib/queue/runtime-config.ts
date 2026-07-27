@@ -7,7 +7,7 @@ import {
   DEFAULT_DIRECTOR_STAGE_CONCURRENCY,
   defaultRenderShotConcurrency,
 } from './in-process-queue'
-import { resolveLaneQuotas } from './init'
+import { resolveLaneQuotas } from './lane-quota-env'
 import type { LaneQuotas } from './types'
 
 /**
