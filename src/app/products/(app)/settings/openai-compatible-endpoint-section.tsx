@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { SettingsSeparator } from '@/components/ui/settings-group'
-import { SettingsRow } from '@/components/ui/settings-row'
+import { SettingsField } from '@/components/ui/settings-field'
 import { StatusPill } from '@/components/ui/status-pill'
 import { TextField } from '@/components/ui/text-field'
 import { useSaveFeedback } from './save-feedback'
@@ -57,44 +57,28 @@ export function OpenAiCompatibleEndpointSection({
   return (
     <div className="flex flex-col">
       <SettingsSeparator />
-      <SettingsRow
-        label={title}
-        chevron={false}
-        className="h-auto min-h-11 flex-col items-stretch gap-1 py-3 sm:flex-row sm:items-center"
-      >
-        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
-          <span className="text-[12px] text-ds-text-muted">{description}</span>
-          <StatusPill
-            variant={configured ? 'rendered' : 'pending'}
-            label={configured ? '已配置' : '未配置'}
-          />
-        </div>
-      </SettingsRow>
-      <SettingsRow
-        label="API Key"
-        chevron={false}
-        className="h-auto min-h-11 flex-col items-stretch gap-2 py-2 sm:flex-row sm:items-center"
-      >
-        <div className="flex min-w-0 flex-1 flex-wrap justify-end gap-2">
-          <TextField
-            aria-label={keyLabel}
-            type="password"
-            variant="ghost"
-            value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
-            placeholder={configured ? '输入新 Key 以更新并校验' : '输入 API Key'}
-            className="min-w-[220px] flex-1"
-          />
-        </div>
-      </SettingsRow>
+      <SettingsField label={title} hint={description}>
+        <StatusPill
+          variant={configured ? 'rendered' : 'pending'}
+          label={configured ? '已配置' : '未配置'}
+        />
+      </SettingsField>
+      <SettingsSeparator />
+      <SettingsField label="API Key">
+        <TextField
+          aria-label={keyLabel}
+          type="password"
+          variant="ghost"
+          value={apiKey}
+          onChange={(event) => setApiKey(event.target.value)}
+          placeholder={configured ? '输入新 Key 以更新并校验' : '输入 API Key'}
+          className="min-w-[220px] flex-1"
+        />
+      </SettingsField>
       {fields.map((field) => (
-        <SettingsRow
-          key={field.label}
-          label={field.label}
-          chevron={false}
-          className="h-auto min-h-11 flex-col items-stretch gap-1 py-2 sm:flex-row sm:items-center"
-        >
-          <div className="flex min-w-0 flex-1 flex-col items-end gap-1">
+        <div key={field.label}>
+          <SettingsSeparator />
+          <SettingsField label={field.label} hint={field.note}>
             <TextField
               aria-label={`${keyLabel} ${field.label}`}
               variant="ghost"
@@ -103,34 +87,27 @@ export function OpenAiCompatibleEndpointSection({
               placeholder={field.placeholder}
               className="w-full max-w-[480px]"
             />
-            {field.note && (
-              <span className="text-[11px] leading-4 text-ds-text-muted">
-                {field.note}
-              </span>
-            )}
-          </div>
-        </SettingsRow>
+          </SettingsField>
+        </div>
       ))}
       {extra}
       <SettingsSeparator />
-      <div className="flex flex-col items-center gap-2 px-4 py-3">
-        <div className="flex items-center gap-3">
-          {saveState === 'success' && (
-            <StatusPill variant="rendered" label="校验成功" />
-          )}
-          {saveState === 'error' && (
-            <StatusPill variant="failed" label="校验失败" />
-          )}
-          <Button
-            size="sm"
-            variant="tinted"
-            disabled={busy || !apiKey.trim()}
-            onClick={() => void save()}
-          >
-            {busy ? '校验中…' : '校验并保存'}
-          </Button>
-        </div>
-        <span className="text-[12px] text-ds-text-muted">{saveHint}</span>
+      <div className="flex flex-wrap items-center justify-end gap-2 px-5 py-3.5">
+        <span className="mr-auto text-xs text-ds-text-muted">{saveHint}</span>
+        {saveState === 'success' && (
+          <StatusPill variant="rendered" label="校验成功" />
+        )}
+        {saveState === 'error' && (
+          <StatusPill variant="failed" label="校验失败" />
+        )}
+        <Button
+          size="sm"
+          variant="tinted"
+          disabled={busy || !apiKey.trim()}
+          onClick={() => void save()}
+        >
+          {busy ? '校验中…' : '校验并保存'}
+        </Button>
       </div>
     </div>
   )

@@ -51,12 +51,35 @@ describe('verification code mail', () => {
     }
   })
 
-  it('uses the brand indigo gradient spectrum, not a flat single color', () => {
+  it('renders the project logo svg in the header, not a text-only wordmark', () => {
     const mail = verificationCodeMail({ purpose: 'signup', code: '012345' })
 
-    expect(mail.html).toContain('#333da7')
-    expect(mail.html).toContain('#6366f1')
-    expect(mail.html).toContain('#a5b4fc')
+    expect(mail.html).toContain('<svg')
+    expect(mail.html).toContain('PurpleInk')
+    expect(mail.html).toContain('viewBox="0 0 167 47"')
+  })
+
+  it('removes the old top indigo gradient bar', () => {
+    const mail = verificationCodeMail({ purpose: 'signup', code: '012345' })
+
+    // 旧模板标志性的顶部渐变条：高 4px 的 indigo 渐变。
+    expect(mail.html).not.toMatch(/height="4".*linear-gradient.*333da7|6366f1|a5b4fc/i)
+    expect(mail.html).not.toContain('#a5b4fc')
+  })
+
+  it('declares light and dark color-scheme support', () => {
+    const mail = verificationCodeMail({ purpose: 'signup', code: '012345' })
+
+    expect(mail.html).toContain('color-scheme: light dark')
+    expect(mail.html).toContain('prefers-color-scheme: dark')
+  })
+
+  it('uses the homepage surface colors in light mode', () => {
+    const mail = verificationCodeMail({ purpose: 'signup', code: '012345' })
+
+    expect(mail.html).toContain('#171a2e') // header ink
+    expect(mail.html).toContain('#ffffff') // card
+    expect(mail.html).toContain('#f5f5f7') // page bg
   })
 })
 

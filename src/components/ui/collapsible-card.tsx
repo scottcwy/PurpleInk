@@ -57,7 +57,7 @@ export function CollapsibleCard({
   return (
     <div
       className={cn(
-        'min-w-0 max-w-full overflow-hidden rounded-lg border border-ds-border bg-ds-surface text-ds-text shadow-sm',
+        'min-w-0 max-w-full overflow-hidden rounded-xl border border-ds-border bg-ds-surface text-ds-text shadow-card',
         className,
       )}
     >
@@ -65,10 +65,14 @@ export function CollapsibleCard({
         type="button"
         onClick={toggle}
         aria-expanded={isOpen}
-        className="flex min-h-12 w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-ds-surface-muted"
+        className="flex min-h-14 w-full items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-ds-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ds-ring"
       >
-        {Icon && <Icon className="h-4 w-4 shrink-0 self-start text-ds-blue" />}
-        <span className="min-w-0 flex-1 text-sm font-semibold text-ds-text">
+        {Icon && (
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-ds-blue-soft">
+            <Icon className="h-4 w-4 text-ds-blue" />
+          </span>
+        )}
+        <span className="min-w-0 flex-1 text-[15px] font-semibold text-ds-text">
           {title}
         </span>
         {meta && <span className="shrink-0 font-mono text-[11px] text-ds-text-muted">{meta}</span>}

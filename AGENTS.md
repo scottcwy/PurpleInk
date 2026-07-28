@@ -180,6 +180,7 @@ git diff --check
 | --- | --- |
 | `docs/conventions/routing.md` | 全部路由、上下文参数、守卫与状态口径 |
 | `docs/conventions/workflow-failure-patterns.md` | Director / 渲染 / 音频 / 模型路由的复发失败模式、诊断顺序与已落地护栏 |
+| `docs/conventions/design-quality-pitfalls.md` | UI 质感失败模式、廉价感根因与视觉交付前自查清单（改控件/页面视觉前必读） |
 | `docs/designs/canvas.pen` | 视觉像素、token、reusable symbol 的 SSOT |
 | `docs/designs/Design-system-inventory.md` | token、组件、页面与同步规则的文字索引 |
 | `docs/designs/README.md` | `docs/designs` 内部权威关系 |

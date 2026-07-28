@@ -1,9 +1,13 @@
 # Purplelnk Design System Inventory
 
-> Created: 2026-07-23 · Updated: 2026-07-26 · Status: accepted
+> Created: 2026-07-23 · Updated: 2026-07-28 · Status: accepted
 > Visual SSOT: [`canvas.pen`](./canvas.pen) · Runtime governance: [Architecture Conventions §10](../conventions/architecture-conventions.md#ui-design-ssot)
 
 本文是 `canvas.pen` 的文字索引，记录当前 Canonical 视觉体系、主题变量、组件母版、组合模块、正式页面及同步规则。若本文与设计稿像素或实例树不一致，以已在 Pencil 编辑器中打开的 `canvas.pen` 为准，并在同一次设计变更中回写本文。
+
+> **2026-07-28 同步挂起说明**：本轮"按钮状态系统 + 设置面板体系"重构经用户确认**代码先行**
+> （主 CTA 回到深海军蓝、token 去雾提纯、新增 SettingsField 原语、行高 44→48、卡片圆角 12）。
+> `canvas.pen` 尚未回写，待下一次 Pencil 编辑器会话以本文件与代码为准同步 B0 母组件。
 
 ---
 
@@ -94,12 +98,13 @@ Pencil reusable symbol
 | Token | Light | Dark | 用途 |
 |---|---|---|---|
 | `ds-bg` | `#EEF2FF` | `#03040A` | 页面基底 |
-| `ds-surface` | `#FAFBFFF2` | `#0D0E13F2` | 卡片、顶栏、Inspector、Dialog |
-| `ds-surface-muted` | `#E8ECFA` | `#171820` | 次级面、选中导航、控件轨道 |
+| `ds-surface` | `#FCFDFFF8` | `#11131AF5` | 卡片、顶栏、Inspector、Dialog |
+| `ds-surface-muted` | `#F1F4FA` | `#191C26` | 次级面、选中导航、控件轨道 |
 | `ds-text` | `#171A2E` | `#F1F1F4` | 主文字 |
-| `ds-text-muted` | `#68728F` | `#9696A3` | 次级文字、元数据 |
-| `ds-border` | `#D2D9EE` | `#292B35` | 1px 边界与分隔 |
+| `ds-text-muted` | `#5E6679` | `#9BA0B0` | 次级文字、元数据 |
+| `ds-border` | `#DDE2EE` | `#2A2E3C` | 1px 边界与分隔 |
 | `ds-shadow` | `#25305A1F` | `#00000099` | Canonical 卡片/浮层阴影色 |
+| `ds-ring` | `#3B5BDB59` | `#93A5FF66` | 全控件统一 focus-visible 光环 |
 
 ### 4.1.1 滚动条（全局细条）
 
@@ -110,8 +115,8 @@ Pencil reusable symbol
 | Token | Light | Dark |
 |---|---|---|
 | `ds-gradient-start` | `#FFFFFF` | `#03040A` |
-| `ds-gradient-mid` | `#F1F3FF` | `#080912` |
-| `ds-gradient-end` | `#DCE3FF` | `#23295C` |
+| `ds-gradient-mid` | `#F5F7FD` | `#080912` |
+| `ds-gradient-end` | `#E6EAF8` | `#23295C` |
 
 统一配置：线性、纵向、stop `0 / 0.52 / 1`。A–D、Sidebar 与 S1–S6 使用同一组变量；不得为单页另造背景渐变。
 
@@ -120,24 +125,24 @@ Pencil reusable symbol
 | Token | Light | Dark | 用途 |
 |---|---|---|---|
 | `ds-primary` | `#202A5B` | `#403778` | Toggle、品牌标及非渐变主色 |
-| `ds-primary-start` | `#8B9AD8` | `#594F94` | Primary gradient start（浅色模式为浅色系主 CTA） |
-| `ds-primary-end` | `#5A6BB5` | `#302762` | Primary gradient end（暗色模式保持深色系） |
-| `ds-primary-fg` | `#F8FAFF` | `#F8FAFF` | 主操作前景 |
+| `ds-button-bg` | `#171A2E` | `#F1F1F4` | Primary 按钮底（墨色，与 `ds-text` 同族） |
+| `ds-button-fg` | `#F8FAFF` | `#171A2E` | Primary 按钮前景 |
+| `ds-button-bg-hover` | `#252C48` | `#FFFFFF` | Primary 按钮 hover 底 |
 
-Primary 按钮使用 `135°` 的 `ds-primary-start → ds-primary-end` 渐变，随主题切换深浅。业务页通过 `Button` 变体选用配色，不得本地覆写渐变。语义约定：`primary` = 新建 / 导出等主 CTA；`tinted` = 执行阶段等次主操作；`destructive` = 重渲此镜等高代价操作；`gray` = 取消 / 次级。
+Primary 按钮为**扁平实心**（Vercel/Linear 式）：零渐变、零投影、零内高光，浅色模式用墨色、暗色模式反转为近白——按钮色取自 `ds-text` 墨族，与全局平面的瓷白/黑曜表面同源，不引入额外色相（两向对比均 ≥14:1）。交互状态只靠底色明度迁移：hover 换 `--ds-button-bg-hover`、active 下压 `translate-y-px` + `brightness-95`、focus-visible 统一 `ds-ring` 光环。业务页通过 `Button` 变体选用配色，不得本地覆写。语义约定：`primary` = 新建 / 导出等主 CTA；`tinted` = 执行阶段等次主操作；`destructive` = 重渲此镜等高代价操作；`gray` = 取消 / 次级。
 
 ### 4.4 信息与状态
 
 | Token | Light | Dark |
 |---|---|---|
-| `ds-blue` | `#4E5FA8` | `#8D8DAA` |
-| `ds-blue-soft` | `#E5E9FF` | `#1C1D2B` |
+| `ds-blue` | `#3B5BDB` | `#93A5FF` |
+| `ds-blue-soft` | `#E9EEFE` | `#1B2140` |
 | `ds-green` | `#168F63` | `#63B28E` |
 | `ds-green-soft` | `#E9F8F2` | `#122A22` |
 | `ds-amber` | `#B66A18` | `#D9A55E` |
 | `ds-amber-soft` | `#F3E7D4` | `#3B2D1D` |
-| `ds-red` | `#C4475B` | `#DE7C91` |
-| `ds-red-soft` | `#F2DEDA` | `#3A2421` |
+| `ds-red` | `#D92D20` | `#E5534B` |
+| `ds-red-soft` | `#FDECEA` | `#3B1D1A` |
 | `ds-accent` | `#80663A` | `#C4A15E` |
 | `ds-accent-soft` | `#F0E6D2` | `#383020` |
 
@@ -170,7 +175,7 @@ Primary 按钮使用 `135°` 的 `ds-primary-start → ds-primary-end` 渐变，
 | `ds-radius` | 8 | 默认表面圆角 |
 | `ds-gap` | 16 | 默认模块间距 |
 
-常用字号：Display 36、H1 30、H2 22、Body 14、Label 12；正文行高建议 1.45–1.55。控件圆角以 6 为主，卡片/播放器以 8 为主，Dialog 为 10，pill 为 999。
+常用字号：Display 36、H1 30、H2 22、Body 14、Label 12；正文行高建议 1.45–1.55。圆角：控件 8（`--radius-md`）、卡片/面板/Dialog 12（`--radius-lg`）、pill 999。设置行节奏：导航/只读行 48px（`SettingsRow`，px-5），表单行 `SettingsField`（min-h 56、px-5 py-3.5，label+hint 在左、多控件区在右，窄屏纵向堆叠）——禁止再用行高覆写把多控件塞进 44px 行。
 
 ---
 
@@ -201,6 +206,10 @@ Primary 按钮使用 `135°` 的 `ds-primary-start → ds-primary-end` 渐变，
 2. 修改结构只改 B0 mother component，再检查 B、C、S 同步结果。
 3. 实例 override 只允许内容、状态、图标、选中态和明确登记的尺寸变体。
 4. 不新增平行 Button、Card、Badge、Sidebar、Tabs 或 QueueBar。
+
+代码侧补充原语（已登记 `/playbook`，待 Pencil 会话补登记为 reusable symbol）：
+`SectionNav`（S6 右栏目录）、`SettingsPanel`（S6 折叠面板）、`SettingsField`（S6 表单行，
+2026-07-28 新增，吸收原 SettingsRow 行高覆写场景）。
 
 ---
 

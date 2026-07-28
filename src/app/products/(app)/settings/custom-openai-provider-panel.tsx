@@ -1,7 +1,7 @@
 'use client'
 
 import { SettingsSeparator } from '@/components/ui/settings-group'
-import { SettingsRow } from '@/components/ui/settings-row'
+import { SettingsField } from '@/components/ui/settings-field'
 import { StatusPill } from '@/components/ui/status-pill'
 import { Toast } from '@/components/ui/toast'
 import { CustomOpenAiAsrSection } from './custom-openai-asr-section'
@@ -29,21 +29,15 @@ export function CustomOpenAiProviderPanel({
   return (
     <div id="provider-openai-compatible" className="flex min-w-0 flex-col">
       <SettingsSeparator />
-      <SettingsRow
+      <SettingsField
         label="OpenAI 兼容模型服务"
-        chevron={false}
-        className="h-auto min-h-11 flex-col items-stretch gap-1 py-3 sm:flex-row sm:items-center"
+        hint="三个互相独立的接入点，各自的端点、模型与密钥分开保存与校验"
       >
-        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
-          <span className="text-[12px] text-ds-text-muted">
-            三个互相独立的接入点，各自的端点、模型与密钥分开保存与校验
-          </span>
-          <StatusPill
-            variant={configuredCount === CUSTOM_ENDPOINT_COUNT ? 'rendered' : configuredCount > 0 ? 'stale' : 'pending'}
-            label={`${configuredCount} / ${CUSTOM_ENDPOINT_COUNT} 已配置`}
-          />
-        </div>
-      </SettingsRow>
+        <StatusPill
+          variant={configuredCount === CUSTOM_ENDPOINT_COUNT ? 'rendered' : configuredCount > 0 ? 'stale' : 'pending'}
+          label={`${configuredCount} / ${CUSTOM_ENDPOINT_COUNT} 已配置`}
+        />
+      </SettingsField>
       <OpenAiCompatibleEndpointSection
         title="文本与视觉"
         description="用于脚本、分镜、代码生成与分镜验收"

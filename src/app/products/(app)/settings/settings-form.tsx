@@ -52,8 +52,8 @@ export function SettingsForm({
       <TopBar title="设置" meta="Provider Registry 与运行默认值" />
       <div className="mx-auto grid w-full max-w-[1280px] lg:grid-cols-[minmax(0,1fr)_200px]">
         <div className="min-w-0">
-          <div className="mx-auto flex min-w-0 w-full max-w-[940px] flex-col gap-3 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
-            <header className="mb-4">
+          <div className="mx-auto flex min-w-0 w-full max-w-[940px] flex-col gap-4 px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
+            <header className="mb-6">
               <div className="flex items-center gap-2.5">
                 <h2 className="text-2xl font-bold">Provider 与默认值</h2>
                 <StatusPill variant="rendered" icon={ShieldCheck} label="本地优先" />

@@ -14,7 +14,7 @@ export function SettingsGroup({ children, className }: SettingsGroupProps) {
   return (
     <div
       className={cn(
-        'flex min-w-0 flex-col overflow-hidden rounded-lg border border-ds-border bg-ds-surface text-ds-text',
+        'flex min-w-0 flex-col overflow-hidden rounded-xl border border-ds-border bg-ds-surface text-ds-text',
         className,
       )}
     >

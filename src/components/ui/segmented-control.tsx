@@ -14,12 +14,13 @@ export interface SegmentedControlProps {
 
 /**
  * InspectorTabs Canonical（ds-surface-muted 轨道 + ds-surface 激活项）。
+ * 激活项带微投影浮起；选项统一 focus ring。
  */
 export function SegmentedControl({ options, value, onChange, className }: SegmentedControlProps) {
   return (
     <div
       className={cn(
-        'inline-flex items-center gap-1 rounded-md bg-ds-surface-muted p-1 text-ds-text',
+        'inline-flex items-center gap-1 rounded-[10px] bg-ds-surface-muted p-1 text-ds-text',
         className,
       )}
     >
@@ -31,9 +32,9 @@ export function SegmentedControl({ options, value, onChange, className }: Segmen
             type="button"
             onClick={() => onChange(option.value)}
             className={cn(
-              'rounded px-2.5 py-1.5 text-xs font-medium transition-colors',
+              'rounded-md px-3 py-1.5 text-[13px] font-medium transition-[background-color,color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-ring',
               active
-                ? 'bg-ds-surface text-ds-text'
+                ? 'bg-ds-surface text-ds-text shadow-[0_1px_2px_#10183a1a]'
                 : 'text-ds-text-muted hover:text-ds-text',
             )}
           >

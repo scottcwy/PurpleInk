@@ -74,5 +74,8 @@ describe('Pencil canonical components', () => {
     expect(html).toContain('border-ds-border')
     expect(html).toContain('bg-ds-blue-soft')
     expect(html).toContain('bg-ds-red')
+    // 状态层配方：统一 focus ring 与 active 下压。
+    expect(html).toContain('focus-visible:ring-ds-ring')
+    expect(html).toContain('active:translate-y-px')
   })
 })

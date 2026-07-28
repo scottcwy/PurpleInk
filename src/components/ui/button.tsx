@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils'
 
 /**
  * 设计系统 4 变体（见 design-system-inventory §4.3）：
- * - primary: 主 CTA（主题化渐变：浅色模式浅色系 / 暗色模式深色系）— 新建项目、导出
+ * - primary: 主 CTA（扁平墨色实心，暗色反转为近白；零渐变零投影）— 新建项目、导出
  * - tinted: 次主操作（blue-soft 底 + blue 字）— 执行此阶段、生成分镜代码
  * - gray: 取消 / 次级
  * - destructive: 高代价操作（red）— 重渲此镜、删除
@@ -18,21 +18,23 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: 'ds-primary-button text-white hover:brightness-105',
-  tinted: 'bg-ds-blue-soft text-ds-blue hover:brightness-95',
+  primary: 'ds-primary-button active:brightness-95',
+  tinted:
+    'bg-ds-blue-soft text-ds-blue hover:bg-[color-mix(in_srgb,var(--ds-blue)_16%,transparent)] active:brightness-95',
   gray:
     'border border-ds-border bg-ds-surface text-ds-text hover:bg-ds-surface-muted',
-  destructive: 'bg-ds-red text-white hover:brightness-95',
+  destructive:
+    'bg-ds-red text-white hover:brightness-95 active:brightness-90',
 }
 
 const SIZES: Record<ButtonSize, string> = {
-  sm: 'h-8 gap-1.5 px-3 text-xs rounded-md',
-  md: 'h-10 gap-2 px-3.5 text-sm rounded-md',
-  lg: 'h-11 gap-2 px-5 text-sm rounded-md',
+  sm: 'h-8 gap-1.5 px-3 text-[13px] rounded-md',
+  md: 'h-9 gap-2 px-3.5 text-sm rounded-md',
+  lg: 'h-10 gap-2 px-4 text-sm rounded-md',
 }
 
 const BASE =
-  'inline-flex items-center justify-center font-medium transition-[background-color,filter,opacity] disabled:pointer-events-none disabled:opacity-50'
+  'inline-flex items-center justify-center font-medium transition-[background-color,box-shadow,filter,opacity,transform] duration-150 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-ring disabled:pointer-events-none disabled:opacity-45'
 
 /**
  * 按钮外观配方（SSOT）。

@@ -1,55 +1,57 @@
 :root {
   --ds-gradient-start: #ffffff;
-  --ds-gradient-mid: #f1f3ff;
-  --ds-gradient-end: #dce3ff;
-  --ds-surface: #fafbfff2;
-  --ds-surface-muted: #e8ecfa;
-  --ds-border: #d2d9ee;
+  --ds-gradient-mid: #f5f7fd;
+  --ds-gradient-end: #e6eaf8;
+  --ds-surface: #fcfdfff8;
+  --ds-surface-muted: #f1f4fa;
+  --ds-border: #dde2ee;
   --ds-text: #171a2e;
-  --ds-text-muted: #68728f;
+  --ds-text-muted: #5e6679;
   --ds-primary: #202a5b;
-  --ds-blue: #4e5fa8;
-  --ds-blue-soft: #e5e9ff;
+  --ds-blue: #3b5bdb;
+  --ds-blue-soft: #e9eefe;
   --ds-green: #168f63;
   --ds-green-soft: #e9f8f2;
-  --ds-red: #c4475b;
-  --ds-red-soft: #f2deda;
+  --ds-red: #d92d20;
+  --ds-red-soft: #fdecea;
   --ds-amber: #b66a18;
   --ds-amber-soft: #f3e7d4;
   --ds-magenta: #f23886;
-  --ds-canvas: #e8ecfa;
+  --ds-canvas: #f1f4fa;
   --ds-scrim: #10183a70;
-  /* Light primary CTA: soft indigo gradient (dark mode keeps deep purple below). */
-  --ds-button-start: #8b9ad8;
-  --ds-button-end: #5a6bb5;
+  /* Primary CTA：扁平墨色实心（Vercel/Linear 式零投影），暗色反转为近白。 */
+  --ds-button-bg: #171a2e;
+  --ds-button-fg: #f8faff;
+  --ds-button-bg-hover: #252c48;
   --ds-shadow: 0 10px 28px #25305a1f;
-  --ds-button-shadow: 0 6px 16px #5a6bb528;
+  --ds-ring: #3b5bdb59;
 }
 
 .dark {
   --ds-gradient-start: #03040a;
   --ds-gradient-mid: #080912;
   --ds-gradient-end: #23295c;
-  --ds-surface: #0d0e13f2;
-  --ds-surface-muted: #171820;
-  --ds-border: #292b35;
+  --ds-surface: #11131af5;
+  --ds-surface-muted: #191c26;
+  --ds-border: #2a2e3c;
   --ds-text: #f1f1f4;
-  --ds-text-muted: #9696a3;
+  --ds-text-muted: #9ba0b0;
   --ds-primary: #403778;
-  --ds-blue: #8d8daa;
-  --ds-blue-soft: #1c1d2b;
+  --ds-blue: #93a5ff;
+  --ds-blue-soft: #1b2140;
   --ds-green: #63b28e;
   --ds-green-soft: #122a22;
-  --ds-red: #de7c91;
-  --ds-red-soft: #3a2421;
+  --ds-red: #e5534b;
+  --ds-red-soft: #3b1d1a;
   --ds-amber: #d9a55e;
   --ds-amber-soft: #3b2d1d;
   --ds-canvas: #080910;
   --ds-scrim: #02030a99;
-  --ds-button-start: #594f94;
-  --ds-button-end: #302762;
+  --ds-button-bg: #f1f1f4;
+  --ds-button-fg: #171a2e;
+  --ds-button-bg-hover: #ffffff;
   --ds-shadow: 0 10px 28px #00000066;
-  --ds-button-shadow: 0 6px 16px #00000052;
+  --ds-ring: #93a5ff66;
 }
 
 @theme inline {
@@ -68,6 +70,7 @@
   --color-ds-amber: var(--ds-amber);
   --color-ds-amber-soft: var(--ds-amber-soft);
   --color-ds-canvas: var(--ds-canvas);
+  --color-ds-ring: var(--ds-ring);
 }
 
 .ds-app-gradient {
@@ -90,12 +93,13 @@
 }
 
 .ds-primary-button {
-  background: linear-gradient(
-    135deg,
-    var(--ds-button-start) 0%,
-    var(--ds-button-end) 100%
-  );
-  box-shadow: var(--ds-button-shadow);
+  /* 扁平实心：无渐变、无投影、无内高光，靠墨色与留白建立层级。 */
+  background: var(--ds-button-bg);
+  color: var(--ds-button-fg);
+}
+
+.ds-primary-button:hover {
+  background: var(--ds-button-bg-hover);
 }
 
 /* TOC 导航定位目标区块的微发光效果（伪元素静态 shadow + opacity 过渡，避免逐帧重绘）。 */

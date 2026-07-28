@@ -32,6 +32,7 @@ import { SearchFieldDemo } from "@/components/ui/search-field.demo";
 import { SectionNavDemo } from "@/components/ui/section-nav.demo";
 import { SegmentedControlDemo } from "@/components/ui/segmented-control.demo";
 import { SettingsGroupDemo } from "@/components/ui/settings-group.demo";
+import { SettingsFieldDemo } from "@/components/ui/settings-field.demo";
 import { SettingsPanelDemo } from "@/components/ui/settings-panel.demo";
 import { SettingsRowDemo } from "@/components/ui/settings-row.demo";
 import { SkeletonDemo } from "@/components/ui/skeleton.demo";
@@ -63,7 +64,7 @@ export const PENCIL_COMPONENT_FAMILY_COUNT = 35;
  * 计入 UI 登记总数。SectionNav 待 canvas.pen 有可用编辑器会话时补登记为
  * reusable symbol；在此之前只是代码侧的已注册组件。
  */
-export const UI_COMPONENT_FAMILY_COUNT = 44;
+export const UI_COMPONENT_FAMILY_COUNT = 45;
 export const PENCIL_CONSOLIDATION_NOTE =
   "当前登记 35 个已转译的应用组件族；其余 reusable symbols 属于上游 kit、变体或尚未进入 PurpleInk 公共边界的设计资产。";
 
@@ -239,6 +240,12 @@ export const PLAYBOOK_ENTRIES: PlaybookEntry[] = [
     name: "SettingsPanel",
     category: "ui",
     Demo: SettingsPanelDemo,
+  },
+  {
+    id: "settings-field",
+    name: "SettingsField",
+    category: "ui",
+    Demo: SettingsFieldDemo,
   },
   {
     id: "settings-row",

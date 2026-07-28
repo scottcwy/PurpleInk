@@ -3,6 +3,7 @@
 import { Cpu, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { SettingsField } from '@/components/ui/settings-field'
 import { SettingsSeparator } from '@/components/ui/settings-group'
 import { SettingsPanel } from '@/components/ui/settings-panel'
 import { SettingsRow } from '@/components/ui/settings-row'
@@ -49,55 +50,46 @@ export function RuntimeConcurrencyPanel({
       open={openPanels['runtime'] ?? false}
       onOpenChange={(open) => onPanelOpenChange('runtime', open)}
     >
-      <SettingsRow
-        label="Director 阶段并发"
-        className="h-auto min-h-11 flex-col items-stretch gap-2 py-2 sm:flex-row sm:items-center"
-      >
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <LaneField
-            ariaLabel="Director 阶段并发"
-            value={controller.laneQuotasDraft.directorStageConcurrency}
-            onChange={(v) =>
-              controller.setLaneQuotaField('directorStageConcurrency', v)
-            }
-            min={LANE_QUOTA_LIMITS.directorStageMin}
-            max={LANE_QUOTA_LIMITS.directorStageMax}
-          />
-          <LaneSourcePill field={view?.directorStage} />
-        </div>
-      </SettingsRow>
+      <SettingsField label="Director 阶段并发">
+        <LaneField
+          ariaLabel="Director 阶段并发"
+          value={controller.laneQuotasDraft.directorStageConcurrency}
+          onChange={(v) =>
+            controller.setLaneQuotaField('directorStageConcurrency', v)
+          }
+          min={LANE_QUOTA_LIMITS.directorStageMin}
+          max={LANE_QUOTA_LIMITS.directorStageMax}
+        />
+        <LaneSourcePill field={view?.directorStage} />
+      </SettingsField>
       <SettingsSeparator />
-      <SettingsRow
-        label="渲染并发"
-        className="h-auto min-h-11 flex-col items-stretch gap-2 py-2 sm:flex-row sm:items-center"
-      >
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <LaneField
-            ariaLabel="渲染并发"
-            value={controller.laneQuotasDraft.renderShotConcurrency}
-            onChange={(v) =>
-              controller.setLaneQuotaField('renderShotConcurrency', v)
-            }
-            min={LANE_QUOTA_LIMITS.renderShotMin}
-            max={LANE_QUOTA_LIMITS.renderShotMax}
-          />
-          <LaneSourcePill field={view?.renderShot} />
-        </div>
-      </SettingsRow>
+      <SettingsField label="渲染并发">
+        <LaneField
+          ariaLabel="渲染并发"
+          value={controller.laneQuotasDraft.renderShotConcurrency}
+          onChange={(v) =>
+            controller.setLaneQuotaField('renderShotConcurrency', v)
+          }
+          min={LANE_QUOTA_LIMITS.renderShotMin}
+          max={LANE_QUOTA_LIMITS.renderShotMax}
+        />
+        <LaneSourcePill field={view?.renderShot} />
+      </SettingsField>
       <SettingsSeparator />
       <SettingsRow
         label="生效范围"
         value="账号级（写入 workspace_settings）"
+        chevron={false}
       />
       <SettingsSeparator />
-      <SettingsRow label="应用方式">
-        <span className="flex items-center gap-2 text-[12px] text-ds-text-muted">
+      <SettingsRow label="应用方式" chevron={false}>
+        <span className="flex items-center gap-2 text-[13px] text-ds-text-muted">
           <RefreshCw className="size-3.5" />
           保存后需重启 dev 进程生效
         </span>
       </SettingsRow>
       <SettingsSeparator />
-      <SettingsRow label="导出分辨率">
+      <SettingsRow label="导出分辨率" chevron={false}>
         <span className="text-[13px] text-ds-text-muted">
           按项目在导出页配置
         </span>
@@ -200,13 +192,7 @@ function SaveRow({
   }
 
   return (
-    <SettingsRow
-      label="并发配置"
-      className="h-auto min-h-11 flex-wrap gap-2 py-2"
-    >
-      <span className="text-[12px] text-ds-text-muted">
-        留空回退 env / 内置默认
-      </span>
+    <SettingsField label="并发配置" hint="留空回退 env / 内置默认">
       <Button
         size="sm"
         variant="gray"
@@ -215,6 +201,6 @@ function SaveRow({
       >
         保存
       </Button>
-    </SettingsRow>
+    </SettingsField>
   )
 }

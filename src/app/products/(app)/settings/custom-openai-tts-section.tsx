@@ -1,7 +1,7 @@
 'use client'
 
 import { SegmentedControl } from '@/components/ui/segmented-control'
-import { SettingsRow } from '@/components/ui/settings-row'
+import { SettingsField } from '@/components/ui/settings-field'
 import { OpenAiCompatibleEndpointSection } from './openai-compatible-endpoint-section'
 import type { ReadyModelSettingsController } from './model-service-contract'
 
@@ -52,27 +52,21 @@ export function CustomOpenAiTtsSection({
         },
       ]}
       extra={
-        <SettingsRow
+        <SettingsField
           label="音频格式"
-          chevron={false}
-          className="h-auto min-h-11 flex-col items-stretch gap-1 py-2 sm:flex-row sm:items-center"
+          hint="只开放 MP3 与 WAV：旁白时长由本地解码真实字节实测，其他容器无法读取。"
         >
-          <div className="flex min-w-0 flex-1 flex-col items-end gap-1">
-            <SegmentedControl
-              options={AUDIO_FORMAT_OPTIONS}
-              value={draft.audioFormat}
-              onChange={(value) =>
-                controller.setCustomOpenAiTtsField(
-                  'audioFormat',
-                  value === 'wav' ? 'wav' : 'mp3',
-                )}
-              className="max-w-full"
-            />
-            <span className="text-[11px] leading-4 text-ds-text-muted">
-              只开放 MP3 与 WAV：旁白时长由本地解码真实字节实测，其他容器无法读取。
-            </span>
-          </div>
-        </SettingsRow>
+          <SegmentedControl
+            options={AUDIO_FORMAT_OPTIONS}
+            value={draft.audioFormat}
+            onChange={(value) =>
+              controller.setCustomOpenAiTtsField(
+                'audioFormat',
+                value === 'wav' ? 'wav' : 'mp3',
+              )}
+            className="max-w-full"
+          />
+        </SettingsField>
       }
       onSave={async (apiKey) => {
         const result = await controller.submit({

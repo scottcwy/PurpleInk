@@ -19,14 +19,14 @@ export function SettingsRow({ label, value, children, className, chevron = true 
   return (
     <div
       className={cn(
-        'flex h-11 min-w-0 items-center justify-between px-4',
+        'flex min-h-12 min-w-0 items-center justify-between px-5',
         className,
       )}
     >
       <span className="shrink-0 text-sm text-ds-text">{label}</span>
       <div className="flex min-w-0 items-center justify-end gap-2">
         {value && (
-          <span className="truncate text-xs font-mono text-ds-text-muted">
+          <span className="truncate text-[13px] font-mono text-ds-text-muted">
             {value}
           </span>
         )}

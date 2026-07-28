@@ -10,21 +10,41 @@ import type { VerificationPurpose } from './verification-code'
 const TTL_MINUTES = Math.round(VERIFICATION_CODE_TTL_MS / 60_000)
 
 /**
- * 品牌色：与营销页 footer / bottom-cta 的靛蓝渐变光谱一致
- * （#333DA7 → #6366f1 → #a5b4fc）。邮件客户端普遍剥离 <style>，
- * 也无法引用应用侧 ds-* token，所以色值以常量形式内联。
+ * 邮件主题色：与主页 design-system.css 同步，并支持客户端明暗色偏好。
+ *
+ * 邮件客户端对 CSS 变量支持极差，所以色值以内联常量为主；暗色模式通过
+ * `<meta name="color-scheme">` + `@media (prefers-color-scheme: dark)` 下发，
+ * 不支持的老客户端会优雅回退到浅色主题。
  */
-const BRAND = {
-  ink: '#333da7',
-  accent: '#6366f1',
-  accentLight: '#a5b4fc',
-  accentFill: '#eef0ff',
-  accentBorder: '#d6dcff',
-  pageBg: '#f5f5f7',
-  cardBg: '#ffffff',
-  text: '#171a2e',
-  muted: '#737373',
-  divider: '#e5e5e5',
+const THEME = {
+  light: {
+    pageBg: '#f5f5f7',
+    cardBg: '#ffffff',
+    headerBg: '#171a2e',
+    text: '#171a2e',
+    muted: '#5e6679',
+    divider: '#e5e5e5',
+    codeBg: '#f1f4fa',
+    codeBorder: '#dde2ee',
+    codeText: '#171a2e',
+    footer: '#5e6679',
+    link: '#5e6679',
+    linkHover: '#171a2e',
+  },
+  dark: {
+    pageBg: '#03040a',
+    cardBg: '#11131a',
+    headerBg: '#03040a',
+    text: '#f1f1f4',
+    muted: '#9ba0b0',
+    divider: '#2a2e3c',
+    codeBg: '#191c26',
+    codeBorder: '#2a2e3c',
+    codeText: '#f1f1f4',
+    footer: '#9ba0b0',
+    link: '#9ba0b0',
+    linkHover: '#f1f1f4',
+  },
 } as const
 
 const LINKS: ReadonlyArray<{ label: string; href: string }> = [
@@ -45,6 +65,15 @@ const COPY: Record<VerificationPurpose, { subject: string; lead: string }> = {
     lead: '你正在重置 PurpleInk 账号密码，请在页面中填入下面的验证码继续。',
   },
 }
+
+/** 邮件内联 LOGO：与营销页 header 同款 `/svg/logo.svg`，白色版本置于深色 header。 */
+const LOGO_SVG =
+  `<svg width="120" height="34" viewBox="0 0 167 47" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="PurpleInk">` +
+  `<rect x="3.5" y="4.5" width="38" height="38" rx="10.5" stroke="white" stroke-width="3"/>` +
+  `<path fill-rule="evenodd" clip-rule="evenodd" d="M13 13H24.7C32 13 36.5 16.8 36.5 23.1C36.5 29.4 32 33.2 24.7 33.2H19.2V37H13V13ZM19.2 18.5V27.7H24.3C28.1 27.7 30.2 26.2 30.2 23.1C30.2 20 28.1 18.5 24.3 18.5H19.2Z" fill="white"/>` +
+  `<circle cx="36.5" cy="10.5" r="3.5" fill="#00C37A"/>` +
+  `<text x="51" y="31.5" fill="white" font-family="Geist, ui-sans-serif, system-ui, sans-serif" font-size="24" font-weight="650" letter-spacing="0">PurpleInk</text>` +
+  `</svg>`
 
 export interface MailBody {
   subject: string
@@ -73,50 +102,95 @@ function htmlBody(input: {
   expiry: string
   disclaimer: string
 }): string {
-  // table + 内联样式：邮件客户端普遍剥离 <style>，Outlook 只认 table 布局。
-  // 渐变均给 background-color 纯色兜底，老客户端优雅降级。
   const footerLinks = LINKS.map(
     (link) =>
-      `<a href="${link.href}" style="color:${BRAND.muted};text-decoration:underline">${link.label}</a>`,
+      `<a href="${link.href}" style="color:${THEME.light.link};text-decoration:none;transition:color 0.2s ease">${link.label}</a>`,
   ).join(
-    `<span style="color:${BRAND.divider};padding:0 10px">·</span>`,
+    `<span style="color:${THEME.light.divider};padding:0 10px">·</span>`,
   )
+
   return [
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${BRAND.pageBg};padding:40px 16px">`,
-    '<tr><td align="center">',
-    '<table role="presentation" width="520" cellpadding="0" cellspacing="0" style="width:100%;max-width:520px">',
+    `<!DOCTYPE html>`,
+    `<html lang="zh-CN" style="color-scheme: light dark;">`,
+    `<head>`,
+    `<meta charset="utf-8">`,
+    `<meta name="viewport" content="width=device-width, initial-scale=1.0">`,
+    `<meta name="color-scheme" content="light dark">`,
+    `<meta name="supported-color-schemes" content="light dark">`,
+    `<title>PurpleInk 验证码</title>`,
+    `<!--[if mso]>`,
+    `<noscript>`,
+    `<xml>`,
+    `<o:OfficeDocumentSettings>`,
+    `<o:PixelsPerInch>96</o:PixelsPerInch>`,
+    `</o:OfficeDocumentSettings>`,
+    `</xml>`,
+    `</noscript>`,
+    `<![endif]-->`,
+    `<style>`,
+    `:root { color-scheme: light dark; }`,
+    `a:hover { color: ${THEME.light.linkHover} !important; text-decoration: underline !important; }`,
+    `@media (prefers-color-scheme: dark) {`,
+    `  .email-body, .email-body > tbody > tr > td { background-color: ${THEME.dark.pageBg} !important; }`,
+    `  .email-shell { background-color: ${THEME.dark.pageBg} !important; }`,
+    `  .email-card { background-color: ${THEME.dark.cardBg} !important; }`,
+    `  .email-header { background-color: ${THEME.dark.headerBg} !important; }`,
+    `  .email-text { color: ${THEME.dark.text} !important; }`,
+    `  .email-muted { color: ${THEME.dark.muted} !important; }`,
+    `  .email-divider { border-color: ${THEME.dark.divider} !important; }`,
+    `  .email-code { background-color: ${THEME.dark.codeBg} !important; border-color: ${THEME.dark.codeBorder} !important; }`,
+    `  .email-code-text { color: ${THEME.dark.codeText} !important; }`,
+    `  .email-footer { color: ${THEME.dark.footer} !important; }`,
+    `  .email-footer a { color: ${THEME.dark.link} !important; }`,
+    `  a:hover { color: ${THEME.dark.linkHover} !important; }`,
+    `}`,
+    `</style>`,
+    `</head>`,
+    `<body class="email-body" style="margin:0;padding:0;background-color:${THEME.light.pageBg};font-family:${FONT_STACK};">`,
+    `<table class="email-body" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${THEME.light.pageBg};">`,
+    `<tr><td align="center" style="padding:40px 16px;">`,
+    `<table class="email-shell" role="presentation" width="520" cellpadding="0" cellspacing="0" style="width:100%;max-width:520px;background-color:${THEME.light.pageBg};">`,
     // 卡片
-    '<tr><td>',
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${BRAND.cardBg};border-radius:16px;overflow:hidden;box-shadow:0 4px 12px rgba(23,26,46,0.08),0 1px 3px rgba(23,26,46,0.06)">`,
-    // 顶部品牌渐变光带（复用首页 footer 光谱）
-    `<tr><td height="4" style="height:4px;font-size:0;line-height:0;background-color:${BRAND.accent};background-image:linear-gradient(90deg,${BRAND.ink},${BRAND.accent},${BRAND.accentLight});border-radius:16px 16px 0 0">&nbsp;</td></tr>`,
-    // 头部淡靛蓝光晕 + wordmark
-    `<tr><td style="padding:28px 32px 0;background-color:${BRAND.cardBg};background-image:linear-gradient(180deg,${BRAND.accentFill} 0%,${BRAND.cardBg} 100%)">`,
-    `<p style="margin:0;font-family:${FONT_STACK};font-size:18px;font-weight:700;letter-spacing:2px;color:${BRAND.ink}">PurpleInk</p>`,
-    '</td></tr>',
+    `<tr><td>`,
+    `<table class="email-card" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${THEME.light.cardBg};border-radius:16px;overflow:hidden;box-shadow:0 4px 12px rgba(23,26,46,0.08),0 1px 3px rgba(23,26,46,0.06);">`,
+    // 顶部深色 header：LOGO
+    `<tr><td class="email-header" style="padding:24px 32px;background-color:${THEME.light.headerBg};">`,
+    `<!--[if !mso]><!-->`,
+    LOGO_SVG,
+    `<!--<![endif]-->`,
+    `<!--[if mso]>`,
+    `<span style="color:#ffffff;font-family:${FONT_STACK};font-size:20px;font-weight:700;letter-spacing:0.5px;">PurpleInk</span>`,
+    `<![endif]-->`,
+    `</td></tr>`,
     // 正文
-    `<tr><td style="padding:20px 32px 32px;font-family:${FONT_STACK};font-size:14px;line-height:1.7;color:${BRAND.text}">`,
+    `<tr><td class="email-text" style="padding:32px;font-family:${FONT_STACK};font-size:15px;line-height:1.7;color:${THEME.light.text};">`,
     `<p style="margin:0 0 20px">${escapeHtml(input.lead)}</p>`,
-    // 验证码块：浅靛蓝底 + 顶部受光高光线
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px">',
-    `<tr><td align="center" style="padding:20px 16px;background-color:${BRAND.accentFill};border:1px solid ${BRAND.accentBorder};border-radius:12px;box-shadow:inset 0 1px 0 ${BRAND.cardBg}">`,
-    `<p style="margin:0;font-size:28px;font-weight:700;letter-spacing:6px;color:${BRAND.ink};font-family:ui-monospace,'SF Mono',Consolas,monospace">${escapeHtml(input.code)}</p>`,
-    '</td></tr>',
-    '</table>',
-    `<p style="margin:0 0 24px;color:${BRAND.muted}">${escapeHtml(input.expiry)}</p>`,
-    `<p style="margin:0 0 16px;border-top:1px solid ${BRAND.divider};font-size:0;line-height:0">&nbsp;</p>`,
-    `<p style="margin:0;color:${BRAND.muted};font-size:13px">${escapeHtml(input.disclaimer)}</p>`,
-    '</td></tr>',
-    '</table>',
-    '</td></tr>',
-    // 卡片外页脚：官网 / 文档 / 联系我们
-    `<tr><td align="center" style="padding:24px 16px 0;font-family:${FONT_STACK};font-size:12px;line-height:1.8;color:${BRAND.muted}">`,
+    // 验证码块
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">`,
+    `<tr><td align="center" style="padding:24px 16px;">`,
+    `<table class="email-code" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${THEME.light.codeBg};border:1px solid ${THEME.light.codeBorder};border-radius:12px;">`,
+    `<tr><td align="center" style="padding:22px 16px;">`,
+    `<p class="email-code-text" style="margin:0;font-size:32px;font-weight:700;letter-spacing:8px;color:${THEME.light.codeText};font-family:ui-monospace,'SF Mono',Consolas,monospace">${escapeHtml(input.code)}</p>`,
+    `</td></tr>`,
+    `</table>`,
+    `</td></tr>`,
+    `</table>`,
+    `<p class="email-muted" style="margin:0 0 24px;color:${THEME.light.muted};font-size:14px">${escapeHtml(input.expiry)}</p>`,
+    `<p class="email-divider" style="margin:0 0 20px;border-top:1px solid ${THEME.light.divider};font-size:0;line-height:0">&nbsp;</p>`,
+    `<p class="email-muted" style="margin:0;color:${THEME.light.muted};font-size:13px;line-height:1.6">${escapeHtml(input.disclaimer)}</p>`,
+    `</td></tr>`,
+    `</table>`,
+    `</td></tr>`,
+    // 页脚
+    `<tr><td class="email-footer" align="center" style="padding:24px 16px 0;font-family:${FONT_STACK};font-size:12px;line-height:1.8;color:${THEME.light.footer};">`,
     `<p style="margin:0 0 4px">${footerLinks}</p>`,
-    `<p style="margin:0;color:${BRAND.muted}">Copyright PurpleInk</p>`,
-    '</td></tr>',
-    '</table>',
-    '</td></tr>',
-    '</table>',
+    `<p style="margin:0;">Copyright PurpleInk</p>`,
+    `</td></tr>`,
+    `</table>`,
+    `</td></tr>`,
+    `</table>`,
+    `</body>`,
+    `</html>`,
   ].join('')
 }
 

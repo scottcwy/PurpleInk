@@ -3,7 +3,6 @@
 import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { CollapsibleCard } from './collapsible-card'
-import { SettingsGroup } from './settings-group'
 
 export interface SettingsPanelProps {
   id?: string
@@ -43,7 +42,7 @@ export function SettingsPanel({
           <span className="block min-w-0">
             <span className="block">{title}</span>
             {description && (
-              <span className="mt-0.5 block text-xs font-normal leading-5 text-ds-text-muted">
+              <span className="mt-0.5 block text-[13px] font-normal leading-5 text-ds-text-muted">
                 {description}
               </span>
             )}
@@ -57,9 +56,7 @@ export function SettingsPanel({
         className={className}
         bodyClassName="p-0"
       >
-        <SettingsGroup className="rounded-none border-0 bg-transparent">
-          {children}
-        </SettingsGroup>
+        <div className="flex min-w-0 flex-col">{children}</div>
       </CollapsibleCard>
     </section>
   )

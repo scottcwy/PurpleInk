@@ -3,9 +3,9 @@
 import { Network } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Card } from '@/components/ui/card'
+import { SettingsField } from '@/components/ui/settings-field'
 import { SettingsSeparator } from '@/components/ui/settings-group'
 import { SettingsPanel } from '@/components/ui/settings-panel'
-import { SettingsRow } from '@/components/ui/settings-row'
 import { StatusPill } from '@/components/ui/status-pill'
 import {
   PROVIDER_REGISTRY,
@@ -87,7 +87,7 @@ export function ProviderRegistryPanel({
                   'h-full transition-colors',
                   selected === provider
                     ? 'border-ds-blue bg-ds-blue-soft'
-                    : 'hover:border-ds-border-strong'
+                    : 'hover:border-ds-blue/50'
                 )}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -171,31 +171,24 @@ function ManagedProviderDetail(props: ManagedProviderDetailProps) {
   return (
     <div id={`provider-${props.provider.toLowerCase()}`} className="flex min-w-0 flex-col">
       <SettingsSeparator />
-      <SettingsRow
+      <SettingsField
         label={`${props.provider} 连接与模型`}
-        chevron={false}
-        className="h-auto min-h-11 flex-col items-stretch gap-1 py-3 sm:flex-row sm:items-center"
+        hint={
+          locked
+            ? 'Free 方案不可使用 Gemini；升级 Plus 后解锁'
+            : '平台统一提供服务，不需要填写 API Key'
+        }
       >
-        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
-          <span className="text-xs text-ds-text-muted">
-            {locked
-              ? 'Free 方案不可使用 Gemini；升级 Plus 后解锁'
-              : '平台统一提供服务，不需要填写 API Key'}
-          </span>
-          <StatusPill
-            variant={locked ? 'stale' : view?.configured ? 'rendered' : 'pending'}
-            label={locked ? 'Plus 解锁' : view?.configured ? '平台服务可用' : '平台服务未配置'}
-          />
-        </div>
-      </SettingsRow>
+        <StatusPill
+          variant={locked ? 'stale' : view?.configured ? 'rendered' : 'pending'}
+          label={locked ? 'Plus 解锁' : view?.configured ? '平台服务可用' : '平台服务未配置'}
+        />
+      </SettingsField>
       <SettingsSeparator />
-      <SettingsRow
+      <SettingsField
         label="可用模型"
-        chevron={false}
+        hint={locked ? '当前方案未授权该供应商' : '模型目录由服务端统一维护'}
       >
-        <span className="text-xs text-ds-text-muted">
-          {locked ? '当前方案未授权该供应商' : '模型目录由服务端统一维护'}
-        </span>
         <div className="flex flex-wrap justify-end gap-1.5">
           {models.length > 0 ? models.map((model) => (
             <StatusPill
@@ -209,7 +202,7 @@ function ManagedProviderDetail(props: ManagedProviderDetailProps) {
             </span>
           )}
         </div>
-      </SettingsRow>
+      </SettingsField>
     </div>
   )
 }
