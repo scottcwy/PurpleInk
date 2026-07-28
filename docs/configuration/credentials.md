@@ -96,6 +96,18 @@ redirects the bare specifier `'server-only'` to an empty stub, so the script
 can directly require Next source modules without booting Next. The shim is
 scoped to that one tsx process and never touches the Next runtime path.
 
+**Workspace boundary (post PLAN-002 phase B).** Provider credentials are
+per-workspace: `save`/`validate` resolve the target workspace through
+`currentWorkspaceId()`, so bootstrap wraps its work in
+`runInAuthContext({ workspaceId: LOCAL_WORKSPACE_ID, userId: 'system:bootstrap' })`.
+That means **bootstrap only ever writes the first owner workspace** (the
+historical `LOCAL_WORKSPACE_ID` anchor). Every other registered user brings
+their own key through `/products/settings` — there is no platform-wide key and
+no silent fallback to another workspace's key (that would break the AAD binding
+in `credential-envelope.ts` or cross-charge usage). A future membership /
+usage-quota tier extends on the workspace dimension (quota fields on
+`workspace_settings`); it must not introduce a second ownership truth.
+
 ## 4. Runtime update path (post-bootstrap)
 
 Once bootstrap has populated `provider_credentials`, the **only** way to

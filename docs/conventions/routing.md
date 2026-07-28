@@ -330,38 +330,50 @@ Project（可变，L3 内部）
 
 ## 9. 守卫、认证与错误语义
 
-### 9.1 当前实现缺口
+### 9.1 当前实现（分层）
 
-必须先记清事实：**目前仓库没有任何认证。** `src/` 下既无 `proxy.ts` 也无 `middleware.ts`，全部页面与全部 `/api/*` 都不读 cookie/session，workspace 固定为 `LOCAL_WORKSPACE_ID`。因此：
+应用内认证已落地（PLAN-002 阶段 A + 阶段 B），守卫分三层，各层职责不同，不可互相替代：
 
-- `/products/*` 与全部 `/api/*` 在当前状态下是**未授权可访问**的。
-- 所有 API 的作用域只有「调用方自己传的 `projectId`」，没有归属校验。
-- 本节的守卫是目标状态，不是已实现状态。在认证落地前，本应用只能跑在本地或受信网络内，不得直接暴露公网。
+| 层 | 位置 | 职责 | 刻意不做的事 |
+| --- | --- | --- | --- |
+| 入站 proxy | `src/proxy.ts` | 拦 `/products/*`：无形状合法的会话 cookie → 302 `/login?next=`；已持 cookie 访问 `/login` `/signup` `/password/reset` → 302 dashboard | **不查库**。只做 cookie 存在性与形状（43 位 base64url）判断；proxy 跑在每个请求上，连库会成为全站延迟与连接数压力 |
+| 页面会话 | `withPageSession`（`src/features/auth/page-session.ts`），6 个 `/products/*` page 逐个包 | 查库校验会话（登出/过期/改密踢下线），建立 workspace 归属上下文后执行渲染体 | 不包在 layout 里：RSC 的 children 独立渲染，layout 的 AsyncLocalStorage 不传播到子页面 |
+| API 会话 | `withApiSession`（`src/features/auth/api-session.ts`），13 条业务 API 入口包裹 | 未登录统一 401 同一句文案；已登录则在归属上下文内执行 handler | 不靠 proxy 兜底（API 要 401/404 语义不是 302）；SSE 路由的流回调在 handler 内闭包捕获上下文 |
 
-**入站边界现由部署层保证（ISSUE-015 P-2，`docs/deployment/access.md`）**：生产环境反代（Caddy）在网络层 IP 过滤 + Basic Auth over TLS 两道防线拒绝未授权入站请求，`next` 容器本身不 publish 任何端口。但这只是把「公网任意人」收敛成「受信网络内 + 拿到共享口令的任意人」——**不等于应用内认证已实现**：拿到凭据的任何人仍是全权管理员（无租户、无角色、无审计），产物 URL 仍携带内部 `projectId`，`LOCAL_WORKSPACE_ID` 仍是硬编码单工作区。应用内认证是独立议题，见 `PLAN-002-auth-system.md`。
+业务查询的 workspace 一律取自 `currentWorkspaceId()`（会话/队列上下文，无上下文即抛错不回落）；队列作业在领到的 attempt 行自身的 workspace 上下文内执行。`LOCAL_WORKSPACE_ID` 已降级为迁移/bootstrap/进程级配置锚点，由 `tests/workspace-context-contract.test.ts` 锁住。公开保留面：`/api/ping`（健康检查）、`/api/auth/*`、营销页与 `/playbook`。
 
-### 9.2 目标守卫矩阵
+**入站边界仍未收敛**（ISSUE-015 P-2，`docs/deployment/access.md`）：反代（Caddy）的 IP 过滤 + Basic Auth 保留为纵深防御；应用内认证落地后，P-2 边界形态可降级为纯网络层（只改反代配置，不动 `src/**`），但在 PLAN-001 完成前不得声称已收敛。
 
-| 情况 | 响应 |
-| --- | --- |
-| 未登录访问 `/products/*` | 302 → `/login`，带回跳目标 |
-| 已登录访问 `/login`、`/signup` | 302 → `/products/dashboard` |
-| `projectId` 不存在或不属于当前 workspace | 404 |
-| `shotId` 不属于该 `projectId`，或节点类型不是 `shot-codegen` | 404 |
-| `shareId` 不存在、已撤销、已被新版本取代 | 404 |
-| `caseSlug` 不存在 | 404 |
-| 上下文缺失但路由本身合法 | 不进入页面；侧栏项禁用并给出原因 |
-| 非生产环境外访问 `/playbook/*` | 404 |
+### 9.2 守卫矩阵（逐行核销）
+
+| 情况 | 响应 | 状态 |
+| --- | --- | --- |
+| 未登录访问 `/products/*` | 302 → `/login?next=`（proxy 形状拦截 + 页面查库兼校） | 已实现 |
+| 已登录访问 `/login`、`/signup` | 302 → `/products/dashboard`（proxy + `redirectIfAuthenticated` 双层） | 已实现 |
+| 未登录调业务 `/api/*` | 401 + 类别文案，不带用户信息、不回显 projectId | 已实现 |
+| `projectId` 不存在或不属于当前 workspace | 404（查询按会话 workspace 过滤，命中 0 即不存在） | 已实现 |
+| `shotId` 不属于该 `projectId`，或节点类型不是 `shot-codegen` | 404 | 已实现 |
+| `shareId` 不存在、已撤销、已被新版本取代 | 404 | 已实现（与认证无关） |
+| `caseSlug` 不存在 | 404 | 已实现（与认证无关） |
+| 上下文缺失但路由本身合法 | 不进入页面；侧栏项禁用并给出原因 | 已实现 |
+| 非生产环境外访问 `/playbook/*` | 404 | 已实现（与认证无关） |
+| 营销页 AI 演示（LaunchComposer） | 未登录先弹登录引导并中止（客户端门，worker 代理行为不变） | 已实现 |
 
 一律用 404 掩盖归属错误，不区分「不存在」与「无权限」，避免泄露其他 workspace 中对象是否存在。前端不得为了让页面渲染成功而隐式创建缺失数据。
 
-### 9.3 认证落地的最小要求
+### 9.3 覆盖边界（如实记录，不虚报）
 
-认证接入时必须一次覆盖三处，不允许只做页面跳转：
+已覆盖：
 
-1. `proxy.ts`（Next 16 取代 `middleware.ts`）或等价 layout 守卫：拦 `/products/*`。
-2. 每个 `/api/*` handler：从 session 解析 `workspaceId`，替换 `LOCAL_WORKSPACE_ID`，且 `projectId` 必须与该 workspace 联合校验。
-3. worker：`/api/engine/*` 之后的调用需要服务间凭据，worker 不再对任意来源开放。
+1. `proxy.ts` 拦 `/products/*`（形状判断）+ 6 个 page 的查库级会话校验。
+2. 13 条业务 API handler 从 session 解析 `workspaceId`，业务查询按该 workspace 联合过滤；队列作业按 attempt 行归属执行；跨账户产物请求已有 pg 测试锁 404 语义。
+3. 取证脚本（`e2e-smoke.ts`）经 `CVC_VERIFY_ACCOUNT` 真实登录后携会话 cookie。
+
+未覆盖（不得声称已做）：
+
+1. **worker 服务间凭据**：`/api/engine/*` 之后的 worker 调用仍无服务间认证，worker 暴露面靠部署层（反代 + 内网）兜底；营销页演示的登录门只在 Next 客户端。
+2. **多实例限流**：`auth_throttle` 固定窗口按实例各算，多实例下变宽松（ISSUE-015 P-9 一并处理或明确接受）。
+3. **角色与协作**：首版每人一个 workspace（owner），`workspace_members.role` 的 `member` 为将来预留，未签发未消费。
 
 ## 10. `/release` 占位
 

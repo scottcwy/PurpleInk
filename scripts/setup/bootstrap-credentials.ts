@@ -48,20 +48,22 @@ async function loadBusiness(): Promise<{
   readonly validateGeminiKey: typeof import('@/features/ai/gemini-adapter')['validateGeminiKey']
   readonly getDb: typeof import('@/lib/db/client')['getDb']
   readonly LOCAL_WORKSPACE_ID: typeof import('@/lib/db/client')['LOCAL_WORKSPACE_ID']
+  readonly runInAuthContext: typeof import('@/lib/auth/workspace-context')['runInAuthContext']
   readonly workspaces: typeof import('@/lib/db/schema/index')['workspaces']
   readonly sql: typeof import('drizzle-orm')['sql']
 }> {
-  const [{ loadEnvConfig }, { sql }, { getDb, LOCAL_WORKSPACE_ID }, { workspaces }, { saveApiKey, validateKey }, { saveGeminiApiKey }, { validateGeminiKey }] = await Promise.all([
+  const [{ loadEnvConfig }, { sql }, { getDb, LOCAL_WORKSPACE_ID }, { runInAuthContext }, { workspaces }, { saveApiKey, validateKey }, { saveGeminiApiKey }, { validateGeminiKey }] = await Promise.all([
     import('@next/env'),
     import('drizzle-orm'),
     import('@/lib/db/client'),
+    import('@/lib/auth/workspace-context'),
     import('@/lib/db/schema/index'),
     import('@/features/ai/stepfun-adapter'),
     import('@/features/ai/gemini-config'),
     import('@/features/ai/gemini-adapter'),
   ])
   return {
-    loadEnvConfig, sql, getDb, LOCAL_WORKSPACE_ID, workspaces,
+    loadEnvConfig, sql, getDb, LOCAL_WORKSPACE_ID, runInAuthContext, workspaces,
     saveApiKey, validateKey,
     saveGeminiApiKey, validateGeminiKey,
   }
@@ -95,12 +97,20 @@ async function main(): Promise<void> {
   let written = 0
   let skipped = 0
   let failed = 0
-  for (const provider of PROVIDERS) {
-    const result = await processProvider(provider)
-    if (result === 'written') written += 1
-    else if (result === 'skipped') skipped += 1
-    else failed += 1
-  }
+  // 业务侧 save/validate 经 `currentWorkspaceId()` 取归属（PLAN-002 阶段 B）；
+  // bootstrap 是单 workspace 冷启动脚本，只写首个 owner workspace（历史锚点），
+  // 其余用户经设置页自行写入（docs/configuration/credentials.md §3）。
+  await business.runInAuthContext(
+    { workspaceId: business.LOCAL_WORKSPACE_ID, userId: 'system:bootstrap' },
+    async () => {
+      for (const provider of PROVIDERS) {
+        const result = await processProvider(provider)
+        if (result === 'written') written += 1
+        else if (result === 'skipped') skipped += 1
+        else failed += 1
+      }
+    },
+  )
 
   process.stdout.write(
     `\n[bootstrap-credentials] written=${written} skipped=${skipped} failed=${failed}\n`,

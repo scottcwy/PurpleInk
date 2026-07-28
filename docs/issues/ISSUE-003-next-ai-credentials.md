@@ -254,3 +254,13 @@ STEPFUN_BASE_URL / STEPFUN_CHAT_MODEL / STEPFUN_TTS_MODEL / STEPFUN_ASR_MODEL / 
 修订 issue 自身漂移、补 bootstrap 脚本、产出凭据边界文档、同步配置占位文件。
 是 ISSUE-001 第 7 项验收（真实运行证据）与 ISSUE-014 端测的前置条件。
 建议第一批就完成，成本极低但解锁面很大。
+
+
+## 多用户登录落地后的复核（2026-07-28 追加，不改写上方已核销内容）
+
+- bootstrap 天然是**单 workspace 冷启动脚本**：PLAN-002 阶段 B 后业务侧
+  save/validate 经 `currentWorkspaceId()` 取归属，`bootstrap-credentials.ts` 已改为在
+  `runInAuthContext({ workspaceId: LOCAL_WORKSPACE_ID, userId: 'system:bootstrap' })`
+  内执行——只写首个 owner workspace，其余用户经 `/products/settings` 自行写入。
+- provider 凭据语义已拍板为**每用户自带 key**（不做平台统一 key、不跨 workspace
+  fallback），详见 `docs/configuration/credentials.md` §3 的 Workspace boundary 段。

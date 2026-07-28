@@ -469,3 +469,20 @@ git diff --check
 6. **不得把 `running` 的孤儿 attempt 静默改回 `queued` 自动重试**（P-5 禁区）。
 7. **不得为迁就音轨而修改已实测的 `durationInFrames`**（P-3 禁区，
    ISSUE-005 §6 明文禁区的延伸）。
+
+## 12. PLAN-002 登录落地后的复核（2026-07-28 追加，不改写上方历史内容）
+
+应用内认证（PLAN-002 阶段 A+B）已落地：proxy + 页面查库校验 + 13 条 API 守卫，
+业务归属收口到会话 workspace，队列按 attempt 行归属执行。逐条影响：
+
+| 条目 | 结论 | 动作 |
+| --- | --- | --- |
+| P-2 接入策略 | **需要复核并降级**。P-2 仍管 Postgres 端口、worker 暴露面等应用层管不到的事；但边界形态应从 Basic Auth 降级为纯网络层，否则用户过两道认证 | 只改反代配置不动 `src/**`；更新 `docs/deployment/access.md` 并重新留证（未登录→应用 302/401；反代仍拒非白名单来源），待部署批次执行 |
+| P-4 容器内并发配额 | **配额语义已拍板：进程级**（约束本机 CPU，与用户无关）。`queue.laneQuotas` 的存储锚点保留在 LOCAL workspace 行，`runtime-config.ts` 头注释已声明 | P-4 落地时沿用这个语义，不得在两处各写 CPU 探测 |
+| P-5 孤儿作业回收 | **验收面扩大**：启动期回收必须跨全部 workspace 扫描，每条回收在该 attempt 自身的 workspace 上下文内走状态机 | 验收用例从「单 workspace 种一条」改为「两个 workspace 各种一条，都被正确回收且互不影响」；禁区不变 |
+| P-7 生产 compose | **需补 env/secret**：`CVC_MAIL_SMTP_HOST/PORT/USER/PASS`（PASS 为 secret）、`CVC_MAIL_FROM_ADDRESS/NAME`；体验账号弹窗已移除，next 服务不再透传 `CVC_DEMO_ACCOUNT_*` | `docker compose config` 无明文 secret 的验收项把新变量纳入检查 |
+| P-8 生产端到端 | **脚本已先行改造**：`e2e-smoke.ts` 支持 `CVC_VERIFY_ACCOUNT`（email:password）登录后携会话 cookie，与 Basic Auth 同一出口 | 验收新增一条：端测账号是真实注册账号，产物归属该账号的 workspace |
+| P-9 多实例 | **前置条件新增一项**：会话已是 DB 持久化天然跨实例；但 `auth_throttle` 固定窗口按实例各算会变宽松 | P-9 落地时一并处理（共享计数）或明确接受并记录 |
+
+另：本文件 §11 禁区第 2 条（不在部署批次里做应用内认证）的背景已变化：
+认证由 PLAN-002 独立批次完成，该禁区继续有效（部署批次仍不得附带认证改动）。
