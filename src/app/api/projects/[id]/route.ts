@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server'
+import { withApiSession } from '@/features/auth/api-session'
 import { exportSettingsSchema, updateExportSettings } from '@/features/canvas'
 
 export const dynamic = 'force-dynamic'
 
 /** 更新项目导出设置（当前仅分辨率预设）。非法预设→400 且不写库；项目不存在→404。 */
-export async function PATCH(
+export function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+): Promise<Response> {
+  return withApiSession(() => handlePatch(request, params))
+}
+
+async function handlePatch(request: Request, params: Promise<{ id: string }>) {
   const { id } = await params
   const body: unknown = await request.json().catch(() => null)
   const exportSettingsInput =

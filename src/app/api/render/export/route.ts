@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { withApiSession } from '@/features/auth/api-session'
 import { enqueueProjectExport } from '@/features/render/export-queue-handler'
 import {
   ensureShotQaChecked,
@@ -14,7 +15,11 @@ const requestSchema = z
   .object({ projectId: z.string().min(1), degraded: z.boolean().optional() })
   .strict()
 
-export async function GET(request: Request) {
+export function GET(request: Request): Promise<Response> {
+  return withApiSession(() => handleGet(request))
+}
+
+async function handleGet(request: Request) {
   const projectId = new URL(request.url).searchParams.get('projectId')
   if (!projectId) {
     return NextResponse.json({ ok: false, error: '缺少 projectId' }, { status: 400 })
@@ -47,7 +52,11 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export function POST(request: Request): Promise<Response> {
+  return withApiSession(() => handlePost(request))
+}
+
+async function handlePost(request: Request) {
   const parsed = requestSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: '请求体无效' }, { status: 400 })

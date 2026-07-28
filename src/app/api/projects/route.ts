@@ -1,13 +1,20 @@
 import { NextResponse } from 'next/server'
+import { withApiSession } from '@/features/auth/api-session'
 import { createProject, getCanvasGraph, listProjects } from '@/features/canvas'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
-  return NextResponse.json({ projects: await listProjects() })
+export function GET(): Promise<Response> {
+  return withApiSession(async () =>
+    NextResponse.json({ projects: await listProjects() }),
+  )
 }
 
-export async function POST(request: Request) {
+export function POST(request: Request): Promise<Response> {
+  return withApiSession(() => handlePost(request))
+}
+
+async function handlePost(request: Request) {
   const body: unknown = await request.json().catch(() => null)
   try {
     const project = await createProject(body)

@@ -1,6 +1,7 @@
 import { Clapperboard } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { EmptyState } from '@/components/ui/empty-state'
+import { withPageSession } from '@/features/auth/page-session'
 import {
   computeLayout,
   getCanvasGraph,
@@ -21,6 +22,12 @@ interface CanvasPageProps {
 
 export default async function CanvasPage({ params }: CanvasPageProps) {
   const { projectId } = await params
+  return withPageSession(`/products/canvas/${projectId}`, () =>
+    renderCanvas(projectId),
+  )
+}
+
+async function renderCanvas(projectId: string) {
   const routeState = await getProjectRouteState(projectId)
   if (routeState === 'missing') notFound()
   if (routeState === 'legacy') return <UnsupportedProjectNotice />

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { withApiSession } from '@/features/auth/api-session'
 import { getCanvasGraph } from '@/features/canvas'
 import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 import { captureThumbnails, RenderRepository } from '@/features/render'
@@ -13,7 +14,11 @@ const THUMBNAIL_FRACTIONS = Array.from({ length: 8 }, (_, index) => index / 7)
  * 只回传 artifact id 下载 URL，绝不暴露 StorageAdapter key 或本机绝对路径；
  * 底层的截帧与缓存由 issue-04 的 `captureThumbnails` 负责（本路由只消费）。
  */
-export async function GET(request: Request) {
+export function GET(request: Request): Promise<Response> {
+  return withApiSession(() => handleGet(request))
+}
+
+async function handleGet(request: Request) {
   const url = new URL(request.url)
   const projectId = url.searchParams.get('projectId')
   const nodeId = url.searchParams.get('nodeId')

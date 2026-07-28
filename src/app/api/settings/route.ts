@@ -4,19 +4,26 @@ import { applyProviderSettings } from '@/features/ai/provider-settings-apply'
 import { describeProviderSettings } from '@/features/ai/provider-settings-projection'
 import { validateProviderSettings } from '@/features/ai/provider-settings-validation'
 import { stepfunSettingsSchema } from '@/features/ai/schemas'
+import { withApiSession } from '@/features/auth/api-session'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
-  return NextResponse.json({
-    ...(await describeProviderSettings()),
-    // 渲染队列默认并发数 = CPU 核数（`in-process-queue.ts` 的 `start()` 默认值）。ISSUE-011 之后由
-    // `laneQuotas.renderShot` 表达并可在 UI 配置；保留此字段为确保旧 settings-form 引用不破。
-    renderConcurrency: Math.max(1, os.cpus().length),
-  })
+export function GET(): Promise<Response> {
+  return withApiSession(async () =>
+    NextResponse.json({
+      ...(await describeProviderSettings()),
+      // 渲染队列默认并发数 = CPU 核数（`in-process-queue.ts` 的 `start()` 默认值）。ISSUE-011 之后由
+      // `laneQuotas.renderShot` 表达并可在 UI 配置；保留此字段为确保旧 settings-form 引用不破。
+      renderConcurrency: Math.max(1, os.cpus().length),
+    }),
+  )
 }
 
-export async function POST(request: Request) {
+export function POST(request: Request): Promise<Response> {
+  return withApiSession(() => handlePost(request))
+}
+
+async function handlePost(request: Request) {
   const body: unknown = await request.json().catch(() => null)
   const parsed = stepfunSettingsSchema.safeParse(body)
   if (!parsed.success) {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { withApiSession } from '@/features/auth/api-session'
 import { classifyWorkflowError } from '@/features/canvas'
 import {
   startProjectPipeline,
@@ -11,7 +12,11 @@ export const dynamic = 'force-dynamic'
 
 const requestSchema = z.object({ projectId: z.string().min(1) }).strict()
 
-export async function POST(request: Request) {
+export function POST(request: Request): Promise<Response> {
+  return withApiSession(() => handlePost(request))
+}
+
+async function handlePost(request: Request) {
   const parsed = await parseRequest(request)
   if (!parsed.success) return parsed.response
   await initQueue()
@@ -31,7 +36,11 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+export function DELETE(request: Request): Promise<Response> {
+  return withApiSession(() => handleDelete(request))
+}
+
+async function handleDelete(request: Request) {
   const parsed = await parseRequest(request)
   if (!parsed.success) return parsed.response
   try {

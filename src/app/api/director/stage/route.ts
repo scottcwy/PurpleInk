@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { withApiSession } from '@/features/auth/api-session'
 import { classifyWorkflowError } from '@/features/canvas'
 import { executeNodeAction } from '@/features/director'
 import { initQueue } from '@/lib/queue/init'
@@ -14,7 +15,11 @@ const requestSchema = z
   })
   .strict()
 
-export async function POST(request: Request) {
+export function POST(request: Request): Promise<Response> {
+  return withApiSession(() => handlePost(request))
+}
+
+async function handlePost(request: Request) {
   await initQueue()
   const body: unknown = await request.json().catch(() => null)
   const parsed = requestSchema.safeParse(body)

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getLatestArtifact, type ArtifactDescriptor } from '@/features/artifacts'
+import { withApiSession } from '@/features/auth/api-session'
 import { getJobSnapshot, type JobSnapshot } from '@/lib/queue'
 
 export const dynamic = 'force-dynamic'
@@ -19,10 +20,14 @@ async function completedArtifact(
   return null
 }
 
-export async function GET(
+export function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+): Promise<Response> {
+  return withApiSession(() => handleGet(request, params))
+}
+
+async function handleGet(request: Request, params: Promise<{ id: string }>) {
   const projectId = new URL(request.url).searchParams.get('projectId')
   if (!projectId) {
     return NextResponse.json({ ok: false, error: '缺少 projectId' }, { status: 400 })

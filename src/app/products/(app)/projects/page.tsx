@@ -1,5 +1,6 @@
 import { NewProjectDialog } from '@/app/_components/new-project-dialog'
 import { TopBar } from '@/components/ui/top-bar'
+import { withPageSession } from '@/features/auth/page-session'
 import { getCanvasGraph, listProjects } from '@/features/canvas'
 import { PublishNavContext } from '@/features/navigation/nav-context'
 import { productCanvasHref } from '@/features/navigation/products-routes'
@@ -11,6 +12,10 @@ import {
 export const dynamic = 'force-dynamic'
 
 export default async function ProjectsPage() {
+  return withPageSession('/products/projects', renderProjects)
+}
+
+async function renderProjects() {
   const projects = await listProjects()
   const graphEntries = await Promise.all(
     projects.map(async (project) => [

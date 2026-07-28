@@ -6,6 +6,18 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('server-only', () => ({}))
+// 会话层单独有 pg 测试覆盖；这里只验路由业务分支，直接以假会话放行。
+vi.mock('@/features/auth/api-session', () => ({
+  withApiSession: (handler: (session: unknown) => Promise<Response>) =>
+    handler({
+      userId: 'user-1',
+      workspaceId: 'ws-1',
+      email: 'user@example.com',
+      name: '测试用户',
+      workspaceName: '测试工作区',
+      sessionId: 'session-1',
+    }),
+}))
 vi.mock('@/features/director', () => ({
   executeNodeAction: mocks.executeNodeAction,
 }))

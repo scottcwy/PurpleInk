@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { getLatestArtifact } from '@/features/artifacts'
+import { withPageSession } from '@/features/auth/page-session'
 import {
   getCanvasGraph,
   listProjects,
@@ -20,6 +21,13 @@ export default async function ShotDetailPage({
   searchParams: Promise<{ projectId?: string }>
 }) {
   const [{ shotId }, { projectId }] = await Promise.all([params, searchParams])
+  const currentPath = projectId
+    ? `/products/shots/${shotId}?projectId=${encodeURIComponent(projectId)}`
+    : `/products/shots/${shotId}`
+  return withPageSession(currentPath, () => renderShotDetail(shotId, projectId))
+}
+
+async function renderShotDetail(shotId: string, projectId: string | undefined) {
   if (!projectId) notFound()
   const routeState = await getProjectRouteState(projectId)
   if (routeState === 'missing') notFound()

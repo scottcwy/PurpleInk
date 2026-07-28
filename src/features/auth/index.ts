@@ -12,7 +12,12 @@ export {
   withApiSession,
 } from './api-session'
 
-export { optionalSession, redirectIfAuthenticated, requireSession } from './page-session'
+export {
+  optionalSession,
+  redirectIfAuthenticated,
+  requireSession,
+  withPageSession,
+} from './page-session'
 
 export { hashSessionToken, issueSession, resolveSession, revokeSession } from './session'
 export type { IssuedSession, SessionOwner } from './session'

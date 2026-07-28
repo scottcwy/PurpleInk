@@ -2,13 +2,19 @@ import { NewProjectDialog } from '@/app/_components/new-project-dialog'
 import { ProjectStatisticsPanel } from '@/components/ui/project-statistics-panel'
 import { RecentProjectsPanel } from '@/components/ui/recent-projects-panel'
 import { TopBar } from '@/components/ui/top-bar'
+import { withPageSession } from '@/features/auth/page-session'
 import { getCanvasGraph, listProjects } from '@/features/canvas'
 import { buildProductsDashboardView } from '@/features/dashboard/products-dashboard-view-model'
 import { PublishNavContext } from '@/features/navigation/nav-context'
 
 export const dynamic = 'force-dynamic'
 
+/** proxy 只按 cookie 形状拦；真实会话校验与归属上下文在 `withPageSession` 内。 */
 export default async function ProductsDashboardPage() {
+  return withPageSession('/products/dashboard', renderDashboard)
+}
+
+async function renderDashboard() {
   const projects = await listProjects()
   const graphEntries = await Promise.all(
     projects.map(async (project) => [

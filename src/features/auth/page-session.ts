@@ -1,6 +1,7 @@
 import 'server-only'
 import { redirect } from 'next/navigation'
 import { readSessionToken } from '@/lib/auth/session-cookie'
+import { runInAuthContext } from '@/lib/auth/workspace-context'
 import { DEFAULT_POST_LOGIN_PATH, safeNextPath } from './next-path'
 import { resolveSession, type SessionOwner } from './session'
 
@@ -29,4 +30,22 @@ export async function redirectIfAuthenticated(nextPath?: string | null): Promise
 
 export async function optionalSession(): Promise<SessionOwner | null> {
   return resolveSession(await readSessionToken())
+}
+
+/**
+ * 需要数据的 `/products/*` 页面入口：校验会话后在归属上下文内执行渲染体。
+ *
+ * 必须由每个 page 自己包而不是包在 layout 里：RSC 的 children 独立渲染，
+ * layout 建立的 AsyncLocalStorage 不会传播到子页面的数据获取。
+ * `notFound()` / `redirect()` 靠抛异常实现，在上下文内抛出不受影响。
+ */
+export async function withPageSession<T>(
+  currentPath: string,
+  render: (session: SessionOwner) => Promise<T>,
+): Promise<T> {
+  const session = await requireSession(currentPath)
+  return runInAuthContext(
+    { userId: session.userId, workspaceId: session.workspaceId },
+    () => render(session),
+  )
 }

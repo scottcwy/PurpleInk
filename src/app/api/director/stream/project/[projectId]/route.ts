@@ -1,3 +1,4 @@
+import { withApiSession } from '@/features/auth/api-session'
 import { listProjects } from '@/features/canvas'
 import { statusBus } from '@/lib/stream/status-bus'
 
@@ -12,10 +13,21 @@ const KEEPALIVE_MS = 15_000
  * 之后转发 node-status / topology 事件。状态真值在 DB（页面 props 承担基线），
  * 本通道只负责推增量，因此无持久化回放分支；连接生命周期归客户端
  * （全终态时由 hook 主动断开），服务端不主动 close。
+ *
+ * 会话：EventSource 同源自动携带 cookie；未登录回 401，客户端 hook 按
+ * connection-error 转轮询兜底。流回调只碰 statusBus（无 DB），数据查询
+ * （listProjects）全部在 handler await 期内，已被归属上下文覆盖。
  */
-export async function GET(
+export function GET(
   request: Request,
   { params }: { params: Promise<{ projectId: string }> }
+): Promise<Response> {
+  return withApiSession(() => handleGet(request, params))
+}
+
+async function handleGet(
+  request: Request,
+  params: Promise<{ projectId: string }>
 ): Promise<Response> {
   const { projectId } = await params
   const projects = await listProjects()

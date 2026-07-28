@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { withPageSession } from '@/features/auth/page-session'
 import { getCanvasGraph, listProjects } from '@/features/canvas'
 import { getProjectRouteState } from '@/features/projects/project-compatibility'
 import { UnsupportedProjectNotice } from '@/features/canvas/unsupported-project-notice'
@@ -12,6 +13,12 @@ export default async function ExportPage({
   params: Promise<{ projectId: string }>
 }) {
   const { projectId } = await params
+  return withPageSession(`/products/export/${projectId}`, () =>
+    renderExport(projectId),
+  )
+}
+
+async function renderExport(projectId: string) {
   const routeState = await getProjectRouteState(projectId)
   if (routeState === 'missing') notFound()
   if (routeState === 'legacy') return <UnsupportedProjectNotice />
