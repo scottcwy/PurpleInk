@@ -168,7 +168,7 @@
 约定：
 
 1. 写操作一律 POST/PATCH/DELETE + 严格 JSON schema 校验；校验失败返回 400 且**不落任何写入**。
-   `/api/settings` POST 承载字段范围：StepFun/Gemini/MiMo 凭据与模型、三个 OpenAI-compatible 自定义端点（文本与视觉 / TTS / ASR，各自独立凭据、端点与模型）、Director 文本/视觉/TTS/ASR 能力路由、`laneQuotas.{directorStageConcurrency, renderShotConcurrency}`（ISSUE-011）。
+   `/api/settings` POST 承载字段范围：StepFun/Gemini/MiMo 凭据与模型、三个 OpenAI-compatible 自定义端点（文本与视觉 / TTS / ASR，各自独立凭据、端点与模型）、Director 文本/视觉/TTS/ASR 能力路由、`laneQuotas.{directorStageConcurrency, renderShotConcurrency}`（ISSUE-011）、`fallbackProvider`（熔断降级链的显式备选 provider，可为 `null` 表示清空；必须支持文本会话，纯音频端点回 422；存 `workspace_settings` 的 `ai.fallback-provider`，默认无备选，见 docs/configuration/model-routing.md）。
    自定义端点家族按能力拆成三个 provider id：`openai-compatible`（text + vision）、`openai-compatible-tts`（tts）、`openai-compatible-asr`（asr）。三者的凭据分别存 `provider_credentials`，配置分别存 `workspace_settings` 的 `ai.openai-compatible` / `ai.openai-compatible.tts` / `ai.openai-compatible.asr`；同一 id 不得跨能力路由。
    Gemini 仍不可用于 TTS/ASR。媒体路由候选为 StepFun、MiMo、`openai-compatible-tts`（配音）、`openai-compatible-asr`（字幕）。
    `openai-compatible` 的视觉模型独立于文本模型；未填写视觉模型时把分镜验收路由到该端点返回 422。
@@ -337,7 +337,7 @@ Project（可变，L3 内部）
 
 | 层 | 位置 | 职责 | 刻意不做的事 |
 | --- | --- | --- | --- |
-| 入站 proxy | `src/proxy.ts` | 拦 `/products/*`：无形状合法的会话 cookie → 302 `/login?next=`；已持 cookie 访问 `/login` `/signup` `/password/reset` → 302 dashboard | **不查库**。只做 cookie 存在性与形状（43 位 base64url）判断；proxy 跑在每个请求上，连库会成为全站延迟与连接数压力 |
+| 入站 proxy | `src/proxy.ts` | 只拦 `/products/*`：无形状合法的会话 cookie → 302 `/login?next=` | **不查库**。只做 cookie 存在性与形状（43 位 base64url）判断；proxy 跑在每个请求上，连库会成为全站延迟与连接数压力。**不拦认证页**：按 cookie 形状把 `/login` 弹回 dashboard 会与页面级 302 `/login` 对残留失效 cookie 形成无限重定向循环（已踩过） |
 | 页面会话 | `withPageSession`（`src/features/auth/page-session.ts`），6 个 `/products/*` page 逐个包 | 查库校验会话（登出/过期/改密踢下线），建立 workspace 归属上下文后执行渲染体 | 不包在 layout 里：RSC 的 children 独立渲染，layout 的 AsyncLocalStorage 不传播到子页面 |
 | API 会话 | `withApiSession`（`src/features/auth/api-session.ts`），13 条业务 API 入口包裹 | 未登录统一 401 同一句文案；已登录则在归属上下文内执行 handler | 不靠 proxy 兜底（API 要 401/404 语义不是 302）；SSE 路由的流回调在 handler 内闭包捕获上下文 |
 
@@ -350,7 +350,7 @@ Project（可变，L3 内部）
 | 情况 | 响应 | 状态 |
 | --- | --- | --- |
 | 未登录访问 `/products/*` | 302 → `/login?next=`（proxy 形状拦截 + 页面查库兼校） | 已实现 |
-| 已登录访问 `/login`、`/signup` | 302 → `/products/dashboard`（proxy + `redirectIfAuthenticated` 双层） | 已实现 |
+| 已登录访问 `/login`、`/signup` | 302 → `/products/dashboard`（仅页面级 `redirectIfAuthenticated` 查库判定；proxy 不拦认证页，避免残留失效 cookie 的重定向循环） | 已实现 |
 | 未登录调业务 `/api/*` | 401 + 类别文案，不带用户信息、不回显 projectId | 已实现 |
 | `projectId` 不存在或不属于当前 workspace | 404（查询按会话 workspace 过滤，命中 0 即不存在） | 已实现 |
 | `shotId` 不属于该 `projectId`，或节点类型不是 `shot-codegen` | 404 | 已实现 |

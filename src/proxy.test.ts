@@ -40,10 +40,12 @@ describe('proxy guard', () => {
     }
   })
 
-  it('bounces an already-signed-in visitor away from the auth pages', () => {
+  it('never bounces a shaped cookie off the auth pages — stale cookies must reach /login', () => {
+    // 回归：形状合法但 DB 已失效的 cookie 若在 proxy 层被弹回 /products，
+    // 会与页面级 requireSession 的 302 /login 形成无限重定向循环。
+    // 「已登录访问 /login → 302」由页面里的 redirectIfAuthenticated 查库判定。
     for (const path of ['/login', '/signup', '/password/reset']) {
-      const location = proxy(request(path, VALID_TOKEN)).headers.get('location')
-      expect(location).toContain('/products/dashboard')
+      expect(proxy(request(path, VALID_TOKEN)).headers.get('location')).toBeNull()
     }
   })
 
@@ -58,11 +60,6 @@ describe('proxy guard', () => {
   })
 
   it('matches exactly the guarded surfaces declared in routing.md §9', () => {
-    expect(config.matcher).toEqual([
-      '/products/:path*',
-      '/login',
-      '/signup',
-      '/password/reset',
-    ])
+    expect(config.matcher).toEqual(['/products/:path*'])
   })
 })
