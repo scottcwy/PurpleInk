@@ -119,10 +119,11 @@ function createHarness(
   const scheduleMediaNarration = vi.fn(async () => {
     calls.push('media')
   })
+  const createSession = vi.fn(async () => session)
   const runner = createStageRunner({
     repository,
     transitionNodeStatus,
-    createSession: vi.fn(async () => session),
+    createSession,
     buildPrompt: vi.fn(() => '类型化阶段提示词'),
     writeArtifact,
     prepareResult,
@@ -142,6 +143,7 @@ function createHarness(
     runStageEffect,
     advancePipeline,
     scheduleMediaNarration,
+    createSession,
     runner,
   }
 }
@@ -194,6 +196,18 @@ describe('createStageRunner', () => {
       projectId: 'project-1',
       nodeId: 'node-1',
     })
+  })
+
+  it('passes the queue attempt id into the Director session', async () => {
+    const harness = createHarness()
+
+    await harness.runner('project-1', 'node-1', 'INGEST', 'queue-attempt-1')
+
+    expect(harness.createSession).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      attemptId: 'queue-attempt-1',
+    }))
   })
 
   it('keeps INGEST successful when the asynchronous media queue is unavailable', async () => {

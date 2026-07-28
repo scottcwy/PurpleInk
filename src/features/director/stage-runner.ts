@@ -93,9 +93,9 @@ type StageRunner = (
 let defaultRunner: Promise<StageRunner> | undefined
 
 /** 首次真正执行作业时才打开 Postgres，模块导入保持无副作用。 */
-export const runStage: StageRunner = async (projectId, nodeId, stage) => {
+export const runStage: StageRunner = async (projectId, nodeId, stage, attemptId) => {
   defaultRunner ??= createDefaultRunner()
-  return (await defaultRunner)(projectId, nodeId, stage)
+  return (await defaultRunner)(projectId, nodeId, stage, attemptId)
 }
 
 async function createDefaultRunner(): Promise<StageRunner> {
