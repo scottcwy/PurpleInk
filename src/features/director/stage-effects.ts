@@ -9,6 +9,7 @@ import {
 } from '@/features/audio'
 import { runShotQaCheck } from '@/features/render/qa-check'
 import { runShotVisionQa } from '@/features/render/vision-qa'
+import { billingInvocationNo } from '@/features/billing'
 import type { DirectorStageContext } from './runtime-repository'
 import {
   shotSfxPromptInputSchema,
@@ -26,6 +27,7 @@ interface StageEffectDependencies {
   runVisionQa: (input: {
     projectId: string
     qaNodeId: string
+    attemptId: string
     shot: Record<string, unknown> & { id: string }
   }) => Promise<unknown>
 }
@@ -73,7 +75,7 @@ export function createDirectorStageEffect(
           ? {
               billingContext: {
                 attemptId: context.attemptId,
-                invocationNo: 100,
+                invocationNo: billingInvocationNo('subtitle-asr', 1),
               },
             }
           : {}),
@@ -81,11 +83,15 @@ export function createDirectorStageEffect(
       return
     }
     if (context.nodeType === 'shot-qa') {
+      if (!context.attemptId) {
+        throw new Error('Vision QA 缺少可审计的 attemptId')
+      }
       const input = shotQaPromptInputSchema.parse(context.directorInput)
       await dependencies.runRuleQa(context.projectId, context.nodeId)
       await dependencies.runVisionQa({
         projectId: context.projectId,
         qaNodeId: context.nodeId,
+        attemptId: context.attemptId,
         shot: input.shot,
       })
     }

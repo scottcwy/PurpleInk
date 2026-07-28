@@ -66,3 +66,9 @@ export {
   PostgresManagedModelCatalogRepository,
   type ManagedModelCatalogRepository,
 } from './managed-model-catalog-repository'
+export {
+  executeManagedVisionQa,
+  VISION_QA_MAX_OUTPUT_TOKENS,
+  type ManagedVisionExecutorDependencies,
+  type ManagedVisionInput,
+} from './managed-vision-executor'

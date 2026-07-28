@@ -1,17 +1,13 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
-import OpenAI from 'openai'
 import { z } from 'zod'
 import { storage, type StorageAdapter } from '@/lib/storage'
 import { readArtifact } from '@/features/artifacts'
 import {
-  resolveDirectorModelTarget,
-  type DirectorModelTarget,
-} from '@/features/ai/model-routing'
-import {
-  PROVIDER_REGISTRY,
-  type AiProviderId,
-} from '@/features/ai/provider-registry'
+  executeManagedVisionQa,
+  type ManagedVisionExecutorDependencies,
+} from '@/features/ai'
+import type { AiProviderId } from '@/features/ai/provider-registry'
 import type { DirectorShot } from '@/features/director/schemas/director-shot-plan'
 import { captureThumbnails } from './thumbnail'
 import { QA_THUMBNAIL_FRACTIONS } from './qa-check'
@@ -75,7 +71,10 @@ export interface ShotVisionQaDependencies {
   >
   capture: typeof captureThumbnails
   readArtifactBytes: (projectId: string, artifactId: string) => Promise<Buffer>
-  analyze: (input: VisionQaAnalysisInput) => Promise<VisionQaAnalysis>
+  analyze: (
+    input: VisionQaAnalysisInput,
+    attemptId: string,
+  ) => Promise<VisionQaAnalysis>
   storeReport: (input: {
     projectId: string
     nodeId: string
@@ -88,6 +87,7 @@ export interface ShotVisionQaDependencies {
 interface ShotVisionQaInput {
   projectId: string
   qaNodeId: string
+  attemptId: string
   shot: DirectorShot
 }
 
@@ -142,7 +142,7 @@ export async function runShotVisionQa(
     mustShow: shot.mustShow,
     mustAvoid: shot.mustAvoid,
     images,
-  })
+  }, input.attemptId)
   const normalized = normalizeReport(analysis.report, shot.mustShow, shot.mustAvoid)
   const report: VisionQaReport = {
     version: 1,
@@ -177,63 +177,19 @@ export async function runShotVisionQa(
 
 export async function analyzeVision(
   input: VisionQaAnalysisInput,
-  dependencies: {
-    resolveTarget: () => Promise<DirectorModelTarget> | DirectorModelTarget
-    complete: (
-      target: DirectorModelTarget,
-      messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]
-    ) => Promise<string | null>
-  } = {
-    resolveTarget: () => resolveDirectorModelTarget('shot-qa', 'vision'),
-    complete: async (target, messages) => {
-      const client = new OpenAI({
-        apiKey: target.apiKey ?? '',
-        baseURL: target.baseUrl,
-      })
-      const completion = await client.chat.completions.create({
-        model: target.modelId,
-        messages,
-      })
-      return completion.choices[0]?.message.content ?? null
-    },
-  }
+  attemptId: string,
+  dependencies: Partial<ManagedVisionExecutorDependencies> = {},
 ): Promise<VisionQaAnalysis> {
-  const target = await dependencies.resolveTarget()
-  if (!target.apiKey) {
-    throw new Error(
-      `${PROVIDER_REGISTRY[target.provider].label} API Key 未配置，无法执行 Vision QA`
-    )
-  }
-  const content = await dependencies.complete(target, [
-      {
-        role: 'system',
-        content:
-          '你是严格的视频分镜验收器。只返回 JSON，不要 Markdown。每个合同项必须逐条且恰好出现一次。',
-      },
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'text',
-            text: visionPrompt(input),
-          },
-          ...input.images.map(
-            (image): OpenAI.Chat.Completions.ChatCompletionContentPartImage => ({
-              type: 'image_url',
-              image_url: {
-                url: `data:image/png;base64,${image.bytes.toString('base64')}`,
-                detail: 'high',
-              },
-            })
-          ),
-        ],
-      },
-    ])
-  if (!content) throw new Error('Vision 模型未返回报告')
+  const result = await executeManagedVisionQa({
+    attemptId,
+    invocationIndex: 1,
+    prompt: visionPrompt(input),
+    images: input.images,
+  }, dependencies)
   return {
-    provider: target.provider,
-    model: target.modelId,
-    report: modelReportSchema.parse(parseJsonResponse(content)),
+    provider: result.provider,
+    model: result.model,
+    report: modelReportSchema.parse(parseJsonResponse(result.content)),
   }
 }
 

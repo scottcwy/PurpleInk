@@ -6,6 +6,7 @@ vi.mock('server-only', () => ({}))
 const baseContext = {
   projectId: 'project-1',
   nodeId: 'node-1',
+  attemptId: 'attempt-1',
   stage: 'ASSEMBLE' as const,
   status: 'pending' as const,
   projectTitle: '项目',
@@ -98,7 +99,7 @@ describe('Director stage effects', () => {
       audioFormat: 'mp3',
       billingContext: {
         attemptId: 'attempt-1',
-        invocationNo: 100,
+        invocationNo: 20_000,
       },
     })
   })
@@ -134,6 +135,7 @@ describe('Director stage effects', () => {
     expect(target.runVisionQa).toHaveBeenCalledWith({
       projectId: 'project-1',
       qaNodeId: 'node-1',
+      attemptId: 'attempt-1',
       shot: { id: 'S001', mustShow: ['标题'], mustAvoid: ['水印'] },
     })
   })
