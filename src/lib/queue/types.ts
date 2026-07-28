@@ -2,6 +2,8 @@ export type JobStatus = 'pending' | 'running' | 'done' | 'failed'
 
 export interface QueueJob {
   id: string
+  /** attempt 行自身的归属；handler 在该 workspace 上下文内执行（PLAN-002 §5.3）。 */
+  workspaceId: string
   kind: string
   status: JobStatus
   payload: Record<string, unknown>

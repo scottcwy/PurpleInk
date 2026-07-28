@@ -24,6 +24,7 @@ function queueStub() {
 function job(payload: Record<string, unknown>): QueueJob {
   return {
     id: 'job-1',
+    workspaceId: 'ws-1',
     kind: EXPORT_PROJECT_KIND,
     status: 'running',
     payload,

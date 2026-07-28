@@ -1,7 +1,8 @@
 import 'server-only'
 
 import { and, eq } from 'drizzle-orm'
-import { getDb, LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb } from '@/lib/db/client'
 import { pipelineRuns, taskAttempts } from '@/lib/db/schema/index'
 import type { JobStatus } from './types'
 
@@ -41,7 +42,9 @@ export async function getJobSnapshot(
     )
     .where(
       and(
-        eq(taskAttempts.workspaceId, LOCAL_WORKSPACE_ID),
+        // 按请求上下文的 workspace 过滤，防止 A 用户查 B 的 jobId
+        // （PLAN-002 §5.3 第 5 点：这里的归属来自调用方会话，不是 attempt 行）。
+        eq(taskAttempts.workspaceId, currentWorkspaceId()),
         eq(taskAttempts.id, jobId),
         eq(pipelineRuns.projectId, projectId)
       )

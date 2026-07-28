@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  currentWorkspaceId,
+  runInAuthContext,
+} from '@/lib/auth/workspace-context'
 import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
 import { pipelineRuns, projects, taskAttempts, workspaces } from '@/lib/db/schema/index'
 import {
@@ -19,6 +23,14 @@ vi.mock('@/lib/db/client', async (importOriginal) => {
 })
 
 const database = {} as PgTestDatabase
+
+/** 模拟请求上下文：enqueue 与 getJobSnapshot 都要求已建立归属上下文。 */
+function inWorkspace<T>(workspaceId: string, operation: () => Promise<T>): Promise<T> {
+  return runInAuthContext({ workspaceId, userId: 'test-user' }, operation)
+}
+
+const inLocalWs = <T>(operation: () => Promise<T>) =>
+  inWorkspace(LOCAL_WORKSPACE_ID, operation)
 
 beforeAll(async () => {
   Object.assign(database, await createPgTestDatabase())
@@ -41,10 +53,12 @@ describe('legacy in-process queue PG compatibility', () => {
     expect(getDbMock).not.toHaveBeenCalled()
     const projectId = await seedProject()
 
-    const attemptId = await queue.enqueue(
-      'render-shot',
-      { projectId, nodeId: projectId },
-      { projectId, nodeId: projectId }
+    const attemptId = await inLocalWs(() =>
+      queue.enqueue(
+        'render-shot',
+        { projectId, nodeId: projectId },
+        { projectId, nodeId: projectId }
+      )
     )
 
     expect(getDbMock).toHaveBeenCalledOnce()
@@ -72,16 +86,14 @@ describe('legacy in-process queue PG compatibility', () => {
     const queue = new InProcessQueue()
     const handler = vi.fn(async () => undefined)
     queue.register('director-stage', handler)
-    const attemptId = await queue.enqueue(
-      'director-stage',
-      { stage: 'INGEST' },
-      { projectId }
+    const attemptId = await inLocalWs(() =>
+      queue.enqueue('director-stage', { stage: 'INGEST' }, { projectId })
     )
 
     queue.start({ 'director-stage': 1 })
     try {
       const snapshot = await waitForStatus(
-        () => getJobSnapshot(projectId, attemptId),
+        () => inLocalWs(() => getJobSnapshot(projectId, attemptId)),
         'done'
       )
       expect(snapshot).toMatchObject({
@@ -94,7 +106,9 @@ describe('legacy in-process queue PG compatibility', () => {
         error: null,
       })
       expect(handler).toHaveBeenCalledOnce()
-      expect(await getJobSnapshot(randomUUID(), attemptId)).toBeNull()
+      expect(
+        await inLocalWs(() => getJobSnapshot(randomUUID(), attemptId))
+      ).toBeNull()
     } finally {
       queue.stop()
     }
@@ -107,12 +121,14 @@ describe('legacy in-process queue PG compatibility', () => {
     ])
     const projectId = await seedProject()
     const queue = new InProcessQueue()
-    const attemptId = await queue.enqueue('missing-handler', {}, { projectId })
+    const attemptId = await inLocalWs(() =>
+      queue.enqueue('missing-handler', {}, { projectId })
+    )
 
     queue.start()
     try {
       const snapshot = await waitForStatus(
-        () => getJobSnapshot(projectId, attemptId),
+        () => inLocalWs(() => getJobSnapshot(projectId, attemptId)),
         'failed'
       )
       expect(snapshot?.error).toBe('no handler for kind: missing-handler')
@@ -121,35 +137,58 @@ describe('legacy in-process queue PG compatibility', () => {
     }
   })
 
-  it('does not let an earlier foreign-workspace attempt starve the local queue', async () => {
+  it('executes attempts from every workspace, each inside its own workspace context', async () => {
     const [{ InProcessQueue }, { getJobSnapshot }] = await Promise.all([
       import('./in-process-queue'),
       import('./query'),
     ])
-    const foreignAttemptId = await seedForeignQueuedAttempt()
+    const foreign = await seedForeignQueuedAttempt()
     const projectId = await seedProject()
     const queue = new InProcessQueue()
-    queue.register('director-stage', vi.fn(async () => undefined))
-    const localAttemptId = await queue.enqueue(
+    // handler 在执行期记录当前上下文的 workspaceId，验证队列按 attempt 行建立归属。
+    const seenWorkspaceIds: string[] = []
+    queue.register(
       'director-stage',
-      { stage: 'INGEST' },
-      { projectId }
+      vi.fn(async () => {
+        seenWorkspaceIds.push(currentWorkspaceId())
+      })
+    )
+    const localAttemptId = await inLocalWs(() =>
+      queue.enqueue('director-stage', { stage: 'INGEST' }, { projectId })
     )
 
     queue.start({ 'director-stage': 1 })
     try {
       await waitForStatus(
-        () => getJobSnapshot(projectId, localAttemptId),
+        () => inLocalWs(() => getJobSnapshot(projectId, localAttemptId)),
         'done'
       )
-      const [foreign] = await database.db
-        .select({ status: taskAttempts.status })
-        .from(taskAttempts)
-        .where(eq(taskAttempts.id, foreignAttemptId))
-      expect(foreign?.status).toBe('queued')
+      const [foreignRow] = await waitForForeignCompletion(foreign.attemptId)
+      expect(foreignRow?.status).toBe('succeeded')
+      expect(seenWorkspaceIds).toEqual(
+        expect.arrayContaining([LOCAL_WORKSPACE_ID, foreign.workspaceId])
+      )
+      // jobId 查询不能跨 workspace 命中：本地上下文查外部 attempt 必须落空。
+      expect(
+        await inLocalWs(() => getJobSnapshot(foreign.projectId, foreign.attemptId))
+      ).toBeNull()
+      expect(
+        await inWorkspace(foreign.workspaceId, () =>
+          getJobSnapshot(foreign.projectId, foreign.attemptId)
+        )
+      ).toMatchObject({ id: foreign.attemptId, status: 'done' })
     } finally {
       queue.stop()
     }
+  })
+
+  it('rejects enqueue outside of an auth context instead of falling back to a constant', async () => {
+    const { InProcessQueue } = await import('./in-process-queue')
+    const projectId = await seedProject()
+    const queue = new InProcessQueue()
+    await expect(
+      queue.enqueue('director-stage', { stage: 'INGEST' }, { projectId })
+    ).rejects.toThrow(/workspace context is not established/)
   })
 
   it('enforces independent quotas per kind so one lane cannot starve or overrun the other', async () => {
@@ -166,19 +205,21 @@ describe('legacy in-process queue PG compatibility', () => {
 
     const directorIds = await Promise.all(
       Array.from({ length: 4 }, () =>
-        queue.enqueue('director-stage', { stage: 'INGEST' }, { projectId })
+        inLocalWs(() =>
+          queue.enqueue('director-stage', { stage: 'INGEST' }, { projectId })
+        )
       )
     )
     const renderIds = await Promise.all(
       Array.from({ length: 4 }, () =>
-        queue.enqueue('render-shot', {}, { projectId })
+        inLocalWs(() => queue.enqueue('render-shot', {}, { projectId }))
       )
     )
 
     queue.start({ 'director-stage': 2, 'render-shot': 1 })
     try {
       await waitForAllStatuses(
-        (id) => getJobSnapshot(projectId, id),
+        (id) => inLocalWs(() => getJobSnapshot(projectId, id)),
         [...directorIds, ...renderIds],
         'done'
       )
@@ -211,25 +252,27 @@ describe('legacy in-process queue PG compatibility', () => {
 
     // render-shot 先入队，是队列里最老的一条；若并发仍是单一全局计数器，
     // 它会一直占着唯一的槽位，后面的 director-stage 永远拿不到 claim() 的机会。
-    const renderAttemptId = await queue.enqueue('render-shot', {}, { projectId })
-    const directorAttemptId = await queue.enqueue(
-      'director-stage',
-      { stage: 'INGEST' },
-      { projectId }
+    const renderAttemptId = await inLocalWs(() =>
+      queue.enqueue('render-shot', {}, { projectId })
+    )
+    const directorAttemptId = await inLocalWs(() =>
+      queue.enqueue('director-stage', { stage: 'INGEST' }, { projectId })
     )
 
     queue.start({ 'render-shot': 1, 'director-stage': 1 })
     try {
       const directorSnapshot = await waitForStatus(
-        () => getJobSnapshot(projectId, directorAttemptId),
+        () => inLocalWs(() => getJobSnapshot(projectId, directorAttemptId)),
         'done'
       )
       expect(directorSnapshot.status).toBe('done')
-      const renderSnapshot = await getJobSnapshot(projectId, renderAttemptId)
+      const renderSnapshot = await inLocalWs(() =>
+        getJobSnapshot(projectId, renderAttemptId)
+      )
       expect(renderSnapshot?.status).toBe('running')
       releaseRender()
       await waitForStatus(
-        () => getJobSnapshot(projectId, renderAttemptId),
+        () => inLocalWs(() => getJobSnapshot(projectId, renderAttemptId)),
         'done'
       )
     } finally {
@@ -249,14 +292,14 @@ describe('legacy in-process queue PG compatibility', () => {
 
     const ids = await Promise.all(
       Array.from({ length: 3 }, () =>
-        queue.enqueue('custom-kind', {}, { projectId })
+        inLocalWs(() => queue.enqueue('custom-kind', {}, { projectId }))
       )
     )
 
     queue.start()
     try {
       await waitForAllStatuses(
-        (id) => getJobSnapshot(projectId, id),
+        (id) => inLocalWs(() => getJobSnapshot(projectId, id)),
         ids,
         'done'
       )
@@ -296,7 +339,11 @@ async function seedProject(): Promise<string> {
   return projectId
 }
 
-async function seedForeignQueuedAttempt(): Promise<string> {
+async function seedForeignQueuedAttempt(): Promise<{
+  workspaceId: string
+  projectId: string
+  attemptId: string
+}> {
   const workspaceId = '00000000-0000-4000-8000-000000000002'
   const projectId = randomUUID()
   const runId = randomUUID()
@@ -338,7 +385,24 @@ async function seedForeignQueuedAttempt(): Promise<string> {
       payload: { stage: 'INGEST' },
     },
   })
-  return attemptId
+  return { workspaceId, projectId, attemptId }
+}
+
+/** 直读 attempt 行等待外部 workspace 作业完成（不走受上下文限制的 getJobSnapshot）。 */
+async function waitForForeignCompletion(
+  attemptId: string
+): Promise<Array<{ status: string }>> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const rows = await database.db
+      .select({ status: taskAttempts.status })
+      .from(taskAttempts)
+      .where(eq(taskAttempts.id, attemptId))
+    if (rows[0] && rows[0].status !== 'queued' && rows[0].status !== 'running') {
+      return rows
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+  throw new Error('timed out waiting for foreign workspace attempt completion')
 }
 
 async function waitForStatus(

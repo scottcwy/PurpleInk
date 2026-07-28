@@ -18,6 +18,10 @@ import type { LaneQuotas } from './types'
  *
  * 真值优先级 **DB > env > 代码默认**，与 AGENTS.md §6、`features/ai/config.ts`
  * 的 `DB 路由 > env > 代码默认值` 口径完全一致，禁止在该链路上再引入第二套覆盖来源。
+ *
+ * 多用户后的语义澄清（PLAN-002 §5.3 / §9.2，已拍板）：配额是**进程级**配置，
+ * 约束的是本机 CPU，与谁在用无关。`LOCAL_WORKSPACE_ID` 在这里只是进程级配置行的
+ * 存放锚点，不是业务归属——不读请求上下文的 workspace，也不随登录用户变化。
  */
 
 export type LaneQuotaSource = 'settings' | 'env' | 'default'

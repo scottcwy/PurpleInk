@@ -39,6 +39,7 @@ describe('director queue handler', () => {
 
     await harness.getHandler()?.({
       id: 'job-1',
+      workspaceId: 'ws-1',
       kind: 'director-stage',
       status: 'running',
       payload: payload ?? {},

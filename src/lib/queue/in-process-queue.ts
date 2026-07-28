@@ -1,7 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto'
 import os from 'node:os'
 import { and, asc, eq, like, notInArray } from 'drizzle-orm'
-import { getDb, LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
+import {
+  currentWorkspaceId,
+  runInAuthContext,
+  SYSTEM_USER_ID,
+} from '@/lib/auth/workspace-context'
+import { getDb, type Db } from '@/lib/db/client'
 import { pipelineRuns, taskAttempts } from '@/lib/db/schema/index'
 import {
   ACTIVE_WORKFLOW_VERSION,
@@ -68,13 +73,16 @@ export class InProcessQueue implements QueueAdapter {
     if (!opts.projectId) {
       throw new Error('legacy queue enqueue requires a trusted projectId')
     }
+    // 入队发生在请求上下文内，归属取自当前会话；无上下文即抛错，
+    // 不回落到常量（PLAN-002 §5.3 / §10 禁区 5）。
+    const workspaceId = currentWorkspaceId()
     const database = await getDb()
     const runId = randomUUID()
     const attemptId = randomUUID()
     const fingerprint = queueFingerprint(kind, payload)
     await database.transaction(async (transaction) => {
       await transaction.insert(pipelineRuns).values({
-        workspaceId: LOCAL_WORKSPACE_ID,
+        workspaceId,
         id: runId,
         projectId: opts.projectId!,
         status: 'queued',
@@ -82,7 +90,7 @@ export class InProcessQueue implements QueueAdapter {
         fingerprint,
       })
       await transaction.insert(taskAttempts).values({
-        workspaceId: LOCAL_WORKSPACE_ID,
+        workspaceId,
         id: attemptId,
         runId,
         taskId: `legacy.${kind}`,
@@ -159,6 +167,7 @@ export class InProcessQueue implements QueueAdapter {
       const [row] = await transaction
         .select({
           id: taskAttempts.id,
+          workspaceId: taskAttempts.workspaceId,
           runId: taskAttempts.runId,
           taskId: taskAttempts.taskId,
           checkpoint: taskAttempts.checkpoint,
@@ -166,11 +175,9 @@ export class InProcessQueue implements QueueAdapter {
         })
         .from(taskAttempts)
         .where(
-          and(
-            eq(taskAttempts.workspaceId, LOCAL_WORKSPACE_ID),
-            eq(taskAttempts.status, 'queued'),
-            kindCondition
-          )
+          // 不按 workspace 过滤：消费者要处理全部 workspace 的作业，
+          // 归属由领到的 attempt 行自身的 workspaceId 决定（PLAN-002 §5.3）。
+          and(eq(taskAttempts.status, 'queued'), kindCondition)
         )
         .orderBy(asc(taskAttempts.createdAt), asc(taskAttempts.id))
         .limit(1)
@@ -181,7 +188,7 @@ export class InProcessQueue implements QueueAdapter {
         .set({ status: 'running', startedAt: new Date(), updatedAt: new Date() })
         .where(
           and(
-            eq(taskAttempts.workspaceId, LOCAL_WORKSPACE_ID),
+            eq(taskAttempts.workspaceId, row.workspaceId),
             eq(taskAttempts.id, row.id),
             eq(taskAttempts.status, 'queued')
           )
@@ -193,13 +200,14 @@ export class InProcessQueue implements QueueAdapter {
         .set({ status: 'running', startedAt: new Date(), updatedAt: new Date() })
         .where(
           and(
-            eq(pipelineRuns.workspaceId, LOCAL_WORKSPACE_ID),
+            eq(pipelineRuns.workspaceId, row.workspaceId),
             eq(pipelineRuns.id, row.runId)
           )
         )
       const checkpoint = parseCheckpoint(row.checkpoint)
       return {
         id: row.id,
+        workspaceId: row.workspaceId,
         kind: checkpoint.kind,
         status: 'running',
         payload: checkpoint.payload,
@@ -208,19 +216,34 @@ export class InProcessQueue implements QueueAdapter {
     })
   }
 
+  /**
+   * 执行已领取的作业。handler 在 attempt 行自身的 workspace 上下文内运行：
+   * 队列是没有请求上下文的后台消费者，userId 用 SYSTEM_USER_ID 占位，
+   * 真实归属由 attempt 行决定（PLAN-002 §5.3）。
+   */
   private async run(job: QueueJob): Promise<void> {
     const database = await getDb()
     const handler = this.handlers.get(job.kind)
     if (!handler) {
-      await completeAttempt(database, job.id, 'failed', `no handler for kind: ${job.kind}`)
+      await completeAttempt(
+        database,
+        job.workspaceId,
+        job.id,
+        'failed',
+        `no handler for kind: ${job.kind}`
+      )
       return
     }
     try {
-      await handler(job)
-      await completeAttempt(database, job.id, 'succeeded')
+      await runInAuthContext(
+        { workspaceId: job.workspaceId, userId: SYSTEM_USER_ID },
+        () => handler(job)
+      )
+      await completeAttempt(database, job.workspaceId, job.id, 'succeeded')
     } catch (err) {
       await completeAttempt(
         database,
+        job.workspaceId,
         job.id,
         'failed',
         err instanceof Error ? err.message : String(err)
@@ -263,6 +286,7 @@ function parseCheckpoint(value: unknown): LegacyQueueCheckpoint {
 
 async function completeAttempt(
   database: Db,
+  workspaceId: string,
   attemptId: string,
   status: 'succeeded' | 'failed',
   message?: string
@@ -278,7 +302,7 @@ async function completeAttempt(
       })
       .where(
         and(
-          eq(taskAttempts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(taskAttempts.workspaceId, workspaceId),
           eq(taskAttempts.id, attemptId)
         )
       )
@@ -293,7 +317,7 @@ async function completeAttempt(
       })
       .where(
         and(
-          eq(pipelineRuns.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(pipelineRuns.workspaceId, workspaceId),
           eq(pipelineRuns.id, attempt.runId)
         )
       )
