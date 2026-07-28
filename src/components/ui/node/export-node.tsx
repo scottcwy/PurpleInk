@@ -13,6 +13,7 @@ const STATUS_MAP: Record<NodeStatus, 'pending' | 'generating' | 'rendered' | 'st
   failed: 'failed',
   cancelled: 'failed',
   stale: 'stale',
+  skipped: 'pending',
 }
 
 export interface ExportNodeProps {

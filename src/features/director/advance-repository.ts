@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne } from 'drizzle-orm'
+import { and, eq, inArray, notInArray } from 'drizzle-orm'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { type Db } from '@/lib/db/client'
 import { canvasEdges, canvasNodes, projects } from '@/lib/db/schema/index'
@@ -67,7 +67,8 @@ export class AdvanceRepositoryImpl
     return toAdvanceCandidate(node)
   }
 
-  async listSuccessfulNodeIds(projectId: string): Promise<string[]> {
+  /** 列出可作为推进起点的已完成节点：成功或已跳过（skipped 同样解锁下游）。 */
+  async listCompletedNodeIds(projectId: string): Promise<string[]> {
     const rows = await this.db
       .select({ id: canvasNodes.id })
       .from(canvasNodes)
@@ -75,7 +76,7 @@ export class AdvanceRepositoryImpl
         and(
           eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.projectId, projectId),
-          eq(canvasNodes.status, 'succeeded')
+          inArray(canvasNodes.status, ['succeeded', 'skipped'])
         )
       )
     return rows.map(({ id }) => id)
@@ -144,7 +145,10 @@ export class AdvanceRepositoryImpl
       )
     return (
       upstreams.length === sourceIds.length &&
-      upstreams.every(({ status }) => status === 'succeeded')
+      // 人为跳过（skipped）与成功同样满足下游前置，否则跳过无法解锁流水线。
+      upstreams.every(
+        ({ status }) => status === 'succeeded' || status === 'skipped'
+      )
     )
   }
 
@@ -165,7 +169,8 @@ export class AdvanceRepositoryImpl
         and(
           eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.projectId, projectId),
-          ne(canvasNodes.status, 'succeeded')
+          // skipped 是用户确认的终态：项目完成度不因已跳过节点永久 blocked。
+          notInArray(canvasNodes.status, ['succeeded', 'skipped'])
         )
       )
       .limit(1)

@@ -7,3 +7,14 @@ export {
   type NodeActionResult,
   type ProjectRepairResult,
 } from './recovery'
+export {
+  skipNodeAction,
+  SkipRejectedError,
+  type SkipNodeInput,
+} from './skip'
+export {
+  SKIPPABLE,
+  SKIPPABLE_FROM_STATUSES,
+  isSkippableFromStatus,
+  isSkippableNodeType,
+} from './skip-policy'

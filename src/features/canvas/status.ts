@@ -1,5 +1,4 @@
 import 'server-only'
-import { createHash } from 'node:crypto'
 import { and, eq, inArray } from 'drizzle-orm'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb } from '@/lib/db/client'
@@ -13,38 +12,38 @@ import {
   type TransactionContext,
 } from '@/lib/db/transaction'
 import { statusBus } from '@/lib/stream/status-bus'
+import {
+  computeContentHash,
+  readInputFingerprint,
+  readOutputContentHash,
+} from './content-hash'
 import type { NodeStatus } from './types'
 
 export type { NodeStatus } from './types'
+export { computeContentHash } from './content-hash'
 
 const ALLOWED_TRANSITIONS: Record<NodeStatus, readonly NodeStatus[]> = {
   idle: ['pending'],
   pending: ['running', 'cancelled'],
   running: ['success', 'failed', 'cancelled'],
   success: ['stale'],
-  failed: ['pending', 'stale'],
-  cancelled: ['pending', 'stale'],
-  stale: ['pending'],
+  failed: ['pending', 'stale', 'skipped'],
+  cancelled: ['pending', 'stale', 'skipped'],
+  stale: ['pending', 'skipped'],
+  skipped: ['pending'],
 }
 
-/** 对 JSON 可序列化输入生成跨进程稳定的 SHA-256。 */
-export function computeContentHash(input: unknown): string {
-  const serialized = JSON.stringify(input)
-  if (serialized === undefined) throw new Error('内容哈希输入必须可 JSON 序列化')
-
-  let normalized: unknown
-  try {
-    normalized = sortJsonValue(JSON.parse(serialized) as unknown)
-  } catch (error) {
-    throw new Error('内容哈希输入必须可 JSON 序列化', { cause: error })
-  }
-  return createHash('sha256').update(JSON.stringify(normalized)).digest('hex')
+/** 跳过审计元数据：转入 skipped 时写入 data.payload.skipMeta。 */
+export interface SkipMeta {
+  reason: string
+  at: string
 }
 
 /** 原子校验并写入节点状态；stale 只允许由真实上游变化触发。 */
 export async function transitionNodeStatus(
   nodeId: string,
-  next: NodeStatus
+  next: NodeStatus,
+  options?: { skipMeta?: SkipMeta }
 ): Promise<void> {
   const database = await getDb()
   const projectId = await withTransaction(database, async (tx) => {
@@ -71,12 +70,12 @@ export async function transitionNodeStatus(
     if (next === 'stale' && !(await isStaleInTransaction(tx, node))) {
       throw new Error(`节点上游内容未变化，不能标记为 stale：${nodeId}`)
     }
-    const cleared = next === 'success' ? withoutStageErrors(node.data) : null
+    const nextData = resolveTransitionData(node.data, current, next, options?.skipMeta)
     await tx
       .update(canvasNodes)
       .set({
         status: toPersistedStatus(next),
-        ...(cleared === null ? {} : { data: cleared }),
+        ...(nextData === null ? {} : { data: nextData }),
         updatedAt: new Date(),
       })
       .where(
@@ -251,28 +250,54 @@ async function dependencyHashes(
  */
 const STAGE_ERROR_PAYLOAD_KEYS = ['directorError', 'renderError'] as const
 
+const SKIP_META_PAYLOAD_KEY = 'skipMeta'
+
+/**
+ * 状态迁移伴随的 data 修订：
+ * - 转 success / skipped 时清理旧错误字段（skipped 节点不应继续显示可重试错误）；
+ * - 转 skipped 时写入 skipMeta（原因与时刻，可审计）；
+ * - skipped 转回 pending（重新执行恢复）时移除 skipMeta，离开跳过态即恢复诚实。
+ * 无需修订时返回 null，避免无意义写入。
+ */
+function resolveTransitionData(
+  data: VersionedPayload,
+  current: NodeStatus,
+  next: NodeStatus,
+  skipMeta: SkipMeta | undefined
+): VersionedPayload | null {
+  if (next === 'success') return withoutStageErrors(data)
+  if (next === 'skipped') {
+    if (!skipMeta) throw new Error('转入 skipped 必须提供 skipMeta（跳过原因）')
+    const cleared = withoutStageErrors(data) ?? data
+    return patchPayload(cleared, { [SKIP_META_PAYLOAD_KEY]: skipMeta })
+  }
+  if (current === 'skipped') {
+    return withoutPayloadKeys(data, [SKIP_META_PAYLOAD_KEY])
+  }
+  return null
+}
+
 /** 返回去掉错误字段后的 data；本来就没有可清理字段时返回 null，避免无意义写入。 */
 function withoutStageErrors(value: VersionedPayload): VersionedPayload | null {
+  return withoutPayloadKeys(value, STAGE_ERROR_PAYLOAD_KEYS)
+}
+
+function withoutPayloadKeys(
+  value: VersionedPayload,
+  keys: readonly string[]
+): VersionedPayload | null {
   const payload = value.payload
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return null
   }
   const entries = payload as Record<string, unknown>
-  const present = STAGE_ERROR_PAYLOAD_KEYS.filter((key) =>
+  const present = keys.filter((key) =>
     Object.hasOwn(entries, key)
   )
   if (present.length === 0) return null
   const nextPayload = { ...entries }
   for (const key of present) delete nextPayload[key]
   return { ...value, payload: nextPayload }
-}
-
-function readPayloadHash(value: unknown, key: string): string | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  const payload = (value as Record<string, unknown>).payload
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null
-  const contentHash = (payload as Record<string, unknown>)[key]
-  return typeof contentHash === 'string' ? contentHash : null
 }
 
 function patchPayload(
@@ -284,20 +309,6 @@ function patchPayload(
       ? value.payload as Record<string, unknown>
       : {}
   return { ...value, payload: { ...current, ...patch } }
-}
-
-function readOutputContentHash(value: unknown): string | null {
-  return (
-    readPayloadHash(value, 'outputContentHash') ??
-    readPayloadHash(value, 'contentHash')
-  )
-}
-
-function readInputFingerprint(value: unknown): string | null {
-  return (
-    readPayloadHash(value, 'inputFingerprint') ??
-    readPayloadHash(value, 'contentHash')
-  )
 }
 
 function toPersistedStatus(status: NodeStatus): string {
@@ -314,21 +325,10 @@ function fromPersistedStatus(status: string): NodeStatus {
     status === 'running' ||
     status === 'failed' ||
     status === 'cancelled' ||
-    status === 'stale'
+    status === 'stale' ||
+    status === 'skipped'
   ) {
     return status
   }
   throw new Error(`未知节点状态：${status}`)
-}
-
-function sortJsonValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sortJsonValue)
-  if (value !== null && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, child]) => [key, sortJsonValue(child)])
-    )
-  }
-  return value
 }

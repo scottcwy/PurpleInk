@@ -4,6 +4,7 @@ import {
   startPipeline,
   stopPipeline,
   triggerNodeAction,
+  triggerNodeSkip,
 } from './canvas-action-api'
 
 describe('triggerNodeAction', () => {
@@ -98,6 +99,65 @@ describe('triggerNodeAction', () => {
   })
 })
 
+describe('triggerNodeSkip', () => {
+  it('posts intent=skip with the reason to the stage endpoint', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      response(actionResult('attempt-1', 'skip'))
+    )
+    await expect(
+      triggerNodeSkip(
+        'project-1',
+        node({ type: 'shot-sfx', stage: 'ASSEMBLE', status: 'failed' }),
+        '素材缺失，先用占位继续',
+        fetcher
+      )
+    ).resolves.toMatchObject({ jobId: 'attempt-1', action: 'skip' })
+
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/director/stage',
+      expect.objectContaining({
+        body: JSON.stringify({
+          projectId: 'project-1',
+          nodeId: 'node-1',
+          intent: 'skip',
+          skipReason: '素材缺失，先用占位继续',
+        }),
+      })
+    )
+  })
+
+  it('surfaces the server rejection message on 422', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({ ok: false, error: '该环节不支持跳过。', code: 'SKIP_REJECTED' }),
+        { status: 422, headers: { 'content-type': 'application/json' } }
+      )
+    )
+    await expect(
+      triggerNodeSkip(
+        'project-1',
+        node({ type: 'shot-qa', stage: 'FINALIZE', status: 'failed' }),
+        '想跳过质检',
+        fetcher
+      )
+    ).rejects.toThrow('该环节不支持跳过。')
+  })
+
+  it('rejects responses with an unknown action shape', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      response({ ...actionResult('x', 'skip'), action: 'nope' })
+    )
+    await expect(
+      triggerNodeSkip(
+        'project-1',
+        node({ type: 'shot-sfx', stage: 'ASSEMBLE', status: 'failed' }),
+        '原因',
+        fetcher
+      )
+    ).rejects.toThrow('作业响应缺少恢复结果')
+  })
+})
+
 describe('pipeline controls', () => {
   it('starts project autopilot through the pipeline endpoint', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
@@ -171,7 +231,7 @@ function response(body: unknown): Response {
 
 function actionResult(
   jobId: string,
-  action: 'execute' | 'repair-upstream' | 'regenerate' | 'rerender',
+  action: 'execute' | 'repair-upstream' | 'regenerate' | 'rerender' | 'skip',
   queuedNodeId = 'node-1'
 ) {
   return {

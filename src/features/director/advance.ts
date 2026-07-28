@@ -33,7 +33,8 @@ export interface AdvanceRepository {
 export interface PipelineRepository extends AdvanceRepository {
   setAutopilot(projectId: string, enabled: boolean): Promise<boolean>
   getEntryNode(projectId: string): Promise<AdvanceCandidate>
-  listSuccessfulNodeIds(projectId: string): Promise<string[]>
+  /** 已完成（成功或已跳过）的节点，作为续跑推进的起点。 */
+  listCompletedNodeIds(projectId: string): Promise<string[]>
   isProjectComplete?(projectId: string): Promise<boolean>
 }
 
@@ -172,7 +173,7 @@ export async function startProjectPipeline(
       )
       blockedNodes.push(...repair.blockedNodes)
     }
-    for (const completedNodeId of await resolved.repository.listSuccessfulNodeIds(
+    for (const completedNodeId of await resolved.repository.listCompletedNodeIds(
       projectId
     )) {
       if (handledSuccessfulNodes.has(completedNodeId)) continue

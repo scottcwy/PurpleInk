@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { CanvasGraphNode, CanvasNodeType } from '@/features/canvas'
 import {
   buildLaneSummaries,
+  getNodeStatusPresentation,
   LaneSummaryDetails,
   miniMapNodeColor,
 } from './flow-elements'
@@ -51,6 +52,22 @@ describe('miniMapNodeColor', () => {
         data: { type: 'unknown' },
       })
     ).toBe('var(--ds-text-muted)')
+  })
+})
+
+describe('getNodeStatusPresentation', () => {
+  it('expresses skipped with text plus an icon, not colour alone', () => {
+    const skipped = getNodeStatusPresentation('skipped')
+
+    expect(skipped.label).toBe('已跳过')
+    expect(skipped.icon).toBeDefined()
+  })
+
+  it('keeps existing statuses icon-free and truthfully labelled', () => {
+    expect(getNodeStatusPresentation('failed')).toEqual({
+      variant: 'failed',
+      label: '失败',
+    })
   })
 })
 
@@ -161,6 +178,27 @@ describe('buildLaneSummaries', () => {
     expect(html).toContain('字幕 · 待执行')
     expect(html).toContain('验收 · 失败')
     expect(html).not.toContain('数据不完整')
+  })
+
+  it('renders the skipped badge with the circle-slash icon', () => {
+    const html = renderToStaticMarkup(
+      createElement(LaneSummaryDetails, {
+        summary: {
+          laneKey: 'S001',
+          nodes: [
+            { type: 'shot-script', status: 'success' },
+            { type: 'shot-codegen', status: 'success' },
+            { type: 'shot-sfx', status: 'skipped' },
+            { type: 'shot-subtitle', status: 'pending' },
+            { type: 'shot-qa', status: 'idle' },
+          ],
+          isComplete: true,
+        },
+      })
+    )
+
+    expect(html).toContain('音效 · 已跳过')
+    expect(html).toContain('lucide-circle-slash')
   })
 
   it('renders a truthful count for incomplete lane data', () => {

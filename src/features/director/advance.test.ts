@@ -262,7 +262,7 @@ describe('startProjectPipeline', () => {
             status,
           })
         ),
-        listSuccessfulNodeIds: vi.fn(async () => []),
+        listCompletedNodeIds: vi.fn(async () => []),
       }
 
       const result = await startProjectPipeline('project-1', {
@@ -311,7 +311,7 @@ describe('startProjectPipeline', () => {
           status: 'success',
         })
       ),
-      listSuccessfulNodeIds: vi.fn(async () => ['ingest', 'direct']),
+      listCompletedNodeIds: vi.fn(async () => ['ingest', 'direct']),
     }
 
     const result = await startProjectPipeline('project-1', {
@@ -347,7 +347,7 @@ describe('startProjectPipeline', () => {
           status: 'pending',
         })
       ),
-      listSuccessfulNodeIds: vi.fn(async () => []),
+      listCompletedNodeIds: vi.fn(async () => []),
     }
 
     const result = await startProjectPipeline('project-1', {
@@ -381,7 +381,7 @@ describe('startProjectPipeline', () => {
           status: 'success',
         })
       ),
-      listSuccessfulNodeIds: vi.fn(async () => ['ingest']),
+      listCompletedNodeIds: vi.fn(async () => ['ingest']),
       isProjectComplete: vi.fn(async () => true),
     }
     const result = await startProjectPipeline('project-1', {

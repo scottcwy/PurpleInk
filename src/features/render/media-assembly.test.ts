@@ -239,6 +239,34 @@ describe('assembleTrustedMediaPlan (degraded)', () => {
     expect(result.placeholderLaneKeys).toEqual([])
   })
 
+  it('routes a skipped lane into degraded placeholding instead of blocking', () => {
+    // 与 failed 同构：skipped 的 codegen 无 render-mp4 产物，严格装配必须阻塞，
+    // 降级装配则将其列为占位候选（routing.md 跳过合同）。
+    const input = twoShotInput()
+    const skippedLane = input.nodes.find((node) => node.nodeId === 'codegen-S002')!
+    skippedLane.status = 'skipped'
+
+    const strict = assembleTrustedMediaPlan(input)
+    expect(strict.plan).toBeNull()
+    // render 维度按 (laneKey, kind) 去重：node-incomplete 已覆盖产物缺失。
+    expect(strict.blockingIssues).toEqual([
+      { laneKey: 'S002', kind: 'render', code: 'node-incomplete' },
+      { laneKey: 'S002', kind: 'subtitle', code: 'artifact-missing' },
+    ])
+
+    const degraded = assembleTrustedMediaPlan({ ...input, degraded: true })
+    expect(degraded.blockingIssues).toEqual([])
+    expect(degraded.placeholderCandidates).toEqual([
+      {
+        laneKey: 'S002',
+        durationInFrames: 60,
+        audioUnitId: 'U002',
+        needsVideo: true,
+        needsNarration: false,
+      },
+    ])
+  })
+
   it('binds a silent narration placeholder spanning the full shot duration', () => {
     const input = twoShotInput()
     input.artifacts = input.artifacts.filter(

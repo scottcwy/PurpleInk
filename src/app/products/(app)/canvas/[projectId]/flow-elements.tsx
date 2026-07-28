@@ -1,5 +1,6 @@
 import { MarkerType, type Edge, type Node } from '@xyflow/react'
-import type { ReactNode } from 'react'
+import { CircleSlash } from 'lucide-react'
+import type { ComponentType, ReactNode } from 'react'
 import { StatusPill, type StatusPillVariant } from '@/components/ui/status-pill'
 import type {
   CanvasGraphEdge,
@@ -153,6 +154,7 @@ function nodeLabel(node: CanvasGraphNode, collapsed: boolean): ReactNode {
       </div>
       <StatusPill
         variant={getNodeStatusPresentation(node.status).variant}
+        icon={getNodeStatusPresentation(node.status).icon}
         label={
           collapsed && node.type === 'shot-script'
             ? '已折叠 · 5 节点'
@@ -171,6 +173,7 @@ const STATUS_VARIANT: Record<NodeStatus, StatusPillVariant> = {
   failed: 'failed',
   cancelled: 'failed',
   stale: 'cached',
+  skipped: 'pending',
 }
 
 const STATUS_LABEL: Record<NodeStatus, string> = {
@@ -181,14 +184,25 @@ const STATUS_LABEL: Record<NodeStatus, string> = {
   failed: '失败',
   cancelled: '已取消',
   stale: '需更新',
+  skipped: '已跳过',
+}
+
+/** 状态语义靠文本 + 图标共同表达，不只靠颜色；skipped 用 circle-slash（白名单）。 */
+const STATUS_ICON: Partial<Record<NodeStatus, ComponentType<{ className?: string }>>> = {
+  skipped: CircleSlash,
 }
 
 export function getNodeStatusPresentation(
   status: NodeStatus
-): { variant: StatusPillVariant; label: string } {
+): {
+  variant: StatusPillVariant
+  label: string
+  icon?: ComponentType<{ className?: string }>
+} {
   return {
     variant: STATUS_VARIANT[status],
     label: STATUS_LABEL[status],
+    ...(STATUS_ICON[status] ? { icon: STATUS_ICON[status] } : {}),
   }
 }
 
@@ -211,6 +225,7 @@ export function LaneSummaryDetails({ summary }: { summary: LaneSummary }) {
             <StatusPill
               key={node.type}
               variant={status.variant}
+              icon={status.icon}
               label={`${getLaneNodeLabel(node.type)} · ${status.label}`}
             />
           )

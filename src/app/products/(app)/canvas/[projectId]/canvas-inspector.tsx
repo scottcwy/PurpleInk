@@ -24,10 +24,15 @@ import {
   INSPECTOR_MIN_WIDTH,
 } from '@/lib/layout/breakpoints'
 import { cn } from '@/lib/utils'
-import { triggerNodeAction } from './canvas-action-api'
+import {
+  triggerNodeAction,
+  triggerNodeSkip,
+  type NodeActionResult,
+} from './canvas-action-api'
 import { getNodeStatusPresentation } from './flow-elements'
 import { isNodeActionBlocked, nodeActionLabel } from './node-action-presentation'
 import { StreamingLogCard } from './streaming-log-card'
+import { isSkippableNodeType } from '@/features/director/skip-policy'
 
 export function CanvasInspector({
   projectId,
@@ -74,13 +79,15 @@ export function CanvasInspector({
     return () => window.removeEventListener('keydown', onKey)
   }, [overlayOpen])
 
-  async function execute() {
+  async function run(
+    task: (target: CanvasGraphNode) => Promise<NodeActionResult>
+  ) {
     if (!node) return
     setSubmitting(true)
     setError(undefined)
     setQueuedJob(undefined)
     try {
-      const result = await triggerNodeAction(projectId, node)
+      const result = await task(node)
       setQueuedJob({
         nodeId: node.id,
         jobId: result.jobId,
@@ -107,7 +114,8 @@ export function CanvasInspector({
       submitting={submitting}
       error={error?.nodeId === node.id ? error.message : undefined}
       queuedFeedback={queuedFeedback}
-      onExecute={execute}
+      onExecute={() => run((target) => triggerNodeAction(projectId, target))}
+      onSkip={(reason) => run((target) => triggerNodeSkip(projectId, target, reason))}
       onCollapse={() => {
         setManualCollapsed(true)
         setOverlayRequested(false)
@@ -209,6 +217,7 @@ function InspectorBody({
   error,
   queuedFeedback,
   onExecute,
+  onSkip,
   onCollapse,
   showCollapse,
 }: {
@@ -218,6 +227,7 @@ function InspectorBody({
   error?: string
   queuedFeedback?: { jobId: string; message: string }
   onExecute: () => void
+  onSkip: (reason: string) => void
   onCollapse: () => void
   showCollapse: boolean
 }) {
@@ -279,6 +289,8 @@ function InspectorBody({
         renderError={node.renderError}
         onRetry={onExecute}
         retrying={submitting}
+        skippable={isSkippableNodeType(node.type)}
+        onSkip={onSkip}
       />
       <Button
         variant={node.type === 'shot-codegen' ? 'destructive' : 'tinted'}

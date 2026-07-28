@@ -25,6 +25,7 @@ const STATUS_DOT: Record<NodeStatus, string> = {
   failed: 'bg-danger',
   cancelled: 'bg-label-tertiary',
   stale: 'bg-warning',
+  skipped: 'bg-label-tertiary',
 }
 
 /**

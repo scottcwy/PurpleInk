@@ -43,6 +43,13 @@
       "when": 1785216806485,
       "tag": "0005_orange_argent",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785227004821,
+      "tag": "0006_flashy_talkback",
+      "breakpoints": true
     }
   ]
 }

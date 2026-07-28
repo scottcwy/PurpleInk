@@ -47,4 +47,11 @@ describe('node action presentation', () => {
     expect(isNodeActionBlocked(retryable)).toBe(false)
     expect(nodeActionLabel(retryable)).toBe('修复并继续')
   })
+
+  it('offers re-execution as the recovery path for skipped nodes', () => {
+    const skipped = node({ type: 'shot-sfx', stage: 'ASSEMBLE', status: 'skipped' })
+
+    expect(isNodeActionBlocked(skipped)).toBe(false)
+    expect(nodeActionLabel(skipped)).toBe('重新执行以恢复此环节')
+  })
 })

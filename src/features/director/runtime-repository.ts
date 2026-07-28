@@ -76,7 +76,8 @@ export class DirectorRuntimeRepository {
       throw new Error(`Director 节点阶段不匹配：${node.stage} != ${stage}`)
     }
     const status = fromPersistedNodeStatus(node.status)
-    if (!['idle', 'failed', 'stale'].includes(status)) {
+    // 'skipped' 在列：已跳过节点允许通过 intent=execute 重新入队恢复（见 routing.md 跳过合同）。
+    if (!['idle', 'failed', 'stale', 'skipped'].includes(status)) {
       throw new Error(`Director 节点当前不可入队：${status}`)
     }
   }

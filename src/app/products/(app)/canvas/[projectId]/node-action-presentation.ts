@@ -17,6 +17,8 @@ export function nodeActionLabel(node: CanvasGraphNode): string {
     return '重新检查配置并继续'
   }
   if (node.status === 'failed' || node.status === 'stale') return '修复并继续'
+  // 已跳过节点可随时重新执行恢复真实产出（routing.md 跳过合同）。
+  if (node.status === 'skipped') return '重新执行以恢复此环节'
   if (node.status === 'success') {
     return node.type === 'shot-codegen'
       ? '重新渲染并更新下游'

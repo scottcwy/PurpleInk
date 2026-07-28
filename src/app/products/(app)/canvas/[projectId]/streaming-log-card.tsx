@@ -9,6 +9,7 @@ import type {
   RenderNodeError,
 } from '@/features/canvas'
 import { useStageStream } from '@/lib/hooks/use-stage-stream'
+import { SkipNodeDialog } from './skip-node-dialog'
 import { StageErrorDialog } from './stage-error-dialog'
 
 const STREAMABLE = new Set<CanvasGraphNode['status']>(['running', 'success', 'failed'])
@@ -28,6 +29,10 @@ export interface StreamingLogCardProps {
   /** 重试：重新入队该阶段。 */
   onRetry: () => void
   retrying?: boolean
+  /** 节点类型可跳过时为 true（skip-policy SKIPPABLE）；否则不渲染跳过入口。 */
+  skippable?: boolean
+  /** 确认跳过：携带必填原因调 intent=skip。 */
+  onSkip?: (reason: string) => void
 }
 
 /**
@@ -72,10 +77,13 @@ export function StreamingLogCard({
   renderError,
   onRetry,
   retrying,
+  skippable,
+  onSkip,
 }: StreamingLogCardProps) {
   const stream = useStageStream(projectId, nodeId, status)
   const error = resolveVisibleStageError(status, directorError, renderError, stream.error)
   const scrollRef = useRef<HTMLPreElement>(null)
+  const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
 
   // 失败态自动弹一次错误弹窗：以「派生复位」实现（不在 effect 内同步 setState）。
   // autoKey 随节点或其失败原因变化；用户关闭后 key 不变故不重复自动弹，
@@ -152,6 +160,24 @@ export function StreamingLogCard({
         }}
         retrying={retrying}
         retryable={error?.retryable !== false}
+        {...(skippable && onSkip
+          ? {
+              onSkip: () => {
+                setDialogOpen(false)
+                setSkipConfirmOpen(true)
+              },
+            }
+          : {})}
+      />
+      <SkipNodeDialog
+        open={skipConfirmOpen}
+        stage={error?.stage ?? stage ?? ''}
+        onClose={() => setSkipConfirmOpen(false)}
+        onConfirm={(reason) => {
+          setSkipConfirmOpen(false)
+          onSkip?.(reason)
+        }}
+        submitting={retrying}
       />
     </>
   )

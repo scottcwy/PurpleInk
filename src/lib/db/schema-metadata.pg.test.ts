@@ -24,6 +24,7 @@ const ENUM_CHECKS = {
   ],
   canvas_nodes_status_check: [
     'idle', 'queued', 'running', 'succeeded', 'failed', 'cancelled', 'stale',
+    'skipped',
   ],
   pipeline_runs_status_check: [
     'triggering', 'queued', 'running', 'succeeded', 'failed', 'cancelled',

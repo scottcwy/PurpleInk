@@ -227,6 +227,43 @@ FINALIZE `export` 节点从 `idle` 到 `succeeded`，最终 MP4 的数据库哈�
 
 ---
 
+## 7.2 模式 H：失败只有「重试到死」一条出路
+
+**症状**：单个节点反复失败（模型不稳定、素材异常、进程中断）后，整条流水线卡死：
+用户只能无限重试或弃片，没有受控的降级出路。
+
+**真实事故**：进程中断后 attempt 永久停在 `running`（僵尸任务）；模型侧间歇性
+失败靠人工反复点重试；单个 shot 环节持续失败时项目无法出片。
+
+**规则**：容灾护栏必须分三层，每层职责不重叠：
+
+1. **进程中断自动回收（阶段 1）**：`task_attempts` 携带 `lease_expires_at` /
+   `visible_at` 租约；`lease.ts` 周期性把过期 `running` attempt 收尸为
+   `TASK_INTERRUPTED` 并重新可见。后台调用必须用 `runInAuthContext` 包住
+   workspace 上下文，否则 `currentWorkspaceId()` 直接抛错。
+2. **自动重试 + 预算闸门（阶段 2）**：`retry-policy.ts` 的
+   `assertEnqueueRetryBudget` 限制同一节点的重试次数；耗尽后落到
+   `RETRY_BUDGET_EXHAUSTED`（`retryable=false`，文案引导用户选择跳过）。
+3. **人为跳过（阶段 3）**：`skipped` 是一等节点状态，仅限可降级占位的节点
+   类型（`shot-codegen` / `shot-sfx` / `shot-subtitle`，`SKIPPABLE` 全集映射 +
+   全集遍历断言，见模式 C），仅限 `failed` / `stale` / `cancelled` 状态；
+   跳过必须留下可审计证据（`node-skip-marker` 产物 + `skipMeta.reason`），
+   下游推进把 `skipped` 视为前置满足，导出走既有降级链占位并在
+   `final-mp4-degraded-manifest` 如实登记，不得宣称完全成功。
+
+三层的诊断口径：先看 attempt 是否被租约回收（`TASK_INTERRUPTED`），再看重试
+预算是否耗尽（`RETRY_BUDGET_EXHAUSTED`），最后看节点是否被人为跳过
+（`status='skipped'` + `skipMeta` + `node-skip-marker`）。三者互斥，不得用
+同一错误码或同一状态混叙。
+
+**已落地护栏**：阶段 1 见 `lease.ts` 与迁移 0005；阶段 2 见 `retry-policy.ts` /
+`attempt-completion.ts`；阶段 3 见 `skip.ts`（`skipNodeAction`）、
+`skip-policy.ts`（`SKIPPABLE` 全集断言）与 `/api/director/stage` 的
+`intent=skip` 合同（routing.md §4.1）。`skipped` 只能由用户显式请求进入，
+自动链路（autopilot / 自动重试）永远不得自行跳过节点。
+
+---
+
 ## 8. 工作流类改动的提交前清单
 
 在 `AGENTS.md` §8 的通用门禁之外，涉及本文覆盖的链路时补做：
@@ -238,6 +275,7 @@ FINALIZE `export` 节点从 `idle` 到 `succeeded`，最终 MP4 的数据库哈�
 - [ ] fixture 是否是真实产物形状（模式 E）。
 - [ ] 验证时是否重启过 dev server，并用节点状态与产物哈希作证据（模式 F）。
 - [ ] artifact 指向的文件是否已经停止写入，哈希是否在生产者关闭后计算（模式 G）。
+- [ ] 新增的失败出路是否落在三层护栏之内（租约回收 / 重试预算 / 人为跳过），跳过语义是否留下可审计证据且不被自动链路滥用（模式 H）。
 - [ ] 真实产物证据：`artifacts.content_hash` 与磁盘字节 SHA-256 逐条核对一致。
 
 真实证据的取法示例：

@@ -14,6 +14,7 @@ const STATUS_MAP: Record<NodeStatus, 'pending' | 'generating' | 'rendered' | 'st
   failed: 'failed',
   cancelled: 'failed',
   stale: 'stale',
+  skipped: 'pending',
 }
 
 type ShotNodeType = Extract<CanvasNodeType, 'shot-script' | 'shot-codegen'>

@@ -25,6 +25,7 @@ export type NodeStatus =
   | 'failed'
   | 'cancelled'
   | 'stale'
+  | 'skipped'
 
 export interface CanvasNode {
   id: string

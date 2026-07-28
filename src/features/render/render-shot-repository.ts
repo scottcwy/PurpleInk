@@ -28,7 +28,8 @@ const renderSpecSchema = z
   })
   .strict()
 
-const ENQUEUEABLE_STATUSES = new Set(['idle', 'failed', 'stale'])
+// 'skipped' 在列：已跳过的 shot-codegen 允许通过 intent=execute 重新入队恢复（见 routing.md 跳过合同）。
+const ENQUEUEABLE_STATUSES = new Set(['idle', 'failed', 'stale', 'skipped'])
 type RenderContextMode = 'running' | 'completed'
 type RenderStatusMode = RenderContextMode | 'enqueueable'
 

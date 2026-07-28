@@ -26,6 +26,26 @@ export async function triggerNodeAction(
     render ? '/api/render' : '/api/director/stage',
     jsonRequest({ projectId, nodeId: node.id, intent: resolveIntent(node) })
   )
+  return parseNodeActionResponse(response)
+}
+
+/**
+ * 手动跳过可跳过节点（intent=skip，见 routing.md 跳过合同）；原因必填，由服务端校验长度。
+ */
+export async function triggerNodeSkip(
+  projectId: string,
+  node: CanvasGraphNode,
+  reason: string,
+  fetcher: typeof fetch = fetch
+): Promise<NodeActionResult> {
+  const response = await fetcher(
+    '/api/director/stage',
+    jsonRequest({ projectId, nodeId: node.id, intent: 'skip', skipReason: reason })
+  )
+  return parseNodeActionResponse(response)
+}
+
+async function parseNodeActionResponse(response: Response): Promise<NodeActionResult> {
   // 401 统一映射成可识别错误类型，由 useRequireLogin 接管（PLAN-002 §4.4）。
   throwIfUnauthenticated(response)
   const body: unknown = await response.json()
@@ -57,7 +77,7 @@ export async function triggerNodeAction(
 
 export interface NodeActionResult {
   ok: true
-  action: 'execute' | 'repair-upstream' | 'regenerate' | 'rerender'
+  action: 'execute' | 'repair-upstream' | 'regenerate' | 'rerender' | 'skip'
   requestedNodeId: string
   queuedNodeId: string
   jobId: string
@@ -145,11 +165,12 @@ function resolveIntent(
   if (node.status === 'success') {
     return node.type === 'shot-codegen' ? 'rerender' : 'regenerate'
   }
+  // skipped 与 idle 同路：重新执行以恢复真实产出。
   return 'execute'
 }
 
 function isNodeAction(value: unknown): value is NodeActionResult['action'] {
-  return ['execute', 'repair-upstream', 'regenerate', 'rerender'].includes(
+  return ['execute', 'repair-upstream', 'regenerate', 'rerender', 'skip'].includes(
     String(value)
   )
 }

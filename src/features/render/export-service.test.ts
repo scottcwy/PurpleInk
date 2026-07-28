@@ -208,6 +208,55 @@ describe('getExportReadiness', () => {
       artifactDelivery: 'narration-hard-subtitle-v2',
     })
   })
+
+  it('lists a skipped lane as a degraded placeholder candidate instead of a hard block', async () => {
+    // 含 skipped 节点的项目：正常导出不就绪，但降级探测将该 lane 列为占位候选。
+    const getExportPlan = vi
+      .fn()
+      .mockResolvedValueOnce({
+        incompleteNodeIds: ['codegen-S002'],
+        shots: [],
+        musicKey: null,
+        targetResolution: { width: 1920, height: 1080 },
+        resolutionPreset: '1920x1080' as const,
+        shotQa: {},
+        ...mediaFields(null),
+      })
+      .mockResolvedValueOnce({
+        incompleteNodeIds: ['codegen-S002'],
+        shots: [],
+        musicKey: null,
+        targetResolution: { width: 1920, height: 1080 },
+        resolutionPreset: '1920x1080' as const,
+        shotQa: {},
+        ...mediaFields(null),
+        placeholderCandidates: [
+          {
+            laneKey: 'S002',
+            durationInFrames: 60,
+            audioUnitId: 'U002',
+            needsVideo: true,
+            needsNarration: false,
+          },
+        ],
+        fps: 30 as const,
+      })
+    const result = await getExportReadiness('project-1', {
+      getExportPlan,
+      findLatestFinalArtifact: vi.fn(async () => null),
+      findDegradedExport: vi.fn(async () => null),
+    })
+
+    expect(result).toMatchObject({
+      ready: false,
+      incompleteNodeIds: ['codegen-S002'],
+      placeholderCandidateLanes: ['S002'],
+      degradedReady: true,
+    })
+    expect(getExportPlan).toHaveBeenNthCalledWith(2, 'project-1', {
+      degraded: true,
+    })
+  })
 })
 
 function createStorage(): StorageAdapter {

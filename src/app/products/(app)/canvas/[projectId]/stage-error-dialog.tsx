@@ -1,6 +1,6 @@
 'use client'
 
-import { CircleX, RefreshCw } from 'lucide-react'
+import { CircleX, RefreshCw, SkipForward } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 
@@ -14,6 +14,8 @@ export interface StageErrorDialogProps {
   onRetry: () => void
   retrying?: boolean
   retryable?: boolean
+  /** 节点类型可跳过时提供：弹出跳过二次确认（routing.md 跳过合同）；不可跳过类型不渲染按钮。 */
+  onSkip?: () => void
 }
 
 /**
@@ -28,6 +30,7 @@ export function StageErrorDialog({
   onRetry,
   retrying,
   retryable = true,
+  onSkip,
 }: StageErrorDialogProps) {
   return (
     <Dialog
@@ -45,6 +48,11 @@ export function StageErrorDialog({
           <Button variant="gray" onClick={onClose}>
             关闭
           </Button>
+          {onSkip && (
+            <Button variant="gray" icon={SkipForward} onClick={onSkip} disabled={retrying}>
+              跳过此环节
+            </Button>
+          )}
           {retryable && (
             <Button variant="tinted" icon={RefreshCw} onClick={onRetry} disabled={retrying}>
               重试

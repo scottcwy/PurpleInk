@@ -17,7 +17,7 @@ export type NodeActionIntent = 'execute' | 'repair' | 'regenerate' | 'rerender'
 
 export interface NodeActionResult {
   ok: true
-  action: 'execute' | 'repair-upstream' | 'regenerate' | 'rerender'
+  action: 'execute' | 'repair-upstream' | 'regenerate' | 'rerender' | 'skip'
   requestedNodeId: string
   queuedNodeId: string
   jobId: string

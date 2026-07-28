@@ -159,7 +159,7 @@
 | `/api/render/export` | GET, POST | GET `projectId` query；POST body `{projectId, degraded?}` | `@/features/render/export-service`、`@/features/render/export-degraded` | `wired` |
 | `/api/render/thumbnails` | GET | `projectId`、`nodeId` | `@/features/render` | `wired` |
 | `/api/director/pipeline` | POST, DELETE | body `{projectId}`；POST 返回 `started|blocked|complete` 与修复根/阻塞明细 | `@/features/director/advance` | `wired` |
-| `/api/director/stage` | POST | body `{projectId,nodeId,intent}`；`intent=execute|repair|regenerate`，阶段由服务端节点投影决定 | `@/features/director/recovery` | `wired` |
+| `/api/director/stage` | POST | body `{projectId,nodeId,intent,skipReason?}`；`intent=execute|repair|regenerate|skip`（`skip` 时 `skipReason` 必填 1-200 字），阶段由服务端节点投影决定 | `@/features/director/recovery`、`@/features/director/skip` | `wired` |
 | `/api/director/stream/[nodeId]` | GET (SSE) | `nodeId` path + `projectId` query | `@/lib/stream/stream-bus` | `wired` |
 | `/api/director/stream/project/[projectId]` | GET (SSE) | `projectId` path | `@/lib/stream/status-bus` | `wired` |
 | `/api/share/[shareId]` | GET | `shareId` path | `@/features/share`（待建） | `planned` |
@@ -174,7 +174,8 @@
    `openai-compatible` 的视觉模型独立于文本模型；未填写视觉模型时把分镜验收路由到该端点返回 422。
    `openai-compatible-asr` 的转写校验被端点拒绝时返回 422 且带 `reason: 'asr-transcription-rejected'`；客户端可改以 `credentialOnly: true` 重新提交，该路径仍需通过 `GET {baseUrl}/models` 凭据校验，并把 `timestampMode` 保守记为 `none`、`verification` 记为 `credential-only`。
    `laneQuotas` 子字段做两层校验：schema 静态 max（directorStage≤32、renderShot≤128）+ route 运行时 `os.cpus().length` 上限；任一失败回 400 且不落任何 secret / route / 配额写入。
-2. 状态码语义固定：400 参数非法、404 资源不存在或不属于当前作用域、409 状态冲突（队列已存在、前置未就绪、旧 workflow 暂不支持执行）、422 外部凭据校验失败。项目设置、Director、单镜渲染、缩略图与成片导出的写/执行入口必须在任何数据库、Artifact 或队列变更前拒绝旧 workflow。
+2. 状态码语义固定：400 参数非法、404 资源不存在或不属于当前作用域、409 状态冲突（队列已存在、前置未就绪、旧 workflow 暂不支持执行）、422 外部凭据校验失败或跳过请求被业务规则拒绝（节点类型不可跳过 / 节点当前状态不允许跳过）。项目设置、Director、单镜渲染、缩略图与成片导出的写/执行入口必须在任何数据库、Artifact 或队列变更前拒绝旧 workflow。
+   `/api/director/stage` 的跳过合同（`intent=skip`）：仅 `shot-codegen`、`shot-sfx`、`shot-subtitle` 三类节点可跳过，且节点当前状态必须是 `failed`、`stale` 或 `cancelled`；其余节点类型或状态返回 422 且不落任何写入。`skipReason` 必填（1-200 字）。成功路径的副作用按序为：登记 `node-skip-marker` JSON 产物（真实字节落盘 + 字节 SHA-256，记录 projectId/nodeId/nodeType/reason/skippedAt）→ 节点状态转入一等状态 `skipped`（节点 data 写入 `skipMeta={reason, at}` 并清理旧的阶段错误字段）→ 推进下游（`skipped` 与 `succeeded` 同样满足下游前置）。被跳过的 shot lane 在成片导出中走既有降级链占位（黑场视频 / 静音旁白 / 字幕缺省为空），并由 `final-mp4-degraded-manifest` 如实记录；`skipped` 节点可随时通过 `intent=execute` 重新执行恢复（状态回 `pending` 并清除 `skipMeta`）。
    `/api/render/export` 的降级导出合同：GET 响应额外含 `placeholderCandidateLanes: string[]`（当前缺渲染产物、可用占位片段出片的 lane）、`degradedReady: boolean`（全部阻塞项都可被占位覆盖）与 `degradedExport: {placeholderLanes: string[]} | null`（最近一次 final-mp4 若为降级产物，列出占位镜头）。POST body `degraded: true` 是用户显式确认的降级导出：项目已就绪时忽略该标志走正常导出；单 lane 的渲染/旁白/字幕缺失可被占位覆盖（黑场视频 / 静音旁白 / 跳过字幕），但项目级完整性问题（`laneKey=null` 的 blockingIssue，如 INGEST 音频合同缺失/无效、帧总数不一致）不可占位，`degradedReady=false` 仍返回 409 且不入队。占位片段是真实 ffmpeg 生成的黑场 MP4（时长取 shot-plan 真值、字节 SHA-256 入 artifacts，kind `placeholder-mp4`），成片的占位清单登记为 `final-mp4-degraded-manifest` 产物，UI 必须据此显示「降级导出 · N 镜占位」，不得宣称完全成功。自动推进链（autopilot）永远不使用降级模式。
 3. 凭据类 POST 必须先验证后保存；验证失败返回 422 且不覆盖已有值。
 4. 除 `/api/ping` 外全部 `export const dynamic = 'force-dynamic'`。
