@@ -57,7 +57,7 @@ async function provision(now = new Date()): Promise<void> {
     provisionFreeEntitlement(tx, WORKSPACE_ID, now))
 }
 
-async function seedCode(planKey: 'free' | 'plus' | 'pro'): Promise<string> {
+async function seedCode(planKey: 'free' | 'plus' | 'pro' | 'max'): Promise<string> {
   const code = `CODE-${planKey}`
   const { hashRedemptionCode } = await import('./redemption')
   const [batch] = await database.db.insert(redemptionBatches).values({
@@ -166,6 +166,54 @@ it('same-tier redemption extends entitlement without resetting the usage period'
   expect(await database.db.select().from(usagePeriods)).toHaveLength(1)
 })
 
+it('allows only one workspace to consume a Max code concurrently', async () => {
+  const secondWorkspaceId = '30000000-0000-4000-8000-000000000041'
+  const secondUserId = '30000000-0000-4000-8000-000000000042'
+  await provision()
+  await database.db.insert(workspaces).values({
+    id: secondWorkspaceId,
+    slug: 'billing-test-second',
+    name: 'Billing Test Second',
+  })
+  await database.db.insert(users).values({
+    id: secondUserId,
+    email: 'billing-second@example.com',
+    name: 'Billing Owner Second',
+    passwordHash: 'not-used-in-this-test',
+  })
+  await database.db.insert(workspaceMembers).values({
+    workspaceId: secondWorkspaceId,
+    userId: secondUserId,
+    role: 'owner',
+  })
+  const { provisionFreeEntitlement } = await import('./period-service')
+  await database.db.transaction((tx) =>
+    provisionFreeEntitlement(tx, secondWorkspaceId, new Date()))
+  const code = await seedCode('max')
+  const { redeemBillingCode } = await import('./redemption')
+  const results = await Promise.all([
+    runInAuthContext(
+      { workspaceId: WORKSPACE_ID, userId: USER_ID },
+      () => redeemBillingCode({ code, idempotencyKey: 'max-race-1' }),
+    ),
+    runInAuthContext(
+      { workspaceId: secondWorkspaceId, userId: secondUserId },
+      () => redeemBillingCode({ code, idempotencyKey: 'max-race-2' }),
+    ),
+  ])
+  expect(results.filter((result) => result.ok)).toHaveLength(1)
+  expect(results.filter((result) =>
+    !result.ok && result.code === 'redemption_unavailable')).toHaveLength(1)
+  const [stored] = await database.db.select().from(redemptionCodes)
+  expect(stored.consumedByWorkspaceId).not.toBeNull()
+  const entitlements = await database.db.select().from(workspaceEntitlements)
+  expect(entitlements.filter((item) => item.planKey === 'max')).toHaveLength(1)
+  expect(entitlements.filter((item) => item.planKey === 'free')).toHaveLength(1)
+  const maxPeriod = (await database.db.select().from(usagePeriods))
+    .find((item) => item.planKey === 'max')
+  expect(maxPeriod?.limitCnyMicros).toBe(BigInt(2_000_000_000))
+})
+
 it('atomically creates, reserves and idempotently settles an invocation', async () => {
   await provision()
   await seedAttempt()
@@ -216,6 +264,186 @@ it('atomically creates, reserves and idempotently settles an invocation', async 
     settledCnyMicros: BigInt(600),
     status: 'succeeded',
   })
+})
+
+it('does not oversell the final quota under concurrent reservations', async () => {
+  await provision()
+  await seedAttempt()
+  await database.db.update(usagePeriods).set({
+    limitCnyMicros: BigInt(1_000),
+  })
+  const { reserveManagedInvocation } = await import('./ledger')
+  const results = await Promise.allSettled([
+    reserveManagedInvocation({
+      workspaceId: WORKSPACE_ID,
+      invocationId: '30000000-0000-4000-8000-000000000021',
+      idempotencyKey: 'concurrent-quota-1',
+      rateCardId: '20000000-0000-4000-8000-000000000001',
+      maximumCostCnyMicros: BigInt(700),
+      create: {
+        attemptId: ATTEMPT_ID,
+        invocationNo: 1,
+        provider: 'stepfun',
+        model: 'step-3.5-flash',
+        inputHash: 'e'.repeat(64),
+      },
+    }),
+    reserveManagedInvocation({
+      workspaceId: WORKSPACE_ID,
+      invocationId: '30000000-0000-4000-8000-000000000022',
+      idempotencyKey: 'concurrent-quota-2',
+      rateCardId: '20000000-0000-4000-8000-000000000001',
+      maximumCostCnyMicros: BigInt(700),
+      create: {
+        attemptId: ATTEMPT_ID,
+        invocationNo: 2,
+        provider: 'stepfun',
+        model: 'step-3.5-flash',
+        inputHash: 'f'.repeat(64),
+      },
+    }),
+  ])
+  expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
+  expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1)
+  const [period] = await database.db.select().from(usagePeriods)
+  expect(period.reservedCnyMicros).toBe(BigInt(700))
+})
+
+it('keeps concurrent reservation and settlement idempotent for one invocation', async () => {
+  await provision()
+  await seedAttempt()
+  const { reserveManagedInvocation, settleManagedInvocation } = await import('./ledger')
+  const reservation = {
+    workspaceId: WORKSPACE_ID,
+    invocationId: INVOCATION_ID,
+    idempotencyKey: 'concurrent-idempotency-1',
+    rateCardId: '20000000-0000-4000-8000-000000000001',
+    maximumCostCnyMicros: BigInt(1_000),
+    create: {
+      attemptId: ATTEMPT_ID,
+      invocationNo: 1,
+      provider: 'stepfun',
+      model: 'step-3.5-flash',
+      inputHash: '1'.repeat(64),
+    },
+  }
+  await Promise.all([
+    reserveManagedInvocation(reservation),
+    reserveManagedInvocation(reservation),
+  ])
+  const settlement = {
+    workspaceId: WORKSPACE_ID,
+    invocationId: INVOCATION_ID,
+    actualCostCnyMicros: BigInt(600),
+    usageStatus: 'reported' as const,
+    usage: {
+      schemaVersion: 1,
+      kind: 'text',
+      inputTokens: 10,
+      outputTokens: 4,
+    },
+  }
+  await Promise.all([
+    settleManagedInvocation(settlement),
+    settleManagedInvocation(settlement),
+  ])
+  const [period] = await database.db.select().from(usagePeriods)
+  expect(period).toMatchObject({
+    reservedCnyMicros: BigInt(0),
+    usedCnyMicros: BigInt(600),
+  })
+  expect(await database.db.select().from(aiInvocations)).toHaveLength(1)
+})
+
+it('projects only settled calls and trusts only reported token usage', async () => {
+  await provision()
+  await seedAttempt()
+  const [period] = await database.db.select().from(usagePeriods)
+  const earlier = new Date('2026-07-29T01:00:00.000Z')
+  const later = new Date('2026-07-29T02:00:00.000Z')
+  await database.db.insert(aiInvocations).values([
+    {
+      workspaceId: WORKSPACE_ID,
+      id: '30000000-0000-4000-8000-000000000031',
+      runId: '30000000-0000-4000-8000-000000000011',
+      attemptId: ATTEMPT_ID,
+      taskId: 'cvc.billing.test',
+      invocationNo: 1,
+      status: 'succeeded',
+      provider: 'stepfun',
+      model: 'step-3.5-flash',
+      inputHash: '2'.repeat(64),
+      usagePeriodId: period.id,
+      billingStatus: 'settled',
+      settledCnyMicros: BigInt(100),
+      usageStatus: 'reported',
+      usage: {
+        schemaVersion: 1,
+        kind: 'text',
+        inputTokens: 12,
+        outputTokens: 3,
+      },
+      settledAt: earlier,
+      completedAt: earlier,
+    },
+    {
+      workspaceId: WORKSPACE_ID,
+      id: '30000000-0000-4000-8000-000000000032',
+      runId: '30000000-0000-4000-8000-000000000011',
+      attemptId: ATTEMPT_ID,
+      taskId: 'cvc.billing.test',
+      invocationNo: 2,
+      status: 'failed',
+      provider: 'gemini',
+      model: 'gemini-3.1-flash-lite',
+      inputHash: '3'.repeat(64),
+      usagePeriodId: period.id,
+      billingStatus: 'settled',
+      settledCnyMicros: BigInt(200),
+      usageStatus: 'unavailable',
+      usage: {
+        schemaVersion: 1,
+        kind: 'text',
+        inputTokens: 999,
+        outputTokens: 999,
+      },
+      settledAt: later,
+      completedAt: later,
+    },
+    {
+      workspaceId: WORKSPACE_ID,
+      id: '30000000-0000-4000-8000-000000000033',
+      runId: '30000000-0000-4000-8000-000000000011',
+      attemptId: ATTEMPT_ID,
+      taskId: 'cvc.billing.test',
+      invocationNo: 3,
+      status: 'cancelled',
+      provider: 'mimo',
+      model: 'mimo-v2.5-tts',
+      inputHash: '4'.repeat(64),
+      usagePeriodId: period.id,
+      billingStatus: 'released',
+      settledCnyMicros: BigInt(0),
+      usageStatus: 'reported',
+      usage: {
+        schemaVersion: 1,
+        kind: 'text',
+        inputTokens: 500,
+        outputTokens: 500,
+      },
+      settledAt: new Date('2026-07-29T03:00:00.000Z'),
+      completedAt: new Date('2026-07-29T03:00:00.000Z'),
+    },
+  ])
+  const { getBillingProjection } = await import('./period-service')
+  const projection = await runInAuthContext(
+    { workspaceId: WORKSPACE_ID, userId: USER_ID },
+    () => getBillingProjection(),
+  )
+  expect(projection.usage.invocationCount).toBe(2)
+  expect(projection.providerCalls).toEqual({ stepfun: 1, mimo: 0, gemini: 1 })
+  expect(projection.tokenUsage).toEqual({ inputTokens: 12, outputTokens: 3 })
+  expect(projection.lastInvocationAt).toBe(later.toISOString())
 })
 
 it('audits a zero-priced managed invocation instead of bypassing the ledger', async () => {

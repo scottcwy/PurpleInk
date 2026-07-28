@@ -118,11 +118,13 @@ export async function getBillingProjection(): Promise<BillingProjection> {
   const invocations = await database.select({
     provider: aiInvocations.provider,
     usage: aiInvocations.usage,
-    createdAt: aiInvocations.createdAt,
+    usageStatus: aiInvocations.usageStatus,
+    settledAt: aiInvocations.settledAt,
   }).from(aiInvocations).where(and(
     eq(aiInvocations.workspaceId, workspaceId),
     eq(aiInvocations.usagePeriodId, period.id),
-  )).orderBy(desc(aiInvocations.createdAt))
+    eq(aiInvocations.billingStatus, 'settled'),
+  )).orderBy(desc(aiInvocations.settledAt))
   const providerCalls = { stepfun: 0, mimo: 0, gemini: 0 }
   let inputTokens = 0
   let outputTokens = 0
@@ -131,10 +133,18 @@ export async function getBillingProjection(): Promise<BillingProjection> {
     if (provider.includes('step')) providerCalls.stepfun += 1
     else if (provider.includes('mimo')) providerCalls.mimo += 1
     else if (provider.includes('gemini')) providerCalls.gemini += 1
-    if (invocation.usage && typeof invocation.usage.inputTokens === 'number') {
+    if (
+      invocation.usageStatus === 'reported'
+      && invocation.usage
+      && typeof invocation.usage.inputTokens === 'number'
+    ) {
       inputTokens += invocation.usage.inputTokens
     }
-    if (invocation.usage && typeof invocation.usage.outputTokens === 'number') {
+    if (
+      invocation.usageStatus === 'reported'
+      && invocation.usage
+      && typeof invocation.usage.outputTokens === 'number'
+    ) {
       outputTokens += invocation.usage.outputTokens
     }
   }
@@ -154,7 +164,7 @@ export async function getBillingProjection(): Promise<BillingProjection> {
     inputTokens,
     outputTokens,
     providerCalls,
-    lastInvocationAt: invocations[0]?.createdAt ?? null,
+    lastInvocationAt: invocations[0]?.settledAt ?? null,
     canRedeem: membership?.role === 'owner',
   })
 }

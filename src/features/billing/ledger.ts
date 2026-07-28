@@ -62,7 +62,13 @@ export async function reserveManagedInvocation(
         provider: input.create.provider,
         model: input.create.model,
         inputHash: input.create.inputHash,
-      }).returning()
+      }).onConflictDoNothing().returning()
+      if (!invocation) {
+        ;[invocation] = await tx.select().from(aiInvocations).where(and(
+          eq(aiInvocations.workspaceId, workspaceId),
+          eq(aiInvocations.id, input.invocationId),
+        )).for('update')
+      }
     }
     if (!invocation) throw new Error('AI invocation does not exist')
     if (invocation.billingStatus !== 'unreserved') {
