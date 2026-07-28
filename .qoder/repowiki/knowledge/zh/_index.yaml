@@ -1,0 +1,82 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: zh-CN
+branch: yusheng/two-part-merge
+nodes_managed: true
+exported_at: "2026-07-27T18:42:25Z"
+modules:
+    "":
+        dir_name: PurpleInk 前端画布应用（Next.js + Worker 多包工作区）
+        title: PurpleInk 前端画布应用（Next.js + Worker 多包工作区）
+        scope:
+            - package.json
+            - pnpm-workspace.yaml
+            - next.config.ts
+            - tsconfig.json
+            - vitest.config.ts
+            - vitest.pg.config.ts
+            - drizzle.config.ts
+            - Dockerfile
+            - .dockerignore
+            - .env.example
+            - .gitignore
+            - .prettierignore
+            - .prettierrc
+            - AGENTS.md
+            - Agent采集设计.md
+            - LICENSE
+            - PRD_PurpleInk.md
+            - README.md
+            - docker-compose.dev.yml
+            - docker-compose.prod.yml
+            - eslint.config.mjs
+            - pnpm-lock.yaml
+            - postcss.config.mjs
+        source_files: []
+        children:
+            - deploy
+            - docs
+            - scripts
+            - tests
+        depends_on: []
+        related_to: []
+    deploy:
+        dir_name: 反向代理（Caddy）容器化部署
+        title: 反向代理（Caddy）容器化部署
+        scope:
+            - deploy/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: scripts
+    docs:
+        dir_name: 项目文档与问题追踪体系
+        title: 项目文档与问题追踪体系
+        scope:
+            - docs/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    scripts:
+        dir_name: 开发、迁移与验证脚本集
+        title: 开发、迁移与验证脚本集
+        scope:
+            - scripts/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: deploy
+            - path: tests
+    tests:
+        dir_name: 测试套件（Vitest 契约与集成测试）
+        title: 测试套件（Vitest 契约与集成测试）
+        scope:
+            - tests/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: scripts
