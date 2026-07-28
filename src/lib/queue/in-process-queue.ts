@@ -1,6 +1,6 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import os from 'node:os'
-import { and, asc, eq, like, notInArray } from 'drizzle-orm'
+import { and, asc, eq, like, lte, notInArray, sql } from 'drizzle-orm'
 import {
   currentWorkspaceId,
   runInAuthContext,
@@ -12,13 +12,16 @@ import {
   ACTIVE_WORKFLOW_VERSION,
   serializeWorkflowVersion,
 } from '@/lib/workflow/version'
+import { parseCheckpoint, queueFingerprint } from './attempt-checkpoint'
+import {
+  HEARTBEAT_INTERVAL_MS,
+  SWEEP_INTERVAL_MS,
+  leaseDeadline,
+  renewLeases,
+  sweepExpiredLeases,
+  withExecutionTimeout,
+} from './lease'
 import type { JobHandler, LaneQuotas, QueueAdapter, QueueJob } from './types'
-
-interface LegacyQueueCheckpoint {
-  schemaVersion: number
-  kind: string
-  payload: Record<string, unknown>
-}
 
 /** 未在 `start(lanes)` 中显式配额的 kind 落入此通道，固定配额 1。 */
 const FALLBACK_LANE = '__fallback__'
@@ -27,7 +30,8 @@ const FALLBACK_LANE_QUOTA = 1
 export const DEFAULT_DIRECTOR_STAGE_CONCURRENCY = 12
 
 export function defaultRenderShotConcurrency(): number {
-  return Math.max(1, Math.floor(os.cpus().length / 2))
+  // 容器 cgroup 限额下 cpus() 会高估；availableParallelism 更贴近真实可用并行度。
+  return Math.min(8, Math.max(1, os.availableParallelism()))
 }
 
 function defaultLaneQuotas(): Record<string, number> {
@@ -62,7 +66,11 @@ type ClaimFilter = { kind: string } | { excludeKinds: string[] }
 export class InProcessQueue implements QueueAdapter {
   private readonly handlers = new Map<string, JobHandler>()
   private timer: ReturnType<typeof setInterval> | null = null
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null
+  private sweepTimer: ReturnType<typeof setInterval> | null = null
   private readonly running = new Map<string, number>()
+  /** 本进程当前持有的 running attempt；心跳只续租这些。 */
+  private readonly heldAttempts = new Set<string>()
   private lanes: Record<string, number> = {}
 
   async enqueue(
@@ -114,12 +122,45 @@ export class InProcessQueue implements QueueAdapter {
     if (this.timer) return
     this.lanes = resolved
     this.timer = setInterval(() => void this.tick(), 200)
+    this.heartbeatTimer = setInterval(
+      () => void this.heartbeat(),
+      HEARTBEAT_INTERVAL_MS
+    )
+    this.sweepTimer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS)
+    // 启动即回收上个进程崩溃遗留的僵尸 attempt，不等首个 sweep 周期。
+    void this.sweep()
   }
 
   stop(): void {
     if (this.timer) {
       clearInterval(this.timer)
       this.timer = null
+    }
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer)
+      this.heartbeatTimer = null
+    }
+    if (this.sweepTimer) {
+      clearInterval(this.sweepTimer)
+      this.sweepTimer = null
+    }
+  }
+
+  private async heartbeat(): Promise<void> {
+    if (this.heldAttempts.size === 0) return
+    try {
+      await renewLeases(await getDb(), [...this.heldAttempts])
+    } catch (error) {
+      // 续租失败不能打断消费循环；持续失败的后果是租约过期被 sweep 回收。
+      console.error('[queue] 租约续期失败', error)
+    }
+  }
+
+  private async sweep(): Promise<void> {
+    try {
+      await sweepExpiredLeases(await getDb())
+    } catch (error) {
+      console.error('[queue] 僵尸 attempt 回收失败', error)
     }
   }
 
@@ -144,9 +185,13 @@ export class InProcessQueue implements QueueAdapter {
     while ((this.running.get(laneKey) ?? 0) < quota) {
       const job = await this.claim(filter)
       if (!job) return
+      this.heldAttempts.add(job.id)
       this.running.set(laneKey, (this.running.get(laneKey) ?? 0) + 1)
+      // run() 已把超时也收敛为正常返回，finally 只会执行一次：
+      // 后台残留的 handler promise 不会重复递减计数或重复释放持有集合。
       void this.run(job).finally(() => {
         this.running.set(laneKey, (this.running.get(laneKey) ?? 0) - 1)
+        this.heldAttempts.delete(job.id)
       })
     }
   }
@@ -177,7 +222,12 @@ export class InProcessQueue implements QueueAdapter {
         .where(
           // 不按 workspace 过滤：消费者要处理全部 workspace 的作业，
           // 归属由领到的 attempt 行自身的 workspaceId 决定（PLAN-002 §5.3）。
-          and(eq(taskAttempts.status, 'queued'), kindCondition)
+          // visible_at 非空且默认 now()，直接比较即可（退避重排属阶段 2）。
+          and(
+            eq(taskAttempts.status, 'queued'),
+            lte(taskAttempts.visibleAt, sql`now()`),
+            kindCondition
+          )
         )
         .orderBy(asc(taskAttempts.createdAt), asc(taskAttempts.id))
         .limit(1)
@@ -185,7 +235,12 @@ export class InProcessQueue implements QueueAdapter {
       if (!row) return null
       const [claimed] = await transaction
         .update(taskAttempts)
-        .set({ status: 'running', startedAt: new Date(), updatedAt: new Date() })
+        .set({
+          status: 'running',
+          leaseExpiresAt: leaseDeadline(),
+          startedAt: new Date(),
+          updatedAt: new Date(),
+        })
         .where(
           and(
             eq(taskAttempts.workspaceId, row.workspaceId),
@@ -235,9 +290,11 @@ export class InProcessQueue implements QueueAdapter {
       return
     }
     try {
-      await runInAuthContext(
-        { workspaceId: job.workspaceId, userId: SYSTEM_USER_ID },
-        () => handler(job)
+      await withExecutionTimeout(job.kind, () =>
+        runInAuthContext(
+          { workspaceId: job.workspaceId, userId: SYSTEM_USER_ID },
+          () => handler(job)
+        )
       )
       await completeAttempt(database, job.workspaceId, job.id, 'succeeded')
     } catch (err) {
@@ -249,38 +306,6 @@ export class InProcessQueue implements QueueAdapter {
         err instanceof Error ? err.message : String(err)
       )
     }
-  }
-}
-
-function queueFingerprint(
-  kind: string,
-  payload: Record<string, unknown>
-): string {
-  return createHash('sha256')
-    .update(kind)
-    .update('\0')
-    .update(JSON.stringify(payload))
-    .digest('hex')
-}
-
-function parseCheckpoint(value: unknown): LegacyQueueCheckpoint {
-  if (!value || typeof value !== 'object') {
-    throw new Error('legacy queue checkpoint is invalid')
-  }
-  const record = value as Record<string, unknown>
-  if (
-    record.schemaVersion !== 1 ||
-    typeof record.kind !== 'string' ||
-    !record.payload ||
-    typeof record.payload !== 'object' ||
-    Array.isArray(record.payload)
-  ) {
-    throw new Error('legacy queue checkpoint is invalid')
-  }
-  return {
-    schemaVersion: 1,
-    kind: record.kind,
-    payload: record.payload as Record<string, unknown>,
   }
 }
 

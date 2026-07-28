@@ -113,6 +113,21 @@ describe('classifyWorkflowError', () => {
     })
   })
 
+  it('marks a lease-expired interruption as retryable TASK_INTERRUPTED', () => {
+    // 租约过期回收（sweepExpiredLeases）写入的原始报文：进程中断不是业务失败，
+    // 重试必须可行，且不得被误判成外部 provider 或产物问题。
+    expect(
+      classifyWorkflowError(new Error('执行进程中断，租约过期自动回收'), {
+        stage: 'INGEST',
+      })
+    ).toEqual({
+      code: 'TASK_INTERRUPTED',
+      stage: 'INGEST',
+      message: '执行进程中断，任务已自动回收，可重试',
+      retryable: true,
+    })
+  })
+
   it('marks a route/capability contract mismatch as a non-retryable configuration issue', () => {
     class RouteContractError extends Error {
       override readonly name = 'RouteContractError'

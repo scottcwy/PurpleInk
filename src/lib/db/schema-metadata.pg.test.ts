@@ -253,7 +253,8 @@ it('uses UUID identities, bigint revisions, and timestamptz suffixes', async () 
     SELECT table_name, data_type FROM information_schema.columns
     WHERE table_schema = 'public' AND right(column_name, 3) = '_at'
   `
-  expect(times).toHaveLength(44)
+  // 0005 迁移给 task_attempts 增加 lease_expires_at / visible_at 两列。
+  expect(times).toHaveLength(46)
   expect(new Set(times.map((row) => row.table_name))).toEqual(new Set(TABLES))
   expect(times.every((row) => row.data_type === 'timestamp with time zone')).toBe(true)
 })

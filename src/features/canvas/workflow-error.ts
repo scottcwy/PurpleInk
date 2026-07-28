@@ -6,6 +6,7 @@ export type WorkflowErrorCode =
   | 'STAGE_INPUT_INVALID'
   | 'ROUTE_CONTRACT_INVALID'
   | 'MEDIA_NOT_READY'
+  | 'TASK_INTERRUPTED'
   | 'CONFIGURATION_BLOCKED'
   | 'PROVIDER_FAILED'
   | 'FABRICATE_FAILED'
@@ -99,6 +100,17 @@ const MESSAGE_RULES: ReadonlyArray<readonly [RegExp, ClassifiedError]> = [
       code: 'MEDIA_NOT_READY',
       message:
         '本项目的配音媒体尚未就绪。配音是异步生成的，请先完成或重试 INGEST 的配音，再执行依赖音频时序的阶段。',
+      retryable: true,
+    },
+  ],
+  [
+    // 租约过期回收（lease.ts sweepExpiredLeases）写入的报文。进程中断不是业务
+    // 失败，重试可行；报文不含「缺少/超时」等关键词，但仍排在笼统规则前，
+    // 避免未来文案调整后被误归成 provider / 产物问题（模式 B/D）。
+    /执行进程中断|租约过期/,
+    {
+      code: 'TASK_INTERRUPTED',
+      message: '执行进程中断，任务已自动回收，可重试',
       retryable: true,
     },
   ],

@@ -100,6 +100,10 @@ export const taskAttempts = pgTable(
     fingerprint: text('fingerprint').notNull(),
     checkpoint: jsonb('checkpoint').$type<VersionedPayload>().notNull(),
     failure: jsonb('failure').$type<VersionedPayload>(),
+    // 租约到期时间：running attempt 由持有进程心跳续期；过期即视为僵尸，由 sweep 回收。
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+    // 可见时间：claim 只领取 visible_at <= now() 的 attempt（退避重排属阶段 2，本阶段只消费列）。
+    visibleAt: timestamp('visible_at', { withTimezone: true }).defaultNow().notNull(),
     revision: bigint('revision', { mode: 'number' }).default(0).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
