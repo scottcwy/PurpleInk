@@ -1,7 +1,7 @@
 # AI托管服务架构
 
 <cite>
-**本文引用的文件**   
+**本文引用的文件**
 - [package.json](file://package.json)
 - [next.config.ts](file://next.config.ts)
 - [tsconfig.json](file://tsconfig.json)
@@ -35,6 +35,8 @@
 - [src/features/ai/managed-credentials.ts](file://src/features/ai/managed-credentials.ts)
 - [src/features/ai/managed-fallback.ts](file://src/features/ai/managed-fallback.ts)
 - [src/features/ai/managed-service.ts](file://src/features/ai/managed-service.ts)
+- [src/features/ai/managed-model-catalog-repository.ts](file://src/features/ai/managed-model-catalog-repository.ts)
+- [src/features/ai/managed-vision-executor.ts](file://src/features/ai/managed-vision-executor.ts)
 - [src/features/audio/narration-queue-handler.ts](file://src/features/audio/narration-queue-handler.ts)
 - [src/features/audio/repository.ts](file://src/features/audio/repository.ts)
 - [src/features/audio/runtime-repository.ts](file://src/features/audio/runtime-repository.ts)
@@ -50,12 +52,15 @@
 </cite>
 
 ## 更新摘要
-**变更内容**   
+**变更内容**
 - 新增统一平台模型服务，集中管理成本计量与凭据管理
 - 实现免费Gemini访问门控机制
 - 增强StepFun、MiMo和Gemini服务的回退过滤能力
 - 优化AI网关的提供商管理与路由策略
 - **最新变更**：托管服务组件支持通过路由解析的新凭据消费模式，保持与更新后的提供商接口兼容性
+- **重要更新**：新增托管模型目录仓库(managed-model-catalog-repository.ts)，重构了模型路由系统和提供商设置投影逻辑，增强了网关和降级机制的健壮性
+- **新增功能**：引入托管视觉执行器(managed-vision-executor.ts)，提供专门的视觉AI操作处理能力
+- **增强功能**：改进供应商调用的预订结算机制，提升资源管理和成本控制能力
 
 ## 目录
 1. [简介](#简介)
@@ -72,7 +77,7 @@
 ## 简介
 本仓库实现了一个面向AI的"托管服务"平台，提供多模型提供商的统一接入、编排与调度能力，涵盖内容生成（导演/流水线）、TTS语音合成、媒体渲染导出、采集代理等关键能力。系统采用前后端分离：前端基于Next.js应用，后端通过独立的Node服务承载API、作业调度与外部AI/TTS/渲染能力的集成。部署层面支持Docker与反向代理，便于本地开发与生产环境一致化运行。
 
-**最新更新**：平台现已集成统一的模型服务层，实现了集中化的成本计量、托管凭据管理和智能回退机制，为StepFun、MiMo和Gemini等服务提供了增强的稳定性和成本控制能力。**最新变更**：托管服务组件已更新以支持通过路由解析的新凭据消费模式，同时保持与更新后的提供商接口的兼容性。
+**最新更新**：平台现已集成统一的模型服务层，实现了集中化的成本计量、托管凭据管理和智能回退机制，为StepFun、MiMo和Gemini等服务提供了增强的稳定性和成本控制能力。**最新变更**：托管服务组件已更新以支持通过路由解析的新凭据消费模式，同时保持与更新后的提供商接口的兼容性。**重要更新**：新增了托管模型目录仓库，重构了模型路由系统和提供商设置投影逻辑，显著增强了网关和降级机制的健壮性和可扩展性。**新增功能**：引入了托管视觉执行器，专门处理视觉AI操作，包括图像识别、OCR、视觉问答等功能，并通过改进的预订结算机制优化供应商调用成本。**重要更新**：提供商设置投影逻辑和降级机制得到显著增强，提升了系统的健壮性和可维护性。
 
 ## 项目结构
 - 前端应用位于 src 目录，包含页面路由、业务功能模块（features）与通用UI组件（components）。
@@ -101,6 +106,8 @@ AI_Credentials["托管凭据<br/>src/features/ai/managed-credentials.ts"]
 AI_Metering["成本计量<br/>src/features/ai/managed-service.ts"]
 AI_Fallback["回退机制<br/>src/features/ai/managed-fallback.ts"]
 AI_Routing["路由解析<br/>src/features/ai/model-routing.ts"]
+AI_ModelCatalog["模型目录仓库<br/>src/features/ai/managed-model-catalog-repository.ts"]
+AI_VisionExecutor["视觉执行器<br/>src/features/ai/managed-vision-executor.ts"]
 end
 subgraph "部署"
 DP_Proxy["反向代理<br/>deploy/reverse-proxy"]
@@ -120,12 +127,14 @@ AI_Gateway --> AI_Credentials
 AI_Gateway --> AI_Metering
 AI_Gateway --> AI_Fallback
 AI_Gateway --> AI_Routing
+AI_Gateway --> AI_ModelCatalog
+AI_Gateway --> AI_VisionExecutor
 DP_Proxy --> BE_API
 DP_Dev --> BE_API
 DP_Prod --> BE_API
 ```
 
-**图示来源** 
+**图示来源**
 - [server/src/server/api.ts](file://server/src/server/api.ts)
 - [server/src/server/job-runner.ts](file://server/src/server/job-runner.ts)
 - [server/src/server/job-store.ts](file://server/src/server/job-store.ts)
@@ -137,6 +146,8 @@ DP_Prod --> BE_API
 - [src/features/ai/managed-service.ts](file://src/features/ai/managed-service.ts)
 - [src/features/ai/managed-fallback.ts](file://src/features/ai/managed-fallback.ts)
 - [src/features/ai/model-routing.ts](file://src/features/ai/model-routing.ts)
+- [src/features/ai/managed-model-catalog-repository.ts](file://src/features/ai/managed-model-catalog-repository.ts)
+- [src/features/ai/managed-vision-executor.ts](file://src/features/ai/managed-vision-executor.ts)
 - [docker-compose.dev.yml](file://docker-compose.dev.yml)
 - [docker-compose.prod.yml](file://docker-compose.prod.yml)
 - [deploy/reverse-proxy/Dockerfile](file://deploy/reverse-proxy/Dockerfile)
@@ -155,6 +166,9 @@ DP_Prod --> BE_API
 - **新增** 集中成本计量：跟踪和记录各模型调用的成本，支持配额控制和预算告警。
 - **新增** 智能回退机制：当主提供商不可用时自动切换到备用提供商。
 - **新增** 路由解析机制：通过路由解析支持新的凭据消费模式，提升提供商接口兼容性。
+- **重要新增** 托管模型目录仓库：统一管理模型元数据、版本信息和可用性状态，提供模型发现和选择能力。
+- **新增** 托管视觉执行器：专门处理视觉AI操作，包括图像识别、OCR、视觉问答等视觉相关任务。
+- **增强** 预订结算机制：改进供应商调用的资源管理和成本控制，提升成本效益。
 - 作业调度与持久化：将耗时任务（渲染、TTS、采集、流水线）抽象为作业，提供队列执行与状态跟踪。
 - 编排与流水线：将复杂流程拆分为阶段（Stage），按顺序或条件执行，支持结果回写与恢复。
 - TTS语音合成：从文本到音频的端到端处理，包括队列、存储与计费计量。
@@ -168,6 +182,8 @@ DP_Prod --> BE_API
 - [src/features/ai/managed-service.ts](file://src/features/ai/managed-service.ts)
 - [src/features/ai/managed-fallback.ts](file://src/features/ai/managed-fallback.ts)
 - [src/features/ai/model-routing.ts](file://src/features/ai/model-routing.ts)
+- [src/features/ai/managed-model-catalog-repository.ts](file://src/features/ai/managed-model-catalog-repository.ts)
+- [src/features/ai/managed-vision-executor.ts](file://src/features/ai/managed-vision-executor.ts)
 - [server/src/server/job-runner.ts](file://server/src/server/job-runner.ts)
 - [server/src/server/job-store.ts](file://server/src/server/job-store.ts)
 - [server/src/compose/run-pipeline.ts](file://server/src/compose/run-pipeline.ts)
@@ -176,7 +192,7 @@ DP_Prod --> BE_API
 - [server/src/capture/ai-capture-agent.ts](file://server/src/capture/ai-capture-agent.ts)
 
 ## 架构总览
-整体架构遵循"前端请求 -> API网关 -> 作业调度 -> 领域服务（AI/TTS/渲染/采集）-> 存储/外部服务"的分层模式。反向代理负责鉴权与流量转发，作业运行器保证异步任务的可靠执行，领域服务通过适配器对接不同提供商。**新增的统一AI托管服务层**提供了集中化的凭据管理、成本计量、智能回退和路由解析能力。
+整体架构遵循"前端请求 -> API网关 -> 作业调度 -> 领域服务（AI/TTS/渲染/采集）-> 存储/外部服务"的分层模式。反向代理负责鉴权与流量转发，作业运行器保证异步任务的可靠执行，领域服务通过适配器对接不同提供商。**新增的统一AI托管服务层**提供了集中化的凭据管理、成本计量、智能回退、路由解析、模型目录管理和视觉执行能力，显著增强了系统的健壮性和可扩展性。**新增的视觉执行器**专门处理视觉相关AI操作，通过改进的预订结算机制优化资源使用。
 
 ```mermaid
 graph TB
@@ -193,7 +209,10 @@ AI_GW --> Credentials["托管凭据<br/>src/features/ai/managed-credentials.ts"]
 AI_GW --> Metering["成本计量<br/>src/features/ai/managed-service.ts"]
 AI_GW --> Fallback["回退机制<br/>src/features/ai/managed-fallback.ts"]
 AI_GW --> Routing["路由解析<br/>src/features/ai/model-routing.ts"]
+AI_GW --> ModelCatalog["模型目录仓库<br/>src/features/ai/managed-model-catalog-repository.ts"]
+AI_GW --> VisionExecutor["视觉执行器<br/>src/features/ai/managed-vision-executor.ts"]
 AI_GW --> Providers["提供商适配层<br/>src/features/ai/*-adapter.ts"]
+VisionExecutor --> VisionProviders["视觉提供商<br/>图像识别/OCR/视觉问答"]
 TTS --> AudioRepo["音频仓储<br/>src/features/audio/repository.ts"]
 Render --> MediaStore["媒体存储/文件系统"]
 Capture --> BrowserDriver["浏览器驱动/Playwright"]
@@ -201,9 +220,12 @@ Credentials --> SecureStorage["安全存储"]
 Metering --> CostDB["成本数据库"]
 Fallback --> ProviderHealth["提供商健康检查"]
 Routing --> RouteResolver["路由解析器<br/>新凭据消费模式"]
+ModelCatalog --> ModelRegistry["模型注册表"]
+ModelCatalog --> VersionManager["版本管理器"]
+VisionExecutor --> ReservationSettlement["预订结算机制<br/>资源管理"]
 ```
 
-**图示来源** 
+**图示来源**
 - [src/app/api/render/route.ts](file://src/app/api/render/route.ts)
 - [src/app/api/director/pipeline/route.ts](file://src/app/api/director/pipeline/route.ts)
 - [src/app/api/jobs/[id]/route.ts](file://src/app/api/jobs/[id]/route.ts)
@@ -214,6 +236,8 @@ Routing --> RouteResolver["路由解析器<br/>新凭据消费模式"]
 - [src/features/ai/managed-service.ts](file://src/features/ai/managed-service.ts)
 - [src/features/ai/managed-fallback.ts](file://src/features/ai/managed-fallback.ts)
 - [src/features/ai/model-routing.ts](file://src/features/ai/model-routing.ts)
+- [src/features/ai/managed-model-catalog-repository.ts](file://src/features/ai/managed-model-catalog-repository.ts)
+- [src/features/ai/managed-vision-executor.ts](file://src/features/ai/managed-vision-executor.ts)
 - [server/src/tts/orchestrate.ts](file://server/src/tts/orchestrate.ts)
 - [src/features/render/export-service.ts](file://src/features/render/export-service.ts)
 - [server/src/capture/ai-capture-agent.ts](file://server/src/capture/ai-capture-agent.ts)
@@ -230,8 +254,10 @@ Routing --> RouteResolver["路由解析器<br/>新凭据消费模式"]
   - OpenAI兼容、Gemini、Mimo、StepFun等适配器：封装具体协议与载荷。
   - 配置与校验：加载环境变量、合并默认值、校验必填项。
   - **新增** 路由解析器：支持新的凭据消费模式，提升接口兼容性。
+  - **重要新增** 模型目录仓库：统一管理模型元数据和版本信息。
+  - **新增** 视觉执行器集成：专门处理视觉相关AI操作。
 
-**更新**：新增了托管凭据管理、集中成本计量、智能回退机制和路由解析功能，提升了系统的稳定性、成本控制能力和接口兼容性。
+**更新**：新增了托管凭据管理、集中成本计量、智能回退机制、路由解析功能和模型目录仓库，显著提升了系统的稳定性、成本控制能力、接口兼容性和模型管理能力。**新增的视觉执行器**为视觉AI操作提供了专门的处理能力，通过改进的预订结算机制优化资源使用。
 
 ```mermaid
 classDiagram
@@ -247,12 +273,15 @@ class ManagedGateway {
 +checkCostLimit()
 +validateCredentials()
 +resolveRoute()
++queryModelCatalog()
++executeVisionTask()
 }
 class ModelRouting {
 +selectProvider(target, context)
 +score(providers)
 +healthCheck()
 +resolveCredentials()
++applySettingsProjection()
 }
 class ManagedCredentials {
 +store(key, value)
@@ -266,17 +295,34 @@ class CostMetering {
 +calculateCost()
 +checkBudget()
 +generateReport()
++enhancedReservationSettlement()
 }
 class FallbackManager {
 +configureFallbacks()
 +detectFailure()
 +switchProvider()
 +monitorHealth()
++enhancedResilience()
 }
 class RouteResolver {
 +parseRoute(route)
 +matchProvider(route)
 +validateCredentials(route)
++newCredentialMode()
+}
+class ModelCatalogRepository {
++getModelInfo(modelId)
++getAvailableModels()
++checkModelVersion()
++getProviderMapping()
++updateModelStatus()
+}
+class VisionExecutor {
++processImage(image)
++performOCR(text)
++answerVisualQuestions(question)
++handleVisionTasks(task)
++manageResources()
 }
 class OpenAICompatibleConfig {
 +loadEnv()
@@ -309,6 +355,8 @@ ManagedGateway --> ManagedCredentials : "凭据管理"
 ManagedGateway --> CostMetering : "成本计量"
 ManagedGateway --> FallbackManager : "回退控制"
 ManagedGateway --> RouteResolver : "路由解析"
+ManagedGateway --> ModelCatalogRepository : "模型查询"
+ManagedGateway --> VisionExecutor : "视觉执行"
 ManagedGateway --> OpenAICompatibleConfig : "配置"
 ManagedGateway --> GeminiConfig : "配置"
 ManagedGateway --> MimoConfig : "配置"
@@ -317,13 +365,15 @@ ManagedGateway --> MimoAdapter : "调用"
 ManagedGateway --> GeminiAdapter : "调用"
 ```
 
-**图示来源** 
+**图示来源**
 - [src/features/ai/provider-registry.ts](file://src/features/ai/provider-registry.ts)
 - [src/features/ai/managed-gateway.ts](file://src/features/ai/managed-gateway.ts)
 - [src/features/ai/model-routing.ts](file://src/features/ai/model-routing.ts)
 - [src/features/ai/managed-credentials.ts](file://src/features/ai/managed-credentials.ts)
 - [src/features/ai/managed-service.ts](file://src/features/ai/managed-service.ts)
 - [src/features/ai/managed-fallback.ts](file://src/features/ai/managed-fallback.ts)
+- [src/features/ai/managed-model-catalog-repository.ts](file://src/features/ai/managed-model-catalog-repository.ts)
+- [src/features/ai/managed-vision-executor.ts](file://src/features/ai/managed-vision-executor.ts)
 - [src/features/ai/openai-compatible-config.ts](file://src/features/ai/openai-compatible-config.ts)
 - [src/features/ai/gemini-config.ts](file://src/features/ai/gemini-config.ts)
 - [src/features/ai/mimo-config.ts](file://src/features/ai/mimo-config.ts)
@@ -339,12 +389,78 @@ ManagedGateway --> GeminiAdapter : "调用"
 - [src/features/ai/managed-credentials.ts](file://src/features/ai/managed-credentials.ts)
 - [src/features/ai/managed-service.ts](file://src/features/ai/managed-service.ts)
 - [src/features/ai/managed-fallback.ts](file://src/features/ai/managed-fallback.ts)
+- [src/features/ai/managed-model-catalog-repository.ts](file://src/features/ai/managed-model-catalog-repository.ts)
+- [src/features/ai/managed-vision-executor.ts](file://src/features/ai/managed-vision-executor.ts)
 - [src/features/ai/openai-compatible-config.ts](file://src/features/ai/openai-compatible-config.ts)
 - [src/features/ai/gemini-config.ts](file://src/features/ai/gemini-config.ts)
 - [src/features/ai/mimo-config.ts](file://src/features/ai/mimo-config.ts)
 - [src/features/ai/stepfun-adapter.ts](file://src/features/ai/stepfun-adapter.ts)
 - [src/features/ai/mimo-adapter.ts](file://src/features/ai/mimo-adapter.ts)
 - [src/features/ai/gemini-adapter.ts](file://src/features/ai/gemini-adapter.ts)
+
+### 托管视觉执行器
+- 职责：专门处理视觉相关的AI操作，包括图像识别、OCR文字识别、视觉问答等功能。
+- 关键特性：
+  - 视觉任务处理：支持多种视觉AI操作的统一接口。
+  - 资源管理：通过预订结算机制优化资源使用和成本控制。
+  - 提供商适配：集成多个视觉AI提供商，提供统一调用接口。
+  - 错误处理：完善的异常处理和重试机制。
+  - **新增功能**：通过改进的预订结算机制，显著提升资源利用效率和成本控制能力。
+
+```mermaid
+sequenceDiagram
+participant Client as "客户端"
+participant Gateway as "AI网关"
+participant VisionExec as "视觉执行器"
+participant VisionProviders as "视觉提供商"
+participant Settlement as "预订结算"
+Client->>Gateway : "提交视觉任务"
+Gateway->>VisionExec : "处理视觉请求"
+VisionExec->>VisionProviders : "调用视觉API"
+VisionProviders-->>VisionExec : "返回视觉结果"
+VisionExec->>Settlement : "结算资源使用"
+Settlement-->>VisionExec : "确认结算完成"
+VisionExec-->>Gateway : "返回处理结果"
+Gateway-->>Client : "返回视觉处理结果"
+```
+
+**图示来源**
+- [src/features/ai/managed-vision-executor.ts](file://src/features/ai/managed-vision-executor.ts)
+
+**章节来源**
+- [src/features/ai/managed-vision-executor.ts](file://src/features/ai/managed-vision-executor.ts)
+
+### 托管模型目录仓库
+- 职责：统一管理模型元数据、版本信息和可用性状态，提供模型发现和选择能力。
+- 关键特性：
+  - 模型注册：动态注册新模型和提供商映射。
+  - 版本管理：跟踪模型版本历史和兼容性。
+  - 可用性监控：实时监控模型可用性和性能指标。
+  - 智能选择：基于负载、成本和可用性选择最优模型。
+  - **重要更新**：改进了提供商设置投影逻辑，提升配置管理的灵活性。
+
+```mermaid
+sequenceDiagram
+participant Client as "客户端"
+participant Gateway as "AI网关"
+participant Catalog as "模型目录仓库"
+participant Registry as "模型注册表"
+participant Health as "健康检查"
+Client->>Gateway : "请求模型信息"
+Gateway->>Catalog : "查询可用模型"
+Catalog->>Registry : "获取模型元数据"
+Registry-->>Catalog : "返回模型信息"
+Catalog->>Health : "检查模型可用性"
+Health-->>Catalog : "返回健康状态"
+Catalog-->>Gateway : "返回可用模型列表"
+Gateway-->>Client : "返回模型选择结果"
+```
+
+**图示来源**
+- [src/features/ai/managed-model-catalog-repository.ts](file://src/features/ai/managed-model-catalog-repository.ts)
+
+**章节来源**
+- [src/features/ai/managed-model-catalog-repository.ts](file://src/features/ai/managed-model-catalog-repository.ts)
 
 ### 托管凭据管理
 - 职责：安全存储和管理各AI提供商的API密钥、令牌和其他认证信息。
@@ -374,7 +490,7 @@ Credentials-->>Gateway : "返回可用凭据"
 Gateway-->>Client : "使用凭据调用提供商"
 ```
 
-**图示来源** 
+**图示来源**
 - [src/features/ai/managed-credentials.ts](file://src/features/ai/managed-credentials.ts)
 
 **章节来源**
@@ -387,6 +503,7 @@ Gateway-->>Client : "使用凭据调用提供商"
   - 预算监控：设置月度/每日预算限制并触发告警。
   - 成本分析：生成详细的成本报告和使用趋势分析。
   - 配额管理：为不同用户提供不同的使用配额。
+  - **增强** 预订结算机制：通过改进的资源管理，提升成本控制的精确性和效率。
 
 ```mermaid
 flowchart TD
@@ -397,11 +514,12 @@ CheckBudget --> |超出| Alert["触发预算告警"]
 CheckBudget --> |正常| Allow["允许调用"]
 Alert --> Log["记录异常"]
 Allow --> Update["更新使用统计"]
-Update --> Report["生成报告"]
+Update --> Settlement["预订结算"]
+Settlement --> Report["生成报告"]
 Report --> End(["结束"])
 ```
 
-**图示来源** 
+**图示来源**
 - [src/features/ai/managed-service.ts](file://src/features/ai/managed-service.ts)
 
 **章节来源**
@@ -414,6 +532,7 @@ Report --> End(["结束"])
   - 自动切换：检测到故障时自动切换到备用提供商。
   - 负载均衡：在多个可用提供商间分配请求。
   - 快速恢复：主提供商恢复后自动切回。
+  - **重要更新**：增强了降级机制的健壮性，提供更可靠的故障恢复。
 
 ```mermaid
 stateDiagram-v2
@@ -427,7 +546,7 @@ Tertiary --> Primary : 主提供商恢复
 Fallback --> Primary : 快速恢复
 ```
 
-**图示来源** 
+**图示来源**
 - [src/features/ai/managed-fallback.ts](file://src/features/ai/managed-fallback.ts)
 
 **章节来源**
@@ -440,6 +559,7 @@ Fallback --> Primary : 快速恢复
   - 消费模式：支持多种凭据消费方式，提升接口兼容性。
   - 优先级排序：根据配置优先级选择最优提供商。
   - 动态调整：运行时动态调整路由策略。
+  - **重要更新**：改进了提供商设置投影逻辑，提升配置管理的灵活性和准确性。
 
 ```mermaid
 flowchart TD
@@ -452,7 +572,7 @@ ApplyCredentials --> CallProvider["调用提供商"]
 CallProvider --> Response["返回响应"]
 ```
 
-**图示来源** 
+**图示来源**
 - [src/features/ai/model-routing.ts](file://src/features/ai/model-routing.ts)
 
 **章节来源**
@@ -483,7 +603,7 @@ Client->>API : "GET /api/jobs/ : id (查询状态)"
 API-->>Client : "返回作业状态/结果"
 ```
 
-**图示来源** 
+**图示来源**
 - [src/app/api/jobs/[id]/route.ts](file://src/app/api/jobs/[id]/route.ts)
 - [server/src/server/job-runner.ts](file://server/src/server/job-runner.ts)
 - [server/src/server/job-store.ts](file://server/src/server/job-store.ts)
@@ -517,7 +637,7 @@ Done --> |是| Commit["提交最终结果"]
 Commit --> End(["结束"])
 ```
 
-**图示来源** 
+**图示来源**
 - [src/features/director/pipeline.ts](file://src/features/director/pipeline.ts)
 - [src/features/director/stage-runner.ts](file://src/features/director/stage-runner.ts)
 - [server/src/compose/run-pipeline.ts](file://server/src/compose/run-pipeline.ts)
@@ -553,7 +673,7 @@ Orchestrator->>RuntimeRepo : "更新运行时状态"
 API-->>Client : "返回任务ID/结果"
 ```
 
-**图示来源** 
+**图示来源**
 - [src/app/api/render/route.ts](file://src/app/api/render/route.ts)
 - [server/src/tts/orchestrate.ts](file://server/src/tts/orchestrate.ts)
 - [src/features/audio/narration-queue-handler.ts](file://src/features/audio/narration-queue-handler.ts)
@@ -585,7 +705,7 @@ Export --> Persist["持久化与索引"]
 Persist --> Done["返回结果"]
 ```
 
-**图示来源** 
+**图示来源**
 - [src/features/render/export-service.ts](file://src/features/render/export-service.ts)
 - [src/features/render/renderer.ts](file://src/features/render/renderer.ts)
 
@@ -614,7 +734,7 @@ Agent->>Store : "保存结构化结果"
 API-->>Client : "返回采集结果"
 ```
 
-**图示来源** 
+**图示来源**
 - [src/app/api/director/pipeline/route.ts](file://src/app/api/director/pipeline/route.ts)
 - [server/src/capture/ai-capture-agent.ts](file://server/src/capture/ai-capture-agent.ts)
 
@@ -624,7 +744,7 @@ API-->>Client : "返回采集结果"
 ## 依赖关系分析
 - 前端依赖Next.js生态，通过API路由与服务端通信。
 - 服务端依赖作业调度、存储抽象与外部AI/TTS/渲染服务。
-- **新增** AI托管服务层依赖凭据管理、成本计量、回退机制和路由解析。
+- **新增** AI托管服务层依赖凭据管理、成本计量、回退机制、路由解析、模型目录仓库和视觉执行器。
 - 部署依赖Docker与反向代理，确保网络与安全边界。
 
 ```mermaid
@@ -640,6 +760,8 @@ AI --> CRED["托管凭据"]
 AI --> METER["成本计量"]
 AI --> FALLBACK["回退机制"]
 AI --> ROUTE["路由解析"]
+AI --> CATALOG["模型目录仓库"]
+AI --> VISION["视觉执行器"]
 TTS --> AUDIO["音频仓储"]
 RND --> MEDIA["媒体存储"]
 CAP --> BROWSER["浏览器驱动"]
@@ -647,9 +769,11 @@ CRED --> SECURE["安全存储"]
 METER --> COSTDB["成本数据库"]
 FALLBACK --> HEALTH["健康检查"]
 ROUTE --> RESOLVER["路由解析器"]
+CATALOG --> REGISTRY["模型注册表"]
+VISION --> SETTLEMENT["预订结算"]
 ```
 
-**图示来源** 
+**图示来源**
 - [server/src/server/job-runner.ts](file://server/src/server/job-runner.ts)
 - [server/src/server/job-store.ts](file://server/src/server/job-store.ts)
 - [src/features/ai/managed-gateway.ts](file://src/features/ai/managed-gateway.ts)
@@ -657,6 +781,8 @@ ROUTE --> RESOLVER["路由解析器"]
 - [src/features/ai/managed-service.ts](file://src/features/ai/managed-service.ts)
 - [src/features/ai/managed-fallback.ts](file://src/features/ai/managed-fallback.ts)
 - [src/features/ai/model-routing.ts](file://src/features/ai/model-routing.ts)
+- [src/features/ai/managed-model-catalog-repository.ts](file://src/features/ai/managed-model-catalog-repository.ts)
+- [src/features/ai/managed-vision-executor.ts](file://src/features/ai/managed-vision-executor.ts)
 - [server/src/tts/orchestrate.ts](file://server/src/tts/orchestrate.ts)
 - [src/features/render/export-service.ts](file://src/features/render/export-service.ts)
 - [server/src/capture/ai-capture-agent.ts](file://server/src/capture/ai-capture-agent.ts)
@@ -676,6 +802,10 @@ ROUTE --> RESOLVER["路由解析器"]
 - **新增** 成本预检：在调用前检查预算限制，避免不必要的API调用。
 - **新增** 健康检查缓存：缓存提供商健康状态，减少探测频率。
 - **新增** 路由解析缓存：缓存路由解析结果，提升响应速度。
+- **重要新增** 模型目录缓存：缓存模型元数据和可用性状态，减少查询开销。
+- **重要新增** 提供商设置投影缓存：缓存提供商配置投影结果，提升配置处理效率。
+- **新增** 视觉任务缓存：缓存视觉处理结果，减少重复计算。
+- **新增** 预订结算优化：通过改进的资源管理机制，提升资源利用效率。
 
 ## 故障排查指南
 - 日志与诊断：启用结构化日志，记录作业生命周期、错误堆栈与指标。
@@ -686,13 +816,17 @@ ROUTE --> RESOLVER["路由解析器"]
 - **新增** 成本监控：设置成本阈值告警，及时发现异常使用情况。
 - **新增** 回退日志：记录提供商切换和健康状态变化，便于问题定位。
 - **新增** 路由调试：记录路由解析过程和消费模式选择，便于接口兼容性排查。
+- **重要新增** 模型目录监控：监控模型可用性和版本状态，及时发现模型问题。
+- **重要新增** 提供商设置投影调试：记录配置投影过程，便于配置问题排查。
+- **新增** 视觉执行器监控：监控视觉任务执行状态和资源使用情况。
+- **新增** 预订结算监控：监控资源结算情况和异常事件。
 
 **章节来源**
 - [server/src/lib/logger.ts](file://server/src/lib/logger.ts)
 - [server/src/lib/load-env.ts](file://server/src/lib/load-env.ts)
 
 ## 结论
-该AI托管服务通过统一网关、作业调度与领域服务分层，实现了多提供商接入、稳定编排与高效渲染/TTS能力。**新增的统一AI托管服务层**进一步增强了系统的可靠性、安全性和成本控制能力，通过集中化的凭据管理、成本计量、智能回退和路由解析机制，为StepFun、MiMo和Gemini等服务提供了更好的稳定性和经济性。**最新的路由解析功能**确保了与新凭据消费模式的兼容性，提升了系统的灵活性和可扩展性。配合容器化与反向代理，具备良好可扩展性与可运维性。建议持续完善监控告警、容量规划与成本治理，以提升整体稳定性与经济性。
+该AI托管服务通过统一网关、作业调度与领域服务分层，实现了多提供商接入、稳定编排与高效渲染/TTS能力。**新增的统一AI托管服务层**进一步增强了系统的可靠性、安全性和成本控制能力，通过集中化的凭据管理、成本计量、智能回退、路由解析、模型目录管理和视觉执行能力，为StepFun、MiMo和Gemini等服务提供了更好的稳定性和经济性。**新增的视觉执行器**专门处理视觉AI操作，通过改进的预订结算机制优化资源使用。**最新的路由解析功能和模型目录仓库**确保了与新凭据消费模式的兼容性，提升了系统的灵活性和可扩展性。**重要更新的提供商设置投影逻辑和增强的降级机制**显著提升了系统的健壮性和可维护性。配合容器化与反向代理，具备良好可扩展性与可运维性。建议持续完善监控告警、容量规划与成本治理，以提升整体稳定性与经济性。
 
 ## 附录
 - 开发环境与生产环境编排：参考 docker-compose 文件与反向代理配置。
@@ -701,6 +835,10 @@ ROUTE --> RESOLVER["路由解析器"]
 - **新增** AI服务配置：参考AI托管服务的配置选项和环境变量。
 - **新增** 成本管理：参考成本计量和预算控制的配置方法。
 - **新增** 路由配置：参考路由解析和凭据消费模式的配置方法。
+- **重要新增** 模型目录配置：参考模型目录仓库的配置和模型注册方法。
+- **重要新增** 提供商设置投影：参考提供商配置投影逻辑和自定义配置方法。
+- **新增** 视觉执行器配置：参考视觉AI操作的相关配置和参数设置。
+- **新增** 预订结算配置：参考资源管理和成本控制的配置方法。
 
 **章节来源**
 - [docker-compose.dev.yml](file://docker-compose.dev.yml)

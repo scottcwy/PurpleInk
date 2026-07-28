@@ -1,7 +1,7 @@
 # 管道编排API
 
 <cite>
-**本文档引用的文件**   
+**本文档引用的文件**
 - [src/app/api/director/pipeline/route.ts](file://src/app/api/director/pipeline/route.ts)
 - [src/app/api/director/stage/route.ts](file://src/app/api/director/stage/route.ts)
 - [src/app/api/director/stream/[nodeId]/route.ts](file://src/app/api/director/stream/[nodeId]/route.ts)
@@ -25,6 +25,13 @@
 - [server/src/compose/run-pipeline.ts](file://server/src/compose/run-pipeline.ts)
 </cite>
 
+## 更新摘要
+**所做更改**
+- 在管道创建接口中新增配额预验证机制
+- 添加成本池验证和402计费合同错误处理
+- 更新管道启动流程以包含配额检查步骤
+- 增强错误处理以支持标准化计费错误响应
+
 ## 目录
 1. [简介](#简介)
 2. [项目结构](#项目结构)
@@ -38,9 +45,10 @@
 10. [附录](#附录)
 
 ## 简介
-本文件面向“管道编排API”，系统化说明工作流管道的创建、配置与执行接口，涵盖以下关键主题：
+本文件面向"管道编排API"，系统化说明工作流管道的创建、配置与执行接口，涵盖以下关键主题：
 - 管道定义结构与节点依赖关系
 - 执行参数与运行上下文
+- **新增：配额预验证与计费管理**
 - 管道状态管理、进度跟踪与结果获取
 - 错误处理与恢复策略
 - 完整示例：基础管道、复杂工作流、错误处理场景
@@ -60,6 +68,7 @@ Client["客户端"] --> API_Pipeline["/api/director/pipeline<br/>创建/查询�
 Client --> API_Stage["/api/director/stage<br/>阶段控制"]
 Client --> API_StreamNode["/api/director/stream/[nodeId]<br/>节点流式输出"]
 Client --> API_StreamProject["/api/director/stream/project/[projectId]<br/>项目级事件流"]
+API_Pipeline --> QuotaCheck["配额预验证"]
 API_Pipeline --> PipelineCore["Pipeline 编排核心"]
 API_Stage --> StageRunner["StageRunner 阶段执行器"]
 API_StreamNode --> RuntimeRepo["RuntimeRepository 运行时仓库"]
@@ -71,9 +80,10 @@ StageRunner --> Effects["StageEffects 副作用处理"]
 StageRunner --> ArtifactSource["RuntimeArtifactSource 工件读取"]
 StageRunner --> ArtifactWriter["RuntimeArtifactWriter 工件写入"]
 StageRunner --> PiProvider["PiProvider AI 提供者"]
+QuotaCheck --> BillingContract["计费合同验证"]
 ```
 
-**图表来源** 
+**图表来源**
 - [src/app/api/director/pipeline/route.ts](file://src/app/api/director/pipeline/route.ts)
 - [src/app/api/director/stage/route.ts](file://src/app/api/director/stage/route.ts)
 - [src/app/api/director/stream/[nodeId]/route.ts](file://src/app/api/director/stream/[nodeId]/route.ts)
@@ -114,6 +124,7 @@ StageRunner --> PiProvider["PiProvider AI 提供者"]
 - 队列处理器：异步任务调度与并发控制
 - 副作用处理：阶段完成后对工件、元数据进行落盘或通知
 - AI提供者：与外部AI能力交互（可选）
+- **新增：配额验证器：在执行前验证成本池配额和计费合同**
 
 **章节来源**
 - [src/features/director/types.ts](file://src/features/director/types.ts)
@@ -127,33 +138,39 @@ StageRunner --> PiProvider["PiProvider AI 提供者"]
 - [src/features/director/pi-provider.ts](file://src/features/director/pi-provider.ts)
 
 ## 架构总览
-下图展示了从HTTP请求到阶段执行的端到端流程，包括状态推进、工件读写与事件流。
+下图展示了从HTTP请求到阶段执行的端到端流程，包括新增的配额预验证、状态推进、工件读写与事件流。
 
 ```mermaid
 sequenceDiagram
 participant C as "客户端"
 participant P as "Pipeline路由"
+participant Q as "配额验证器"
 participant S as "Stage路由"
 participant R as "StageRunner"
 participant A as "Advance"
 participant W as "RuntimeArtifactWriter"
-participant Q as "QueueHandler"
 participant V as "RuntimeRepository"
 C->>P : "POST /api/director/pipeline (创建/启动)"
+P->>Q : "验证成本池配额"
+alt 配额充足
+Q-->>P : "通过验证"
 P->>A : "初始化管道状态"
 A-->>P : "返回运行ID/会话ID"
 P-->>C : "201 Created + 运行元信息"
 C->>S : "POST /api/director/stage (触发阶段)"
 S->>R : "调度阶段执行"
-R->>Q : "入队(可选)"
 R->>W : "写入阶段工件"
 R->>V : "更新节点数据/事件"
 R-->>S : "阶段结果"
 S-->>C : "200 OK + 结果摘要"
+else 配额不足
+Q-->>P : "返回402计费合同错误"
+P-->>C : "402 Payment Required + 错误详情"
+end
 Note over C,V : "通过流式接口订阅进度与事件"
 ```
 
-**图表来源** 
+**图表来源**
 - [src/app/api/director/pipeline/route.ts](file://src/app/api/director/pipeline/route.ts)
 - [src/app/api/director/stage/route.ts](file://src/app/api/director/stage/route.ts)
 - [src/features/director/stage-runner.ts](file://src/features/director/stage-runner.ts)
@@ -167,25 +184,33 @@ Note over C,V : "通过流式接口订阅进度与事件"
 ### 管道创建与执行接口（/api/director/pipeline）
 - 功能要点
   - 创建管道实例，绑定项目、节点定义与依赖关系
+  - **新增：执行前配额预验证，检查成本池余额**
   - 设置执行参数（并发度、超时、重试策略、环境变量等）
   - 立即启动或延迟启动（入队）
   - 返回运行标识与会话信息，便于后续查询与流式订阅
 - 典型流程
   - 校验输入结构（节点列表、依赖边、初始输入）
+  - **新增：验证当前成本池配额和计费合同**
   - 初始化会话与运行时仓库
   - 构建依赖图并计算可执行阶段集合
-  - 推进至“运行中”状态，必要时入队异步执行
+  - 推进至"运行中"状态，必要时入队异步执行
 - 错误处理
   - 输入校验失败返回422
+  - **新增：配额不足返回402计费合同错误**
   - 资源不足或队列满返回429/503
   - 启动失败回滚状态并记录原因
+
+**更新** 新增了配额预验证机制，在管道启动前检查成本池余额，确保有足够的配额执行管道任务。
 
 ```mermaid
 flowchart TD
 Start(["进入 /pipeline"]) --> Validate["校验请求体"]
 Validate --> Valid{"有效?"}
 Valid --> |否| Return422["返回422 参数错误"]
-Valid --> |是| InitSession["初始化会话/运行时"]
+Valid --> |是| CheckQuota["验证成本池配额"]
+CheckQuota --> QuotaOK{"配额充足?"}
+QuotaOK --> |否| Return402["返回402 计费合同错误"]
+QuotaOK --> |是| InitSession["初始化会话/运行时"]
 InitSession --> BuildGraph["构建依赖图"]
 BuildGraph --> ReadySet["计算就绪阶段集合"]
 ReadySet --> StartExec["启动执行(同步/异步)"]
@@ -196,10 +221,11 @@ Enqueue --> |否| RunNow["直接执行"]
 Queue --> Return201["返回201 Created"]
 RunNow --> Return201
 Return422 --> End(["结束"])
+Return402 --> End
 Return201 --> End
 ```
 
-**图表来源** 
+**图表来源**
 - [src/app/api/director/pipeline/route.ts](file://src/app/api/director/pipeline/route.ts)
 - [src/features/director/pipeline.ts](file://src/features/director/pipeline.ts)
 - [src/features/director/advance.ts](file://src/features/director/advance.ts)
@@ -240,7 +266,7 @@ S-->>C : "409 Conflict"
 end
 ```
 
-**图表来源** 
+**图表来源**
 - [src/app/api/director/stage/route.ts](file://src/app/api/director/stage/route.ts)
 - [src/features/director/stage-runner.ts](file://src/features/director/stage-runner.ts)
 - [src/features/director/advance.ts](file://src/features/director/advance.ts)
@@ -273,7 +299,7 @@ Stream-->>C : "推送事件(进度/日志/工件)"
 Note over C,Stream : "支持心跳与重连"
 ```
 
-**图表来源** 
+**图表来源**
 - [src/app/api/director/stream/[nodeId]/route.ts](file://src/app/api/director/stream/[nodeId]/route.ts)
 - [src/app/api/director/stream/project/[projectId]/route.ts](file://src/app/api/director/stream/project/[projectId]/route.ts)
 - [src/features/director/runtime-repository.ts](file://src/features/director/runtime-repository.ts)
@@ -320,7 +346,7 @@ StageRunner --> RuntimeArtifactWriter : "写入输出"
 StageRunner --> StageEffects : "触发副作用"
 ```
 
-**图表来源** 
+**图表来源**
 - [src/features/director/stage-runner.ts](file://src/features/director/stage-runner.ts)
 - [src/features/director/stage-effects.ts](file://src/features/director/stage-effects.ts)
 - [src/features/director/runtime-artifact-source.ts](file://src/features/director/runtime-artifact-source.ts)
@@ -358,7 +384,7 @@ class SessionStore {
 RuntimeRepository <.. SessionStore : "共享执行上下文"
 ```
 
-**图表来源** 
+**图表来源**
 - [src/features/director/runtime-repository.ts](file://src/features/director/runtime-repository.ts)
 - [src/features/director/session-store.ts](file://src/features/director/session-store.ts)
 
@@ -387,7 +413,7 @@ stateDiagram-v2
 失败 --> 待运行 : "重试/修复后重启"
 ```
 
-**图表来源** 
+**图表来源**
 - [src/features/director/advance.ts](file://src/features/director/advance.ts)
 - [src/features/director/recovery.ts](file://src/features/director/recovery.ts)
 
@@ -418,7 +444,7 @@ StageRunner --> PiProvider : "AI调用"
 PiProvider --> PiSession : "会话上下文"
 ```
 
-**图表来源** 
+**图表来源**
 - [src/features/director/pi-provider.ts](file://src/features/director/pi-provider.ts)
 - [src/features/director/pi-session.ts](file://src/features/director/pi-session.ts)
 
@@ -449,7 +475,7 @@ Retry --> |是| Backoff["退避后重试"]
 Retry --> |否| Fail["标记失败"]
 ```
 
-**图表来源** 
+**图表来源**
 - [src/features/director/queue-handler.ts](file://src/features/director/queue-handler.ts)
 
 **章节来源**
@@ -474,6 +500,7 @@ Retry --> |否| Fail["标记失败"]
 - 外部依赖
   - 队列处理器可能对接消息中间件
   - AI提供者对接外部模型服务
+  - **新增：配额验证器依赖计费系统**
 - 潜在循环依赖
   - 通过接口抽象与事件解耦避免循环引用
 
@@ -488,9 +515,11 @@ Core --> State["Advance/Recovery"]
 Core --> Queue["QueueHandler"]
 API --> Stream["Stream路由"]
 Stream --> Repo["RuntimeRepository"]
+API --> Quota["配额验证器"]
+Quota --> Billing["计费系统"]
 ```
 
-**图表来源** 
+**图表来源**
 - [src/app/api/director/pipeline/route.ts](file://src/app/api/director/pipeline/route.ts)
 - [src/app/api/director/stage/route.ts](file://src/app/api/director/stage/route.ts)
 - [src/app/api/director/stream/[nodeId]/route.ts](file://src/app/api/director/stream/[nodeId]/route.ts)
@@ -516,6 +545,7 @@ Stream --> Repo["RuntimeRepository"]
 - 队列背压：监控队列长度与消费延迟，动态限流
 - 缓存策略：对只读工件与模板进行缓存，减少重复计算
 - 连接池：对外部API与数据库连接池进行合理配置
+- **新增：配额验证缓存：缓存配额检查结果，减少计费系统调用频率**
 
 [本节为通用指导，不直接分析具体文件]
 
@@ -525,11 +555,13 @@ Stream --> Repo["RuntimeRepository"]
   - 工件缺失：核对上游阶段输出键名与写入路径
   - 状态不一致：查看状态推进日志与检查点恢复记录
   - 队列积压：监控队列指标与消费者健康状态
+  - **新增：配额不足错误：检查成本池余额和计费合同状态**
 - 定位手段
   - 通过节点级流与项目级流观察实时事件
   - 检查运行时仓库中的节点数据与工件元数据
   - 查看会话存储中的上下文快照
   - 启用更详细的日志级别
+  - **新增：检查配额验证日志和计费系统响应**
 
 **章节来源**
 - [src/features/director/runtime-repository.ts](file://src/features/director/runtime-repository.ts)
@@ -538,7 +570,7 @@ Stream --> Repo["RuntimeRepository"]
 - [src/features/director/queue-handler.ts](file://src/features/director/queue-handler.ts)
 
 ## 结论
-本API围绕“管道定义—阶段执行—状态推进—工件管理—事件流”形成闭环，具备可扩展、可观测与可恢复的特性。通过清晰的接口与模块化设计，用户可灵活构建从简单到复杂的编排工作流，并在生产环境中获得稳定的执行保障。
+本API围绕"管道定义—阶段执行—状态推进—工件管理—事件流"形成闭环，具备可扩展、可观测与可恢复的特性。**新增的配额预验证机制**确保了计费系统的集成和资源使用的可控性。通过清晰的接口与模块化设计，用户可灵活构建从简单到复杂的编排工作流，并在生产环境中获得稳定的执行保障。
 
 [本节为总结性内容，不直接分析具体文件]
 
@@ -571,5 +603,6 @@ Stream --> Repo["RuntimeRepository"]
 - 基础管道：线性阶段链，依次处理输入并产出最终工件
 - 复杂工作流：分支与汇聚、条件执行、并行阶段
 - 错误处理：捕获异常、重试、回滚与补偿
+- **新增：配额不足处理：当成本池余额不足时返回402错误并提供充值指引**
 
 [本节为概念说明，不直接分析具体文件]

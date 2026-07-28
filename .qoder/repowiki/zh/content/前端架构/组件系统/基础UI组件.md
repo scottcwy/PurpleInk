@@ -1,25 +1,26 @@
 # 基础UI组件
 
 <cite>
-**本文引用的文件**   
+**本文引用的文件**
 - [src/components/ui/button.tsx](file://src/components/ui/button.tsx)
 - [src/components/ui/dialog.tsx](file://src/components/ui/dialog.tsx)
 - [src/components/ui/card.tsx](file://src/components/ui/card.tsx)
-- [src/components/ui/sidebar.tsx](file://src/components/ui/sidebar.tsx)
-- [src/components/ui/sidebar-chrome.tsx](file://src/components/ui/sidebar-chrome.tsx)
+- [src/components/ui/settings-field.tsx](file://src/components/ui/settings-field.tsx)
+- [src/components/ui/settings-panel.tsx](file://src/components/ui/settings-panel.tsx)
+- [src/components/ui/settings-group.tsx](file://src/components/ui/settings-group.tsx)
+- [src/components/ui/settings-row.tsx](file://src/components/ui/settings-row.tsx)
 - [src/app/design-system.css](file://src/app/design-system.css)
 - [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
 - [src/app/providers.tsx](file://src/app/providers.tsx)
-- [src/features/canvas/export-settings.ts](file://src/features/canvas/export-settings.ts)
-- [src/features/render/export-degraded.ts](file://src/features/render/export-degraded.ts)
 </cite>
 
 ## 更新摘要
-**变更内容**   
-- 侧边栏组件系统得到显著增强，sidebar-chrome.tsx增加了38行代码支持新的账户菜单功能
-- sidebar.tsx基础组件获得了15行增强，提升了组件的交互性和可访问性
-- demo文件相应更新以展示新功能
-- 新增账户菜单集成和增强的导航体验
+**变更内容**
+- Button组件采用v2设计系统，引入扁平化纯色配色方案
+- 新增SettingsField基础组件，提供统一的设置字段输入体验
+- SettingsPanel组件得到全面改进，支持更丰富的设置项管理
+- 新增SettingsGroup和SettingsRow组件，优化设置界面的组织结构
+- 整体UI组件现代化升级，提升视觉一致性和用户体验
 
 ## 目录
 1. [简介](#简介)
@@ -27,22 +28,26 @@
 3. [核心组件](#核心组件)
 4. [架构总览](#架构总览)
 5. [详细组件分析](#详细组件分析)
-6. [侧边栏组件增强](#侧边栏组件增强)
-7. [依赖关系分析](#依赖关系分析)
-8. [性能考量](#性能考量)
-9. [故障排查指南](#故障排查指南)
-10. [结论](#结论)
-11. [附录](#附录)
+6. [Button v2设计系统](#button-v2设计系统)
+7. [SettingsField基础组件](#settingsfield基础组件)
+8. [SettingsPanel全面改进](#settingspanel全面改进)
+9. [依赖关系分析](#依赖关系分析)
+10. [性能考量](#性能考量)
+11. [故障排查指南](#故障排查指南)
+12. [结论](#结论)
+13. [附录](#附录)
 
 ## 简介
-本文件面向开发者与产品/设计人员，系统化梳理本项目中基础UI组件（Button、Dialog、Card、Sidebar）的设计与实现。内容涵盖：
+本文件面向开发者与产品/设计人员，系统化梳理本项目中基础UI组件（Button、Dialog、Card、SettingsField、SettingsPanel等）的设计与实现。内容涵盖：
 - Props接口定义与类型契约
 - 事件处理机制与可组合性模式
 - 样式定制选项与主题适配
 - 无障碍访问支持（a11y）
 - 响应式行为与最佳实践
 - 常见问题与解决方案
-- **新增**：侧边栏组件系统的账户菜单功能和增强的导航体验
+- **新增**：Button v2设计系统与扁平化纯色配色
+- **新增**：SettingsField基础组件的统一输入体验
+- **新增**：SettingsPanel的全面改进与增强功能
 
 ## 项目结构
 基础UI组件位于 src/components/ui 目录下，采用"按功能拆分"的组织方式，每个组件独立文件并配套演示与测试文件。主题与全局样式集中在 src/app/design-system.css，运行时主题切换由 src/lib/theme-mode.ts 提供，应用级Provider在 src/app/providers.tsx 中注入。
@@ -51,29 +56,29 @@
 graph TB
 A["应用入口<br/>src/app/providers.tsx"] --> B["主题模式管理<br/>src/lib/theme-mode.ts"]
 A --> C["全局样式<br/>src/app/design-system.css"]
-C --> D["按钮 Button<br/>src/components/ui/button.tsx"]
+C --> D["按钮 Button v2<br/>src/components/ui/button.tsx"]
 C --> E["对话框 Dialog<br/>src/components/ui/dialog.tsx"]
 C --> F["卡片 Card<br/>src/components/ui/card.tsx"]
-C --> G["侧边栏 Sidebar<br/>src/components/ui/sidebar.tsx"]
-C --> H["侧边栏外壳 SidebarChrome<br/>src/components/ui/sidebar-chrome.tsx"]
-G --> I["账户菜单功能<br/>sidebar-chrome.tsx"]
-D --> J["导出设置<br/>src/features/canvas/export-settings.ts"]
-E --> J
-F --> J
-J --> K["降级处理<br/>src/features/render/export-degraded.ts"]
+C --> G["设置字段 SettingsField<br/>src/components/ui/settings-field.tsx"]
+C --> H["设置面板 SettingsPanel<br/>src/components/ui/settings-panel.tsx"]
+C --> I["设置分组 SettingsGroup<br/>src/components/ui/settings-group.tsx"]
+C --> J["设置行 SettingsRow<br/>src/components/ui/settings-row.tsx"]
+D --> K["扁平化纯色配色<br/>v2设计系统"]
+G --> L["统一输入体验<br/>标准化表单控件"]
+H --> M["全面改进<br/>增强的设置管理"]
 ```
 
-图表来源 
+图表来源
 - [src/app/providers.tsx](file://src/app/providers.tsx)
 - [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
 - [src/app/design-system.css](file://src/app/design-system.css)
 - [src/components/ui/button.tsx](file://src/components/ui/button.tsx)
 - [src/components/ui/dialog.tsx](file://src/components/ui/dialog.tsx)
 - [src/components/ui/card.tsx](file://src/components/ui/card.tsx)
-- [src/components/ui/sidebar.tsx](file://src/components/ui/sidebar.tsx)
-- [src/components/ui/sidebar-chrome.tsx](file://src/components/ui/sidebar-chrome.tsx)
-- [src/features/canvas/export-settings.ts](file://src/features/canvas/export-settings.ts)
-- [src/features/render/export-degraded.ts](file://src/features/render/export-degraded.ts)
+- [src/components/ui/settings-field.tsx](file://src/components/ui/settings-field.tsx)
+- [src/components/ui/settings-panel.tsx](file://src/components/ui/settings-panel.tsx)
+- [src/components/ui/settings-group.tsx](file://src/components/ui/settings-group.tsx)
+- [src/components/ui/settings-row.tsx](file://src/components/ui/settings-row.tsx)
 
 章节来源
 - [src/app/design-system.css](file://src/app/design-system.css)
@@ -81,7 +86,7 @@ J --> K["降级处理<br/>src/features/render/export-degraded.ts"]
 - [src/app/providers.tsx](file://src/app/providers.tsx)
 
 ## 核心组件
-本节对 Button、Dialog、Card、Sidebar 四个核心组件进行统一说明，包括：
+本节对 Button v2、Dialog、Card、SettingsField、SettingsPanel 等核心组件进行统一说明，包括：
 - 设计目标与职责边界
 - 关键Props与类型契约
 - 事件模型与回调约定
@@ -94,26 +99,30 @@ J --> K["降级处理<br/>src/features/render/export-degraded.ts"]
 - [src/components/ui/button.tsx](file://src/components/ui/button.tsx)
 - [src/components/ui/dialog.tsx](file://src/components/ui/dialog.tsx)
 - [src/components/ui/card.tsx](file://src/components/ui/card.tsx)
-- [src/components/ui/sidebar.tsx](file://src/components/ui/sidebar.tsx)
-- [src/components/ui/sidebar-chrome.tsx](file://src/components/ui/sidebar-chrome.tsx)
+- [src/components/ui/settings-field.tsx](file://src/components/ui/settings-field.tsx)
+- [src/components/ui/settings-panel.tsx](file://src/components/ui/settings-panel.tsx)
+- [src/components/ui/settings-group.tsx](file://src/components/ui/settings-group.tsx)
+- [src/components/ui/settings-row.tsx](file://src/components/ui/settings-row.tsx)
 - [src/app/design-system.css](file://src/app/design-system.css)
 - [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
 
 ## 架构总览
-基础UI组件遵循"样式与主题解耦 + 语义化标签 + 无障碍优先"的架构原则：
-- 样式层：通过CSS变量与类名组合实现主题与变体
+基础UI组件遵循"样式与主题解耦 + 语义化标签 + 无障碍优先 + 设计系统驱动"的架构原则：
+- 样式层：通过CSS变量与类名组合实现主题与变体，支持v2设计系统
 - 交互层：基于原生事件与React状态管理，避免过度封装
 - 可访问性：使用语义化HTML与ARIA属性，确保键盘与屏幕阅读器可用
 - 主题层：通过Provider与CSS变量驱动明暗主题与品牌色
-- **新增**：侧边栏组件系统的账户菜单功能和增强的导航体验
+- **新增**：v2设计系统提供扁平化纯色配色方案
+- **新增**：SettingsField组件提供统一的设置字段输入体验
 
 ```mermaid
 classDiagram
-class Button {
-+variant : "primary" | "secondary" | "ghost" | ...
+class ButtonV2 {
++variant : "primary" | "secondary" | "ghost" | "destructive"
 +size : "sm" | "md" | "lg"
 +disabled : boolean
 +loading : boolean
++flatColor : boolean
 +onClick(event) : void
 +children : ReactNode
 }
@@ -133,68 +142,72 @@ class Card {
 +onClick(event) : void
 +children : ReactNode
 }
-class Sidebar {
-+mode : "default" | "compact" | "expanded"
-+collapsed : boolean
-+onCollapseChange(boolean) : void
-+items : NavigationItem[]
+class SettingsField {
++label : string
++value : any
++onChange(value) : void
++placeholder : string
++error : string
++helperText : string
++disabled : boolean
++required : boolean
++type : "text" | "number" | "email" | "password"
+}
+class SettingsPanel {
++title : string
++description : string
++fields : FieldConfig[]
++onSave(values) : void
++onCancel() : void
++loading : boolean
 +children : ReactNode
 }
-class SidebarChrome {
-+accountMenu : AccountMenuProps
-+enhancedNavigation : boolean
-+userProfile : UserProfile
-+onAccountAction(action) : void
+class SettingsGroup {
++title : string
++description : string
 +children : ReactNode
 }
-class ExportSettings {
-+degradedMode : boolean
-+destructiveAction : boolean
-+callback : Function
-+handleError(error) : void
+class SettingsRow {
++label : string
++description : string
++action : ReactNode
++align : "left" | "center" | "right"
++children : ReactNode
 }
-class ThemeMode {
-+mode : "light" | "dark"
-+toggle() : void
-}
-class DesignSystemCSS {
-+variables : CSS Variables
+class DesignSystemV2 {
++flatColors : ColorPalette
 +baseStyles : Global Styles
 +componentTokens : Component Tokens
++spacing : SpacingScale
++typography : TypographyScale
 }
-Button --> DesignSystemCSS : "使用CSS变量/类名"
-Dialog --> DesignSystemCSS : "使用CSS变量/类名"
-Card --> DesignSystemCSS : "使用CSS变量/类名"
-Sidebar --> DesignSystemCSS : "使用CSS变量/类名"
-SidebarChrome --> Sidebar : "增强侧边栏"
-ExportSettings --> Button : "使用破坏性按钮"
-ExportSettings --> Dialog : "错误提示对话框"
-Button --> ThemeMode : "读取主题模式"
-Dialog --> ThemeMode : "读取主题模式"
-Card --> ThemeMode : "读取主题模式"
-Sidebar --> ThemeMode : "读取主题模式"
-SidebarChrome --> ThemeMode : "读取主题模式"
+ButtonV2 --> DesignSystemV2 : "使用v2设计系统"
+SettingsField --> DesignSystemV2 : "使用v2设计系统"
+SettingsPanel --> DesignSystemV2 : "使用v2设计系统"
+SettingsGroup --> DesignSystemV2 : "使用v2设计系统"
+SettingsRow --> DesignSystemV2 : "使用v2设计系统"
 ```
 
-图表来源 
+图表来源
 - [src/components/ui/button.tsx](file://src/components/ui/button.tsx)
 - [src/components/ui/dialog.tsx](file://src/components/ui/dialog.tsx)
 - [src/components/ui/card.tsx](file://src/components/ui/card.tsx)
-- [src/components/ui/sidebar.tsx](file://src/components/ui/sidebar.tsx)
-- [src/components/ui/sidebar-chrome.tsx](file://src/components/ui/sidebar-chrome.tsx)
-- [src/features/canvas/export-settings.ts](file://src/features/canvas/export-settings.ts)
+- [src/components/ui/settings-field.tsx](file://src/components/ui/settings-field.tsx)
+- [src/components/ui/settings-panel.tsx](file://src/components/ui/settings-panel.tsx)
+- [src/components/ui/settings-group.tsx](file://src/components/ui/settings-group.tsx)
+- [src/components/ui/settings-row.tsx](file://src/components/ui/settings-row.tsx)
 - [src/app/design-system.css](file://src/app/design-system.css)
-- [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
 
 ## 详细组件分析
 
-### Button 组件
-- 设计目标：提供一致的点击触发控件，支持多种视觉变体与尺寸，具备加载态与禁用态。
+### Button v2 组件
+- 设计目标：提供一致的点击触发控件，采用v2设计系统的扁平化纯色配色方案，支持多种视觉变体与尺寸，具备加载态与禁用态。
 - Props接口要点：
-  - variant：控制外观风格（如 primary、secondary、ghost 等）
+  - variant：控制外观风格（如 primary、secondary、ghost、destructive 等）
   - size：控制尺寸（sm、md、lg）
   - disabled：禁用交互
   - loading：显示加载指示器，同时禁用交互
+  - flatColor：启用v2设计系统的扁平化纯色配色
   - onClick：点击回调，接收原生事件对象
   - children：按钮内容（文本或图标）
 - 事件处理机制：
@@ -203,6 +216,7 @@ SidebarChrome --> ThemeMode : "读取主题模式"
 - 样式定制选项：
   - 通过CSS变量覆盖颜色、圆角、阴影、字号等
   - 通过className叠加自定义样式
+  - **新增**：支持v2设计系统的扁平化纯色配色方案
 - 无障碍访问支持：
   - 使用 button 语义标签，自动获得键盘焦点
   - disabled/loading 时设置 aria-disabled
@@ -212,29 +226,24 @@ SidebarChrome --> ThemeMode : "读取主题模式"
 - 可组合性与扩展：
   - 与图标组件组合使用
   - 通过wrapper组件封装业务按钮（如提交、确认）
-  - **新增**：支持破坏性操作按钮变体用于导出确认
 
 ```mermaid
 flowchart TD
-Start(["用户点击"]) --> CheckState{"是否禁用或加载中?"}
-CheckState --> |是| Prevent["阻止交互<br/>不触发回调"]
-CheckState --> |否| Trigger["触发 onClick 回调"]
-Trigger --> CheckDestructive{"是否为破坏性操作?"}
-CheckDestructive --> |是| Confirm["显示确认对话框"]
-CheckDestructive --> |否| End(["完成"])
-Confirm --> UserConfirm{"用户确认?"}
-UserConfirm --> |是| Execute["执行操作"]
-UserConfirm --> |否| Cancel["取消操作"]
-Execute --> End
-Cancel --> End
-Prevent --> End
+A["用户点击 Button v2"] --> B{"检查状态"}
+B --> |禁用/加载中| C["阻止交互"]
+B --> |正常状态| D["触发onClick回调"]
+D --> E{"是否破坏性操作?"}
+E --> |是| F["显示确认对话框"]
+E --> |否| G["执行操作"]
+F --> H{"用户确认?"}
+H --> |是| G
+H --> |否| I["取消操作"]
+G --> J["完成"]
+I --> J
+C --> J
 ```
 
-图表来源 
-- [src/components/ui/button.tsx](file://src/components/ui/button.tsx)
-- [src/features/canvas/export-settings.ts](file://src/features/canvas/export-settings.ts)
-
-章节来源
+**章节来源**
 - [src/components/ui/button.tsx](file://src/components/ui/button.tsx)
 - [src/app/design-system.css](file://src/app/design-system.css)
 - [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
@@ -263,7 +272,6 @@ Prevent --> End
 - 可组合性与扩展：
   - 与表单、列表、通知等组件组合
   - 提供ConfirmDialog、FormDialog等业务封装
-  - **新增**：支持导出错误提示与降级状态展示
 
 ```mermaid
 sequenceDiagram
@@ -272,7 +280,6 @@ participant D as "Dialog"
 participant O as "Overlay(遮罩)"
 participant K as "键盘事件"
 participant F as "焦点管理"
-participant E as "导出系统"
 U->>D : 触发打开
 D->>D : 设置 open=true
 D->>F : 锁定滚动/聚焦首元素
@@ -282,14 +289,9 @@ U->>K : 按下ESC
 K-->>D : 触发 closeOnEscape
 D->>D : 设置 open=false
 D->>F : 恢复滚动/返回焦点
-E->>D : 显示错误/降级提示
 ```
 
-图表来源 
-- [src/components/ui/dialog.tsx](file://src/components/ui/dialog.tsx)
-- [src/features/render/export-degraded.ts](file://src/features/render/export-degraded.ts)
-
-章节来源
+**章节来源**
 - [src/components/ui/dialog.tsx](file://src/components/ui/dialog.tsx)
 - [src/app/design-system.css](file://src/app/design-system.css)
 - [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
@@ -337,125 +339,196 @@ class CardFooter {
 +actions : ReactNode
 }
 Card --> CardHeader : "包含"
-Card --> CardCardBody : "包含"
+Card --> CardBody : "包含"
 Card --> CardFooter : "包含"
 ```
 
-图表来源 
-- [src/components/ui/card.tsx](file://src/components/ui/card.tsx)
-
-章节来源
+**章节来源**
 - [src/components/ui/card.tsx](file://src/components/ui/card.tsx)
 - [src/app/design-system.css](file://src/app/design-system.css)
 - [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
 
-### 概念总览
-以下流程图展示了三个组件在典型页面中的协作关系：用户通过Button触发Dialog，Dialog内嵌Card展示内容。
+## Button v2设计系统
 
-```mermaid
-flowchart TD
-A["用户点击 Button"] --> B["打开 Dialog"]
-B --> C["渲染 Card 内容"]
-C --> D["用户操作 Card"]
-D --> E["关闭 Dialog"]
-```
+### 设计理念
+Button v2设计系统引入了现代化的扁平化纯色配色方案，强调简洁、直观和一致性：
 
-[此图为概念流程，不直接映射具体源码文件]
+- **扁平化设计**：去除多余的阴影和渐变，采用纯色填充
+- **色彩系统**：建立完整的色彩调色板，支持明暗主题适配
+- **视觉层次**：通过颜色和尺寸建立清晰的操作优先级
+- **可访问性**：确保足够的对比度和键盘导航支持
 
-## 侧边栏组件增强
+### 配色方案
+v2设计系统提供了丰富的色彩选择：
 
-### 侧边栏基础组件 (Sidebar)
-侧边栏组件经过15行代码增强，提供了更强大的导航功能和用户体验：
+- **主色调**：品牌主色用于主要操作
+- **次要色**：辅助色用于次要操作
+- **中性色**：用于文本、边框和背景
+- **状态色**：成功、警告、错误等状态反馈
+- **深色模式**：完整的明暗主题支持
 
-- **增强的导航模式**：支持默认、紧凑和展开三种模式
-- **改进的状态管理**：更好的折叠状态管理和回调机制
-- **优化的可访问性**：增强的键盘导航和屏幕阅读器支持
-- **主题适配**：完整的明暗主题支持和品牌色适配
+### 尺寸规范
+Button v2支持三种标准尺寸：
 
-### 侧边栏外壳组件 (SidebarChrome)
-侧边栏外壳组件新增了38行代码，主要增强了账户菜单功能：
+- **Small (sm)**：适用于紧凑布局和工具栏
+- **Medium (md)**：默认尺寸，适用于大多数场景
+- **Large (lg)**：用于重要操作和引导性按钮
 
-- **账户菜单集成**：完整的用户账户下拉菜单，支持用户信息展示和常用操作
-- **增强的导航体验**：改进的导航项布局和交互反馈
-- **用户状态管理**：集成用户登录状态和权限控制
-- **响应式设计**：在不同屏幕尺寸下的优化显示
-
-```mermaid
-flowchart TD
-A["用户访问侧边栏"] --> B{"检查用户状态"}
-B --> |已登录| C["显示账户菜单"]
-B --> |未登录| D["显示登录提示"]
-C --> E["用户点击账户菜单"]
-E --> F["显示用户信息"]
-F --> G["显示操作选项"]
-G --> H["执行账户操作"]
-H --> I["更新用户状态"]
-D --> J["跳转到登录页面"]
-I --> K["刷新侧边栏内容"]
-```
-
-**图表来源** 
-- [src/components/ui/sidebar.tsx](file://src/components/ui/sidebar.tsx)
-- [src/components/ui/sidebar-chrome.tsx](file://src/components/ui/sidebar-chrome.tsx)
-
-### 账户菜单功能详解
-新增的账户菜单功能提供了完整的用户交互体验：
-
-- **用户信息展示**：头像、用户名、邮箱等信息显示
-- **快捷操作**：个人设置、退出登录等常用操作
-- **权限控制**：根据用户角色显示不同的菜单项
-- **状态同步**：与全局用户状态保持同步
-
-### 导航增强特性
-侧边栏组件的导航功能得到了显著增强：
-
-- **智能折叠**：根据内容长度自动调整折叠行为
-- **活动状态**：当前页面的高亮显示和视觉反馈
-- **搜索集成**：支持快速搜索导航项
-- **快捷键支持**：键盘快捷键提升操作效率
+### 变体类型
+- **Primary**：主要操作，使用品牌主色
+- **Secondary**：次要操作，使用中性色
+- **Ghost**：幽灵按钮，无边框无填充
+- **Destructive**：破坏性操作，使用红色系
+- **Outline**：轮廓按钮，仅显示边框
 
 **章节来源**
-- [src/components/ui/sidebar.tsx](file://src/components/ui/sidebar.tsx)
-- [src/components/ui/sidebar-chrome.tsx](file://src/components/ui/sidebar-chrome.tsx)
+- [src/components/ui/button.tsx](file://src/components/ui/button.tsx)
+- [src/app/design-system.css](file://src/app/design-system.css)
+
+## SettingsField基础组件
+
+### 组件概述
+SettingsField是一个专门用于设置界面的基础输入组件，提供统一的输入体验和验证机制：
+
+- **统一的输入体验**：标准化的标签、输入框、错误提示和帮助文本
+- **灵活的输入类型**：支持文本、数字、邮箱、密码等多种输入类型
+- **内置验证**：提供必填验证、格式验证和自定义验证规则
+- **无障碍支持**：完整的ARIA属性和键盘导航支持
+
+### Props接口
+SettingsField组件提供丰富的配置选项：
+
+- **label**：字段标签文本
+- **value**：当前值
+- **onChange**：值变化回调函数
+- **placeholder**：占位符文本
+- **error**：错误消息
+- **helperText**：帮助文本
+- **disabled**：禁用状态
+- **required**：必填标记
+- **type**：输入类型（text、number、email、password等）
+
+### 使用示例
+SettingsField组件的典型使用方式：
+
+```tsx
+<SettingsField
+  label="API密钥"
+  value={apiKey}
+  onChange={setApiKey}
+  placeholder="请输入您的API密钥"
+  error={errors.apiKey}
+  helperText="您可以在账户设置中找到API密钥"
+  required
+  type="password"
+/>
+```
+
+### 验证机制
+SettingsField内置了强大的验证机制：
+
+- **必填验证**：通过required属性启用
+- **格式验证**：根据输入类型自动验证格式
+- **自定义验证**：通过onChange回调实现自定义逻辑
+- **错误显示**：统一的错误消息展示
+
+**章节来源**
+- [src/components/ui/settings-field.tsx](file://src/components/ui/settings-field.tsx)
+- [src/app/design-system.css](file://src/app/design-system.css)
+
+## SettingsPanel全面改进
+
+### 组件架构
+SettingsPanel经过全面改进，提供了更强大和灵活的设置界面管理能力：
+
+- **模块化设计**：支持嵌套的SettingsGroup和SettingsRow组件
+- **数据绑定**：双向数据绑定和实时验证
+- **状态管理**：内置的状态管理和错误处理
+- **响应式布局**：适配不同屏幕尺寸的布局
+
+### 核心功能
+- **分组管理**：通过SettingsGroup组织相关的设置项
+- **行布局**：通过SettingsRow排列设置项和对应操作
+- **表单验证**：集成SettingsField的验证机制
+- **保存状态**：支持保存中的加载状态和成功/失败反馈
+
+### 使用模式
+SettingsPanel的典型使用模式：
+
+```tsx
+<SettingsPanel
+  title="AI模型设置"
+  description="配置AI模型的参数和行为"
+  onSave={handleSave}
+  onCancel={handleCancel}
+  loading={isSaving}
+>
+  <SettingsGroup title="模型配置">
+    <SettingsRow label="模型名称" action={<ModelSelector />}>
+      <SettingsField
+        label="温度"
+        value={temperature}
+        onChange={setTemperature}
+        type="number"
+        min={0}
+        max={1}
+        step={0.1}
+      />
+    </SettingsRow>
+  </SettingsGroup>
+</SettingsPanel>
+```
+
+### 改进特性
+- **增强的用户体验**：更直观的界面和操作流程
+- **更好的可访问性**：完整的键盘导航和屏幕阅读器支持
+- **性能优化**：按需渲染和状态管理优化
+- **主题适配**：完整的明暗主题支持
+
+**章节来源**
+- [src/components/ui/settings-panel.tsx](file://src/components/ui/settings-panel.tsx)
+- [src/components/ui/settings-group.tsx](file://src/components/ui/settings-group.tsx)
+- [src/components/ui/settings-row.tsx](file://src/components/ui/settings-row.tsx)
+- [src/app/design-system.css](file://src/app/design-system.css)
 
 ## 依赖关系分析
 - 组件与样式：所有组件均依赖 design-system.css 提供的CSS变量与基础样式，保证主题一致性与可定制性。
 - 组件与主题：通过 theme-mode.ts 暴露的主题模式，组件根据当前模式动态调整颜色与对比度。
 - 组件与应用：providers.tsx 注入主题上下文，确保组件能正确读取与应用主题。
-- **新增**：侧边栏组件系统与账户菜单功能的依赖关系，确保用户状态的统一管理。
-- **新增**：导出组件与降级处理模块的依赖关系，确保错误处理的完整性。
+- **新增**：Button v2设计系统与扁平化纯色配色的依赖关系。
+- **新增**：SettingsField组件与验证机制的依赖关系。
+- **新增**：SettingsPanel与SettingsGroup、SettingsRow的组合依赖关系。
 
 ```mermaid
 graph LR
 Providers["应用Provider<br/>src/app/providers.tsx"] --> Theme["主题模式<br/>src/lib/theme-mode.ts"]
 Theme --> CSS["全局样式<br/>src/app/design-system.css"]
-CSS --> Button["Button<br/>src/components/ui/button.tsx"]
+CSS --> ButtonV2["Button v2<br/>src/components/ui/button.tsx"]
 CSS --> Dialog["Dialog<br/>src/components/ui/dialog.tsx"]
 CSS --> Card["Card<br/>src/components/ui/card.tsx"]
-CSS --> Sidebar["Sidebar<br/>src/components/ui/sidebar.tsx"]
-CSS --> SidebarChrome["SidebarChrome<br/>src/components/ui/sidebar-chrome.tsx"]
-SidebarChrome --> Sidebar : "增强侧边栏"
-ExportSettings["导出设置<br/>src/features/canvas/export-settings.ts"] --> Button
-ExportSettings --> Dialog
-ExportSettings --> Degraded["降级处理<br/>src/features/render/export-degraded.ts"]
-Button --> ExportSettings
-Dialog --> ExportSettings
-Card --> ExportSettings
-Sidebar --> ExportSettings
-SidebarChrome --> ExportSettings
+CSS --> SettingsField["SettingsField<br/>src/components/ui/settings-field.tsx"]
+CSS --> SettingsPanel["SettingsPanel<br/>src/components/ui/settings-panel.tsx"]
+CSS --> SettingsGroup["SettingsGroup<br/>src/components/ui/settings-group.tsx"]
+CSS --> SettingsRow["SettingsRow<br/>src/components/ui/settings-row.tsx"]
+ButtonV2 --> DesignSystemV2["v2设计系统<br/>扁平化纯色配色"]
+SettingsPanel --> SettingsGroup : "包含"
+SettingsPanel --> SettingsRow : "包含"
+SettingsPanel --> SettingsField : "使用"
+SettingsGroup --> SettingsRow : "包含"
+SettingsRow --> SettingsField : "使用"
 ```
 
-图表来源 
+图表来源
 - [src/app/providers.tsx](file://src/app/providers.tsx)
 - [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
 - [src/app/design-system.css](file://src/app/design-system.css)
 - [src/components/ui/button.tsx](file://src/components/ui/button.tsx)
 - [src/components/ui/dialog.tsx](file://src/components/ui/dialog.tsx)
 - [src/components/ui/card.tsx](file://src/components/ui/card.tsx)
-- [src/components/ui/sidebar.tsx](file://src/components/ui/sidebar.tsx)
-- [src/components/ui/sidebar-chrome.tsx](file://src/components/ui/sidebar-chrome.tsx)
-- [src/features/canvas/export-settings.ts](file://src/features/canvas/export-settings.ts)
-- [src/features/render/export-degraded.ts](file://src/features/render/export-degraded.ts)
+- [src/components/ui/settings-field.tsx](file://src/components/ui/settings-field.tsx)
+- [src/components/ui/settings-panel.tsx](file://src/components/ui/settings-panel.tsx)
+- [src/components/ui/settings-group.tsx](file://src/components/ui/settings-group.tsx)
+- [src/components/ui/settings-row.tsx](file://src/components/ui/settings-row.tsx)
 
 章节来源
 - [src/app/providers.tsx](file://src/app/providers.tsx)
@@ -467,8 +540,9 @@ SidebarChrome --> ExportSettings
 - 渲染优化：Dialog打开时按需渲染内容，减少初始渲染开销。
 - 样式合并：尽量复用CSS变量与类名，避免重复样式计算。
 - 无障碍与可访问性：正确使用语义标签可减少额外Aria维护成本。
-- **新增**：侧边栏组件的懒加载和虚拟滚动优化，提升大量导航项的性能。
-- **新增**：导出过程的异步处理与内存管理，避免长时间占用资源。
+- **新增**：Button v2设计系统的样式优化，减少不必要的重绘。
+- **新增**：SettingsField组件的受控组件优化，避免不必要的重新渲染。
+- **新增**：SettingsPanel的懒加载和虚拟滚动优化，提升大量设置项的性能。
 
 ## 故障排查指南
 - 主题未生效
@@ -483,45 +557,46 @@ SidebarChrome --> ExportSettings
 - 卡片不可点击
   - 检查 interactive 标志
   - 确认子元素未拦截事件冒泡
-- **新增**：侧边栏组件问题
-  - 检查账户菜单的用户状态是否正确传递
-  - 确认侧边栏的折叠状态管理是否正常
-  - 验证导航项的权限控制逻辑
-- **新增**：导出功能异常
-  - 检查降级模式是否正确启用
-  - 确认回调函数是否正常执行
-  - 查看错误日志获取详细信息
+- **新增**：Button v2样式问题
+  - 检查flatColor属性是否正确设置
+  - 确认v2设计系统的CSS变量已正确加载
+- **新增**：SettingsField验证问题
+  - 检查onChange回调是否正确实现
+  - 确认错误状态是否正确传递
+- **新增**：SettingsPanel保存问题
+  - 检查onSave回调是否正确实现
+  - 确认表单验证是否通过
 
-章节来源
+**章节来源**
 - [src/app/providers.tsx](file://src/app/providers.tsx)
 - [src/app/design-system.css](file://src/app/design-system.css)
 - [src/components/ui/dialog.tsx](file://src/components/ui/dialog.tsx)
 - [src/components/ui/button.tsx](file://src/components/ui/button.tsx)
 - [src/components/ui/card.tsx](file://src/components/ui/card.tsx)
-- [src/components/ui/sidebar.tsx](file://src/components/ui/sidebar.tsx)
-- [src/components/ui/sidebar-chrome.tsx](file://src/components/ui/sidebar-chrome.tsx)
-- [src/features/canvas/export-settings.ts](file://src/features/canvas/export-settings.ts)
-- [src/features/render/export-degraded.ts](file://src/features/render/export-degraded.ts)
+- [src/components/ui/settings-field.tsx](file://src/components/ui/settings-field.tsx)
+- [src/components/ui/settings-panel.tsx](file://src/components/ui/settings-panel.tsx)
 
 ## 结论
-Button、Dialog、Card、Sidebar 四个基础组件在本项目中以"语义化 + 可访问性 + 主题化"为核心设计原则，通过CSS变量与Provider实现灵活的样式与主题定制。**新增的侧边栏组件增强功能**提供了完善的账户菜单集成和增强的导航体验，结合**导出的组件增强功能**提供了完善的降级处理机制和错误恢复能力，确保导出功能的稳定性和用户体验。建议在实际使用中：
+Button v2、Dialog、Card、SettingsField、SettingsPanel等基础组件在本项目中以"语义化 + 可访问性 + 主题化 + 设计系统驱动"为核心设计原则，通过CSS变量与Provider实现灵活的样式与主题定制。**Button v2设计系统的扁平化纯色配色**提供了现代化的视觉体验，**SettingsField基础组件**实现了统一的设置字段输入体验，**SettingsPanel的全面改进**提供了强大的设置界面管理能力。建议在实际使用中：
 - 优先使用语义化标签与ARIA属性保障无障碍体验
 - 通过CSS变量与className进行样式定制，避免内联样式
-- 结合业务场景封装可复用的组合组件（如ConfirmDialog、ProductCard）
-- **新增**：充分利用侧边栏组件的账户菜单功能，提升用户交互体验
-- **新增**：充分利用导出组件的降级处理机制，提升系统的容错能力
+- 结合业务场景封装可复用的组合组件
+- **新增**：充分利用Button v2设计系统的扁平化配色方案
+- **新增**：充分利用SettingsField组件的统一输入体验
+- **新增**：充分利用SettingsPanel的强大设置管理能力
 
 ## 附录
 - 使用示例与最佳实践
-  - Button：为图标按钮提供aria-label；在异步操作中启用loading状态；使用破坏性按钮确认危险操作
-  - Dialog：在打开时聚焦到标题或首个可聚焦元素；关闭后返回触发焦点；用于显示导出错误信息
+  - Button v2：使用flatColor启用v2设计系统；为图标按钮提供aria-label；在异步操作中启用loading状态
+  - Dialog：在打开时聚焦到标题或首个可聚焦元素；关闭后返回触发焦点
   - Card：交互态使用button或a；非交互态使用article/div
-  - Sidebar：合理使用折叠模式；确保导航项的可访问性；集成用户账户状态
-  - SidebarChrome：正确配置账户菜单；处理用户权限；优化导航性能
-  - **新增**：导出设置：正确处理降级模式；提供用户友好的错误提示；集成完整的回调机制
+  - SettingsField：合理使用各种输入类型；实现完整的验证逻辑；提供清晰的错误提示
+  - SettingsPanel：合理使用SettingsGroup和SettingsRow组织设置项；实现完整的保存流程
+  - **新增**：v2设计系统：理解扁平化配色理念；选择合适的按钮变体；确保足够的对比度
 - 常见问题解决方案
   - 主题不一致：检查CSS变量覆盖范围与优先级
   - 键盘导航异常：确保焦点顺序与tabindex合理
   - 移动端适配：通过媒体查询调整尺寸与布局
-  - **新增**：侧边栏问题：检查用户状态传递；验证权限控制逻辑；优化导航性能
-  - **新增**：导出失败：检查降级模式配置；查看错误日志；验证回调函数实现
+  - **新增**：Button v2样式问题：检查CSS变量加载；确认设计系统初始化
+  - **新增**：SettingsField验证问题：检查验证逻辑；确认错误状态管理
+  - **新增**：SettingsPanel保存问题：检查保存逻辑；确认表单状态管理

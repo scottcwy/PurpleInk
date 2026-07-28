@@ -3,11 +3,11 @@ schema_version: 1
 locale: zh-CN
 branch: yusheng/two-part-merge
 nodes_managed: true
-exported_at: "2026-07-28T13:09:41Z"
+exported_at: "2026-07-28T16:30:36Z"
 modules:
     "":
-        dir_name: PurpleInk AI SaaS 应用根模块（Next.js + 独立渲染 Worker）
-        title: PurpleInk AI SaaS 应用根模块（Next.js + 独立渲染 Worker）
+        dir_name: PurpleInk AI 工作流平台（Next.js 前端 + 独立渲染 Worker）
+        title: PurpleInk AI 工作流平台（Next.js 前端 + 独立渲染 Worker）
         scope: []
         source_files: []
         children: []

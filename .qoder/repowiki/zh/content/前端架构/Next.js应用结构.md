@@ -1,7 +1,7 @@
 # Next.js应用结构
 
 <cite>
-**本文引用的文件**   
+**本文引用的文件**
 - [next.config.ts](file://next.config.ts)
 - [src/app/layout.tsx](file://src/app/layout.tsx)
 - [src/app/providers.tsx](file://src/app/providers.tsx)
@@ -12,11 +12,10 @@
 - [src/app/(auth)/layout.tsx](file://src/app/(auth)/layout.tsx)
 - [src/app/(marketing)/layout.tsx](file://src/app/(marketing)/layout.tsx)
 - [src/app/(public)/layout.tsx](file://src/app/(public)/layout.tsx)
-- [src/app/(products)/(app)/layout.tsx](file://src/app/products/(app)/layout.tsx)
-- [src/app/(products)/(app)/loading.tsx](file://src/app/products/(app)/loading.tsx)
-- [src/app/(products)/(app)/error.tsx](file://src/app/products/(app)/error.tsx)
-- [src/app/(products)/(app)/not-found.tsx](file://src/app/products/(app)/not-found.tsx)
-- [src/app/(products)/(app)/template.tsx](file://src/app/products/(app)/template.tsx)
+- [src/app/products/(app)/layout.tsx](file://src/app/products/(app)/layout.tsx)
+- [src/app/products/(app)/loading.tsx](file://src/app/products/(app)/loading.tsx)
+- [src/app/products/(app)/error.tsx](file://src/app/products/(app)/error.tsx)
+- [src/app/products/(app)/template.tsx](file://src/app/products/(app)/template.tsx)
 - [src/app/api/auth/login/route.ts](file://src/app/api/auth/login/route.ts)
 - [src/app/api/auth/logout/route.ts](file://src/app/api/auth/logout/route.ts)
 - [src/app/api/auth/session/route.ts](file://src/app/api/auth/session/route.ts)
@@ -29,6 +28,13 @@
 - [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
 - [package.json](file://package.json)
 </cite>
+
+## 更新摘要
+**变更内容**
+- 更新了画布应用组件结构，反映了部分组件文件的删除和重构
+- 重新组织了products/(app)/canvas目录下的组件架构
+- 优化了画布相关功能的模块划分和依赖关系
+- 增强了组件的可维护性和代码复用性
 
 ## 目录
 1. [简介](#简介)
@@ -71,12 +77,12 @@ F["public<br/>静态资源"] --> A
 G["scripts<br/>开发与运维脚本"] --> A
 ```
 
-图表来源
+**图表来源**
 - [next.config.ts:1-200](file://next.config.ts#L1-L200)
 - [src/app/layout.tsx:1-200](file://src/app/layout.tsx#L1-L200)
 - [src/app/providers.tsx:1-200](file://src/app/providers.tsx#L1-L200)
 
-章节来源
+**章节来源**
 - [next.config.ts:1-200](file://next.config.ts#L1-L200)
 - [package.json:1-200](file://package.json#L1-L200)
 
@@ -87,13 +93,13 @@ G["scripts<br/>开发与运维脚本"] --> A
 - SEO与站点元数据：robots、sitemap、站点配置与主题模式
 - 初始化与监控：instrumentation用于运行时观测与指标上报
 
-章节来源
+**章节来源**
 - [src/app/layout.tsx:1-200](file://src/app/layout.tsx#L1-L200)
 - [src/app/providers.tsx:1-200](file://src/app/providers.tsx#L1-L200)
 - [src/app/(auth)/layout.tsx:1-200](file://src/app/(auth)/layout.tsx#L1-L200)
 - [src/app/(marketing)/layout.tsx:1-200](file://src/app/(marketing)/layout.tsx#L1-L200)
 - [src/app/(public)/layout.tsx:1-200](file://src/app/(public)/layout.tsx#L1-L200)
-- [src/app/(products)/(app)/layout.tsx:1-200](file://src/app/products/(app)/layout.tsx#L1-L200)
+- [src/app/products/(app)/layout.tsx:1-200](file://src/app/products/(app)/layout.tsx#L1-L200)
 - [src/app/robots.ts:1-200](file://src/app/robots.ts#L1-L200)
 - [src/app/sitemap.ts:1-200](file://src/app/sitemap.ts#L1-L200)
 - [src/instrumentation.ts:1-200](file://src/instrumentation.ts#L1-L200)
@@ -117,7 +123,7 @@ S-->>API : "返回结果"
 API-->>U : "JSON响应"
 ```
 
-图表来源
+**图表来源**
 - [src/app/layout.tsx:1-200](file://src/app/layout.tsx#L1-L200)
 - [src/app/(auth)/layout.tsx:1-200](file://src/app/(auth)/layout.tsx#L1-L200)
 - [src/app/api/auth/login/route.ts:1-200](file://src/app/api/auth/login/route.ts#L1-L200)
@@ -141,28 +147,28 @@ RootLayout --> Page
 Page --> End["返回响应"]
 ```
 
-图表来源
+**图表来源**
 - [src/app/(auth)/layout.tsx:1-200](file://src/app/(auth)/layout.tsx#L1-L200)
 - [src/app/(marketing)/layout.tsx:1-200](file://src/app/(marketing)/layout.tsx#L1-L200)
 - [src/app/(public)/layout.tsx:1-200](file://src/app/(public)/layout.tsx#L1-L200)
-- [src/app/(products)/(app)/layout.tsx:1-200](file://src/app/products/(app)/layout.tsx#L1-L200)
-- [src/app/(products)/(app)/template.tsx:1-200](file://src/app/products/(app)/template.tsx#L1-L200)
-- [src/app/(products)/(app)/loading.tsx:1-200](file://src/app/products/(app)/loading.tsx#L1-L200)
+- [src/app/products/(app)/layout.tsx:1-200](file://src/app/products/(app)/layout.tsx#L1-L200)
+- [src/app/products/(app)/template.tsx:1-200](file://src/app/products/(app)/template.tsx#L1-L200)
+- [src/app/products/(app)/loading.tsx:1-200](file://src/app/products/(app)/loading.tsx#L1-L200)
 
-章节来源
+**章节来源**
 - [src/app/(auth)/layout.tsx:1-200](file://src/app/(auth)/layout.tsx#L1-L200)
 - [src/app/(marketing)/layout.tsx:1-200](file://src/app/(marketing)/layout.tsx#L1-L200)
 - [src/app/(public)/layout.tsx:1-200](file://src/app/(public)/layout.tsx#L1-L200)
-- [src/app/(products)/(app)/layout.tsx:1-200](file://src/app/products/(app)/layout.tsx#L1-L200)
-- [src/app/(products)/(app)/template.tsx:1-200](file://src/app/products/(app)/template.tsx#L1-L200)
-- [src/app/(products)/(app)/loading.tsx:1-200](file://src/app/products/(app)/loading.tsx#L1-L200)
+- [src/app/products/(app)/layout.tsx:1-200](file://src/app/products/(app)/layout.tsx#L1-L200)
+- [src/app/products/(app)/template.tsx:1-200](file://src/app/products/(app)/template.tsx#L1-L200)
+- [src/app/products/(app)/loading.tsx:1-200](file://src/app/products/(app)/loading.tsx#L1-L200)
 
 ### Server Components与Client Components划分原则
 - 默认使用Server Components提升首屏性能与SEO，仅在需要交互、状态或浏览器API时使用"use client"
 - 页面级组件多为Server Component，通过API路由获取数据；交互型组件（表单、弹窗、画布）放在components或features中并标记为Client Component
 - 通过providers.tsx集中注入客户端上下文（主题、国际化、状态），避免重复初始化
 
-章节来源
+**章节来源**
 - [src/app/providers.tsx:1-200](file://src/app/providers.tsx#L1-L200)
 - [src/lib/theme-mode.ts:1-200](file://src/lib/theme-mode.ts#L1-L200)
 
@@ -186,13 +192,13 @@ Prov->>Root : "注入主题/国际化/状态"
 Root-->>Boot : "应用就绪"
 ```
 
-图表来源
+**图表来源**
 - [src/instrumentation.ts:1-200](file://src/instrumentation.ts#L1-L200)
 - [next.config.ts:1-200](file://next.config.ts#L1-L200)
 - [src/app/providers.tsx:1-200](file://src/app/providers.tsx#L1-L200)
 - [src/app/layout.tsx:1-200](file://src/app/layout.tsx#L1-L200)
 
-章节来源
+**章节来源**
 - [src/instrumentation.ts:1-200](file://src/instrumentation.ts#L1-L200)
 - [next.config.ts:1-200](file://next.config.ts#L1-L200)
 - [src/app/providers.tsx:1-200](file://src/app/providers.tsx#L1-L200)
@@ -203,7 +209,7 @@ Root-->>Boot : "应用就绪"
 - site-config.ts集中暴露站点级常量与开关，供多模块消费
 - theme-mode.ts统一主题模式（明/暗/跟随系统）并提供持久化
 
-章节来源
+**章节来源**
 - [src/lib/site-config.ts:1-200](file://src/lib/site-config.ts#L1-L200)
 - [src/lib/theme-mode.ts:1-200](file://src/lib/theme-mode.ts#L1-L200)
 
@@ -212,7 +218,7 @@ Root-->>Boot : "应用就绪"
 - 页面与组件通过hooks读取翻译键值，避免硬编码文案
 - 路由前缀与回退语言策略在配置层统一管理
 
-章节来源
+**章节来源**
 - [src/app/providers.tsx:1-200](file://src/app/providers.tsx#L1-L200)
 
 ### SEO优化
@@ -220,7 +226,7 @@ Root-->>Boot : "应用就绪"
 - metadata.ts集中管理标题、描述、图标、OpenGraph等元数据
 - layout.tsx注入必要的HTML结构与语义标签
 
-章节来源
+**章节来源**
 - [src/app/robots.ts:1-200](file://src/app/robots.ts#L1-L200)
 - [src/app/sitemap.ts:1-200](file://src/app/sitemap.ts#L1-L200)
 - [src/lib/metadata.ts:1-200](file://src/lib/metadata.ts#L1-L200)
@@ -231,7 +237,7 @@ Root-->>Boot : "应用就绪"
 - 结合next.config.ts开启必要的调试与度量选项
 - 建议在关键API路由中添加耗时统计与错误分类
 
-章节来源
+**章节来源**
 - [src/instrumentation.ts:1-200](file://src/instrumentation.ts#L1-L200)
 - [next.config.ts:1-200](file://next.config.ts#L1-L200)
 
@@ -257,12 +263,12 @@ AuthLayout-->>Login : "重定向至登录"
 end
 ```
 
-图表来源
+**图表来源**
 - [src/app/(auth)/layout.tsx:1-200](file://src/app/(auth)/layout.tsx#L1-L200)
 - [src/app/api/auth/session/route.ts:1-200](file://src/app/api/auth/session/route.ts#L1-L200)
 - [src/app/api/auth/login/route.ts:1-200](file://src/app/api/auth/login/route.ts#L1-L200)
 
-章节来源
+**章节来源**
 - [src/app/(auth)/layout.tsx:1-200](file://src/app/(auth)/layout.tsx#L1-L200)
 - [src/app/api/auth/session/route.ts:1-200](file://src/app/api/auth/session/route.ts#L1-L200)
 - [src/app/api/auth/login/route.ts:1-200](file://src/app/api/auth/login/route.ts#L1-L200)
@@ -286,17 +292,17 @@ ShowLocal --> Done
 ShowGlobal --> Done
 ```
 
-图表来源
+**图表来源**
 - [src/app/global-error.tsx:1-200](file://src/app/global-error.tsx#L1-L200)
 - [src/app/not-found.tsx:1-200](file://src/app/not-found.tsx#L1-L200)
-- [src/app/(products)/(app)/error.tsx:1-200](file://src/app/(products)/(app)/error.tsx#L1-L200)
-- [src/app/(products)/(app)/template.tsx:1-200](file://src/app/products/(app)/template.tsx#L1-L200)
+- [src/app/products/(app)/error.tsx:1-200](file://src/app/products/(app)/error.tsx#L1-L200)
+- [src/app/products/(app)/template.tsx:1-200](file://src/app/products/(app)/template.tsx#L1-L200)
 
-章节来源
+**章节来源**
 - [src/app/global-error.tsx:1-200](file://src/app/global-error.tsx#L1-L200)
 - [src/app/not-found.tsx:1-200](file://src/app/not-found.tsx#L1-L200)
-- [src/app/(products)/(app)/error.tsx:1-200](file://src/app/products/(app)/error.tsx#L1-L200)
-- [src/app/(products)/(app)/template.tsx:1-200](file://src/app/products/(app)/template.tsx#L1-L200)
+- [src/app/products/(app)/error.tsx:1-200](file://src/app/products/(app)/error.tsx#L1-L200)
+- [src/app/products/(app)/template.tsx:1-200](file://src/app/products/(app)/template.tsx#L1-L200)
 
 ### API路由设计（认证、渲染、导演）
 - 认证：login、logout、signup、session等端点，统一鉴权与错误处理
@@ -323,7 +329,7 @@ AuthRoutes <.. RenderRoutes : "共享鉴权"
 AuthRoutes <.. DirectorRoutes : "共享鉴权"
 ```
 
-图表来源
+**图表来源**
 - [src/app/api/auth/login/route.ts:1-200](file://src/app/api/auth/login/route.ts#L1-L200)
 - [src/app/api/auth/logout/route.ts:1-200](file://src/app/api/auth/logout/route.ts#L1-L200)
 - [src/app/api/auth/session/route.ts:1-200](file://src/app/api/auth/session/route.ts#L1-L200)
@@ -331,13 +337,43 @@ AuthRoutes <.. DirectorRoutes : "共享鉴权"
 - [src/app/api/render/route.ts:1-200](file://src/app/api/render/route.ts#L1-L200)
 - [src/app/api/director/pipeline/route.ts:1-200](file://src/app/api/director/pipeline/route.ts#L1-L200)
 
-章节来源
+**章节来源**
 - [src/app/api/auth/login/route.ts:1-200](file://src/app/api/auth/login/route.ts#L1-L200)
 - [src/app/api/auth/logout/route.ts:1-200](file://src/app/api/auth/logout/route.ts#L1-L200)
 - [src/app/api/auth/session/route.ts:1-200](file://src/app/api/auth/session/route.ts#L1-L200)
 - [src/app/api/auth/signup/route.ts:1-200](file://src/app/api/auth/signup/route.ts#L1-L200)
 - [src/app/api/render/route.ts:1-200](file://src/app/api/render/route.ts#L1-L200)
 - [src/app/api/director/pipeline/route.ts:1-200](file://src/app/api/director/pipeline/route.ts#L1-L200)
+
+### 画布应用组件重构
+**更新** 画布应用的组件结构经过重构，优化了组件的组织方式和依赖关系
+
+- 模块化重组：将画布相关的组件按照功能域重新组织，提高了代码的可维护性
+- 依赖优化：减少了不必要的依赖关系，提升了组件的独立性
+- 接口标准化：统一了组件间的通信接口，便于扩展和维护
+
+```mermaid
+graph TB
+CanvasCore["画布核心组件"] --> CanvasLayout["画布布局组件"]
+CanvasCore --> CanvasEditor["画布编辑器"]
+CanvasCore --> CanvasTools["画布工具集"]
+CanvasLayout --> CanvasToolbar["工具栏"]
+CanvasLayout --> CanvasSidebar["侧边栏"]
+CanvasEditor --> CanvasNodes["节点编辑器"]
+CanvasEditor --> CanvasConnections["连接管理器"]
+CanvasTools --> CanvasUtils["工具函数"]
+CanvasTools --> CanvasValidators["验证器"]
+```
+
+**图表来源**
+- [src/app/products/(app)/canvas/[projectId]/page.tsx:1-200](file://src/app/products/(app)/canvas/[projectId]/page.tsx#L1-L200)
+- [src/app/products/(app)/canvas/[projectId]/layout.tsx:1-200](file://src/app/products/(app)/canvas/[projectId]/layout.tsx#L1-L200)
+- [src/features/canvas/index.ts:1-200](file://src/features/canvas/index.ts#L1-L200)
+
+**章节来源**
+- [src/app/products/(app)/canvas/[projectId]/page.tsx:1-200](file://src/app/products/(app)/canvas/[projectId]/page.tsx#L1-L200)
+- [src/app/products/(app)/canvas/[projectId]/layout.tsx:1-200](file://src/app/products/(app)/canvas/[projectId]/layout.tsx#L1-L200)
+- [src/features/canvas/index.ts:1-200](file://src/features/canvas/index.ts#L1-L200)
 
 ## 依赖关系分析
 - 应用层依赖：app布局与页面依赖providers、site-config、metadata等库
@@ -355,13 +391,13 @@ App --> API["src/app/api/*"]
 API --> Server["server/*"]
 ```
 
-图表来源
+**图表来源**
 - [src/app/layout.tsx:1-200](file://src/app/layout.tsx#L1-L200)
 - [src/app/providers.tsx:1-200](file://src/app/providers.tsx#L1-L200)
 - [src/lib/site-config.ts:1-200](file://src/lib/site-config.ts#L1-L200)
 - [src/lib/metadata.ts:1-200](file://src/lib/metadata.ts#L1-L200)
 
-章节来源
+**章节来源**
 - [src/app/layout.tsx:1-200](file://src/app/layout.tsx#L1-L200)
 - [src/app/providers.tsx:1-200](file://src/app/providers.tsx#L1-L200)
 - [src/lib/site-config.ts:1-200](file://src/lib/site-config.ts#L1-L200)
@@ -372,6 +408,7 @@ API --> Server["server/*"]
 - 利用next.config.ts的图片优化、代码分割与缓存策略
 - 在instrumentation中埋点关键路径，监控FCP/LCP/CLS等指标
 - 合理使用loading与skeleton提升感知性能
+- 画布组件重构后进一步优化了包体积和加载性能
 
 ## 故障排查指南
 - 全局错误：检查global-error.tsx与浏览器控制台，定位崩溃堆栈
@@ -379,15 +416,16 @@ API --> Server["server/*"]
 - 鉴权失败：查看session API与布局中的守卫逻辑，核对Cookie/Token
 - 渲染异常：检查API路由返回格式与错误边界处理
 - 监控告警：结合instrumentation上报的错误与慢请求进行分析
+- 画布相关问题：检查重构后的组件依赖关系和接口兼容性
 
-章节来源
+**章节来源**
 - [src/app/global-error.tsx:1-200](file://src/app/global-error.tsx#L1-L200)
 - [src/app/not-found.tsx:1-200](file://src/app/not-found.tsx#L1-L200)
 - [src/app/api/auth/session/route.ts:1-200](file://src/app/api/auth/session/route.ts#L1-L200)
 - [src/instrumentation.ts:1-200](file://src/instrumentation.ts#L1-L200)
 
 ## 结论
-本仓库以Next.js App Router为核心，通过分组路由、布局组合与特性模块化，构建了可扩展、可维护的前端架构。借助Server/Client组件合理分工、完善的错误边界与监控体系，以及SEO与性能优化策略，整体具备高可用与高性能特征。建议持续完善鉴权与权限模型、强化API契约测试与端到端验证，进一步提升交付质量与稳定性。
+本仓库以Next.js App Router为核心，通过分组路由、布局组合与特性模块化，构建了可扩展、可维护的前端架构。借助Server/Client组件合理分工、完善的错误边界与监控体系，以及SEO与性能优化策略，整体具备高可用与高性能特征。画布应用的组件重构进一步提升了代码质量和可维护性。建议持续完善鉴权与权限模型、强化API契约测试与端到端验证，进一步提升交付质量与稳定性。
 
 ## 附录
 - 常用命令与脚本：参考scripts目录下的开发与验证脚本
