@@ -4,7 +4,14 @@ import type { LucideIcon } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { PurpleInkLogo } from './purple-ink-logo'
-import { AccountMenu, SidebarAccount, SidebarToggle } from './sidebar-chrome'
+import {
+  AccountMenu,
+  SidebarAccount,
+  SidebarToggle,
+  type SidebarAccountInfo,
+} from './sidebar-chrome'
+
+export type { SidebarAccountInfo }
 
 export interface PurpleInkSidebarItem {
   label: string
@@ -20,6 +27,9 @@ export interface PurpleInkSidebarProps {
   onCollapsedChange: (collapsed: boolean) => void
   accountOpen: boolean
   onAccountOpenChange: (open: boolean) => void
+  account?: SidebarAccountInfo | null
+  /** 透传给账户菜单的登出动作；不传则按钮禁用。 */
+  onLogout?: () => Promise<boolean>
   brandHref?: string
   settingsHref?: string
   className?: string
@@ -31,6 +41,8 @@ export function PurpleInkSidebar({
   onCollapsedChange,
   accountOpen,
   onAccountOpenChange,
+  account,
+  onLogout,
   brandHref = '/',
   settingsHref,
   className,
@@ -82,11 +94,12 @@ export function PurpleInkSidebar({
       <div className="relative">
         {accountOpen && !collapsed ? (
           <div className="absolute bottom-[66px] left-0 z-40">
-            <AccountMenu settingsHref={settingsHref} />
+            <AccountMenu settingsHref={settingsHref} account={account} onLogout={onLogout} />
           </div>
         ) : null}
         <SidebarAccount
           compact={collapsed}
+          account={account}
           onSettings={() => onAccountOpenChange(!accountOpen)}
         />
       </div>

@@ -8,9 +8,11 @@ import {
   Waypoints,
 } from 'lucide-react'
 import { useState } from 'react'
+import { performLogout } from '@/features/auth/logout-client'
 import {
   PurpleInkSidebar,
   type PurpleInkSidebarItem,
+  type SidebarAccountInfo,
 } from '@/components/ui/sidebar'
 import { cn } from '@/lib/utils'
 import {
@@ -26,6 +28,7 @@ export function AppSidebar({
   active,
   projectId,
   rendererNodeId,
+  account,
   compact = false,
   onCompactChange,
   className,
@@ -33,6 +36,7 @@ export function AppSidebar({
   active: AppSection
   projectId?: string
   rendererNodeId?: string
+  account?: SidebarAccountInfo | null
   compact?: boolean
   onCompactChange?: (compact: boolean) => void
   className?: string
@@ -84,6 +88,8 @@ export function AppSidebar({
       onCollapsedChange={(next) => onCompactChange?.(next)}
       accountOpen={accountOpen}
       onAccountOpenChange={setAccountOpen}
+      account={account}
+      onLogout={performLogout}
       brandHref="/"
       settingsHref={productSettingsHref(projectId)}
       className={cn('shrink-0', className)}

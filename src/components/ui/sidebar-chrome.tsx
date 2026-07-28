@@ -1,6 +1,7 @@
 'use client'
 
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import {
   Info,
@@ -68,12 +69,21 @@ export function DefaultAvatar({ className }: { className?: string }) {
   )
 }
 
+/** 侧栏账户区展示的会话投影；由 features 侧从 SessionOwner 映射，null = 未登录边缘态。 */
+export interface SidebarAccountInfo {
+  name: string
+  email: string
+  workspaceName: string
+}
+
 export function SidebarAccount({
   compact = false,
   onSettings,
+  account,
 }: {
   compact?: boolean
   onSettings?: () => void
+  account?: SidebarAccountInfo | null
 }) {
   if (compact) {
     return (
@@ -89,10 +99,10 @@ export function SidebarAccount({
         <DefaultAvatar />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-xs font-semibold text-ds-text">
-            本地用户
+            {account?.name ?? '未登录'}
           </span>
           <span className="block truncate text-[10px] text-ds-text-muted">
-            PurpleInk Free
+            {account?.email ?? '—'}
           </span>
         </span>
       </div>
@@ -118,22 +128,30 @@ const ACCOUNT_ITEMS = [
 export function AccountMenu({
   footer,
   settingsHref,
+  account,
+  onLogout,
 }: {
   footer?: ReactNode
   settingsHref?: string
+  account?: SidebarAccountInfo | null
+  /** 返回 false 表示登出失败（成功时整页跳转，不会回到这里）。 */
+  onLogout?: () => Promise<boolean>
 }) {
   const { theme, setTheme } = useTheme()
   const mode: ThemeMode = isThemeMode(theme) ? theme : 'system'
   const appearanceLabel = `外观 · ${themeModeLabel(mode)}`
+  const [logoutState, setLogoutState] = useState<'idle' | 'pending' | 'failed'>('idle')
 
   return (
     <div className="w-56 rounded-lg border border-ds-border bg-ds-surface p-1.5 text-ds-text shadow-[var(--ds-shadow)] backdrop-blur-xl">
       <div className="flex items-center gap-2.5 p-2">
         <DefaultAvatar />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-semibold">本地用户</span>
+          <span className="block truncate text-[13px] font-semibold">
+            {account?.name ?? '未登录'}
+          </span>
           <span className="block truncate font-mono text-[10px] text-ds-text-muted">
-            workspace.local
+            {account?.workspaceName ?? '—'}
           </span>
         </span>
       </div>
@@ -184,12 +202,24 @@ export function AccountMenu({
       <div className="my-0.5 h-px bg-ds-border" />
       <button
         type="button"
-        disabled
-        title="认证将在 Stage B 接线"
-        className="flex h-9 w-full items-center gap-2.5 px-2.5 text-left text-xs text-ds-red opacity-70"
+        disabled={!onLogout || logoutState === 'pending'}
+        className="flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-xs text-ds-red hover:bg-ds-surface-muted disabled:opacity-70 disabled:hover:bg-transparent"
+        onClick={() => {
+          if (!onLogout || logoutState === 'pending') return
+          setLogoutState('pending')
+          // 成功路径由 performLogout 整页跳转 /login，不需要复位；
+          // 失败时用文本态提示重试（状态不能只靠颜色，AGENTS §6）。
+          void onLogout().then((ok) => {
+            if (!ok) setLogoutState('failed')
+          })
+        }}
       >
         <LogOut aria-hidden className="size-4" />
-        退出登录
+        {logoutState === 'pending'
+          ? '正在退出…'
+          : logoutState === 'failed'
+            ? '退出失败，点击重试'
+            : '退出登录'}
       </button>
       {footer}
     </div>

@@ -13,6 +13,7 @@ import {
   SIDEBAR_RAIL_WIDTH,
 } from '@/lib/layout/breakpoints'
 import { AppSidebar } from './app-sidebar'
+import type { SidebarAccountInfo } from '@/components/ui/sidebar'
 import { AnimatedAside, DrawerOverlay } from './collapsible-panel'
 import { useNavContext } from './nav-context'
 import { resolveActiveSection, resolveSidebarMode } from './sidebar-mode'
@@ -20,7 +21,11 @@ import { resolveActiveSection, resolveSidebarMode } from './sidebar-mode'
 export { resolveActiveSection, resolveSidebarMode } from './sidebar-mode'
 export type { SidebarMode } from './sidebar-mode'
 
-export function AppSidebarShell() {
+export function AppSidebarShell({
+  account,
+}: {
+  account?: SidebarAccountInfo | null
+}) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const nav = useNavContext()
@@ -66,6 +71,7 @@ export function AppSidebarShell() {
             active={active}
             projectId={projectId}
             rendererNodeId={rendererNodeId}
+            account={account}
             onCompactChange={() => setDrawerRequested(false)}
             className="h-full w-full"
           />
@@ -84,6 +90,7 @@ export function AppSidebarShell() {
         active={active}
         projectId={projectId}
         rendererNodeId={rendererNodeId}
+        account={account}
         compact={compact}
         onCompactChange={setManualCollapsed}
         className="h-full w-full"
