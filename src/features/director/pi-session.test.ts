@@ -531,6 +531,24 @@ describe('createDirectorSession', () => {
     expect(mocks.recordProviderSuccess).not.toHaveBeenCalled()
   })
 
+  it('keeps a pi-formatted 4xx status while discarding the provider body', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const session = await createDirectorSession({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      stage: 'INGEST',
+    })
+    mocks.agentInstances[0]!.state.errorMessage = '402: {"providerDetail":"must-not-leak"}'
+
+    const failure = await session.run({ prompt: '执行阶段', output: assistantOutput })
+      .then(() => null, (error: unknown) => error)
+    const message = failure instanceof Error ? failure.message : String(failure)
+
+    expect(message).toBe('Director 模型调用失败（stepfun/step-chat，HTTP 402）')
+    expect(message).not.toContain('providerDetail')
+    expect(mocks.recordProviderFailure).toHaveBeenCalledWith('stepfun')
+  })
+
   it('does not count an internal route contract contradiction against the breaker', async () => {
     // 纯音频端点无法承担文本会话是设置面矛盾（RouteContractError），
     // 不是外部故障：若计入熔断，一条配置错误就会把健康的 provider 熏成不可用。

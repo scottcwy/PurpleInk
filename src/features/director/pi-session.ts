@@ -241,8 +241,13 @@ function assertRunSucceeded(
 
 /** 仅保留上游 HTTP 状态码，不能把 provider 原始报文带入工作流错误面。 */
 function upstreamHttpStatus(message: string): number | null {
-  const match = /\b(?:HTTP|status(?:\s*code)?)\s*[:=]?\s*([45]\d{2})\b/i.exec(message)
-  return match ? Number(match[1]) : null
+  const labeled = /\b(?:HTTP|status(?:\s*code)?)\s*[:=]?\s*([45]\d{2})\b/i.exec(message)
+  // pi 的 OpenAI 兼容适配器会把 SDK 的 `error.status` 格式化成
+  // `402: <provider body>`。该正文绝不能进入工作流错误面，但状态码必须
+  // 保留下来，才能把配置/额度类 4xx 交给不可重试分类器。
+  const prefixed = /^\s*([45]\d{2})\s*:/.exec(message)
+  const status = labeled?.[1] ?? prefixed?.[1]
+  return status ? Number(status) : null
 }
 
 /** 会话级角色约束。阶段任务本体由 `stage-prompt.ts` 的 prompt builder 提供。 */
