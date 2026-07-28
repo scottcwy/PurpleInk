@@ -8,6 +8,7 @@ export type WorkflowErrorCode =
   | 'MEDIA_NOT_READY'
   | 'TASK_INTERRUPTED'
   | 'RETRY_BUDGET_EXHAUSTED'
+  | 'QUOTA_EXHAUSTED'
   | 'CONFIGURATION_BLOCKED'
   | 'PROVIDER_FAILED'
   | 'FABRICATE_FAILED'
@@ -63,6 +64,9 @@ function classifyByType(
   error: unknown,
   stage: string
 ): ClassifiedError | undefined {
+  if (error instanceof Error && error.name === 'QuotaExhaustedError') {
+    return QUOTA_EXHAUSTED_PROJECTION
+  }
   if (error instanceof z.ZodError) {
     return {
       code: 'STAGE_INPUT_INVALID',
@@ -117,8 +121,18 @@ const RETRY_BUDGET_EXHAUSTED_PROJECTION: ClassifiedError = {
   retryable: false,
 }
 
+const QUOTA_EXHAUSTED_PROJECTION: ClassifiedError = {
+  code: 'QUOTA_EXHAUSTED',
+  message: '本周期 AI 额度已用完，请升级套餐或等待下个周期重置。',
+  retryable: false,
+}
+
 /** 有序文案规则：先具体后笼统，命中即返回。 */
 const MESSAGE_RULES: ReadonlyArray<readonly [RegExp, ClassifiedError]> = [
+  [
+    /quota_exhausted|Managed AI quota is exhausted/i,
+    QUOTA_EXHAUSTED_PROJECTION,
+  ],
   [
     // 必须排在「缺失产物」规则之前：媒体未就绪的文案本身含「缺少」。
     /配音媒体尚未就绪|媒体尚未就绪/,

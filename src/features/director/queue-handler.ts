@@ -13,6 +13,7 @@ import {
   type QueueAdapter,
 } from '@/lib/queue'
 import { DirectorRuntimeRepository } from './runtime-repository'
+import { assertDirectorBillingAvailable } from './pi-provider'
 import { runStage as defaultRunStage } from './stage-runner'
 import { PIPELINE_STAGES, type PipelineStage } from './types'
 
@@ -29,7 +30,8 @@ export type DirectorStageJobInput = z.infer<typeof directorStageJobSchema>
 type RunStage = (
   projectId: string,
   nodeId: string,
-  stage: PipelineStage
+  stage: PipelineStage,
+  attemptId?: string,
 ) => Promise<void>
 
 interface EnqueueDependencies {
@@ -39,6 +41,7 @@ interface EnqueueDependencies {
   transitionNodeStatus: typeof transitionNodeStatus
   /** 毒任务闸门（可选）：重试预算耗尽时拒绝再次入队。 */
   assertRetryBudget?(kind: string, payload: Record<string, unknown>): Promise<void>
+  assertBillingAvailable?(input: DirectorStageJobInput): Promise<void>
   recordStageError(
     nodeId: string,
     stage: PipelineStage,
@@ -52,7 +55,7 @@ export function registerDirectorStageHandler(
 ): void {
   targetQueue.register('director-stage', async (job) => {
     const payload = directorStageJobSchema.parse(job.payload)
-    await runStage(payload.projectId, payload.nodeId, payload.stage)
+    await runStage(payload.projectId, payload.nodeId, payload.stage, job.id)
   })
 }
 
@@ -77,6 +80,7 @@ export async function enqueueDirectorStage(
   try {
     // 闸门在 try 内：预算耗尽走既有补偿链，落节点 failed + directorError 投影。
     await resolved.assertRetryBudget?.('director-stage', payload)
+    await resolved.assertBillingAvailable?.(payload)
     return await resolved.queue.enqueue('director-stage', payload, {
       projectId: payload.projectId,
       nodeId: payload.nodeId,
@@ -96,6 +100,11 @@ async function createDefaultEnqueueDependencies(): Promise<EnqueueDependencies> 
     captureInputFingerprint: captureNodeInputFingerprint,
     transitionNodeStatus,
     assertRetryBudget: assertEnqueueRetryBudget,
+    assertBillingAvailable: async (input) =>
+      assertDirectorBillingAvailable({
+        nodeType: await repository.loadNodeType(input.projectId, input.nodeId),
+        stage: input.stage,
+      }),
     recordStageError: (nodeId, stage, error) =>
       repository.recordStageError(nodeId, stage, error),
   }

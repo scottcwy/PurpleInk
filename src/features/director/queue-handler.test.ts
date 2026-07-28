@@ -50,7 +50,7 @@ describe('director queue handler', () => {
       'director-stage',
       expect.any(Function)
     )
-    expect(runStage).toHaveBeenCalledWith('project-1', 'node-1', 'INGEST')
+    expect(runStage).toHaveBeenCalledWith('project-1', 'node-1', 'INGEST', 'job-1')
   })
 
   it('moves the node to pending before enqueueing', async () => {
@@ -118,6 +118,39 @@ describe('director queue handler', () => {
       'failed',
     ])
     expect(recordStageError).toHaveBeenCalledWith('node-1', 'INGEST', failure)
+  })
+
+  it('stops before queueing when the managed billing preflight rejects', async () => {
+    const harness = createQueue()
+    const quotaError = Object.assign(new Error('quota_exhausted'), {
+      name: 'QuotaExhaustedError',
+      code: 'quota_exhausted',
+    })
+    const transitionNodeStatus = vi.fn(
+      async (_nodeId: string, _status: string) => {},
+    )
+    const recordStageError = vi.fn(async () => {})
+
+    await expect(enqueueDirectorStage(
+      { projectId: 'project-1', nodeId: 'node-1', stage: 'DIRECT' },
+      {
+        queue: harness.queue,
+        assertEnqueueable: vi.fn(async () => {}),
+        assertBillingAvailable: vi.fn(async () => {
+          throw quotaError
+        }),
+        transitionNodeStatus,
+        recordStageError,
+      },
+    )).rejects.toBe(quotaError)
+
+    expect(harness.queue.enqueue).not.toHaveBeenCalled()
+    expect(transitionNodeStatus.mock.calls.map((call) => call[1])).toEqual([
+      'pending',
+      'running',
+      'failed',
+    ])
+    expect(recordStageError).toHaveBeenCalledWith('node-1', 'DIRECT', quotaError)
   })
 
   it('registers before starting the application queue', () => {

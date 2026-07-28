@@ -33,12 +33,18 @@ describe('generateSubtitle', () => {
         audioBytes: Buffer.from([1, 2, 3]),
         audioFormat: 'mp3',
       },
-      { transcribe, storeArtifact }
+      {
+        transcribe,
+        measure: measuredAudio,
+        storeArtifact,
+      }
     )
 
     expect(transcribe).toHaveBeenCalledWith({
       audioBytes: Buffer.from([1, 2, 3]),
       audioFormat: 'mp3',
+      audioSeconds: 1,
+      billingContext: undefined,
     })
     const trackWrite = storeArtifact.mock.calls[0]?.[0] as Record<string, unknown>
     expect(trackWrite).toMatchObject({
@@ -97,6 +103,7 @@ describe('generateSubtitle', () => {
             model: 'stepaudio-2.5-asr',
             captions: [],
           })),
+          measure: measuredAudio,
           storeArtifact: vi.fn(),
         }
       )
@@ -143,3 +150,12 @@ describe('generateSubtitle', () => {
     ])
   })
 })
+
+async function measuredAudio() {
+  return {
+    durationMs: 1000,
+    sampleRateHz: 24_000,
+    sampleCount: 24_000,
+    container: 'mp3' as const,
+  }
+}

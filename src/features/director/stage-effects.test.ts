@@ -77,6 +77,7 @@ describe('Director stage effects', () => {
 
     await target.effect({
       ...baseContext,
+      attemptId: 'attempt-1',
       nodeType: 'shot-subtitle',
       directorInput: {
         shot: { id: 'S001' },
@@ -95,6 +96,10 @@ describe('Director stage effects', () => {
       audioKey: 'narration/project-1/u001.mp3',
       audioBytes: expect.any(Buffer),
       audioFormat: 'mp3',
+      billingContext: {
+        attemptId: 'attempt-1',
+        invocationNo: 100,
+      },
     })
   })
 

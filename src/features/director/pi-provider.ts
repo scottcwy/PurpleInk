@@ -8,6 +8,7 @@ import type { Api, Model, MutableModels } from '@earendil-works/pi-ai'
 import { googleGenerativeAIApi } from '@earendil-works/pi-ai/api/google-generative-ai.lazy'
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy'
 import type { CanvasNodeType } from '@/features/canvas'
+import { assertBillingAvailable } from '@/features/billing'
 import {
   DIRECTOR_NODE_TYPES,
   resolveDirectorModelTarget,
@@ -79,6 +80,9 @@ export interface DirectorModelRuntime {
   providerId: AiProviderId
   /** 供失败分类使用的选型描述，不含任何凭据。 */
   routeLabel: string
+  modelId: string
+  maxOutputTokens: number
+  deductsManagedPool: boolean
 }
 
 /**
@@ -144,11 +148,28 @@ export async function createDirectorModelRuntime(input: {
     model,
     apiKey: target.apiKey,
     providerId: target.provider,
+    modelId: target.modelId,
+    maxOutputTokens: requestShape.maxTokens,
+    deductsManagedPool: target.deductsManagedPool === true,
     // 降级发生时 routeLabel 如实标注备选身份：该标签随失败落入
     // attempt.failure 与服务端日志，是降级事实在错误链路上的可追溯出口。
     routeLabel: target.degradedFrom
       ? `${target.provider}/${target.modelId}（备选，主选 ${target.degradedFrom} 已熔断）`
       : `${target.provider}/${target.modelId}`,
+  }
+}
+
+/** 入队前的轻量额度预检；BYOK 路由不受平台成本池影响。 */
+export async function assertDirectorBillingAvailable(input: {
+  nodeType?: string | null
+  stage: PipelineStage
+}): Promise<void> {
+  const target = await resolveDirectorModelTarget(
+    trustedNodeType(input.nodeType, input.stage),
+    'text',
+  )
+  if (target.deductsManagedPool === true) {
+    await assertBillingAvailable()
   }
 }
 

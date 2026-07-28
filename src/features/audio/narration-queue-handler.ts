@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { classifyWorkflowError, type WorkflowErrorProjection } from '@/features/canvas/workflow-error'
+import { isManagedProvider } from '@/features/ai'
+import { assertBillingAvailable } from '@/features/billing'
 import { advancePipeline } from '@/features/director/advance'
 import {
   buildMeasuredAudioAllocation,
@@ -22,11 +24,16 @@ import { canvasNodes } from '@/lib/db/schema/index'
 import { queue as defaultQueue, type QueueAdapter } from '@/lib/queue'
 import { storage } from '@/lib/storage'
 import { synthesizeNarration, type NarrationResult } from './narration'
+import { describeMediaProvider } from './media-provider'
 
 const mediaNarrationJobSchema = z
   .object({
     projectId: z.string().min(1),
     nodeId: z.string().min(1),
+    billingContext: z.object({
+      attemptId: z.string().min(1),
+      invocationNo: z.number().int().min(1),
+    }).strict().optional(),
   })
   .strict()
 
@@ -48,6 +55,10 @@ export interface MediaNarrationDependencies {
     projectId: string
     nodeId: string
     units: Array<{ unitId: string; text: string }>
+    billingContext?: {
+      attemptId: string
+      invocationNo: number
+    }
   }): Promise<NarrationResult>
   persistResult(input: PersistMediaResultInput): Promise<string>
   updateMediaState(nodeId: string, state: MediaState): Promise<void>
@@ -70,6 +81,7 @@ export async function runMediaNarrationJob(
     const narration = await resolved.synthesize({
       ...payload,
       units: scriptUnits.map(({ unitId, text }) => ({ unitId, text })),
+      billingContext: payload.billingContext,
     })
     const audioManifest = buildMeasuredAudioManifest(scriptUnits, narration)
     const audioAllocation = buildMeasuredAudioAllocation(scriptUnits, audioManifest)
@@ -104,19 +116,34 @@ export function registerMediaNarrationHandler(
   run: typeof runMediaNarrationJob = runMediaNarrationJob
 ): void {
   targetQueue.register('media-narration', async (job) => {
-    await run(mediaNarrationJobSchema.parse(job.payload))
+    await run(mediaNarrationJobSchema.parse({
+      ...job.payload,
+      billingContext: {
+        attemptId: job.id,
+        invocationNo: 1,
+      },
+    }))
   })
 }
 
 export async function enqueueMediaNarration(
   input: MediaNarrationJobInput,
-  targetQueue: QueueAdapter = defaultQueue
+  targetQueue: QueueAdapter = defaultQueue,
+  preflight: () => Promise<void> = assertNarrationBillingAvailable,
 ): Promise<string> {
   const payload = mediaNarrationJobSchema.parse(input)
+  await preflight()
   return targetQueue.enqueue('media-narration', payload, {
     projectId: payload.projectId,
     nodeId: payload.nodeId,
   })
+}
+
+async function assertNarrationBillingAvailable(): Promise<void> {
+  const target = await describeMediaProvider('tts')
+  if (isManagedProvider(target.provider)) {
+    await assertBillingAvailable()
+  }
 }
 
 async function createDefaultDependencies(): Promise<MediaNarrationDependencies> {

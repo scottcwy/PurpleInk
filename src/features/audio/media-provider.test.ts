@@ -13,6 +13,7 @@ import {
   synthesizeRoutedSpeech,
   transcribeRoutedSpeech,
 } from './media-provider'
+import type { ManagedAudioBillingInput } from './managed-audio-billing'
 
 // 被测模块经 currentWorkspaceId() 取归属（PLAN-002 阶段 B）；单测没有请求入口，
 // 把读取口 mock 成历史单工作区 id，与用例 seed 的数据保持一致。
@@ -118,7 +119,14 @@ function routedDependencies(provider: Provider, config = dependencies(provider))
       captions: [{ text: '自定义转写', startMs: 0, endMs: 900 }],
       timestampMode: 'segment' as const,
     })),
+    billManaged: bypassManagedBilling,
   }
+}
+
+async function bypassManagedBilling<T>(
+  input: ManagedAudioBillingInput<T>,
+): Promise<T> {
+  return input.invoke()
 }
 
 describe('media provider dispatcher', () => {
@@ -139,12 +147,28 @@ describe('media provider dispatcher', () => {
     await transcribeRoutedSpeech({
       audioBytes: Buffer.from('wav'),
       audioFormat: 'wav',
+      audioSeconds: 1,
     }, deps)
 
     expect(deps.synthesizeMimo).toHaveBeenCalledOnce()
     expect(deps.transcribeMimo).toHaveBeenCalledOnce()
     expect(deps.synthesizeStepfun).not.toHaveBeenCalled()
     expect(deps.synthesizeCustom).not.toHaveBeenCalled()
+  })
+
+  it('keeps provider adapters untouched when the managed quota gate rejects', async () => {
+    const deps = {
+      ...routedDependencies('mimo'),
+      billManaged: async <T>(_input: ManagedAudioBillingInput<T>): Promise<T> => {
+        throw new Error('quota_exhausted')
+      },
+    }
+
+    await expect(synthesizeRoutedSpeech({ text: '旁白' }, deps))
+      .rejects.toThrow('quota_exhausted')
+
+    expect(deps.synthesizeMimo).not.toHaveBeenCalled()
+    expect(deps.synthesizeStepfun).not.toHaveBeenCalled()
   })
 
   it('takes voice, container and model from the custom TTS profile', async () => {
@@ -170,18 +194,32 @@ describe('media provider dispatcher', () => {
   })
 
   it('routes custom audio calls to the OpenAI-compatible client', async () => {
-    const ttsDeps = routedDependencies(CUSTOM_TTS_PROVIDER)
+    let billingCalls = 0
+    const billManaged = async <T>(
+      _input: ManagedAudioBillingInput<T>,
+    ): Promise<T> => {
+      billingCalls += 1
+      throw new Error('custom calls must not enter the managed ledger')
+    }
+    const ttsDeps = {
+      ...routedDependencies(CUSTOM_TTS_PROVIDER),
+      billManaged,
+    }
     await synthesizeRoutedSpeech({ text: '旁白' }, ttsDeps)
     expect(ttsDeps.synthesizeCustom).toHaveBeenCalledOnce()
     expect(ttsDeps.synthesizeMimo).not.toHaveBeenCalled()
 
-    const asrDeps = routedDependencies(CUSTOM_ASR_PROVIDER)
+    const asrDeps = {
+      ...routedDependencies(CUSTOM_ASR_PROVIDER),
+      billManaged,
+    }
     const result = await transcribeRoutedSpeech({
       audioBytes: Buffer.from('wav'),
       audioFormat: 'wav',
     }, asrDeps)
     expect(asrDeps.transcribeCustom).toHaveBeenCalledOnce()
     expect(result.alignmentSource).toBe('openai-compatible-asr-segment')
+    expect(billingCalls).toBe(0)
   })
 
   it('marks whole-clip alignment when the endpoint returns no timestamps', async () => {

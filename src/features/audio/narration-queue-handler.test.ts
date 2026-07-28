@@ -89,7 +89,7 @@ describe('media narration queue', () => {
   })
 
   it('registers and enqueues a dedicated queue kind on the INGEST aggregate', async () => {
-    let handler: ((job: Parameters<QueueAdapter['register']>[1] extends infer H ? H : never) => unknown) | undefined
+    let handler: Parameters<QueueAdapter['register']>[1] | undefined
     const queue = {
       register: vi.fn((kind, registered) => {
         expect(kind).toBe('media-narration')
@@ -104,7 +104,8 @@ describe('media narration queue', () => {
 
     await enqueueMediaNarration(
       { projectId: 'project-1', nodeId: 'ingest-1' },
-      queue
+      queue,
+      vi.fn(async () => {}),
     )
     expect(queue.enqueue).toHaveBeenCalledWith(
       'media-narration',
@@ -112,5 +113,34 @@ describe('media narration queue', () => {
       { projectId: 'project-1', nodeId: 'ingest-1' }
     )
     expect(handler).toBeDefined()
+    await handler?.({
+      id: 'attempt-1',
+      workspaceId: 'workspace-1',
+      kind: 'media-narration',
+      status: 'running',
+      payload: { projectId: 'project-1', nodeId: 'ingest-1' },
+      attempts: 1,
+    })
+    expect(run).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      nodeId: 'ingest-1',
+      billingContext: { attemptId: 'attempt-1', invocationNo: 1 },
+    })
+  })
+
+  it('does not enqueue narration when the quick billing preflight fails', async () => {
+    const queue = {
+      enqueue: vi.fn(async () => 'job-1'),
+    } as unknown as QueueAdapter
+
+    await expect(enqueueMediaNarration(
+      { projectId: 'project-1', nodeId: 'ingest-1' },
+      queue,
+      vi.fn(async () => {
+        throw new Error('quota_exhausted')
+      }),
+    )).rejects.toThrow('quota_exhausted')
+
+    expect(queue.enqueue).not.toHaveBeenCalled()
   })
 })

@@ -14,6 +14,7 @@ import {
   type SynthesizedSpeech,
 } from './media-provider'
 import type { Caption } from './types'
+import type { AudioBillingContext } from './managed-audio-billing'
 
 /**
  * INGEST 阶段的旁白合成：每个 script unit 一段真实 TTS 音频。
@@ -36,6 +37,10 @@ const inputSchema = z
     units: z.array(unitSchema).min(1),
     voiceId: z.string().trim().min(1).optional(),
     concurrency: z.number().int().min(1).optional(),
+    billingContext: z.object({
+      attemptId: z.string().min(1),
+      invocationNo: z.number().int().min(1),
+    }).strict().optional(),
   })
   .strict()
 
@@ -68,6 +73,7 @@ export interface NarrationDependencies {
   synthesize: (input: {
     text: string
     voiceId?: string
+    billingContext?: AudioBillingContext
   }) => Promise<SynthesizedSpeech>
   measure: (bytes: Buffer) => Promise<MeasuredAudio>
   reuseAudio: (key: string) => Promise<Buffer | null>
@@ -116,6 +122,12 @@ export async function synthesizeNarration(
           audioFormat: engine.audioFormat,
           voice,
           request,
+          billingContext: parsed.billingContext
+            ? {
+                attemptId: parsed.billingContext.attemptId,
+                invocationNo: parsed.billingContext.invocationNo + index,
+              }
+            : undefined,
         },
         dependencies
       )
@@ -152,6 +164,7 @@ async function synthesizeUnit(
     voice: string
     audioFormat: 'mp3' | 'wav'
     request: z.infer<typeof unitSchema>
+    billingContext?: AudioBillingContext
   },
   dependencies: NarrationDependencies
 ): Promise<NarrationUnit> {
@@ -170,6 +183,9 @@ async function synthesizeUnit(
         await dependencies.synthesize({
           text: context.request.text,
           voiceId: context.voice,
+          ...(context.billingContext
+            ? { billingContext: context.billingContext }
+            : {}),
         })
       )
   const bytes = cached ?? speech?.audioBytes

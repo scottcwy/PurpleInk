@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { withApiSession } from '@/features/auth/api-session'
+import { QuotaExhaustedError } from '@/features/billing'
 import { classifyWorkflowError } from '@/features/canvas'
 import { executeNodeAction, skipNodeAction } from '@/features/director'
 import {
@@ -57,6 +58,16 @@ async function handlePost(request: Request) {
       await executeNodeAction({ projectId, nodeId, intent })
     )
   } catch (error) {
+    if (error instanceof QuotaExhaustedError) {
+      return NextResponse.json(
+        {
+          code: error.code,
+          resetAt: error.resetAt,
+          billingUrl: error.billingUrl,
+        },
+        { status: 402 },
+      )
+    }
     // 跳过被业务规则拒绝属于「请求语义不可满足」而非状态冲突：422，只回类别文案。
     if (error instanceof Error && error.name === 'SkipRejectedError') {
       return NextResponse.json(

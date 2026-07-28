@@ -24,6 +24,10 @@ export interface SubtitleInput {
   audioKey: string
   audioBytes: Buffer
   audioFormat: 'mp3' | 'wav' | 'ogg' | 'pcm'
+  billingContext?: {
+    attemptId: string
+    invocationNo: number
+  }
 }
 
 export interface SfxInput {

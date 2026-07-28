@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { withApiSession } from '@/features/auth/api-session'
+import { QuotaExhaustedError } from '@/features/billing'
 import { classifyWorkflowError } from '@/features/canvas'
 import {
   startProjectPipeline,
@@ -24,6 +25,16 @@ async function handlePost(request: Request) {
     const result = await startProjectPipeline(parsed.projectId)
     return NextResponse.json({ ok: true, ...result })
   } catch (error) {
+    if (error instanceof QuotaExhaustedError) {
+      return NextResponse.json(
+        {
+          code: error.code,
+          resetAt: error.resetAt,
+          billingUrl: error.billingUrl,
+        },
+        { status: 402 },
+      )
+    }
     const projected = classifyWorkflowError(error, { stage: 'QUEUE' })
     return NextResponse.json(
       {

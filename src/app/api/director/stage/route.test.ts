@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { QuotaExhaustedError } from '@/features/billing'
 import { POST } from './route'
 
 const mocks = vi.hoisted(() => ({
@@ -56,6 +57,25 @@ describe('POST /api/director/stage', () => {
       ok: false,
       error: '上游产物缺失或不包含当前镜头，需要先修复上游阶段。',
       code: 'UPSTREAM_ARTIFACT_MISSING',
+    })
+  })
+
+  it('returns the public 402 quota contract without queueing a provider call', async () => {
+    mocks.executeNodeAction.mockRejectedValue(
+      new QuotaExhaustedError('2026-08-27T00:00:00.000Z'),
+    )
+
+    const response = await POST(request({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      intent: 'execute',
+    }))
+
+    expect(response.status).toBe(402)
+    await expect(response.json()).resolves.toEqual({
+      code: 'quota_exhausted',
+      resetAt: '2026-08-27T00:00:00.000Z',
+      billingUrl: '/products/billing',
     })
   })
 

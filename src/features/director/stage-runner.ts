@@ -86,7 +86,8 @@ interface StageRunnerDependencies {
 type StageRunner = (
   projectId: string,
   nodeId: string,
-  stage: PipelineStage
+  stage: PipelineStage,
+  attemptId?: string,
 ) => Promise<void>
 
 let defaultRunner: Promise<StageRunner> | undefined
@@ -132,7 +133,7 @@ async function createDefaultRunner(): Promise<StageRunner> {
 export function createStageRunner(
   dependencies: StageRunnerDependencies
 ): StageRunner {
-  return async (projectId, nodeId, stage) => {
+  return async (projectId, nodeId, stage, attemptId) => {
     const streamKey = `${projectId}:${nodeId}`
     let session: DirectorSession | undefined
     let closed = false
@@ -144,10 +145,14 @@ export function createStageRunner(
         nodeId,
         stage
       )
+      const executionContext: DirectorStageContext = attemptId
+        ? { ...context, attemptId }
+        : context
       const prompt = dependencies.buildPrompt(stage, context)
       session = await dependencies.createSession({
         projectId,
         nodeId,
+        ...(attemptId ? { attemptId } : {}),
         nodeType: context.nodeType,
         stage,
         resumeSessionKey: context.resumeSessionKey,
@@ -161,7 +166,7 @@ export function createStageRunner(
         writeArtifact: dependencies.writeArtifact,
       })
       await dependencies.commitResult(context, prepared, artifact)
-      await dependencies.runStageEffect(context, prepared, artifact)
+      await dependencies.runStageEffect(executionContext, prepared, artifact)
       await dependencies.repository.persistStreamLog(
         projectId,
         nodeId,

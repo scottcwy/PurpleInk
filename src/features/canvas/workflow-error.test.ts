@@ -23,6 +23,16 @@ function stageInputError(): unknown {
 }
 
 describe('classifyWorkflowError', () => {
+  it('projects quota exhaustion as a non-retryable workflow stop', () => {
+    const error = Object.assign(new Error('Managed AI quota is exhausted'), {
+      name: 'QuotaExhaustedError',
+    })
+
+    expect(classifyWorkflowError(error, { stage: 'DIRECT' })).toMatchObject({
+      code: 'QUOTA_EXHAUSTED',
+      retryable: false,
+    })
+  })
   it('turns missing upstream artifacts into a safe retryable projection', () => {
     expect(
       classifyWorkflowError(

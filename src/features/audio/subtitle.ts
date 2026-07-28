@@ -24,6 +24,10 @@ const inputSchema = z
     audioKey: z.string().min(1),
     audioBytes: z.instanceof(Buffer).refine((bytes) => bytes.length > 0),
     audioFormat: z.enum(['mp3', 'wav', 'ogg', 'pcm']),
+    billingContext: z.object({
+      attemptId: z.string().min(1),
+      invocationNo: z.number().int().min(1),
+    }).strict().optional(),
   })
   .strict()
 
@@ -31,6 +35,11 @@ interface SubtitleDependencies {
   transcribe: (input: {
     audioBytes: Buffer
     audioFormat: 'mp3' | 'wav' | 'ogg' | 'pcm'
+    audioSeconds: number
+    billingContext?: {
+      attemptId: string
+      invocationNo: number
+    }
   }) => Promise<TranscribedSpeech | RoutedTranscribedSpeech>
   measure?: (bytes: Buffer) => Promise<MeasuredAudio>
   storeArtifact: (
@@ -48,16 +57,18 @@ export async function generateSubtitle(
   }
 ): Promise<SubtitleResult> {
   const parsed = inputSchema.parse(input)
+  const measured = await (dependencies.measure ?? measureAudio)(parsed.audioBytes)
   const transcription = await dependencies.transcribe({
     audioBytes: parsed.audioBytes,
     audioFormat: parsed.audioFormat,
+    audioSeconds: measured.durationMs / 1000,
+    billingContext: parsed.billingContext,
   })
   const alignmentSource = readAlignmentSource(transcription)
   let captions = transcription.captions
   // 用谓词而不是逐个比较取值：新增一种「无逐段时间戳」的 ASR 端点时漏掉这里，
   // 会产出零 caption 的字幕轨，也就是一个永久空产物。
   if (captions.length === 0 && needsWholeClipAlignment(alignmentSource)) {
-    const measured = await (dependencies.measure ?? measureAudio)(parsed.audioBytes)
     captions = [{
       text: transcription.transcript,
       startMs: 0,

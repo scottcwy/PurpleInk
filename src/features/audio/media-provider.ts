@@ -5,6 +5,7 @@ import {
   getStepfunConfig,
   type AiConfigDependencies,
 } from '@/features/ai/config'
+import { requireManagedCredential } from '@/features/ai'
 import {
   synthesizeMimoSpeech,
   transcribeMimoSpeech,
@@ -19,6 +20,11 @@ import {
   type SynthesizedSpeech,
   type TranscribedSpeech,
 } from './stepfun-audio-client'
+import {
+  runManagedAudioBilling,
+  type AudioBillingContext,
+  type ManagedAudioBillingInput,
+} from './managed-audio-billing'
 
 export const CUSTOM_TTS_PROVIDER = 'openai-compatible-tts' as const
 export const CUSTOM_ASR_PROVIDER = 'openai-compatible-asr' as const
@@ -74,6 +80,7 @@ interface RoutedMediaDependencies {
     input: { audioBytes: Buffer; audioFormat: 'mp3' | 'wav' },
     deps: AiConfigDependencies,
   ) => Promise<TranscribedSpeech & { timestampMode: 'segment' | 'none' }>
+  billManaged?: <T>(input: ManagedAudioBillingInput<T>) => Promise<T>
 }
 
 function defaultDependencies(): RoutedMediaDependencies {
@@ -175,28 +182,57 @@ export async function resolveNarrationEngine(
       audioFormat: profile.audioFormat,
     }
   }
+  if (target.provider !== 'stepfun' && target.provider !== 'mimo') {
+    throw new Error(`媒体路由供应商不支持 TTS：${target.provider}`)
+  }
   return target.provider === 'mimo'
     ? { ...target, voice: 'mimo_default', audioFormat: 'wav' }
     : { ...target, voice: 'cixingnansheng', audioFormat: 'mp3' }
 }
 
 export async function synthesizeRoutedSpeech(
-  input: { text: string; voiceId?: string },
+  input: {
+    text: string
+    voiceId?: string
+    billingContext?: AudioBillingContext
+  },
   dependencies: RoutedMediaDependencies = defaultDependencies(),
 ): Promise<SynthesizedSpeech> {
   const target = await resolveProvider('tts', dependencies.config)
   if (target.provider === CUSTOM_TTS_PROVIDER) {
-    return dependencies.synthesizeCustom(input, dependencies.config)
+    return dependencies.synthesizeCustom(
+      { text: input.text, voiceId: input.voiceId },
+      dependencies.config,
+    )
   }
-  return target.provider === 'mimo'
-    ? dependencies.synthesizeMimo(input)
-    : dependencies.synthesizeStepfun(input)
+  if (target.provider !== 'stepfun' && target.provider !== 'mimo') {
+    throw new Error(`媒体路由供应商不支持 TTS：${target.provider}`)
+  }
+  const managedProvider = target.provider
+  const invoke = () => managedProvider === 'mimo'
+    ? dependencies.synthesizeMimo({ text: input.text, voiceId: input.voiceId })
+    : dependencies.synthesizeStepfun({ text: input.text, voiceId: input.voiceId })
+  return (dependencies.billManaged ?? runManagedAudioBilling)({
+    provider: managedProvider,
+    model: target.model,
+    capability: 'tts',
+    billingContext: input.billingContext,
+    estimate: { kind: 'tts', characters: input.text.length },
+    input: input.text,
+    prepare: async () => {
+      requireManagedCredential(managedProvider)
+    },
+    invoke,
+    outputBytes: (speech) => speech.audioBytes,
+  })
 }
 
 export async function transcribeRoutedSpeech(
   input: {
     audioBytes: Buffer
     audioFormat: 'mp3' | 'wav' | 'ogg' | 'pcm'
+    audioSeconds?: number
+    billingContext?: AudioBillingContext
   },
   dependencies: RoutedMediaDependencies = defaultDependencies(),
 ): Promise<RoutedTranscribedSpeech> {
@@ -213,15 +249,41 @@ export async function transcribeRoutedSpeech(
         : 'openai-compatible-asr-whole',
     }
   }
-  if (target.provider === 'mimo') {
-    const result = await dependencies.transcribeMimo({
-      audioBytes: input.audioBytes,
-      audioFormat: compactFormat(input, 'MiMo ASR'),
-    })
-    return { ...result, alignmentSource: 'mimo-asr-segment' }
+  if (target.provider !== 'stepfun' && target.provider !== 'mimo') {
+    throw new Error(`媒体路由供应商不支持 ASR：${target.provider}`)
   }
-  const result = await dependencies.transcribeStepfun(input)
-  return { ...result, alignmentSource: 'stepfun-asr' }
+  const managedProvider = target.provider
+  const audioSeconds = input.audioSeconds
+  if (!Number.isFinite(audioSeconds) || (audioSeconds ?? 0) <= 0) {
+    throw new Error('托管 ASR 调用缺少实测音频时长')
+  }
+  const invoke = async () => {
+    if (managedProvider === 'mimo') {
+      const result = await dependencies.transcribeMimo({
+        audioBytes: input.audioBytes,
+        audioFormat: compactFormat(input, 'MiMo ASR'),
+      })
+      return { ...result, alignmentSource: 'mimo-asr-segment' as const }
+    }
+    const result = await dependencies.transcribeStepfun({
+      audioBytes: input.audioBytes,
+      audioFormat: input.audioFormat,
+    })
+    return { ...result, alignmentSource: 'stepfun-asr' as const }
+  }
+  return (dependencies.billManaged ?? runManagedAudioBilling)({
+    provider: managedProvider,
+    model: target.model,
+    capability: 'asr',
+    billingContext: input.billingContext,
+    estimate: { kind: 'asr', audioSeconds: audioSeconds! },
+    input: input.audioBytes,
+    prepare: async () => {
+      requireManagedCredential(managedProvider)
+    },
+    invoke,
+    outputBytes: (speech) => speech.transcript,
+  })
 }
 
 /** 只接受 MP3 / WAV 的供应商共用的收窄：格式不符必须显式失败，不静默转码。 */

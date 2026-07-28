@@ -28,6 +28,8 @@ import { classifyWorkflowError } from '@/features/canvas/workflow-error'
 export type { ArtifactPointerInput } from './runtime-artifact-writer'
 
 export interface DirectorStageContext {
+  /** 当前队列 attempt；只在执行期注入，不属于持久化阶段输入。 */
+  attemptId?: string
   projectId: string
   nodeId: string
   nodeType: string | null
@@ -80,6 +82,22 @@ export class DirectorRuntimeRepository {
     if (!['idle', 'failed', 'stale', 'skipped'].includes(status)) {
       throw new Error(`Director 节点当前不可入队：${status}`)
     }
+  }
+
+  async loadNodeType(projectId: string, nodeId: string): Promise<string | null> {
+    const [node] = await this.db
+      .select({ type: canvasNodes.type })
+      .from(canvasNodes)
+      .where(
+        and(
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
+          eq(canvasNodes.projectId, projectId),
+          eq(canvasNodes.id, nodeId),
+        ),
+      )
+      .limit(1)
+    if (!node) throw new Error(`Director 节点不存在或不属于项目：${nodeId}`)
+    return node.type
   }
 
   async loadStageContext(

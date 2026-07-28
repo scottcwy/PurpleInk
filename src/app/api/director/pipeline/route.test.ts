@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { QuotaExhaustedError } from '@/features/billing'
 import { DELETE, POST } from './route'
 
 const mocks = vi.hoisted(() => ({
@@ -63,6 +64,21 @@ describe('/api/director/pipeline', () => {
     })
     expect(mocks.initQueue).toHaveBeenCalledOnce()
     expect(mocks.startProjectPipeline).toHaveBeenCalledWith('project-1')
+  })
+
+  it('returns the public 402 quota contract', async () => {
+    mocks.startProjectPipeline.mockRejectedValue(
+      new QuotaExhaustedError('2026-08-27T00:00:00.000Z'),
+    )
+
+    const response = await POST(request('POST', { projectId: 'project-1' }))
+
+    expect(response.status).toBe(402)
+    await expect(response.json()).resolves.toEqual({
+      code: 'quota_exhausted',
+      resetAt: '2026-08-27T00:00:00.000Z',
+      billingUrl: '/products/billing',
+    })
   })
 
   it('returns blocked instead of claiming a zero-enqueue start', async () => {

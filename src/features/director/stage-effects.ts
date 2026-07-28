@@ -67,6 +67,16 @@ export function createDirectorStageEffect(
         audioKey: source.audioKey,
         audioBytes: source.audioBytes,
         audioFormat: source.audioFormat,
+        // Director 文本调用占用低位 invocationNo；100 是 ASR 副作用的保留槽，
+        // 避免工具循环、修复调用与字幕计费记录发生唯一键冲突。
+        ...(context.attemptId
+          ? {
+              billingContext: {
+                attemptId: context.attemptId,
+                invocationNo: 100,
+              },
+            }
+          : {}),
       })
       return
     }
