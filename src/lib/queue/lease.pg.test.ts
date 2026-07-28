@@ -66,7 +66,7 @@ describe('sweepExpiredLeases', () => {
     expect(readDirectorError(node.data)).toMatchObject({
       code: 'TASK_INTERRUPTED',
       retryable: true,
-      message: '执行进程中断，任务已自动回收，可重试',
+      message: '执行进程中断，任务已自动回收。这是系统回收僵尸任务的保护机制，可放心重试',
     })
 
     // 未过期的 running attempt 完全不受影响。
