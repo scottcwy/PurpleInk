@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { withApiSession } from '@/features/auth/api-session'
-import { QuotaExhaustedError } from '@/features/billing'
+import {
+  assertBillingAvailable,
+  QuotaExhaustedError,
+} from '@/features/billing'
 import { classifyWorkflowError } from '@/features/canvas'
 import {
   startProjectPipeline,
@@ -20,8 +23,9 @@ export function POST(request: Request): Promise<Response> {
 async function handlePost(request: Request) {
   const parsed = await parseRequest(request)
   if (!parsed.success) return parsed.response
-  await initQueue()
   try {
+    await assertBillingAvailable()
+    await initQueue()
     const result = await startProjectPipeline(parsed.projectId)
     return NextResponse.json({ ok: true, ...result })
   } catch (error) {

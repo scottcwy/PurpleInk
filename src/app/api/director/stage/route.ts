@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { withApiSession } from '@/features/auth/api-session'
-import { QuotaExhaustedError } from '@/features/billing'
+import {
+  assertBillingAvailable,
+  QuotaExhaustedError,
+} from '@/features/billing'
 import { classifyWorkflowError } from '@/features/canvas'
 import { executeNodeAction, skipNodeAction } from '@/features/director'
 import {
@@ -38,7 +41,6 @@ export function POST(request: Request): Promise<Response> {
 }
 
 async function handlePost(request: Request) {
-  await initQueue()
   const body: unknown = await request.json().catch(() => null)
   const parsed = requestSchema.safeParse(body)
   if (!parsed.success) {
@@ -54,6 +56,8 @@ async function handlePost(request: Request) {
         await skipNodeAction({ projectId, nodeId, reason: skipReason! })
       )
     }
+    await assertBillingAvailable()
+    await initQueue()
     return NextResponse.json(
       await executeNodeAction({ projectId, nodeId, intent })
     )

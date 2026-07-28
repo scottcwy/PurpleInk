@@ -3,12 +3,17 @@ import { QuotaExhaustedError } from '@/features/billing'
 import { DELETE, POST } from './route'
 
 const mocks = vi.hoisted(() => ({
+  assertBillingAvailable: vi.fn(),
   startProjectPipeline: vi.fn(),
   stopProjectPipeline: vi.fn(),
   initQueue: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
+vi.mock('@/features/billing', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/billing')>()),
+  assertBillingAvailable: mocks.assertBillingAvailable,
+}))
 // 会话层单独有 pg 测试覆盖；这里只验路由业务分支，直接以假会话放行。
 vi.mock('@/features/auth/api-session', () => ({
   withApiSession: (handler: (session: unknown) => Promise<Response>) =>
@@ -30,6 +35,7 @@ vi.mock('@/lib/queue/init', () => ({ initQueue: mocks.initQueue }))
 describe('/api/director/pipeline', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.assertBillingAvailable.mockResolvedValue(undefined)
     mocks.startProjectPipeline.mockResolvedValue({
       autopilot: true,
       status: 'started',
@@ -67,7 +73,7 @@ describe('/api/director/pipeline', () => {
   })
 
   it('returns the public 402 quota contract', async () => {
-    mocks.startProjectPipeline.mockRejectedValue(
+    mocks.assertBillingAvailable.mockRejectedValue(
       new QuotaExhaustedError('2026-08-27T00:00:00.000Z'),
     )
 
@@ -79,6 +85,8 @@ describe('/api/director/pipeline', () => {
       resetAt: '2026-08-27T00:00:00.000Z',
       billingUrl: '/products/billing',
     })
+    expect(mocks.initQueue).not.toHaveBeenCalled()
+    expect(mocks.startProjectPipeline).not.toHaveBeenCalled()
   })
 
   it('returns blocked instead of claiming a zero-enqueue start', async () => {

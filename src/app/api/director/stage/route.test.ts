@@ -3,11 +3,16 @@ import { QuotaExhaustedError } from '@/features/billing'
 import { POST } from './route'
 
 const mocks = vi.hoisted(() => ({
+  assertBillingAvailable: vi.fn(),
   executeNodeAction: vi.fn(),
   skipNodeAction: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
+vi.mock('@/features/billing', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/billing')>()),
+  assertBillingAvailable: mocks.assertBillingAvailable,
+}))
 // 会话层单独有 pg 测试覆盖；这里只验路由业务分支，直接以假会话放行。
 vi.mock('@/features/auth/api-session', () => ({
   withApiSession: (handler: (session: unknown) => Promise<Response>) =>
@@ -28,6 +33,7 @@ vi.mock('@/features/director', () => ({
 describe('POST /api/director/stage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.assertBillingAvailable.mockResolvedValue(undefined)
     mocks.executeNodeAction.mockResolvedValue({
       ok: true,
       action: 'execute',
@@ -61,7 +67,7 @@ describe('POST /api/director/stage', () => {
   })
 
   it('returns the public 402 quota contract without queueing a provider call', async () => {
-    mocks.executeNodeAction.mockRejectedValue(
+    mocks.assertBillingAvailable.mockRejectedValue(
       new QuotaExhaustedError('2026-08-27T00:00:00.000Z'),
     )
 
@@ -77,6 +83,7 @@ describe('POST /api/director/stage', () => {
       resetAt: '2026-08-27T00:00:00.000Z',
       billingUrl: '/products/billing',
     })
+    expect(mocks.executeNodeAction).not.toHaveBeenCalled()
   })
 
   it('returns the actual recovery action and queued node', async () => {
