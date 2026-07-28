@@ -2,9 +2,8 @@ import 'server-only'
 import {
   createModels,
   createProvider,
-  envApiKeyAuth,
 } from '@earendil-works/pi-ai'
-import type { Api, Model, MutableModels } from '@earendil-works/pi-ai'
+import type { Api, ApiKeyAuth, Model, MutableModels } from '@earendil-works/pi-ai'
 import { googleGenerativeAIApi } from '@earendil-works/pi-ai/api/google-generative-ai.lazy'
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy'
 import type { CanvasNodeType } from '@/features/canvas'
@@ -58,20 +57,6 @@ const REQUEST_SHAPE: Record<
   'openai-compatible-asr': null,
 }
 
-/**
- * pi 的 `envApiKeyAuth` 只用于提示用户「该填哪个环境变量」，真实凭据来自
- * `resolveDirectorModelTarget` 的加密存储。同样显式按 provider 声明，避免新
- * 供应商落到某个兜底分支上给出错误的变量名。
- */
-const AUTH_ENV_KEYS: Record<AiProviderId, readonly string[] | null> = {
-  gemini: ['GEMINI_API_KEY'],
-  stepfun: ['STEP_API_KEY'],
-  mimo: ['MIMO_API_KEY'],
-  'openai-compatible': ['OPENAI_COMPATIBLE_API_KEY'],
-  'openai-compatible-tts': null,
-  'openai-compatible-asr': null,
-}
-
 export interface DirectorModelRuntime {
   models: MutableModels
   model: Model<Api>
@@ -99,10 +84,9 @@ export async function createDirectorModelRuntime(input: {
   const target = await resolveDirectorModelTarget(nodeType, 'text')
   const label = PROVIDER_LABEL[target.provider]
   const requestShape = REQUEST_SHAPE[target.provider]
-  const authEnvKeys = AUTH_ENV_KEYS[target.provider]
   // 纯音频端点不可能承担文本会话。这是设置面矛盾而非外部抖动，用
   // RouteContractError 让分类器直接判定不可重试，而不是让画布劝用户反复重试。
-  if (!requestShape || !authEnvKeys) {
+  if (!requestShape) {
     throw new RouteContractError(
       `${label} 只提供音频能力，不能承担 Director 文本会话`,
     )
@@ -135,7 +119,7 @@ export async function createDirectorModelRuntime(input: {
       id: target.provider,
       baseUrl,
       auth: {
-        apiKey: envApiKeyAuth(`${label} API Key`, [...authEnvKeys]),
+        apiKey: resolvedRouteApiKeyAuth(`${label} API Key`, target.apiKey),
       },
       api: target.provider === 'gemini'
         ? googleGenerativeAIApi()
@@ -179,6 +163,20 @@ function trustedNodeType(
 ): CanvasNodeType {
   const trusted = DIRECTOR_NODE_TYPES.find((candidate) => candidate === nodeType)
   return trusted ?? STAGE_FALLBACK_NODE_TYPE[stage]
+}
+
+/**
+ * Director 路由已在服务端解析并完成授权；PI transport 必须消费这个最终值，
+ * 不能再次回退旧环境变量，否则托管凭据与实际请求会发生分叉。
+ */
+function resolvedRouteApiKeyAuth(name: string, apiKey: string): ApiKeyAuth {
+  return {
+    name,
+    resolve: async () => ({
+      auth: { apiKey },
+      source: 'resolved route credential',
+    }),
+  }
 }
 
 /**

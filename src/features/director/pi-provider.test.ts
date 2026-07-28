@@ -9,7 +9,12 @@ vi.mock('server-only', () => ({}))
 vi.mock('@earendil-works/pi-ai', () => ({
   createModels: vi.fn(() => models),
   createProvider: vi.fn((provider) => provider),
-  envApiKeyAuth: vi.fn(() => ({ type: 'env' })),
+  envApiKeyAuth: vi.fn(() => ({
+    resolve: async () => ({
+      auth: { apiKey: 'legacy-env-key' },
+      source: 'STEP_API_KEY',
+    }),
+  })),
 }))
 vi.mock('@earendil-works/pi-ai/api/google-generative-ai.lazy', () => ({
   googleGenerativeAIApi: vi.fn(() => ({ type: 'google' })),
@@ -45,6 +50,14 @@ describe('createDirectorModelRuntime', () => {
       id: 'mimo-v2.5-pro',
     })
     expect(runtime.routeLabel).toBe('openai-compatible/mimo-v2.5-pro')
+    const provider = models.setProvider.mock.calls.at(-1)?.[0]
+    const auth = await provider.auth.apiKey.resolve({
+      ctx: { env: vi.fn() },
+    })
+    expect(auth).toEqual({
+      auth: { apiKey: 'candidate-secret' },
+      source: 'resolved route credential',
+    })
   })
 
   it('keeps MiMo independent while using its OpenAI-compatible transport', async () => {
