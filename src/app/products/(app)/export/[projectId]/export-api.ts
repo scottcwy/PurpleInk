@@ -14,6 +14,12 @@ export interface ExportReadiness {
   artifactUrl?: string
   blockingIssues: ExportBlockingIssue[]
   media: ExportMediaReadiness
+  /** 当前缺渲染产物、可占位出片的 lane。 */
+  placeholderCandidateLanes: string[]
+  /** 降级导出是否可行（无项目级完整性阻塞）。 */
+  degradedReady: boolean
+  /** 最新成片若为降级产物，列出其占位镜头。 */
+  degradedExport: { placeholderLanes: string[] } | null
   artifactDelivery:
     | 'none'
     | 'legacy-silent-v1'
@@ -60,6 +66,9 @@ export async function loadExportReadiness(
       : DEFAULT_EXPORT_SETTINGS.resolutionPreset,
     blockingIssues: toBlockingIssues(body.blockingIssues),
     media: toMediaReadiness(body.media, body.shotCount),
+    placeholderCandidateLanes: toStringArray(body.placeholderCandidateLanes),
+    degradedReady: body.degradedReady === true,
+    degradedExport: toDegradedExport(body.degradedExport),
     artifactDelivery: isArtifactDelivery(body.artifactDelivery)
       ? body.artifactDelivery
       : 'none',
@@ -77,12 +86,16 @@ export async function loadExportReadiness(
 export async function startProjectExport(
   projectId: string,
   fetcher: typeof fetch = fetch,
-  wait: (milliseconds: number) => Promise<void> = delay
+  wait: (milliseconds: number) => Promise<void> = delay,
+  options: { degraded?: boolean } = {}
 ): Promise<string> {
   const response = await fetcher('/api/render/export', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ projectId }),
+    body: JSON.stringify({
+      projectId,
+      ...(options.degraded ? { degraded: true } : {}),
+    }),
   })
   const body = await objectBody(response)
   if (!response.ok) throw new Error(exportStartError(body))
@@ -244,6 +257,19 @@ function isArtifactDelivery(
     value === 'legacy-silent-v1' ||
     value === 'narration-hard-subtitle-v2'
   )
+}
+
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === 'string')
+}
+
+function toDegradedExport(
+  value: unknown
+): { placeholderLanes: string[] } | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const lanes = toStringArray((value as Record<string, unknown>).placeholderLanes)
+  return { placeholderLanes: lanes }
 }
 
 export function blockingIssueLabel(issue: ExportBlockingIssue): string {

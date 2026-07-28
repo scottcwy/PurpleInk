@@ -27,11 +27,23 @@ export function useExportRuntime(projectId: string) {
   }, [projectId])
 
   async function exportVideo(): Promise<string | undefined> {
+    return runExport({})
+  }
+
+  /** 降级导出：缺失分镜以占位顶替（用户显式确认后调用）。 */
+  async function exportDegraded(): Promise<string | undefined> {
+    return runExport({ degraded: true })
+  }
+
+  async function runExport(
+    options: { degraded?: boolean }
+  ): Promise<string | undefined> {
     setExporting(true)
     setError(undefined)
     try {
-      const url = await startProjectExport(projectId)
+      const url = await startProjectExport(projectId, fetch, undefined, options)
       setOutputUrl(url)
+      void loadExportReadiness(projectId).then(setReadiness).catch(() => {})
       return url
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '终片导出失败')
@@ -51,5 +63,5 @@ export function useExportRuntime(projectId: string) {
     }
   }
 
-  return { readiness, outputUrl, error, exporting, exportVideo, updateResolution }
+  return { readiness, outputUrl, error, exporting, exportVideo, exportDegraded, updateResolution }
 }

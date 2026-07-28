@@ -53,7 +53,9 @@ describe('Export workspace composition', () => {
     expect(settings).toContain('开始导出')
     expect(settings).toContain('ProgressBar')
     expect(settings).not.toContain('variant="tinted"')
-    expect(settings).not.toContain('variant="destructive"')
+    // 降级导出是独立的高代价 CTA（destructive）；正常开始导出仍为默认 primary。
+    expect(settings).toContain('降级导出')
+    expect(settings).toContain('variant="destructive"')
   })
 
   it('renders only readiness-backed media tracks and marks BGM/SFX as unwired', () => {

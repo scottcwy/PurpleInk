@@ -39,6 +39,9 @@ describe('export API client', () => {
         requiredShotCount: 1,
         delivery: 'narration-hard-subtitle-v2',
       },
+      placeholderCandidateLanes: [],
+      degradedReady: false,
+      degradedExport: null,
       artifactDelivery: 'legacy-silent-v1',
       artifactUrl: '/api/artifacts/final?projectId=project-1',
     })
@@ -61,6 +64,9 @@ describe('export API client', () => {
         requiredShotCount: 0,
         delivery: 'narration-hard-subtitle-v2',
       },
+      placeholderCandidateLanes: [],
+      degradedReady: false,
+      degradedExport: null,
       artifactDelivery: 'none',
     })
   })

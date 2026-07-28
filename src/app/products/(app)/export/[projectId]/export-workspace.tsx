@@ -38,6 +38,11 @@ export function ExportWorkspace({
     if (url) setSettingsOpen(false)
   }
 
+  async function handleDegradedExport() {
+    const url = await runtime.exportDegraded()
+    if (url) setSettingsOpen(false)
+  }
+
   return (
     <main className="min-h-0 flex-1 overflow-y-auto text-ds-text">
       <TopBar
@@ -64,6 +69,7 @@ export function ExportWorkspace({
               exporting={runtime.exporting}
               disabled={disabled}
               onExport={handleExport}
+              onDegradedExport={handleDegradedExport}
               onResolutionChange={runtime.updateResolution}
             />
           </Popover>

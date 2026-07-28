@@ -7,6 +7,7 @@ import { SegmentedControl } from '@/components/ui/segmented-control'
 import { SettingsGroup, SettingsSeparator } from '@/components/ui/settings-group'
 import { SettingsRow } from '@/components/ui/settings-row'
 import { Skeleton } from '@/components/ui/skeleton'
+import { StatusPill } from '@/components/ui/status-pill'
 import {
   EXPORT_RESOLUTION_PRESETS,
   MASTER_RESOLUTION_PRESET,
@@ -23,6 +24,7 @@ export interface ExportSettingsProps {
   exporting: boolean
   disabled: boolean
   onExport: () => void
+  onDegradedExport: () => void
   onResolutionChange: (preset: ResolutionPreset) => void
 }
 
@@ -33,6 +35,7 @@ export function ExportSettings({
   exporting,
   disabled,
   onExport,
+  onDegradedExport,
   onResolutionChange,
 }: ExportSettingsProps) {
   const currentPreset = readiness?.resolutionPreset ?? MASTER_RESOLUTION_PRESET
@@ -64,10 +67,40 @@ export function ExportSettings({
       <SettingsRow label="格式" value="MP4 (H.264 + AAC)" />
       <SettingsSeparator />
       <SettingsRow label="字幕交付" value={delivery} />
+      {readiness?.degradedExport && (
+        <>
+          <SettingsSeparator />
+          <div className="flex items-center justify-between gap-2 px-4 py-3">
+            <StatusPill
+              variant="stale"
+              label={`降级导出 · ${readiness.degradedExport.placeholderLanes.length} 镜占位`}
+            />
+            <span className="truncate text-xs text-ds-text-muted">
+              {readiness.degradedExport.placeholderLanes.join('、')}
+            </span>
+          </div>
+        </>
+      )}
       <div className="flex flex-col gap-3 p-4">
         <Button icon={Download} disabled={disabled} onClick={onExport}>
           开始导出
         </Button>
+        {readiness && !readiness.ready && readiness.degradedReady && (
+          <div className="flex flex-col gap-1.5">
+            <Button
+              variant="destructive"
+              disabled={exporting}
+              onClick={onDegradedExport}
+            >
+              {`降级导出（${degradedLaneCount(readiness)} 个镜头将以占位呈现）`}
+            </Button>
+            <p className="text-[11px] leading-relaxed text-ds-text-muted">
+              失败分镜将以黑场占位、无字幕（旁白保留），修复后重新导出可自动升级为完整版。
+              {readiness.placeholderCandidateLanes.length > 0 &&
+                `待占位：${readiness.placeholderCandidateLanes.join('、')}`}
+            </p>
+          </div>
+        )}
         {exporting ? (
           <div className="flex w-full flex-col gap-1.5" aria-live="polite">
             <div className="flex items-center justify-between text-[13px]">
@@ -82,4 +115,16 @@ export function ExportSettings({
       </div>
     </SettingsGroup>
   )
+}
+
+/** 待占位镜头数：优先用候选 lane，回退到阻塞项中的渲染缺失数。 */
+function degradedLaneCount(readiness: ExportReadiness): number {
+  if (readiness.placeholderCandidateLanes.length > 0) {
+    return readiness.placeholderCandidateLanes.length
+  }
+  return new Set(
+    readiness.blockingIssues
+      .filter((issue) => issue.kind === 'render' && issue.laneKey !== null)
+      .map((issue) => issue.laneKey)
+  ).size
 }
