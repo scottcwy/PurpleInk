@@ -2,8 +2,9 @@ import 'server-only'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { saveLaneQuotas } from '@/lib/queue/runtime-config'
 import { getAiConfigDependencies, saveStepfunModelSettings } from './config'
-import { saveGeminiApiKey, saveGeminiSettings } from './gemini-config'
-import { saveMimoApiKey, saveMimoSettings } from './mimo-config'
+import { saveGeminiSettings } from './gemini-config'
+import { saveMimoSettings } from './mimo-config'
+import { ManagedAiError } from './managed-service'
 import { saveDirectorRoutes } from './model-routing'
 import {
   CUSTOM_ASR_PROVIDER,
@@ -25,7 +26,6 @@ import {
 } from './provider-settings-dependencies'
 import { RouteContractError } from './route-contract-error'
 import type { StepfunSettings } from './schemas'
-import { saveApiKey } from './stepfun-adapter'
 
 /**
  * 执行写入。路由先落：`saveDirectorRoutes` 的能力合同错误属于设置面矛盾，
@@ -50,20 +50,32 @@ export async function applyProviderSettings(
     fallbackProvider,
     ...modelSettings
   } = input
-  try {
-    if (routes) await saveDirectorRoutes(routes)
-  } catch (error) {
-    if (error instanceof RouteContractError) return reject(422, error.message, false)
-    throw error
-  }
   const { apiKey: geminiApiKey, ...geminiSettings } = gemini ?? {}
   const { apiKey: mimoApiKey, ...mimoSettings } = mimo ?? {}
-  await saveStepfunModelSettings(modelSettings)
-  await saveGeminiSettings(geminiSettings)
-  await saveMimoSettings(mimoSettings)
-  if (apiKey !== undefined) await saveApiKey(apiKey)
-  if (geminiApiKey !== undefined) await saveGeminiApiKey(geminiApiKey)
-  if (mimoApiKey !== undefined) await saveMimoApiKey(mimoApiKey)
+  if (
+    apiKey !== undefined ||
+    geminiApiKey !== undefined ||
+    mimoApiKey !== undefined ||
+    hasManagedModelInput(modelSettings, geminiSettings, mimoSettings)
+  ) {
+    return reject(422, '托管凭据与模型由服务端管理，不接受设置写入', false)
+  }
+  try {
+    // 三个托管配置先完成无副作用预检，保证 baseUrl 合同失败时尚未落任何路由。
+    await saveStepfunModelSettings(modelSettings)
+    await saveGeminiSettings(geminiSettings)
+    await saveMimoSettings(mimoSettings)
+    const plan = await getAiConfigDependencies().currentPlan?.() ?? 'free'
+    if (plan === 'free' && fallbackProvider === 'gemini') {
+      return reject(422, 'Free 套餐不可使用 Gemini 托管服务', false)
+    }
+    if (routes) await saveDirectorRoutes(routes)
+  } catch (error) {
+    if (error instanceof RouteContractError || error instanceof ManagedAiError) {
+      return reject(422, error.message, false)
+    }
+    throw error
+  }
   if (customOpenAi) {
     await saveOpenAiCompatibleProfile(customOpenAi, customOpenAiDependencies())
   }
@@ -94,6 +106,18 @@ export async function applyProviderSettings(
     )
   }
   return OK
+}
+
+function hasManagedModelInput(
+  stepfun: object,
+  gemini: object,
+  mimo: object,
+): boolean {
+  return ['chatModel', 'ttsModel', 'asrModel', 'visionModel'].some((key) =>
+    key in stepfun)
+    || ['primaryModel', 'fastModel'].some((key) => key in gemini)
+    || ['textModel', 'visionModel', 'ttsModel', 'asrModel'].some((key) =>
+      key in mimo)
 }
 
 /**

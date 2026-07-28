@@ -1,18 +1,16 @@
 import 'server-only'
-import { currentWorkspaceId } from '@/lib/auth/workspace-context'
-import type { AiTaskKind, MediaTaskKind } from '@/features/routing'
 import {
   type AiConfigDependencies,
   getAiConfigDependencies,
   type StepfunConfigFieldView,
 } from './config'
+import { resolveManagedCredential } from './managed-credentials'
+import { RouteContractError } from './route-contract-error'
 
 export const MIMO_PROVIDER = 'mimo' as const
 
 export const MIMO_TTS_MODELS = [
   'mimo-v2.5-tts',
-  'mimo-v2.5-tts-voicedesign',
-  'mimo-v2.5-tts-voiceclone',
 ] as const
 
 export type MimoConfigField =
@@ -63,19 +61,10 @@ function nonEmpty(value: string | null | undefined): string | null {
 }
 
 function envOrDefault(field: MimoConfigField): StepfunConfigFieldView {
-  const value = nonEmpty(process.env[ENV_KEYS[field]])
+  const value = field === 'baseUrl' ? nonEmpty(process.env[ENV_KEYS[field]]) : null
   return value
     ? { value, source: 'env' }
     : { value: DEFAULTS[field], source: 'default' }
-}
-
-function configuredModel(
-  route: { provider: string; model: string } | null,
-  field: MimoConfigField
-): StepfunConfigFieldView {
-  return route?.provider === MIMO_PROVIDER
-    ? { value: route.model, source: 'settings' }
-    : envOrDefault(field)
 }
 
 export function resolveMimoBaseUrl(): string {
@@ -83,82 +72,33 @@ export function resolveMimoBaseUrl(): string {
 }
 
 export async function getMimoConfig(
-  deps: AiConfigDependencies = getAiConfigDependencies()
+  _deps: AiConfigDependencies = getAiConfigDependencies()
 ): Promise<MimoConfig> {
-  const [apiKey, text, vision, tts, asr] = await Promise.all([
-    deps.credentials.loadSecret(currentWorkspaceId(), MIMO_PROVIDER),
-    deps.modelRoutes.find(currentWorkspaceId(), 'fabricate'),
-    deps.modelRoutes.find(currentWorkspaceId(), 'vision-qa'),
-    deps.mediaRoutes.find(currentWorkspaceId(), 'tts'),
-    deps.mediaRoutes.find(currentWorkspaceId(), 'asr'),
-  ])
   return {
-    apiKey,
+    apiKey: resolveManagedCredential(MIMO_PROVIDER),
     baseUrl: resolveMimoBaseUrl(),
-    textModel: configuredModel(text, 'textModel').value,
-    visionModel: configuredModel(vision, 'visionModel').value,
-    ttsModel: configuredModel(tts, 'ttsModel').value,
-    asrModel: configuredModel(asr, 'asrModel').value,
+    textModel: DEFAULTS.textModel,
+    visionModel: DEFAULTS.visionModel,
+    ttsModel: DEFAULTS.ttsModel,
+    asrModel: DEFAULTS.asrModel,
   }
 }
 
 export async function describeMimoConfig(
-  deps: AiConfigDependencies = getAiConfigDependencies()
+  _deps: AiConfigDependencies = getAiConfigDependencies()
 ): Promise<MimoConfigView> {
-  const [text, vision, tts, asr] = await Promise.all([
-    deps.modelRoutes.find(currentWorkspaceId(), 'fabricate'),
-    deps.modelRoutes.find(currentWorkspaceId(), 'vision-qa'),
-    deps.mediaRoutes.find(currentWorkspaceId(), 'tts'),
-    deps.mediaRoutes.find(currentWorkspaceId(), 'asr'),
-  ])
   return {
     baseUrl: envOrDefault('baseUrl'),
-    textModel: configuredModel(text, 'textModel'),
-    visionModel: configuredModel(vision, 'visionModel'),
-    ttsModel: configuredModel(tts, 'ttsModel'),
-    asrModel: configuredModel(asr, 'asrModel'),
-  }
-}
-
-async function saveAiModels(
-  deps: AiConfigDependencies,
-  kinds: readonly AiTaskKind[],
-  value: string
-): Promise<void> {
-  const model = nonEmpty(value)
-  await Promise.all(kinds.map((aiTaskKind) =>
-    model
-      ? deps.modelRoutes.save({
-          workspaceId: currentWorkspaceId(),
-          aiTaskKind,
-          provider: MIMO_PROVIDER,
-          model,
-        })
-      : deps.modelRoutes.remove(currentWorkspaceId(), aiTaskKind)
-  ))
-}
-
-async function saveMediaModel(
-  deps: AiConfigDependencies,
-  mediaTaskKind: MediaTaskKind,
-  value: string
-): Promise<void> {
-  const model = nonEmpty(value)
-  if (model) {
-    await deps.mediaRoutes.save({
-      workspaceId: currentWorkspaceId(),
-      mediaTaskKind,
-      provider: MIMO_PROVIDER,
-      model,
-    })
-  } else {
-    await deps.mediaRoutes.remove(currentWorkspaceId(), mediaTaskKind)
+    textModel: envOrDefault('textModel'),
+    visionModel: envOrDefault('visionModel'),
+    ttsModel: envOrDefault('ttsModel'),
+    asrModel: envOrDefault('asrModel'),
   }
 }
 
 export async function saveMimoSettings(
   input: MimoSettingsInput,
-  deps: AiConfigDependencies = getAiConfigDependencies()
+  _deps: AiConfigDependencies = getAiConfigDependencies()
 ): Promise<void> {
   const requestedBaseUrl = nonEmpty(input.baseUrl)
   if (requestedBaseUrl && requestedBaseUrl.replace(/\/+$/, '') !== DEFAULTS.baseUrl) {
@@ -166,35 +106,20 @@ export async function saveMimoSettings(
       'Persisting a custom MiMo baseUrl is unsupported; use MIMO_BASE_URL'
     )
   }
-  const writes: Promise<void>[] = []
-  if (input.textModel !== undefined) {
-    writes.push(saveAiModels(
-      deps,
-      ['project-plan', 'shot-spec', 'fabricate'],
-      input.textModel
-    ))
+  if (
+    input.textModel !== undefined ||
+    input.visionModel !== undefined ||
+    input.ttsModel !== undefined ||
+    input.asrModel !== undefined
+  ) {
+    throw new RouteContractError('MiMo 托管模型由服务端目录管理，不接受设置写入')
   }
-  if (input.visionModel !== undefined) {
-    writes.push(saveAiModels(deps, ['vision-qa'], input.visionModel))
-  }
-  if (input.ttsModel !== undefined) {
-    writes.push(saveMediaModel(deps, 'tts', input.ttsModel))
-  }
-  if (input.asrModel !== undefined) {
-    writes.push(saveMediaModel(deps, 'asr', input.asrModel))
-  }
-  await Promise.all(writes)
 }
 
 export async function saveMimoApiKey(
-  apiKey: string,
-  verifiedAt = new Date(),
-  deps: AiConfigDependencies = getAiConfigDependencies()
+  _apiKey: string,
+  _verifiedAt = new Date(),
+  _deps: AiConfigDependencies = getAiConfigDependencies()
 ): Promise<void> {
-  await deps.credentials.save({
-    workspaceId: currentWorkspaceId(),
-    provider: MIMO_PROVIDER,
-    secret: apiKey.trim(),
-    verifiedAt,
-  })
+  throw new RouteContractError('MiMo 托管凭据由服务端管理，不接受设置写入')
 }

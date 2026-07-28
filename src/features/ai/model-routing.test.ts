@@ -89,18 +89,20 @@ function createDependencies() {
         : null
     }),
   }
-  return {
-    dependencies: {
-      credentials,
-      mediaRoutes,
-      modelRoutes,
-      openAiCompatibleProfiles: {
+  const dependencies: AiConfigDependencies = {
+    credentials,
+    mediaRoutes,
+    modelRoutes,
+    currentPlan: vi.fn(async () => 'plus' as const),
+    openAiCompatibleProfiles: {
         find: vi.fn(async () => customProfile),
         save: vi.fn(async (_workspaceId, profile) => {
           customProfile = profile
         }),
-      },
     },
+  }
+  return {
+    dependencies,
     media,
     models,
     secrets,
@@ -117,8 +119,9 @@ function tripBreaker(providerId: AiProviderId): void {
 beforeEach(() => {
   process.env = {
     ...originalEnv,
-    GEMINI_API_KEY: 'gemini-key',
-    STEPFUN_API_KEY: 'stepfun-key',
+    CVC_MANAGED_GEMINI_API_KEY: 'gemini-key',
+    CVC_MANAGED_STEPFUN_API_KEY: 'stepfun-key',
+    CVC_MANAGED_MIMO_API_KEY: 'mimo-key',
   }
   resetBreaker()
 })
@@ -137,6 +140,44 @@ describe('Director provider routing', () => {
       .resolves.toMatchObject({ provider: 'gemini' })
     await expect(getDirectorProvider('shot-sfx', dependencies))
       .resolves.toMatchObject({ provider: 'stepfun' })
+  })
+
+  it('uses StepFun by default on Free and rejects a configured Gemini route', async () => {
+    const { dependencies, models } = createDependencies()
+    dependencies.currentPlan = vi.fn(async () => 'free' as const)
+    await expect(getDirectorProvider('script-import', dependencies))
+      .resolves.toEqual({ provider: 'stepfun', source: 'default' })
+    models.set('project-plan', {
+      workspaceId: 'workspace',
+      aiTaskKind: 'project-plan',
+      provider: 'gemini',
+      model: 'gemini-3.1-flash-lite',
+      revision: 0,
+    })
+    await expect(resolveDirectorModelTarget(
+      'script-import',
+      'text',
+      dependencies,
+    )).rejects.toMatchObject({
+      code: 'MANAGED_GEMINI_FORBIDDEN_FOR_FREE',
+      status: 403,
+      retryable: false,
+    })
+  })
+
+  it('filters Gemini from the Free fallback chain before provider resolution', async () => {
+    const { dependencies } = createDependencies()
+    dependencies.currentPlan = vi.fn(async () => 'free' as const)
+    dependencies.fallbackProviders = {
+      find: vi.fn(async () => 'gemini' as const),
+      save: vi.fn(async () => {}),
+    }
+    tripBreaker('stepfun')
+    await expect(resolveDirectorModelTarget(
+      'script-import',
+      'text',
+      dependencies,
+    )).rejects.toMatchObject({ name: 'ProviderUnavailableError' })
   })
 
   it('persists AI and capability-compatible media routes', async () => {
@@ -182,7 +223,7 @@ describe('Director provider routing', () => {
     expect(dependencies.mediaRoutes.save).not.toHaveBeenCalled()
   })
 
-  it('resolves configured model and secret through the shared credential store', async () => {
+  it('rejects arbitrary managed models without reading workspace secrets', async () => {
     const { dependencies, models, secrets } = createDependencies()
     secrets.set('stepfun', 'stored-stepfun-key')
     models.set('fabricate', {
@@ -197,16 +238,8 @@ describe('Director provider routing', () => {
       'shot-codegen',
       'text',
       dependencies,
-    )).resolves.toEqual({
-      provider: 'stepfun',
-      baseUrl: 'https://api.stepfun.com/v1',
-      modelId: 'stored-fabricate',
-      apiKey: 'stored-stepfun-key',
-    })
-    expect(dependencies.credentials.loadSecret).toHaveBeenCalledWith(
-      expect.any(String),
-      'stepfun',
-    )
+    )).rejects.toMatchObject({ code: 'MANAGED_MODEL_NOT_AUTHORIZED', status: 403 })
+    expect(dependencies.credentials.loadSecret).not.toHaveBeenCalled()
   })
 
   it('resolves a custom OpenAI-compatible route with its endpoint and route model', async () => {
@@ -234,6 +267,8 @@ describe('Director provider routing', () => {
       baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
       modelId: 'mimo-v2.5-pro',
       apiKey: 'custom-key',
+      funding: 'byok',
+      deductsManagedPool: false,
     })
   })
 
@@ -256,7 +291,9 @@ describe('Director provider routing', () => {
       provider: 'mimo',
       baseUrl: 'https://api.xiaomimimo.com/v1',
       modelId: 'mimo-v2.5',
-      apiKey: 'stored-mimo-key',
+      apiKey: 'mimo-key',
+      funding: 'managed',
+      deductsManagedPool: true,
     })
   })
 
@@ -278,7 +315,7 @@ describe('Director provider routing', () => {
       dependencies,
     )).resolves.toMatchObject({
       provider: 'gemini',
-      modelId: 'gemini-3.6-flash',
+      modelId: 'gemini-3.1-flash-lite',
     })
 
     const routes = await describeDirectorRoutes(dependencies)
@@ -315,7 +352,7 @@ describe('Director provider routing', () => {
       workspaceId: 'workspace',
       aiTaskKind: 'project-plan',
       provider: 'gemini',
-      model: 'configured-text-model',
+      model: 'gemini-3.1-flash-lite',
       revision: 0,
     })
     media.set('tts', {
@@ -331,7 +368,7 @@ describe('Director provider routing', () => {
       resolveDirectorModelTarget('shot-sfx', 'text', dependencies)
     ).resolves.toMatchObject({
       provider: 'gemini',
-      modelId: 'configured-text-model',
+      modelId: 'gemini-3.1-flash-lite',
       apiKey: 'gemini-key',
     })
     const routes = await describeDirectorRoutes(dependencies)
@@ -387,7 +424,9 @@ describe('Director provider routing', () => {
       provider: 'stepfun',
       baseUrl: 'https://api.stepfun.com/v1',
       modelId: 'step-3.5-flash',
-      apiKey: 'stored-stepfun-key',
+      apiKey: 'stepfun-key',
+      funding: 'managed',
+      deductsManagedPool: true,
       degradedFrom: 'gemini',
     })
     expect(warn).toHaveBeenCalledWith(

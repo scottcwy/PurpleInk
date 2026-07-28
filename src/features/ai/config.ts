@@ -3,12 +3,11 @@ import {
   PostgresProviderCredentialStore,
   type ProviderCredentialStore,
 } from '@/features/credentials'
+import { getCurrentPlanKey, type PlanKey } from '@/features/billing'
 import {
-  type AiTaskKind,
   PostgresMediaRouteRepository,
   PostgresModelRouteRepository,
 } from '@/features/routing'
-import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb } from '@/lib/db/client'
 import {
   PostgresFallbackProviderStore,
@@ -22,6 +21,8 @@ import {
   PostgresOpenAiCompatibleProfileStore,
   type OpenAiCompatibleProfileStore,
 } from './openai-compatible-profile-store'
+import { resolveManagedCredential } from './managed-credentials'
+import { RouteContractError } from './route-contract-error'
 
 export type StepfunModelField =
   | 'baseUrl'
@@ -61,6 +62,8 @@ export interface AiConfigDependencies {
   openAiCompatibleAudioProfiles?: OpenAiCompatibleAudioProfileStore
   /** 熔断降级链的显式备选 provider（模式 H 阶段 4）；缺省即无备选。 */
   fallbackProviders?: FallbackProviderStore
+  /** 当前 workspace 套餐；测试可注入，默认经 billing 公共投影读取。 */
+  currentPlan?: () => Promise<PlanKey>
 }
 
 const credentials = new PostgresProviderCredentialStore(getDb)
@@ -72,6 +75,7 @@ const dependencies: AiConfigDependencies = {
   openAiCompatibleAudioProfiles:
     new PostgresOpenAiCompatibleAudioProfileStore(getDb),
   fallbackProviders: new PostgresFallbackProviderStore(getDb),
+  currentPlan: getCurrentPlanKey,
 }
 
 const DEFAULTS: Record<StepfunModelField, string> = {
@@ -84,10 +88,10 @@ const DEFAULTS: Record<StepfunModelField, string> = {
 
 const ENV_KEYS: Record<StepfunModelField, string> = {
   baseUrl: 'STEPFUN_BASE_URL',
-  chatModel: 'STEPFUN_CHAT_MODEL',
-  ttsModel: 'STEPFUN_TTS_MODEL',
-  asrModel: 'STEPFUN_ASR_MODEL',
-  visionModel: 'STEPFUN_VISION_MODEL',
+  chatModel: '',
+  ttsModel: '',
+  asrModel: '',
+  visionModel: '',
 }
 
 function nonEmpty(value: string | null | undefined): string | null {
@@ -96,20 +100,10 @@ function nonEmpty(value: string | null | undefined): string | null {
 }
 
 function envOrDefault(field: StepfunModelField): StepfunConfigFieldView {
-  const value = nonEmpty(process.env[ENV_KEYS[field]])
+  const value = field === 'baseUrl' ? nonEmpty(process.env[ENV_KEYS[field]]) : null
   return value
     ? { value, source: 'env' }
     : { value: DEFAULTS[field], source: 'default' }
-}
-
-function configuredModel(
-  provider: string | undefined,
-  model: string | undefined,
-  field: StepfunModelField,
-): StepfunConfigFieldView {
-  return provider === 'stepfun' && model
-    ? { value: model, source: 'settings' }
-    : envOrDefault(field)
 }
 
 export function getAiConfigDependencies(): AiConfigDependencies {
@@ -121,48 +115,27 @@ export function resolveStepfunBaseUrl(): string {
 }
 
 export async function getStepfunConfig(
-  deps: AiConfigDependencies = dependencies,
+  _deps: AiConfigDependencies = dependencies,
 ): Promise<StepfunConfig> {
-  const [storedKey, chat, vision, tts, asr] = await Promise.all([
-    deps.credentials.loadSecret(currentWorkspaceId(), 'stepfun'),
-    deps.modelRoutes.find(currentWorkspaceId(), 'fabricate'),
-    deps.modelRoutes.find(currentWorkspaceId(), 'vision-qa'),
-    deps.mediaRoutes.find(currentWorkspaceId(), 'tts'),
-    deps.mediaRoutes.find(currentWorkspaceId(), 'asr'),
-  ])
   return {
-    apiKey: storedKey,
+    apiKey: resolveManagedCredential('stepfun'),
     baseUrl: resolveStepfunBaseUrl(),
-    chatModel: configuredModel(chat?.provider, chat?.model, 'chatModel').value,
-    ttsModel: configuredModel(tts?.provider, tts?.model, 'ttsModel').value,
-    asrModel: configuredModel(asr?.provider, asr?.model, 'asrModel').value,
-    visionModel: configuredModel(
-      vision?.provider,
-      vision?.model,
-      'visionModel',
-    ).value,
+    chatModel: DEFAULTS.chatModel,
+    ttsModel: DEFAULTS.ttsModel,
+    asrModel: DEFAULTS.asrModel,
+    visionModel: DEFAULTS.visionModel,
   }
 }
 
 export async function describeStepfunConfig(
-  deps: AiConfigDependencies = dependencies,
+  _deps: AiConfigDependencies = dependencies,
 ): Promise<StepfunConfigView> {
-  const [chat, vision, tts, asr] = await Promise.all([
-    deps.modelRoutes.find(currentWorkspaceId(), 'fabricate'),
-    deps.modelRoutes.find(currentWorkspaceId(), 'vision-qa'),
-    deps.mediaRoutes.find(currentWorkspaceId(), 'tts'),
-    deps.mediaRoutes.find(currentWorkspaceId(), 'asr'),
-  ])
   return {
     baseUrl: envOrDefault('baseUrl'),
-    chatModel: configuredModel(chat?.provider, chat?.model, 'chatModel'),
-    ttsModel: configuredModel(tts?.provider, tts?.model, 'ttsModel'),
-    asrModel: configuredModel(asr?.provider, asr?.model, 'asrModel'),
-    visionModel: configuredModel(
-      vision?.provider,
-      vision?.model,
-      'visionModel',
-    ),
+    chatModel: envOrDefault('chatModel'),
+    ttsModel: envOrDefault('ttsModel'),
+    asrModel: envOrDefault('asrModel'),
+    visionModel: envOrDefault('visionModel'),
   }
 }
 
@@ -174,25 +147,9 @@ export interface StepfunModelSettingsInput {
   visionModel?: string
 }
 
-async function saveAiModel(
-  deps: AiConfigDependencies,
-  kinds: readonly AiTaskKind[],
-  value: string,
-): Promise<void> {
-  const model = nonEmpty(value)
-  await Promise.all(kinds.map((aiTaskKind) => model
-    ? deps.modelRoutes.save({
-        workspaceId: currentWorkspaceId(),
-        aiTaskKind,
-        provider: 'stepfun',
-        model,
-      })
-    : deps.modelRoutes.remove(currentWorkspaceId(), aiTaskKind)))
-}
-
 export async function saveStepfunModelSettings(
   input: StepfunModelSettingsInput,
-  deps: AiConfigDependencies = dependencies,
+  _deps: AiConfigDependencies = dependencies,
 ): Promise<void> {
   const requestedBaseUrl = nonEmpty(input.baseUrl)
   if (requestedBaseUrl && requestedBaseUrl !== DEFAULTS.baseUrl) {
@@ -200,31 +157,12 @@ export async function saveStepfunModelSettings(
       'Persisting a custom StepFun baseUrl is unsupported; use STEPFUN_BASE_URL',
     )
   }
-  const writes: Promise<unknown>[] = []
-  if (input.chatModel !== undefined) {
-    writes.push(saveAiModel(
-      deps,
-      ['project-plan', 'shot-spec', 'fabricate'],
-      input.chatModel,
-    ))
+  if (
+    input.chatModel !== undefined ||
+    input.visionModel !== undefined ||
+    input.ttsModel !== undefined ||
+    input.asrModel !== undefined
+  ) {
+    throw new RouteContractError('StepFun 托管模型由服务端目录管理，不接受设置写入')
   }
-  if (input.visionModel !== undefined) {
-    writes.push(saveAiModel(deps, ['vision-qa'], input.visionModel))
-  }
-  for (const [mediaTaskKind, value] of [
-    ['tts', input.ttsModel],
-    ['asr', input.asrModel],
-  ] as const) {
-    if (value === undefined) continue
-    const model = nonEmpty(value)
-    writes.push(model
-      ? deps.mediaRoutes.save({
-          workspaceId: currentWorkspaceId(),
-          mediaTaskKind,
-          provider: 'stepfun',
-          model,
-        })
-      : deps.mediaRoutes.remove(currentWorkspaceId(), mediaTaskKind))
-  }
-  await Promise.all(writes)
 }

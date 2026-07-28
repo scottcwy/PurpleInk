@@ -1,11 +1,12 @@
 import 'server-only'
-import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import {
   type AiConfigDependencies,
   getAiConfigDependencies,
   type StepfunConfigFieldView,
   type StepfunConfigSource,
 } from './config'
+import { resolveManagedCredential } from './managed-credentials'
+import { RouteContractError } from './route-contract-error'
 
 export type GeminiConfigField = 'baseUrl' | 'primaryModel' | 'fastModel'
 
@@ -26,7 +27,7 @@ const ENV_KEYS: Record<GeminiConfigField, string> = {
 
 const DEFAULTS: Record<GeminiConfigField, string> = {
   baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
-  primaryModel: 'gemini-3.6-flash',
+  primaryModel: 'gemini-3.1-flash-lite',
   fastModel: 'gemini-3.1-flash-lite',
 }
 
@@ -36,20 +37,10 @@ function nonEmpty(value: string | null | undefined): string | null {
 }
 
 function envOrDefault(field: GeminiConfigField): StepfunConfigFieldView {
-  const value = nonEmpty(process.env[ENV_KEYS[field]])
+  const value = field === 'baseUrl' ? nonEmpty(process.env[ENV_KEYS[field]]) : null
   return value
     ? { value, source: 'env' }
     : { value: DEFAULTS[field], source: 'default' }
-}
-
-function configuredModel(
-  provider: string | undefined,
-  model: string | undefined,
-  field: GeminiConfigField,
-): StepfunConfigFieldView {
-  return provider === 'gemini' && model
-    ? { value: model, source: 'settings' }
-    : envOrDefault(field)
 }
 
 export function resolveGeminiBaseUrl(): string {
@@ -57,40 +48,23 @@ export function resolveGeminiBaseUrl(): string {
 }
 
 export async function getGeminiConfig(
-  deps: AiConfigDependencies = getAiConfigDependencies(),
+  _deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<GeminiConfig> {
-  const [storedKey, primary, fast] = await Promise.all([
-    deps.credentials.loadSecret(currentWorkspaceId(), 'gemini'),
-    deps.modelRoutes.find(currentWorkspaceId(), 'fabricate'),
-    deps.modelRoutes.find(currentWorkspaceId(), 'project-plan'),
-  ])
   return {
-    apiKey: storedKey,
+    apiKey: resolveManagedCredential('gemini'),
     baseUrl: resolveGeminiBaseUrl(),
-    primaryModel: configuredModel(
-      primary?.provider,
-      primary?.model,
-      'primaryModel',
-    ).value,
-    fastModel: configuredModel(fast?.provider, fast?.model, 'fastModel').value,
+    primaryModel: DEFAULTS.primaryModel,
+    fastModel: DEFAULTS.fastModel,
   }
 }
 
 export async function describeGeminiConfig(
-  deps: AiConfigDependencies = getAiConfigDependencies(),
+  _deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<GeminiConfigView> {
-  const [primary, fast] = await Promise.all([
-    deps.modelRoutes.find(currentWorkspaceId(), 'fabricate'),
-    deps.modelRoutes.find(currentWorkspaceId(), 'project-plan'),
-  ])
   return {
     baseUrl: envOrDefault('baseUrl'),
-    primaryModel: configuredModel(
-      primary?.provider,
-      primary?.model,
-      'primaryModel',
-    ),
-    fastModel: configuredModel(fast?.provider, fast?.model, 'fastModel'),
+    primaryModel: envOrDefault('primaryModel'),
+    fastModel: envOrDefault('fastModel'),
   }
 }
 
@@ -100,27 +74,9 @@ export interface GeminiSettingsInput {
   fastModel?: string
 }
 
-async function saveModelGroup(
-  deps: AiConfigDependencies,
-  input: {
-    kinds: readonly ('project-plan' | 'shot-spec' | 'fabricate' | 'vision-qa')[]
-    value: string
-  },
-): Promise<void> {
-  const model = nonEmpty(input.value)
-  await Promise.all(input.kinds.map((aiTaskKind) => model
-    ? deps.modelRoutes.save({
-        workspaceId: currentWorkspaceId(),
-        aiTaskKind,
-        provider: 'gemini',
-        model,
-      })
-    : deps.modelRoutes.remove(currentWorkspaceId(), aiTaskKind)))
-}
-
 export async function saveGeminiSettings(
   input: GeminiSettingsInput,
-  deps: AiConfigDependencies = getAiConfigDependencies(),
+  _deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<void> {
   const requestedBaseUrl = nonEmpty(input.baseUrl)
   if (requestedBaseUrl && requestedBaseUrl !== DEFAULTS.baseUrl) {
@@ -128,33 +84,17 @@ export async function saveGeminiSettings(
       'Persisting a custom Gemini baseUrl is unsupported; use GEMINI_BASE_URL',
     )
   }
-  const writes: Promise<void>[] = []
-  if (input.primaryModel !== undefined) {
-    writes.push(saveModelGroup(deps, {
-      kinds: ['shot-spec', 'fabricate', 'vision-qa'],
-      value: input.primaryModel,
-    }))
+  if (input.primaryModel !== undefined || input.fastModel !== undefined) {
+    throw new RouteContractError('Gemini 托管模型由服务端目录管理，不接受设置写入')
   }
-  if (input.fastModel !== undefined) {
-    writes.push(saveModelGroup(deps, {
-      kinds: ['project-plan'],
-      value: input.fastModel,
-    }))
-  }
-  await Promise.all(writes)
 }
 
 export async function saveGeminiApiKey(
-  apiKey: string,
-  verifiedAt = new Date(),
-  deps: AiConfigDependencies = getAiConfigDependencies(),
+  _apiKey: string,
+  _verifiedAt = new Date(),
+  _deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<void> {
-  await deps.credentials.save({
-    workspaceId: currentWorkspaceId(),
-    provider: 'gemini',
-    secret: apiKey,
-    verifiedAt,
-  })
+  throw new RouteContractError('Gemini 托管凭据由服务端管理，不接受设置写入')
 }
 
 export type { StepfunConfigSource as GeminiConfigSource }

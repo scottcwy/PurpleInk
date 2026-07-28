@@ -88,39 +88,35 @@ function dependencies() {
 }
 
 describe('MiMo configuration', () => {
-  it('resolves product API defaults without an env secret fallback', async () => {
+  it('uses only the managed credential with fixed catalog defaults', async () => {
     const { deps } = dependencies()
     process.env.MIMO_BASE_URL = ''
     process.env.MIMO_API_KEY = 'must-not-be-read'
+    process.env.CVC_MANAGED_MIMO_API_KEY = 'managed-mimo-key'
 
     await expect(getMimoConfig(deps)).resolves.toEqual({
-      apiKey: 'stored-mimo-key',
+      apiKey: 'managed-mimo-key',
       baseUrl: 'https://api.xiaomimimo.com/v1',
       textModel: 'mimo-v2.5',
       visionModel: 'mimo-v2.5',
       ttsModel: 'mimo-v2.5-tts',
       asrModel: 'mimo-v2.5-asr',
     })
+    expect(deps.credentials.loadSecret).not.toHaveBeenCalled()
   })
 
-  it('persists text, vision, TTS and ASR model routes under mimo', async () => {
+  it('rejects arbitrary managed model writes', async () => {
     const { deps, models, media } = dependencies()
-    await saveMimoSettings({
+    await expect(saveMimoSettings({
       textModel: 'mimo-v2.5',
       visionModel: 'mimo-v2.5',
       ttsModel: 'mimo-v2.5-tts-voicedesign',
       asrModel: 'mimo-v2.5-asr',
-    }, deps)
-
-    expect(models.get('fabricate')).toMatchObject({ provider: 'mimo' })
-    expect(models.get('vision-qa')).toMatchObject({ provider: 'mimo' })
-    expect(media.get('tts')).toMatchObject({
-      provider: 'mimo',
-      model: 'mimo-v2.5-tts-voicedesign',
-    })
-    expect(media.get('asr')).toMatchObject({ provider: 'mimo' })
+    }, deps)).rejects.toThrow('托管模型')
+    expect(models.size).toBe(0)
+    expect(media.size).toBe(0)
     await expect(describeMimoConfig(deps)).resolves.toMatchObject({
-      ttsModel: { source: 'settings' },
+      ttsModel: { value: 'mimo-v2.5-tts', source: 'default' },
     })
   })
 })

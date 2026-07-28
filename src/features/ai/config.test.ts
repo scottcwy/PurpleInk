@@ -97,6 +97,7 @@ beforeEach(() => {
   process.env = { ...originalEnv }
   for (const key of [
     'STEPFUN_API_KEY',
+    'CVC_MANAGED_STEPFUN_API_KEY',
     'STEPFUN_BASE_URL',
     'STEPFUN_CHAT_MODEL',
     'STEPFUN_TTS_MODEL',
@@ -124,22 +125,24 @@ describe('getStepfunConfig', () => {
     })
   })
 
-  it('uses model env values but never falls back to a plaintext credential env', async () => {
+  it('uses only the managed credential env and fixed catalog models', async () => {
     const { dependencies } = createDependencies()
     process.env.STEPFUN_API_KEY = 'env-key'
+    process.env.CVC_MANAGED_STEPFUN_API_KEY = 'managed-key'
     process.env.STEPFUN_CHAT_MODEL = 'env-chat'
     process.env.STEPFUN_TTS_MODEL = 'env-tts'
 
     await expect(getStepfunConfig(dependencies)).resolves.toMatchObject({
-      apiKey: null,
-      chatModel: 'env-chat',
-      ttsModel: 'env-tts',
+      apiKey: 'managed-key',
+      chatModel: 'step-3.5-flash',
+      ttsModel: 'stepaudio-2.5-tts',
     })
   })
 
-  it('prefers encrypted credentials and provider-matched routes over env', async () => {
+  it('ignores encrypted workspace credentials and arbitrary stored routes', async () => {
     const { dependencies, media, models, secrets } = createDependencies()
     process.env.STEPFUN_API_KEY = 'env-key'
+    process.env.CVC_MANAGED_STEPFUN_API_KEY = 'managed-key'
     process.env.STEPFUN_CHAT_MODEL = 'env-chat'
     secrets.set('stepfun', 'stored-key')
     models.set('fabricate', {
@@ -165,11 +168,12 @@ describe('getStepfunConfig', () => {
     })
 
     await expect(getStepfunConfig(dependencies)).resolves.toMatchObject({
-      apiKey: 'stored-key',
-      chatModel: 'stored-chat',
-      ttsModel: 'stored-tts',
-      visionModel: 'stored-vision',
+      apiKey: 'managed-key',
+      chatModel: 'step-3.5-flash',
+      ttsModel: 'stepaudio-2.5-tts',
+      visionModel: 'step-3.7-flash',
     })
+    expect(dependencies.credentials.loadSecret).not.toHaveBeenCalled()
   })
 })
 
@@ -188,15 +192,15 @@ describe('describeStepfunConfig', () => {
 
     const view = await describeStepfunConfig(dependencies)
 
-    expect(view.chatModel).toEqual({ value: 'custom-chat', source: 'settings' })
-    expect(view.asrModel).toEqual({ value: 'env-asr', source: 'env' })
+    expect(view.chatModel).toEqual({ value: 'step-3.5-flash', source: 'default' })
+    expect(view.asrModel).toEqual({ value: 'stepaudio-2.5-asr', source: 'default' })
     expect(view).not.toHaveProperty('apiKey')
     expect(JSON.stringify(view)).not.toContain('never-exposed')
   })
 })
 
 describe('saveStepfunModelSettings', () => {
-  it('writes only submitted model groups and clears empty overrides', async () => {
+  it('rejects all managed model writes without mutating routes', async () => {
     const { dependencies, media, models } = createDependencies()
     media.set('tts', {
       workspaceId: 'workspace',
@@ -206,14 +210,12 @@ describe('saveStepfunModelSettings', () => {
       revision: 0,
     })
 
-    await saveStepfunModelSettings({ chatModel: 'new-chat' }, dependencies)
-    expect([...models.keys()].sort()).toEqual(
-      ['fabricate', 'project-plan', 'shot-spec'].sort(),
-    )
-    expect(media.get('tts')?.model).toBe('existing-tts')
-
-    await saveStepfunModelSettings({ chatModel: '' }, dependencies)
+    await expect(saveStepfunModelSettings(
+      { chatModel: 'new-chat' },
+      dependencies,
+    )).rejects.toThrow('托管模型')
     expect(models.size).toBe(0)
+    expect(media.get('tts')?.model).toBe('existing-tts')
   })
 
   it('accepts empty/canonical base URLs but rejects unsupported persistence', async () => {

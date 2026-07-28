@@ -39,22 +39,14 @@ beforeEach(() => {
 })
 
 describe('credentials', () => {
-  it('reads and writes credentials only through the encrypted store', async () => {
-    mocks.loadSecret.mockResolvedValue('stored-key')
-    await expect(getStoredApiKey()).resolves.toBe('stored-key')
+  it('reads only the managed credential and rejects workspace writes', async () => {
+    process.env.CVC_MANAGED_STEPFUN_API_KEY = 'managed-key'
+    await expect(getStoredApiKey()).resolves.toBe('managed-key')
     const verifiedAt = new Date('2026-07-25T00:00:00.000Z')
-    await saveApiKey('new-key', verifiedAt)
+    await expect(saveApiKey('new-key', verifiedAt)).rejects.toThrow('托管凭据')
 
-    expect(mocks.loadSecret).toHaveBeenCalledWith(
-      '00000000-0000-4000-8000-000000000001',
-      'stepfun',
-    )
-    expect(mocks.saveSecret).toHaveBeenCalledWith({
-      workspaceId: '00000000-0000-4000-8000-000000000001',
-      provider: 'stepfun',
-      secret: 'new-key',
-      verifiedAt,
-    })
+    expect(mocks.loadSecret).not.toHaveBeenCalled()
+    expect(mocks.saveSecret).not.toHaveBeenCalled()
   })
 })
 

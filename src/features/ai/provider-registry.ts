@@ -34,7 +34,7 @@ export const PROVIDER_REGISTRY: Record<AiProviderId, ProviderDefinition> = {
     capabilities: ['text', 'vision'],
     defaultModels: {
       text: 'gemini-3.1-flash-lite',
-      vision: 'gemini-3.6-flash',
+      vision: 'gemini-3.1-flash-lite',
     },
   },
   stepfun: {

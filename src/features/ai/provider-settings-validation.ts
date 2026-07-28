@@ -1,7 +1,5 @@
 import 'server-only'
 import os from 'node:os'
-import { validateGeminiKey } from './gemini-adapter'
-import { validateMimoKey } from './mimo-adapter'
 import {
   validateAsrProfile,
   validateTtsProfile,
@@ -15,7 +13,6 @@ import {
 } from './provider-settings-contract'
 import { PROVIDER_REGISTRY, providerSupports } from './provider-registry'
 import type { StepfunSettings } from './schemas'
-import { validateKey } from './stepfun-adapter'
 
 /**
  * 先验证后保存的全部闸门（AGENTS §7）。返回 `ok: true` 才允许调用
@@ -28,6 +25,16 @@ export async function validateProviderSettings(
 ): Promise<ProviderSettingsOutcome> {
   const laneQuotas = checkLaneQuotas(input.laneQuotas)
   if (!laneQuotas.ok) return laneQuotas
+  const { apiKey: geminiApiKey, ...geminiSettings } = input.gemini ?? {}
+  const { apiKey: mimoApiKey, ...mimoSettings } = input.mimo ?? {}
+  if (
+    input.apiKey !== undefined ||
+    geminiApiKey !== undefined ||
+    mimoApiKey !== undefined ||
+    hasManagedModelInput(input, geminiSettings, mimoSettings)
+  ) {
+    return reject(422, '托管凭据与模型由服务端管理，不接受设置写入', false)
+  }
 
   // 备选 provider 服务于 Director 文本会话的降级：纯音频端点切过去必然
   // 以 RouteContractError 失败，在保存前就拒掉（先验证后保存）。
@@ -40,24 +47,6 @@ export async function validateProviderSettings(
       `${PROVIDER_REGISTRY[input.fallbackProvider].label} 不支持文本会话，不能作为备选 provider`,
       false,
     )
-  }
-
-  if (input.apiKey !== undefined && !(await validateKey(input.apiKey))) {
-    return keyValidationError('StepFun')
-  }
-
-  const { apiKey: geminiApiKey, ...geminiSettings } = input.gemini ?? {}
-  if (
-    geminiApiKey !== undefined
-    && !(await validateGeminiKey(geminiApiKey, geminiSettings))
-  ) {
-    return keyValidationError('Gemini')
-  }
-
-  const { apiKey: mimoApiKey, ...mimoSettings } = input.mimo ?? {}
-  if (mimoApiKey !== undefined) {
-    const validation = await validateMimoKey(mimoApiKey, mimoSettings)
-    if (!validation.ok) return mimoValidationError(validation.reason)
   }
 
   if (input.customOpenAi) {
@@ -93,6 +82,18 @@ export async function validateProviderSettings(
   return OK
 }
 
+function hasManagedModelInput(
+  stepfun: object,
+  gemini: object,
+  mimo: object,
+): boolean {
+  return ['chatModel', 'ttsModel', 'asrModel', 'visionModel'].some((key) =>
+    key in stepfun)
+    || ['primaryModel', 'fastModel'].some((key) => key in gemini)
+    || ['textModel', 'visionModel', 'ttsModel', 'asrModel'].some((key) =>
+      key in mimo)
+}
+
 /**
  * ISSUE-011: renderShot 上限依赖运行期 CPU 数，schema 无法静态表达上限——
  * 在写入任何 secret / models / routes / laneQuotas 之前做二次校验。
@@ -105,26 +106,6 @@ function checkLaneQuotas(
   return laneQuotas.renderShotConcurrency > cpuCount
     ? reject(400, `渲染并发数不可超过 CPU 核数 (${cpuCount})`)
     : OK
-}
-
-function keyValidationError(
-  provider: 'StepFun' | 'Gemini',
-): ProviderSettingsOutcome {
-  return reject(422, `${provider} Key 校验失败 · 请检查 Key 是否正确`, false)
-}
-
-function mimoValidationError(
-  reason:
-    | 'token-plan-not-for-backend'
-    | 'invalid-key-format'
-    | 'provider-failed',
-): ProviderSettingsOutcome {
-  const error = reason === 'token-plan-not-for-backend'
-    ? 'MiMo Token Plan Key 仅用于编程工具，PurpleInk 后端请使用 sk- 产品 API Key'
-    : reason === 'invalid-key-format'
-      ? 'MiMo 产品 API Key 格式无效，请使用 sk- Key'
-      : 'MiMo Key 校验失败，请检查产品 API Key、额度和端点'
-  return reject(422, error, false)
 }
 
 /**

@@ -5,12 +5,17 @@ import type { CanvasNodeType } from '@/features/canvas'
 import type { AiTaskKind } from '@/features/routing'
 import { type AiConfigDependencies, getAiConfigDependencies } from './config'
 import { isProviderAvailable } from './provider-breaker'
-import { ProviderUnavailableError } from './provider-unavailable-error'
 import { providerDefaults } from './route-provider-defaults'
+import {
+  authorizeManagedRoute,
+  isManagedProvider,
+  type ManagedPlanKey,
+  type ManagedRouteAuthorization,
+} from './managed-service'
+import { resolveAuthorizedFallback } from './managed-fallback'
 import {
   AI_PROVIDER_IDS,
   assertProviderCapability,
-  providerSupports,
   type AiProviderId,
   type ProviderCapability,
 } from './provider-registry'
@@ -83,6 +88,8 @@ export interface DirectorModelTarget {
   baseUrl: string
   modelId: string
   apiKey: string | null
+  funding?: ManagedRouteAuthorization['funding']
+  deductsManagedPool?: boolean
   /**
    * 仅在降级发生时存在：记录被熔断的主选 provider。返回值必须如实反映
    * 实际执行的备选（provider/modelId 就是备选的），降级事实通过本字段、
@@ -104,10 +111,17 @@ function sessionTarget(nodeType: CanvasNodeType): AiRouteTarget {
     : { domain: 'ai', kind: MEDIA_LANE_SESSION_TASK }
 }
 
-function defaultProviderFor(target: RouteTarget): AiProviderId {
+function defaultProviderFor(
+  target: RouteTarget,
+  plan: ManagedPlanKey = 'free',
+): AiProviderId {
   return target.domain === 'media'
     ? DEFAULT_MEDIA_PROVIDER[target.kind]
-    : DEFAULT_AI_PROVIDER[target.kind]
+    : plan === 'free' ? 'stepfun' : DEFAULT_AI_PROVIDER[target.kind]
+}
+
+async function currentPlan(deps: AiConfigDependencies): Promise<ManagedPlanKey> {
+  return deps.currentPlan ? deps.currentPlan() : 'free'
 }
 
 async function findRoute(
@@ -123,6 +137,12 @@ async function resolveRoute(
   target: RouteTarget,
   deps: AiConfigDependencies,
 ): Promise<ResolvedRoute | null> {
+  const stored = await findRoute(target, deps)
+  if (!stored) return null
+  const provider = providerSchema.parse(stored.provider)
+  if (isManagedProvider(provider)) {
+    return { provider, model: stored.model, secret: null }
+  }
   const route = target.domain === 'media'
     ? await deps.mediaRoutes.resolve(currentWorkspaceId(), target.kind)
     : await deps.modelRoutes.resolve(currentWorkspaceId(), target.kind)
@@ -139,11 +159,12 @@ export async function getDirectorProvider(
   deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<DirectorProviderView> {
   const target = ROUTE_TARGET[nodeType]
+  const plan = await currentPlan(deps)
   const configured = await findRoute(target, deps)
   const provider = providerSchema.safeParse(configured?.provider)
   return provider.success
     ? { provider: provider.data, source: 'settings' }
-    : { provider: defaultProviderFor(target), source: 'default' }
+    : { provider: defaultProviderFor(target, plan), source: 'default' }
 }
 
 /**
@@ -158,77 +179,74 @@ export async function resolveDirectorModelTarget(
   deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<DirectorModelTarget> {
   const target = sessionTarget(nodeType)
+  const plan = await currentPlan(deps)
   const configured = await resolveRoute(target, deps)
-  const primary = configured?.provider ?? defaultProviderFor(target)
+  const primary = configured?.provider ?? defaultProviderFor(target, plan)
+  if (configured) {
+    authorizeManagedRoute({
+      plan,
+      provider: configured.provider,
+      modelId: configured.model,
+      capability,
+    })
+  }
   // 熔断检查必须在真正发起调用的解析处：half-open 的试探名额会被本次调用占用。
   // 健康路径完全旁路降级链：不读备选配置，也不产生 degradedFrom 字段。
   if (!isProviderAvailable(primary)) {
-    return degradeToFallback(primary, target, capability, deps)
+    return resolveAuthorizedFallback({ primary, target, capability, plan, deps })
   }
   if (configured) {
     const defaults = await providerDefaults(configured.provider, deps)
+    const authorization = authorizeManagedRoute({
+      plan,
+      provider: configured.provider,
+      modelId: configured.model,
+      capability,
+    })
     return {
       provider: configured.provider,
       baseUrl: defaults.baseUrl,
       modelId: configured.model,
-      apiKey: configured.secret,
+      apiKey: isManagedProvider(configured.provider)
+        ? defaults.apiKey
+        : configured.secret,
+      ...authorization,
     }
   }
   const defaults = await providerDefaults(primary, deps)
+  const modelId = defaults.modelFor(target, capability)
+  const authorization = authorizeManagedRoute({
+    plan,
+    provider: primary,
+    modelId,
+    capability,
+  })
   return {
     provider: primary,
     baseUrl: defaults.baseUrl,
-    modelId: defaults.modelFor(target, capability),
+    modelId,
     apiKey: defaults.apiKey,
-  }
-}
-
-/**
- * 降级链（保守设计，默认关闭）：主选熔断 open 时，只有用户在
- * workspace_settings 里显式配置了备选且备选确实可用才切换；其余一律抛
- * `ProviderUnavailableError`（分类为 PROVIDER_FAILED，retryable=true），
- * 绝不擅自替用户换模型，也不回显任何 provider 原始错误。
- */
-async function degradeToFallback(
-  primary: AiProviderId,
-  target: AiRouteTarget,
-  capability: ModelCapability,
-  deps: AiConfigDependencies,
-): Promise<DirectorModelTarget> {
-  const fallback =
-    (await deps.fallbackProviders?.find(currentWorkspaceId())) ?? null
-  if (
-    !fallback ||
-    fallback === primary ||
-    !providerSupports(fallback, capability) ||
-    !isProviderAvailable(fallback)
-  ) {
-    throw new ProviderUnavailableError()
-  }
-  const defaults = await providerDefaults(fallback, deps)
-  // 备选缺 Key 同样视为不可用：切过去只会把外部故障升级成误导性的
-  // 「Key 未配置」不可重试错误，方向指错。
-  if (!defaults.apiKey) throw new ProviderUnavailableError()
-  console.warn('[ai] provider_fallback', { from: primary, to: fallback })
-  return {
-    provider: fallback,
-    baseUrl: defaults.baseUrl,
-    modelId: defaults.modelFor(target, capability),
-    apiKey: defaults.apiKey,
-    degradedFrom: primary,
+    ...authorization,
   }
 }
 
 export async function describeDirectorRoutes(
   deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<Record<CanvasNodeType, DirectorRouteView>> {
+  const plan = await currentPlan(deps)
   const entries = await Promise.all(DIRECTOR_NODE_TYPES.map(async (nodeType) => {
     const target = ROUTE_TARGET[nodeType]
     const [provider, configured] = await Promise.all([
       getDirectorProvider(nodeType, deps),
       findRoute(target, deps),
     ])
-    const model = configured?.model ?? await defaultModel(provider.provider, target, deps)
+    const model = configured?.model ?? await defaultModel(provider.provider, target, plan, deps)
+    authorizeManagedRoute({
+      plan,
+      provider: provider.provider,
+      modelId: model,
+      capability: capabilityForTarget(target),
+    })
     return [nodeType, { ...provider, model }] as const
   }))
   return Object.fromEntries(entries) as Record<CanvasNodeType, DirectorRouteView>
@@ -242,6 +260,7 @@ export async function saveDirectorRoutes(
   input: DirectorRouteSettingsInput,
   deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<void> {
+  const plan = await currentPlan(deps)
   const selected = new Map<
     string,
     { target: RouteTarget; provider: AiProviderId }
@@ -258,7 +277,7 @@ export async function saveDirectorRoutes(
     [...selected.values()].map(async ({ target, provider }) => ({
       target,
       provider,
-      model: await defaultModel(provider, target, deps),
+      model: await defaultModel(provider, target, plan, deps),
     }))
   )
   await Promise.all(planned.map(async ({ target, provider, model }) => {
@@ -283,8 +302,12 @@ export async function saveDirectorRoutes(
 async function defaultModel(
   provider: AiProviderId,
   target: RouteTarget,
+  plan: ManagedPlanKey,
   deps: AiConfigDependencies,
 ): Promise<string> {
   const defaults = await providerDefaults(provider, deps)
-  return defaults.modelFor(target, capabilityForTarget(target))
+  const capability = capabilityForTarget(target)
+  const model = defaults.modelFor(target, capability)
+  authorizeManagedRoute({ plan, provider, modelId: model, capability })
+  return model
 }

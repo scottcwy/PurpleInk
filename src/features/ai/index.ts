@@ -35,3 +35,29 @@ export {
   type StepfunModelField,
   type StepfunModelSettingsInput,
 } from './config'
+export {
+  ManagedAiGateway,
+  type ManagedAiBeginInput,
+  type ManagedAiGatewayDependencies,
+  type ManagedAiHandle,
+} from './managed-gateway'
+export {
+  MANAGED_CREDENTIAL_ENV,
+  requireManagedCredential,
+  resolveManagedCredential,
+} from './managed-credentials'
+export {
+  MANAGED_MODEL_CATALOG,
+  MANAGED_PROVIDER_IDS,
+  ManagedAiError,
+  authorizeManagedRoute,
+  filterAuthorizedFallbacks,
+  isManagedProvider,
+  managedCredentialUnavailableError,
+  managedUpstreamError,
+  type ManagedAiErrorCode,
+  type ManagedPlanKey,
+  type ManagedProviderId,
+  type ManagedRouteAuthorization,
+  type ManagedUsage,
+} from './managed-service'

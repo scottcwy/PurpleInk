@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
  *   - CVC_CREDENTIAL_MASTER_KEY：credential-envelope.ts:45 强制读取
  *   - GEMINI_API_KEY / STEPFUN_API_KEY：scripts/setup/bootstrap-credentials.ts 读取（写入
  *     DB 加密存储，运行时不读 env；详见 docs/configuration/credentials.md）
+ *   - CVC_MANAGED_*：三家内置托管服务的 server-only 平台凭据
  *   - BACKEND_ORIGIN：next.config.ts:30 rewrites 直接消费（反向代理到 worker）
  *
  * 移除的旧断言（历史漂移，至本 issue 一次性纠正）：
@@ -28,6 +29,9 @@ describe("global environment isolation", () => {
       "CVC_CREDENTIAL_MASTER_KEY",
       "GEMINI_API_KEY",
       "STEPFUN_API_KEY",
+      "CVC_MANAGED_STEPFUN_API_KEY",
+      "CVC_MANAGED_MIMO_API_KEY",
+      "CVC_MANAGED_GEMINI_API_KEY",
       "BACKEND_ORIGIN",
       // PLAN-002 §1.5：认证验证码的出站 SMTP 通道，src/features/auth/mailer.ts 消费。
       "CVC_MAIL_SMTP_HOST",
