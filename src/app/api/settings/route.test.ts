@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => ({
   validateAsrProfile: vi.fn(),
   findMediaRoute: vi.fn(),
   saveMediaRoute: vi.fn(),
+  listManagedModels: vi.fn().mockResolvedValue([]),
 }))
 
 vi.mock('server-only', () => ({}))
@@ -141,6 +142,11 @@ vi.mock('@/features/ai/mimo-adapter', () => ({
 vi.mock('@/features/ai/model-routing', () => ({
   describeDirectorRoutes: mocks.describeDirectorRoutes,
   saveDirectorRoutes: mocks.saveDirectorRoutes,
+}))
+vi.mock('@/features/ai/managed-model-catalog-repository', () => ({
+  managedModelCatalogRepository: {
+    listEnabled: mocks.listManagedModels,
+  },
 }))
 vi.mock('@/features/ai/openai-compatible-config', () => ({
   describeOpenAiCompatibleProfile: mocks.describeOpenAiCompatibleProfile,
