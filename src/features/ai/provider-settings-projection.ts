@@ -66,6 +66,7 @@ export async function describeProviderSettings() {
       ?? null,
   ])
   return {
+    planKey: plan,
     ...stepfunCredential,
     models,
     geminiConfigured: geminiCredential.configured,

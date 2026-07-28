@@ -15,6 +15,11 @@ import type { OpenAiCompatibleAudioFormat } from '@/features/ai/openai-compatibl
 import type { OpenAiCompatibleProfileView } from '@/features/ai/openai-compatible-config'
 import type { MimoConfigField, MimoConfigView } from '@/features/ai/mimo-config'
 import type { CanvasNodeType } from '@/features/canvas/types'
+import type { PlanKey } from '@/features/billing'
+import type {
+  ManagedModelDefinition,
+  ManagedProviderId,
+} from '@/features/ai'
 
 export type StepfunDraft = Record<StepfunModelField, string>
 export type GeminiDraft = Record<GeminiConfigField, string>
@@ -132,6 +137,14 @@ export const LANE_QUOTA_LIMITS = {
 } as const
 
 export interface SettingsResponse {
+  planKey?: PlanKey
+  managedProviders?: Array<{
+    provider: ManagedProviderId
+    configured: boolean
+    managed: true
+    models: readonly ManagedModelDefinition[]
+  }>
+  availableCatalog?: readonly ManagedModelDefinition[]
   configured?: boolean
   models?: StepfunConfigView
   geminiConfigured?: boolean

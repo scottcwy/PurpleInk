@@ -14,6 +14,8 @@ import '@xyflow/react/dist/style.css'
 import { Button } from '@/components/ui/button'
 import { QueueStatusBar } from '@/components/ui/queue-status-bar'
 import { Toast } from '@/components/ui/toast'
+import { BillingCanvasUsage } from '@/features/billing/ui/usage-panels'
+import type { BillingUiProjection } from '@/features/billing/ui/projection-contract'
 import type { CanvasGraphEdge, PositionedCanvasNode } from '@/features/canvas'
 import { fadeInUp } from '@/lib/motion/variants'
 import { useProjectStatusStream } from '@/lib/hooks/use-project-status-stream'
@@ -22,7 +24,12 @@ import { productExportHref } from '@/features/navigation/products-routes'
 import { CanvasAutoHideTopBar } from './canvas-auto-hide-top-bar'
 import { CanvasInspector } from './canvas-inspector'
 import { CanvasMiniMap } from './canvas-minimap'
-import { startPipeline, stopPipeline } from './canvas-action-api'
+import { StageErrorDialog } from './stage-error-dialog'
+import {
+  BillingQuotaExhaustedError,
+  startPipeline,
+  stopPipeline,
+} from './canvas-action-api'
 import { applyStatusOverlay } from './live-status'
 import {
   describePipelineResult,
@@ -40,6 +47,7 @@ export interface CanvasViewProps {
   projectId: string
   projectTitle: string
   autopilot: boolean
+  billing: BillingUiProjection
   nodes: PositionedCanvasNode[]
   edges: CanvasGraphEdge[]
 }
@@ -48,12 +56,14 @@ export function CanvasView({
   projectId,
   projectTitle,
   autopilot,
+  billing,
   nodes,
   edges,
 }: CanvasViewProps) {
   const router = useRouter()
   const [pipelineSubmitting, setPipelineSubmitting] = useState(false)
   const [pipelineFeedback, setPipelineFeedback] = useState<PipelineFeedback>()
+  const [pipelineQuotaOpen, setPipelineQuotaOpen] = useState(false)
   const [collapsedLanes, setCollapsedLanes] = useState<Set<string>>(() => new Set())
   const [selectedNodeId, setSelectedNodeId] = useState(nodes[0]?.id)
   // SSE 状态覆盖层：props 是全量真值基线，覆盖层只做逐节点 status 替换。
@@ -142,8 +152,15 @@ export function CanvasView({
         ? await stopPipeline(projectId)
         : await startPipeline(projectId)
       setPipelineFeedback(describePipelineResult(result))
+      if (result.blockedNodes?.some(({ code }) =>
+        code === 'quota_exhausted' || code === 'QUOTA_EXHAUSTED')) {
+        setPipelineQuotaOpen(true)
+      }
       router.refresh()
     } catch (error) {
+      if (error instanceof BillingQuotaExhaustedError) {
+        setPipelineQuotaOpen(true)
+      }
       setPipelineFeedback({
         variant: 'error',
         title: '工作流操作失败',
@@ -162,6 +179,7 @@ export function CanvasView({
           meta={`${liveNodes.length} 节点`}
           actions={
             <>
+              <BillingCanvasUsage projection={billing} />
               <Button
                 variant="gray"
                 size="sm"
@@ -219,6 +237,16 @@ export function CanvasView({
         />
       </section>
       <CanvasInspector projectId={projectId} node={selectedNode} onQueued={() => router.refresh()} />
+      <StageErrorDialog
+        open={pipelineQuotaOpen}
+        stage=""
+        message=""
+        errorCode="quota_exhausted"
+        billingProjection={billing}
+        retryable={false}
+        onClose={() => setPipelineQuotaOpen(false)}
+        onRetry={() => undefined}
+      />
     </div>
   )
 }

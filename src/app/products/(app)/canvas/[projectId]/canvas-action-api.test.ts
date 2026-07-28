@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CanvasGraphNode } from '@/features/canvas'
 import {
+  BillingQuotaExhaustedError,
   startPipeline,
   stopPipeline,
   triggerNodeAction,
@@ -159,6 +160,23 @@ describe('triggerNodeSkip', () => {
 })
 
 describe('pipeline controls', () => {
+  it('preserves the public quota contract for the upgrade dialog', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({
+        code: 'quota_exhausted',
+        resetAt: '2026-08-27T00:00:00.000Z',
+        billingUrl: '/products/billing',
+      }), { status: 402, headers: { 'content-type': 'application/json' } }),
+    )
+
+    await expect(startPipeline('project-1', fetcher)).rejects.toEqual(
+      new BillingQuotaExhaustedError(
+        '2026-08-27T00:00:00.000Z',
+        '/products/billing',
+      ),
+    )
+  })
+
   it('starts project autopilot through the pipeline endpoint', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       response({

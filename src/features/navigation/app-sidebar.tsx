@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { performLogout } from '@/features/auth/logout-client'
+import { BillingSidebarUsage } from '@/features/billing/ui/usage-panels'
 import {
   PurpleInkSidebar,
   type PurpleInkSidebarItem,
@@ -82,17 +83,33 @@ export function AppSidebar({
   ]
 
   return (
-    <PurpleInkSidebar
-      items={items}
-      collapsed={compact}
-      onCollapsedChange={(next) => onCompactChange?.(next)}
-      accountOpen={accountOpen}
-      onAccountOpenChange={setAccountOpen}
-      account={account}
-      onLogout={performLogout}
-      brandHref="/"
-      settingsHref={productSettingsHref(projectId)}
-      className={cn('shrink-0', className)}
-    />
+    <div
+      className={cn(
+        'relative h-full shrink-0',
+        compact ? 'w-[60px]' : 'w-[248px]',
+        className,
+      )}
+    >
+      <PurpleInkSidebar
+        items={items}
+        collapsed={compact}
+        onCollapsedChange={(next) => onCompactChange?.(next)}
+        accountOpen={accountOpen}
+        onAccountOpenChange={setAccountOpen}
+        account={account}
+        onLogout={performLogout}
+        brandHref="/"
+        settingsHref={productSettingsHref(projectId)}
+        className="h-full"
+      />
+      <div
+        className={cn(
+          'absolute bottom-[72px] z-20',
+          compact ? 'left-1/2 -translate-x-1/2' : 'inset-x-3',
+        )}
+      >
+        <BillingSidebarUsage compact={compact} />
+      </div>
+    </div>
   )
 }

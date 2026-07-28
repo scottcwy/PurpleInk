@@ -153,6 +153,7 @@ export function StreamingLogCard({
         open={dialogOpen}
         stage={error?.stage ?? stage ?? ''}
         message={error?.message ?? ''}
+        errorCode={error?.code}
         onClose={() => setDialogOpen(false)}
         onRetry={() => {
           setDialogOpen(false)

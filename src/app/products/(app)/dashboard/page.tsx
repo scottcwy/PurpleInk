@@ -3,6 +3,9 @@ import { ProjectStatisticsPanel } from '@/components/ui/project-statistics-panel
 import { RecentProjectsPanel } from '@/components/ui/recent-projects-panel'
 import { TopBar } from '@/components/ui/top-bar'
 import { withPageSession } from '@/features/auth/page-session'
+import { getBillingProjection } from '@/features/billing'
+import { BillingDashboardUsage } from '@/features/billing/ui/usage-panels'
+import type { BillingUiProjection } from '@/features/billing/ui/projection-contract'
 import { getCanvasGraph, listProjects } from '@/features/canvas'
 import { buildProductsDashboardView } from '@/features/dashboard/products-dashboard-view-model'
 import { PublishNavContext } from '@/features/navigation/nav-context'
@@ -15,7 +18,11 @@ export default async function ProductsDashboardPage() {
 }
 
 async function renderDashboard() {
-  const projects = await listProjects()
+  const [projects, billing] = await Promise.all([
+    listProjects(),
+    getBillingProjection(),
+  ])
+  const billingProjection: BillingUiProjection = billing
   const graphEntries = await Promise.all(
     projects.map(async (project) => [
       project.id,
@@ -50,6 +57,7 @@ async function renderDashboard() {
             </div>
             <p className="text-xs text-ds-text-muted">{dashboard.updatedLabel}</p>
           </header>
+          <BillingDashboardUsage projection={billingProjection} />
           <ProjectStatisticsPanel
             metrics={dashboard.metrics}
             statusDistribution={dashboard.statusDistribution}

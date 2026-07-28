@@ -2,13 +2,11 @@
 
 import { Network } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { SettingsSeparator } from '@/components/ui/settings-group'
 import { SettingsPanel } from '@/components/ui/settings-panel'
 import { SettingsRow } from '@/components/ui/settings-row'
 import { StatusPill } from '@/components/ui/status-pill'
-import { TextField } from '@/components/ui/text-field'
 import {
   PROVIDER_REGISTRY,
   type AiProviderId,
@@ -20,13 +18,7 @@ import {
   countConfiguredCustomEndpoints,
   CUSTOM_ENDPOINT_COUNT,
 } from './custom-openai-status'
-import {
-  GEMINI_FIELDS,
-  MIMO_FIELDS,
-  STEPFUN_FIELDS,
-  type ReadyModelSettingsController,
-} from './model-service-contract'
-import { useSaveFeedback } from './save-feedback'
+import type { ReadyModelSettingsController } from './model-service-contract'
 
 /**
  * 供应商卡片是**家族**，不是 provider id。
@@ -72,7 +64,7 @@ export function ProviderRegistryPanel({
     <SettingsPanel
       id="providers"
       title="模型供应商"
-      description="先连接服务，再按能力分配工作流；密钥仅在校验成功后替换"
+      description="内置模型由平台托管；自定义 OpenAI-compatible 继续使用自己的凭据"
       icon={Network}
       summary={`${PROVIDER_CARDS.length} 个供应商`}
       open={openPanels['providers'] ?? false}
@@ -138,83 +130,44 @@ function SelectedProvider({
   }
   if (provider === 'stepfun') {
     return (
-      <ProviderDetail
+      <ManagedProviderDetail
         provider="StepFun"
-        configured={Boolean(controller.data.configured)}
-        fields={STEPFUN_FIELDS}
-        draft={controller.stepfunDraft}
-        view={controller.data.models}
-        busy={controller.busy}
-        onDraft={controller.setStepfunField}
-        onSaveKey={async (apiKey) =>
-          (await controller.submit({ apiKey }, 'stepfun-key')).ok}
-        onSaveFields={() => {
-          void controller.submit(controller.stepfunDraft, 'stepfun-fields')
-        }}
+        providerId="stepfun"
+        controller={controller}
       />
     )
   }
   if (provider === 'gemini') {
     return (
-      <ProviderDetail
+      <ManagedProviderDetail
         provider="Gemini"
-        configured={Boolean(controller.data.geminiConfigured)}
-        fields={GEMINI_FIELDS}
-        draft={controller.geminiDraft}
-        view={controller.data.gemini}
-        busy={controller.busy}
-        onDraft={controller.setGeminiField}
-        onSaveKey={async (apiKey) => (await controller.submit(
-          { gemini: { apiKey, ...controller.geminiDraft } },
-          'gemini-key',
-        )).ok}
-        onSaveFields={() => {
-          void controller.submit({ gemini: controller.geminiDraft }, 'gemini-fields')
-        }}
+        providerId="gemini"
+        controller={controller}
       />
     )
   }
   return (
-    <ProviderDetail
+    <ManagedProviderDetail
       provider="MiMo"
-      configured={controller.data.mimoCredential?.configured === true}
-      fields={MIMO_FIELDS}
-      draft={controller.mimoDraft}
-      view={controller.data.mimo}
-      busy={controller.busy}
-      onDraft={controller.setMimoField}
-      onSaveKey={async (apiKey) => (await controller.submit(
-        { mimo: { apiKey, ...controller.mimoDraft } },
-        'mimo-key',
-      )).ok}
-      onSaveFields={() => {
-        void controller.submit({ mimo: controller.mimoDraft }, 'mimo-fields')
-      }}
+      providerId="mimo"
+      controller={controller}
     />
   )
 }
 
-interface ProviderDetailProps<T extends string> {
+interface ManagedProviderDetailProps {
   provider: 'StepFun' | 'Gemini' | 'MiMo'
-  configured: boolean
-  fields: Array<[T, string]>
-  draft: Record<T, string>
-  view?: Record<T, { value: string; source: string }>
-  busy?: string
-  onDraft: (field: T, value: string) => void
-  onSaveKey: (apiKey: string) => Promise<boolean>
-  onSaveFields: () => void
+  providerId: 'stepfun' | 'gemini' | 'mimo'
+  controller: ReadyModelSettingsController
 }
 
-function ProviderDetail<T extends string>(props: ProviderDetailProps<T>) {
-  const [apiKey, setApiKey] = useState('')
-  const { state: keyState, report } = useSaveFeedback()
-  const keyBusy = props.busy === `${props.provider.toLowerCase()}-key`
-  async function saveKey() {
-    const ok = await props.onSaveKey(apiKey)
-    if (ok) setApiKey('')
-    report(ok)
-  }
+function ManagedProviderDetail(props: ManagedProviderDetailProps) {
+  const view = props.controller.data.managedProviders?.find(
+    ({ provider }) => provider === props.providerId,
+  )
+  const locked =
+    props.providerId === 'gemini' && props.controller.data.planKey === 'free'
+  const models = view?.models ?? []
   return (
     <div id={`provider-${props.provider.toLowerCase()}`} className="flex min-w-0 flex-col">
       <SettingsSeparator />
@@ -224,66 +177,38 @@ function ProviderDetail<T extends string>(props: ProviderDetailProps<T>) {
         className="h-auto min-h-11 flex-col items-stretch gap-1 py-3 sm:flex-row sm:items-center"
       >
         <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
-          <span className="text-[12px] text-ds-text-muted">
-            {props.provider === 'MiMo'
-              ? '业务后端使用 sk- 产品 API Key；tp- Token Plan Key 不可用于此处'
-              : '密钥与模型配置分开保存，便于先验证连接再微调模型'}
+          <span className="text-xs text-ds-text-muted">
+            {locked
+              ? 'Free 方案不可使用 Gemini；升级 Plus 后解锁'
+              : '平台统一提供服务，不需要填写 API Key'}
           </span>
           <StatusPill
-            variant={props.configured ? 'rendered' : 'pending'}
-            label={props.configured ? '已连接' : '未连接'}
+            variant={locked ? 'stale' : view?.configured ? 'rendered' : 'pending'}
+            label={locked ? 'Plus 解锁' : view?.configured ? '平台服务可用' : '平台服务未配置'}
           />
         </div>
       </SettingsRow>
-      <SettingsRow label="API Key" chevron={false} className="h-auto flex-col items-stretch gap-2 py-3 sm:flex-row">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
-          <TextField
-            aria-label={`${props.provider} API Key`}
-            type="password"
-            variant="ghost"
-            value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
-            placeholder={props.configured ? '输入新 Key 以重新校验' : '输入 API Key'}
-            className="min-w-[220px] flex-1"
-          />
-          {keyState === 'success' && <StatusPill variant="rendered" label="校验成功" />}
-          {keyState === 'error' && <StatusPill variant="failed" label="校验失败" />}
-          <Button
-            size="sm"
-            variant="tinted"
-            disabled={!apiKey.trim() || keyBusy}
-            onClick={() => void saveKey()}
-          >
-            {keyBusy ? '校验中…' : '校验并保存'}
-          </Button>
-        </div>
-      </SettingsRow>
-      {props.fields.map(([field, label]) => (
-        <div key={field}>
-          <SettingsSeparator />
-          <SettingsRow label={label} chevron={false}>
-            <TextField
-              aria-label={`${props.provider} ${label}`}
-              variant="ghost"
-              value={props.draft[field]}
-              onChange={(event) => props.onDraft(field, event.target.value)}
-              placeholder={placeholderFor(props.view?.[field])}
-              className="w-full max-w-[480px]"
-            />
-          </SettingsRow>
-        </div>
-      ))}
       <SettingsSeparator />
-      <SettingsRow label="模型配置" chevron={false}>
-        <span className="text-xs text-ds-text-muted">留空时使用环境变量或内置默认</span>
-        <Button
-          size="sm"
-          variant="tinted"
-          disabled={Boolean(props.busy)}
-          onClick={props.onSaveFields}
-        >
-          保存模型
-        </Button>
+      <SettingsRow
+        label="可用模型"
+        chevron={false}
+      >
+        <span className="text-xs text-ds-text-muted">
+          {locked ? '当前方案未授权该供应商' : '模型目录由服务端统一维护'}
+        </span>
+        <div className="flex flex-wrap justify-end gap-1.5">
+          {models.length > 0 ? models.map((model) => (
+            <StatusPill
+              key={`${model.modelId}:${model.capabilities.join(',')}`}
+              variant="cached"
+              label={`${model.modelId} · ${model.capabilities.join('/')}`}
+            />
+          )) : (
+            <span className="text-xs text-ds-text-muted">
+              {locked ? '升级 Plus 解锁' : '暂无可用模型'}
+            </span>
+          )}
+        </div>
       </SettingsRow>
     </div>
   )
@@ -316,19 +241,14 @@ function cardStatus(
       ? { variant: 'rendered', label: '已连接' }
       : { variant: 'stale', label: `${configured} / ${CUSTOM_ENDPOINT_COUNT} 已配置` }
   }
-  const configured = provider === 'stepfun'
-    ? Boolean(controller.data.configured)
-    : provider === 'gemini'
-      ? Boolean(controller.data.geminiConfigured)
-      : controller.data.mimoCredential?.configured === true
+  const managed = controller.data.managedProviders?.find(
+    (entry) => entry.provider === provider,
+  )
+  if (provider === 'gemini' && controller.data.planKey === 'free') {
+    return { variant: 'stale', label: 'Plus 解锁' }
+  }
+  const configured = managed?.configured === true
   return configured
     ? { variant: 'rendered', label: '已连接' }
     : { variant: 'pending', label: '未连接' }
-}
-
-function placeholderFor(field?: { value: string; source: string }): string {
-  if (!field) return ''
-  if (field.source === 'env') return `${field.value}（环境变量）`
-  if (field.source === 'default') return `${field.value}（内置默认）`
-  return field.value
 }

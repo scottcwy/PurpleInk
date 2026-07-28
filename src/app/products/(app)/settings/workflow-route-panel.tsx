@@ -7,6 +7,7 @@ import { SettingsSeparator } from '@/components/ui/settings-group'
 import { SettingsPanel } from '@/components/ui/settings-panel'
 import { SettingsRow } from '@/components/ui/settings-row'
 import type { AiProviderId, DirectorRouteView } from '@/features/ai/model-routing'
+import type { PlanKey } from '@/features/billing'
 import {
   PROVIDER_REGISTRY,
   providersFor,
@@ -18,6 +19,7 @@ import { ROUTE_ROWS, type RouteDraft } from './model-service-contract'
 export function WorkflowRoutePanel({
   routes,
   effective,
+  planKey,
   busy,
   onChange,
   onSave,
@@ -26,6 +28,7 @@ export function WorkflowRoutePanel({
 }: {
   routes: RouteDraft
   effective?: Record<CanvasNodeType, DirectorRouteView>
+  planKey: PlanKey
   busy: boolean
   onChange: (nodeType: CanvasNodeType, provider: AiProviderId) => void
   onSave: () => void
@@ -45,10 +48,12 @@ export function WorkflowRoutePanel({
     >
       {ROUTE_ROWS.map(([nodeType, label], index) => {
         const capability = capabilityFor(nodeType)
-        const options = providersFor(capability).map((provider) => ({
-          value: provider,
-          label: PROVIDER_REGISTRY[provider].label,
-        }))
+        const options = providersFor(capability)
+          .filter((provider) => planKey !== 'free' || provider !== 'gemini')
+          .map((provider) => ({
+            value: provider,
+            label: PROVIDER_REGISTRY[provider].label,
+          }))
         return (
           <div key={nodeType} data-testid={`route-${nodeType}`}>
             {index > 0 && <SettingsSeparator />}

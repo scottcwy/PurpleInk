@@ -2,6 +2,8 @@ import { Clapperboard } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { EmptyState } from '@/components/ui/empty-state'
 import { withPageSession } from '@/features/auth/page-session'
+import { getBillingProjection } from '@/features/billing'
+import type { BillingUiProjection } from '@/features/billing/ui/projection-contract'
 import {
   computeLayout,
   getCanvasGraph,
@@ -35,7 +37,11 @@ async function renderCanvas(projectId: string) {
   const project = projects.find((candidate) => candidate.id === projectId)
   if (!project) notFound()
 
-  const graph = await getCanvasGraph(projectId)
+  const [graph, billing] = await Promise.all([
+    getCanvasGraph(projectId),
+    getBillingProjection(),
+  ])
+  const billingProjection: BillingUiProjection = billing
   if (graph.nodes.length === 0) {
     return <CanvasEmptyState projectId={projectId} description="当前项目还没有节点，请先导入并拆分脚本。" />
   }
@@ -52,6 +58,7 @@ async function renderCanvas(projectId: string) {
       projectId={projectId}
       projectTitle={project.title}
       autopilot={await getProjectAutopilot(projectId)}
+      billing={billingProjection}
       nodes={nodes}
       edges={graph.edges}
     />

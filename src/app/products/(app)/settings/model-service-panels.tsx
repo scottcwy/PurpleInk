@@ -24,6 +24,7 @@ export function ModelServicePanels({
       <WorkflowRoutePanel
         routes={controller.routes}
         effective={controller.data.routes}
+        planKey={controller.data.planKey ?? 'free'}
         busy={controller.busy === 'routes'}
         onChange={controller.setRoute}
         onSave={() => controller.submit({ routes: controller.routes }, 'routes')}

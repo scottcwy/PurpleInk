@@ -53,6 +53,7 @@ async function parseNodeActionResponse(response: Response): Promise<NodeActionRe
     throw new Error('作业响应无效')
   }
   const result = body as Record<string, unknown>
+  throwIfQuotaExhausted(result)
   if (!response.ok) {
     throw new Error(typeof result.error === 'string' ? result.error : '作业入队失败')
   }
@@ -122,6 +123,7 @@ async function controlPipeline(
     throw new Error('工作流响应无效')
   }
   const result = body as Record<string, unknown>
+  throwIfQuotaExhausted(result)
   if (!response.ok) {
     throw new Error(
       typeof result.error === 'string' ? result.error : '工作流操作失败'
@@ -155,6 +157,28 @@ async function controlPipeline(
             ),
         }
       : {}),
+  }
+}
+
+export class BillingQuotaExhaustedError extends Error {
+  readonly code = 'quota_exhausted'
+
+  constructor(
+    readonly resetAt: string,
+    readonly billingUrl: '/products/billing',
+  ) {
+    super('本周期 AI 额度已用完')
+    this.name = 'BillingQuotaExhaustedError'
+  }
+}
+
+function throwIfQuotaExhausted(result: Record<string, unknown>): void {
+  if (
+    result.code === 'quota_exhausted'
+    && typeof result.resetAt === 'string'
+    && result.billingUrl === '/products/billing'
+  ) {
+    throw new BillingQuotaExhaustedError(result.resetAt, result.billingUrl)
   }
 }
 

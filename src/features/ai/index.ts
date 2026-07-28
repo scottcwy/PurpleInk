@@ -58,6 +58,7 @@ export {
   type ManagedAiErrorCode,
   type ManagedPlanKey,
   type ManagedProviderId,
+  type ManagedModelDefinition,
   type ManagedRouteAuthorization,
   type ManagedUsage,
 } from './managed-service'

@@ -96,7 +96,17 @@ describe('Canvas pipeline feedback wiring', () => {
   it('配置阻塞时禁用画布动作且错误弹窗不提供无效重试', () => {
     expect(inspectorSource).toContain('isNodeActionBlocked(node)')
     expect(streamingLogSource).toContain('retryable={error?.retryable !== false}')
-    expect(stageErrorDialogSource).toContain('{retryable && (')
+    expect(stageErrorDialogSource).toContain('{!quotaExhausted && retryable && (')
+  })
+
+  it('额度耗尽复用阶段错误弹窗并引导到真实计费页', () => {
+    expect(canvasViewSource).toContain("<StageErrorDialog")
+    expect(canvasViewSource).toContain("code === 'quota_exhausted'")
+    expect(streamingLogSource).toContain('errorCode={error?.code}')
+    expect(stageErrorDialogSource).toContain("errorCode === 'quota_exhausted'")
+    expect(stageErrorDialogSource).toContain('PRODUCTS_ROUTES.billing')
+    expect(stageErrorDialogSource).toContain('getQuotaUpgradeDirection')
+    expect(stageErrorDialogSource).toContain('Max 已是最高额度')
   })
 
   it('pipeline 反馈锚定在画布主区右上角，避开左侧泳道折叠与顶栏', () => {
