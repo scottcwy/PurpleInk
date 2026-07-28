@@ -177,6 +177,35 @@ describe('classifyWorkflowError', () => {
     })
   })
 
+  it('classifies an open-breaker outage by type name as retryable PROVIDER_FAILED', () => {
+    // 阶段 4（模式 H）：主备 provider 均不可用是外部故障，必须可重试，
+    // 且文案只给类别与出口指引，不回显任何 provider 原始错误。
+    class ProviderUnavailableError extends Error {
+      override readonly name = 'ProviderUnavailableError'
+    }
+    const projection = classifyWorkflowError(
+      new ProviderUnavailableError('AI 服务暂时不可用，可稍后重试或选择跳过'),
+      { stage: 'INGEST' }
+    )
+    expect(projection.code).toBe('PROVIDER_FAILED')
+    expect(projection.retryable).toBe(true)
+    expect(projection.message).toBe('AI 服务暂时不可用，可稍后重试或选择跳过')
+  })
+
+  it('classifies the persisted outage message without hitting broader rules', () => {
+    // 文案持久化到 attempt.failure 后只剩字符串：「AI 服务暂时不可用」含「不可用」，
+    // 不得被「配置/凭据不可用」误判成不可重试的 CONFIGURATION_BLOCKED。
+    expect(
+      classifyWorkflowError(
+        new Error('AI 服务暂时不可用，可稍后重试或选择跳过'),
+        { stage: 'FABRICATE' }
+      )
+    ).toMatchObject({
+      code: 'PROVIDER_FAILED',
+      retryable: true,
+    })
+  })
+
   it('never labels a non-render stage failure as a render failure', () => {
     for (const stage of ['INGEST', 'DIRECT', 'SHOT_SPEC', 'ASSEMBLE', 'FINALIZE']) {
       const projection = classifyWorkflowError(new Error('未知内部失败'), { stage })

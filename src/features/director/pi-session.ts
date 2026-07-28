@@ -1,5 +1,9 @@
 import 'server-only'
 import { Agent } from '@earendil-works/pi-agent-core'
+import {
+  recordProviderFailure,
+  recordProviderSuccess,
+} from '@/features/ai/provider-breaker'
 import { storage } from '@/lib/storage'
 import {
   extractDirectorOutput,
@@ -103,7 +107,7 @@ export async function createDirectorSession(
         agent.state.tools = adaptDirectorTools(runInput.tools)
         await agent.prompt(runInput.prompt)
         await agent.waitForIdle()
-        assertRunSucceeded(agent, runtime.routeLabel)
+        assertRunSucceeded(agent, runtime)
         return extractDirectorOutput(bridge.runMessages(), runInput.output)
       },
       close: async () => {
@@ -123,12 +127,27 @@ export async function createDirectorSession(
 /**
  * 供应商原始错误不进入业务错误面（会落到节点 directorError 并显示给用户），
  * 只在服务端日志留分类信息，对外给稳定的类别文案。
+ *
+ * 这里同时是熔断记账的**单一收敛点**（模式 H 阶段 4）：只有真实发生过的
+ * 外部模型调用才会走到这里——RouteContractError 等内部矛盾在会话装配阶段
+ * （createDirectorModelRuntime）就已抛出，永远到不了记账点；模型响应后的
+ * 输出解析失败也不计入（provider 本身是健康的）。
  */
-function assertRunSucceeded(agent: Agent, routeLabel: string): void {
+function assertRunSucceeded(
+  agent: Agent,
+  runtime: { providerId: string; routeLabel: string },
+): void {
   const errorMessage = agent.state.errorMessage
-  if (!errorMessage) return
-  console.error('[director] 模型调用失败', { route: routeLabel, errorMessage })
-  throw new DirectorRunError(routeLabel)
+  if (!errorMessage) {
+    recordProviderSuccess(runtime.providerId)
+    return
+  }
+  recordProviderFailure(runtime.providerId)
+  console.error('[director] 模型调用失败', {
+    route: runtime.routeLabel,
+    errorMessage,
+  })
+  throw new DirectorRunError(runtime.routeLabel)
 }
 
 /** 会话级角色约束。阶段任务本体由 `stage-prompt.ts` 的 prompt builder 提供。 */

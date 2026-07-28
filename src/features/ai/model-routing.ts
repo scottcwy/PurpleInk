@@ -4,10 +4,13 @@ import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import type { CanvasNodeType } from '@/features/canvas'
 import type { AiTaskKind } from '@/features/routing'
 import { type AiConfigDependencies, getAiConfigDependencies } from './config'
+import { isProviderAvailable } from './provider-breaker'
+import { ProviderUnavailableError } from './provider-unavailable-error'
 import { providerDefaults } from './route-provider-defaults'
 import {
   AI_PROVIDER_IDS,
   assertProviderCapability,
+  providerSupports,
   type AiProviderId,
   type ProviderCapability,
 } from './provider-registry'
@@ -80,6 +83,12 @@ export interface DirectorModelTarget {
   baseUrl: string
   modelId: string
   apiKey: string | null
+  /**
+   * 仅在降级发生时存在：记录被熔断的主选 provider。返回值必须如实反映
+   * 实际执行的备选（provider/modelId 就是备选的），降级事实通过本字段、
+   * routeLabel 与 provider_fallback 日志三处可追溯；设置页展示的仍是配置真值。
+   */
+  degradedFrom?: AiProviderId
 }
 
 interface ResolvedRoute {
@@ -150,6 +159,12 @@ export async function resolveDirectorModelTarget(
 ): Promise<DirectorModelTarget> {
   const target = sessionTarget(nodeType)
   const configured = await resolveRoute(target, deps)
+  const primary = configured?.provider ?? defaultProviderFor(target)
+  // 熔断检查必须在真正发起调用的解析处：half-open 的试探名额会被本次调用占用。
+  // 健康路径完全旁路降级链：不读备选配置，也不产生 degradedFrom 字段。
+  if (!isProviderAvailable(primary)) {
+    return degradeToFallback(primary, target, capability, deps)
+  }
   if (configured) {
     const defaults = await providerDefaults(configured.provider, deps)
     return {
@@ -159,13 +174,48 @@ export async function resolveDirectorModelTarget(
       apiKey: configured.secret,
     }
   }
-  const provider = defaultProviderFor(target)
-  const defaults = await providerDefaults(provider, deps)
+  const defaults = await providerDefaults(primary, deps)
   return {
-    provider,
+    provider: primary,
     baseUrl: defaults.baseUrl,
     modelId: defaults.modelFor(target, capability),
     apiKey: defaults.apiKey,
+  }
+}
+
+/**
+ * 降级链（保守设计，默认关闭）：主选熔断 open 时，只有用户在
+ * workspace_settings 里显式配置了备选且备选确实可用才切换；其余一律抛
+ * `ProviderUnavailableError`（分类为 PROVIDER_FAILED，retryable=true），
+ * 绝不擅自替用户换模型，也不回显任何 provider 原始错误。
+ */
+async function degradeToFallback(
+  primary: AiProviderId,
+  target: AiRouteTarget,
+  capability: ModelCapability,
+  deps: AiConfigDependencies,
+): Promise<DirectorModelTarget> {
+  const fallback =
+    (await deps.fallbackProviders?.find(currentWorkspaceId())) ?? null
+  if (
+    !fallback ||
+    fallback === primary ||
+    !providerSupports(fallback, capability) ||
+    !isProviderAvailable(fallback)
+  ) {
+    throw new ProviderUnavailableError()
+  }
+  const defaults = await providerDefaults(fallback, deps)
+  // 备选缺 Key 同样视为不可用：切过去只会把外部故障升级成误导性的
+  // 「Key 未配置」不可重试错误，方向指错。
+  if (!defaults.apiKey) throw new ProviderUnavailableError()
+  console.warn('[ai] provider_fallback', { from: primary, to: fallback })
+  return {
+    provider: fallback,
+    baseUrl: defaults.baseUrl,
+    modelId: defaults.modelFor(target, capability),
+    apiKey: defaults.apiKey,
+    degradedFrom: primary,
   }
 }
 

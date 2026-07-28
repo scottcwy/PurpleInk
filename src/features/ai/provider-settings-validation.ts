@@ -13,6 +13,7 @@ import {
   reject,
   type ProviderSettingsOutcome,
 } from './provider-settings-contract'
+import { PROVIDER_REGISTRY, providerSupports } from './provider-registry'
 import type { StepfunSettings } from './schemas'
 import { validateKey } from './stepfun-adapter'
 
@@ -27,6 +28,19 @@ export async function validateProviderSettings(
 ): Promise<ProviderSettingsOutcome> {
   const laneQuotas = checkLaneQuotas(input.laneQuotas)
   if (!laneQuotas.ok) return laneQuotas
+
+  // 备选 provider 服务于 Director 文本会话的降级：纯音频端点切过去必然
+  // 以 RouteContractError 失败，在保存前就拒掉（先验证后保存）。
+  if (
+    input.fallbackProvider != null
+    && !providerSupports(input.fallbackProvider, 'text')
+  ) {
+    return reject(
+      422,
+      `${PROVIDER_REGISTRY[input.fallbackProvider].label} 不支持文本会话，不能作为备选 provider`,
+      false,
+    )
+  }
 
   if (input.apiKey !== undefined && !(await validateKey(input.apiKey))) {
     return keyValidationError('StepFun')

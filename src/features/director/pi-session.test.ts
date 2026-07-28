@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => {
   const publish = vi.fn()
   const createProvider = vi.fn(() => ({}))
   const resolveDirectorModelTarget = vi.fn()
+  const recordProviderFailure = vi.fn()
+  const recordProviderSuccess = vi.fn()
   const agentInstances: MockAgent[] = []
   const promptMessages: unknown[][] = []
 
@@ -87,6 +89,8 @@ const mocks = vi.hoisted(() => {
     publish,
     createProvider,
     resolveDirectorModelTarget,
+    recordProviderFailure,
+    recordProviderSuccess,
     agentInstances,
     promptMessages,
     MockAgent,
@@ -120,6 +124,10 @@ vi.mock('@/features/ai/model-routing', () => ({
     'shot-qa',
   ],
   resolveDirectorModelTarget: mocks.resolveDirectorModelTarget,
+}))
+vi.mock('@/features/ai/provider-breaker', () => ({
+  recordProviderFailure: mocks.recordProviderFailure,
+  recordProviderSuccess: mocks.recordProviderSuccess,
 }))
 vi.mock('./session-store', () => ({
   DirectorSessionStore: class {
@@ -414,5 +422,59 @@ describe('createDirectorSession', () => {
       })
     ).rejects.toThrow('Gemini API Key 未配置')
     expect(mocks.closeStore).toHaveBeenCalledOnce()
+  })
+
+  /**
+   * 阶段 4（模式 H）：熔断记账的单一收敛点在本会话的 run 结果处——
+   * 只有真实发生过的外部模型调用成败/失败才计入，内部矛盾不得污染计数。
+   */
+  it('records a provider success on a completed model run', async () => {
+    const session = await createDirectorSession({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      stage: 'INGEST',
+    })
+    await session.run({ prompt: '执行阶段', output: assistantOutput })
+
+    expect(mocks.recordProviderSuccess).toHaveBeenCalledWith('stepfun')
+    expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
+  })
+
+  it('records a provider failure when the model run itself fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const session = await createDirectorSession({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      stage: 'INGEST',
+    })
+    mocks.agentInstances[0]!.state.errorMessage = 'provider HTTP 503'
+
+    await expect(
+      session.run({ prompt: '执行阶段', output: assistantOutput })
+    ).rejects.toThrow('Director 模型调用失败')
+    expect(mocks.recordProviderFailure).toHaveBeenCalledWith('stepfun')
+    expect(mocks.recordProviderSuccess).not.toHaveBeenCalled()
+  })
+
+  it('does not count an internal route contract contradiction against the breaker', async () => {
+    // 纯音频端点无法承担文本会话是设置面矛盾（RouteContractError），
+    // 不是外部故障：若计入熔断，一条配置错误就会把健康的 provider 熏成不可用。
+    mocks.resolveDirectorModelTarget.mockReturnValueOnce({
+      provider: 'openai-compatible-tts',
+      baseUrl: 'https://audio.test/v1',
+      modelId: 'tts-1',
+      apiKey: 'audio-key',
+    })
+
+    await expect(
+      createDirectorSession({
+        projectId: 'project-1',
+        nodeId: 'node-1',
+        nodeType: 'shot-codegen',
+        stage: 'FABRICATE',
+      })
+    ).rejects.toMatchObject({ name: 'RouteContractError' })
+    expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
+    expect(mocks.recordProviderSuccess).not.toHaveBeenCalled()
   })
 })

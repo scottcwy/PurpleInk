@@ -35,6 +35,7 @@ export async function describeProviderSettings() {
     customOpenAi,
     customOpenAiTts,
     customOpenAiAsr,
+    fallbackProvider,
   ] = await Promise.all([
     credentials.describe(currentWorkspaceId(), 'stepfun'),
     credentials.describe(currentWorkspaceId(), 'gemini'),
@@ -47,6 +48,9 @@ export async function describeProviderSettings() {
     describeOpenAiCompatibleProfile(customOpenAiDependencies()),
     describeTtsProfile(audioDependencies()),
     describeAsrProfile(audioDependencies()),
+    // 降级链备选：未配置时回 null（默认无备选）。只回 provider id，无 secret。
+    getAiConfigDependencies().fallbackProviders?.find(currentWorkspaceId())
+      ?? null,
   ])
   return {
     ...stepfunCredential,
@@ -63,5 +67,6 @@ export async function describeProviderSettings() {
     customOpenAi,
     customOpenAiTts,
     customOpenAiAsr,
+    fallbackProvider,
   }
 }

@@ -75,6 +75,8 @@ export interface DirectorModelRuntime {
   models: MutableModels
   model: Model<Api>
   apiKey: string
+  /** 实际执行的 provider id：熔断记账（pi-session 收敛点）按它计数。 */
+  providerId: AiProviderId
   /** 供失败分类使用的选型描述，不含任何凭据。 */
   routeLabel: string
 }
@@ -141,7 +143,12 @@ export async function createDirectorModelRuntime(input: {
     models,
     model,
     apiKey: target.apiKey,
-    routeLabel: `${target.provider}/${target.modelId}`,
+    providerId: target.provider,
+    // 降级发生时 routeLabel 如实标注备选身份：该标签随失败落入
+    // attempt.failure 与服务端日志，是降级事实在错误链路上的可追溯出口。
+    routeLabel: target.degradedFrom
+      ? `${target.provider}/${target.modelId}（备选，主选 ${target.degradedFrom} 已熔断）`
+      : `${target.provider}/${target.modelId}`,
   }
 }
 

@@ -11,6 +11,10 @@ import {
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb } from '@/lib/db/client'
 import {
+  PostgresFallbackProviderStore,
+  type FallbackProviderStore,
+} from './fallback-provider-store'
+import {
   PostgresOpenAiCompatibleAudioProfileStore,
   type OpenAiCompatibleAudioProfileStore,
 } from './openai-compatible-audio-profile-store'
@@ -55,6 +59,8 @@ export interface AiConfigDependencies {
   >
   openAiCompatibleProfiles?: OpenAiCompatibleProfileStore
   openAiCompatibleAudioProfiles?: OpenAiCompatibleAudioProfileStore
+  /** 熔断降级链的显式备选 provider（模式 H 阶段 4）；缺省即无备选。 */
+  fallbackProviders?: FallbackProviderStore
 }
 
 const credentials = new PostgresProviderCredentialStore(getDb)
@@ -65,6 +71,7 @@ const dependencies: AiConfigDependencies = {
   openAiCompatibleProfiles: new PostgresOpenAiCompatibleProfileStore(getDb),
   openAiCompatibleAudioProfiles:
     new PostgresOpenAiCompatibleAudioProfileStore(getDb),
+  fallbackProviders: new PostgresFallbackProviderStore(getDb),
 }
 
 const DEFAULTS: Record<StepfunModelField, string> = {

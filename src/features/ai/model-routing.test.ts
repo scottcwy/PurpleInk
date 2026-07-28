@@ -8,6 +8,8 @@ import {
   saveDirectorRoutes,
 } from './model-routing'
 import type { OpenAiCompatibleProfile } from './openai-compatible-payloads'
+import { recordProviderFailure, resetBreaker } from './provider-breaker'
+import type { AiProviderId } from './provider-registry'
 
 // 被测模块经 currentWorkspaceId() 取归属（PLAN-002 阶段 B）；单测没有请求入口，
 // 把读取口 mock 成历史单工作区 id，与用例 seed 的数据保持一致。
@@ -105,15 +107,25 @@ function createDependencies() {
   }
 }
 
+/** 打开某个 provider 的熔断：连续三次外部失败。 */
+function tripBreaker(providerId: AiProviderId): void {
+  recordProviderFailure(providerId)
+  recordProviderFailure(providerId)
+  recordProviderFailure(providerId)
+}
+
 beforeEach(() => {
   process.env = {
     ...originalEnv,
     GEMINI_API_KEY: 'gemini-key',
     STEPFUN_API_KEY: 'stepfun-key',
   }
+  resetBreaker()
 })
 afterEach(() => {
   process.env = originalEnv
+  resetBreaker()
+  vi.restoreAllMocks()
 })
 
 describe('Director provider routing', () => {
@@ -346,5 +358,94 @@ describe('Director provider routing', () => {
         executed.modelId
       )
     }
+  })
+
+  /**
+   * 阶段 4（模式 H）：主 provider 熔断打开且用户显式配置了备选时，执行路径切换到
+   * 备选 provider，并留下 provider_fallback 日志与 degradedFrom 可观测字段——
+   * 返回值必须如实反映实际执行的备选，不得继续宣称在用主选。
+   */
+  it('falls back to the explicitly configured provider when the primary breaker is open', async () => {
+    const { dependencies, secrets } = createDependencies()
+    secrets.set('gemini', 'gemini-key')
+    secrets.set('stepfun', 'stored-stepfun-key')
+    const deps: AiConfigDependencies = {
+      ...dependencies,
+      fallbackProviders: {
+        find: vi.fn(async () => 'stepfun' as const),
+        save: vi.fn(async () => {}),
+      },
+    }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    tripBreaker('gemini')
+
+    await expect(resolveDirectorModelTarget(
+      'script-import',
+      'text',
+      deps,
+    )).resolves.toEqual({
+      provider: 'stepfun',
+      baseUrl: 'https://api.stepfun.com/v1',
+      modelId: 'step-3.5-flash',
+      apiKey: 'stored-stepfun-key',
+      degradedFrom: 'gemini',
+    })
+    expect(warn).toHaveBeenCalledWith(
+      '[ai] provider_fallback',
+      { from: 'gemini', to: 'stepfun' },
+    )
+  })
+
+  it('fails as retryable PROVIDER_FAILED when the breaker is open and no fallback is configured', async () => {
+    // 保守默认：没有显式备选就绝不擅自替用户换模型，只给「暂时不可用」的可重试出口。
+    const { dependencies, secrets } = createDependencies()
+    secrets.set('gemini', 'gemini-key')
+    tripBreaker('gemini')
+
+    await expect(resolveDirectorModelTarget(
+      'script-import',
+      'text',
+      dependencies,
+    )).rejects.toMatchObject({
+      name: 'ProviderUnavailableError',
+      message: 'AI 服务暂时不可用，可稍后重试或选择跳过',
+    })
+  })
+
+  it('fails the same way when both primary and fallback breakers are open', async () => {
+    const { dependencies, secrets } = createDependencies()
+    secrets.set('gemini', 'gemini-key')
+    secrets.set('stepfun', 'stored-stepfun-key')
+    const deps: AiConfigDependencies = {
+      ...dependencies,
+      fallbackProviders: {
+        find: vi.fn(async () => 'stepfun' as const),
+        save: vi.fn(async () => {}),
+      },
+    }
+    tripBreaker('gemini')
+    tripBreaker('stepfun')
+
+    await expect(resolveDirectorModelTarget(
+      'script-import',
+      'text',
+      deps,
+    )).rejects.toMatchObject({ name: 'ProviderUnavailableError' })
+  })
+
+  it('keeps the healthy path untouched even when a fallback is configured', async () => {
+    // 熔断关闭时降级链完全旁路：既不读备选，也不产生 degradedFrom 字段。
+    const { dependencies, secrets } = createDependencies()
+    secrets.set('gemini', 'gemini-key')
+    const find = vi.fn(async () => 'stepfun' as const)
+    const deps: AiConfigDependencies = {
+      ...dependencies,
+      fallbackProviders: { find, save: vi.fn(async () => {}) },
+    }
+
+    const target = await resolveDirectorModelTarget('script-import', 'text', deps)
+    expect(target.provider).toBe('gemini')
+    expect(target).not.toHaveProperty('degradedFrom')
+    expect(find).not.toHaveBeenCalled()
   })
 })

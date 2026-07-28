@@ -235,7 +235,7 @@ FINALIZE `export` 节点从 `idle` 到 `succeeded`，最终 MP4 的数据库哈�
 **真实事故**：进程中断后 attempt 永久停在 `running`（僵尸任务）；模型侧间歇性
 失败靠人工反复点重试；单个 shot 环节持续失败时项目无法出片。
 
-**规则**：容灾护栏必须分三层，每层职责不重叠：
+**规则**：容灾护栏必须分四层，每层职责不重叠：
 
 1. **进程中断自动回收（阶段 1）**：`task_attempts` 携带 `lease_expires_at` /
    `visible_at` 租约；`lease.ts` 周期性把过期 `running` attempt 收尸为
@@ -250,17 +250,29 @@ FINALIZE `export` 节点从 `idle` 到 `succeeded`，最终 MP4 的数据库哈�
    跳过必须留下可审计证据（`node-skip-marker` 产物 + `skipMeta.reason`），
    下游推进把 `skipped` 视为前置满足，导出走既有降级链占位并在
    `final-mp4-degraded-manifest` 如实登记，不得宣称完全成功。
+4. **Provider 熔断 + 显式备选降级（阶段 4）**：`provider-breaker.ts` 按
+   provider 独立计数（连续失败 ≥3 次 open 5 分钟，窗口后 half-open 单次
+   试探）；记账**单一收敛点**在 `pi-session.ts` 的 run 结果处，只有外部
+   模型调用成败才计入，RouteContractError 等内部矛盾不得污染计数
+   （模式 B）。降级只在用户显式配置了 `fallbackProvider` 且备选可用时
+   发生（默认无备选，绝不擅自换模型），降级事实经 `degradedFrom`、
+   routeLabel 与 `provider_fallback` 日志可追溯；主备均不可用落到
+   `PROVIDER_FAILED`（`retryable=true`），不回显 provider 原始错误。
 
-三层的诊断口径：先看 attempt 是否被租约回收（`TASK_INTERRUPTED`），再看重试
-预算是否耗尽（`RETRY_BUDGET_EXHAUSTED`），最后看节点是否被人为跳过
-（`status='skipped'` + `skipMeta` + `node-skip-marker`）。三者互斥，不得用
+四层的诊断口径：先看 attempt 是否被租约回收（`TASK_INTERRUPTED`），再看重试
+预算是否耗尽（`RETRY_BUDGET_EXHAUSTED`），再看是否熔断降级（`provider_fallback`
+日志 / routeLabel 带备选标注），最后看节点是否被人为跳过
+（`status='skipped'` + `skipMeta` + `node-skip-marker`）。四者互斥，不得用
 同一错误码或同一状态混叙。
 
 **已落地护栏**：阶段 1 见 `lease.ts` 与迁移 0005；阶段 2 见 `retry-policy.ts` /
 `attempt-completion.ts`；阶段 3 见 `skip.ts`（`skipNodeAction`）、
 `skip-policy.ts`（`SKIPPABLE` 全集断言）与 `/api/director/stage` 的
 `intent=skip` 合同（routing.md §4.1）。`skipped` 只能由用户显式请求进入，
-自动链路（autopilot / 自动重试）永远不得自行跳过节点。
+自动链路（autopilot / 自动重试）永远不得自行跳过节点。阶段 4 见
+`provider-breaker.ts`（红线：纯内存单实例假设，多实例部署必须落库）、
+`model-routing.ts` 的 `degradeToFallback` 与 `fallback-provider-store.ts`
+（配置说明见 docs/configuration/model-routing.md）。
 
 ---
 
@@ -275,7 +287,7 @@ FINALIZE `export` 节点从 `idle` 到 `succeeded`，最终 MP4 的数据库哈�
 - [ ] fixture 是否是真实产物形状（模式 E）。
 - [ ] 验证时是否重启过 dev server，并用节点状态与产物哈希作证据（模式 F）。
 - [ ] artifact 指向的文件是否已经停止写入，哈希是否在生产者关闭后计算（模式 G）。
-- [ ] 新增的失败出路是否落在三层护栏之内（租约回收 / 重试预算 / 人为跳过），跳过语义是否留下可审计证据且不被自动链路滥用（模式 H）。
+- [ ] 新增的失败出路是否落在四层护栏之内（租约回收 / 重试预算 / 人为跳过 / 熔断降级），跳过语义是否留下可审计证据且不被自动链路滥用，熔断记账是否只计外部故障（模式 H）。
 - [ ] 真实产物证据：`artifacts.content_hash` 与磁盘字节 SHA-256 逐条核对一致。
 
 真实证据的取法示例：

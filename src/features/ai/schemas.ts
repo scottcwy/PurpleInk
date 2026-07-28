@@ -126,6 +126,12 @@ export const stepfunSettingsSchema = z.object({
     })
     .strict()
     .optional(),
+  /**
+   * 熔断降级链的显式备选 provider（模式 H 阶段 4）。未提交则不改已存值；
+   * `null` 表示显式清空备选（回到默认的无备选状态）。必须支持文本会话，
+   * 由 `validateProviderSettings` 按能力兑住。
+   */
+  fallbackProvider: textProviderSchema.nullable().optional(),
   laneQuotas: laneQuotasSchema,
 }).strict()
 

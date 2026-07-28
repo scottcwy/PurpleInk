@@ -94,7 +94,19 @@ function classifyByType(
   if (error instanceof Error && error.name === 'RetryBudgetExhaustedError') {
     return RETRY_BUDGET_EXHAUSTED_PROJECTION
   }
+  // 熔断降级链的「主备均不可用」来自 features/ai；同样只按类型名判定。
+  // 这是外部服务故障，熔断窗口过后重试有意义，必须可重试（模式 B）。
+  if (error instanceof Error && error.name === 'ProviderUnavailableError') {
+    return PROVIDER_UNAVAILABLE_PROJECTION
+  }
   return undefined
+}
+
+/** 主备 provider 均不可用的统一投影：类型判定与文案判定必须给出同一结果。 */
+const PROVIDER_UNAVAILABLE_PROJECTION: ClassifiedError = {
+  code: 'PROVIDER_FAILED',
+  message: 'AI 服务暂时不可用，可稍后重试或选择跳过',
+  retryable: true,
 }
 
 /** 重试预算耗尽的统一投影：类型判定与文案判定必须给出同一结果。 */
@@ -133,6 +145,12 @@ const MESSAGE_RULES: ReadonlyArray<readonly [RegExp, ClassifiedError]> = [
     // 必须排在「配置/额度」等笼统规则前，避免被误归成 CONFIGURATION_BLOCKED。
     /已暂停重试/,
     RETRY_BUDGET_EXHAUSTED_PROJECTION,
+  ],
+  [
+    // 熔断文案持久化后同样只剩字符串：「AI 服务暂时不可用」含「不可用」，
+    // 必须排在笼统规则前，不得被误归成不可重试的 CONFIGURATION_BLOCKED。
+    /AI 服务暂时不可用/,
+    PROVIDER_UNAVAILABLE_PROJECTION,
   ],
   [
     /StepFun\s+TTS.*HTTP\s*402/i,

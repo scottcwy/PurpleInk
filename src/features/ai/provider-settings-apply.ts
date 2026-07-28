@@ -47,6 +47,7 @@ export async function applyProviderSettings(
     customOpenAi,
     customOpenAiTts,
     customOpenAiAsr,
+    fallbackProvider,
     ...modelSettings
   } = input
   try {
@@ -83,6 +84,14 @@ export async function applyProviderSettings(
       directorStage: laneQuotas.directorStageConcurrency,
       renderShot: laneQuotas.renderShotConcurrency,
     })
+  }
+  // 降级链备选：未提交不改已存值；null 显式清空。能力门禁已在
+  // `validateProviderSettings` 拒过，这里只负责落库。
+  if (fallbackProvider !== undefined) {
+    await getAiConfigDependencies().fallbackProviders?.save(
+      currentWorkspaceId(),
+      fallbackProvider,
+    )
   }
   return OK
 }
