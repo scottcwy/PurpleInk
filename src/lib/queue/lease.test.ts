@@ -8,6 +8,7 @@ import {
   executionTimeoutMs,
   HEARTBEAT_INTERVAL_MS,
   LEASE_DURATION_MS,
+  leaseDurationMs,
   SWEEP_INTERVAL_MS,
   withExecutionTimeout,
 } from './lease'
@@ -29,6 +30,14 @@ describe('租约与执行超时常量', () => {
     expect(executionTimeoutMs('export-project')).toBe(1_800_000)
     expect(executionTimeoutMs('media-narration')).toBe(1_800_000)
     expect(DEFAULT_EXECUTION_TIMEOUT_MS).toBe(600_000)
+  })
+
+  it('租约覆盖该 kind 的完整执行窗口与一次清扫间隔，不能在合法执行中途回收', () => {
+    expect(leaseDurationMs('director-stage')).toBe(660_000)
+    expect(leaseDurationMs('render-shot')).toBe(960_000)
+    expect(leaseDurationMs('export-project')).toBe(1_860_000)
+    expect(leaseDurationMs('media-narration')).toBe(1_860_000)
+    expect(leaseDurationMs('unknown-kind')).toBe(660_000)
   })
 })
 

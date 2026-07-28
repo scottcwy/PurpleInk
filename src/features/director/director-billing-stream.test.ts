@@ -7,7 +7,10 @@ import {
   type Model,
 } from '@earendil-works/pi-ai'
 import type { ManagedAiGateway, ManagedAiHandle } from '@/features/ai'
-import { createDirectorBillingStream } from './director-billing-stream'
+import {
+  createDirectorBillingStream,
+  DIRECTOR_PROVIDER_TIMEOUT_MS,
+} from './director-billing-stream'
 
 vi.mock('server-only', () => ({}))
 
@@ -108,11 +111,47 @@ describe('Director per-provider-call billing stream', () => {
 
     expect(begin.mock.calls.map(([input]) => input.invocationNo)).toEqual([1, 2, 3])
     expect(streamSimple).toHaveBeenCalledTimes(3)
+    expect(streamSimple).toHaveBeenCalledWith(
+      model,
+      context,
+      expect.objectContaining({
+        timeoutMs: DIRECTOR_PROVIDER_TIMEOUT_MS,
+        maxRetries: 0,
+      }),
+    )
     expect(order).toEqual([
       'settled', 'done',
       'settled', 'done',
       'settled', 'done',
     ])
+  })
+
+  it('preserves caller options while capping provider timeout and disabling nested retries', async () => {
+    const streamSimple = vi.fn(upstream)
+    await consume(createDirectorBillingStream({
+      model,
+      context,
+      options: {
+        maxTokens: 512,
+        timeoutMs: DIRECTOR_PROVIDER_TIMEOUT_MS * 2,
+        maxRetries: 3,
+      },
+      runtime: {
+        providerId: 'stepfun',
+        modelId: model.id,
+        maxOutputTokens: 4_096,
+        deductsManagedPool: false,
+      },
+      invocationIndex: 1,
+      gateway: {} as ManagedAiGateway,
+      streamSimple,
+    }))
+
+    expect(streamSimple).toHaveBeenCalledWith(model, context, {
+      maxTokens: 512,
+      timeoutMs: DIRECTOR_PROVIDER_TIMEOUT_MS,
+      maxRetries: 0,
+    })
   })
 
   it('does not start the next provider call when reservation is rejected', async () => {

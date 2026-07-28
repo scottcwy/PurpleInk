@@ -163,7 +163,7 @@ async function createSkipAttempt(
       fingerprint,
       checkpoint: { schemaVersion: 1, kind: SKIP_TASK_KIND, payload },
       startedAt: new Date(),
-      leaseExpiresAt: leaseDeadline(),
+      leaseExpiresAt: leaseDeadline(SKIP_TASK_KIND),
     })
   })
   return attemptId

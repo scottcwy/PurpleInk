@@ -310,6 +310,41 @@ Pi Agent 把这条内部错误压成 `errorMessage` 后，旧会话收敛逻辑�
 
 ---
 
+## 7.4 模式 J：长模型调用被短租约误回收，并遗留托管计费预留
+
+**症状**：修复模式 I 后，FABRICATE 不再秒失败，`ai_invocations` 也出现真实的
+`provider/model` 与 `running/reserved` 记录；但模型长时间没有终态事件时，父 attempt
+先变成 `TASK_INTERRUPTED`，调用记录仍永久停在 `running/reserved`。这不是模型切换
+失败，而是队列租约、模型超时和计费补偿三个时钟没有形成闭环。
+
+**真实事故**：MiMo FABRICATE 调用已完成托管预留并进入上游，Pi 会话不再出现
+「缺少 attemptId」，证明模式 I 已修复；但上游超过原 2 分钟租约仍未产生终态事件，
+心跳未能在这次 Next dev 运行中把租约续到完整执行窗口。约 4 分钟后清扫器把 attempt
+回收为 `TASK_INTERRUPTED`。旧实现既没有给 `streamSimple` 显式超时，也保留 SDK
+内部重试；清扫器只收尸 attempt/run/node，不处理其 `ai_invocations`，因此额度预留
+失去归属并永久悬挂。
+
+**规则**：
+
+- 单次 Provider 调用必须有短于所属队列阶段执行上限的显式硬超时；SDK 内重试必须
+  关闭，由队列的统一重试预算负责，禁止形成「SDK 重试 × 队列重试」乘法。
+- claim 与续租写入的租约必须覆盖该 `kind` 的完整合法执行窗口，再加至少一个清扫
+  间隔。心跳用于延展活跃任务，不能把正确性建立在短进程内定时器永不失效的假设上。
+- 每轮僵尸清扫都必须补偿检查：父 attempt 已非 `running`，而托管 invocation 仍是
+  `running/reserved` 时，按 `usageStatus=unavailable` 终态结算。该补偿必须幂等，
+  并能修复重启前已遗留的孤儿记录。
+- 进程中断后无法证明 Provider 是否产生用量，沿用计费合同以最大预留结算；不得
+  悄悄释放而低报，也不得保留永久预留。
+
+**已落地护栏**：`director-billing-stream.ts` 把 Provider 调用封顶为 4 分钟并固定
+`maxRetries=0`；`lease.ts` 以 `executionTimeoutMs(kind) + SWEEP_INTERVAL_MS`
+计算 claim 与续租截止时间；同一清扫周期动态调用
+`reconcileOrphanedManagedInvocations`，把父 attempt 已终态的孤儿预留幂等收敛为
+`failed/settled/unavailable`。单测锁定超时与重试所有权，Postgres 测试锁定租约
+窗口、孤儿补偿和额度账本归零。
+
+---
+
 ## 8. 工作流类改动的提交前清单
 
 在 `AGENTS.md` §8 的通用门禁之外，涉及本文覆盖的链路时补做：
@@ -323,6 +358,7 @@ Pi Agent 把这条内部错误压成 `errorMessage` 后，旧会话收敛逻辑�
 - [ ] artifact 指向的文件是否已经停止写入，哈希是否在生产者关闭后计算（模式 G）。
 - [ ] 新增的失败出路是否落在四层护栏之内（租约回收 / 重试预算 / 人为跳过 / 熔断降级），跳过语义是否留下可审计证据且不被自动链路滥用，熔断记账是否只计外部故障（模式 H）。
 - [ ] 复合队列是否把父 `job.id` 贯穿到所有需要审计/计费的子阶段；出网前失败是否保留原始类型并绕过 Provider 熔断（模式 I）。
+- [ ] Provider 硬超时是否短于阶段执行上限，SDK 内重试是否关闭；租约是否覆盖完整执行窗口，父 attempt 终态后是否仍存在 `running/reserved` 孤儿调用（模式 J）。
 - [ ] 真实产物证据：`artifacts.content_hash` 与磁盘字节 SHA-256 逐条核对一致。
 
 真实证据的取法示例：
@@ -349,7 +385,8 @@ docker exec purpleink-dev-postgres-1 psql -U cvc -d cvc -A -t -F "|" -c `
 `DEFAULT_PROVIDER` 与 `media_routes` 双真值（模式 A）、内部路由矛盾仍走文案
 规则（模式 B）、文档 `measureMp3` 漂移、队列初始化全量并行抖动、终片异步音频
 读取错误（模式 D）、Pi 会话哈希失真（模式 G）、复合渲染队列丢失 attempt id 并
-污染 Provider 熔断（模式 I）——见各节「已落地护栏」。
+污染 Provider 熔断（模式 I）、长模型调用被短租约误回收且遗留计费预留（模式 J）
+——见各节「已落地护栏」。
 
 ---
 

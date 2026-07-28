@@ -238,7 +238,7 @@ export class InProcessQueue implements QueueAdapter {
         .update(taskAttempts)
         .set({
           status: 'running',
-          leaseExpiresAt: leaseDeadline(),
+          leaseExpiresAt: leaseDeadline(row.taskId.slice('legacy.'.length)),
           startedAt: new Date(),
           updatedAt: new Date(),
         })

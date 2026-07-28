@@ -1,4 +1,4 @@
-import { and, eq, gt, lte, sql } from 'drizzle-orm'
+import { and, eq, gt, lte, ne, sql } from 'drizzle-orm'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb } from '@/lib/db/client'
 import type { VersionedPayload } from '@/lib/db/schema/core'
@@ -182,6 +182,43 @@ export async function failManagedInvocation(input: {
 }
 
 export const settleUsageUnavailable = failManagedInvocation
+
+/**
+ * 补偿父 attempt 已终态、但仍占用托管额度的调用。
+ *
+ * Provider 是否已经产生用量在进程中断后不可证明，因此按既有
+ * usageStatus=unavailable 合同以最大预留结算；重复执行是幂等 no-op。
+ */
+export async function reconcileOrphanedManagedInvocations(): Promise<string[]> {
+  const database = await getDb()
+  const rows = await database
+    .select({
+      workspaceId: aiInvocations.workspaceId,
+      invocationId: aiInvocations.id,
+    })
+    .from(aiInvocations)
+    .innerJoin(
+      taskAttempts,
+      and(
+        eq(taskAttempts.workspaceId, aiInvocations.workspaceId),
+        eq(taskAttempts.id, aiInvocations.attemptId),
+      ),
+    )
+    .where(
+      and(
+        eq(aiInvocations.status, 'running'),
+        eq(aiInvocations.billingStatus, 'reserved'),
+        ne(taskAttempts.status, 'running'),
+      ),
+    )
+  for (const row of rows) {
+    await failManagedInvocation({
+      workspaceId: row.workspaceId,
+      invocationId: row.invocationId,
+    })
+  }
+  return rows.map((row) => row.invocationId)
+}
 
 export async function releaseManagedReservation(input: {
   workspaceId?: string

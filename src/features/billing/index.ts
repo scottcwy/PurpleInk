@@ -11,6 +11,7 @@ export {
 } from './domain'
 export {
   failManagedInvocation,
+  reconcileOrphanedManagedInvocations,
   reserveManagedInvocation,
   releaseManagedReservation,
   settleManagedInvocation,

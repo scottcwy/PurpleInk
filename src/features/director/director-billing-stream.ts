@@ -26,6 +26,9 @@ interface DirectorBillingRuntime {
   deductsManagedPool: boolean
 }
 
+/** 单次上游调用的硬上限；队列层负责重试，SDK 内不得再做嵌套重试。 */
+export const DIRECTOR_PROVIDER_TIMEOUT_MS = 4 * 60_000
+
 /** 模型出网前的内部审计/计费上下文不完整；不得计入 Provider 熔断。 */
 export class DirectorPreflightError extends Error {
   override readonly name = 'DirectorPreflightError'
@@ -63,7 +66,11 @@ async function* billedEvents(
   let providerStarted = false
   let settled = false
   try {
-    const upstream = input.streamSimple(input.model, input.context, input.options)
+    const upstream = input.streamSimple(
+      input.model,
+      input.context,
+      providerOptions(input.options),
+    )
     providerStarted = true
     for await (const event of upstream) {
       if (event.type === 'done' || event.type === 'error') {
@@ -78,6 +85,19 @@ async function* billedEvents(
       else await handle.releaseBeforeCall()
     }
     throw error
+  }
+}
+
+function providerOptions(
+  options: SimpleStreamOptions | undefined,
+): SimpleStreamOptions {
+  return {
+    ...options,
+    timeoutMs: Math.min(
+      options?.timeoutMs ?? DIRECTOR_PROVIDER_TIMEOUT_MS,
+      DIRECTOR_PROVIDER_TIMEOUT_MS,
+    ),
+    maxRetries: 0,
   }
 }
 

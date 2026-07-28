@@ -5,6 +5,7 @@ import {
   redemptionBatches,
   redemptionCodes,
   aiInvocations,
+  taskAttempts,
   usagePeriods,
   users,
   workspaceEntitlements,
@@ -263,6 +264,52 @@ it('atomically creates, reserves and idempotently settles an invocation', async 
     billingStatus: 'settled',
     settledCnyMicros: BigInt(600),
     status: 'succeeded',
+  })
+})
+
+it('settles reserved invocations whose parent attempt is already terminal', async () => {
+  await provision()
+  await seedAttempt()
+  const {
+    reconcileOrphanedManagedInvocations,
+    reserveManagedInvocation,
+  } = await import('./ledger')
+  await reserveManagedInvocation({
+    workspaceId: WORKSPACE_ID,
+    invocationId: INVOCATION_ID,
+    idempotencyKey: 'orphaned-managed-invocation-1',
+    rateCardId: '20000000-0000-4000-8000-000000000001',
+    maximumCostCnyMicros: BigInt(1_000),
+    create: {
+      attemptId: ATTEMPT_ID,
+      invocationNo: 1,
+      provider: 'mimo',
+      model: 'mimo-v2.5',
+      inputHash: '9'.repeat(64),
+    },
+  })
+  await database.db
+    .update(taskAttempts)
+    .set({ status: 'failed', completedAt: new Date() })
+    .where(eq(taskAttempts.id, ATTEMPT_ID))
+
+  await expect(reconcileOrphanedManagedInvocations()).resolves.toEqual([
+    INVOCATION_ID,
+  ])
+  await expect(reconcileOrphanedManagedInvocations()).resolves.toEqual([])
+
+  const [invocation] = await database.db.select().from(aiInvocations)
+  expect(invocation).toMatchObject({
+    status: 'failed',
+    billingStatus: 'settled',
+    usageStatus: 'unavailable',
+    reservedCnyMicros: BigInt(1_000),
+    settledCnyMicros: BigInt(1_000),
+  })
+  const [period] = await database.db.select().from(usagePeriods)
+  expect(period).toMatchObject({
+    reservedCnyMicros: BigInt(0),
+    usedCnyMicros: BigInt(1_000),
   })
 })
 

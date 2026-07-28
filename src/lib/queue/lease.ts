@@ -33,8 +33,15 @@ export function executionTimeoutMs(kind: string): number {
 }
 
 /** 用 DB 时钟计算租约到期时间，避免应用与 DB 时钟漂移导致误回收。 */
-export function leaseDeadline(): SQL {
-  return sql`now() + make_interval(secs => ${LEASE_DURATION_MS / 1000})`
+export function leaseDurationMs(kind: string): number {
+  return Math.max(
+    LEASE_DURATION_MS,
+    executionTimeoutMs(kind) + SWEEP_INTERVAL_MS,
+  )
+}
+
+export function leaseDeadline(kind = ''): SQL {
+  return sql`now() + make_interval(secs => ${leaseDurationMs(kind) / 1000})`
 }
 
 export class ExecutionTimeoutError extends Error {
@@ -67,15 +74,33 @@ export async function withExecutionTimeout<T>(
 /** 只续租传入的（本进程持有的）running attempt；空列表是空闲心跳的 no-op。 */
 export async function renewLeases(db: Db, attemptIds: string[]): Promise<void> {
   if (attemptIds.length === 0) return
-  await db
-    .update(taskAttempts)
-    .set({ leaseExpiresAt: leaseDeadline(), updatedAt: new Date() })
+  const held = await db
+    .select({ id: taskAttempts.id, taskId: taskAttempts.taskId })
+    .from(taskAttempts)
     .where(
       and(
         eq(taskAttempts.status, 'running'),
-        inArray(taskAttempts.id, attemptIds)
-      )
+        inArray(taskAttempts.id, attemptIds),
+      ),
     )
+  const byKind = new Map<string, string[]>()
+  for (const row of held) {
+    const kind = row.taskId.startsWith('legacy.')
+      ? row.taskId.slice('legacy.'.length)
+      : ''
+    byKind.set(kind, [...(byKind.get(kind) ?? []), row.id])
+  }
+  for (const [kind, ids] of byKind) {
+    await db
+      .update(taskAttempts)
+      .set({ leaseExpiresAt: leaseDeadline(kind), updatedAt: new Date() })
+      .where(
+        and(
+          eq(taskAttempts.status, 'running'),
+          inArray(taskAttempts.id, ids),
+        ),
+      )
+  }
 }
 
 interface ExpiredAttemptRow {
@@ -152,7 +177,16 @@ export async function sweepExpiredLeases(db: Db): Promise<string[]> {
     db,
     expired.filter((row) => row.entityType === 'node')
   )
+  await reconcileOrphanedInvocations()
   return expired.map((row) => row.id)
+}
+
+/** 每轮清扫都补偿 terminal attempt 遗留的托管调用，覆盖进程重启前已产生的孤儿预留。 */
+async function reconcileOrphanedInvocations(): Promise<void> {
+  const { reconcileOrphanedManagedInvocations } = await import(
+    '@/features/billing'
+  )
+  await reconcileOrphanedManagedInvocations()
 }
 
 /**
