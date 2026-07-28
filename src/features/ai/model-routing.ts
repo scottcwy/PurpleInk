@@ -3,7 +3,11 @@ import { z } from 'zod'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import type { CanvasNodeType } from '@/features/canvas'
 import type { AiTaskKind } from '@/features/routing'
-import { type AiConfigDependencies, getAiConfigDependencies } from './config'
+import {
+  fundingForProvider,
+  type AiConfigDependencies,
+  getAiConfigDependencies,
+} from './config'
 import { isProviderAvailable } from './provider-breaker'
 import { providerDefaults } from './route-provider-defaults'
 import {
@@ -183,11 +187,13 @@ export async function resolveDirectorModelTarget(
   const configured = await resolveRoute(target, deps)
   const primary = configured?.provider ?? defaultProviderFor(target, plan)
   if (configured) {
+    const funding = await fundingForProvider(configured.provider, deps)
     await authorizeManagedRoute({
       plan,
       provider: configured.provider,
       modelId: configured.model,
       capability,
+      funding,
     }, deps.managedModelCatalog)
   }
   // 熔断检查必须在真正发起调用的解析处：half-open 的试探名额会被本次调用占用。
@@ -197,11 +203,13 @@ export async function resolveDirectorModelTarget(
   }
   if (configured) {
     const defaults = await providerDefaults(configured.provider, deps)
+    const funding = await fundingForProvider(configured.provider, deps)
     const authorization = await authorizeManagedRoute({
       plan,
       provider: configured.provider,
       modelId: configured.model,
       capability,
+      funding,
     }, deps.managedModelCatalog)
     const { catalogId: _catalogId, ...publicAuthorization } = authorization
     return {
@@ -216,11 +224,13 @@ export async function resolveDirectorModelTarget(
   }
   const defaults = await providerDefaults(primary, deps)
   const modelId = defaults.modelFor(target, capability)
+  const funding = await fundingForProvider(primary, deps)
   const authorization = await authorizeManagedRoute({
     plan,
     provider: primary,
     modelId,
     capability,
+    funding,
   }, deps.managedModelCatalog)
   const { catalogId: _catalogId, ...publicAuthorization } = authorization
   return {
@@ -243,11 +253,13 @@ export async function describeDirectorRoutes(
       findRoute(target, deps),
     ])
     const model = configured?.model ?? await defaultModel(provider.provider, target, plan, deps)
+    const funding = await fundingForProvider(provider.provider, deps)
     await authorizeManagedRoute({
       plan,
       provider: provider.provider,
       modelId: model,
       capability: capabilityForTarget(target),
+      funding,
     }, deps.managedModelCatalog)
     return [nodeType, { ...provider, model }] as const
   }))
@@ -310,8 +322,9 @@ async function defaultModel(
   const defaults = await providerDefaults(provider, deps)
   const capability = capabilityForTarget(target)
   const model = defaults.modelFor(target, capability)
+  const funding = await fundingForProvider(provider, deps)
   await authorizeManagedRoute(
-    { plan, provider, modelId: model, capability },
+    { plan, provider, modelId: model, capability, funding },
     deps.managedModelCatalog,
   )
   return model

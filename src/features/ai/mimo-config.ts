@@ -1,10 +1,11 @@
 import 'server-only'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import {
   type AiConfigDependencies,
   getAiConfigDependencies,
+  resolveProviderApiKey,
   type StepfunConfigFieldView,
 } from './config'
-import { resolveManagedCredential } from './managed-credentials'
 import { RouteContractError } from './route-contract-error'
 
 export const MIMO_PROVIDER = 'mimo' as const
@@ -72,10 +73,10 @@ export function resolveMimoBaseUrl(): string {
 }
 
 export async function getMimoConfig(
-  _deps: AiConfigDependencies = getAiConfigDependencies()
+  deps: AiConfigDependencies = getAiConfigDependencies()
 ): Promise<MimoConfig> {
   return {
-    apiKey: resolveManagedCredential(MIMO_PROVIDER),
+    apiKey: await resolveProviderApiKey(MIMO_PROVIDER, deps),
     baseUrl: resolveMimoBaseUrl(),
     textModel: DEFAULTS.textModel,
     visionModel: DEFAULTS.visionModel,
@@ -117,9 +118,14 @@ export async function saveMimoSettings(
 }
 
 export async function saveMimoApiKey(
-  _apiKey: string,
-  _verifiedAt = new Date(),
-  _deps: AiConfigDependencies = getAiConfigDependencies()
+  apiKey: string,
+  verifiedAt = new Date(),
+  deps: AiConfigDependencies = getAiConfigDependencies()
 ): Promise<void> {
-  throw new RouteContractError('MiMo 托管凭据由服务端管理，不接受设置写入')
+  await deps.credentials.save({
+    workspaceId: currentWorkspaceId(),
+    provider: MIMO_PROVIDER,
+    secret: apiKey,
+    verifiedAt,
+  })
 }

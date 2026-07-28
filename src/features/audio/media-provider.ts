@@ -5,7 +5,6 @@ import {
   getStepfunConfig,
   type AiConfigDependencies,
 } from '@/features/ai/config'
-import { requireManagedCredential } from '@/features/ai'
 import {
   synthesizeMimoSpeech,
   transcribeMimoSpeech,
@@ -219,9 +218,6 @@ export async function synthesizeRoutedSpeech(
     billingContext: input.billingContext,
     estimate: { kind: 'tts', characters: Array.from(input.text).length },
     input: input.text,
-    prepare: async () => {
-      requireManagedCredential(managedProvider)
-    },
     invoke,
     outputBytes: (speech) => speech.audioBytes,
     usageFromResult: (speech) => ({
@@ -283,9 +279,6 @@ export async function transcribeRoutedSpeech(
     billingContext: input.billingContext,
     estimate: { kind: 'asr', audioSeconds: audioSeconds! },
     input: input.audioBytes,
-    prepare: async () => {
-      requireManagedCredential(managedProvider)
-    },
     invoke,
     outputBytes: (speech) => speech.transcript,
     usageFromResult: () => ({

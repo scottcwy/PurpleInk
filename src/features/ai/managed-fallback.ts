@@ -1,6 +1,6 @@
 import 'server-only'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
-import type { AiConfigDependencies } from './config'
+import { fundingForProvider, type AiConfigDependencies } from './config'
 import {
   authorizeManagedRoute,
   filterAuthorizedFallbacks,
@@ -25,13 +25,16 @@ export async function resolveAuthorizedFallback(input: {
 }): Promise<DirectorModelTarget> {
   const fallback =
     (await input.deps.fallbackProviders?.find(currentWorkspaceId())) ?? null
-  const [authorizedFallback] = fallback
+  const fallbackFunding = fallback
+    ? await fundingForProvider(fallback, input.deps)
+    : 'managed'
+  const [authorizedFallback] = fallback && fallbackFunding === 'managed'
     ? await filterAuthorizedFallbacks({
         plan: input.plan,
         capability: input.capability,
         candidates: [fallback],
       }, input.deps.managedModelCatalog)
-    : []
+    : fallback ? [fallback] : []
   if (
     !fallback ||
     fallback === input.primary ||
@@ -49,6 +52,7 @@ export async function resolveAuthorizedFallback(input: {
     provider: authorizedFallback,
     modelId,
     capability: input.capability,
+    funding: fallbackFunding,
   }, input.deps.managedModelCatalog)
   const { catalogId: _catalogId, ...publicAuthorization } = authorization
   console.warn('[ai] provider_fallback', {

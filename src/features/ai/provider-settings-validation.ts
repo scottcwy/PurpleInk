@@ -13,6 +13,12 @@ import {
 } from './provider-settings-contract'
 import { PROVIDER_REGISTRY, providerSupports } from './provider-registry'
 import type { StepfunSettings } from './schemas'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getAiConfigDependencies } from './config'
+import { validateGeminiKey } from './gemini-adapter'
+import { validateMimoKey } from './mimo-adapter'
+import { validateKey as validateStepfunKey } from './stepfun-adapter'
+import type { ManagedProviderId } from './managed-service'
 
 /**
  * 先验证后保存的全部闸门（AGENTS §7）。返回 `ok: true` 才允许调用
@@ -33,8 +39,10 @@ export async function validateProviderSettings(
     mimoApiKey !== undefined ||
     hasManagedModelInput(input, geminiSettings, mimoSettings)
   ) {
-    return reject(422, '托管凭据与模型由服务端管理，不接受设置写入', false)
+    return reject(422, '内置模型与旧凭据字段不接受写入，请使用服务来源配置', false)
   }
+  const builtIn = await validateBuiltInServices(input)
+  if (!builtIn.ok) return builtIn
 
   // 备选 provider 服务于 Director 文本会话的降级：纯音频端点切过去必然
   // 以 RouteContractError 失败，在保存前就拒掉（先验证后保存）。
@@ -80,6 +88,51 @@ export async function validateProviderSettings(
   }
 
   return OK
+}
+
+async function validateBuiltInServices(
+  input: StepfunSettings,
+): Promise<ProviderSettingsOutcome> {
+  const entries = Object.entries(input.providerServices ?? {}) as Array<
+    [ManagedProviderId, { funding: 'managed' | 'byok'; apiKey?: string }]
+  >
+  for (const [provider, service] of entries) {
+    if (service.funding === 'managed') {
+      if (service.apiKey !== undefined) {
+        return reject(422, '平台托管模式不接受用户 API Key', false)
+      }
+      continue
+    }
+    if (!service.apiKey) {
+      const existing = await getAiConfigDependencies().credentials.describe(
+        currentWorkspaceId(),
+        provider,
+      )
+      if (!existing.configured) {
+        return reject(422, '切换到自有 Key 前请先填写并验证 API Key', false)
+      }
+      continue
+    }
+    if (!await validateByok(provider, service.apiKey)) {
+      return reject(422, `${providerLabel(provider)} API Key 校验失败`, false)
+    }
+  }
+  return OK
+}
+
+async function validateByok(
+  provider: ManagedProviderId,
+  apiKey: string,
+): Promise<boolean> {
+  if (provider === 'stepfun') return validateStepfunKey(apiKey)
+  if (provider === 'gemini') return validateGeminiKey(apiKey)
+  return (await validateMimoKey(apiKey)).ok
+}
+
+function providerLabel(provider: ManagedProviderId): string {
+  if (provider === 'stepfun') return 'StepFun'
+  if (provider === 'gemini') return 'Gemini'
+  return 'MiMo'
 }
 
 function hasManagedModelInput(

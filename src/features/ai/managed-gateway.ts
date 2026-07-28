@@ -20,6 +20,11 @@ import {
 } from './managed-service'
 import type { AiProviderId, ProviderCapability } from './provider-registry'
 import { RouteContractError } from './route-contract-error'
+import {
+  fundingForProvider,
+  getAiConfigDependencies,
+} from './config'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 
 export interface ManagedAiGatewayDependencies {
   getCurrentPlanKey: typeof getCurrentPlanKey
@@ -34,6 +39,8 @@ export interface ManagedAiGatewayDependencies {
   settleManagedInvocation: typeof settleManagedInvocation
   releaseManagedReservation: typeof releaseManagedReservation
   authorizeManagedRoute: typeof authorizeManagedRoute
+  fundingForProvider: typeof fundingForProvider
+  loadByokCredential: (provider: AiProviderId) => Promise<string | null>
 }
 
 const DEFAULT_DEPENDENCIES: ManagedAiGatewayDependencies = {
@@ -46,6 +53,12 @@ const DEFAULT_DEPENDENCIES: ManagedAiGatewayDependencies = {
   settleManagedInvocation,
   releaseManagedReservation,
   authorizeManagedRoute,
+  fundingForProvider,
+  loadByokCredential: (provider) =>
+    getAiConfigDependencies().credentials.loadSecret(
+      currentWorkspaceId(),
+      provider,
+    ),
 }
 
 interface BeginBase {
@@ -94,13 +107,21 @@ export class ManagedAiGateway {
 
   async begin(input: ManagedAiBeginInput): Promise<ManagedAiHandle> {
     const plan = await this.dependencies.getCurrentPlanKey()
+    const funding = await this.dependencies.fundingForProvider(input.provider)
     const authorization = await this.dependencies.authorizeManagedRoute({
       plan,
       provider: input.provider,
       modelId: input.model,
       capability: input.capability,
+      funding,
     })
-    if (authorization.funding === 'byok') return byokHandle()
+    if (authorization.funding === 'byok') {
+      const credential = await this.dependencies.loadByokCredential(input.provider)
+      if (!credential) {
+        throw new RouteContractError('所选供应商尚未配置自己的 API Key')
+      }
+      return byokHandle(credential)
+    }
 
     const provider = requireManagedProvider(input.provider)
     const credential = this.dependencies.requireManagedCredential(provider)
@@ -244,13 +265,13 @@ function requireManagedProvider(provider: AiProviderId): ManagedProviderId {
   throw new RouteContractError('BYOK provider 不应进入托管预留流程')
 }
 
-function byokHandle(): ManagedAiHandle {
+function byokHandle(credential: string): ManagedAiHandle {
   const done = Promise.resolve()
   return {
     invocationId: null,
     funding: 'byok',
     deductsManagedPool: false,
-    credential: null,
+    credential,
     settle: () => done,
     settleUnavailable: () => done,
     releaseBeforeCall: () => done,

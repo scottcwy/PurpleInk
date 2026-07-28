@@ -13,6 +13,7 @@ import { describeOpenAiCompatibleProfile } from './openai-compatible-config'
 import { resolveManagedCredential } from './managed-credentials'
 import { managedModelCatalogRepository } from './managed-model-catalog-repository'
 import { MANAGED_PROVIDER_IDS, type ManagedProviderId } from './managed-service'
+import { resolveProviderFunding } from './config'
 import {
   audioDependencies,
   customOpenAiDependencies,
@@ -47,6 +48,8 @@ export async function describeProviderSettings() {
     customOpenAiTts,
     customOpenAiAsr,
     fallbackProvider,
+    fundingEntries,
+    byokCredentialEntries,
   ] = await Promise.all([
     Promise.resolve(managedCredential('stepfun')),
     Promise.resolve(managedCredential('gemini')),
@@ -63,7 +66,17 @@ export async function describeProviderSettings() {
     // 降级链备选：未配置时回 null（默认无备选）。只回 provider id，无 secret。
     dependencies.fallbackProviders?.find(currentWorkspaceId())
       ?? null,
+    Promise.all(MANAGED_PROVIDER_IDS.map(async (provider) => [
+      provider,
+      await resolveProviderFunding(provider, dependencies),
+    ] as const)),
+    Promise.all(MANAGED_PROVIDER_IDS.map(async (provider) => [
+      provider,
+      await dependencies.credentials.describe(currentWorkspaceId(), provider),
+    ] as const)),
   ])
+  const fundingByProvider = Object.fromEntries(fundingEntries)
+  const byokByProvider = Object.fromEntries(byokCredentialEntries)
   return {
     planKey: plan,
     ...stepfunCredential,
@@ -75,12 +88,22 @@ export async function describeProviderSettings() {
     mimo,
     managedProviders: MANAGED_PROVIDER_IDS.map((provider) => ({
       provider,
-      ...managedCredential(provider),
+      funding: fundingByProvider[provider],
+      configured: fundingByProvider[provider] === 'managed'
+        ? managedCredential(provider).configured
+        : byokByProvider[provider].configured,
+      managedConfigured: managedCredential(provider).configured,
+      byokCredential: byokByProvider[provider],
       models: managedCatalog.filter((model) =>
-        model.provider === provider && planCanUse(plan, model.minimumPlanKey)),
+        model.provider === provider
+        && (
+          fundingByProvider[provider] === 'byok'
+          || planCanUse(plan, model.minimumPlanKey)
+        )),
     })),
     availableCatalog: managedCatalog.filter((model) =>
-      planCanUse(plan, model.minimumPlanKey)),
+      fundingByProvider[model.provider] === 'byok'
+      || planCanUse(plan, model.minimumPlanKey)),
     routes,
     // ISSUE-011: 队列并发配额真值。优先级 DB > env > 代码默认，由 `runtime-config.ts` 统一提供。
     // `source = 'settings' | 'env' | 'default'` 让 UI 能透出真值来自哪里。

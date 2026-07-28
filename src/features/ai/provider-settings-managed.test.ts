@@ -15,7 +15,7 @@ describe('managed provider settings boundary', () => {
         body: {
           ok: false,
           valid: false,
-          error: '托管凭据与模型由服务端管理，不接受设置写入',
+          error: '内置模型与旧凭据字段不接受写入，请使用服务来源配置',
         },
       },
     })

@@ -9,6 +9,7 @@ import {
   type ManagedModelCatalogRepository,
   type ManagedModelDefinition,
 } from './managed-model-catalog-repository'
+import type { ProviderFunding } from './provider-funding-store'
 
 export const MANAGED_PROVIDER_IDS = ['stepfun', 'mimo', 'gemini'] as const
 export type ManagedProviderId = (typeof MANAGED_PROVIDER_IDS)[number]
@@ -63,6 +64,7 @@ export interface ManagedRouteAuthorizationInput {
   provider: AiProviderId
   modelId: string
   capability: ProviderCapability
+  funding?: ProviderFunding
 }
 export type ManagedRouteAuthorization = {
   funding: 'managed' | 'byok'
@@ -87,6 +89,13 @@ export async function authorizeManagedRoute(
   })
   if (!model || !model.enabled) {
     throw modelNotAuthorized()
+  }
+  if (input.funding === 'byok') {
+    return {
+      funding: 'byok',
+      deductsManagedPool: false,
+      catalogId: model.id,
+    }
   }
   if (comparePlans(input.plan, model.minimumPlanKey) < 0) {
     if (input.plan === 'free' && input.provider === 'gemini') {

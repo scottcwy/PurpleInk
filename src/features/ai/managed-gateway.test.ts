@@ -41,8 +41,11 @@ function dependencies() {
     calculateActualCost: vi.fn(() => BigInt(42)),
     settleManagedInvocation: vi.fn(async () => undefined),
     releaseManagedReservation: vi.fn(async () => undefined),
+    fundingForProvider: vi.fn(async (provider) =>
+      provider === 'openai-compatible' ? 'byok' as const : 'managed' as const),
+    loadByokCredential: vi.fn(async () => 'workspace-secret'),
     authorizeManagedRoute: vi.fn(async (input) =>
-      input.provider === 'openai-compatible'
+      input.funding === 'byok'
         ? { funding: 'byok' as const, deductsManagedPool: false }
         : {
             funding: 'managed' as const,
@@ -83,12 +86,35 @@ describe('ManagedAiGateway', () => {
     expect(handle).toMatchObject({
       funding: 'byok',
       deductsManagedPool: false,
-      credential: null,
+      credential: 'workspace-secret',
     })
     expect(deps.requireManagedCredential).not.toHaveBeenCalled()
+    expect(deps.loadByokCredential).toHaveBeenCalled()
     expect(deps.getCurrentRateCard).not.toHaveBeenCalled()
     expect(deps.reserveManagedInvocation).not.toHaveBeenCalled()
     expect(deps.settleManagedInvocation).not.toHaveBeenCalled()
+  })
+
+  it('lets Free Gemini BYOK bypass managed credentials and the cost pool', async () => {
+    const deps = dependencies()
+    vi.mocked(deps.getCurrentPlanKey).mockResolvedValue('free')
+    vi.mocked(deps.fundingForProvider).mockResolvedValue('byok')
+    vi.mocked(deps.loadByokCredential).mockResolvedValue('user-gemini-key')
+
+    const handle = await new ManagedAiGateway(deps).begin({
+      ...TEXT_INPUT,
+      provider: 'gemini',
+      model: 'gemini-3.1-flash-lite',
+    })
+
+    expect(handle).toMatchObject({
+      funding: 'byok',
+      deductsManagedPool: false,
+      credential: 'user-gemini-key',
+      invocationId: null,
+    })
+    expect(deps.requireManagedCredential).not.toHaveBeenCalled()
+    expect(deps.reserveManagedInvocation).not.toHaveBeenCalled()
   })
 
   it('does not reserve when the managed credential is unavailable', async () => {

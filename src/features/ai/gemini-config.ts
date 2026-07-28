@@ -1,11 +1,12 @@
 import 'server-only'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import {
   type AiConfigDependencies,
   getAiConfigDependencies,
+  resolveProviderApiKey,
   type StepfunConfigFieldView,
   type StepfunConfigSource,
 } from './config'
-import { resolveManagedCredential } from './managed-credentials'
 import { RouteContractError } from './route-contract-error'
 
 export type GeminiConfigField = 'baseUrl' | 'primaryModel' | 'fastModel'
@@ -48,10 +49,10 @@ export function resolveGeminiBaseUrl(): string {
 }
 
 export async function getGeminiConfig(
-  _deps: AiConfigDependencies = getAiConfigDependencies(),
+  deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<GeminiConfig> {
   return {
-    apiKey: resolveManagedCredential('gemini'),
+    apiKey: await resolveProviderApiKey('gemini', deps),
     baseUrl: resolveGeminiBaseUrl(),
     primaryModel: DEFAULTS.primaryModel,
     fastModel: DEFAULTS.fastModel,
@@ -90,11 +91,16 @@ export async function saveGeminiSettings(
 }
 
 export async function saveGeminiApiKey(
-  _apiKey: string,
-  _verifiedAt = new Date(),
-  _deps: AiConfigDependencies = getAiConfigDependencies(),
+  apiKey: string,
+  verifiedAt = new Date(),
+  deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<void> {
-  throw new RouteContractError('Gemini 托管凭据由服务端管理，不接受设置写入')
+  await deps.credentials.save({
+    workspaceId: currentWorkspaceId(),
+    provider: 'gemini',
+    secret: apiKey,
+    verifiedAt,
+  })
 }
 
 export type { StepfunConfigSource as GeminiConfigSource }

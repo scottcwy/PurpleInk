@@ -67,6 +67,11 @@ export {
   type ManagedModelCatalogRepository,
 } from './managed-model-catalog-repository'
 export {
+  PostgresProviderFundingStore,
+  type ProviderFunding,
+  type ProviderFundingStore,
+} from './provider-funding-store'
+export {
   executeManagedVisionQa,
   VISION_QA_MAX_OUTPUT_TOKENS,
   type ManagedVisionExecutorDependencies,

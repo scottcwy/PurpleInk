@@ -40,6 +40,9 @@ const mocks = vi.hoisted(() => ({
   findMediaRoute: vi.fn(),
   saveMediaRoute: vi.fn(),
   listManagedModels: vi.fn().mockResolvedValue([]),
+  resolveProviderFunding: vi.fn().mockResolvedValue('managed'),
+  saveCredential: vi.fn(),
+  saveProviderFunding: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
@@ -94,8 +97,13 @@ vi.mock('@/features/ai/stepfun-adapter', () => ({
 }))
 vi.mock('@/features/ai/config', () => ({
   describeStepfunConfig: mocks.describeStepfunConfig,
+  resolveProviderFunding: mocks.resolveProviderFunding,
   getAiConfigDependencies: () => ({
-    credentials: { describe: mocks.describeCredential },
+    credentials: {
+      describe: mocks.describeCredential,
+      save: mocks.saveCredential,
+    },
+    providerFunding: { save: mocks.saveProviderFunding },
     mediaRoutes: {
       find: mocks.findMediaRoute,
       save: mocks.saveMediaRoute,
@@ -230,7 +238,15 @@ describe('GET /api/settings', () => {
     expect(body.mimoCredential.configured).toBe(false)
     expect(body.routes['shot-codegen'].provider).toBe('gemini')
     expect(body.laneQuotas).toEqual(MOCK_DEFAULT_LANE_VIEW)
-    expect(mocks.describeCredential).not.toHaveBeenCalled()
+    expect(mocks.describeCredential).toHaveBeenCalledTimes(3)
+    expect(body.managedProviders).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        provider: 'stepfun',
+        funding: 'managed',
+        byokCredential: expect.objectContaining({ configured: true }),
+      }),
+    ]))
+    expect(JSON.stringify(body)).not.toContain('workspace-key')
   })
 })
 
@@ -439,7 +455,7 @@ describe('POST /api/settings', () => {
     const body = await response.json()
 
     expect(response.status).toBe(422)
-    expect(body.error).toContain('托管凭据与模型由服务端管理')
+    expect(body.error).toContain('内置模型与旧凭据字段不接受写入')
     expect(mocks.validateMimoKey).not.toHaveBeenCalled()
     expect(mocks.saveMimoApiKey).not.toHaveBeenCalled()
   })
@@ -483,7 +499,7 @@ describe('POST /api/settings', () => {
     await expect(response.json()).resolves.toEqual({
       ok: false,
       valid: false,
-      error: '托管凭据与模型由服务端管理，不接受设置写入',
+      error: '内置模型与旧凭据字段不接受写入，请使用服务来源配置',
     })
   })
 

@@ -54,6 +54,19 @@ const catalog: ManagedModelCatalogRepository = {
 }
 
 describe('managed model authorization', () => {
+  it('allows Free to use a catalog Gemini model with BYOK', async () => {
+    await expect(authorizeManagedRoute({
+      plan: 'free',
+      provider: 'gemini',
+      modelId: 'gemini-3.1-flash-lite',
+      capability: 'text',
+      funding: 'byok',
+    }, catalog)).resolves.toMatchObject({
+      funding: 'byok',
+      deductsManagedPool: false,
+    })
+  })
+
   it('keeps the managed catalog explicit and capability-bound', async () => {
     await expect(catalog.listEnabled()).resolves.toEqual(expect.arrayContaining([
       expect.objectContaining({

@@ -1,19 +1,27 @@
 import 'server-only'
 import { getStepfunConfig } from './config'
-import { resolveManagedCredential } from './managed-credentials'
-import { RouteContractError } from './route-contract-error'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getAiConfigDependencies } from './config'
 
-/** 兼容旧调用名：只读取服务端托管凭据，绝不读取 workspace key。 */
+/** 兼容旧调用名：读取当前 workspace 的 BYOK 凭据。 */
 export async function getStoredApiKey(): Promise<string | null> {
-  return resolveManagedCredential('stepfun')
+  return getAiConfigDependencies().credentials.loadSecret(
+    currentWorkspaceId(),
+    'stepfun',
+  )
 }
 
-/** 托管凭据不可由 workspace 设置覆盖。 */
+/** 保存当前 workspace 的 BYOK 凭据；平台托管 Key 不经过此路径。 */
 export async function saveApiKey(
-  _apiKey: string,
-  _verifiedAt = new Date(),
+  apiKey: string,
+  verifiedAt = new Date(),
 ): Promise<void> {
-  throw new RouteContractError('StepFun 托管凭据由服务端管理，不接受设置写入')
+  await getAiConfigDependencies().credentials.save({
+    workspaceId: currentWorkspaceId(),
+    provider: 'stepfun',
+    secret: apiKey,
+    verifiedAt,
+  })
 }
 
 /** 校验 Key 是否可用（fetch 直连、与真实对话一致的最小 chat 探测；端点/模型走统一 resolver）。 */

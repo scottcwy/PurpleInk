@@ -46,7 +46,6 @@ export async function runManagedAudioBilling<T>(
 ): Promise<T> {
   const context = requireBillingContext(input.billingContext)
   const handle = await dependencies.gateway.begin(gatewayInput(input, context))
-  assertManagedHandle(handle)
 
   try {
     await input.prepare?.()
@@ -120,10 +119,4 @@ function requireBillingContext(
     throw new Error('托管音频调用缺少可审计的 billingContext')
   }
   return context
-}
-
-function assertManagedHandle(handle: ManagedAiHandle): void {
-  if (handle.funding !== 'managed' || !handle.invocationId) {
-    throw new Error('托管音频调用不得进入 BYOK 计费路径')
-  }
 }

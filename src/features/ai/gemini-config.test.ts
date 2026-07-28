@@ -128,7 +128,7 @@ describe('Gemini config', () => {
     expect(dependencies.credentials.loadSecret).not.toHaveBeenCalled()
   })
 
-  it('rejects managed model and credential writes', async () => {
+  it('rejects managed model writes but stores workspace BYOK credentials', async () => {
     const { dependencies, models, secrets } = createDependencies()
     await expect(saveGeminiSettings({
       primaryModel: 'custom-primary',
@@ -139,9 +139,14 @@ describe('Gemini config', () => {
       'gemini-secret',
       new Date('2026-07-25T00:00:00.000Z'),
       dependencies,
-    )).rejects.toThrow('托管凭据')
-    expect(secrets.has('gemini')).toBe(false)
-    expect(dependencies.credentials.save).not.toHaveBeenCalled()
+    )).resolves.toBeUndefined()
+    expect(secrets.get('gemini')).toBe('gemini-secret')
+    expect(dependencies.credentials.save).toHaveBeenCalledWith({
+      workspaceId: '00000000-0000-4000-8000-000000000001',
+      provider: 'gemini',
+      secret: 'gemini-secret',
+      verifiedAt: new Date('2026-07-25T00:00:00.000Z'),
+    })
   })
 
   it('accepts canonical base URL but rejects custom persistence', async () => {

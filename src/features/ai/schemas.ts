@@ -3,6 +3,11 @@ import { AUDIO_FORMATS } from './openai-compatible-payloads'
 import { AI_PROVIDER_IDS } from './provider-registry'
 
 const textProviderSchema = z.enum(AI_PROVIDER_IDS)
+const fundingSchema = z.enum(['managed', 'byok'])
+const builtInServiceSchema = z.object({
+  funding: fundingSchema,
+  apiKey: z.string().min(1, 'API Key 不能为空').optional(),
+}).strict()
 /**
  * 媒体路由候选。Gemini 不可用于 TTS/ASR，而两个自定义音频端点各只承担一种能力——
  * 更细的「TTS 路由不能选 ASR 端点」由 `assertProviderCapability` 在
@@ -52,6 +57,11 @@ export const stepfunSettingsSchema = z.object({
   ttsModel: z.string().optional(),
   asrModel: z.string().optional(),
   visionModel: z.string().optional(),
+  providerServices: z.object({
+    stepfun: builtInServiceSchema.optional(),
+    gemini: builtInServiceSchema.optional(),
+    mimo: builtInServiceSchema.optional(),
+  }).strict().optional(),
   gemini: z
     .object({
       apiKey: z.string().min(1, 'Gemini API Key 不能为空').optional(),

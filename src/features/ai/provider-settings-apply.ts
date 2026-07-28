@@ -1,7 +1,7 @@
 import 'server-only'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { saveLaneQuotas } from '@/lib/queue/runtime-config'
-import { getAiConfigDependencies } from './config'
+import { getAiConfigDependencies, resolveProviderFunding } from './config'
 import { ManagedAiError } from './managed-service'
 import { saveDirectorRoutes } from './model-routing'
 import {
@@ -46,6 +46,7 @@ export async function applyProviderSettings(
     customOpenAiTts,
     customOpenAiAsr,
     fallbackProvider,
+    providerServices,
     ...modelSettings
   } = input
   const { apiKey: geminiApiKey, ...geminiSettings } = gemini ?? {}
@@ -56,12 +57,16 @@ export async function applyProviderSettings(
     mimoApiKey !== undefined ||
     hasManagedModelInput(modelSettings, geminiSettings, mimoSettings)
   ) {
-    return reject(422, '托管凭据与模型由服务端管理，不接受设置写入', false)
+    return reject(422, '内置模型与旧凭据字段不接受写入，请使用服务来源配置', false)
   }
   try {
     const plan = await getAiConfigDependencies().currentPlan?.() ?? 'free'
     if (plan === 'free' && fallbackProvider === 'gemini') {
-      return reject(422, 'Free 套餐不可使用 Gemini 托管服务', false)
+      const geminiFunding = providerServices?.gemini?.funding
+        ?? await resolveProviderFunding('gemini')
+      if (geminiFunding === 'managed') {
+        return reject(422, 'Free 套餐不可使用 Gemini 托管服务', false)
+      }
     }
     if (routes) await saveDirectorRoutes(routes)
   } catch (error) {
@@ -72,6 +77,26 @@ export async function applyProviderSettings(
   }
   if (customOpenAi) {
     await saveOpenAiCompatibleProfile(customOpenAi, customOpenAiDependencies())
+  }
+  if (providerServices) {
+    const deps = getAiConfigDependencies()
+    for (const [provider, service] of Object.entries(providerServices)) {
+      if (!service) continue
+      const providerId = provider as 'stepfun' | 'gemini' | 'mimo'
+      if (service.apiKey) {
+        await deps.credentials.save({
+          workspaceId: currentWorkspaceId(),
+          provider: providerId,
+          secret: service.apiKey,
+          verifiedAt: new Date(),
+        })
+      }
+      await deps.providerFunding?.save(
+        currentWorkspaceId(),
+        providerId,
+        service.funding,
+      )
+    }
   }
   if (customOpenAiTts) {
     await saveTtsProfile(customOpenAiTts, audioDependencies())
