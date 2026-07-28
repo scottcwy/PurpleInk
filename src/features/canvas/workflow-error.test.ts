@@ -142,6 +142,41 @@ describe('classifyWorkflowError', () => {
     expect(projection.message).toContain('不支持 TTS 路由')
   })
 
+  it('classifies the retry budget gate by type name as a non-retryable stop', () => {
+    // 复刻 lib/queue/retry-policy 抛出的闸门错误：canvas 只按类型名判定，
+    // 避免反向依赖队列层（与 ArtifactValidationError / RouteContractError 同款先例）。
+    class RetryBudgetExhaustedError extends Error {
+      override readonly name = 'RetryBudgetExhaustedError'
+    }
+    const projection = classifyWorkflowError(
+      new RetryBudgetExhaustedError(
+        '该环节在 30 分钟内已失败 5 次，已暂停重试；可稍后再试、修复配置或选择跳过'
+      ),
+      { stage: 'INGEST' }
+    )
+    expect(projection.code).toBe('RETRY_BUDGET_EXHAUSTED')
+    expect(projection.retryable).toBe(false)
+    // 文案必须含暂停原因与出口指引，且不撞「配置/额度」等既有规则的笼统文案。
+    expect(projection.message).toContain('已暂停重试')
+    expect(projection.message).toContain('跳过')
+  })
+
+  it('classifies the persisted budget message without hitting broader rules', () => {
+    // 闸门文案持久化到 attempt.failure 后会被再次分类（只剩字符串）：
+    // 「已暂停重试」是独有词，不得被「修复配置」误判成 CONFIGURATION_BLOCKED。
+    expect(
+      classifyWorkflowError(
+        new Error(
+          '该环节在 30 分钟内已失败 5 次，已暂停重试；可稍后再试、修复配置或选择跳过'
+        ),
+        { stage: 'RENDER' }
+      )
+    ).toMatchObject({
+      code: 'RETRY_BUDGET_EXHAUSTED',
+      retryable: false,
+    })
+  })
+
   it('never labels a non-render stage failure as a render failure', () => {
     for (const stage of ['INGEST', 'DIRECT', 'SHOT_SPEC', 'ASSEMBLE', 'FINALIZE']) {
       const projection = classifyWorkflowError(new Error('未知内部失败'), { stage })

@@ -5,7 +5,11 @@ import {
   transitionNodeStatus,
 } from '@/features/canvas'
 import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
-import { queue as defaultQueue, type QueueAdapter } from '@/lib/queue'
+import {
+  assertEnqueueRetryBudget,
+  queue as defaultQueue,
+  type QueueAdapter,
+} from '@/lib/queue'
 import { storage } from '@/lib/storage'
 import { assertRenderAdmission } from './admission'
 import { openFrameCapture } from './frame-capture'
@@ -57,6 +61,8 @@ interface EnqueueDependencies {
   assertAdmission(job: RenderJob): Promise<void>
   captureInputFingerprint?(nodeId: string): Promise<unknown>
   transitionNodeStatus: typeof transitionNodeStatus
+  /** 毒任务闸门（可选）：重试预算耗尽时拒绝再次入队。 */
+  assertRetryBudget?(kind: string, payload: Record<string, unknown>): Promise<void>
   recordRenderError(nodeId: string, error: unknown): Promise<void>
 }
 
@@ -121,6 +127,8 @@ export async function enqueueRenderShot(
     await resolved.captureInputFingerprint?.(payload.nodeId)
     await resolved.transitionNodeStatus(payload.nodeId, 'pending')
     pendingSet = true
+    // 闸门在 try 内：预算耗尽走既有补偿链，落节点 failed + renderError 投影。
+    await resolved.assertRetryBudget?.('render-shot', payload)
     return await resolved.queue.enqueue('render-shot', payload, {
       projectId: payload.projectId,
       nodeId: payload.nodeId,
@@ -167,6 +175,7 @@ function createEnqueueDependencies(): EnqueueDependencies {
       assertRenderAdmission(job, { storage, openFrameCapture }),
     captureInputFingerprint: captureNodeInputFingerprint,
     transitionNodeStatus,
+    assertRetryBudget: assertEnqueueRetryBudget,
     recordRenderError: (nodeId, error) =>
       repository.recordRenderError(nodeId, error),
   }

@@ -7,6 +7,7 @@ export type WorkflowErrorCode =
   | 'ROUTE_CONTRACT_INVALID'
   | 'MEDIA_NOT_READY'
   | 'TASK_INTERRUPTED'
+  | 'RETRY_BUDGET_EXHAUSTED'
   | 'CONFIGURATION_BLOCKED'
   | 'PROVIDER_FAILED'
   | 'FABRICATE_FAILED'
@@ -88,7 +89,20 @@ function classifyByType(
       retryable: false,
     }
   }
+  // 重试预算闸门来自 lib/queue/retry-policy；同样只按类型名判定，避免 canvas
+  // 反向依赖队列层。预算耗尽是硬停：继续重试只会继续烧预算，必须不可重试。
+  if (error instanceof Error && error.name === 'RetryBudgetExhaustedError') {
+    return RETRY_BUDGET_EXHAUSTED_PROJECTION
+  }
   return undefined
+}
+
+/** 重试预算耗尽的统一投影：类型判定与文案判定必须给出同一结果。 */
+const RETRY_BUDGET_EXHAUSTED_PROJECTION: ClassifiedError = {
+  code: 'RETRY_BUDGET_EXHAUSTED',
+  message:
+    '该环节在 30 分钟内已失败 5 次，已暂停重试；可稍后再试、修复配置或选择跳过',
+  retryable: false,
 }
 
 /** 有序文案规则：先具体后笼统，命中即返回。 */
@@ -113,6 +127,12 @@ const MESSAGE_RULES: ReadonlyArray<readonly [RegExp, ClassifiedError]> = [
       message: '执行进程中断，任务已自动回收，可重试',
       retryable: true,
     },
+  ],
+  [
+    // 闸门文案持久化到 attempt.failure 后只剩字符串：「已暂停重试」是独有词，
+    // 必须排在「配置/额度」等笼统规则前，避免被误归成 CONFIGURATION_BLOCKED。
+    /已暂停重试/,
+    RETRY_BUDGET_EXHAUSTED_PROJECTION,
   ],
   [
     /StepFun\s+TTS.*HTTP\s*402/i,

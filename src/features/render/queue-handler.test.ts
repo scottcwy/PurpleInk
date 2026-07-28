@@ -413,4 +413,36 @@ describe('render queue handler', () => {
     expect(statuses).toEqual(['pending', 'running', 'failed'])
     expect(recordRenderError).toHaveBeenCalledWith('node-1', expect.any(Error))
   })
+
+  it('rejects re-enqueue when the retry budget gate trips, before any queue write', async () => {
+    const harness = createQueue()
+    const statuses: string[] = []
+    const recordRenderError = vi.fn(async () => {})
+    const budgetError = new Error(
+      '该环节在 30 分钟内已失败 5 次，已暂停重试；可稍后再试、修复配置或选择跳过'
+    )
+
+    await expect(
+      enqueueRenderShot(
+        { projectId: 'project-1', nodeId: 'node-1' },
+        {
+          queue: harness.queue,
+          loadAdmissionContext: vi.fn(async () => enqueueContext),
+          assertAdmission: vi.fn(async () => {}),
+          transitionNodeStatus: vi.fn(async (_nodeId, status) => {
+            statuses.push(status)
+          }),
+          recordRenderError,
+          assertRetryBudget: vi.fn(async () => {
+            throw budgetError
+          }),
+        }
+      )
+    ).rejects.toBe(budgetError)
+
+    // 闸门只拦再次入队：不写队列行，走既有补偿链落节点 failed + renderError。
+    expect(harness.queue.enqueue).not.toHaveBeenCalled()
+    expect(statuses).toEqual(['pending', 'running', 'failed'])
+    expect(recordRenderError).toHaveBeenCalledWith('node-1', budgetError)
+  })
 })

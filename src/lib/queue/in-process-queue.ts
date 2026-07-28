@@ -6,12 +6,13 @@ import {
   runInAuthContext,
   SYSTEM_USER_ID,
 } from '@/lib/auth/workspace-context'
-import { getDb, type Db } from '@/lib/db/client'
+import { getDb } from '@/lib/db/client'
 import { pipelineRuns, taskAttempts } from '@/lib/db/schema/index'
 import {
   ACTIVE_WORKFLOW_VERSION,
   serializeWorkflowVersion,
 } from '@/lib/workflow/version'
+import { completeAttempt } from './attempt-completion'
 import { parseCheckpoint, queueFingerprint } from './attempt-checkpoint'
 import {
   HEARTBEAT_INTERVAL_MS,
@@ -280,12 +281,14 @@ export class InProcessQueue implements QueueAdapter {
     const database = await getDb()
     const handler = this.handlers.get(job.kind)
     if (!handler) {
+      // 未注册 handler 是进程内配置缺口，重试无法自愈，直接终态。
       await completeAttempt(
         database,
         job.workspaceId,
         job.id,
         'failed',
-        `no handler for kind: ${job.kind}`
+        `no handler for kind: ${job.kind}`,
+        { allowAutoRetry: false }
       )
       return
     }
@@ -307,44 +310,4 @@ export class InProcessQueue implements QueueAdapter {
       )
     }
   }
-}
-
-async function completeAttempt(
-  database: Db,
-  workspaceId: string,
-  attemptId: string,
-  status: 'succeeded' | 'failed',
-  message?: string
-): Promise<void> {
-  await database.transaction(async (transaction) => {
-    const [attempt] = await transaction
-      .update(taskAttempts)
-      .set({
-        status,
-        failure: message ? { schemaVersion: 1, message } : null,
-        completedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(taskAttempts.workspaceId, workspaceId),
-          eq(taskAttempts.id, attemptId)
-        )
-      )
-      .returning({ runId: taskAttempts.runId })
-    if (!attempt) throw new Error(`legacy queue attempt not found: ${attemptId}`)
-    await transaction
-      .update(pipelineRuns)
-      .set({
-        status,
-        completedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(pipelineRuns.workspaceId, workspaceId),
-          eq(pipelineRuns.id, attempt.runId)
-        )
-      )
-  })
 }

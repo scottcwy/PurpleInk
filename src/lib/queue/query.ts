@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { and, eq } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb } from '@/lib/db/client'
 import { pipelineRuns, taskAttempts } from '@/lib/db/schema/index'
@@ -24,6 +24,7 @@ export async function getJobSnapshot(
   const [row] = await database
     .select({
       id: taskAttempts.id,
+      runId: taskAttempts.runId,
       projectId: pipelineRuns.projectId,
       entityType: taskAttempts.entityType,
       entityId: taskAttempts.entityId,
@@ -51,7 +52,10 @@ export async function getJobSnapshot(
     )
     .limit(1)
   if (!row) return null
-  const status = toJobStatus(row.status)
+  // 自动重试会把原 attempt 置 superseded 并追加新 attempt；轮询方持有的是原
+  // attemptId，快照必须跟随同 run 的最新 attempt，否则终态永远不可见。
+  const effective = row.status === 'superseded' ? await latestAttempt(row) : row
+  const status = toJobStatus(effective.status)
   return {
     id: row.id,
     projectId: row.projectId,
@@ -60,13 +64,46 @@ export async function getJobSnapshot(
       ? row.taskId.slice('legacy.'.length)
       : row.taskId,
     status,
-    attempts: row.attemptNo,
-    error: failureMessage(row.failure),
+    attempts: effective.attemptNo,
+    error: failureMessage(effective.failure),
   }
+}
+
+interface AttemptStatusRow {
+  status: string
+  attemptNo: number
+  failure: unknown
+}
+
+async function latestAttempt(row: {
+  runId: string
+  status: string
+  attemptNo: number
+  failure: unknown
+}): Promise<AttemptStatusRow> {
+  const database = await getDb()
+  const [latest] = await database
+    .select({
+      status: taskAttempts.status,
+      attemptNo: taskAttempts.attemptNo,
+      failure: taskAttempts.failure,
+    })
+    .from(taskAttempts)
+    .where(
+      and(
+        eq(taskAttempts.workspaceId, currentWorkspaceId()),
+        eq(taskAttempts.runId, row.runId)
+      )
+    )
+    .orderBy(desc(taskAttempts.attemptNo))
+    .limit(1)
+  return latest ?? row
 }
 
 function toJobStatus(status: string): JobStatus {
   if (status === 'queued') return 'pending'
+  // superseded 仅作防御性兜底：最新 attempt 正常不会是 superseded。
+  if (status === 'superseded') return 'pending'
   if (status === 'succeeded') return 'done'
   if (status === 'running' || status === 'failed') return status
   throw new Error(`未知作业状态：${status}`)
