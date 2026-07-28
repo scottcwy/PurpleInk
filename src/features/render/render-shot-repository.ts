@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, ne } from 'drizzle-orm'
 import { z } from 'zod'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb, type Db } from '@/lib/db/client'
@@ -80,6 +80,46 @@ export class RenderShotRepository {
   /** 幂等门槛：已存在 `director-fabricate` 产物时，render handler 不应重新生成 HTML。 */
   async hasFabricateArtifact(projectId: string, nodeId: string): Promise<boolean> {
     return (await this.findFabricateArtifact(projectId, nodeId)) !== null
+  }
+
+  /** runtime admission 证明 source 无效后拒绝最新 draft，下一次重试必须重新 FABRICATE。 */
+  async rejectFabricateArtifact(
+    projectId: string,
+    nodeId: string,
+  ): Promise<void> {
+    const database = await this.database()
+    await database.transaction(async (transaction) => {
+      const [artifact] = await transaction
+        .select({ id: artifacts.id, lifecycle: artifacts.lifecycle })
+        .from(artifacts)
+        .where(
+          and(
+            eq(artifacts.workspaceId, currentWorkspaceId()),
+            eq(artifacts.projectId, projectId),
+            eq(artifacts.aggregateType, 'node'),
+            eq(artifacts.aggregateId, nodeId),
+            eq(artifacts.kind, 'director-fabricate'),
+            ne(artifacts.lifecycle, 'rejected'),
+          ),
+        )
+        .orderBy(desc(artifacts.version), desc(artifacts.createdAt))
+        .limit(1)
+        .for('update')
+      if (!artifact) return
+      if (artifact.lifecycle !== 'draft') {
+        throw new Error('已批准或发布的 FABRICATE 产物不可原地拒绝')
+      }
+      await transaction
+        .update(artifacts)
+        .set({ lifecycle: 'rejected', updatedAt: new Date() })
+        .where(
+          and(
+            eq(artifacts.workspaceId, currentWorkspaceId()),
+            eq(artifacts.id, artifact.id),
+            eq(artifacts.lifecycle, 'draft'),
+          ),
+        )
+    })
   }
 
   loadRenderContext(projectId: string, nodeId: string): Promise<RenderJob> {
@@ -272,7 +312,8 @@ export class RenderShotRepository {
           eq(artifacts.projectId, projectId),
           eq(artifacts.aggregateType, 'node'),
           eq(artifacts.aggregateId, nodeId),
-          eq(artifacts.kind, 'director-fabricate')
+          eq(artifacts.kind, 'director-fabricate'),
+          ne(artifacts.lifecycle, 'rejected'),
         )
       )
       .orderBy(desc(artifacts.version), desc(artifacts.createdAt))

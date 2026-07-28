@@ -257,6 +257,28 @@ describe('RenderRepository Postgres', () => {
     )
   })
 
+  it('rejects the latest draft fabricate artifact so the next retry regenerates source', async () => {
+    const projectId = randomUUID()
+    const retryable = await seedRenderFixture(database.db, TEST_WORKSPACE_ID, projectId, {
+      codegenStatus: 'failed',
+    })
+    const repository = new RenderRepository(database.db)
+
+    await repository.rejectFabricateArtifact(
+      projectId,
+      retryable.codegenNodeId,
+    )
+
+    await expect(
+      repository.hasFabricateArtifact(projectId, retryable.codegenNodeId)
+    ).resolves.toBe(false)
+    const [artifact] = await database.db
+      .select({ lifecycle: artifacts.lifecycle })
+      .from(artifacts)
+      .where(eq(artifacts.aggregateId, retryable.codegenNodeId))
+    expect(artifact.lifecycle).toBe('rejected')
+  })
+
   it('registers new exports as immutable final-video/v2 artifacts', async () => {
     const artifactId = await new RenderRepository(database.db).registerFinalArtifact({
       projectId: fixture.projectId,

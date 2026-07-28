@@ -11,7 +11,10 @@ import {
   type QueueAdapter,
 } from '@/lib/queue'
 import { storage } from '@/lib/storage'
-import { assertRenderAdmission } from './admission'
+import {
+  assertRenderAdmission,
+  isRenderSourceContractError,
+} from './admission'
 import { openFrameCapture } from './frame-capture'
 import { RenderRepository } from './repository'
 import { HyperframesRenderer, type Renderer } from './renderer'
@@ -33,6 +36,10 @@ interface HandlerRepository {
   hasFabricateArtifact(projectId: string, nodeId: string): Promise<boolean>
   loadRenderContext(projectId: string, nodeId: string): Promise<RenderJob>
   recordRenderError(nodeId: string, error: unknown): Promise<void>
+  rejectFabricateArtifact?(
+    projectId: string,
+    nodeId: string,
+  ): Promise<void>
   recordStageError?(
     nodeId: string,
     stage: 'FABRICATE',
@@ -68,6 +75,10 @@ interface EnqueueDependencies {
   /** 毒任务闸门（可选）：重试预算耗尽时拒绝再次入队。 */
   assertRetryBudget?(kind: string, payload: Record<string, unknown>): Promise<void>
   recordRenderError(nodeId: string, error: unknown): Promise<void>
+  rejectFabricateArtifact?(
+    projectId: string,
+    nodeId: string,
+  ): Promise<void>
 }
 
 export function registerRenderShotHandler(
@@ -106,7 +117,7 @@ export function registerRenderShotHandler(
         payload.nodeId
       )
     } catch (error) {
-      await failRender(payload.nodeId, error, resolved)
+      await failRender(payload.projectId, payload.nodeId, error, resolved)
       throw error
     }
   })
@@ -138,7 +149,13 @@ export async function enqueueRenderShot(
       nodeId: payload.nodeId,
     })
   } catch (error) {
-    await compensateEnqueueFailure(payload.nodeId, pendingSet, error, resolved)
+    await compensateEnqueueFailure(
+      payload.projectId,
+      payload.nodeId,
+      pendingSet,
+      error,
+      resolved,
+    )
     throw error
   }
 }
@@ -182,15 +199,18 @@ function createEnqueueDependencies(): EnqueueDependencies {
     assertRetryBudget: assertEnqueueRetryBudget,
     recordRenderError: (nodeId, error) =>
       repository.recordRenderError(nodeId, error),
+    rejectFabricateArtifact: (projectId, nodeId) =>
+      repository.rejectFabricateArtifact(projectId, nodeId),
   }
 }
 
 function failRender(
+  projectId: string,
   nodeId: string,
   error: unknown,
   dependencies: Pick<HandlerDependencies, 'transitionNodeStatus' | 'repository'>
 ): Promise<void> {
-  return compensateFailure(nodeId, error, dependencies)
+  return compensateFailure(projectId, nodeId, error, dependencies)
 }
 
 /**
@@ -226,11 +246,22 @@ async function failFabricate(
 }
 
 async function compensateFailure(
+  projectId: string,
   nodeId: string,
   error: unknown,
   dependencies: Pick<HandlerDependencies, 'transitionNodeStatus' | 'repository'>
 ): Promise<void> {
   const cleanupErrors: unknown[] = []
+  if (
+    isRenderSourceContractError(error) &&
+    dependencies.repository.rejectFabricateArtifact
+  ) {
+    try {
+      await dependencies.repository.rejectFabricateArtifact(projectId, nodeId)
+    } catch (cleanupError) {
+      cleanupErrors.push(cleanupError)
+    }
+  }
   try {
     await dependencies.transitionNodeStatus(nodeId, 'failed')
   } catch (cleanupError) {
@@ -247,12 +278,19 @@ async function compensateFailure(
 }
 
 function compensateEnqueueFailure(
+  projectId: string,
   nodeId: string,
   pendingSet: boolean,
   error: unknown,
   dependencies: EnqueueDependencies
 ): Promise<void> {
-  return compensateEnqueueFailureAsync(nodeId, pendingSet, error, dependencies)
+  return compensateEnqueueFailureAsync(
+    projectId,
+    nodeId,
+    pendingSet,
+    error,
+    dependencies,
+  )
 }
 
 /**
@@ -267,12 +305,20 @@ function compensateEnqueueFailure(
  * `pending -> running -> failed`（原有行为，不变）。
  */
 async function compensateEnqueueFailureAsync(
+  projectId: string,
   nodeId: string,
   pendingSet: boolean,
   error: unknown,
   dependencies: EnqueueDependencies
 ): Promise<void> {
   const cleanupErrors: unknown[] = []
+  if (isRenderSourceContractError(error) && dependencies.rejectFabricateArtifact) {
+    try {
+      await dependencies.rejectFabricateArtifact(projectId, nodeId)
+    } catch (cleanupError) {
+      cleanupErrors.push(cleanupError)
+    }
+  }
   const transitions = pendingSet
     ? (['running', 'failed'] as const)
     : (['pending', 'running', 'failed'] as const)

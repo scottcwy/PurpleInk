@@ -120,6 +120,34 @@ describe('writeValidatedArtifact', () => {
     expect(storage.put).not.toHaveBeenCalled()
   })
 
+  it('does not stage deterministic HTML whose inline runtime has a syntax error', async () => {
+    const storage = createStorage()
+    const resolveAttempt = vi.fn()
+    const malformed = `<!doctype html><html><head>
+<meta name="viewport" content="width=1920, height=1080"></head>
+<body><main data-composition-id="shot" data-width="1920" data-height="1080"></main>
+<script>
+const broken = { timeline() { return {}; }, ease: true }:;
+window.__CVC_RENDER__ = { version: 1, seek() {} };
+</script></body></html>`
+
+    await expect(
+      writeValidatedArtifact(
+        {
+          projectId: 'project-1',
+          nodeId: 'node-1',
+          kind: 'director-fabricate',
+          key: 'project-1/node-1/malformed.html',
+          content: malformed,
+          validation: 'deterministic-html',
+        },
+        { storage, resolveAttempt }
+      )
+    ).rejects.toThrow('脚本语法无效')
+    expect(resolveAttempt).not.toHaveBeenCalled()
+    expect(storage.put).not.toHaveBeenCalled()
+  })
+
   it('does not write bytes when no legal attempt exists', async () => {
     const storage = createStorage()
     const failure = new Error('找不到可归属的 task attempt')

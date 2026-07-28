@@ -345,6 +345,39 @@ Pi Agent 把这条内部错误压成 `errorMessage` 后，旧会话收敛逻辑�
 
 ---
 
+## 7.5 模式 K：静态确定性门禁放过语法错误，重试永久复用坏 HTML
+
+**症状**：FABRICATE 模型调用成功且 `director-fabricate` 哈希与磁盘一致，随后
+渲染报「shot 缺少 window.__CVC_RENDER__ runtime」。直接查看 HTML 明明能找到
+`window.__CVC_RENDER__` 字样；同一节点的自动重试又在数秒内连续报相同错误。
+
+**真实事故**：产物中的 GSAP 兼容层少了一个闭合花括号，Chromium 在执行第一行
+脚本时抛 `SyntaxError: Unexpected token ':'`，所以后面的 runtime 赋值永远没有
+执行。旧 `inspectFabricateSource` 只扫描确定性禁词、viewport 与根画布，不解析
+JavaScript；字符串合同因此误判为通过。首次失败后，`hasFabricateArtifact` 又把
+同一 draft 当作可复用缓存，队列重试从不重新生成源代码。
+
+**规则**：
+
+- `deterministic-html` 提交门禁除静态确定性外，必须解析全部内联 JavaScript，并
+  检查 `window.__CVC_RENDER__@v1 + seek(frame,fps)` 静态合同；语法错误必须在
+  artifact 写入前进入既有两次模型修复回路。
+- Chromium runtime admission 仍是动态真值，不能被静态门禁替代；脚本执行期错误、
+  runtime 缺失、版本或 seek 不匹配均由 admission 发现。
+- 动态 admission 已证明源代码无效时，最新 draft `director-fabricate` 必须转为
+  `rejected`。后续查询不得返回 rejected 版本，自动重试必须重新 FABRICATE。
+- approved / released Artifact 不可原地拒绝；若该异常发生在不可变版本，必须失败
+  闭合并通过新版本修复，禁止覆盖原字节。
+
+**已落地护栏**：`fabricate-runtime-contract.ts` 使用 Node 解析器检查全部内联脚本
+与 runtime v1；`write-artifact.ts` 把结果并入 `deterministic-html` 门禁。
+`RenderShotRepository.rejectFabricateArtifact` 只把最新 draft 转为 rejected，
+`findFabricateArtifact` 排除 rejected；handler 与入队 admission 两条失败补偿路径
+都会先拒绝坏源，使下一次队列重试重新生成。单测与 Postgres 测试分别锁定语法拒绝、
+runtime 失败补偿和 rejected 版本不再命中。
+
+---
+
 ## 8. 工作流类改动的提交前清单
 
 在 `AGENTS.md` §8 的通用门禁之外，涉及本文覆盖的链路时补做：
@@ -359,6 +392,7 @@ Pi Agent 把这条内部错误压成 `errorMessage` 后，旧会话收敛逻辑�
 - [ ] 新增的失败出路是否落在四层护栏之内（租约回收 / 重试预算 / 人为跳过 / 熔断降级），跳过语义是否留下可审计证据且不被自动链路滥用，熔断记账是否只计外部故障（模式 H）。
 - [ ] 复合队列是否把父 `job.id` 贯穿到所有需要审计/计费的子阶段；出网前失败是否保留原始类型并绕过 Provider 熔断（模式 I）。
 - [ ] Provider 硬超时是否短于阶段执行上限，SDK 内重试是否关闭；租约是否覆盖完整执行窗口，父 attempt 终态后是否仍存在 `running/reserved` 孤儿调用（模式 J）。
+- [ ] FABRICATE HTML 是否实际通过 JavaScript 解析与 Chromium runtime admission；动态证明无效的 draft 是否转为 rejected，自动重试是否会重新生成而非复用坏缓存（模式 K）。
 - [ ] 真实产物证据：`artifacts.content_hash` 与磁盘字节 SHA-256 逐条核对一致。
 
 真实证据的取法示例：
@@ -386,7 +420,7 @@ docker exec purpleink-dev-postgres-1 psql -U cvc -d cvc -A -t -F "|" -c `
 规则（模式 B）、文档 `measureMp3` 漂移、队列初始化全量并行抖动、终片异步音频
 读取错误（模式 D）、Pi 会话哈希失真（模式 G）、复合渲染队列丢失 attempt id 并
 污染 Provider 熔断（模式 I）、长模型调用被短租约误回收且遗留计费预留（模式 J）
-——见各节「已落地护栏」。
+、静态门禁放过语法错误并重复复用坏 HTML（模式 K）——见各节「已落地护栏」。
 
 ---
 

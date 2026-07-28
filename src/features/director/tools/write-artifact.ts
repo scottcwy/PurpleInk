@@ -6,6 +6,7 @@ import { getDb } from '@/lib/db/client'
 import { storage as defaultStorage, type StorageAdapter } from '@/lib/storage'
 import { inspectFabricateSource } from '@/features/canvas/contracts'
 import { ArtifactValidationError } from '../artifact-validation-error'
+import { inspectFabricateRuntime } from '../fabricate-runtime-contract'
 import { validateShotPlanValue } from './validate-shot-plan'
 
 export { ArtifactValidationError } from '../artifact-validation-error'
@@ -130,14 +131,18 @@ function validateArtifact(input: WriteArtifactInput): ArtifactPrevalidation {
   }
   if (input.validation === 'deterministic-html') {
     const inspection = inspectFabricateSource(input.content)
-    return inspection.ok
+    const runtime = inspectFabricateRuntime(input.content)
+    return inspection.ok && runtime.ok
       ? { ok: true }
       : {
           ok: false,
-          errors: inspection.violations.map(
-            (violation) =>
-              `${violation.ruleId}@${violation.line}: ${violation.message}`
-          ),
+          errors: [
+            ...inspection.violations.map(
+              (violation) =>
+                `${violation.ruleId}@${violation.line}: ${violation.message}`
+            ),
+            ...runtime.errors,
+          ],
         }
   }
   try {

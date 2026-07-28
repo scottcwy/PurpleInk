@@ -75,3 +75,12 @@ function safeRuntimeMessage(error: unknown): string {
   }
   return '渲染 runtime admission 失败'
 }
+
+export function isRenderSourceContractError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : ''
+  return (
+    message === 'shot 缺少 window.__CVC_RENDER__ runtime' ||
+    message === '__CVC_RENDER__.seek 必须是函数' ||
+    /^__CVC_RENDER__ runtime version 不匹配：.+ != 1$/.test(message)
+  )
+}

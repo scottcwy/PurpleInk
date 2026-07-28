@@ -206,6 +206,38 @@ describe('render queue handler', () => {
     expect(recordRenderError).toHaveBeenCalledWith('node-1', failure)
   })
 
+  it('rejects an invalid fabricate artifact before automatic retry can reuse it', async () => {
+    const harness = createQueue()
+    const failure = new Error('shot 缺少 window.__CVC_RENDER__ runtime')
+    const rejectFabricateArtifact = vi.fn(async () => {})
+    registerRenderShotHandler(harness.queue, {
+      repository: {
+        hasFabricateArtifact: vi.fn(async () => true),
+        loadRenderContext: vi.fn(async () => renderJob),
+        recordRenderError: vi.fn(async () => {}),
+        rejectFabricateArtifact,
+      },
+      transitionNodeStatus: vi.fn(async () => {}),
+      renderer: { render: vi.fn(async () => { throw failure }) },
+      fabricateShot: vi.fn(async () => {}),
+      advancePipeline: vi.fn(),
+    })
+
+    await expect(
+      harness.getHandler()?.({
+        id: 'job-1',
+        kind: 'render-shot',
+        status: 'running',
+        payload: { projectId: 'project-1', nodeId: 'node-1' },
+        attempts: 1,
+      })
+    ).rejects.toThrow(failure)
+    expect(rejectFabricateArtifact).toHaveBeenCalledWith(
+      'project-1',
+      'node-1',
+    )
+  })
+
   it('fails directly when the committed source is missing', async () => {
     const harness = createQueue()
     const missingSource = new Error('节点缺少 director-fabricate 产物：node-1')
@@ -327,6 +359,7 @@ describe('render queue handler', () => {
       async (...args: [string, string]) => void args
     )
     const recordRenderError = vi.fn(async () => {})
+    const rejectFabricateArtifact = vi.fn(async () => {})
 
     await expect(
       enqueueRenderShot(
@@ -339,6 +372,7 @@ describe('render queue handler', () => {
           }),
           transitionNodeStatus,
           recordRenderError,
+          rejectFabricateArtifact,
         }
       )
     ).rejects.toThrow('shot 缺少 window.__CVC_RENDER__ runtime')
@@ -350,6 +384,10 @@ describe('render queue handler', () => {
     ])
     expect(harness.queue.enqueue).not.toHaveBeenCalled()
     expect(recordRenderError).toHaveBeenCalledWith('node-1', expect.any(Error))
+    expect(rejectFabricateArtifact).toHaveBeenCalledWith(
+      'project-1',
+      'node-1',
+    )
   })
 
   it('surfaces a failed admission load as a failed node instead of a silent idle', async () => {
