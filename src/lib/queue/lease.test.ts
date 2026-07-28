@@ -19,12 +19,15 @@ describe('租约与执行超时常量', () => {
     expect(SWEEP_INTERVAL_MS).toBe(60_000)
   })
 
-  it('按 kind 给执行超时：director-stage 10 分钟、render-shot 15 分钟、未知 kind 兜底 10 分钟', () => {
+  it('按 kind 给执行超时：导出与异步旁白均保留 30 分钟合同', () => {
     expect(EXECUTION_TIMEOUT_MS['director-stage']).toBe(600_000)
     expect(EXECUTION_TIMEOUT_MS['render-shot']).toBe(900_000)
+    expect(EXECUTION_TIMEOUT_MS['export-project']).toBe(1_800_000)
+    expect(EXECUTION_TIMEOUT_MS['media-narration']).toBe(1_800_000)
     expect(executionTimeoutMs('director-stage')).toBe(600_000)
     expect(executionTimeoutMs('render-shot')).toBe(900_000)
-    expect(executionTimeoutMs('export-project')).toBe(DEFAULT_EXECUTION_TIMEOUT_MS)
+    expect(executionTimeoutMs('export-project')).toBe(1_800_000)
+    expect(executionTimeoutMs('media-narration')).toBe(1_800_000)
     expect(DEFAULT_EXECUTION_TIMEOUT_MS).toBe(600_000)
   })
 })

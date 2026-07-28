@@ -10,6 +10,7 @@ interface CompletingAttemptRow {
   taskId: string
   entityType: string
   entityId: string
+  status: string
   attemptNo: number
   fingerprint: string
   checkpoint: VersionedPayload
@@ -39,6 +40,7 @@ export async function completeAttempt(
         taskId: taskAttempts.taskId,
         entityType: taskAttempts.entityType,
         entityId: taskAttempts.entityId,
+        status: taskAttempts.status,
         attemptNo: taskAttempts.attemptNo,
         fingerprint: taskAttempts.fingerprint,
         checkpoint: taskAttempts.checkpoint,
@@ -53,6 +55,10 @@ export async function completeAttempt(
       .limit(1)
       .for('update')
     if (!attempt) throw new Error(`legacy queue attempt not found: ${attemptId}`)
+    // sweepExpiredLeases 可能在 handler 迟到完成前已把 attempt/run 收尸为失败。
+    // 行锁保证这里读取的状态与后续写入属于同一原子窗口；非 running 的旧完成
+    // 不得覆盖 TASK_INTERRUPTED 投影，也不得重置节点或追加新的 retry attempt。
+    if (attempt.status !== 'running') return null
 
     const retryable =
       status === 'failed' &&
@@ -113,7 +119,8 @@ async function scheduleRetry(
     .where(
       and(
         eq(taskAttempts.workspaceId, workspaceId),
-        eq(taskAttempts.id, attemptId)
+        eq(taskAttempts.id, attemptId),
+        eq(taskAttempts.status, 'running')
       )
     )
   await transaction.insert(taskAttempts).values({

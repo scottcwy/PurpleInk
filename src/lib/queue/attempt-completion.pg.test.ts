@@ -181,6 +181,47 @@ describe('completeAttempt 自动重试', () => {
     expect(await readRunAttempts(seeded.runId)).toHaveLength(1)
   })
 
+  it('租约回收后的迟到完成不覆盖终态，也不再排入自动重试', async () => {
+    const { completeAttempt } = await import('./attempt-completion')
+    const projectId = await seedProject()
+    const seeded = await seedRunningNodeAttempt(projectId, { nodeStatus: 'failed' })
+
+    // 这里模拟 sweepExpiredLeases 已在另一个事务中完成的收尸写入。迟到的
+    // handler 无论报告成功还是可重试失败，都只能成为 no-op；否则 attempt/run
+    // 会和节点上的 TASK_INTERRUPTED 投影彼此矛盾。
+    await database.db
+      .update(taskAttempts)
+      .set({
+        status: 'failed',
+        failure: { schemaVersion: 1, message: RETRYABLE_MESSAGE },
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(taskAttempts.id, seeded.attemptId))
+    await database.db
+      .update(pipelineRuns)
+      .set({ status: 'failed', completedAt: new Date(), updatedAt: new Date() })
+      .where(eq(pipelineRuns.id, seeded.runId))
+
+    await completeAttempt(
+      database.db,
+      LOCAL_WORKSPACE_ID,
+      seeded.attemptId,
+      'succeeded'
+    )
+    await completeAttempt(
+      database.db,
+      LOCAL_WORKSPACE_ID,
+      seeded.attemptId,
+      'failed',
+      RETRYABLE_MESSAGE
+    )
+
+    expect((await readAttempt(seeded.attemptId)).status).toBe('failed')
+    expect((await readRun(seeded.runId)).status).toBe('failed')
+    expect(await readRunAttempts(seeded.runId)).toHaveLength(1)
+  })
+
   it('成功路径维持原语义：attempt 与 run 同置 succeeded', async () => {
     const { completeAttempt } = await import('./attempt-completion')
     const projectId = await seedProject()
