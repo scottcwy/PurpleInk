@@ -27,7 +27,14 @@ Max 只增加成本池，不引入独占模型、优先队列或更高并发。
 - `CVC_MANAGED_MIMO_API_KEY`
 - `CVC_MANAGED_GEMINI_API_KEY`
 
-这些变量不是 `provider_credentials` 的 fallback。内置平台模型始终走托管凭据；
+这些变量不是 `provider_credentials` 的 fallback。三家内置模型可以由 workspace
+显式选择平台托管或 BYOK：
+
+- `managed` 使用上述平台 Key，进入会员授权、预留与结算；
+- `byok` 使用 `provider_credentials` 中当前 workspace 的加密 Key，不检查会员
+  等级且不消耗平台额度；
+- 两条路径不得因缺 Key、额度不足或上游失败而静默互相回退。
+
 OpenAI-compatible 自定义端点继续使用 workspace 加密凭据，且不消耗平台额度。
 
 平台 Key 禁止进入数据库、客户端 bundle、HTTP/SSE、日志、Artifact、截图或错误文案。
@@ -36,9 +43,10 @@ OpenAI-compatible 自定义端点继续使用 workspace 加密凭据，且不消
 
 可调用模型必须来自托管目录，并绑定不可变 rate card 版本。
 
-- Free：StepFun、MiMo。
+- Free 托管服务：StepFun、MiMo；使用自己的 Key 时也可以使用 Gemini。
 - Plus / Pro / Max：StepFun、MiMo、Gemini。
-- fallback 必须先与当前会员允许集合求交集。
+- managed fallback 必须先与当前会员允许集合求交集；BYOK fallback 按该
+  workspace 已选来源与已验证凭据授权，不得借 fallback 切换资金来源。
 - 没有稳定公开价格的能力不得加入托管目录。
 
 前端隐藏不可用模型只是体验优化；服务端必须在任何账本写入与外部调用前重新校验。

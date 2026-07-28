@@ -171,7 +171,7 @@
 约定：
 
 1. 写操作一律 POST/PATCH/DELETE + 严格 JSON schema 校验；校验失败返回 400 且**不落任何写入**。
-   `/api/settings` POST 承载字段范围：平台托管 StepFun/Gemini/MiMo 的模型 SKU（不接收三家平台 Key）、三个 OpenAI-compatible 自定义端点（文本与视觉 / TTS / ASR，各自独立凭据、端点与模型）、Director 文本/视觉/TTS/ASR 能力路由、`laneQuotas.{directorStageConcurrency, renderShotConcurrency}`（ISSUE-011）、`fallbackProvider`（熔断降级链的显式备选 provider，可为 `null` 表示清空；必须支持文本会话，纯音频端点回 422；存 `workspace_settings` 的 `ai.fallback-provider`，默认无备选，见 docs/configuration/model-routing.md）。
+   `/api/settings` POST 承载字段范围：StepFun/Gemini/MiMo 的显式服务来源 `providerServices.{provider}.{funding,apiKey?}`（`funding` 为 `managed | byok`；只有 BYOK 接受 Key，先验证再加密保存且响应不回传）、平台目录模型 SKU、三个 OpenAI-compatible 自定义端点（文本与视觉 / TTS / ASR，各自独立凭据、端点与模型）、Director 文本/视觉/TTS/ASR 能力路由、`laneQuotas.{directorStageConcurrency, renderShotConcurrency}`（ISSUE-011）、`fallbackProvider`（熔断降级链的显式备选 provider，可为 `null` 表示清空；必须支持文本会话，纯音频端点回 422；存 `workspace_settings` 的 `ai.fallback-provider`，默认无备选，见 docs/configuration/model-routing.md）。
    自定义端点家族按能力拆成三个 provider id：`openai-compatible`（text + vision）、`openai-compatible-tts`（tts）、`openai-compatible-asr`（asr）。三者的凭据分别存 `provider_credentials`，配置分别存 `workspace_settings` 的 `ai.openai-compatible` / `ai.openai-compatible.tts` / `ai.openai-compatible.asr`；同一 id 不得跨能力路由。
    Gemini 仍不可用于 TTS/ASR。媒体路由候选为 StepFun、MiMo、`openai-compatible-tts`（配音）、`openai-compatible-asr`（字幕）。
    `openai-compatible` 的视觉模型独立于文本模型；未填写视觉模型时把分镜验收路由到该端点返回 422。
@@ -183,7 +183,7 @@
 3. 凭据类 POST 必须先验证后保存；验证失败返回 422 且不覆盖已有值。
 4. 除 `/api/ping` 外全部 `export const dynamic = 'force-dynamic'`。
 5. `/api/billing` 只返回方案、周期、额度比例和脱敏 usage 汇总，不返回 `limit_cny_micros`、`used_cny_micros`、供应商单价、汇率或平台 Key。`/api/billing/redemptions` 仅 workspace owner 可用；无效、过期、撤销或已消费代码统一返回不可用语义。
-6. 平台托管额度耗尽统一返回 402 `{code:'quota_exhausted',resetAt,billingUrl:'/products/billing'}`；Free 不能通过直接 API、历史路由或 fallback 使用 Gemini，越权返回 403 且不得产生外部调用或账本写入。
+6. 平台托管额度耗尽统一返回 402 `{code:'quota_exhausted',resetAt,billingUrl:'/products/billing'}`；Free 不能通过直接 API、历史路由或 fallback 使用 Gemini 托管服务，越权返回 403 且不得产生外部调用或账本写入。Free 使用已验证的 workspace Gemini BYOK 不受会员门禁且不写平台成本账本。
 
 ### 4.2 引擎代理
 

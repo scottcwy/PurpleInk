@@ -20,6 +20,15 @@
 
 ## 备选 provider（默认关闭，需显式配置）
 
+每个内置 provider 的资金来源独立存于 `workspace_settings`：
+`ai.funding.stepfun`、`ai.funding.mimo`、`ai.funding.gemini`。缺行默认
+`managed`。路由只决定 provider/model，资金来源不能由路由请求覆盖。
+
+- `managed` 按套餐目录授权并进入成本池；
+- `byok` 仍校验服务端模型目录与能力，但跳过套餐门禁和平台账本；
+- fallback 沿用备选 provider 自己已保存的来源，禁止在 BYOK 与 managed 之间
+  自动切换。
+
 主 provider 熔断 open 时的降级出路，**默认无备选**——未配置时只会得到
 「AI 服务暂时不可用，可稍后重试或选择跳过」的可重试失败
 （`PROVIDER_FAILED`），绝不擅自替用户换模型。

@@ -34,10 +34,11 @@ This boundary mirrors `docs/issues/README.md` §0 and is enforced by:
 `src/features/ai/managed-credentials.ts` 是三家内置服务的唯一平台 Key
 解析器，只接受 `CVC_MANAGED_STEPFUN_API_KEY`、
 `CVC_MANAGED_MIMO_API_KEY` 和 `CVC_MANAGED_GEMINI_API_KEY`。
-`provider_credentials` 仅保留既有数据并继续服务自定义
-OpenAI-compatible BYOK，不再是三家内置服务的主执行来源。
+`provider_credentials` 同时服务自定义 OpenAI-compatible 与三家内置厂商的
+workspace BYOK。三家内置厂商默认使用托管服务；只有 workspace 显式选择
+`byok` 时才解密对应行，选择 `managed` 时绝不把该行当作平台 Key fallback。
 
-内置 StepFun、MiMo、Gemini 不得回退到旧的 provider env 名称或 workspace
+内置 StepFun、MiMo、Gemini 的托管路径不得回退到旧的 provider env 名称或 workspace
 凭据；自定义 OpenAI-compatible 也不得回退到平台托管 Key。两条凭据链必须保持隔离。
 
 ## 3. 历史/自定义凭据的 cold-start bootstrap
@@ -91,8 +92,10 @@ continue to use this per-workspace encrypted path.
 
 StepFun, Gemini, and MiMo platform service credentials are a separate,
 explicitly managed path. They resolve only from `CVC_MANAGED_STEPFUN_API_KEY`,
-`CVC_MANAGED_GEMINI_API_KEY`, and `CVC_MANAGED_MIMO_API_KEY`; they are never a
-fallback for a workspace credential and are never returned to the client.
+`CVC_MANAGED_GEMINI_API_KEY`, and `CVC_MANAGED_MIMO_API_KEY`. A workspace may
+instead select BYOK; that source is encrypted in `provider_credentials` and
+does not consume the membership pool. Neither path is a fallback for the
+other, and neither secret is ever returned to the client.
 Membership and usage accounting remain workspace-scoped. See
 `docs/configuration/billing.md`.
 
