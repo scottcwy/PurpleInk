@@ -72,6 +72,12 @@ nodemailer 报 `{ code: 'ESOCKET', command: 'CONN' }`。
 
 ### 体验账号弹窗
 
+> **2026-07-28 更新**：登录页的体验账号提示弹窗已整体移除（`demo-account.ts`、
+> `demo-account-dialog.tsx` 与 `demo-account-dialog-shot.mjs` 已删除，
+> `CVC_DEMO_ACCOUNT_*` 不再下发到浏览器）。下方段落与 `demo-account-dialog.png`
+> 保留为历史取证记录；建号机制（`seed-owner-account.ts` 与 compose 的
+> `seed-demo-account` 服务）不变。
+
 `/login` 在 `CVC_DEMO_ACCOUNT_EMAIL` 与 `CVC_DEMO_ACCOUNT_PASSWORD` **同时非空**时，
 自动弹出体验账号提示，提供「填入并登录」。默认关闭，不设这两个变量即彻底不出现。
 

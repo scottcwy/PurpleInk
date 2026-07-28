@@ -47,11 +47,6 @@ services:
       # OOMKilled。按目标容器的 --cpus 上限调整，不要留空。
       CVC_QUEUE_RENDER_SHOT_CONCURRENCY: ${CVC_QUEUE_RENDER_SHOT_CONCURRENCY:?必须显式设置，见 docs/deployment/runbook.md}
       CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY: ${CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY:?必须显式设置，见 docs/deployment/runbook.md}
-      # 体验账号提示只在这两个变量同时非空时出现（见 .env.example）。
-      # 刻意不是 NEXT_PUBLIC_*：那会在构建期内联进 bundle，之后无法关掉、无法换账号。
-      CVC_DEMO_ACCOUNT_EMAIL: ${CVC_DEMO_ACCOUNT_EMAIL:-}
-      CVC_DEMO_ACCOUNT_PASSWORD: ${CVC_DEMO_ACCOUNT_PASSWORD:-}
-      CVC_DEMO_ACCOUNT_NOTE: ${CVC_DEMO_ACCOUNT_NOTE:-}
     volumes:
       - cvc_data:/app/.data
     depends_on:

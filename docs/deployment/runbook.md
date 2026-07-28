@@ -52,8 +52,8 @@ docker compose -f docker-compose.prod.yml build
 | `CVC_ALLOWED_CIDRS` | 反代 IP 过滤网段，留空默认放行所有（不设防），生产必须收紧 |
 | `STEP_API_KEY` / `GEMINI_API_KEY` / `LISTENHUB_API_KEY` 等 | worker 的 provider 凭据，见 `server/.env.example` |
 | `STEPFUN_API_KEY` | **可选**。Next 侧凭据 bootstrap 用；留空则默认复用 `STEP_API_KEY` 的值 |
-| `CVC_DEMO_ACCOUNT_EMAIL` / `CVC_DEMO_ACCOUNT_PASSWORD` | **可选**。设置后登录页出现体验账号弹窗，并自动创建该账号；正式对外运营时不要设 |
-| `CVC_DEMO_ACCOUNT_NAME` / `CVC_DEMO_ACCOUNT_NOTE` | 可选，体验账号显示名与弹窗正文 |
+| `CVC_DEMO_ACCOUNT_EMAIL` / `CVC_DEMO_ACCOUNT_PASSWORD` | **可选**。设置后 `seed-demo-account` 服务自动创建该体验账号；登录页的体验账号提示弹窗已移除，这组变量不再下发到浏览器 |
+| `CVC_DEMO_ACCOUNT_NAME` | 可选，体验账号显示名（仅建号脚本消费） |
 
 ### 3.1 Next 侧 provider 凭据怎么进去
 
