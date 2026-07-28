@@ -40,6 +40,24 @@ describe('verification code mail', () => {
     expect(mail.html).not.toContain('<b>1</b>')
     expect(mail.html).toContain('&lt;b&gt;1&lt;/b&gt;')
   })
+
+  it('carries the official site, docs and contact links in both parts', () => {
+    const mail = verificationCodeMail({ purpose: 'signup', code: '012345' })
+
+    for (const part of [mail.text, mail.html]) {
+      expect(part).toContain('purpleink.cn')
+      expect(part).toContain('docs.purpleink.cn')
+      expect(part).toContain('support@purpleink.cn')
+    }
+  })
+
+  it('uses the brand indigo gradient spectrum, not a flat single color', () => {
+    const mail = verificationCodeMail({ purpose: 'signup', code: '012345' })
+
+    expect(mail.html).toContain('#333da7')
+    expect(mail.html).toContain('#6366f1')
+    expect(mail.html).toContain('#a5b4fc')
+  })
 })
 
 describe('maskMailbox', () => {
