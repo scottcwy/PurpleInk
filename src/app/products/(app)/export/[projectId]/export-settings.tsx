@@ -95,7 +95,8 @@ export function ExportSettings({
               {`降级导出（${degradedLaneCount(readiness)} 个镜头将以占位呈现）`}
             </Button>
             <p className="text-[11px] leading-relaxed text-ds-text-muted">
-              失败分镜将以黑场占位、无字幕（旁白保留），修复后重新导出可自动升级为完整版。
+              失败或已跳过的分镜将以黑场占位、无字幕（旁白保留）。已跳过的环节将导出为降级版本；
+              修复后重新导出可自动升级为完整版。
               {readiness.placeholderCandidateLanes.length > 0 &&
                 `待占位：${readiness.placeholderCandidateLanes.join('、')}`}
             </p>

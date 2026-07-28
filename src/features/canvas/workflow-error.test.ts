@@ -133,7 +133,7 @@ describe('classifyWorkflowError', () => {
     ).toEqual({
       code: 'TASK_INTERRUPTED',
       stage: 'INGEST',
-      message: '执行进程中断，任务已自动回收，可重试',
+      message: '执行进程中断，任务已自动回收。这是系统回收僵尸任务的保护机制，可放心重试',
       retryable: true,
     })
   })

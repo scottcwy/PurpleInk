@@ -56,6 +56,7 @@ describe('Export workspace composition', () => {
     // 降级导出是独立的高代价 CTA（destructive）；正常开始导出仍为默认 primary。
     expect(settings).toContain('降级导出')
     expect(settings).toContain('variant="destructive"')
+    expect(settings).toContain('已跳过的环节将导出为降级版本')
   })
 
   it('renders only readiness-backed media tracks and marks BGM/SFX as unwired', () => {

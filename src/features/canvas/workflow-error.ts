@@ -150,7 +150,7 @@ const MESSAGE_RULES: ReadonlyArray<readonly [RegExp, ClassifiedError]> = [
     /执行进程中断|租约过期/,
     {
       code: 'TASK_INTERRUPTED',
-      message: '执行进程中断，任务已自动回收，可重试',
+      message: '执行进程中断，任务已自动回收。这是系统回收僵尸任务的保护机制，可放心重试',
       retryable: true,
     },
   ],
