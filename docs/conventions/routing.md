@@ -156,7 +156,7 @@
 | `/api/artifacts/[id]` | GET | `id` path + `projectId` query（必填） | `@/features/artifacts` | `wired` |
 | `/api/jobs/[id]` | GET | `id` path + `projectId` query | `@/lib/queue`、`@/features/artifacts` | `wired` |
 | `/api/render` | POST | body `{projectId,nodeId,intent}`；`intent=execute|repair|rerender` | `@/features/director/recovery` | `wired` |
-| `/api/render/export` | GET, POST | `projectId` | `@/features/render/export-service` | `wired` |
+| `/api/render/export` | GET, POST | GET `projectId` query；POST body `{projectId, degraded?}` | `@/features/render/export-service`、`@/features/render/export-degraded` | `wired` |
 | `/api/render/thumbnails` | GET | `projectId`、`nodeId` | `@/features/render` | `wired` |
 | `/api/director/pipeline` | POST, DELETE | body `{projectId}`；POST 返回 `started|blocked|complete` 与修复根/阻塞明细 | `@/features/director/advance` | `wired` |
 | `/api/director/stage` | POST | body `{projectId,nodeId,intent}`；`intent=execute|repair|regenerate`，阶段由服务端节点投影决定 | `@/features/director/recovery` | `wired` |
@@ -175,6 +175,7 @@
    `openai-compatible-asr` 的转写校验被端点拒绝时返回 422 且带 `reason: 'asr-transcription-rejected'`；客户端可改以 `credentialOnly: true` 重新提交，该路径仍需通过 `GET {baseUrl}/models` 凭据校验，并把 `timestampMode` 保守记为 `none`、`verification` 记为 `credential-only`。
    `laneQuotas` 子字段做两层校验：schema 静态 max（directorStage≤32、renderShot≤128）+ route 运行时 `os.cpus().length` 上限；任一失败回 400 且不落任何 secret / route / 配额写入。
 2. 状态码语义固定：400 参数非法、404 资源不存在或不属于当前作用域、409 状态冲突（队列已存在、前置未就绪、旧 workflow 暂不支持执行）、422 外部凭据校验失败。项目设置、Director、单镜渲染、缩略图与成片导出的写/执行入口必须在任何数据库、Artifact 或队列变更前拒绝旧 workflow。
+   `/api/render/export` 的降级导出合同：GET 响应额外含 `placeholderCandidateLanes: string[]`（当前缺渲染产物、可用占位片段出片的 lane）、`degradedReady: boolean`（全部阻塞项都可被占位覆盖）与 `degradedExport: {placeholderLanes: string[]} | null`（最近一次 final-mp4 若为降级产物，列出占位镜头）。POST body `degraded: true` 是用户显式确认的降级导出：项目已就绪时忽略该标志走正常导出；单 lane 的渲染/旁白/字幕缺失可被占位覆盖（黑场视频 / 静音旁白 / 跳过字幕），但项目级完整性问题（`laneKey=null` 的 blockingIssue，如 INGEST 音频合同缺失/无效、帧总数不一致）不可占位，`degradedReady=false` 仍返回 409 且不入队。占位片段是真实 ffmpeg 生成的黑场 MP4（时长取 shot-plan 真值、字节 SHA-256 入 artifacts，kind `placeholder-mp4`），成片的占位清单登记为 `final-mp4-degraded-manifest` 产物，UI 必须据此显示「降级导出 · N 镜占位」，不得宣称完全成功。自动推进链（autopilot）永远不使用降级模式。
 3. 凭据类 POST 必须先验证后保存；验证失败返回 422 且不覆盖已有值。
 4. 除 `/api/ping` 外全部 `export const dynamic = 'force-dynamic'`。
 
