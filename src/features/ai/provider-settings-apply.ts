@@ -1,9 +1,7 @@
 import 'server-only'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { saveLaneQuotas } from '@/lib/queue/runtime-config'
-import { getAiConfigDependencies, saveStepfunModelSettings } from './config'
-import { saveGeminiSettings } from './gemini-config'
-import { saveMimoSettings } from './mimo-config'
+import { getAiConfigDependencies } from './config'
 import { ManagedAiError } from './managed-service'
 import { saveDirectorRoutes } from './model-routing'
 import {
@@ -61,10 +59,6 @@ export async function applyProviderSettings(
     return reject(422, '托管凭据与模型由服务端管理，不接受设置写入', false)
   }
   try {
-    // 三个托管配置先完成无副作用预检，保证 baseUrl 合同失败时尚未落任何路由。
-    await saveStepfunModelSettings(modelSettings)
-    await saveGeminiSettings(geminiSettings)
-    await saveMimoSettings(mimoSettings)
     const plan = await getAiConfigDependencies().currentPlan?.() ?? 'free'
     if (plan === 'free' && fallbackProvider === 'gemini') {
       return reject(422, 'Free 套餐不可使用 Gemini 托管服务', false)

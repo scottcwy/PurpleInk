@@ -207,9 +207,9 @@ describe('GET /api/settings', () => {
     const response = await GET()
     const body = await response.json()
 
-    expect(body.configured).toBe(true)
-    expect(body.verifiedAt).toBe('2026-07-25T01:02:03.000Z')
-    expect(body.updatedAt).toBe('2026-07-25T01:02:04.000Z')
+    expect(body.configured).toBe(false)
+    expect(body.verifiedAt).toBeNull()
+    expect(body.updatedAt).toBeNull()
     expect(body).not.toHaveProperty('masked')
     expect(body.models.chatModel).toEqual({ value: 'step-3.5-flash', source: 'env' })
     expect(body.geminiConfigured).toBe(false)
@@ -217,13 +217,14 @@ describe('GET /api/settings', () => {
       configured: false,
       verifiedAt: null,
       updatedAt: null,
+      managed: true,
     })
     expect(body.gemini.primaryModel.value).toBe('gemini-3.6-flash')
     expect(body.mimo.textModel.value).toBe('mimo-v2.5')
     expect(body.mimoCredential.configured).toBe(false)
     expect(body.routes['shot-codegen'].provider).toBe('gemini')
     expect(body.laneQuotas).toEqual(MOCK_DEFAULT_LANE_VIEW)
-    expect(mocks.describeCredential).toHaveBeenCalledTimes(3)
+    expect(mocks.describeCredential).not.toHaveBeenCalled()
   })
 })
 
@@ -432,7 +433,8 @@ describe('POST /api/settings', () => {
     const body = await response.json()
 
     expect(response.status).toBe(422)
-    expect(body.error).toContain('Token Plan')
+    expect(body.error).toContain('托管凭据与模型由服务端管理')
+    expect(mocks.validateMimoKey).not.toHaveBeenCalled()
     expect(mocks.saveMimoApiKey).not.toHaveBeenCalled()
   })
 
@@ -450,31 +452,19 @@ describe('POST /api/settings', () => {
       },
     }))
 
-    expect(response.status).toBe(200)
-    expect(mocks.validateMimoKey).toHaveBeenCalledWith(
-      'sk-product-api-key',
-      {
-        textModel: 'mimo-v2.5',
-        ttsModel: 'mimo-v2.5-tts',
-      }
-    )
-    expect(mocks.saveMimoApiKey).toHaveBeenCalledWith('sk-product-api-key')
-    expect(mocks.saveMimoSettings).toHaveBeenCalledWith({
-      textModel: 'mimo-v2.5',
-      ttsModel: 'mimo-v2.5-tts',
-    })
+    expect(response.status).toBe(422)
+    expect(mocks.validateMimoKey).not.toHaveBeenCalled()
+    expect(mocks.saveMimoApiKey).not.toHaveBeenCalled()
+    expect(mocks.saveMimoSettings).not.toHaveBeenCalled()
   })
 
   it('validates before saving a StepFun Key', async () => {
     mocks.validateKey.mockResolvedValue(true)
     const response = await POST(request({ apiKey: 'sk-valid-value' }))
 
-    expect(response.status).toBe(200)
-    expect(mocks.validateKey).toHaveBeenCalledWith('sk-valid-value')
-    expect(mocks.saveApiKey).toHaveBeenCalledWith('sk-valid-value')
-    expect(mocks.validateKey.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.saveApiKey.mock.invocationCallOrder[0]!
-    )
+    expect(response.status).toBe(422)
+    expect(mocks.validateKey).not.toHaveBeenCalled()
+    expect(mocks.saveApiKey).not.toHaveBeenCalled()
   })
 
   it('never persists a Key that fails validation', async () => {
@@ -487,20 +477,17 @@ describe('POST /api/settings', () => {
     await expect(response.json()).resolves.toEqual({
       ok: false,
       valid: false,
-      error: 'StepFun Key 校验失败 · 请检查 Key 是否正确',
+      error: '托管凭据与模型由服务端管理，不接受设置写入',
     })
   })
 
   it('saves model settings without requiring or validating an apiKey', async () => {
     const response = await POST(request({ chatModel: 'step-3.5-flash', ttsModel: '' }))
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(422)
     expect(mocks.validateKey).not.toHaveBeenCalled()
     expect(mocks.saveApiKey).not.toHaveBeenCalled()
-    expect(mocks.saveStepfunModelSettings).toHaveBeenCalledWith({
-      chatModel: 'step-3.5-flash',
-      ttsModel: '',
-    })
+    expect(mocks.saveStepfunModelSettings).not.toHaveBeenCalled()
   })
 
   it('applies apiKey and model settings together only after validation succeeds', async () => {
@@ -510,23 +497,19 @@ describe('POST /api/settings', () => {
       baseUrl: 'https://api.stepfun.com/v1',
     }))
 
-    expect(response.status).toBe(200)
-    expect(mocks.saveApiKey).toHaveBeenCalledWith('sk-valid-value')
-    expect(mocks.saveStepfunModelSettings).toHaveBeenCalledWith({
-      baseUrl: 'https://api.stepfun.com/v1',
-    })
+    expect(response.status).toBe(422)
+    expect(mocks.saveApiKey).not.toHaveBeenCalled()
+    expect(mocks.saveStepfunModelSettings).not.toHaveBeenCalled()
   })
 
   it('does not save a validated key when a custom base URL is rejected', async () => {
     mocks.validateKey.mockResolvedValue(true)
-    mocks.saveStepfunModelSettings.mockRejectedValueOnce(
-      new Error('Persisting a custom StepFun baseUrl is unsupported'),
-    )
 
-    await expect(POST(request({
+    const response = await POST(request({
       apiKey: 'sk-valid-value',
       baseUrl: 'https://custom.example/v1',
-    }))).rejects.toThrow('custom StepFun baseUrl')
+    }))
+    expect(response.status).toBe(422)
     expect(mocks.saveApiKey).not.toHaveBeenCalled()
   })
 
@@ -545,18 +528,11 @@ describe('POST /api/settings', () => {
       })
     )
 
-    expect(response.status).toBe(200)
-    expect(mocks.validateGeminiKey).toHaveBeenCalledWith('gemini-valid', {
-      primaryModel: 'gemini-3.6-flash',
-    })
-    expect(mocks.saveGeminiApiKey).toHaveBeenCalledWith('gemini-valid')
-    expect(mocks.saveGeminiSettings).toHaveBeenCalledWith({
-      primaryModel: 'gemini-3.6-flash',
-    })
-    expect(mocks.saveDirectorRoutes).toHaveBeenCalledWith({
-      'shot-codegen': 'gemini',
-      'shot-sfx': 'stepfun',
-    })
+    expect(response.status).toBe(422)
+    expect(mocks.validateGeminiKey).not.toHaveBeenCalled()
+    expect(mocks.saveGeminiApiKey).not.toHaveBeenCalled()
+    expect(mocks.saveGeminiSettings).not.toHaveBeenCalled()
+    expect(mocks.saveDirectorRoutes).not.toHaveBeenCalled()
     expect(mocks.saveApiKey).not.toHaveBeenCalled()
   })
 
@@ -581,7 +557,6 @@ describe('POST /api/settings', () => {
     )
 
     const response = await POST(request({
-      chatModel: 'step-3.5-flash',
       routes: { export: 'openai-compatible' },
     }))
 
@@ -633,7 +608,9 @@ describe('POST /api/settings lane quotas (ISSUE-011)', () => {
   })
 
   it('does not call saveLaneQuotas when laneQuotas is omitted', async () => {
-    const response = await POST(request({ chatModel: 'step-3.5-flash' }))
+    const response = await POST(request({
+      routes: { 'script-import': 'stepfun' },
+    }))
 
     expect(response.status).toBe(200)
     expect(mocks.saveLaneQuotas).not.toHaveBeenCalled()
@@ -703,19 +680,16 @@ describe('POST /api/settings lane quotas (ISSUE-011)', () => {
     expect(mocks.saveApiKey).not.toHaveBeenCalled()
   })
 
-  it('persists lane quotas and a validated StepFun key in the same request', async () => {
+  it('rejects lane quotas combined with a managed StepFun key', async () => {
     mocks.validateKey.mockResolvedValue(true)
     const response = await POST(request({
       apiKey: 'sk-valid',
       laneQuotas: { directorStageConcurrency: 4, renderShotConcurrency: 2 },
     }))
 
-    expect(response.status).toBe(200)
-    expect(mocks.saveApiKey).toHaveBeenCalledWith('sk-valid')
-    expect(mocks.saveLaneQuotas).toHaveBeenCalledWith({
-      directorStage: 4,
-      renderShot: 2,
-    })
+    expect(response.status).toBe(422)
+    expect(mocks.saveApiKey).not.toHaveBeenCalled()
+    expect(mocks.saveLaneQuotas).not.toHaveBeenCalled()
   })
 })
 
