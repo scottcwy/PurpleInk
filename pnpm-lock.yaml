@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   '@earendil-works/pi-ai':
-    hash: e5e3f079a61c1b9f0bdb021516c34d07ffe4a1253f99c3a6184f10aa0a3ff750
+    hash: febed32413daa9e13f9c2c3c367733aa0be0a0916b64d6ecf6c601a3d05bc14e
     path: patches/@earendil-works__pi-ai.patch
 
 importers:
@@ -21,7 +21,7 @@ importers:
         version: 0.80.10(ws@8.21.1)(zod@4.4.3)
       '@earendil-works/pi-ai':
         specifier: 0.80.10
-        version: 0.80.10(patch_hash=e5e3f079a61c1b9f0bdb021516c34d07ffe4a1253f99c3a6184f10aa0a3ff750)(ws@8.21.1)(zod@4.4.3)
+        version: 0.80.10(patch_hash=febed32413daa9e13f9c2c3c367733aa0be0a0916b64d6ecf6c601a3d05bc14e)(ws@8.21.1)(zod@4.4.3)
       '@next/env':
         specifier: 16.2.0
         version: 16.2.0
@@ -4862,7 +4862,7 @@ snapshots:
 
   '@earendil-works/pi-agent-core@0.80.10(ws@8.21.1)(zod@4.4.3)':
     dependencies:
-      '@earendil-works/pi-ai': 0.80.10(patch_hash=e5e3f079a61c1b9f0bdb021516c34d07ffe4a1253f99c3a6184f10aa0a3ff750)(ws@8.21.1)(zod@4.4.3)
+      '@earendil-works/pi-ai': 0.80.10(patch_hash=febed32413daa9e13f9c2c3c367733aa0be0a0916b64d6ecf6c601a3d05bc14e)(ws@8.21.1)(zod@4.4.3)
       ignore: 7.0.5
       typebox: 1.1.38
       yaml: 2.9.0
@@ -4874,7 +4874,7 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-ai@0.80.10(patch_hash=e5e3f079a61c1b9f0bdb021516c34d07ffe4a1253f99c3a6184f10aa0a3ff750)(ws@8.21.1)(zod@4.4.3)':
+  '@earendil-works/pi-ai@0.80.10(patch_hash=febed32413daa9e13f9c2c3c367733aa0be0a0916b64d6ecf6c601a3d05bc14e)(ws@8.21.1)(zod@4.4.3)':
     dependencies:
       '@anthropic-ai/sdk': 0.91.1(zod@4.4.3)
       '@aws-sdk/client-bedrock-runtime': 3.1048.0

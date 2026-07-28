@@ -1,5 +1,5 @@
 diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
-index 7a990ddd2ecb6a349ff21e6797d357fac9f09518..b037cf1aede1279336ff3dac2289a43ccd9ddbd7 100644
+index 7a990ddd2ecb6a349ff21e6797d357fac9f09518..8552de056613ea0af40b0b11c97a1d2dae1eb341 100644
 --- a/dist/api/openai-completions.js
 +++ b/dist/api/openai-completions.js
 @@ -1,6 +1,6 @@
@@ -10,6 +10,15 @@ index 7a990ddd2ecb6a349ff21e6797d357fac9f09518..b037cf1aede1279336ff3dac2289a43c
  import { AssistantMessageEventStream } from "../utils/event-stream.js";
  import { headersToRecord } from "../utils/headers.js";
  import { parseStreamingJson } from "../utils/json-parse.js";
+@@ -121,7 +121,7 @@ export const stream = (model, context, options) => {
+             const compat = getCompat(model);
+             const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
+             const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
+-            const client = createClient(model, context, apiKey, options?.headers, cacheSessionId, compat);
++            const client = createClient(model, context, apiKey, options?.headers, cacheSessionId, compat, options?.onResponse);
+             let params = buildParams(model, context, options, compat, cacheRetention);
+             const nextParams = await options?.onPayload?.(params, model);
+             if (nextParams !== undefined) {
 @@ -386,21 +386,24 @@ export const stream = (model, context, options) => {
                  delete block.streamIndex;
              }
@@ -44,3 +53,37 @@ index 7a990ddd2ecb6a349ff21e6797d357fac9f09518..b037cf1aede1279336ff3dac2289a43c
  export const streamSimple = (model, context, options) => {
      getClientApiKey(model.provider, options?.apiKey, options?.headers);
      const base = buildBaseOptions(model, context, options, options?.apiKey);
+@@ -413,7 +416,7 @@ export const streamSimple = (model, context, options) => {
+         toolChoice,
+     });
+ };
+-function createClient(model, context, apiKey, optionsHeaders, sessionId, compat = getCompat(model)) {
++function createClient(model, context, apiKey, optionsHeaders, sessionId, compat = getCompat(model), onResponse) {
+     const headers = { ...model.headers };
+     if (model.provider === "github-copilot") {
+         const hasImages = hasCopilotVisionInput(context.messages);
+@@ -439,11 +442,24 @@ function createClient(model, context, apiKey, optionsHeaders, sessionId, compat
+     if (optionsHeaders) {
+         Object.assign(headers, optionsHeaders);
+     }
++    // The OpenAI SDK throws before `.withResponse()` for non-2xx responses, so
++    // observe the status at the fetch boundary. The callback receives only the
++    // status and headers; provider response bodies remain inside the SDK.
++    const observedFetch = onResponse
++        ? async (input, init) => {
++            const response = await globalThis.fetch(input, init);
++            if (!response.ok) {
++                await onResponse({ status: response.status, headers: headersToRecord(response.headers) }, model);
++            }
++            return response;
++        }
++        : undefined;
+     return new OpenAI({
+         apiKey,
+         baseURL: model.baseUrl,
+         dangerouslyAllowBrowser: true,
+         defaultHeaders: headers,
++        ...(observedFetch ? { fetch: observedFetch } : {}),
+     });
+ }
+ function buildParams(model, context, options, compat = getCompat(model), cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env)) {
