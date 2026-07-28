@@ -149,6 +149,16 @@ export async function createDirectorSession(
             else if (providerStarted) await handle.settleUnavailable(true)
             else await handle.releaseBeforeCall()
           }
+          // pi 在部分流式失败中会从 prompt() 直接 reject，而不会走到下方
+          // assertRunSucceeded。只要本次请求已观察到 HTTP 状态或 Agent 已投影
+          // 为 provider error，仍必须收敛成稳定的 DirectorRunError，避免让 4xx
+          // 被重试策略当作未知瞬态错误。
+          if (
+            !(error instanceof DirectorRunError) &&
+            (upstreamFailureStatus !== null || Boolean(agent.state.errorMessage))
+          ) {
+            throwDirectorRunFailure(agent, runtime, upstreamFailureStatus)
+          }
           throw error
         }
       },
@@ -228,6 +238,14 @@ function assertRunSucceeded(
     recordProviderSuccess(runtime.providerId)
     return
   }
+  throwDirectorRunFailure(agent, runtime, responseStatus)
+}
+
+function throwDirectorRunFailure(
+  agent: Agent,
+  runtime: { providerId: string; routeLabel: string },
+  responseStatus: number | null,
+): never {
   recordProviderFailure(runtime.providerId)
   console.error('[director] 模型调用失败', {
     route: runtime.routeLabel,
@@ -235,7 +253,7 @@ function assertRunSucceeded(
   })
   throw new DirectorRunError(
     runtime.routeLabel,
-    responseStatus ?? upstreamHttpStatus(errorMessage),
+    responseStatus ?? upstreamHttpStatus(agent.state.errorMessage ?? ''),
   )
 }
 

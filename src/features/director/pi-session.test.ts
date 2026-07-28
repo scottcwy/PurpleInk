@@ -531,6 +531,25 @@ describe('createDirectorSession', () => {
     expect(mocks.recordProviderSuccess).not.toHaveBeenCalled()
   })
 
+  it('preserves an observed HTTP status when Agent.prompt rejects before idle', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const session = await createDirectorSession({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      stage: 'INGEST',
+    })
+    const agent = mocks.agentInstances[0]!
+    agent.state.errorMessage = 'Provider request failed'
+    await agent.onResponse?.({ status: 402 }, {})
+    vi.spyOn(agent, 'prompt').mockRejectedValueOnce(new Error('Provider request failed'))
+
+    await expect(
+      session.run({ prompt: '执行阶段', output: assistantOutput })
+    ).rejects.toThrow('Director 模型调用失败（stepfun/step-chat，HTTP 402）')
+    expect(mocks.recordProviderFailure).toHaveBeenCalledWith('stepfun')
+    expect(mocks.recordProviderSuccess).not.toHaveBeenCalled()
+  })
+
   it('keeps a pi-formatted 4xx status while discarding the provider body', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const session = await createDirectorSession({
