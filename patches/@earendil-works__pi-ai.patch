@@ -1,0 +1,46 @@
+diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
+index 7a990ddd2ecb6a349ff21e6797d357fac9f09518..b037cf1aede1279336ff3dac2289a43ccd9ddbd7 100644
+--- a/dist/api/openai-completions.js
++++ b/dist/api/openai-completions.js
+@@ -1,6 +1,6 @@
+ import OpenAI from "openai";
+ import { calculateCost, clampThinkingLevel } from "../models.js";
+-import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
++import { normalizeProviderError } from "../utils/error-body.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { headersToRecord } from "../utils/headers.js";
+ import { parseStreamingJson } from "../utils/json-parse.js";
+@@ -386,21 +386,24 @@ export const stream = (model, context, options) => {
+                 delete block.streamIndex;
+             }
+             output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+-            output.errorMessage = formatProviderError(normalizeProviderError(error));
+-            // Some providers via OpenRouter give additional information in this field.
+-            // normalizeProviderError already stringifies the parsed body (error.error)
+-            // into errorMessage, so only append the raw metadata when it is not already
+-            // present to avoid double-printing it.
+-            const rawMetadata = error?.error?.metadata?.raw;
+-            if (rawMetadata && !output.errorMessage.includes(String(rawMetadata))) {
+-                output.errorMessage += `\n${rawMetadata}`;
+-            }
++            output.errorMessage = safeProviderErrorMessage(normalizeProviderError(error));
+             stream.push({ type: "error", reason: output.stopReason, error: output });
+             stream.end();
+         }
+     })();
+     return stream;
+ };
++/**
++ * Stream error events can be persisted by consumers. Keep only a stable HTTP
++ * category for retry policy and never copy provider response bodies/metadata
++ * into that durable surface.
++ */
++function safeProviderErrorMessage(error) {
++    const status = error.status;
++    return typeof status === "number" && Number.isInteger(status) && status >= 400 && status <= 599
++        ? `HTTP ${status}`
++        : "Provider request failed";
++}
+ export const streamSimple = (model, context, options) => {
+     getClientApiKey(model.provider, options?.apiKey, options?.headers);
+     const base = buildBaseOptions(model, context, options, options?.apiKey);

@@ -75,6 +75,9 @@
       "esbuild",
       "ffmpeg-static",
       "sharp"
-    ]
+    ],
+    "patchedDependencies": {
+      "@earendil-works/pi-ai": "patches/@earendil-works__pi-ai.patch"
+    }
   }
 }
