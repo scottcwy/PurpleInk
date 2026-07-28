@@ -41,6 +41,14 @@ function dependencies() {
     calculateActualCost: vi.fn(() => BigInt(42)),
     settleManagedInvocation: vi.fn(async () => undefined),
     releaseManagedReservation: vi.fn(async () => undefined),
+    authorizeManagedRoute: vi.fn(async (input) =>
+      input.provider === 'openai-compatible'
+        ? { funding: 'byok' as const, deductsManagedPool: false }
+        : {
+            funding: 'managed' as const,
+            deductsManagedPool: true,
+            catalogId: '00000000-0000-4000-8000-000000000009',
+          }),
   }
   return deps
 }
@@ -104,6 +112,7 @@ describe('ManagedAiGateway', () => {
       .digest('hex')
 
     expect(deps.getCurrentRateCard).toHaveBeenCalledWith({
+      catalogId: '00000000-0000-4000-8000-000000000009',
       provider: 'stepfun',
       model: 'step-3.5-flash',
       capability: 'text',

@@ -47,7 +47,6 @@ export {
   resolveManagedCredential,
 } from './managed-credentials'
 export {
-  MANAGED_MODEL_CATALOG,
   MANAGED_PROVIDER_IDS,
   ManagedAiError,
   authorizeManagedRoute,
@@ -62,3 +61,8 @@ export {
   type ManagedRouteAuthorization,
   type ManagedUsage,
 } from './managed-service'
+export {
+  managedModelCatalogRepository,
+  PostgresManagedModelCatalogRepository,
+  type ManagedModelCatalogRepository,
+} from './managed-model-catalog-repository'

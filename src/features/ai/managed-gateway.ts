@@ -33,6 +33,7 @@ export interface ManagedAiGatewayDependencies {
   calculateActualCost: typeof calculateActualCost
   settleManagedInvocation: typeof settleManagedInvocation
   releaseManagedReservation: typeof releaseManagedReservation
+  authorizeManagedRoute: typeof authorizeManagedRoute
 }
 
 const DEFAULT_DEPENDENCIES: ManagedAiGatewayDependencies = {
@@ -44,6 +45,7 @@ const DEFAULT_DEPENDENCIES: ManagedAiGatewayDependencies = {
   calculateActualCost,
   settleManagedInvocation,
   releaseManagedReservation,
+  authorizeManagedRoute,
 }
 
 interface BeginBase {
@@ -88,7 +90,7 @@ export class ManagedAiGateway {
 
   async begin(input: ManagedAiBeginInput): Promise<ManagedAiHandle> {
     const plan = await this.dependencies.getCurrentPlanKey()
-    const authorization = authorizeManagedRoute({
+    const authorization = await this.dependencies.authorizeManagedRoute({
       plan,
       provider: input.provider,
       modelId: input.model,
@@ -99,6 +101,7 @@ export class ManagedAiGateway {
     const provider = requireManagedProvider(input.provider)
     const credential = this.dependencies.requireManagedCredential(provider)
     const rateCard = await this.dependencies.getCurrentRateCard({
+      catalogId: authorization.catalogId,
       provider,
       model: input.model,
       capability: input.capability,

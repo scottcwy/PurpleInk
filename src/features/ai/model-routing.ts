@@ -183,12 +183,12 @@ export async function resolveDirectorModelTarget(
   const configured = await resolveRoute(target, deps)
   const primary = configured?.provider ?? defaultProviderFor(target, plan)
   if (configured) {
-    authorizeManagedRoute({
+    await authorizeManagedRoute({
       plan,
       provider: configured.provider,
       modelId: configured.model,
       capability,
-    })
+    }, deps.managedModelCatalog)
   }
   // 熔断检查必须在真正发起调用的解析处：half-open 的试探名额会被本次调用占用。
   // 健康路径完全旁路降级链：不读备选配置，也不产生 degradedFrom 字段。
@@ -197,12 +197,13 @@ export async function resolveDirectorModelTarget(
   }
   if (configured) {
     const defaults = await providerDefaults(configured.provider, deps)
-    const authorization = authorizeManagedRoute({
+    const authorization = await authorizeManagedRoute({
       plan,
       provider: configured.provider,
       modelId: configured.model,
       capability,
-    })
+    }, deps.managedModelCatalog)
+    const { catalogId: _catalogId, ...publicAuthorization } = authorization
     return {
       provider: configured.provider,
       baseUrl: defaults.baseUrl,
@@ -210,23 +211,24 @@ export async function resolveDirectorModelTarget(
       apiKey: isManagedProvider(configured.provider)
         ? defaults.apiKey
         : configured.secret,
-      ...authorization,
+      ...publicAuthorization,
     }
   }
   const defaults = await providerDefaults(primary, deps)
   const modelId = defaults.modelFor(target, capability)
-  const authorization = authorizeManagedRoute({
+  const authorization = await authorizeManagedRoute({
     plan,
     provider: primary,
     modelId,
     capability,
-  })
+  }, deps.managedModelCatalog)
+  const { catalogId: _catalogId, ...publicAuthorization } = authorization
   return {
     provider: primary,
     baseUrl: defaults.baseUrl,
     modelId,
     apiKey: defaults.apiKey,
-    ...authorization,
+    ...publicAuthorization,
   }
 }
 
@@ -241,12 +243,12 @@ export async function describeDirectorRoutes(
       findRoute(target, deps),
     ])
     const model = configured?.model ?? await defaultModel(provider.provider, target, plan, deps)
-    authorizeManagedRoute({
+    await authorizeManagedRoute({
       plan,
       provider: provider.provider,
       modelId: model,
       capability: capabilityForTarget(target),
-    })
+    }, deps.managedModelCatalog)
     return [nodeType, { ...provider, model }] as const
   }))
   return Object.fromEntries(entries) as Record<CanvasNodeType, DirectorRouteView>
@@ -308,6 +310,9 @@ async function defaultModel(
   const defaults = await providerDefaults(provider, deps)
   const capability = capabilityForTarget(target)
   const model = defaults.modelFor(target, capability)
-  authorizeManagedRoute({ plan, provider, modelId: model, capability })
+  await authorizeManagedRoute(
+    { plan, provider, modelId: model, capability },
+    deps.managedModelCatalog,
+  )
   return model
 }

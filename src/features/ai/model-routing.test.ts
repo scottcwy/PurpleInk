@@ -8,6 +8,7 @@ import {
   saveDirectorRoutes,
 } from './model-routing'
 import type { OpenAiCompatibleProfile } from './openai-compatible-payloads'
+import type { ManagedModelDefinition } from './managed-model-catalog-repository'
 import { recordProviderFailure, resetBreaker } from './provider-breaker'
 import type { AiProviderId } from './provider-registry'
 
@@ -89,11 +90,35 @@ function createDependencies() {
         : null
     }),
   }
+  const catalog = [
+    ['stepfun', 'step-3.5-flash', ['text'], 'free'],
+    ['stepfun', 'step-3.7-flash', ['vision'], 'free'],
+    ['stepfun', 'stepaudio-2.5-tts', ['tts'], 'free'],
+    ['stepfun', 'stepaudio-2.5-asr', ['asr'], 'free'],
+    ['mimo', 'mimo-v2.5', ['text', 'vision'], 'free'],
+    ['mimo', 'mimo-v2.5-tts', ['tts'], 'free'],
+    ['mimo', 'mimo-v2.5-asr', ['asr'], 'free'],
+    ['gemini', 'gemini-3.1-flash-lite', ['text', 'vision'], 'plus'],
+  ].map(([provider, modelId, capabilities, minimumPlanKey], index) => ({
+    id: `catalog-${index}`,
+    provider,
+    modelId,
+    capabilities,
+    minimumPlanKey,
+    enabled: true,
+  })) as ManagedModelDefinition[]
   const dependencies: AiConfigDependencies = {
     credentials,
     mediaRoutes,
     modelRoutes,
     currentPlan: vi.fn(async () => 'plus' as const),
+    managedModelCatalog: {
+      find: vi.fn(async (input) => catalog.find((entry) =>
+        entry.provider === input.provider
+        && entry.modelId === input.modelId
+        && entry.capabilities.includes(input.capability)) ?? null),
+      listEnabled: vi.fn(async () => catalog),
+    },
     openAiCompatibleProfiles: {
         find: vi.fn(async () => customProfile),
         save: vi.fn(async (_workspaceId, profile) => {

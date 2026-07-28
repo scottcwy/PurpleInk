@@ -3,7 +3,12 @@ import {
   type AiProviderId,
   type ProviderCapability,
 } from './provider-registry'
-import type { PlanKey } from '@/features/billing'
+import { comparePlans, type PlanKey } from '@/features/billing'
+import {
+  managedModelCatalogRepository,
+  type ManagedModelCatalogRepository,
+  type ManagedModelDefinition,
+} from './managed-model-catalog-repository'
 
 export const MANAGED_PROVIDER_IDS = ['stepfun', 'mimo', 'gemini'] as const
 export type ManagedProviderId = (typeof MANAGED_PROVIDER_IDS)[number]
@@ -11,56 +16,7 @@ export type ManagedProviderId = (typeof MANAGED_PROVIDER_IDS)[number]
  * 临时 AI 边界类型。billing 合同合并后改为 type-only import，值集合不得分叉。
  */
 export type ManagedPlanKey = PlanKey
-export interface ManagedModelDefinition {
-  provider: ManagedProviderId
-  modelId: string
-  capabilities: readonly ProviderCapability[]
-}
-/**
- * 托管服务唯一模型白名单。BYOK 模型由用户 profile 校验，不进入此目录。
- */
-export const MANAGED_MODEL_CATALOG = [
-  {
-    provider: 'stepfun',
-    modelId: 'step-3.5-flash',
-    capabilities: ['text'],
-  },
-  {
-    provider: 'stepfun',
-    modelId: 'step-3.7-flash',
-    capabilities: ['vision'],
-  },
-  {
-    provider: 'stepfun',
-    modelId: 'stepaudio-2.5-tts',
-    capabilities: ['tts'],
-  },
-  {
-    provider: 'stepfun',
-    modelId: 'stepaudio-2.5-asr',
-    capabilities: ['asr'],
-  },
-  {
-    provider: 'mimo',
-    modelId: 'mimo-v2.5',
-    capabilities: ['text', 'vision'],
-  },
-  {
-    provider: 'mimo',
-    modelId: 'mimo-v2.5-tts',
-    capabilities: ['tts'],
-  },
-  {
-    provider: 'mimo',
-    modelId: 'mimo-v2.5-asr',
-    capabilities: ['asr'],
-  },
-  {
-    provider: 'gemini',
-    modelId: 'gemini-3.1-flash-lite',
-    capabilities: ['text', 'vision'],
-  },
-] as const satisfies readonly ManagedModelDefinition[]
+export type { ManagedModelCatalogRepository, ManagedModelDefinition }
 
 export type ManagedAiErrorCode =
   | 'MANAGED_GEMINI_FORBIDDEN_FOR_FREE'
@@ -108,36 +64,51 @@ export interface ManagedRouteAuthorizationInput {
   modelId: string
   capability: ProviderCapability
 }
-export interface ManagedRouteAuthorization {
+export type ManagedRouteAuthorization = {
   funding: 'managed' | 'byok'
   deductsManagedPool: boolean
+  catalogId?: string
 }
 
-export function authorizeManagedRoute(
+export async function authorizeManagedRoute(
   input: ManagedRouteAuthorizationInput,
-): ManagedRouteAuthorization {
+  catalog: ManagedModelCatalogRepository = managedModelCatalogRepository,
+): Promise<ManagedRouteAuthorization> {
   if (!isManagedProvider(input.provider)) {
     if (!providerSupports(input.provider, input.capability)) {
       throw modelNotAuthorized()
     }
     return { funding: 'byok', deductsManagedPool: false }
   }
-  if (input.plan === 'free' && input.provider === 'gemini') {
-    throw new ManagedAiError({
-      code: 'MANAGED_GEMINI_FORBIDDEN_FOR_FREE',
-      status: 403,
-      retryable: false,
-      message: 'Free 套餐不可使用 Gemini 托管服务',
-    })
-  }
-  const model = MANAGED_MODEL_CATALOG.find((entry) =>
-    entry.provider === input.provider
-    && entry.modelId === input.modelId
-  )
-  if (!model || !managedModelSupports(model, input.capability)) {
+  const model = await catalog.find({
+    provider: input.provider,
+    modelId: input.modelId,
+    capability: input.capability,
+  })
+  if (!model || !model.enabled) {
     throw modelNotAuthorized()
   }
-  return { funding: 'managed', deductsManagedPool: true }
+  if (comparePlans(input.plan, model.minimumPlanKey) < 0) {
+    if (input.plan === 'free' && input.provider === 'gemini') {
+      throw new ManagedAiError({
+        code: 'MANAGED_GEMINI_FORBIDDEN_FOR_FREE',
+        status: 403,
+        retryable: false,
+        message: 'Free 套餐不可使用 Gemini 托管服务',
+      })
+    }
+    throw new ManagedAiError({
+      code: 'MANAGED_MODEL_NOT_AUTHORIZED',
+      status: 403,
+      retryable: false,
+      message: '当前套餐不可使用所选托管模型',
+    })
+  }
+  return {
+    funding: 'managed',
+    deductsManagedPool: true,
+    catalogId: model.id,
+  }
 }
 
 export interface FilterFallbacksInput {
@@ -148,16 +119,18 @@ export interface FilterFallbacksInput {
 /**
  * 只过滤调用方已经显式配置的候选，保持顺序；不会凭空添加或替换 provider。
  */
-export function filterAuthorizedFallbacks(
+export async function filterAuthorizedFallbacks(
   input: FilterFallbacksInput,
-): AiProviderId[] {
+  catalog: ManagedModelCatalogRepository = managedModelCatalogRepository,
+): Promise<AiProviderId[]> {
+  const models = await catalog.listEnabled()
   return [...new Set(input.candidates)].filter((provider) => {
     if (!providerSupports(provider, input.capability)) return false
     if (!isManagedProvider(provider)) return true
-    if (input.plan === 'free' && provider === 'gemini') return false
-    return MANAGED_MODEL_CATALOG.some((entry) =>
+    return models.some((entry) =>
       entry.provider === provider
-      && managedModelSupports(entry, input.capability)
+      && entry.capabilities.includes(input.capability)
+      && comparePlans(input.plan, entry.minimumPlanKey) >= 0
     )
   })
 }
@@ -240,11 +213,4 @@ function modelNotAuthorized(): ManagedAiError {
     retryable: false,
     message: '当前套餐不可使用所选托管模型',
   })
-}
-
-function managedModelSupports(
-  model: ManagedModelDefinition,
-  capability: ProviderCapability,
-): boolean {
-  return model.capabilities.includes(capability)
 }

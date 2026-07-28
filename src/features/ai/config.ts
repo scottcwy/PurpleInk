@@ -22,6 +22,10 @@ import {
   type OpenAiCompatibleProfileStore,
 } from './openai-compatible-profile-store'
 import { resolveManagedCredential } from './managed-credentials'
+import {
+  managedModelCatalogRepository,
+  type ManagedModelCatalogRepository,
+} from './managed-model-catalog-repository'
 import { RouteContractError } from './route-contract-error'
 
 export type StepfunModelField =
@@ -64,6 +68,8 @@ export interface AiConfigDependencies {
   fallbackProviders?: FallbackProviderStore
   /** 当前 workspace 套餐；测试可注入，默认经 billing 公共投影读取。 */
   currentPlan?: () => Promise<PlanKey>
+  /** 托管模型授权目录；生产环境唯一实现读取 Postgres。 */
+  managedModelCatalog?: ManagedModelCatalogRepository
 }
 
 const credentials = new PostgresProviderCredentialStore(getDb)
@@ -76,6 +82,7 @@ const dependencies: AiConfigDependencies = {
     new PostgresOpenAiCompatibleAudioProfileStore(getDb),
   fallbackProviders: new PostgresFallbackProviderStore(getDb),
   currentPlan: getCurrentPlanKey,
+  managedModelCatalog: managedModelCatalogRepository,
 }
 
 const DEFAULTS: Record<StepfunModelField, string> = {

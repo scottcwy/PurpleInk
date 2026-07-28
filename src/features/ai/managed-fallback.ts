@@ -26,11 +26,11 @@ export async function resolveAuthorizedFallback(input: {
   const fallback =
     (await input.deps.fallbackProviders?.find(currentWorkspaceId())) ?? null
   const [authorizedFallback] = fallback
-    ? filterAuthorizedFallbacks({
+    ? await filterAuthorizedFallbacks({
         plan: input.plan,
         capability: input.capability,
         candidates: [fallback],
-      })
+      }, input.deps.managedModelCatalog)
     : []
   if (
     !fallback ||
@@ -44,12 +44,13 @@ export async function resolveAuthorizedFallback(input: {
   const defaults = await providerDefaults(authorizedFallback, input.deps)
   if (!defaults.apiKey) throw new ProviderUnavailableError()
   const modelId = defaults.modelFor(input.target, input.capability)
-  const authorization = authorizeManagedRoute({
+  const authorization = await authorizeManagedRoute({
     plan: input.plan,
     provider: authorizedFallback,
     modelId,
     capability: input.capability,
-  })
+  }, input.deps.managedModelCatalog)
+  const { catalogId: _catalogId, ...publicAuthorization } = authorization
   console.warn('[ai] provider_fallback', {
     from: input.primary,
     to: authorizedFallback,
@@ -59,7 +60,7 @@ export async function resolveAuthorizedFallback(input: {
     baseUrl: defaults.baseUrl,
     modelId,
     apiKey: defaults.apiKey,
-    ...authorization,
+    ...publicAuthorization,
     degradedFrom: input.primary,
   }
 }

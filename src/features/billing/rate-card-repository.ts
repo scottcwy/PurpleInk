@@ -16,6 +16,7 @@ export interface CurrentRateCard {
 }
 
 export async function getCurrentRateCard(input: {
+  catalogId?: string
   provider: string
   model: string
   capability: 'text' | 'vision' | 'tts' | 'asr'
@@ -34,9 +35,13 @@ export async function getCurrentRateCard(input: {
       eq(rateCards.catalogId, managedModelCatalog.id),
     )
     .where(and(
-      eq(managedModelCatalog.provider, input.provider),
-      eq(managedModelCatalog.model, input.model),
-      eq(managedModelCatalog.capability, input.capability),
+      input.catalogId
+        ? eq(managedModelCatalog.id, input.catalogId)
+        : and(
+            eq(managedModelCatalog.provider, input.provider),
+            eq(managedModelCatalog.model, input.model),
+            eq(managedModelCatalog.capability, input.capability),
+          ),
       eq(managedModelCatalog.enabled, true),
       lte(rateCards.effectiveAt, now),
       or(isNull(rateCards.retiredAt), gt(rateCards.retiredAt, now)),

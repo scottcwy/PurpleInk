@@ -1,6 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
-  MANAGED_MODEL_CATALOG,
   ManagedAiError,
   authorizeManagedRoute,
   filterAuthorizedFallbacks,
@@ -8,10 +7,55 @@ import {
   managedUpstreamError,
   type ManagedUsage,
 } from './managed-service'
+import type {
+  ManagedModelCatalogRepository,
+  ManagedModelDefinition,
+} from './managed-model-catalog-repository'
+
+vi.mock('server-only', () => ({}))
+
+const CATALOG: ManagedModelDefinition[] = [
+  {
+    id: 'step-text',
+    provider: 'stepfun',
+    modelId: 'step-3.5-flash',
+    capabilities: ['text'],
+    minimumPlanKey: 'free',
+    enabled: true,
+  },
+  {
+    id: 'mimo-tts',
+    provider: 'mimo',
+    modelId: 'mimo-v2.5-tts',
+    capabilities: ['tts'],
+    minimumPlanKey: 'free',
+    enabled: true,
+  },
+  {
+    id: 'gemini',
+    provider: 'gemini',
+    modelId: 'gemini-3.1-flash-lite',
+    capabilities: ['text', 'vision'],
+    minimumPlanKey: 'plus',
+    enabled: true,
+  },
+]
+
+const catalog: ManagedModelCatalogRepository = {
+  async find(input) {
+    return CATALOG.find((model) =>
+      model.provider === input.provider
+      && model.modelId === input.modelId
+      && model.capabilities.includes(input.capability)) ?? null
+  },
+  async listEnabled() {
+    return CATALOG
+  },
+}
 
 describe('managed model authorization', () => {
-  it('keeps the managed catalog explicit and capability-bound', () => {
-    expect(MANAGED_MODEL_CATALOG).toEqual(expect.arrayContaining([
+  it('keeps the managed catalog explicit and capability-bound', async () => {
+    await expect(catalog.listEnabled()).resolves.toEqual(expect.arrayContaining([
       expect.objectContaining({
         provider: 'stepfun',
         modelId: 'step-3.5-flash',
@@ -30,67 +74,69 @@ describe('managed model authorization', () => {
     ]))
   })
 
-  it('rejects Gemini for Free with a stable 403 code', () => {
-    expect(() => authorizeManagedRoute({
+  it('rejects Gemini for Free with a stable 403 code', async () => {
+    await expect(authorizeManagedRoute({
       plan: 'free',
       provider: 'gemini',
       modelId: 'gemini-3.1-flash-lite',
       capability: 'text',
-    })).toThrow(expect.objectContaining({
+    }, catalog)).rejects.toMatchObject({
       name: 'ManagedAiError',
       code: 'MANAGED_GEMINI_FORBIDDEN_FOR_FREE',
       status: 403,
       retryable: false,
-    }))
+    })
   })
 
-  it('authorizes managed models for eligible plans and charges the pool', () => {
-    expect(authorizeManagedRoute({
+  it('authorizes managed models for eligible plans and charges the pool', async () => {
+    await expect(authorizeManagedRoute({
       plan: 'plus',
       provider: 'gemini',
       modelId: 'gemini-3.1-flash-lite',
       capability: 'text',
-    })).toEqual({
+    }, catalog)).resolves.toEqual({
       funding: 'managed',
       deductsManagedPool: true,
+      catalogId: 'gemini',
     })
-    expect(authorizeManagedRoute({
+    await expect(authorizeManagedRoute({
       plan: 'plus',
       provider: 'gemini',
       modelId: 'gemini-3.1-flash-lite',
       capability: 'vision',
-    })).toEqual({
+    }, catalog)).resolves.toEqual({
       funding: 'managed',
       deductsManagedPool: true,
+      catalogId: 'gemini',
     })
   })
 
-  it('rejects unpriced legacy Gemini models from managed execution', () => {
-    expect(() => authorizeManagedRoute({
+  it('rejects unpriced legacy Gemini models from managed execution', async () => {
+    await expect(authorizeManagedRoute({
       plan: 'plus',
       provider: 'gemini',
       modelId: 'gemini-3.6-flash',
       capability: 'vision',
-    })).toThrow(expect.objectContaining({
+    }, catalog)).rejects.toMatchObject({
       code: 'MANAGED_MODEL_NOT_AUTHORIZED',
       status: 403,
-    }))
+    })
   })
 
-  it('keeps custom OpenAI-compatible routes as BYOK without pool deduction', () => {
-    expect(authorizeManagedRoute({
+  it('keeps custom OpenAI-compatible routes as BYOK without pool deduction', async () => {
+    await expect(authorizeManagedRoute({
       plan: 'free',
       provider: 'openai-compatible',
       modelId: 'customer-selected-model',
       capability: 'text',
-    })).toEqual({
+    }, catalog)).resolves.toEqual({
       funding: 'byok',
       deductsManagedPool: false,
     })
   })
 
-  it('filters fallback candidates by plan, capability, and funding mode', () => {
-    expect(filterAuthorizedFallbacks({
+  it('filters fallback candidates by plan, capability, and funding mode', async () => {
+    await expect(filterAuthorizedFallbacks({
       plan: 'free',
       capability: 'text',
       candidates: [
@@ -99,7 +145,7 @@ describe('managed model authorization', () => {
         'openai-compatible',
         'openai-compatible-tts',
       ],
-    })).toEqual(['stepfun', 'openai-compatible'])
+    }, catalog)).resolves.toEqual(['stepfun', 'openai-compatible'])
   })
 })
 

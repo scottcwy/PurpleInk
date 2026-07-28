@@ -11,11 +11,8 @@ import {
 } from './openai-compatible-audio-config'
 import { describeOpenAiCompatibleProfile } from './openai-compatible-config'
 import { resolveManagedCredential } from './managed-credentials'
-import {
-  MANAGED_MODEL_CATALOG,
-  MANAGED_PROVIDER_IDS,
-  type ManagedProviderId,
-} from './managed-service'
+import { managedModelCatalogRepository } from './managed-model-catalog-repository'
+import { MANAGED_PROVIDER_IDS, type ManagedProviderId } from './managed-service'
 import {
   audioDependencies,
   customOpenAiDependencies,
@@ -41,6 +38,7 @@ export async function describeProviderSettings() {
     geminiCredential,
     mimoCredential,
     models,
+    managedCatalog,
     gemini,
     mimo,
     routes,
@@ -54,6 +52,7 @@ export async function describeProviderSettings() {
     Promise.resolve(managedCredential('gemini')),
     Promise.resolve(managedCredential('mimo')),
     describeStepfunConfig(),
+    managedModelCatalogRepository.listEnabled(),
     describeGeminiConfig(),
     describeMimoConfig(),
     describeDirectorRoutes(),
@@ -77,11 +76,11 @@ export async function describeProviderSettings() {
     managedProviders: MANAGED_PROVIDER_IDS.map((provider) => ({
       provider,
       ...managedCredential(provider),
-      models: MANAGED_MODEL_CATALOG.filter((model) =>
-        model.provider === provider && !(plan === 'free' && provider === 'gemini')),
+      models: managedCatalog.filter((model) =>
+        model.provider === provider && planCanUse(plan, model.minimumPlanKey)),
     })),
-    availableCatalog: MANAGED_MODEL_CATALOG.filter((model) =>
-      !(plan === 'free' && model.provider === 'gemini')),
+    availableCatalog: managedCatalog.filter((model) =>
+      planCanUse(plan, model.minimumPlanKey)),
     routes,
     // ISSUE-011: 队列并发配额真值。优先级 DB > env > 代码默认，由 `runtime-config.ts` 统一提供。
     // `source = 'settings' | 'env' | 'default'` 让 UI 能透出真值来自哪里。
@@ -91,4 +90,12 @@ export async function describeProviderSettings() {
     customOpenAiAsr,
     fallbackProvider,
   }
+}
+
+function planCanUse(
+  plan: 'free' | 'plus' | 'pro' | 'max',
+  minimum: 'free' | 'plus' | 'pro' | 'max',
+): boolean {
+  const rank = { free: 0, plus: 1, pro: 2, max: 3 } as const
+  return rank[plan] >= rank[minimum]
 }

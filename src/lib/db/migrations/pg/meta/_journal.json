@@ -64,6 +64,13 @@
       "when": 1785236874938,
       "tag": "0008_lively_aqueduct",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785312000000,
+      "tag": "0009_billing_catalog_truth",
+      "breakpoints": true
     }
   ]
 }
