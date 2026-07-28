@@ -42,3 +42,7 @@ export {
   getCurrentRateCard,
   type CurrentRateCard,
 } from './rate-card-repository'
+export {
+  billingInvocationNo,
+  type BillingInvocationScope,
+} from './invocation-number'

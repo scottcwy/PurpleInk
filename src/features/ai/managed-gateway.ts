@@ -77,7 +77,11 @@ export interface ManagedAiHandle {
   funding: 'managed' | 'byok'
   deductsManagedPool: boolean
   credential: string | null
-  settle: (usage: ManagedUsage, outputHash?: string) => Promise<void>
+  settle: (
+    usage: ManagedUsage,
+    outputHash?: string,
+    failed?: boolean,
+  ) => Promise<void>
   settleUnavailable: (failed?: boolean) => Promise<void>
   releaseBeforeCall: () => Promise<void>
 }
@@ -137,6 +141,7 @@ export class ManagedAiGateway {
       invocationId,
       credential,
       prices: rateCard.prices,
+      maximumCostCnyMicros,
     })
   }
 
@@ -145,6 +150,7 @@ export class ManagedAiGateway {
     invocationId: string
     credential: string
     prices: Parameters<typeof calculateActualCost>[0]
+    maximumCostCnyMicros: bigint
   }): ManagedAiHandle {
     let terminal: Promise<void> | null = null
     const once = (action: () => Promise<void>): Promise<void> => {
@@ -161,7 +167,7 @@ export class ManagedAiGateway {
       funding: 'managed',
       deductsManagedPool: true,
       credential: input.credential,
-      settle: (usage, outputHash) => once(async () => {
+      settle: (usage, outputHash, failed = false) => once(async () => {
         validateOutputHash(outputHash)
         const billable = billableUsage(input.input.capability, usage)
         await this.dependencies.settleManagedInvocation({
@@ -171,7 +177,7 @@ export class ManagedAiGateway {
             billable,
           ),
           usageStatus: 'reported',
-          invocationStatus: 'succeeded',
+          invocationStatus: failed ? 'failed' : 'succeeded',
           outputHash,
           usage: {
             schemaVersion: 1,
@@ -183,7 +189,7 @@ export class ManagedAiGateway {
       settleUnavailable: (failed = false) => once(() =>
         this.dependencies.settleManagedInvocation({
           invocationId: input.invocationId,
-          actualCostCnyMicros: BigInt(0),
+          actualCostCnyMicros: input.maximumCostCnyMicros,
           usageStatus: 'unavailable',
           invocationStatus: failed ? 'failed' : 'succeeded',
           usage: {

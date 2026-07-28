@@ -243,7 +243,7 @@ describe('ManagedAiGateway', () => {
     await failed.settleUnavailable(true)
     expect(failedDeps.settleManagedInvocation).toHaveBeenCalledWith({
       invocationId: failed.invocationId,
-      actualCostCnyMicros: BigInt(0),
+      actualCostCnyMicros: BigInt(100),
       usageStatus: 'unavailable',
       invocationStatus: 'failed',
       usage: { schemaVersion: 1, capability: 'text', unavailable: true },

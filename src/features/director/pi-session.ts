@@ -1,7 +1,6 @@
 import 'server-only'
-import { createHash } from 'node:crypto'
 import { Agent } from '@earendil-works/pi-agent-core'
-import { ManagedAiGateway, type ManagedAiHandle } from '@/features/ai'
+import { ManagedAiGateway } from '@/features/ai'
 import {
   recordProviderFailure,
   recordProviderSuccess,
@@ -14,6 +13,7 @@ import {
 } from './pi-output'
 import { createDirectorModelRuntime } from './pi-provider'
 import { createDirectorRunBridge } from './pi-stream-bridge'
+import { createDirectorBillingStream } from './director-billing-stream'
 import { adaptDirectorTools } from './pi-tool-adapter'
 import { DirectorSessionStore } from './session-store'
 import type { PipelineStage } from './types'
@@ -91,6 +91,8 @@ export async function createDirectorSession(
       appendMessage: (message) => stored.session.appendMessage(message),
     })
     let upstreamFailureStatus: number | null = null
+    const gateway = new ManagedAiGateway()
+    let invocationIndex = 0
     const agent = new Agent({
       initialState: {
         systemPrompt: buildDirectorSystemPrompt(input.stage),
@@ -98,8 +100,17 @@ export async function createDirectorSession(
         messages: [...restored.messages],
         tools: [],
       },
-      streamFn: (model, context, options) =>
-        runtime.models.streamSimple(model, context, options),
+      streamFn: (model, context, options) => createDirectorBillingStream({
+        model,
+        context,
+        options,
+        runtime,
+        attemptId: input.attemptId,
+        invocationIndex: ++invocationIndex,
+        gateway,
+        streamSimple: (nextModel, nextContext, nextOptions) =>
+          runtime.models.streamSimple(nextModel, nextContext, nextOptions),
+      }),
       getApiKey: () => runtime.apiKey,
       onResponse: (response) => {
         if (response.status >= 400 && response.status <= 599) {
@@ -108,8 +119,6 @@ export async function createDirectorSession(
       },
     })
     const unsubscribe = agent.subscribe(bridge.listener)
-    const gateway = new ManagedAiGateway()
-    let invocationNo = 0
     let closed = false
     return {
       id: stored.id,
@@ -117,38 +126,12 @@ export async function createDirectorSession(
       run: async (runInput) => {
         bridge.beginRun()
         agent.state.tools = adaptDirectorTools(runInput.tools)
-        const handle = await beginManagedDirectorInvocation({
-          gateway,
-          runtime,
-          attemptId: input.attemptId,
-          invocationNo: ++invocationNo,
-          prompt: runInput.prompt,
-          billingInput: JSON.stringify({
-            systemPrompt: buildDirectorSystemPrompt(input.stage),
-            messages: agent.state.messages,
-            prompt: runInput.prompt,
-            tools: runInput.tools?.map(({ name, description, parameters }) => ({
-              name,
-              description,
-              parameters,
-            })) ?? [],
-          }),
-        })
-        let providerStarted = false
         try {
-          providerStarted = true
           await agent.prompt(runInput.prompt)
           await agent.waitForIdle()
           assertRunSucceeded(agent, runtime, upstreamFailureStatus)
-          await settleDirectorInvocation(handle, bridge.runUsage())
           return extractDirectorOutput(bridge.runMessages(), runInput.output)
         } catch (error) {
-          if (handle) {
-            const usage = bridge.runUsage()
-            if (providerStarted && usage) await handle.settle(usage)
-            else if (providerStarted) await handle.settleUnavailable(true)
-            else await handle.releaseBeforeCall()
-          }
           // pi 在部分流式失败中会从 prompt() 直接 reject，而不会走到下方
           // assertRunSucceeded。只要本次请求已观察到 HTTP 状态或 Agent 已投影
           // 为 provider error，仍必须收敛成稳定的 DirectorRunError，避免让 4xx
@@ -174,49 +157,6 @@ export async function createDirectorSession(
     await store.close()
     throw error
   }
-}
-
-async function beginManagedDirectorInvocation(input: {
-  gateway: ManagedAiGateway
-  runtime: {
-    providerId: Parameters<ManagedAiGateway['begin']>[0]['provider']
-    modelId: string
-    maxOutputTokens: number
-    deductsManagedPool: boolean
-  }
-  attemptId?: string
-  invocationNo: number
-  prompt: string
-  billingInput: string
-}): Promise<ManagedAiHandle | null> {
-  if (!input.runtime.deductsManagedPool) return null
-  if (!input.attemptId) {
-    throw new Error('托管 Director 调用缺少可审计的 attemptId')
-  }
-  return input.gateway.begin({
-    attemptId: input.attemptId,
-    invocationNo: input.invocationNo,
-    provider: input.runtime.providerId,
-    model: input.runtime.modelId,
-    capability: 'text',
-    rawInput: input.billingInput,
-    maxOutputTokens: input.runtime.maxOutputTokens,
-  })
-}
-
-async function settleDirectorInvocation(
-  handle: ManagedAiHandle | null,
-  usage: ReturnType<ReturnType<typeof createDirectorRunBridge>['runUsage']>,
-): Promise<void> {
-  if (!handle) return
-  if (!usage) {
-    await handle.settleUnavailable()
-    return
-  }
-  const usageHash = createHash('sha256')
-    .update(JSON.stringify(usage))
-    .digest('hex')
-  await handle.settle(usage, usageHash)
 }
 
 /**

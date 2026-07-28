@@ -1,6 +1,5 @@
 import 'server-only'
 import type { AgentEvent, AgentMessage } from '@earendil-works/pi-agent-core'
-import type { ManagedUsage } from '@/features/ai'
 import { streamBus } from '@/lib/stream/stream-bus'
 import type { DirectorAgentMessage } from './pi-output'
 import {
@@ -16,8 +15,6 @@ export interface DirectorRunBridge {
   beginRun(): void
   /** 本轮（不含恢复历史）产生的消息，按输出提取器契约投影。 */
   runMessages(): DirectorAgentMessage[]
-  /** 本轮所有 assistant 调用的标准化 Token 用量；任一响应缺失用量时返回 null。 */
-  runUsage(): ManagedUsage | null
 }
 
 /**
@@ -40,9 +37,6 @@ export function createDirectorRunBridge(input: {
     runMessages() {
       return toDirectorMessages(messages)
     },
-    runUsage() {
-      return aggregateTextUsage(messages)
-    },
     listener: async (event) => {
       if (event.type === 'message_update') {
         const delta = nextDelta(streamedText, assistantVisibleText(event.message))
@@ -57,41 +51,6 @@ export function createDirectorRunBridge(input: {
       }
     },
   }
-}
-
-function aggregateTextUsage(messages: readonly AgentMessage[]): ManagedUsage | null {
-  const assistants = messages.filter((message) => message.role === 'assistant')
-  if (assistants.length === 0) return null
-  let inputTokens = 0
-  let cachedInputTokens = 0
-  let outputTokens = 0
-  let reasoningTokens = 0
-  for (const message of assistants) {
-    const usage = message.usage
-    if (
-      !isUsageNumber(usage?.input)
-      || !isUsageNumber(usage?.output)
-      || !isUsageNumber(usage?.cacheRead)
-      || !isUsageNumber(usage?.cacheWrite)
-    ) {
-      return null
-    }
-    inputTokens += usage.input
-    cachedInputTokens += usage.cacheRead + usage.cacheWrite
-    outputTokens += usage.output
-    reasoningTokens += isUsageNumber(usage.reasoning) ? usage.reasoning : 0
-  }
-  return {
-    kind: 'text',
-    inputTokens,
-    cachedInputTokens,
-    outputTokens,
-    reasoningTokens,
-  }
-}
-
-function isUsageNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
 /**

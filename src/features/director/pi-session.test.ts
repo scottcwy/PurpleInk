@@ -217,59 +217,6 @@ describe('createDirectorSession', () => {
     expect(agent.state.systemPrompt).not.toContain('Skill')
   })
 
-  it('reserves and settles managed Director usage with the queue attempt id', async () => {
-    mocks.resolveDirectorModelTarget.mockReturnValueOnce({
-      provider: 'stepfun',
-      baseUrl: 'https://api.stepfun.test/v1',
-      modelId: 'step-3.5-flash',
-      apiKey: 'managed-key',
-      funding: 'managed',
-      deductsManagedPool: true,
-    })
-    mocks.promptMessages.push([
-      { role: 'user', content: [{ type: 'text', text: '执行' }], timestamp: 2 },
-      {
-        role: 'assistant',
-        content: [{ type: 'text', text: '完成' }],
-        timestamp: 3,
-        stopReason: 'stop',
-        usage: {
-          input: 120,
-          output: 30,
-          cacheRead: 20,
-          cacheWrite: 10,
-          reasoning: 5,
-          totalTokens: 180,
-          cost: {},
-        },
-      },
-    ])
-    const session = await createDirectorSession({
-      projectId: 'project-1',
-      nodeId: 'node-1',
-      attemptId: 'attempt-1',
-      stage: 'DIRECT',
-    })
-
-    await session.run({ prompt: '执行', output: assistantOutput })
-
-    expect(mocks.gatewayBegin).toHaveBeenCalledWith(expect.objectContaining({
-      attemptId: 'attempt-1',
-      invocationNo: 1,
-      provider: 'stepfun',
-      model: 'step-3.5-flash',
-      capability: 'text',
-      rawInput: expect.stringContaining('"prompt":"执行"'),
-    }))
-    expect(mocks.gatewaySettle).toHaveBeenCalledWith({
-      kind: 'text',
-      inputTokens: 120,
-      cachedInputTokens: 30,
-      outputTokens: 30,
-      reasoningTokens: 5,
-    }, expect.stringMatching(/^[0-9a-f]{64}$/))
-  })
-
   it('closes the subscription and session store', async () => {
     const session = await createDirectorSession({
       projectId: 'project-1',
