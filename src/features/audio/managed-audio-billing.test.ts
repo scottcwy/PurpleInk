@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { QuotaExhaustedError } from '@/features/billing'
 import type { ManagedAiHandle } from '@/features/ai'
@@ -49,6 +50,9 @@ describe('managed audio billing adapter', () => {
       input: '真实旁白',
       invoke,
       outputBytes: (bytes) => bytes,
+      usageFromResult: () => ({
+        kind: 'tts', inputCharacters: 4, outputAudioSeconds: 1,
+      }),
     }, dependencies)).rejects.toBeInstanceOf(QuotaExhaustedError)
 
     expect(invoke).not.toHaveBeenCalled()
@@ -67,6 +71,9 @@ describe('managed audio billing adapter', () => {
       input: '旁白',
       invoke: vi.fn(async () => Buffer.from('audio')),
       outputBytes: (bytes) => bytes,
+      usageFromResult: () => ({
+        kind: 'tts', inputCharacters: 2, outputAudioSeconds: 1.5,
+      }),
     }, dependencies)).resolves.toEqual(Buffer.from('audio'))
 
     expect(dependencies.gateway.begin).toHaveBeenCalledWith({
@@ -78,8 +85,12 @@ describe('managed audio billing adapter', () => {
       rawInput: '旁白',
       ttsEstimate: { characters: 2 },
     })
-    expect(handle.settleUnavailable).toHaveBeenCalledWith()
-    expect(handle.settle).not.toHaveBeenCalled()
+    expect(handle.settle).toHaveBeenCalledWith({
+      kind: 'tts',
+      inputCharacters: 2,
+      outputAudioSeconds: 1.5,
+    }, createHash('sha256').update('audio').digest('hex'))
+    expect(handle.settleUnavailable).not.toHaveBeenCalled()
   })
 
   it('settles provider failures as unavailable and exposes only the safe error', async () => {
@@ -96,6 +107,9 @@ describe('managed audio billing adapter', () => {
         throw new Error('raw provider body')
       }),
       outputBytes: (bytes: Buffer) => bytes,
+      usageFromResult: () => ({
+        kind: 'tts', inputCharacters: 2, outputAudioSeconds: 1,
+      }),
     }, dependencies)).rejects.toMatchObject({
       code: 'MANAGED_UPSTREAM_FAILED',
       message: '托管 AI 服务本次执行失败，请稍后重试',
@@ -120,6 +134,9 @@ describe('managed audio billing adapter', () => {
       }),
       invoke,
       outputBytes: (bytes) => bytes,
+      usageFromResult: () => ({
+        kind: 'tts', inputCharacters: 2, outputAudioSeconds: 1,
+      }),
     }, dependencies)).rejects.toThrow('prepare failed')
 
     expect(invoke).not.toHaveBeenCalled()
@@ -140,6 +157,9 @@ describe('managed audio billing adapter', () => {
       input: audio,
       invoke: vi.fn(async () => '转写'),
       outputBytes: (transcript) => transcript,
+      usageFromResult: () => ({
+        kind: 'asr', inputAudioSeconds: 1.25,
+      }),
     }, dependencies)
 
     expect(dependencies.gateway.begin).toHaveBeenCalledWith({
@@ -151,6 +171,9 @@ describe('managed audio billing adapter', () => {
       rawInput: audio,
       asrEstimate: { audioSeconds: 1.25 },
     })
-    expect(handle.settleUnavailable).toHaveBeenCalledWith()
+    expect(handle.settle).toHaveBeenCalledWith({
+      kind: 'asr',
+      inputAudioSeconds: 1.25,
+    }, createHash('sha256').update('转写').digest('hex'))
   })
 })

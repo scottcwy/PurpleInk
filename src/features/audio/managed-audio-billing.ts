@@ -1,4 +1,5 @@
 import 'server-only'
+import { createHash } from 'node:crypto'
 import {
   ManagedAiGateway,
   managedUpstreamError,
@@ -24,6 +25,7 @@ export interface ManagedAudioBillingInput<T> {
   prepare?: () => Promise<void>
   invoke: () => Promise<T>
   outputBytes: (result: T) => string | Uint8Array
+  usageFromResult: (result: T) => Parameters<ManagedAiHandle['settle']>[0]
 }
 
 export interface ManagedAudioBillingDependencies {
@@ -60,7 +62,10 @@ export async function runManagedAudioBilling<T>(
     await handle.settleUnavailable(true)
     throw managedUpstreamError(error)
   }
-  await handle.settleUnavailable()
+  const outputHash = createHash('sha256')
+    .update(input.outputBytes(result))
+    .digest('hex')
+  await handle.settle(input.usageFromResult(result), outputHash)
   return result
 }
 

@@ -124,7 +124,7 @@ describe('media narration queue', () => {
     expect(run).toHaveBeenCalledWith({
       projectId: 'project-1',
       nodeId: 'ingest-1',
-      billingContext: { attemptId: 'attempt-1', invocationNo: 1 },
+      billingContext: { attemptId: 'attempt-1', invocationNo: 10_000 },
     })
   })
 

@@ -217,13 +217,18 @@ export async function synthesizeRoutedSpeech(
     model: target.model,
     capability: 'tts',
     billingContext: input.billingContext,
-    estimate: { kind: 'tts', characters: input.text.length },
+    estimate: { kind: 'tts', characters: Array.from(input.text).length },
     input: input.text,
     prepare: async () => {
       requireManagedCredential(managedProvider)
     },
     invoke,
     outputBytes: (speech) => speech.audioBytes,
+    usageFromResult: (speech) => ({
+      kind: 'tts',
+      inputCharacters: Array.from(input.text).length,
+      outputAudioSeconds: Math.max(0, speech.durationMs / 1_000),
+    }),
   })
 }
 
@@ -283,6 +288,10 @@ export async function transcribeRoutedSpeech(
     },
     invoke,
     outputBytes: (speech) => speech.transcript,
+    usageFromResult: () => ({
+      kind: 'asr',
+      inputAudioSeconds: audioSeconds!,
+    }),
   })
 }
 

@@ -1,4 +1,5 @@
 import 'server-only'
+import { billingInvocationNo } from '@/features/billing'
 import { createHash } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
@@ -120,7 +121,7 @@ export function registerMediaNarrationHandler(
       ...job.payload,
       billingContext: {
         attemptId: job.id,
-        invocationNo: 1,
+        invocationNo: billingInvocationNo('narration', 1),
       },
     }))
   })
