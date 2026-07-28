@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => {
       messages: unknown[]
       errorMessage?: string
     }
+    readonly onResponse?: (response: { status: number }, model: unknown) => Promise<void> | void
 
     constructor(options: {
       initialState?: {
@@ -38,6 +39,7 @@ const mocks = vi.hoisted(() => {
         tools?: unknown[]
         messages?: unknown[]
       }
+      onResponse?: (response: { status: number }, model: unknown) => Promise<void> | void
     }) {
       this.state = {
         systemPrompt: options.initialState?.systemPrompt ?? '',
@@ -45,6 +47,7 @@ const mocks = vi.hoisted(() => {
         tools: options.initialState?.tools ?? [],
         messages: options.initialState?.messages ?? [],
       }
+      this.onResponse = options.onResponse
       agentInstances.push(this)
     }
 
@@ -518,7 +521,8 @@ describe('createDirectorSession', () => {
       nodeId: 'node-1',
       stage: 'INGEST',
     })
-    mocks.agentInstances[0]!.state.errorMessage = 'provider HTTP 402; raw_response=secret'
+    mocks.agentInstances[0]!.state.errorMessage = 'provider request rejected'
+    await mocks.agentInstances[0]!.onResponse?.({ status: 402 }, {})
 
     await expect(
       session.run({ prompt: '执行阶段', output: assistantOutput })

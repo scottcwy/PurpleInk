@@ -90,6 +90,7 @@ export async function createDirectorSession(
       streamKey: `${input.projectId}:${input.nodeId}`,
       appendMessage: (message) => stored.session.appendMessage(message),
     })
+    let upstreamFailureStatus: number | null = null
     const agent = new Agent({
       initialState: {
         systemPrompt: buildDirectorSystemPrompt(input.stage),
@@ -100,6 +101,11 @@ export async function createDirectorSession(
       streamFn: (model, context, options) =>
         runtime.models.streamSimple(model, context, options),
       getApiKey: () => runtime.apiKey,
+      onResponse: (response) => {
+        if (response.status >= 400 && response.status <= 599) {
+          upstreamFailureStatus = response.status
+        }
+      },
     })
     const unsubscribe = agent.subscribe(bridge.listener)
     const gateway = new ManagedAiGateway()
@@ -133,7 +139,7 @@ export async function createDirectorSession(
           providerStarted = true
           await agent.prompt(runInput.prompt)
           await agent.waitForIdle()
-          assertRunSucceeded(agent, runtime)
+          assertRunSucceeded(agent, runtime, upstreamFailureStatus)
           await settleDirectorInvocation(handle, bridge.runUsage())
           return extractDirectorOutput(bridge.runMessages(), runInput.output)
         } catch (error) {
@@ -215,6 +221,7 @@ async function settleDirectorInvocation(
 function assertRunSucceeded(
   agent: Agent,
   runtime: { providerId: string; routeLabel: string },
+  responseStatus: number | null,
 ): void {
   const errorMessage = agent.state.errorMessage
   if (!errorMessage) {
@@ -226,7 +233,10 @@ function assertRunSucceeded(
     route: runtime.routeLabel,
     code: 'DIRECTOR_RUN_FAILED',
   })
-  throw new DirectorRunError(runtime.routeLabel, upstreamHttpStatus(errorMessage))
+  throw new DirectorRunError(
+    runtime.routeLabel,
+    responseStatus ?? upstreamHttpStatus(errorMessage),
+  )
 }
 
 /** 仅保留上游 HTTP 状态码，不能把 provider 原始报文带入工作流错误面。 */
