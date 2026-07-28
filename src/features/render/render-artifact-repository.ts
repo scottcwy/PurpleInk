@@ -23,6 +23,14 @@ export interface FinalArtifactInput {
   sizeBytes: number
 }
 
+/** 降级导出的占位清单产物（JSON 字节）：与 final-mp4 同一 project attempt 提交。 */
+export interface DegradedManifestInput {
+  projectId: string
+  storageKey: string
+  contentHash: string
+  sizeBytes: number
+}
+
 export interface FinalArtifactRecord {
   artifactId: string
   path: string
@@ -97,6 +105,35 @@ export class RenderArtifactRepository extends RenderShotRepository {
           schemaVersion: row.schemaVersion,
         }
       : null
+  }
+
+  /**
+   * 登记降级导出的占位清单（真实 JSON 字节已落盘）。内容含 `finalContentHash`
+   * 与当次 final-mp4 精确对应，读取时据此判定“最新成片是否为降级产物”。
+   */
+  async registerDegradedManifest(
+    input: DegradedManifestInput
+  ): Promise<string> {
+    const database = await this.database()
+    const attemptId = await resolveCurrentAttemptId(database, {
+      workspaceId: LOCAL_WORKSPACE_ID,
+      projectId: input.projectId,
+      aggregateType: 'project',
+      aggregateId: input.projectId,
+    })
+    const committed = await commitArtifactRecord(database, {
+      workspaceId: LOCAL_WORKSPACE_ID,
+      projectId: input.projectId,
+      aggregateType: 'project',
+      aggregateId: input.projectId,
+      kind: 'final-mp4-degraded-manifest',
+      schemaVersion: 'cvc.final-degraded-manifest/v1',
+      storageKey: input.storageKey,
+      sizeBytes: input.sizeBytes,
+      contentHash: input.contentHash,
+      attemptId,
+    })
+    return committed.artifactId
   }
 
   async findThumbnail(

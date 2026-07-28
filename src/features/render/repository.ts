@@ -13,7 +13,12 @@ import {
   loadMediaAssembly,
   type LoadedMediaAssembly,
 } from './media-assembly-loader'
-import type { ExportBlockingIssue, MediaAssemblyPlan } from './media-assembly'
+import type {
+  ArtifactRef,
+  ExportBlockingIssue,
+  MediaAssemblyPlan,
+  PlaceholderCandidate,
+} from './media-assembly'
 import {
   laneKeyOf,
   legacyNodeStatus,
@@ -44,12 +49,25 @@ export interface RenderExportPlan {
   shotQa: Record<string, boolean | null>
   mediaAssemblyPlan: MediaAssemblyPlan | null
   blockingIssues: ExportBlockingIssue[]
+  /** 降级导出待占位的 lane（正常模式恒空）。 */
+  placeholderCandidates: PlaceholderCandidate[]
+  /** 实际使用了占位视频的 lane（正常模式恒空）。 */
+  placeholderLaneKeys: string[]
+  /** 时间轴帧率（生成占位片段用）；ingest 合同缺失时 null。 */
+  fps: number | null
   media: {
     narrationReadyCount: number
     subtitleReadyCount: number
     requiredShotCount: number
     delivery: 'legacy-silent-v1' | 'narration-hard-subtitle-v2'
   }
+}
+
+/** 降级导出：允许缺产物的 lane 用预生成的占位片段顶替出片。 */
+export interface ExportPlanOptions {
+  degraded?: boolean
+  placeholderVideos?: ReadonlyMap<string, ArtifactRef>
+  placeholderNarrations?: ReadonlyMap<string, ArtifactRef>
 }
 
 export interface ShotQaTarget {
@@ -67,7 +85,10 @@ export class RenderRepository extends RenderArtifactRepository {
     super(suppliedDb)
   }
 
-  async getExportPlan(projectId: string): Promise<RenderExportPlan> {
+  async getExportPlan(
+    projectId: string,
+    options: ExportPlanOptions = {}
+  ): Promise<RenderExportPlan> {
     const database = await this.database()
     const [project] = await database
       .select({ exportSettings: projects.exportSettings })
@@ -160,6 +181,13 @@ export class RenderRepository extends RenderArtifactRepository {
       })),
       targetResolution: resolutionForPreset(settings.resolutionPreset),
       musicKey: await this.latestMusicKey(projectId),
+      ...(options.degraded ? { degraded: true } : {}),
+      ...(options.placeholderVideos
+        ? { placeholderVideos: options.placeholderVideos }
+        : {}),
+      ...(options.placeholderNarrations
+        ? { placeholderNarrations: options.placeholderNarrations }
+        : {}),
     })
     return {
       incompleteNodeIds: [...incomplete].sort(),
@@ -170,8 +198,57 @@ export class RenderRepository extends RenderArtifactRepository {
       shotQa,
       mediaAssemblyPlan: media.plan,
       blockingIssues: media.blockingIssues,
+      placeholderCandidates: media.placeholderCandidates,
+      placeholderLaneKeys: media.placeholderLaneKeys,
+      fps: media.fps,
       media: mediaReadiness(media),
     }
+  }
+
+  /**
+   * 最新成片若为降级产物则返回其占位镜头清单，否则 null。
+   * 以占位清单里的 `finalContentHash` 与最新 final-mp4 哈希严格比对，
+   * 跨次导出不会误报（修复后的完整导出无清单 → 最新 final 哈希不匹配 → null）。
+   */
+  async findDegradedExport(
+    projectId: string
+  ): Promise<{ placeholderLanes: string[] } | null> {
+    const final = await this.findLatestFinalArtifact(projectId)
+    if (!final) return null
+    const database = await this.database()
+    const [row] = await database
+      .select({ storageKey: artifacts.storageKey })
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(artifacts.projectId, projectId),
+          eq(artifacts.aggregateType, 'project'),
+          eq(artifacts.aggregateId, projectId),
+          eq(artifacts.kind, 'final-mp4-degraded-manifest')
+        )
+      )
+      .orderBy(desc(artifacts.version), desc(artifacts.createdAt))
+      .limit(1)
+    if (!row) return null
+    try {
+      const parsed = readObject(
+        JSON.parse(
+          (await this.suppliedStorage.get(row.storageKey)).toString('utf-8')
+        ) as unknown
+      )
+      const lanes = parsed.placeholderLanes
+      if (
+        parsed.finalContentHash === final.contentHash &&
+        Array.isArray(lanes) &&
+        lanes.every((lane): lane is string => typeof lane === 'string')
+      ) {
+        return { placeholderLanes: lanes }
+      }
+    } catch {
+      // 清单不可读时保守处理：视为非降级，不阻断 readiness。
+    }
+    return null
   }
 
   async getShotQaTargets(projectId: string): Promise<ShotQaTarget[]> {

@@ -103,11 +103,41 @@ describe('registerExportProjectHandler', () => {
       outputKey: 'exports/final.mp4',
       contentHash: 'a'.repeat(64),
     }))
-    registerExportProjectHandler(adapter, { exportProject })
+    const exportDegradedProject = vi.fn()
+    registerExportProjectHandler(adapter, {
+      exportProject,
+      exportDegradedProject: exportDegradedProject as never,
+    })
 
     await handlers.get(EXPORT_PROJECT_KIND)?.(job({ projectId: 'project-1' }))
 
     expect(exportProject).toHaveBeenCalledWith('project-1')
+    expect(exportDegradedProject).not.toHaveBeenCalled()
+  })
+
+  it('routes a degraded payload to the degraded export path', async () => {
+    const { adapter, handlers } = queueStub()
+    const exportProject = vi.fn()
+    const exportDegradedProject = vi.fn(async () => ({
+      ok: true as const,
+      artifactId: 'artifact-degraded',
+      outputKey: 'exports/final.mp4',
+      contentHash: 'a'.repeat(64),
+      placeholderLanes: ['S007'],
+    }))
+    registerExportProjectHandler(adapter, {
+      exportProject: exportProject as never,
+      exportDegradedProject,
+    })
+
+    await handlers.get(EXPORT_PROJECT_KIND)?.(
+      job({ projectId: 'project-1', degraded: true })
+    )
+
+    expect(exportDegradedProject).toHaveBeenCalledWith('project-1', {
+      repository: expect.anything(),
+    })
+    expect(exportProject).not.toHaveBeenCalled()
   })
 
   it('fails the attempt with the incomplete nodes when the project is not exportable', async () => {
@@ -116,7 +146,10 @@ describe('registerExportProjectHandler', () => {
       ok: false as const,
       incompleteNodeIds: ['node-a', 'node-b'],
     }))
-    registerExportProjectHandler(adapter, { exportProject })
+    registerExportProjectHandler(adapter, {
+      exportProject,
+      exportDegradedProject: vi.fn() as never,
+    })
 
     await expect(
       handlers.get(EXPORT_PROJECT_KIND)?.(job({ projectId: 'project-1' }))
@@ -136,7 +169,10 @@ describe('registerExportProjectHandler', () => {
         },
       ],
     }))
-    registerExportProjectHandler(adapter, { exportProject })
+    registerExportProjectHandler(adapter, {
+      exportProject,
+      exportDegradedProject: vi.fn() as never,
+    })
 
     await expect(
       handlers.get(EXPORT_PROJECT_KIND)?.(job({ projectId: 'project-1' }))
@@ -148,6 +184,7 @@ describe('registerExportProjectHandler', () => {
     const exportProject = vi.fn()
     registerExportProjectHandler(adapter, {
       exportProject: exportProject as never,
+      exportDegradedProject: vi.fn() as never,
     })
 
     await expect(

@@ -10,7 +10,9 @@ import { assertProjectWorkflowSupported } from '@/features/projects/project-comp
 
 export const dynamic = 'force-dynamic'
 
-const requestSchema = z.object({ projectId: z.string().min(1) }).strict()
+const requestSchema = z
+  .object({ projectId: z.string().min(1), degraded: z.boolean().optional() })
+  .strict()
 
 export async function GET(request: Request) {
   const projectId = new URL(request.url).searchParams.get('projectId')
@@ -56,7 +58,9 @@ export async function POST(request: Request) {
     // 未就绪在入队前如实拒绝，保持既有 409 + incompleteNodeIds 契约；
     // 拼接与产物提交交给项目级队列作业（需要 project 级 attempt 才能提交 final-mp4）。
     const readiness = await getExportReadiness(parsed.data.projectId)
-    if (!readiness.ready) {
+    // 降级导出：已就绪则忽略降级标志走正常导出；仅当 degradedReady 才放行。
+    const degraded = parsed.data.degraded === true && !readiness.ready
+    if (!readiness.ready && !(degraded && readiness.degradedReady)) {
       return NextResponse.json(
         {
           ok: false,
@@ -68,7 +72,10 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({
       ok: true,
-      jobId: await enqueueProjectExport({ projectId: parsed.data.projectId }),
+      jobId: await enqueueProjectExport({
+        projectId: parsed.data.projectId,
+        ...(degraded ? { degraded: true } : {}),
+      }),
     })
   } catch (error) {
     return NextResponse.json(

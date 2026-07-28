@@ -7,6 +7,8 @@ import {
   type QueueAdapter,
 } from '@/lib/queue'
 import { exportProject } from './export-service'
+import { exportDegradedProject } from './export-degraded'
+import { RenderRepository } from './repository'
 import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 
 /**
@@ -25,22 +27,31 @@ import { assertProjectWorkflowSupported } from '@/features/projects/project-comp
 export const EXPORT_PROJECT_KIND = 'export-project'
 
 const exportJobPayloadSchema = z
-  .object({ projectId: z.string().min(1) })
+  .object({ projectId: z.string().min(1), degraded: z.boolean().optional() })
   .strict()
 
 export type ExportProjectInput = z.infer<typeof exportJobPayloadSchema>
 
 interface ExportHandlerDependencies {
   exportProject: typeof exportProject
+  exportDegradedProject: typeof exportDegradedProject
 }
 
 export function registerExportProjectHandler(
   targetQueue: QueueAdapter = defaultQueue,
-  dependencies: ExportHandlerDependencies = { exportProject }
+  dependencies: ExportHandlerDependencies = {
+    exportProject,
+    exportDegradedProject,
+  }
 ): void {
   targetQueue.register(EXPORT_PROJECT_KIND, async (job) => {
     const payload = exportJobPayloadSchema.parse(job.payload)
-    const result = await dependencies.exportProject(payload.projectId)
+    // 降级导出只由用户显式触发（payload.degraded）；自动推进不传该标志。
+    const result = payload.degraded
+      ? await dependencies.exportDegradedProject(payload.projectId, {
+          repository: new RenderRepository(),
+        })
+      : await dependencies.exportProject(payload.projectId)
     if (!result.ok) {
       const mediaIssue = result.blockingIssues?.[0]
       if (mediaIssue) {
@@ -57,7 +68,8 @@ export function registerExportProjectHandler(
             : mediaIssue.code === 'artifact-missing'
               ? '产物缺失'
               : '节点未完成'
-        throw new Error(`终片导出失败：${target} ${media}${reason}`)
+        const prefix = payload.degraded ? '降级导出失败' : '终片导出失败'
+        throw new Error(`${prefix}：${target} ${media}${reason}`)
       }
       throw new Error(
         `终片导出失败：以下节点尚未产出可用分镜 ${result.incompleteNodeIds.join('、')}`

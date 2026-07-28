@@ -199,6 +199,7 @@ describe('getExportReadiness', () => {
         contentHash: 'hash-final',
         schemaVersion: 'cvc.final-video/v2',
       })),
+      findDegradedExport: vi.fn(async () => null),
     })
 
     expect(result).toMatchObject({
@@ -277,6 +278,9 @@ function mediaFields(mediaAssemblyPlan: ReturnType<typeof completeMediaPlan> | n
   return {
     mediaAssemblyPlan,
     blockingIssues: [],
+    placeholderCandidates: [],
+    placeholderLaneKeys: [],
+    fps: mediaAssemblyPlan ? (30 as const) : null,
     media: {
       narrationReadyCount: mediaAssemblyPlan ? 1 : 0,
       subtitleReadyCount: mediaAssemblyPlan ? 1 : 0,

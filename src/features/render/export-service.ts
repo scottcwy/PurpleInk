@@ -1,15 +1,16 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
-import { z } from 'zod'
 import type { ResolutionPreset } from '@/features/canvas'
-import { buildAssDocument } from '@/features/audio/subtitle-ass'
 import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 import { storage as defaultStorage, type StorageAdapter } from '@/lib/storage'
 import { concatExport } from './concat'
+import { isDegradable } from './export-degraded'
+import { buildSubtitleAss } from './export-subtitles'
 import { runShotQaChecks } from './qa-check'
 import {
   RenderRepository,
+  type ExportPlanOptions,
   type FinalArtifactInput,
   type FinalArtifactRecord,
   type RenderExportPlan,
@@ -35,23 +36,15 @@ interface ExportDependencies {
 }
 
 interface ExportReadinessRepository {
-  getExportPlan(projectId: string): Promise<RenderExportPlan>
+  getExportPlan(
+    projectId: string,
+    options?: ExportPlanOptions
+  ): Promise<RenderExportPlan>
   findLatestFinalArtifact(projectId: string): Promise<FinalArtifactRecord | null>
+  findDegradedExport(
+    projectId: string
+  ): Promise<{ placeholderLanes: string[] } | null>
 }
-
-const subtitleTrackSchema = z
-  .object({
-    shotId: z.string().min(1),
-    sourceText: z.string().min(1),
-    captions: z.array(
-      z.object({
-        text: z.string(),
-        startMs: z.number(),
-        endMs: z.number(),
-      })
-    ),
-  })
-  .passthrough()
 
 export async function exportProject(
   projectId: string,
@@ -130,6 +123,12 @@ export async function getExportReadiness(
   finalArtifactId: string | null
   blockingIssues: RenderExportPlan['blockingIssues']
   media: RenderExportPlan['media']
+  /** 当前缺渲染产物、可占位出片的 lane。 */
+  placeholderCandidateLanes: string[]
+  /** 降级导出是否可行（无项目级完整性阻塞）。 */
+  degradedReady: boolean
+  /** 最新成片若为降级产物，列出其占位镜头。 */
+  degradedExport: { placeholderLanes: string[] } | null
   artifactDelivery:
     | 'none'
     | 'legacy-silent-v1'
@@ -137,11 +136,21 @@ export async function getExportReadiness(
 }> {
   const plan = await repository.getExportPlan(projectId)
   const finalArtifact = await repository.findLatestFinalArtifact(projectId)
+  const ready =
+    plan.incompleteNodeIds.length === 0 &&
+    plan.blockingIssues.length === 0 &&
+    plan.mediaAssemblyPlan !== null
+  let placeholderCandidateLanes: string[] = []
+  let degradedReady = false
+  if (!ready) {
+    const probe = await repository.getExportPlan(projectId, { degraded: true })
+    placeholderCandidateLanes = probe.placeholderCandidates
+      .map((candidate) => candidate.laneKey)
+      .sort()
+    degradedReady = isDegradable(probe)
+  }
   return {
-    ready:
-      plan.incompleteNodeIds.length === 0 &&
-      plan.blockingIssues.length === 0 &&
-      plan.mediaAssemblyPlan !== null,
+    ready,
     incompleteNodeIds: plan.incompleteNodeIds,
     shotCount: plan.shots.length,
     shotQa: plan.shotQa,
@@ -149,6 +158,9 @@ export async function getExportReadiness(
     finalArtifactId: finalArtifact?.artifactId ?? null,
     blockingIssues: plan.blockingIssues,
     media: plan.media,
+    placeholderCandidateLanes,
+    degradedReady,
+    degradedExport: await repository.findDegradedExport(projectId),
     artifactDelivery: finalDelivery(finalArtifact),
   }
 }
@@ -157,41 +169,6 @@ export async function getExportReadiness(
 export async function ensureShotQaChecked(projectId: string): Promise<void> {
   await assertProjectWorkflowSupported(projectId)
   await runShotQaChecks(projectId)
-}
-
-async function buildSubtitleAss(
-  plan: NonNullable<RenderExportPlan['mediaAssemblyPlan']>,
-  storage: StorageAdapter
-): Promise<string> {
-  const shots = await Promise.all(
-    plan.shots.map(async (shot) => {
-      let parsed: z.infer<typeof subtitleTrackSchema>
-      try {
-        parsed = subtitleTrackSchema.parse(
-          JSON.parse(
-            (await storage.get(shot.subtitle.storageKey)).toString('utf-8')
-          ) as unknown
-        )
-      } catch {
-        throw new Error(`分镜 ${shot.laneKey} 的字幕产物无效`)
-      }
-      if (parsed.shotId !== shot.laneKey) {
-        throw new Error(`分镜 ${shot.laneKey} 的字幕 lane 不匹配`)
-      }
-      return {
-        laneKey: shot.laneKey,
-        durationInFrames: shot.durationInFrames,
-        sourceText: parsed.sourceText,
-        audioDurationMs: shot.narration.endInUnitMs,
-        captions: parsed.captions,
-      }
-    })
-  )
-  return buildAssDocument({
-    fps: plan.fps,
-    targetResolution: plan.targetResolution,
-    shots,
-  })
 }
 
 function incomplete(nodeIds: string[]): ExportProjectResult {
