@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('server-only', () => ({}))
+
 import {
   DEFAULT_EXECUTION_TIMEOUT_MS,
   EXECUTION_TIMEOUT_MS,

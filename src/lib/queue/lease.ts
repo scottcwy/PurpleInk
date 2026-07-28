@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNotNull, lt, sql, type SQL } from 'drizzle-orm'
 import { PIPELINE_STAGES, type PipelineStage } from '@/features/director/types'
+import { runInAuthContext, SYSTEM_USER_ID } from '@/lib/auth/workspace-context'
 import type { Db } from '@/lib/db/client'
 import { canvasNodes, pipelineRuns, taskAttempts } from '@/lib/db/schema/index'
 
@@ -167,11 +168,19 @@ async function projectInterruptedNodes(
   const repository = new DirectorRuntimeRepository(db, storage)
   for (const row of rows) {
     try {
-      await transitionNodeStatus(row.entityId, 'failed')
-      await repository.recordStageError(
-        row.entityId,
-        resolveStage(row),
-        new Error(LEASE_EXPIRED_FAILURE_MESSAGE)
+      // status.ts 与 runtime-repository 从 auth 上下文取 workspaceId；sweep 是
+      // 无请求上下文的后台任务，按 attempt 行自身的归属建立上下文（与
+      // attempt-completion 的 resetNodeForRetry 同一先例）。
+      await runInAuthContext(
+        { workspaceId: row.workspaceId, userId: SYSTEM_USER_ID },
+        async () => {
+          await transitionNodeStatus(row.entityId, 'failed')
+          await repository.recordStageError(
+            row.entityId,
+            resolveStage(row),
+            new Error(LEASE_EXPIRED_FAILURE_MESSAGE)
+          )
+        }
       )
     } catch (error) {
       // 节点可能已被用户/其他路径改走（不在 running），逐条容错，不让 sweep 崩溃。
