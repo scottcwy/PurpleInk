@@ -184,7 +184,7 @@ const MESSAGE_RULES: ReadonlyArray<readonly [RegExp, ClassifiedError]> = [
     },
   ],
   [
-    /API\s*Key|credential|凭据|未配置|配置.+不可用|quota(?:_exceeded)?|billing|payment|required|HTTP\s*402|\b402\b|额度|配额|余额不足/i,
+    /API\s*Key|credential|凭据|未配置|配置.+不可用|quota(?:_exceeded)?|billing|payment|required|HTTP\s*(?:400|401|402|403)\b|\b(?:400|401|402|403)\b|额度|配额|余额不足/i,
     {
       code: 'CONFIGURATION_BLOCKED',
       message: '运行配置或服务凭据不可用，请先检查项目设置。',

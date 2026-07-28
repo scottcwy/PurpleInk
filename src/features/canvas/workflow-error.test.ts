@@ -85,6 +85,18 @@ describe('classifyWorkflowError', () => {
     })
   })
 
+  it('stops retrying a sanitized Director authorization status', () => {
+    expect(
+      classifyWorkflowError(
+        new Error('Director 模型调用失败（StepFun/step-chat，HTTP 402）'),
+        { stage: 'INGEST' },
+      ),
+    ).toMatchObject({
+      code: 'CONFIGURATION_BLOCKED',
+      retryable: false,
+    })
+  })
+
   it('names a StepFun TTS 402 without exposing provider response details', () => {
     expect(
       classifyWorkflowError(new Error('StepFun TTS 请求失败（HTTP 402）'), {

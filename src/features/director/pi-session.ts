@@ -62,8 +62,9 @@ export interface DirectorSessionInput {
 class DirectorRunError extends Error {
   readonly code = 'DIRECTOR_RUN_FAILED'
 
-  constructor(routeLabel: string) {
-    super(`Director 模型调用失败（${routeLabel}）`)
+  constructor(routeLabel: string, httpStatus: number | null) {
+    const status = httpStatus === null ? '' : `，HTTP ${httpStatus}`
+    super(`Director 模型调用失败（${routeLabel}${status}）`)
     this.name = 'DirectorRunError'
   }
 }
@@ -225,7 +226,13 @@ function assertRunSucceeded(
     route: runtime.routeLabel,
     code: 'DIRECTOR_RUN_FAILED',
   })
-  throw new DirectorRunError(runtime.routeLabel)
+  throw new DirectorRunError(runtime.routeLabel, upstreamHttpStatus(errorMessage))
+}
+
+/** 仅保留上游 HTTP 状态码，不能把 provider 原始报文带入工作流错误面。 */
+function upstreamHttpStatus(message: string): number | null {
+  const match = /\b(?:HTTP|status(?:\s*code)?)\s*[:=]?\s*([45]\d{2})\b/i.exec(message)
+  return match ? Number(match[1]) : null
 }
 
 /** 会话级角色约束。阶段任务本体由 `stage-prompt.ts` 的 prompt builder 提供。 */

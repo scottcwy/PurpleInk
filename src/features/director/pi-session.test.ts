@@ -518,11 +518,11 @@ describe('createDirectorSession', () => {
       nodeId: 'node-1',
       stage: 'INGEST',
     })
-    mocks.agentInstances[0]!.state.errorMessage = 'provider HTTP 503'
+    mocks.agentInstances[0]!.state.errorMessage = 'provider HTTP 402; raw_response=secret'
 
     await expect(
       session.run({ prompt: '执行阶段', output: assistantOutput })
-    ).rejects.toThrow('Director 模型调用失败')
+    ).rejects.toThrow('Director 模型调用失败（stepfun/step-chat，HTTP 402）')
     expect(mocks.recordProviderFailure).toHaveBeenCalledWith('stepfun')
     expect(mocks.recordProviderSuccess).not.toHaveBeenCalled()
   })
