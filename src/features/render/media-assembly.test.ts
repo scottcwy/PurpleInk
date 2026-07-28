@@ -160,3 +160,107 @@ describe('assembleTrustedMediaPlan', () => {
     ])
   })
 })
+
+function twoShotInput() {
+  const input = validInput()
+  // 第二个 lane：有旁白 U002（合同一致），但缺 shot-codegen 产物与字幕。
+  input.nodes.push({
+    nodeId: 'codegen-S002',
+    type: 'shot-codegen',
+    status: 'failed',
+    laneKey: 'S002',
+  })
+  input.artifacts.push(
+    artifact({
+      artifactId: 'narration-U002',
+      aggregateId: 'ingest-node',
+      kind: 'narration-audio:U002',
+      storageKey: 'audio/U002.mp3',
+    })
+  )
+  input.audioManifest.units.push({
+    unitId: 'U002',
+    audioFile: 'audio/U002.mp3',
+    sha256: `sha256:${HASH}`,
+  })
+  input.audioAllocation.totalFrames = 120
+  input.audioAllocation.shots.push({
+    id: 'S002',
+    audioUnitId: 'U002',
+    startInUnitMs: 0,
+    endInUnitMs: 2_000,
+    durationInFrames: 60,
+  })
+  return input
+}
+
+describe('assembleTrustedMediaPlan (degraded)', () => {
+  it('occupies a render-less lane with a placeholder video and drops its subtitle', () => {
+    const input = {
+      ...twoShotInput(),
+      degraded: true,
+      placeholderVideos: new Map([
+        [
+          'S002',
+          {
+            artifactId: 'placeholder-video:S002',
+            storageKey: 'exports/p/placeholders/S002.mp4',
+            contentHash: OTHER_HASH,
+          },
+        ],
+      ]),
+    }
+
+    const result = assembleTrustedMediaPlan(input)
+
+    expect(result.blockingIssues).toEqual([])
+    expect(result.placeholderLaneKeys).toEqual(['S002'])
+    expect(result.plan?.shots).toHaveLength(2)
+    const occupied = result.plan?.shots.find((shot) => shot.laneKey === 'S002')
+    expect(occupied?.video.storageKey).toBe('exports/p/placeholders/S002.mp4')
+    expect(occupied?.subtitle).toBeNull()
+    expect(occupied?.narration.artifact.storageKey).toBe('audio/U002.mp3')
+  })
+
+  it('reports placeholder candidates and yields no plan before clips are supplied', () => {
+    const result = assembleTrustedMediaPlan({ ...twoShotInput(), degraded: true })
+
+    expect(result.plan).toBeNull()
+    expect(result.blockingIssues).toEqual([])
+    expect(result.placeholderCandidates).toEqual([
+      {
+        laneKey: 'S002',
+        durationInFrames: 60,
+        audioUnitId: 'U002',
+        needsVideo: true,
+        needsNarration: false,
+      },
+    ])
+    expect(result.placeholderLaneKeys).toEqual([])
+  })
+
+  it('binds a silent narration placeholder spanning the full shot duration', () => {
+    const input = twoShotInput()
+    input.artifacts = input.artifacts.filter(
+      (item) => item.kind !== 'narration-audio:U002'
+    )
+    const result = assembleTrustedMediaPlan({
+      ...input,
+      degraded: true,
+      placeholderVideos: new Map([
+        ['S002', { artifactId: 'ph-v', storageKey: 'ph/S002.mp4', contentHash: OTHER_HASH }],
+      ]),
+      placeholderNarrations: new Map([
+        ['S002', { artifactId: 'ph-a', storageKey: 'ph/S002.wav', contentHash: HASH }],
+      ]),
+    })
+
+    const occupied = result.plan?.shots.find((shot) => shot.laneKey === 'S002')
+    expect(occupied?.narration).toEqual({
+      unitId: 'U002',
+      artifact: { artifactId: 'ph-a', storageKey: 'ph/S002.wav', contentHash: HASH },
+      startInUnitMs: 0,
+      endInUnitMs: 2_000,
+    })
+  })
+})

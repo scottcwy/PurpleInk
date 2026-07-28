@@ -10,8 +10,10 @@ import { artifacts } from '@/lib/db/schema/index'
 import type { StorageAdapter } from '@/lib/storage'
 import {
   assembleTrustedMediaPlan,
+  type ArtifactRef,
   type ExportBlockingIssue,
   type MediaAssemblyPlan,
+  type PlaceholderCandidate,
 } from './media-assembly'
 
 interface AssemblyNode {
@@ -28,6 +30,10 @@ interface LoadInput {
   nodes: AssemblyNode[]
   targetResolution: { width: number; height: number }
   musicKey: string | null
+  /** 降级导出：允许缺产物的 lane 用占位顶替。 */
+  degraded?: boolean
+  placeholderVideos?: ReadonlyMap<string, ArtifactRef>
+  placeholderNarrations?: ReadonlyMap<string, ArtifactRef>
 }
 
 export interface LoadedMediaAssembly {
@@ -36,6 +42,12 @@ export interface LoadedMediaAssembly {
   narrationReadyCount: number
   subtitleReadyCount: number
   requiredShotCount: number
+  /** 降级模式待占位的 lane（正常模式恒空）。 */
+  placeholderCandidates: PlaceholderCandidate[]
+  /** 实际使用了占位视频的 lane（正常模式恒空）。 */
+  placeholderLaneKeys: string[]
+  /** 时间轴帧率（用于生成占位片段）；ingest 合同缺失时为 null。 */
+  fps: number | null
 }
 
 const subtitleLineageSchema = z
@@ -129,6 +141,13 @@ export async function loadMediaAssembly(
     audioAllocation: parsedIngest.data.audioAllocation,
     targetResolution: input.targetResolution,
     musicKey: input.musicKey,
+    ...(input.degraded ? { degraded: true } : {}),
+    ...(input.placeholderVideos
+      ? { placeholderVideos: input.placeholderVideos }
+      : {}),
+    ...(input.placeholderNarrations
+      ? { placeholderNarrations: input.placeholderNarrations }
+      : {}),
   })
   const issues = mergeIssues(storageIssues, result.blockingIssues)
   if (result.plan) {
@@ -141,6 +160,9 @@ export async function loadMediaAssembly(
     narrationReadyCount: readyCount(requiredShotCount, issues, 'narration'),
     subtitleReadyCount: readyCount(requiredShotCount, issues, 'subtitle'),
     requiredShotCount,
+    placeholderCandidates: result.placeholderCandidates,
+    placeholderLaneKeys: result.placeholderLaneKeys,
+    fps: parsedIngest.data.audioAllocation.fps,
   }
 }
 
@@ -226,7 +248,10 @@ async function validateFiles(
       shot.narration.artifact,
       issues
     )
-    await validateRef(storage, shot.laneKey, 'subtitle', shot.subtitle, issues)
+    // 降级占位镜头无字幕（subtitle=null），无需校验。
+    if (shot.subtitle) {
+      await validateRef(storage, shot.laneKey, 'subtitle', shot.subtitle, issues)
+    }
   }
 }
 
@@ -261,6 +286,9 @@ function blocked(
     narrationReadyCount: 0,
     subtitleReadyCount: 0,
     requiredShotCount: nodes.filter((node) => node.type === 'shot-codegen').length,
+    placeholderCandidates: [],
+    placeholderLaneKeys: [],
+    fps: null,
   }
 }
 

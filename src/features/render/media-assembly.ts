@@ -1,3 +1,9 @@
+import {
+  addIssue,
+  resolveDegradedShot,
+  resolveStrictShot,
+} from './media-assembly-shots'
+
 export interface ArtifactRef {
   artifactId: string
   storageKey: string
@@ -14,7 +20,8 @@ export interface MediaAssemblyShot {
     startInUnitMs: number
     endInUnitMs: number
   }
-  subtitle: ArtifactRef
+  /** 降级导出中被占位的分镜可为 null（跳过字幕）；正常装配始终非 null。 */
+  subtitle: ArtifactRef | null
 }
 
 export interface MediaAssemblyPlan {
@@ -31,14 +38,14 @@ export interface ExportBlockingIssue {
   code: 'node-incomplete' | 'artifact-missing' | 'artifact-invalid'
 }
 
-interface MediaNode {
+export interface MediaNode {
   nodeId: string
   type: string
   status: string
   laneKey: string
 }
 
-interface MediaArtifact extends ArtifactRef {
+export interface MediaArtifact extends ArtifactRef {
   aggregateId: string
   kind: string
   version: number
@@ -56,7 +63,7 @@ interface ManifestUnit {
   sha256?: string
 }
 
-interface ShotAllocation {
+export interface ShotAllocation {
   id: string
   audioUnitId: string
   startInUnitMs: number
@@ -76,14 +83,37 @@ export interface TrustedMediaInput {
   }
   targetResolution: { width: number; height: number }
   musicKey: string | null
+  /** 降级导出：允许缺渲染/旁白/字幕的 lane 用占位顶替，而不阻塞出片。 */
+  degraded?: boolean
+  /** laneKey -> 占位黑场视频引用（由 export-degraded 预先生成）。 */
+  placeholderVideos?: ReadonlyMap<string, ArtifactRef>
+  /** laneKey -> 占位静音旁白引用（旁白缺失时使用）。 */
+  placeholderNarrations?: ReadonlyMap<string, ArtifactRef>
 }
 
-export function assembleTrustedMediaPlan(input: TrustedMediaInput): {
+/** 降级导出待占位的 lane：export-degraded 据此生成占位片段。 */
+export interface PlaceholderCandidate {
+  laneKey: string
+  durationInFrames: number
+  audioUnitId: string
+  needsVideo: boolean
+  needsNarration: boolean
+}
+
+export interface AssembleResult {
   plan: MediaAssemblyPlan | null
   blockingIssues: ExportBlockingIssue[]
-} {
+  /** 降级模式下缺渲染/旁白、待占位的 lane（正常模式恒空）。 */
+  placeholderCandidates: PlaceholderCandidate[]
+  /** 实际使用了占位视频的 lane（用于成片占位清单，正常模式恒空）。 */
+  placeholderLaneKeys: string[]
+}
+
+export function assembleTrustedMediaPlan(input: TrustedMediaInput): AssembleResult {
   const issues: ExportBlockingIssue[] = []
   const shots: MediaAssemblyShot[] = []
+  const placeholderCandidates: PlaceholderCandidate[] = []
+  const placeholderLaneKeys: string[] = []
   const frameTotal = input.audioAllocation.shots.reduce(
     (total, shot) => total + shot.durationInFrames,
     0
@@ -93,130 +123,31 @@ export function assembleTrustedMediaPlan(input: TrustedMediaInput): {
   }
 
   for (const allocation of input.audioAllocation.shots) {
-    const laneKey = allocation.id
-    const codegenNode = findNode(input.nodes, laneKey, 'shot-codegen')
-    const subtitleNode = findNode(input.nodes, laneKey, 'shot-subtitle')
-    checkNode(issues, codegenNode, laneKey, 'render')
-    checkNode(issues, subtitleNode, laneKey, 'subtitle')
-
-    const video = codegenNode
-      ? latestArtifact(input.artifacts, codegenNode.nodeId, 'render-mp4')
-      : undefined
-    const narration = latestKind(
-      input.artifacts,
-      `narration-audio:${allocation.audioUnitId}`
-    )
-    const subtitle = subtitleNode
-      ? latestArtifact(input.artifacts, subtitleNode.nodeId, 'subtitle-track')
-      : undefined
-    const manifest = input.audioManifest.units.find(
-      (unit) => unit.unitId === allocation.audioUnitId
-    )
-
-    if (!video) addIssue(issues, laneKey, 'render', 'artifact-missing')
-    if (!narration) {
-      addIssue(issues, laneKey, 'narration', 'artifact-missing')
-    } else if (
-      !manifest ||
-      manifest.audioFile !== narration.storageKey ||
-      manifest.sha256 !== `sha256:${narration.contentHash}`
-    ) {
-      addIssue(issues, laneKey, 'narration', 'artifact-invalid')
-    }
-    if (!subtitle) {
-      addIssue(issues, laneKey, 'subtitle', 'artifact-missing')
-    } else {
-      const lineage = input.subtitleTracks[subtitle.artifactId]
-      if (
-        !lineage ||
-        lineage.shotId !== laneKey ||
-        !narration ||
-        lineage.sourceAudioArtifactId !== narration.artifactId ||
-        lineage.sourceAudioKey !== narration.storageKey
-      ) {
-        addIssue(issues, laneKey, 'subtitle', 'artifact-invalid')
-      }
-    }
-
-    if (video && narration && subtitle) {
-      shots.push({
-        laneKey,
-        video: toRef(video),
-        durationInFrames: allocation.durationInFrames,
-        narration: {
-          unitId: allocation.audioUnitId,
-          artifact: toRef(narration),
-          startInUnitMs: allocation.startInUnitMs,
-          endInUnitMs: allocation.endInUnitMs,
-        },
-        subtitle: toRef(subtitle),
-      })
-    }
+    const resolved = input.degraded
+      ? resolveDegradedShot(input, allocation)
+      : resolveStrictShot(input, allocation)
+    issues.push(...resolved.issues)
+    if (resolved.shot) shots.push(resolved.shot)
+    if (resolved.candidate) placeholderCandidates.push(resolved.candidate)
+    if (resolved.usedPlaceholderVideo) placeholderLaneKeys.push(allocation.id)
   }
 
+  // 正常模式：无 issue 即全部 shot 就绪（与旧不变）；降级模式：探测阶段
+  // （占位 map 为空）shot 未集齐时 plan 为 null，避免产出残缺时间轴。
+  const complete =
+    issues.length === 0 && shots.length === input.audioAllocation.shots.length
   return {
-    plan:
-      issues.length === 0
-        ? {
-            fps: input.audioAllocation.fps,
-            totalFrames: input.audioAllocation.totalFrames,
-            shots,
-            targetResolution: input.targetResolution,
-            musicKey: input.musicKey,
-          }
-        : null,
+    plan: complete
+      ? {
+          fps: input.audioAllocation.fps,
+          totalFrames: input.audioAllocation.totalFrames,
+          shots,
+          targetResolution: input.targetResolution,
+          musicKey: input.musicKey,
+        }
+      : null,
     blockingIssues: issues,
+    placeholderCandidates,
+    placeholderLaneKeys,
   }
-}
-
-function findNode(nodes: MediaNode[], laneKey: string, type: string) {
-  return nodes.find((node) => node.laneKey === laneKey && node.type === type)
-}
-
-function checkNode(
-  issues: ExportBlockingIssue[],
-  node: MediaNode | undefined,
-  laneKey: string,
-  kind: ExportBlockingIssue['kind']
-): void {
-  if (node && node.status !== 'success' && node.status !== 'succeeded') {
-    addIssue(issues, laneKey, kind, 'node-incomplete')
-  }
-}
-
-function latestArtifact(
-  artifacts: MediaArtifact[],
-  aggregateId: string,
-  kind: string
-) {
-  return artifacts
-    .filter(
-      (artifact) =>
-        artifact.aggregateId === aggregateId && artifact.kind === kind
-    )
-    .sort((left, right) => right.version - left.version)[0]
-}
-
-function latestKind(artifacts: MediaArtifact[], kind: string) {
-  return artifacts
-    .filter((artifact) => artifact.kind === kind)
-    .sort((left, right) => right.version - left.version)[0]
-}
-
-function toRef(artifact: MediaArtifact): ArtifactRef {
-  return {
-    artifactId: artifact.artifactId,
-    storageKey: artifact.storageKey,
-    contentHash: artifact.contentHash,
-  }
-}
-
-function addIssue(
-  issues: ExportBlockingIssue[],
-  laneKey: string | null,
-  kind: ExportBlockingIssue['kind'],
-  code: ExportBlockingIssue['code']
-): void {
-  if (issues.some((item) => item.laneKey === laneKey && item.kind === kind)) return
-  issues.push({ laneKey, kind, code })
 }

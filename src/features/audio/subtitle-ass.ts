@@ -16,6 +16,8 @@ interface SubtitleTrackInput {
 interface AssShot extends SubtitleTrackInput {
   laneKey: string
   durationInFrames: number
+  /** 降级占位镜头：直接给定 cue（如「S007 · 占位」），跳过 ASR↔原稿校验。 */
+  precomputedCues?: ReadableSubtitleCue[]
 }
 
 interface AssDocumentInput {
@@ -57,7 +59,8 @@ export function buildAssDocument(input: AssDocumentInput): string {
   let priorFrames = 0
   for (const shot of input.shots) {
     const offsetMs = (priorFrames * 1_000) / input.fps
-    for (const cue of normalizeSubtitleTrack(shot)) {
+    const cues = shot.precomputedCues ?? normalizeSubtitleTrack(shot)
+    for (const cue of cues) {
       dialogue.push(
         [
           'Dialogue: 0',
