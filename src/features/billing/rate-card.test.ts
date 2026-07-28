@@ -27,6 +27,7 @@ describe('rate card calculation', () => {
   it('prices TTS characters and ASR duration using their own units', () => {
     expect(calculateActualCost(prices, { kind: 'tts', characters: 1001 })).toBe(BigInt(11))
     expect(calculateActualCost(prices, { kind: 'asr', audioSeconds: 3 })).toBe(BigInt(300))
+    expect(calculateActualCost(prices, { kind: 'asr', audioSeconds: 3.001 })).toBe(BigInt(400))
   })
 
   it('uses UTF-8 bytes as a conservative text input token bound', () => {

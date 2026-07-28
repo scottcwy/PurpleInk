@@ -7,8 +7,9 @@
 > 加一次清扫间隔；每轮 sweep 幂等结算父 attempt 已终态的孤儿预留。复发模式与
 > 后续端测还发现静态确定性门禁不解析 JavaScript、自动重试复用坏 HTML；现已补上
 > 脚本语法/runtime v1 提交门禁，以及 runtime admission 失败后拒绝 draft 并强制
-> 重新 FABRICATE。提交前检查以 `docs/conventions/workflow-failure-patterns.md`
-> 模式 I/J/K 为准。
+> 重新 FABRICATE。下游字幕端测还发现 ASR 毫秒时长未按整秒计费原子归一化，现已
+> 对预留与实际结算统一向上取整。提交前检查以
+> `docs/conventions/workflow-failure-patterns.md` 模式 I/J/K/L 为准。
 
 总结：
 收到，UI 端测由您自行验证。我将任务 10 收尾并立即启动任务 11 终审：并行派出 3 名独立评审，各自只负责一个维度。

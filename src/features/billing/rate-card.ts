@@ -51,7 +51,9 @@ export function calculateActualCost(
   usage: BillableUsage,
 ): bigint {
   if (usage.kind === 'tts') return price(prices, 'tts_character', usage.characters)
-  if (usage.kind === 'asr') return price(prices, 'audio_second', usage.audioSeconds)
+  if (usage.kind === 'asr') {
+    return price(prices, 'audio_second', wholeAudioSeconds(usage.audioSeconds))
+  }
   return price(prices, 'input_token', usage.inputTokens)
     + price(prices, 'cached_input_token', usage.cachedInputTokens ?? 0)
     + price(prices, 'output_token', usage.outputTokens)
@@ -65,11 +67,19 @@ export function estimateMaximumCost(
     return price(prices, 'tts_character', estimate.characters)
   }
   if (estimate.kind === 'asr') {
-    return price(prices, 'audio_second', Math.ceil(estimate.audioSeconds))
+    return price(prices, 'audio_second', wholeAudioSeconds(estimate.audioSeconds))
   }
   const inputBytes = typeof estimate.input === 'string'
     ? Buffer.byteLength(estimate.input, 'utf8')
     : estimate.input.byteLength
   return price(prices, 'input_token', inputBytes)
     + price(prices, 'output_token', estimate.maxOutputTokens)
+}
+
+/** 音频探针返回毫秒级小数；费率以整秒为原子并向上取整。 */
+function wholeAudioSeconds(value: number): number {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error('invalid audio_second usage')
+  }
+  return Math.ceil(value)
 }

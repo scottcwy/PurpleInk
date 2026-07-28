@@ -378,6 +378,25 @@ runtime 失败补偿和 rejected 版本不再命中。
 
 ---
 
+## 7.6 模式 L：ASR 毫秒时长直接进入整数计费原子，字幕三通道同时失败
+
+**症状**：镜头代码与 MP4 已成功，下游三个 `shot-subtitle` 仍同时失败；UI 只显示
+上游合同无效，`task_attempts.failure.message` 的服务端真值为
+`invalid audio_second usage`。切换文本模型或重试字幕都没有意义。
+
+**真实事故**：音频探针按毫秒测量，字幕 ASR 把 `durationMs / 1000` 作为实际用量，
+因此常见值是带小数的秒数。费率表的 `price` 只接受安全整数；预留估算已经
+`Math.ceil`，实际结算却遗漏同一归一化，Provider 成功返回后反而在本地结算阶段
+失败。三个镜头共享同一计费函数，所以同时复发。
+
+**规则与护栏**：音频秒以整秒为最小计费原子，预留和实际结算都必须先验证有限、
+非负，再向上取整；token 与字符仍保持整数合同。`rate-card.ts` 以唯一
+`wholeAudioSeconds` 同时归一化 estimate/actual，测试锁定 `3.001s → 4s`，并继续
+拒绝负数与非有限值。父 attempt 已终态时，模式 J 的补偿清扫负责收敛旧版本遗留的
+`running/reserved`，不得留下额度悬挂。
+
+---
+
 ## 8. 工作流类改动的提交前清单
 
 在 `AGENTS.md` §8 的通用门禁之外，涉及本文覆盖的链路时补做：
@@ -393,6 +412,7 @@ runtime 失败补偿和 rejected 版本不再命中。
 - [ ] 复合队列是否把父 `job.id` 贯穿到所有需要审计/计费的子阶段；出网前失败是否保留原始类型并绕过 Provider 熔断（模式 I）。
 - [ ] Provider 硬超时是否短于阶段执行上限，SDK 内重试是否关闭；租约是否覆盖完整执行窗口，父 attempt 终态后是否仍存在 `running/reserved` 孤儿调用（模式 J）。
 - [ ] FABRICATE HTML 是否实际通过 JavaScript 解析与 Chromium runtime admission；动态证明无效的 draft 是否转为 rejected，自动重试是否会重新生成而非复用坏缓存（模式 K）。
+- [ ] TTS 字符与 ASR 音频秒是否按各自计费原子归一化；音频探针的小数秒是否在预留和实际结算两条路径保持一致（模式 L）。
 - [ ] 真实产物证据：`artifacts.content_hash` 与磁盘字节 SHA-256 逐条核对一致。
 
 真实证据的取法示例：
@@ -420,7 +440,8 @@ docker exec purpleink-dev-postgres-1 psql -U cvc -d cvc -A -t -F "|" -c `
 规则（模式 B）、文档 `measureMp3` 漂移、队列初始化全量并行抖动、终片异步音频
 读取错误（模式 D）、Pi 会话哈希失真（模式 G）、复合渲染队列丢失 attempt id 并
 污染 Provider 熔断（模式 I）、长模型调用被短租约误回收且遗留计费预留（模式 J）
-、静态门禁放过语法错误并重复复用坏 HTML（模式 K）——见各节「已落地护栏」。
+、静态门禁放过语法错误并重复复用坏 HTML（模式 K）、ASR 小数秒导致字幕结算失败
+（模式 L）——见各节「已落地护栏」。
 
 ---
 
