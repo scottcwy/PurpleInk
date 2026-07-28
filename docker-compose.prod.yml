@@ -40,6 +40,10 @@ services:
       # 避免两处手填导致的凭据漂移。首版不引入 PgBouncer（PLAN-001 §3.4）。
       DATABASE_URL: postgres://cvc:${POSTGRES_PASSWORD:?生产必须设置强口令，不得沿用 dev 的 cvc_dev_only}@postgres:5432/cvc
       CVC_CREDENTIAL_MASTER_KEY: ${CVC_CREDENTIAL_MASTER_KEY}
+      CVC_MANAGED_STEPFUN_API_KEY: ${CVC_MANAGED_STEPFUN_API_KEY:?Next 托管 StepFun Key 缺失}
+      CVC_MANAGED_MIMO_API_KEY: ${CVC_MANAGED_MIMO_API_KEY:?Next 托管 MiMo Key 缺失}
+      CVC_MANAGED_GEMINI_API_KEY: ${CVC_MANAGED_GEMINI_API_KEY:?Next 托管 Gemini Key 缺失}
+      CVC_REDEMPTION_CODE_PEPPER: ${CVC_REDEMPTION_CODE_PEPPER:?兑换码 pepper 缺失}
       DATA_DIR: /app/.data
       BACKEND_ORIGIN: http://worker:8787
       # P-4 未落地前的兜底（ISSUE-015 §3.2 / PLAN-001 §3.5）：容器内 CPU 核数

@@ -19,6 +19,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/setup/db-migrate.ts",
     "verify:v3": "tsx scripts/verify/v3-architecture.ts --check",
+    "verify:managed-services": "node scripts/verify/managed-service-readiness.mjs",
     "verify:e2e": "tsx scripts/verify/e2e-smoke.ts",
     "report:v3": "tsx scripts/verify/v3-architecture.ts --report",
     "typecheck": "tsc --noEmit",

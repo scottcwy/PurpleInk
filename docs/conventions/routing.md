@@ -76,7 +76,7 @@
 | `/products/shots/[shotId]` | `src/app/products/(app)/shots/[shotId]/page.tsx` | `wired` | `shotId` path + `projectId` query（必填） | 缺失项目/镜头 `notFound()`；旧 workflow 显示保留数据说明 |
 | `/products/export/[projectId]` | `src/app/products/(app)/export/[projectId]/page.tsx` | `wired` | `projectId` path | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明 |
 | `/products/settings` | `src/app/products/(app)/settings/page.tsx` | `wired` | `projectId` query（可选） | 无项目参数渲染账号级设置；旧 workflow 显示保留数据说明 |
-| `/products/billing` | `src/app/products/(app)/billing/page.tsx` | `planned` | 当前 workspace 会话 | 展示当前会员、额度比例与兑换入口；不回显内部人民币成本 |
+| `/products/billing` | `src/app/products/(app)/billing/page.tsx` | `wired` | 当前 workspace 会话 | 展示当前会员、额度比例与兑换入口；不回显内部人民币成本 |
 
 段级约定（已落盘，新增 L3 路由沿用）：
 
@@ -165,8 +165,8 @@
 | `/api/director/stream/project/[projectId]` | GET (SSE) | `projectId` path | `@/lib/stream/status-bus` | `wired` |
 | `/api/share/[shareId]` | GET | `shareId` path | `@/features/share`（待建） | `planned` |
 | `/api/settings` | GET, POST | — | `@/features/ai/*`、`@/lib/queue/runtime-config` | `wired` |
-| `/api/billing` | GET | — | `@/features/billing` | `planned` |
-| `/api/billing/redemptions` | POST | header `Idempotency-Key` + body `{code}` | `@/features/billing` | `planned` |
+| `/api/billing` | GET | — | `@/features/billing` | `wired` |
+| `/api/billing/redemptions` | POST | header `Idempotency-Key` + body `{code}` | `@/features/billing` | `wired` |
 
 约定：
 
