@@ -5,7 +5,8 @@ import {
   commitArtifactRecord,
   resolveCurrentAttemptId,
 } from '@/features/artifacts'
-import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { type Db } from '@/lib/db/client'
 import { canvasNodes } from '@/lib/db/schema/index'
 import type { StorageAdapter } from '@/lib/storage'
 import { patchNodePayload } from './runtime-node-data'
@@ -45,7 +46,7 @@ export class DirectorArtifactWriter {
     const id = randomUUID()
     try {
       await commitArtifactRecord(this.db, {
-        workspaceId: LOCAL_WORKSPACE_ID,
+        workspaceId: currentWorkspaceId(),
         projectId: input.projectId,
         aggregateType: 'node',
         aggregateId: input.nodeId,
@@ -77,7 +78,7 @@ export class DirectorArtifactWriter {
     await this.storage.put(storageKey, text)
     try {
       await commitArtifactRecord(this.db, {
-        workspaceId: LOCAL_WORKSPACE_ID,
+        workspaceId: currentWorkspaceId(),
         projectId,
         aggregateType: 'node',
         aggregateId: nodeId,
@@ -122,7 +123,7 @@ export class DirectorArtifactWriter {
             .from(canvasNodes)
             .where(
               and(
-                eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+                eq(canvasNodes.workspaceId, currentWorkspaceId()),
                 eq(canvasNodes.projectId, artifact.projectId),
                 eq(canvasNodes.id, nodeId)
               )
@@ -141,7 +142,7 @@ export class DirectorArtifactWriter {
             })
             .where(
               and(
-                eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+                eq(canvasNodes.workspaceId, currentWorkspaceId()),
                 eq(canvasNodes.id, nodeId)
               )
             )
@@ -160,7 +161,7 @@ export class DirectorArtifactWriter {
     nodeId: string
   ): Promise<string> {
     return resolveCurrentAttemptId(this.db, {
-      workspaceId: LOCAL_WORKSPACE_ID,
+      workspaceId: currentWorkspaceId(),
       projectId,
       aggregateType: 'node',
       aggregateId: nodeId,
@@ -173,7 +174,7 @@ function assertArtifactMatchesNode(
   artifact: ArtifactCommitResult
 ): void {
   if (
-    artifact.workspaceId !== LOCAL_WORKSPACE_ID ||
+    artifact.workspaceId !== currentWorkspaceId() ||
     artifact.aggregateType !== 'node' ||
     artifact.aggregateId !== nodeId
   ) {

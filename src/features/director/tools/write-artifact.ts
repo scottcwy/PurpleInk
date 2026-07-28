@@ -1,10 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { resolveCurrentAttemptId } from '@/features/artifacts'
-import {
-  getDb,
-  LOCAL_WORKSPACE_ID,
-} from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb } from '@/lib/db/client'
 import { storage as defaultStorage, type StorageAdapter } from '@/lib/storage'
 import { inspectFabricateSource } from '@/features/canvas/contracts'
 import { ArtifactValidationError } from '../artifact-validation-error'
@@ -97,7 +95,7 @@ export async function writeValidatedArtifact(
   )
   return {
     id: (dependencies.createId ?? randomUUID)(),
-    workspaceId: LOCAL_WORKSPACE_ID,
+    workspaceId: currentWorkspaceId(),
     projectId: parsed.data.projectId,
     aggregateType,
     aggregateId,
@@ -117,7 +115,7 @@ async function defaultAttemptResolver(input: {
 }): Promise<string> {
   const database = await getDb()
   return resolveCurrentAttemptId(database, {
-    workspaceId: LOCAL_WORKSPACE_ID,
+    workspaceId: currentWorkspaceId(),
     projectId: input.projectId,
     aggregateType: input.nodeId ? 'node' : 'project',
     aggregateId: input.nodeId ?? input.projectId,

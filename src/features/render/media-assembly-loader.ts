@@ -5,7 +5,8 @@ import {
   audioAllocationSchema,
   audioManifestSchema,
 } from '@/features/director/schemas/ingest'
-import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { type Db } from '@/lib/db/client'
 import { artifacts } from '@/lib/db/schema/index'
 import type { StorageAdapter } from '@/lib/storage'
 import {
@@ -73,7 +74,7 @@ export async function loadMediaAssembly(
     .from(artifacts)
     .where(
       and(
-        eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(artifacts.workspaceId, currentWorkspaceId()),
         eq(artifacts.projectId, input.projectId),
         eq(artifacts.aggregateType, 'node')
       )

@@ -1,7 +1,8 @@
 import 'server-only'
 
 import { and, desc, eq } from 'drizzle-orm'
-import { getDb, LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb } from '@/lib/db/client'
 import { artifacts } from '@/lib/db/schema/index'
 import { storage } from '@/lib/storage'
 
@@ -22,7 +23,7 @@ export async function getLatestArtifact(
   const aggregateType = nodeId === null ? 'project' : 'node'
   const aggregateId = nodeId ?? projectId
   const predicates = [
-    eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+    eq(artifacts.workspaceId, currentWorkspaceId()),
     eq(artifacts.projectId, projectId),
     eq(artifacts.aggregateType, aggregateType),
     eq(artifacts.aggregateId, aggregateId),
@@ -52,7 +53,7 @@ export async function readArtifact(
     .from(artifacts)
     .where(
       and(
-        eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(artifacts.workspaceId, currentWorkspaceId()),
         eq(artifacts.id, artifactId),
         eq(artifacts.projectId, projectId)
       )

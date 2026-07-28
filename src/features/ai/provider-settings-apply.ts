@@ -1,5 +1,5 @@
 import 'server-only'
-import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { saveLaneQuotas } from '@/lib/queue/runtime-config'
 import { getAiConfigDependencies, saveStepfunModelSettings } from './config'
 import { saveGeminiApiKey, saveGeminiSettings } from './gemini-config'
@@ -101,10 +101,10 @@ async function resyncMediaRoute(
   model: string,
 ): Promise<void> {
   const deps = getAiConfigDependencies()
-  const route = await deps.mediaRoutes.find(LOCAL_WORKSPACE_ID, kind)
+  const route = await deps.mediaRoutes.find(currentWorkspaceId(), kind)
   if (route?.provider !== provider || route.model === model) return
   await deps.mediaRoutes.save({
-    workspaceId: LOCAL_WORKSPACE_ID,
+    workspaceId: currentWorkspaceId(),
     mediaTaskKind: kind,
     provider,
     model,

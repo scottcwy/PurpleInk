@@ -1,6 +1,7 @@
 import 'server-only'
 import { and, eq } from 'drizzle-orm'
-import { getDb, LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb } from '@/lib/db/client'
 import { projects } from '@/lib/db/schema/index'
 import {
   ACTIVE_WORKFLOW_VERSION,
@@ -30,7 +31,7 @@ export async function getProjectRouteState(
     .from(projects)
     .where(
       and(
-        eq(projects.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(projects.workspaceId, currentWorkspaceId()),
         eq(projects.id, projectId)
       )
     )

@@ -1,5 +1,6 @@
 import { and, eq, inArray, ne } from 'drizzle-orm'
-import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { type Db } from '@/lib/db/client'
 import { canvasEdges, canvasNodes, projects } from '@/lib/db/schema/index'
 import { storage } from '@/lib/storage'
 import type { CanvasNodeType } from '@/features/canvas'
@@ -56,7 +57,7 @@ export class AdvanceRepositoryImpl
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.projectId, projectId),
           eq(canvasNodes.type, 'script-import')
         )
@@ -72,7 +73,7 @@ export class AdvanceRepositoryImpl
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.projectId, projectId),
           eq(canvasNodes.status, 'succeeded')
         )
@@ -89,7 +90,7 @@ export class AdvanceRepositoryImpl
       .from(canvasEdges)
       .where(
         and(
-          eq(canvasEdges.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasEdges.workspaceId, currentWorkspaceId()),
           eq(canvasEdges.projectId, projectId),
           eq(canvasEdges.source, completedNodeId)
         )
@@ -107,7 +108,7 @@ export class AdvanceRepositoryImpl
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.projectId, projectId),
           inArray(canvasNodes.id, targetIds)
         )
@@ -124,7 +125,7 @@ export class AdvanceRepositoryImpl
       .from(canvasEdges)
       .where(
         and(
-          eq(canvasEdges.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasEdges.workspaceId, currentWorkspaceId()),
           eq(canvasEdges.projectId, projectId),
           eq(canvasEdges.target, nodeId)
         )
@@ -136,7 +137,7 @@ export class AdvanceRepositoryImpl
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.projectId, projectId),
           inArray(canvasNodes.id, sourceIds)
         )
@@ -162,7 +163,7 @@ export class AdvanceRepositoryImpl
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.projectId, projectId),
           ne(canvasNodes.status, 'succeeded')
         )
@@ -220,7 +221,7 @@ function scope(
   projectId: string
 ) {
   return and(
-    eq(workspaceColumn, LOCAL_WORKSPACE_ID),
+    eq(workspaceColumn, currentWorkspaceId()),
     eq(idColumn, projectId)
   )
 }

@@ -5,7 +5,7 @@ import {
   resolveExportSettings,
   type ResolutionPreset,
 } from '@/features/canvas'
-import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { artifacts, canvasNodes, projects } from '@/lib/db/schema/index'
 import { withTransaction } from '@/lib/db/transaction'
 import { storage as defaultStorage, type StorageAdapter } from '@/lib/storage'
@@ -95,7 +95,7 @@ export class RenderRepository extends RenderArtifactRepository {
       .from(projects)
       .where(
         and(
-          eq(projects.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(projects.workspaceId, currentWorkspaceId()),
           eq(projects.id, projectId)
         )
       )
@@ -114,7 +114,7 @@ export class RenderRepository extends RenderArtifactRepository {
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.projectId, projectId)
         )
       )
@@ -134,7 +134,7 @@ export class RenderRepository extends RenderArtifactRepository {
       .from(artifacts)
       .where(
         and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(artifacts.workspaceId, currentWorkspaceId()),
           eq(artifacts.projectId, projectId),
           eq(artifacts.aggregateType, 'node'),
           eq(artifacts.kind, 'render-mp4')
@@ -221,7 +221,7 @@ export class RenderRepository extends RenderArtifactRepository {
       .from(artifacts)
       .where(
         and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(artifacts.workspaceId, currentWorkspaceId()),
           eq(artifacts.projectId, projectId),
           eq(artifacts.aggregateType, 'project'),
           eq(artifacts.aggregateId, projectId),
@@ -263,7 +263,7 @@ export class RenderRepository extends RenderArtifactRepository {
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.projectId, projectId)
         )
       )
@@ -297,7 +297,7 @@ export class RenderRepository extends RenderArtifactRepository {
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.id, nodeId)
         )
       )

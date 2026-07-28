@@ -16,7 +16,8 @@ import type {
   AudioManifest,
   ScriptUnit,
 } from '@/features/director/schemas/ingest'
-import { getDb, LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb } from '@/lib/db/client'
 import { canvasNodes } from '@/lib/db/schema/index'
 import { queue as defaultQueue, type QueueAdapter } from '@/lib/queue'
 import { storage } from '@/lib/storage'
@@ -151,7 +152,7 @@ async function createDefaultDependencies(): Promise<MediaNarrationDependencies> 
         .from(canvasNodes)
         .where(
           and(
-            eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+            eq(canvasNodes.workspaceId, currentWorkspaceId()),
             eq(canvasNodes.projectId, projectId),
             eq(canvasNodes.type, 'shot-script'),
             eq(canvasNodes.status, 'succeeded')
@@ -171,7 +172,7 @@ async function patchMediaState(nodeId: string, state: MediaState): Promise<void>
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.id, nodeId)
         )
       )
@@ -186,7 +187,7 @@ async function patchMediaState(nodeId: string, state: MediaState): Promise<void>
       })
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.id, nodeId)
         )
       )

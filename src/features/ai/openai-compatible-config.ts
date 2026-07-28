@@ -1,5 +1,5 @@
 import 'server-only'
-import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import type { ProviderCredentialStore } from '@/features/credentials'
 import {
   normalizeBaseUrl,
@@ -46,20 +46,20 @@ export async function saveOpenAiCompatibleProfile(
 ): Promise<void> {
   const profile = parseInput(input)
   await dependencies.credentials.save({
-    workspaceId: LOCAL_WORKSPACE_ID,
+    workspaceId: currentWorkspaceId(),
     provider: CUSTOM_OPENAI_PROVIDER,
     secret: input.apiKey.trim(),
     verifiedAt: new Date(),
   })
-  await dependencies.profileStore.save(LOCAL_WORKSPACE_ID, profile)
+  await dependencies.profileStore.save(currentWorkspaceId(), profile)
 }
 
 export async function describeOpenAiCompatibleProfile(
   dependencies: OpenAiCompatibleDependencies,
 ): Promise<OpenAiCompatibleProfileView> {
   const [credential, profile] = await Promise.all([
-    dependencies.credentials.describe(LOCAL_WORKSPACE_ID, CUSTOM_OPENAI_PROVIDER),
-    dependencies.profileStore.find(LOCAL_WORKSPACE_ID),
+    dependencies.credentials.describe(currentWorkspaceId(), CUSTOM_OPENAI_PROVIDER),
+    dependencies.profileStore.find(currentWorkspaceId()),
   ])
   return {
     configured: credential.configured && profile !== null,

@@ -1,7 +1,8 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import { and, eq, inArray } from 'drizzle-orm'
-import { getDb, LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb } from '@/lib/db/client'
 import { canvasEdges, canvasNodes } from '@/lib/db/schema/index'
 import {
   withTransaction,
@@ -78,7 +79,7 @@ async function findAnchors(
     .from(canvasNodes)
     .where(
       and(
-        eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(canvasNodes.workspaceId, currentWorkspaceId()),
         eq(canvasNodes.projectId, projectId),
         inArray(canvasNodes.type, ['shot-split', 'score'])
       )
@@ -114,7 +115,7 @@ async function findExistingLaneKeys(
     .from(canvasNodes)
     .where(
       and(
-        eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(canvasNodes.workspaceId, currentWorkspaceId()),
         eq(canvasNodes.projectId, projectId),
         inArray(canvasNodes.logicalKey, logicalKeys)
       )
@@ -131,7 +132,7 @@ async function insertLaneNodes(
     .insert(canvasNodes)
     .values(
       LANE_ROLES.map((role) => ({
-        workspaceId: LOCAL_WORKSPACE_ID,
+        workspaceId: currentWorkspaceId(),
         id: stableId('node', projectId, shot.shotId, role),
         projectId,
         logicalKey: shotLogicalKey(shot.shotId, role),
@@ -181,7 +182,7 @@ async function insertLaneEdges(
     .insert(canvasEdges)
     .values(
       pairs.map(([source, target]) => ({
-        workspaceId: LOCAL_WORKSPACE_ID,
+        workspaceId: currentWorkspaceId(),
         id: stableId('edge', projectId, source, target),
         projectId,
         source,

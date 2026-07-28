@@ -8,7 +8,8 @@ import {
   PostgresMediaRouteRepository,
   PostgresModelRouteRepository,
 } from '@/features/routing'
-import { getDb, LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb } from '@/lib/db/client'
 import {
   PostgresOpenAiCompatibleAudioProfileStore,
   type OpenAiCompatibleAudioProfileStore,
@@ -116,11 +117,11 @@ export async function getStepfunConfig(
   deps: AiConfigDependencies = dependencies,
 ): Promise<StepfunConfig> {
   const [storedKey, chat, vision, tts, asr] = await Promise.all([
-    deps.credentials.loadSecret(LOCAL_WORKSPACE_ID, 'stepfun'),
-    deps.modelRoutes.find(LOCAL_WORKSPACE_ID, 'fabricate'),
-    deps.modelRoutes.find(LOCAL_WORKSPACE_ID, 'vision-qa'),
-    deps.mediaRoutes.find(LOCAL_WORKSPACE_ID, 'tts'),
-    deps.mediaRoutes.find(LOCAL_WORKSPACE_ID, 'asr'),
+    deps.credentials.loadSecret(currentWorkspaceId(), 'stepfun'),
+    deps.modelRoutes.find(currentWorkspaceId(), 'fabricate'),
+    deps.modelRoutes.find(currentWorkspaceId(), 'vision-qa'),
+    deps.mediaRoutes.find(currentWorkspaceId(), 'tts'),
+    deps.mediaRoutes.find(currentWorkspaceId(), 'asr'),
   ])
   return {
     apiKey: storedKey,
@@ -140,10 +141,10 @@ export async function describeStepfunConfig(
   deps: AiConfigDependencies = dependencies,
 ): Promise<StepfunConfigView> {
   const [chat, vision, tts, asr] = await Promise.all([
-    deps.modelRoutes.find(LOCAL_WORKSPACE_ID, 'fabricate'),
-    deps.modelRoutes.find(LOCAL_WORKSPACE_ID, 'vision-qa'),
-    deps.mediaRoutes.find(LOCAL_WORKSPACE_ID, 'tts'),
-    deps.mediaRoutes.find(LOCAL_WORKSPACE_ID, 'asr'),
+    deps.modelRoutes.find(currentWorkspaceId(), 'fabricate'),
+    deps.modelRoutes.find(currentWorkspaceId(), 'vision-qa'),
+    deps.mediaRoutes.find(currentWorkspaceId(), 'tts'),
+    deps.mediaRoutes.find(currentWorkspaceId(), 'asr'),
   ])
   return {
     baseUrl: envOrDefault('baseUrl'),
@@ -174,12 +175,12 @@ async function saveAiModel(
   const model = nonEmpty(value)
   await Promise.all(kinds.map((aiTaskKind) => model
     ? deps.modelRoutes.save({
-        workspaceId: LOCAL_WORKSPACE_ID,
+        workspaceId: currentWorkspaceId(),
         aiTaskKind,
         provider: 'stepfun',
         model,
       })
-    : deps.modelRoutes.remove(LOCAL_WORKSPACE_ID, aiTaskKind)))
+    : deps.modelRoutes.remove(currentWorkspaceId(), aiTaskKind)))
 }
 
 export async function saveStepfunModelSettings(
@@ -211,12 +212,12 @@ export async function saveStepfunModelSettings(
     const model = nonEmpty(value)
     writes.push(model
       ? deps.mediaRoutes.save({
-          workspaceId: LOCAL_WORKSPACE_ID,
+          workspaceId: currentWorkspaceId(),
           mediaTaskKind,
           provider: 'stepfun',
           model,
         })
-      : deps.mediaRoutes.remove(LOCAL_WORKSPACE_ID, mediaTaskKind))
+      : deps.mediaRoutes.remove(currentWorkspaceId(), mediaTaskKind))
   }
   await Promise.all(writes)
 }

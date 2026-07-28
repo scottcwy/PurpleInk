@@ -1,6 +1,6 @@
 import 'server-only'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import type { AiTaskKind, MediaTaskKind } from '@/features/routing'
-import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
 import {
   type AiConfigDependencies,
   getAiConfigDependencies,
@@ -86,11 +86,11 @@ export async function getMimoConfig(
   deps: AiConfigDependencies = getAiConfigDependencies()
 ): Promise<MimoConfig> {
   const [apiKey, text, vision, tts, asr] = await Promise.all([
-    deps.credentials.loadSecret(LOCAL_WORKSPACE_ID, MIMO_PROVIDER),
-    deps.modelRoutes.find(LOCAL_WORKSPACE_ID, 'fabricate'),
-    deps.modelRoutes.find(LOCAL_WORKSPACE_ID, 'vision-qa'),
-    deps.mediaRoutes.find(LOCAL_WORKSPACE_ID, 'tts'),
-    deps.mediaRoutes.find(LOCAL_WORKSPACE_ID, 'asr'),
+    deps.credentials.loadSecret(currentWorkspaceId(), MIMO_PROVIDER),
+    deps.modelRoutes.find(currentWorkspaceId(), 'fabricate'),
+    deps.modelRoutes.find(currentWorkspaceId(), 'vision-qa'),
+    deps.mediaRoutes.find(currentWorkspaceId(), 'tts'),
+    deps.mediaRoutes.find(currentWorkspaceId(), 'asr'),
   ])
   return {
     apiKey,
@@ -106,10 +106,10 @@ export async function describeMimoConfig(
   deps: AiConfigDependencies = getAiConfigDependencies()
 ): Promise<MimoConfigView> {
   const [text, vision, tts, asr] = await Promise.all([
-    deps.modelRoutes.find(LOCAL_WORKSPACE_ID, 'fabricate'),
-    deps.modelRoutes.find(LOCAL_WORKSPACE_ID, 'vision-qa'),
-    deps.mediaRoutes.find(LOCAL_WORKSPACE_ID, 'tts'),
-    deps.mediaRoutes.find(LOCAL_WORKSPACE_ID, 'asr'),
+    deps.modelRoutes.find(currentWorkspaceId(), 'fabricate'),
+    deps.modelRoutes.find(currentWorkspaceId(), 'vision-qa'),
+    deps.mediaRoutes.find(currentWorkspaceId(), 'tts'),
+    deps.mediaRoutes.find(currentWorkspaceId(), 'asr'),
   ])
   return {
     baseUrl: envOrDefault('baseUrl'),
@@ -129,12 +129,12 @@ async function saveAiModels(
   await Promise.all(kinds.map((aiTaskKind) =>
     model
       ? deps.modelRoutes.save({
-          workspaceId: LOCAL_WORKSPACE_ID,
+          workspaceId: currentWorkspaceId(),
           aiTaskKind,
           provider: MIMO_PROVIDER,
           model,
         })
-      : deps.modelRoutes.remove(LOCAL_WORKSPACE_ID, aiTaskKind)
+      : deps.modelRoutes.remove(currentWorkspaceId(), aiTaskKind)
   ))
 }
 
@@ -146,13 +146,13 @@ async function saveMediaModel(
   const model = nonEmpty(value)
   if (model) {
     await deps.mediaRoutes.save({
-      workspaceId: LOCAL_WORKSPACE_ID,
+      workspaceId: currentWorkspaceId(),
       mediaTaskKind,
       provider: MIMO_PROVIDER,
       model,
     })
   } else {
-    await deps.mediaRoutes.remove(LOCAL_WORKSPACE_ID, mediaTaskKind)
+    await deps.mediaRoutes.remove(currentWorkspaceId(), mediaTaskKind)
   }
 }
 
@@ -192,7 +192,7 @@ export async function saveMimoApiKey(
   deps: AiConfigDependencies = getAiConfigDependencies()
 ): Promise<void> {
   await deps.credentials.save({
-    workspaceId: LOCAL_WORKSPACE_ID,
+    workspaceId: currentWorkspaceId(),
     provider: MIMO_PROVIDER,
     secret: apiKey.trim(),
     verifiedAt,

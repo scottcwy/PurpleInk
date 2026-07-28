@@ -1,7 +1,8 @@
 import 'server-only'
 import { and, desc, eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { getDb, LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb, type Db } from '@/lib/db/client'
 import { artifacts, canvasNodes } from '@/lib/db/schema/index'
 import {
   laneKeyOf,
@@ -110,7 +111,7 @@ export class RenderShotRepository {
         .from(canvasNodes)
         .where(
           and(
-            eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+            eq(canvasNodes.workspaceId, currentWorkspaceId()),
             eq(canvasNodes.id, nodeId)
           )
         )
@@ -131,7 +132,7 @@ export class RenderShotRepository {
         })
         .where(
           and(
-            eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+            eq(canvasNodes.workspaceId, currentWorkspaceId()),
             eq(canvasNodes.id, nodeId)
           )
         )
@@ -152,7 +153,7 @@ export class RenderShotRepository {
         .from(canvasNodes)
         .where(
           and(
-            eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+            eq(canvasNodes.workspaceId, currentWorkspaceId()),
             eq(canvasNodes.id, nodeId)
           )
         )
@@ -176,7 +177,7 @@ export class RenderShotRepository {
         })
         .where(
           and(
-            eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+            eq(canvasNodes.workspaceId, currentWorkspaceId()),
             eq(canvasNodes.id, nodeId)
           )
         )
@@ -231,7 +232,7 @@ export class RenderShotRepository {
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.id, nodeId),
           eq(canvasNodes.projectId, projectId)
         )
@@ -266,7 +267,7 @@ export class RenderShotRepository {
       .from(artifacts)
       .where(
         and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(artifacts.workspaceId, currentWorkspaceId()),
           eq(artifacts.projectId, projectId),
           eq(artifacts.aggregateType, 'node'),
           eq(artifacts.aggregateId, nodeId),

@@ -1,6 +1,7 @@
 import 'server-only'
 import { and, eq } from 'drizzle-orm'
-import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { type Db } from '@/lib/db/client'
 import { canvasNodes, projects } from '@/lib/db/schema/index'
 import { withTransaction } from '@/lib/db/transaction'
 import type { StorageAdapter } from '@/lib/storage'
@@ -64,7 +65,7 @@ export class DirectorRuntimeRepository {
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.id, nodeId),
           eq(canvasNodes.projectId, projectId)
         )
@@ -105,7 +106,7 @@ export class DirectorRuntimeRepository {
       )
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.id, nodeId),
           eq(projects.id, projectId)
         )
@@ -184,7 +185,7 @@ export class DirectorRuntimeRepository {
         .from(canvasNodes)
         .where(
           and(
-            eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+            eq(canvasNodes.workspaceId, currentWorkspaceId()),
             eq(canvasNodes.id, nodeId)
           )
         )
@@ -199,7 +200,7 @@ export class DirectorRuntimeRepository {
         })
         .where(
           and(
-            eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+            eq(canvasNodes.workspaceId, currentWorkspaceId()),
             eq(canvasNodes.id, nodeId)
           )
         )

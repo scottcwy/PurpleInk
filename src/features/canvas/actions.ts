@@ -1,12 +1,12 @@
 import 'server-only'
 import { randomUUID } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
-import { getDb, LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb } from '@/lib/db/client'
 import {
   canvasEdges,
   canvasNodes,
   projects,
-  workspaces,
 } from '@/lib/db/schema/index'
 import { withTransaction } from '@/lib/db/transaction'
 import {
@@ -25,23 +25,22 @@ const GLOBAL_NODE_DEFINITIONS = [
   { type: 'export', stage: 'FINALIZE', logicalKey: 'global:export' },
 ] as const
 
-/** 单事务创建项目与初始全局 DAG，避免出现无入口节点的半成品项目。 */
+/**
+ * 单事务创建项目与初始全局 DAG，避免出现无入口节点的半成品项目。
+ *
+ * workspace 行的创建点唯一在注册事务（auth-repository 的
+ * `createUserWithWorkspace`）；这里只消费当前会话的归属，不再 upsert
+ * workspace（PLAN-002 §5.2）。
+ */
 export async function createProject(input: unknown): Promise<Project> {
   const { title, script, visualTheme } = createProjectSchema.parse(input)
+  const workspaceId = currentWorkspaceId()
   const database = await getDb()
   return withTransaction(database, async (tx) => {
-    await tx
-      .insert(workspaces)
-      .values({
-        id: LOCAL_WORKSPACE_ID,
-        slug: 'local',
-        name: 'Local Workspace',
-      })
-      .onConflictDoNothing()
     const [project] = await tx
       .insert(projects)
       .values({
-        workspaceId: LOCAL_WORKSPACE_ID,
+        workspaceId,
         id: randomUUID(),
         title,
         script,
@@ -61,7 +60,7 @@ export async function createProject(input: unknown): Promise<Project> {
     if (!project) throw new Error('项目创建失败')
 
     const nodes = GLOBAL_NODE_DEFINITIONS.map((definition) => ({
-      workspaceId: LOCAL_WORKSPACE_ID,
+      workspaceId,
       id: randomUUID(),
       projectId: project.id,
       ...definition,
@@ -78,14 +77,14 @@ export async function createProject(input: unknown): Promise<Project> {
       .insert(canvasEdges)
       .values([
         {
-          workspaceId: LOCAL_WORKSPACE_ID,
+          workspaceId,
           id: randomUUID(),
           projectId: project.id,
           source: nodes[0]!.id,
           target: nodes[1]!.id,
         },
         {
-          workspaceId: LOCAL_WORKSPACE_ID,
+          workspaceId,
           id: randomUUID(),
           projectId: project.id,
           source: nodes[2]!.id,
@@ -115,7 +114,7 @@ export async function updateExportSettings(
     })
     .where(
       and(
-        eq(projects.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(projects.workspaceId, currentWorkspaceId()),
         eq(projects.id, projectId)
       )
     )
@@ -136,7 +135,7 @@ export async function setProjectAutopilot(
     .set({ autopilot: enabled, updatedAt: new Date() })
     .where(
       and(
-        eq(projects.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(projects.workspaceId, currentWorkspaceId()),
         eq(projects.id, projectId)
       )
     )

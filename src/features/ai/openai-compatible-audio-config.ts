@@ -1,7 +1,7 @@
 import 'server-only'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { buildAsrValidationWav } from '@/lib/audio/wav-sample'
 import type { ProviderCredentialStore } from '@/features/credentials'
-import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
 import {
   AUDIO_FORMATS,
   normalizeBaseUrl,
@@ -147,12 +147,12 @@ export async function saveTtsProfile(
 ): Promise<void> {
   const profile = parseTtsInput(input)
   await dependencies.credentials.save({
-    workspaceId: LOCAL_WORKSPACE_ID,
+    workspaceId: currentWorkspaceId(),
     provider: CUSTOM_TTS_PROVIDER,
     secret: input.apiKey.trim(),
     verifiedAt: new Date(),
   })
-  await dependencies.profileStore.saveTts(LOCAL_WORKSPACE_ID, profile)
+  await dependencies.profileStore.saveTts(currentWorkspaceId(), profile)
 }
 
 export async function saveAsrProfile(
@@ -165,12 +165,12 @@ export async function saveAsrProfile(
 ): Promise<void> {
   const profile = parseAsrInput(input)
   await dependencies.credentials.save({
-    workspaceId: LOCAL_WORKSPACE_ID,
+    workspaceId: currentWorkspaceId(),
     provider: CUSTOM_ASR_PROVIDER,
     secret: input.apiKey.trim(),
     verifiedAt: new Date(),
   })
-  await dependencies.profileStore.saveAsr(LOCAL_WORKSPACE_ID, {
+  await dependencies.profileStore.saveAsr(currentWorkspaceId(), {
     ...profile,
     ...negotiated,
   })
@@ -180,8 +180,8 @@ export async function describeTtsProfile(
   dependencies: AudioProfileDependencies,
 ): Promise<TtsProfileView> {
   const [credential, profile] = await Promise.all([
-    dependencies.credentials.describe(LOCAL_WORKSPACE_ID, CUSTOM_TTS_PROVIDER),
-    dependencies.profileStore.findTts(LOCAL_WORKSPACE_ID),
+    dependencies.credentials.describe(currentWorkspaceId(), CUSTOM_TTS_PROVIDER),
+    dependencies.profileStore.findTts(currentWorkspaceId()),
   ])
   return {
     configured: credential.configured && profile !== null,
@@ -197,8 +197,8 @@ export async function describeAsrProfile(
   dependencies: AudioProfileDependencies,
 ): Promise<AsrProfileView> {
   const [credential, profile] = await Promise.all([
-    dependencies.credentials.describe(LOCAL_WORKSPACE_ID, CUSTOM_ASR_PROVIDER),
-    dependencies.profileStore.findAsr(LOCAL_WORKSPACE_ID),
+    dependencies.credentials.describe(currentWorkspaceId(), CUSTOM_ASR_PROVIDER),
+    dependencies.profileStore.findAsr(currentWorkspaceId()),
   ])
   return {
     configured: credential.configured && profile !== null,

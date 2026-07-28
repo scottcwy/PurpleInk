@@ -16,6 +16,14 @@ import type { StorageAdapter } from '@/lib/storage'
 import { mp3Frames } from './mp3.fixture'
 import { AudioRuntimeRepository } from './runtime-repository'
 
+// 被测模块经 currentWorkspaceId() 取归属（PLAN-002 阶段 B）；单测没有请求入口，
+// 把读取口 mock 成历史单工作区 id，与用例 seed 的数据保持一致。
+vi.mock('@/lib/auth/workspace-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/workspace-context')>()),
+  currentWorkspaceId: () => '00000000-0000-4000-8000-000000000001',
+  currentUserId: () => 'test-user',
+}))
+
 vi.mock('server-only', () => ({}))
 
 const OTHER_WORKSPACE_ID = '00000000-0000-4000-8000-000000000002'

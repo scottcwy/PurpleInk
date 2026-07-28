@@ -142,7 +142,7 @@ L3 的壳只有一处实现：`src/features/navigation/app-shell.tsx`。`(auth)`
 
 ## 8. 当前已知问题
 
-1. **无认证。** 没有 `proxy.ts`，全部页面与 API 都不读 session，workspace 固定 `LOCAL_WORKSPACE_ID`。`/products/*` 与 `/api/*` 目前未授权可访问，只能跑在本地或受信网络内。
+1. ~~无认证~~ 已落地：`src/proxy.ts` 拦 `/products/*`（cookie 形状），页面经 `withPageSession` 查库校验，业务 API 经 `withApiSession` 回 401；业务查询的 workspace 取自会话上下文（`currentWorkspaceId()`），`LOCAL_WORKSPACE_ID` 仅作迁移/bootstrap/进程级配置锚点。
 2. ~~`robots.ts` 缺 `/share/` disallow~~ 已修复（ISSUE-009）。
 3. `sitemap.ts` 只有 `/` 一条；`/artifacts` 与 featured 案例待 `ShareSnapshot` 落盘后接入（见 `sitemap.ts` 注释）。
 4. ~~`canvas-inspector.tsx` 拼 artifact href 时 `projectId` 未 `encodeURIComponent`~~ 已修复（ISSUE-009）。

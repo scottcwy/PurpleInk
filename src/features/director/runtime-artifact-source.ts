@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
-import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { type Db } from '@/lib/db/client'
 import { artifacts, canvasNodes } from '@/lib/db/schema/index'
 import type { StorageAdapter } from '@/lib/storage'
 import { readLaneKey } from './runtime-node-data'
@@ -100,7 +101,7 @@ export class DirectorArtifactSource {
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.projectId, projectId),
           eq(canvasNodes.type, 'script-import')
         )
@@ -177,7 +178,7 @@ export class DirectorArtifactSource {
       .from(artifacts)
       .where(
         and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(artifacts.workspaceId, currentWorkspaceId()),
           eq(artifacts.projectId, projectId),
           eq(artifacts.aggregateType, 'node'),
           inArray(
@@ -207,7 +208,7 @@ export class DirectorArtifactSource {
       .from(artifacts)
       .where(
         and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(artifacts.workspaceId, currentWorkspaceId()),
           eq(artifacts.projectId, projectId),
           eq(artifacts.aggregateType, 'project'),
           eq(artifacts.aggregateId, projectId),
@@ -256,7 +257,7 @@ export class DirectorArtifactSource {
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.projectId, projectId),
           eq(canvasNodes.type, type)
         )
@@ -274,7 +275,7 @@ export class DirectorArtifactSource {
       .from(artifacts)
       .where(
         and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(artifacts.workspaceId, currentWorkspaceId()),
           eq(artifacts.projectId, projectId),
           eq(artifacts.aggregateType, 'node'),
           eq(artifacts.aggregateId, nodeId),

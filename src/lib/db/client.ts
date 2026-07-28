@@ -8,6 +8,13 @@ const globalStore = globalThis as unknown as {
   __cvcDbPromise?: Promise<Db>
 }
 
+/**
+ * 历史单工作区的固定 id。**已降级：禁止在业务查询中使用**（PLAN-002 §1.2）。
+ * 业务代码一律用 `currentWorkspaceId()`（`@/lib/auth/workspace-context`）；
+ * 本常量只剩三个合法用途：历史数据迁移、bootstrap/seed 脚本、
+ * 进程级配置行的存放锚点（`queue/runtime-config.ts`）。
+ * 契约测试 `tests/workspace-context-contract.test.ts` 锁住这一点。
+ */
 export const LOCAL_WORKSPACE_ID = '00000000-0000-4000-8000-000000000001'
 
 export type Db = PostgresJsDatabase<typeof postgresSchema>

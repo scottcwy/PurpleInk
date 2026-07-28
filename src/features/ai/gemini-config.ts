@@ -1,5 +1,5 @@
 import 'server-only'
-import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import {
   type AiConfigDependencies,
   getAiConfigDependencies,
@@ -60,9 +60,9 @@ export async function getGeminiConfig(
   deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<GeminiConfig> {
   const [storedKey, primary, fast] = await Promise.all([
-    deps.credentials.loadSecret(LOCAL_WORKSPACE_ID, 'gemini'),
-    deps.modelRoutes.find(LOCAL_WORKSPACE_ID, 'fabricate'),
-    deps.modelRoutes.find(LOCAL_WORKSPACE_ID, 'project-plan'),
+    deps.credentials.loadSecret(currentWorkspaceId(), 'gemini'),
+    deps.modelRoutes.find(currentWorkspaceId(), 'fabricate'),
+    deps.modelRoutes.find(currentWorkspaceId(), 'project-plan'),
   ])
   return {
     apiKey: storedKey,
@@ -80,8 +80,8 @@ export async function describeGeminiConfig(
   deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<GeminiConfigView> {
   const [primary, fast] = await Promise.all([
-    deps.modelRoutes.find(LOCAL_WORKSPACE_ID, 'fabricate'),
-    deps.modelRoutes.find(LOCAL_WORKSPACE_ID, 'project-plan'),
+    deps.modelRoutes.find(currentWorkspaceId(), 'fabricate'),
+    deps.modelRoutes.find(currentWorkspaceId(), 'project-plan'),
   ])
   return {
     baseUrl: envOrDefault('baseUrl'),
@@ -110,12 +110,12 @@ async function saveModelGroup(
   const model = nonEmpty(input.value)
   await Promise.all(input.kinds.map((aiTaskKind) => model
     ? deps.modelRoutes.save({
-        workspaceId: LOCAL_WORKSPACE_ID,
+        workspaceId: currentWorkspaceId(),
         aiTaskKind,
         provider: 'gemini',
         model,
       })
-    : deps.modelRoutes.remove(LOCAL_WORKSPACE_ID, aiTaskKind)))
+    : deps.modelRoutes.remove(currentWorkspaceId(), aiTaskKind)))
 }
 
 export async function saveGeminiSettings(
@@ -150,7 +150,7 @@ export async function saveGeminiApiKey(
   deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<void> {
   await deps.credentials.save({
-    workspaceId: LOCAL_WORKSPACE_ID,
+    workspaceId: currentWorkspaceId(),
     provider: 'gemini',
     secret: apiKey,
     verifiedAt,

@@ -1,5 +1,5 @@
 import 'server-only'
-import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { type AiConfigDependencies, getStepfunConfig } from './config'
 import { getGeminiConfig } from './gemini-config'
 import { getMimoConfig } from './mimo-config'
@@ -54,8 +54,8 @@ async function customAudioDefaults(
   if (!store) throw new RouteContractError('自定义兼容音频端点配置存储不可用')
   const isTts = provider === CUSTOM_TTS_PROVIDER
   const [profile, apiKey] = await Promise.all([
-    isTts ? store.findTts(LOCAL_WORKSPACE_ID) : store.findAsr(LOCAL_WORKSPACE_ID),
-    deps.credentials.loadSecret(LOCAL_WORKSPACE_ID, provider),
+    isTts ? store.findTts(currentWorkspaceId()) : store.findAsr(currentWorkspaceId()),
+    deps.credentials.loadSecret(currentWorkspaceId(), provider),
   ])
   if (!profile) {
     throw new RouteContractError(
@@ -110,8 +110,8 @@ async function customOpenAiDefaults(
   const profiles = deps.openAiCompatibleProfiles
   if (!profiles) throw new RouteContractError('OpenAI 兼容模型配置存储不可用')
   const [profile, apiKey] = await Promise.all([
-    profiles.find(LOCAL_WORKSPACE_ID),
-    deps.credentials.loadSecret(LOCAL_WORKSPACE_ID, CUSTOM_OPENAI_PROVIDER),
+    profiles.find(currentWorkspaceId()),
+    deps.credentials.loadSecret(currentWorkspaceId(), CUSTOM_OPENAI_PROVIDER),
   ])
   if (!profile) throw new RouteContractError('OpenAI 兼容模型服务尚未配置')
   return {

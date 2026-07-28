@@ -1,6 +1,7 @@
 import 'server-only'
 import { and, desc, eq } from 'drizzle-orm'
-import { getDb, LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb } from '@/lib/db/client'
 import {
   artifacts,
   canvasEdges,
@@ -81,7 +82,7 @@ export async function listProjects(): Promise<Project[]> {
     .from(projects)
     .where(
       and(
-        eq(projects.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(projects.workspaceId, currentWorkspaceId()),
         eq(
           projects.workflowVersion,
           serializeWorkflowVersion(ACTIVE_WORKFLOW_VERSION)
@@ -98,7 +99,7 @@ export async function getExportSettings(projectId: string): Promise<ExportSettin
     .from(projects)
     .where(
       and(
-        eq(projects.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(projects.workspaceId, currentWorkspaceId()),
         eq(projects.id, projectId)
       )
     )
@@ -113,7 +114,7 @@ export async function getProjectAutopilot(projectId: string): Promise<boolean> {
     .from(projects)
     .where(
       and(
-        eq(projects.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(projects.workspaceId, currentWorkspaceId()),
         eq(projects.id, projectId)
       )
     )
@@ -134,7 +135,7 @@ export async function getCanvasGraph(projectId: string): Promise<CanvasGraph> {
     .from(canvasNodes)
     .where(
       and(
-        eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(canvasNodes.workspaceId, currentWorkspaceId()),
         eq(canvasNodes.projectId, projectId)
       )
     )
@@ -170,7 +171,7 @@ export async function getCanvasGraph(projectId: string): Promise<CanvasGraph> {
     .from(canvasEdges)
     .where(
       and(
-        eq(canvasEdges.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(canvasEdges.workspaceId, currentWorkspaceId()),
         eq(canvasEdges.projectId, projectId)
       )
     )
@@ -191,7 +192,7 @@ export async function getNodeArtifacts(
     .from(artifacts)
     .where(
       and(
-        eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(artifacts.workspaceId, currentWorkspaceId()),
         eq(artifacts.projectId, projectId),
         eq(artifacts.aggregateType, 'node'),
         eq(artifacts.aggregateId, nodeId)
@@ -269,7 +270,7 @@ export async function getNodeStreamContext(
     .from(canvasNodes)
     .where(
       and(
-        eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(canvasNodes.workspaceId, currentWorkspaceId()),
         eq(canvasNodes.id, nodeId),
         eq(canvasNodes.projectId, projectId)
       )

@@ -1,7 +1,8 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import { and, eq, inArray } from 'drizzle-orm'
-import { getDb, LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb } from '@/lib/db/client'
 import {
   canvasEdges,
   canvasNodes,
@@ -57,7 +58,7 @@ export async function transitionNodeStatus(
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.id, nodeId)
         )
       )
@@ -80,7 +81,7 @@ export async function transitionNodeStatus(
       })
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.id, nodeId)
         )
       )
@@ -106,7 +107,7 @@ export async function isStale(nodeId: string): Promise<boolean> {
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.id, nodeId)
         )
       )
@@ -124,7 +125,7 @@ export async function captureNodeInputFingerprint(nodeId: string): Promise<strin
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.id, nodeId)
         )
       )
@@ -141,7 +142,7 @@ export async function captureNodeInputFingerprint(nodeId: string): Promise<strin
       })
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.id, nodeId)
         )
       )
@@ -165,7 +166,7 @@ export async function invalidateNodeForRegeneration(
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.id, nodeId)
         )
       )
@@ -186,7 +187,7 @@ export async function invalidateNodeForRegeneration(
       })
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.id, nodeId)
         )
       )
@@ -217,7 +218,7 @@ async function dependencyHashes(
     .from(canvasEdges)
     .where(
       and(
-        eq(canvasEdges.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(canvasEdges.workspaceId, currentWorkspaceId()),
         eq(canvasEdges.target, nodeId)
       )
     )
@@ -228,7 +229,7 @@ async function dependencyHashes(
     .from(canvasNodes)
     .where(
       and(
-        eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(canvasNodes.workspaceId, currentWorkspaceId()),
         inArray(
           canvasNodes.id,
           incoming.map(({ source }) => source)

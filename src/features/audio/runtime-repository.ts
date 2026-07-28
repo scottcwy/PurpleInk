@@ -1,7 +1,8 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import { and, desc, eq } from 'drizzle-orm'
-import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { type Db } from '@/lib/db/client'
 import { artifacts } from '@/lib/db/schema/index'
 import type { StorageAdapter } from '@/lib/storage'
 import { detectAudioContainer, type AudioContainer } from './audio-format'
@@ -44,7 +45,7 @@ export class AudioRuntimeRepository {
       .from(artifacts)
       .where(
         and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(artifacts.workspaceId, currentWorkspaceId()),
           eq(artifacts.projectId, projectId),
           eq(artifacts.aggregateType, 'node'),
           eq(artifacts.kind, kind)

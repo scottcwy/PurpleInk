@@ -1,10 +1,10 @@
 import 'server-only'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import {
   getAiConfigDependencies,
   getStepfunConfig,
   type AiConfigDependencies,
 } from '@/features/ai/config'
-import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
 import {
   synthesizeMimoSpeech,
   transcribeMimoSpeech,
@@ -86,16 +86,16 @@ function defaultDependencies(): RoutedMediaDependencies {
     synthesizeCustom: (input, deps) =>
       synthesizeOpenAiCompatibleSpeech(input, {
         fetcher: fetch,
-        getProfile: () => audioProfiles(deps).findTts(LOCAL_WORKSPACE_ID),
+        getProfile: () => audioProfiles(deps).findTts(currentWorkspaceId()),
         getApiKey: () =>
-          deps.credentials.loadSecret(LOCAL_WORKSPACE_ID, CUSTOM_TTS_PROVIDER),
+          deps.credentials.loadSecret(currentWorkspaceId(), CUSTOM_TTS_PROVIDER),
       }),
     transcribeCustom: (input, deps) =>
       transcribeOpenAiCompatibleSpeech(input, {
         fetcher: fetch,
-        getProfile: () => audioProfiles(deps).findAsr(LOCAL_WORKSPACE_ID),
+        getProfile: () => audioProfiles(deps).findAsr(currentWorkspaceId()),
         getApiKey: () =>
-          deps.credentials.loadSecret(LOCAL_WORKSPACE_ID, CUSTOM_ASR_PROVIDER),
+          deps.credentials.loadSecret(currentWorkspaceId(), CUSTOM_ASR_PROVIDER),
       }),
   }
 }
@@ -125,7 +125,7 @@ async function resolveProvider(
   kind: 'tts' | 'asr',
   deps: AiConfigDependencies,
 ): Promise<{ provider: MediaProviderId; model: string }> {
-  const route = await deps.mediaRoutes.resolve(LOCAL_WORKSPACE_ID, kind)
+  const route = await deps.mediaRoutes.resolve(currentWorkspaceId(), kind)
   if (!route) {
     const config = await getStepfunConfig(deps)
     return {
@@ -149,8 +149,8 @@ async function customModel(
 ): Promise<string> {
   const store = audioProfiles(deps)
   const profile = provider === CUSTOM_TTS_PROVIDER
-    ? await store.findTts(LOCAL_WORKSPACE_ID)
-    : await store.findAsr(LOCAL_WORKSPACE_ID)
+    ? await store.findTts(currentWorkspaceId())
+    : await store.findAsr(currentWorkspaceId())
   if (!profile) {
     throw new Error(
       provider === CUSTOM_TTS_PROVIDER
@@ -167,7 +167,7 @@ export async function resolveNarrationEngine(
   const target = await resolveProvider('tts', deps)
   if (target.provider === CUSTOM_TTS_PROVIDER) {
     // 音色与容器格式由用户 profile 提供，不猜默认值。
-    const profile = await audioProfiles(deps).findTts(LOCAL_WORKSPACE_ID)
+    const profile = await audioProfiles(deps).findTts(currentWorkspaceId())
     if (!profile) throw new Error('自定义兼容 TTS 端点尚未配置')
     return {
       ...target,

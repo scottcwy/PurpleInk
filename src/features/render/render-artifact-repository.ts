@@ -6,7 +6,8 @@ import {
   resolveCurrentAttemptId,
   resolveDerivedSourceAttemptId,
 } from '@/features/artifacts'
-import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { type Db } from '@/lib/db/client'
 import { artifacts } from '@/lib/db/schema/index'
 import { writeNodeProjection } from './persistence'
 import { RenderShotRepository } from './render-shot-repository'
@@ -54,13 +55,13 @@ export class RenderArtifactRepository extends RenderShotRepository {
   async registerFinalArtifact(input: FinalArtifactInput): Promise<string> {
     const database = await this.database()
     const attemptId = await resolveCurrentAttemptId(database, {
-      workspaceId: LOCAL_WORKSPACE_ID,
+      workspaceId: currentWorkspaceId(),
       projectId: input.projectId,
       aggregateType: 'project',
       aggregateId: input.projectId,
     })
     const committed = await commitArtifactRecord(database, {
-      workspaceId: LOCAL_WORKSPACE_ID,
+      workspaceId: currentWorkspaceId(),
       projectId: input.projectId,
       aggregateType: 'project',
       aggregateId: input.projectId,
@@ -88,7 +89,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
       .from(artifacts)
       .where(
         and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(artifacts.workspaceId, currentWorkspaceId()),
           eq(artifacts.projectId, projectId),
           eq(artifacts.aggregateType, 'project'),
           eq(artifacts.aggregateId, projectId),
@@ -116,13 +117,13 @@ export class RenderArtifactRepository extends RenderShotRepository {
   ): Promise<string> {
     const database = await this.database()
     const attemptId = await resolveCurrentAttemptId(database, {
-      workspaceId: LOCAL_WORKSPACE_ID,
+      workspaceId: currentWorkspaceId(),
       projectId: input.projectId,
       aggregateType: 'project',
       aggregateId: input.projectId,
     })
     const committed = await commitArtifactRecord(database, {
-      workspaceId: LOCAL_WORKSPACE_ID,
+      workspaceId: currentWorkspaceId(),
       projectId: input.projectId,
       aggregateType: 'project',
       aggregateId: input.projectId,
@@ -154,7 +155,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
       .from(artifacts)
       .where(
         and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(artifacts.workspaceId, currentWorkspaceId()),
           eq(artifacts.projectId, projectId),
           eq(artifacts.aggregateType, 'node'),
           eq(artifacts.aggregateId, nodeId),
@@ -178,14 +179,14 @@ export class RenderArtifactRepository extends RenderShotRepository {
   async registerThumbnail(input: ThumbnailRegistration): Promise<string> {
     const database = await this.database()
     const attemptId = await resolveDerivedSourceAttemptId(database, {
-      workspaceId: LOCAL_WORKSPACE_ID,
+      workspaceId: currentWorkspaceId(),
       projectId: input.projectId,
       aggregateType: 'node',
       aggregateId: input.nodeId,
       sourceKind: 'director-fabricate',
     })
     const committed = await commitDerivedArtifact(database, {
-      workspaceId: LOCAL_WORKSPACE_ID,
+      workspaceId: currentWorkspaceId(),
       projectId: input.projectId,
       aggregateType: 'node',
       aggregateId: input.nodeId,
@@ -207,7 +208,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
     const committed = await commitArtifactRecord(
       database,
       {
-        workspaceId: LOCAL_WORKSPACE_ID,
+        workspaceId: currentWorkspaceId(),
         projectId: input.projectId,
         aggregateType: 'node',
         aggregateId: input.nodeId,
@@ -243,7 +244,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
       .from(artifacts)
       .where(
         and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(artifacts.workspaceId, currentWorkspaceId()),
           eq(artifacts.projectId, projectId),
           eq(artifacts.kind, 'score-audio')
         )
@@ -258,7 +259,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
     input: { projectId: string; nodeId: string }
   ): Promise<string> {
     return resolveCurrentAttemptId(database, {
-      workspaceId: LOCAL_WORKSPACE_ID,
+      workspaceId: currentWorkspaceId(),
       projectId: input.projectId,
       aggregateType: 'node',
       aggregateId: input.nodeId,

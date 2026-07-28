@@ -1,7 +1,8 @@
 import 'server-only'
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { getDb, LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb } from '@/lib/db/client'
 import {
   commitArtifactRecord,
   resolveCurrentAttemptId as resolveArtifactAttemptId,
@@ -73,7 +74,7 @@ export async function storeAudioArtifact(
   try {
     await dependencies.insertArtifact({
       id,
-      workspaceId: LOCAL_WORKSPACE_ID,
+      workspaceId: currentWorkspaceId(),
       projectId: parsed.projectId,
       aggregateType: 'node',
       aggregateId: parsed.nodeId,
@@ -114,7 +115,7 @@ async function resolveCurrentAttemptId(
 ): Promise<string> {
   const database = await getDb()
   return resolveArtifactAttemptId(database, {
-    workspaceId: LOCAL_WORKSPACE_ID,
+    workspaceId: currentWorkspaceId(),
     projectId,
     aggregateType: 'node',
     aggregateId: nodeId,

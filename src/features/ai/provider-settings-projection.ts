@@ -1,5 +1,5 @@
 import 'server-only'
-import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { describeLaneQuotas } from '@/lib/queue/runtime-config'
 import { describeStepfunConfig, getAiConfigDependencies } from './config'
 import { describeGeminiConfig } from './gemini-config'
@@ -36,9 +36,9 @@ export async function describeProviderSettings() {
     customOpenAiTts,
     customOpenAiAsr,
   ] = await Promise.all([
-    credentials.describe(LOCAL_WORKSPACE_ID, 'stepfun'),
-    credentials.describe(LOCAL_WORKSPACE_ID, 'gemini'),
-    credentials.describe(LOCAL_WORKSPACE_ID, 'mimo'),
+    credentials.describe(currentWorkspaceId(), 'stepfun'),
+    credentials.describe(currentWorkspaceId(), 'gemini'),
+    credentials.describe(currentWorkspaceId(), 'mimo'),
     describeStepfunConfig(),
     describeGeminiConfig(),
     describeMimoConfig(),

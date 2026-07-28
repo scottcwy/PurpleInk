@@ -5,7 +5,8 @@ import {
   commitArtifactRecord,
   resolveCurrentAttemptId,
 } from '@/features/artifacts'
-import { getDb, LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb, type Db } from '@/lib/db/client'
 import { artifacts } from '@/lib/db/schema/index'
 import { storage as defaultStorage, type StorageAdapter } from '@/lib/storage'
 
@@ -47,7 +48,7 @@ export async function lookupCache(
     .where(
       and(
         eq(artifacts.kind, 'render-mp4'),
-        eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(artifacts.workspaceId, currentWorkspaceId()),
         eq(artifacts.projectId, input.projectId),
         eq(artifacts.aggregateType, 'node'),
         eq(artifacts.aggregateId, input.nodeId),
@@ -86,13 +87,13 @@ export async function writeCache(
     throw new Error('render cache 实体 hash 与声明不一致')
   }
   const attemptId = await resolveCurrentAttemptId(database, {
-    workspaceId: LOCAL_WORKSPACE_ID,
+    workspaceId: currentWorkspaceId(),
     projectId: input.projectId,
     aggregateType: 'node',
     aggregateId: input.nodeId,
   })
   const committed = await commitArtifactRecord(database, {
-    workspaceId: LOCAL_WORKSPACE_ID,
+    workspaceId: currentWorkspaceId(),
     projectId: input.projectId,
     aggregateType: 'node',
     aggregateId: input.nodeId,

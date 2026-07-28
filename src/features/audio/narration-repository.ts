@@ -4,7 +4,8 @@ import {
   commitArtifactRecord,
   resolveCurrentAttemptId,
 } from '@/features/artifacts'
-import { getDb, LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb, type Db } from '@/lib/db/client'
 import { storage as defaultStorage, type StorageAdapter } from '@/lib/storage'
 
 export interface NarrationAudioRecord {
@@ -67,13 +68,13 @@ export async function registerNarrationAudio(
     throw new Error(`旁白音频实体 hash 与声明不一致：${input.audioKey}`)
   }
   const attemptId = await resolveCurrentAttemptId(database, {
-    workspaceId: LOCAL_WORKSPACE_ID,
+    workspaceId: currentWorkspaceId(),
     projectId: input.projectId,
     aggregateType: 'node',
     aggregateId: input.nodeId,
   })
   const committed = await commitArtifactRecord(database, {
-    workspaceId: LOCAL_WORKSPACE_ID,
+    workspaceId: currentWorkspaceId(),
     projectId: input.projectId,
     aggregateType: 'node',
     aggregateId: input.nodeId,

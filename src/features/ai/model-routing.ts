@@ -1,8 +1,8 @@
 import 'server-only'
 import { z } from 'zod'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import type { CanvasNodeType } from '@/features/canvas'
 import type { AiTaskKind } from '@/features/routing'
-import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
 import { type AiConfigDependencies, getAiConfigDependencies } from './config'
 import { providerDefaults } from './route-provider-defaults'
 import {
@@ -106,8 +106,8 @@ async function findRoute(
   deps: AiConfigDependencies,
 ): Promise<{ provider: string; model: string } | null> {
   return target.domain === 'media'
-    ? deps.mediaRoutes.find(LOCAL_WORKSPACE_ID, target.kind)
-    : deps.modelRoutes.find(LOCAL_WORKSPACE_ID, target.kind)
+    ? deps.mediaRoutes.find(currentWorkspaceId(), target.kind)
+    : deps.modelRoutes.find(currentWorkspaceId(), target.kind)
 }
 
 async function resolveRoute(
@@ -115,8 +115,8 @@ async function resolveRoute(
   deps: AiConfigDependencies,
 ): Promise<ResolvedRoute | null> {
   const route = target.domain === 'media'
-    ? await deps.mediaRoutes.resolve(LOCAL_WORKSPACE_ID, target.kind)
-    : await deps.modelRoutes.resolve(LOCAL_WORKSPACE_ID, target.kind)
+    ? await deps.mediaRoutes.resolve(currentWorkspaceId(), target.kind)
+    : await deps.modelRoutes.resolve(currentWorkspaceId(), target.kind)
   if (!route) return null
   return {
     provider: providerSchema.parse(route.provider),
@@ -214,7 +214,7 @@ export async function saveDirectorRoutes(
   await Promise.all(planned.map(async ({ target, provider, model }) => {
     if (target.domain === 'media') {
       await deps.mediaRoutes.save({
-        workspaceId: LOCAL_WORKSPACE_ID,
+        workspaceId: currentWorkspaceId(),
         mediaTaskKind: target.kind,
         provider,
         model,
@@ -222,7 +222,7 @@ export async function saveDirectorRoutes(
       return
     }
     await deps.modelRoutes.save({
-      workspaceId: LOCAL_WORKSPACE_ID,
+      workspaceId: currentWorkspaceId(),
       aiTaskKind: target.kind,
       provider,
       model,

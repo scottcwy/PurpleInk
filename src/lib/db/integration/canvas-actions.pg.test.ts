@@ -28,6 +28,14 @@ import {
   getProjectAutopilot,
 } from '@/features/canvas/queries'
 
+// 被测模块经 currentWorkspaceId() 取归属（PLAN-002 阶段 B）；单测没有请求入口，
+// 把读取口 mock 成历史单工作区 id，与用例 seed 的数据保持一致。
+vi.mock('@/lib/auth/workspace-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/workspace-context')>()),
+  currentWorkspaceId: () => '00000000-0000-4000-8000-000000000001',
+  currentUserId: () => 'test-user',
+}))
+
 const WORKSPACE_ID = '00000000-0000-4000-8000-000000000001'
 const { getDbMock } = vi.hoisted(() => ({
   getDbMock: vi.fn<() => Promise<Db>>(),
@@ -48,6 +56,12 @@ beforeAll(async () => {
 beforeEach(async () => {
   await database.reset()
   getDbMock.mockResolvedValue(database.db)
+  // 阶段 B 后 createProject 不再自建 workspace（创建点唯一在注册事务），
+  // 用例自行 seed 归属行。
+  await database.db
+    .insert(workspaces)
+    .values({ id: WORKSPACE_ID, slug: 'local', name: 'Local Workspace' })
+    .onConflictDoNothing()
 })
 
 afterAll(async () => {
@@ -60,7 +74,7 @@ describe('createProject', () => {
     getDbMock.mockResolvedValue(database.db)
   })
 
-  it('atomically creates the local workspace, project, and four global nodes', async () => {
+  it('atomically creates the project and four global nodes in the session workspace', async () => {
     const result = createProject({ title: 'RAG 十分钟入门', script: '测试稿件' })
     expect(result).toBeInstanceOf(Promise)
     const project = await result
@@ -96,7 +110,7 @@ describe('createProject', () => {
     ])
   })
 
-  it('rolls back workspace and project when initial graph creation fails', async () => {
+  it('rolls back the project when initial graph creation fails', async () => {
     await database.sql`
       CREATE FUNCTION fail_initial_graph() RETURNS trigger AS $$
       BEGIN
@@ -114,7 +128,8 @@ describe('createProject', () => {
       createProject({ title: '失败项目', script: '稿件' })
     ).rejects.toThrow()
     expect(await database.db.select().from(projects)).toHaveLength(0)
-    expect(await database.db.select().from(workspaces)).toHaveLength(0)
+    // seed 的 workspace 行不受事务影响：createProject 不再负责建/删 workspace。
+    expect(await database.db.select().from(workspaces)).toHaveLength(1)
   })
 })
 
