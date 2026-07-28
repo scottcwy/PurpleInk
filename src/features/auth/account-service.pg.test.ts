@@ -1,6 +1,13 @@
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { sessions, users, workspaceMembers, workspaces } from '@/lib/db/schema/index'
+import {
+  sessions,
+  usagePeriods,
+  users,
+  workspaceEntitlements,
+  workspaceMembers,
+  workspaces,
+} from '@/lib/db/schema/index'
 import { createPgTestDatabase, type PgTestDatabase } from '@/lib/db/test/pg-test-database'
 
 const getDbMock = vi.hoisted(() => vi.fn())
@@ -77,12 +84,24 @@ describe('registerAccount', () => {
     const [user] = await database.db.select().from(users)
     const [workspace] = await database.db.select().from(workspaces)
     const [membership] = await database.db.select().from(workspaceMembers)
+    const [entitlement] = await database.db.select().from(workspaceEntitlements)
+    const [usagePeriod] = await database.db.select().from(usagePeriods)
     expect(user?.email).toBe('owner@example.com')
     expect(user?.emailVerifiedAt).not.toBeNull()
     expect(membership).toMatchObject({
       userId: user?.id,
       workspaceId: workspace?.id,
       role: 'owner',
+    })
+    expect(entitlement).toMatchObject({
+      workspaceId: workspace?.id,
+      planKey: 'free',
+      status: 'active',
+    })
+    expect(usagePeriod).toMatchObject({
+      workspaceId: workspace?.id,
+      planKey: 'free',
+      status: 'active',
     })
   })
 

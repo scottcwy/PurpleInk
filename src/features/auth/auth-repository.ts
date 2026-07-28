@@ -10,6 +10,7 @@ import {
   workspaces,
 } from '@/lib/db/schema/index'
 import { withTransaction } from '@/lib/db/transaction'
+import { provisionFreeEntitlement } from '@/features/billing'
 
 export interface UserRecord {
   id: string
@@ -50,7 +51,8 @@ export async function findUserByEmail(email: string): Promise<UserRecord | null>
 }
 
 /**
- * 注册的原子边界（§8.2）：user + workspace + owner 成员关系必须同生同死，
+ * 注册的原子边界（§8.2）：user + workspace + owner 成员关系 + Free 权益与
+ * 首个用量周期必须同生同死，
  * 任一步失败全回滚，绝不留下「有账号但没有 workspace」的半成品。
  *
  * workspace 的创建点唯一在这里——`createProject()` 里那段 upsert 本地
@@ -85,6 +87,7 @@ export async function createUserWithWorkspace(input: {
     await tx
       .insert(workspaceMembers)
       .values({ workspaceId: workspace.id, userId: user.id, role: 'owner' })
+    await provisionFreeEntitlement(tx, workspace.id)
 
     return { userId: user.id, workspaceId: workspace.id }
   })

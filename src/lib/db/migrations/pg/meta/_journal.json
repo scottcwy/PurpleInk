@@ -50,6 +50,20 @@
       "when": 1785227004821,
       "tag": "0006_flashy_talkback",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785236363142,
+      "tag": "0007_silly_namorita",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785236874938,
+      "tag": "0008_lively_aqueduct",
+      "breakpoints": true
     }
   ]
 }

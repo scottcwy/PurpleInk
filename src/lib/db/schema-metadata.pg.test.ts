@@ -6,12 +6,15 @@ const TABLES = [
   'task_attempts', 'artifacts', 'command_receipts', 'model_routes',
   'media_routes', 'provider_credentials', 'ai_invocations', 'workspace_settings',
   'users', 'workspace_members', 'sessions', 'email_verification_codes',
-  'auth_throttle',
+  'auth_throttle', 'managed_model_catalog', 'rate_cards', 'rate_card_units',
+  'workspace_entitlements', 'usage_periods', 'redemption_batches',
+  'redemption_codes', 'redemption_audits',
 ] as const
 const WORKSPACE_TABLES = [
   'projects', 'canvas_nodes', 'canvas_edges', 'pipeline_runs', 'task_attempts',
   'artifacts', 'command_receipts', 'model_routes', 'media_routes',
   'provider_credentials', 'ai_invocations', 'workspace_settings',
+  'usage_periods', 'workspace_entitlements',
 ] as const
 const ENUM_CHECKS = {
   projects_status_check: ['active', 'archived'],
@@ -68,6 +71,12 @@ const REQUIRED_UNIQUES = [
   'media_routes:workspace_id,media_task_kind',
   'provider_credentials:workspace_id,provider',
   'ai_invocations:workspace_id,attempt_id,invocation_no,repair_no',
+  'ai_invocations:workspace_id,billing_idempotency_key',
+  'managed_model_catalog:provider,model,capability',
+  'rate_cards:catalog_id,version',
+  'redemption_audits:workspace_id,idempotency_key',
+  'redemption_codes:code_hash',
+  'usage_periods:workspace_id,starts_at',
   'sessions:token_hash',
 ] as const
 const EXPECTED_FOREIGN_KEYS = [
@@ -84,6 +93,16 @@ const EXPECTED_FOREIGN_KEYS = [
   'ai_invocations->pipeline_runs:workspace_id,run_id=>workspace_id,id',
   'ai_invocations->task_attempts:workspace_id,attempt_id=>workspace_id,id',
   'ai_invocations->artifacts:workspace_id,trace_artifact_id=>workspace_id,id',
+  'ai_invocations->rate_cards:rate_card_id=>id',
+  'ai_invocations->usage_periods:workspace_id,usage_period_id=>workspace_id,id',
+  'rate_card_units->rate_cards:rate_card_id=>id',
+  'rate_cards->managed_model_catalog:catalog_id=>id',
+  'redemption_audits->redemption_codes:code_id=>id',
+  'redemption_audits->users:actor_user_id=>id',
+  'redemption_audits->workspaces:workspace_id=>id',
+  'redemption_batches->users:created_by_user_id=>id',
+  'redemption_codes->redemption_batches:batch_id=>id',
+  'redemption_codes->workspaces:consumed_by_workspace_id=>id',
   'workspace_members->workspaces:workspace_id=>id',
   'workspace_members->users:user_id=>id',
   'sessions->workspaces:workspace_id=>id',
@@ -161,7 +180,7 @@ beforeAll(async () => Object.assign(database, await createPgTestDatabase()))
 beforeEach(async () => database.reset())
 afterAll(async () => database.close())
 
-it('creates exactly eighteen tables with their scoped primary keys', async () => {
+it('creates the complete schema with scoped primary keys', async () => {
   const rows = await database.sql<{ table_name: string }[]>`
     SELECT table_name FROM information_schema.tables
     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
@@ -172,9 +191,16 @@ it('creates exactly eighteen tables with their scoped primary keys', async () =>
   const expected = [
     'workspaces:id',
     ...WORKSPACE_TABLES
-      .filter((table) => table !== 'workspace_settings')
+      .filter((table) => !['workspace_settings', 'workspace_entitlements'].includes(table))
       .map((table) => `${table}:workspace_id,id`),
     'workspace_settings:workspace_id,key',
+    'workspace_entitlements:workspace_id',
+    'managed_model_catalog:id',
+    'rate_cards:id',
+    'rate_card_units:rate_card_id,unit_kind',
+    'redemption_batches:id',
+    'redemption_codes:id',
+    'redemption_audits:id',
     'users:id',
     'workspace_members:workspace_id,user_id',
     'sessions:id',
@@ -184,9 +210,9 @@ it('creates exactly eighteen tables with their scoped primary keys', async () =>
   expect(signatures).toEqual(expected)
 })
 
-it('locks the exact set of twenty-eight workspace and identity foreign keys', async () => {
+it('locks the exact workspace and identity foreign keys', async () => {
   const signatures = (await foreignKeys()).map(foreignKeySignature).sort()
-  expect(EXPECTED_FOREIGN_KEYS).toHaveLength(28)
+  expect(EXPECTED_FOREIGN_KEYS).toHaveLength(40)
   expect(signatures).toEqual([...EXPECTED_FOREIGN_KEYS].sort())
 })
 
@@ -242,20 +268,22 @@ it('uses UUID identities, bigint revisions, and timestamptz suffixes', async () 
     SELECT table_name, data_type FROM information_schema.columns
     WHERE table_schema = 'public' AND column_name IN ('id', 'workspace_id')
   `
-  expect(identities).toHaveLength(29)
+  expect(identities).toHaveLength(38)
   expect(identities.every((row) => row.data_type === 'uuid')).toBe(true)
   const revisions = await database.sql<{ table_name: string; data_type: string }[]>`
     SELECT table_name, data_type FROM information_schema.columns
     WHERE table_schema = 'public' AND column_name = 'revision'
   `
-  expect(revisions).toHaveLength(6)
+  expect(revisions).toHaveLength(7)
   expect(revisions.every((row) => row.data_type === 'bigint')).toBe(true)
   const times = await database.sql<{ table_name: string; data_type: string }[]>`
     SELECT table_name, data_type FROM information_schema.columns
     WHERE table_schema = 'public' AND right(column_name, 3) = '_at'
   `
   // 0005 迁移给 task_attempts 增加 lease_expires_at / visible_at 两列。
-  expect(times).toHaveLength(46)
-  expect(new Set(times.map((row) => row.table_name))).toEqual(new Set(TABLES))
+  expect(times).toHaveLength(68)
+  expect(new Set(times.map((row) => row.table_name))).toEqual(
+    new Set(TABLES.filter((table) => table !== 'rate_card_units')),
+  )
   expect(times.every((row) => row.data_type === 'timestamp with time zone')).toBe(true)
 })

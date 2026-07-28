@@ -16,6 +16,7 @@ import {
 import { artifacts } from './artifacts'
 import { type VersionedPayload, workspaces } from './core'
 import { pipelineRuns, taskAttempts } from './execution'
+import { rateCards, usagePeriods } from './billing'
 
 export const AI_TASK_KINDS = [
   'project-plan',
@@ -162,6 +163,18 @@ export const aiInvocations = pgTable(
     inputHash: text('input_hash').notNull(),
     outputHash: text('output_hash'),
     usage: jsonb('usage').$type<VersionedPayload>(),
+    usagePeriodId: uuid('usage_period_id'),
+    rateCardId: uuid('rate_card_id').references(() => rateCards.id, {
+      onDelete: 'restrict',
+    }),
+    billingIdempotencyKey: text('billing_idempotency_key'),
+    billingStatus: text('billing_status').default('unreserved').notNull(),
+    reservedCnyMicros: bigint('reserved_cny_micros', { mode: 'bigint' })
+      .default(sql`0`)
+      .notNull(),
+    settledCnyMicros: bigint('settled_cny_micros', { mode: 'bigint' }),
+    usageStatus: text('usage_status'),
+    settledAt: timestamp('settled_at', { withTimezone: true }),
     traceArtifactId: uuid('trace_artifact_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -172,6 +185,11 @@ export const aiInvocations = pgTable(
       name: 'ai_invocations_pkey',
       columns: [table.workspaceId, table.id],
     }),
+    foreignKey({
+      name: 'ai_invocations_usage_period_fk',
+      columns: [table.workspaceId, table.usagePeriodId],
+      foreignColumns: [usagePeriods.workspaceId, usagePeriods.id],
+    }).onDelete('restrict'),
     foreignKey({
       name: 'ai_invocations_run_fk',
       columns: [table.workspaceId, table.runId],
@@ -193,6 +211,10 @@ export const aiInvocations = pgTable(
       table.invocationNo,
       table.repairNo,
     ),
+    unique('ai_invocations_billing_idempotency_unique').on(
+      table.workspaceId,
+      table.billingIdempotencyKey,
+    ),
     check(
       'ai_invocations_status_check',
       sql`${table.status} in ('running', 'succeeded', 'failed', 'cancelled')`,
@@ -212,6 +234,19 @@ export const aiInvocations = pgTable(
     check(
       'ai_invocations_output_hash_check',
       sql`${table.outputHash} is null or length(${table.outputHash}) = 64`,
+    ),
+    check(
+      'ai_invocations_billing_status_check',
+      sql`${table.billingStatus} in ('unreserved', 'reserved', 'settled', 'released')`,
+    ),
+    check(
+      'ai_invocations_billing_amounts_check',
+      sql`${table.reservedCnyMicros} >= 0
+        and (${table.settledCnyMicros} is null or ${table.settledCnyMicros} >= 0)`,
+    ),
+    check(
+      'ai_invocations_usage_status_check',
+      sql`${table.usageStatus} is null or ${table.usageStatus} in ('reported', 'unavailable')`,
     ),
   ],
 )
