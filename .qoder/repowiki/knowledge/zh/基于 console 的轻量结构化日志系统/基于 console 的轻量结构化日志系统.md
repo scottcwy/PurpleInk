@@ -6,29 +6,52 @@ scope:
     - '**'
 source_files:
     - server/src/lib/logger.ts
-    - next.config.ts
     - server/src/server/api.ts
-    - server/src/server/job-runner.ts
+    - server/src/capture/run-capture.ts
+    - next.config.ts
 ---
 
-该仓库采用极简的本地 logger 模块，未引入第三方日志框架（如 winston、pino、bunyan），而是通过一个仅 13 行的 `server/src/lib/logger.ts` 封装 `console.log/error/warn`，以 `[INFO] / [ERROR] / [WARN]` 前缀 + 事件名 + JSON 序列化数据对象的方式输出结构化日志。
+## 1. 使用的系统与框架
 
-**系统与架构**
-- 核心实现：`server/src/lib/logger.ts` 暴露统一的 `logger.info | warn | error` 三个方法，参数为 `(event: string, data?: Record<string, unknown>)`，将 event 与 data 序列化为 JSON 字符串输出。
-- 使用范围：所有 server/Worker 子包中的业务模块均通过相对路径导入该 logger，包括 `adapter/*`、`capture/*`、`compose/*`、`lib/*`、`server/api.ts`、`server/job-runner.ts` 等，形成统一的日志入口。
-- 前端 Next.js 应用未使用该 logger，脚本目录（scripts/*）直接使用 `console.log` 做调试输出。
+该仓库未引入第三方日志库（如 pino、winston、bunyan、log4js 等），而是采用**极简自定义 logger**，直接基于 Node.js 内置 `console.log` / `console.error` / `console.warn` 输出。核心实现位于 `server/src/lib/logger.ts`，仅暴露 `info`、`error`、`warn` 三个方法，格式为 `[LEVEL] event_name {structured_data}`。
 
-**日志级别策略**
-- 仅使用 info、warn、error 三级，无 debug 级别。
-- 生产构建通过 Next.js `compiler.removeConsole` 配置保留 `error` 和 `warn`，移除 `log`，确保生产环境仍能看到错误与警告诊断信息（见 `next.config.ts` 第 23-32 行注释说明）。
-- 服务端 API 启动时仍用 `console.log` 打印帮助提示，属于一次性启动信息，不受 removeConsole 影响。
+Next.js 前端通过 `next.config.ts` 中的 `compiler.removeConsole` 在生产构建中移除 `console.log`，但显式保留 `console.error` 和 `console.warn`，确保生产环境仍可通过错误通道输出诊断信息。
 
-**结构化字段约定**
-- 每个日志调用包含一个语义化事件名（如 `api:render_queued`、`ai_capture:step`、`job:done`、`job:failed`），便于在日志系统中按事件过滤。
-- 第二个参数为可选的上下文对象，通常包含 `id`、`url`、`step`、`error`、`stack` 等键，全部经 `JSON.stringify` 序列化后拼接输出。
-- 错误堆栈统一通过 `errorMessage(err)` 工具函数处理后写入 `stack` 字段，避免直接暴露本机路径。
+## 2. 核心文件与位置
 
-**约束与限制**
-- 无日志级别开关、无异步写入、无文件/网络 sink，所有输出均走进程标准输出，依赖容器或进程管理器收集。
-- 无请求 ID 追踪、无采样率控制、无敏感字段脱敏逻辑，敏感信息需由调用方自行处理。
-- 前端代码不经过此 logger，测试与脚本使用原生 `console.*`，未纳入统一规范。
+- **logger 定义**: `server/src/lib/logger.ts` — 唯一日志门面
+- **API 层使用**: `server/src/server/api.ts` — HTTP 请求/响应生命周期日志
+- **采集流程**: `server/src/capture/run-capture.ts` — 页面采集各阶段日志
+- **其他调用点**: `server/src/adapter/describe-assets.ts`、`server/src/capture/ai-capture-agent.ts`、`server/src/capture/credentials.ts`、`server/src/capture/imap-email.ts`、`server/src/compose/chapters/generate.ts`、`server/src/compose/chapters/root-html.ts`、`server/src/compose/render.ts`、`server/src/compose/run-pipeline.ts`、`server/src/lib/llm-response-parser.ts`、`server/src/lib/step-client.ts`、`server/src/server/job-runner.ts`
+- **构建期配置**: `next.config.ts` — 控制生产环境 console 移除策略
+
+## 3. 架构与约定
+
+### 结构
+- 单例模块导出 `{ info, error, warn }` 三个函数，无初始化过程
+- 所有服务端代码统一通过相对路径 `../lib/logger` 或 `../../lib/logger` 导入
+- 日志事件名采用 `模块:动作` 命名风格（如 `api:render_queued`、`run_capture:page_tokens`、`api:video_stream_failed`）
+
+### 字段约定
+- 每个日志调用第一个参数是**字符串事件名**，第二个参数可选的 `Record<string, unknown>` 结构化数据对象
+- 结构化数据会被 `JSON.stringify` 后附加到消息末尾
+- 错误堆栈通过 `String(err?.stack || err)` 序列化后放入 `error` 或 `stack` 字段
+
+### 输出通道
+- `info` → `console.log`（开发时可见，生产构建被移除）
+- `warn` → `console.warn`（生产构建保留）
+- `error` → `console.error`（生产构建保留，用于关键故障诊断）
+
+## 4. 约定与约束
+
+### 已观察到的模式
+- 所有业务异常均通过 `logger.error` 记录，并附带可追踪的上下文字段（job id、错误信息等）
+- 正常流程的关键节点使用 `logger.info` 记录结构化事件，便于按事件名聚合分析
+- 降级/非致命失败使用 `logger.warn`，包含 fallback 决策依据
+- Next.js 生产构建明确排除 `error` 和 `warn` 的 console 移除，确保容器日志仍有诊断能力
+
+### 约束与限制
+- 无日志级别过滤机制，无法动态调整输出粒度
+- 无异步写入或缓冲，所有日志同步输出到 stdout/stderr
+- 无集中式日志收集或格式化管道，依赖运行环境的日志采集器
+- 前端代码不使用此 logger，脚本目录中的 `console.log` 属于一次性工具输出，不纳入应用日志体系

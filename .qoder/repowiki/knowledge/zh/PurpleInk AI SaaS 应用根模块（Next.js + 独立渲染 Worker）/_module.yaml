@@ -1,0 +1,7 @@
+schema_version: 1
+module_path: ""
+title: PurpleInk AI SaaS 应用根模块（Next.js + 独立渲染 Worker）
+scope: []
+source_files: []
+depends_on: []
+related_to: []

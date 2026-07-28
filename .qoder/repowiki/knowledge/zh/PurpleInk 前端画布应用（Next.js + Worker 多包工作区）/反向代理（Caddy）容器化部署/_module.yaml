@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: deploy
-title: 反向代理（Caddy）容器化部署
-scope:
-    - deploy/
-source_files: []
-depends_on: []
-related_to:
-    - path: scripts

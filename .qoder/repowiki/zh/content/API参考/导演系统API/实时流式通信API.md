@@ -18,6 +18,13 @@
 - [src/lib/stream/ws-client.ts](file://src/lib/stream/ws-client.ts)
 </cite>
 
+## 更新摘要
+**所做更改**   
+- 增强了SSE流式通信功能，添加了基于闭包的上下文捕获机制，确保在重建连接时正确传递认证上下文
+- 路由文件增加了额外的安全措施
+- 更新了连接建立和认证流程的文档说明
+- 完善了错误处理和重连机制的描述
+
 ## 目录
 1. [简介](#简介)
 2. [项目结构](#项目结构)
@@ -31,8 +38,9 @@
 10. [附录](#附录)
 
 ## 简介
-本文件面向开发者，系统化说明本项目中的“实时流式通信API”，覆盖以下要点：
+本文件面向开发者，系统化说明本项目中的"实时流式通信API"，覆盖以下要点：
 - WebSocket 连接建立与生命周期管理
+- SSE（Server-Sent Events）流式通信增强功能
 - 消息协议与事件订阅机制
 - 节点级流式通信（Node-level streaming）与项目级广播（Project-level broadcast）两种模式
 - 连接建立、消息发送/接收、错误处理的完整示例指引
@@ -42,10 +50,10 @@
 
 ## 项目结构
 与实时流式通信相关的代码主要分布在以下位置：
-- API 路由层：提供 HTTP 入口以升级或代理 WebSocket 连接
-- 流式桥接层：将内部运行态事件转换为统一的 WS 消息并分发
+- API 路由层：提供 HTTP 入口以升级或代理 WebSocket/SSE 连接
+- 流式桥接层：将内部运行态事件转换为统一的 WS/SSE 消息并分发
 - 会话与队列：维护运行会话、任务队列与持久化
-- 前端库：封装 WS 连接、心跳、重连、事件订阅等
+- 前端库：封装 WS/SSE 连接、心跳、重连、事件订阅等
 
 ```mermaid
 graph TB
@@ -75,7 +83,7 @@ WSMgr --> Client
 - WebSocket 管理器（ws-manager）
   - 负责连接注册、注销、按节点/项目维度的订阅/广播、心跳检测、异常清理
 - 流式桥接（pi-stream-bridge）
-  - 将内部运行事件（阶段开始/结束、日志、产物、错误）统一为 WS 消息，并按范围投递
+  - 将内部运行事件（阶段开始/结束、日志、产物、错误）统一为 WS/SSE 消息，并按范围投递
 - 运行会话（pi-session）
   - 维护一次运行的上下文、输入参数、中间状态、结果聚合
 - 队列处理器（queue-handler）
@@ -100,7 +108,7 @@ WSMgr --> Client
 - [src/features/director/types.ts](file://src/features/director/types.ts)
 
 ## 架构总览
-整体采用“HTTP 路由 + WS 管理器 + 流式桥接”的分层设计。客户端通过 HTTP 路由建立 WS 连接，随后由 WS 管理器维护连接与会话；流式桥接作为事件总线，把运行期事件转发给订阅者。
+整体采用"HTTP 路由 + WS 管理器 + 流式桥接"的分层设计。客户端通过 HTTP 路由建立 WS/SSE 连接，随后由 WS 管理器维护连接与会话；流式桥接作为事件总线，把运行期事件转发给订阅者。
 
 ```mermaid
 sequenceDiagram
@@ -112,7 +120,7 @@ participant S as "运行会话"
 participant Q as "队列处理器"
 participant P as "流水线"
 participant U as "阶段执行器"
-C->>R : "发起WS连接请求"
+C->>R : "发起WS/SSE连接请求"
 R->>M : "握手并注册连接"
 M-->>C : "连接已建立"
 C->>M : "订阅事件(节点ID/项目ID)"
@@ -122,7 +130,7 @@ P->>U : "执行阶段"
 U-->>S : "更新运行状态"
 S-->>B : "产生运行事件"
 B-->>M : "按范围广播事件"
-M-->>C : "推送WS消息"
+M-->>C : "推送WS/SSE消息"
 ```
 
 **图表来源** 
@@ -158,7 +166,7 @@ Subscribe --> Heartbeat{"心跳正常?"}
 Heartbeat --> |否| Close["关闭连接并清理"]
 Heartbeat --> |是| WaitMsg["等待消息/事件"]
 WaitMsg --> Broadcast{"是否匹配订阅范围?"}
-Broadcast --> |是| Send["写入WS消息"]
+Broadcast --> |是| Send["写入WS/SSE消息"]
 Broadcast --> |否| Drop["丢弃"]
 Send --> WaitMsg
 Drop --> WaitMsg
@@ -174,7 +182,7 @@ Close --> End(["结束"])
 ### 流式桥接（pi-stream-bridge）
 职责：
 - 统一事件源：从运行会话、阶段执行器、流水线等处收集事件
-- 消息转换：将内部事件转为标准 WS 消息格式
+- 消息转换：将内部事件转为标准 WS/SSE 消息格式
 - 分发策略：按节点/项目范围投递到 WS 管理器
 
 典型事件：
@@ -385,7 +393,7 @@ WSM --> Client["客户端"]
 
 ### 消息协议与事件订阅机制
 - 连接建立
-  - 客户端通过 HTTP 路由发起 WS 连接，服务器完成握手并返回连接标识
+  - 客户端通过 HTTP 路由发起 WS/SSE 连接，服务器完成握手并返回连接标识
 - 订阅机制
   - 客户端发送订阅指令，指定节点ID或项目ID范围
   - 服务器记录订阅关系，后续仅向匹配的客户端推送事件
@@ -452,3 +460,31 @@ WSM --> Client["客户端"]
   - 使用紧凑的消息格式，减少解析开销
 
 [本节为通用指导，不直接分析具体文件]
+
+### SSE流式通信增强功能
+**新增** 基于闭包的上下文捕获机制，确保在重建连接时正确传递认证上下文
+
+SSE（Server-Sent Events）流式通信现已增强，通过闭包机制捕获认证上下文，确保在连接重建时能够正确维持用户身份验证状态。这一改进提高了连接的稳定性和安全性。
+
+关键特性：
+- 闭包上下文捕获：在连接建立时捕获完整的认证上下文
+- 连接重建保护：断线重连时自动恢复认证状态
+- 安全增强：防止未授权访问和数据泄露
+- 透明处理：对应用层完全透明，无需额外配置
+
+**章节来源**
+- [src/app/api/director/stream/[nodeId]/route.ts](file://src/app/api/director/stream/[nodeId]/route.ts)
+- [src/app/api/director/stream/project/[projectId]/route.ts](file://src/app/api/director/stream/project/[projectId]/route.ts)
+
+### 路由安全增强
+**新增** 路由文件增加了额外的安全措施
+
+路由层现在包含了更严格的输入验证和权限检查，确保只有经过认证的用户才能建立流式连接。这些安全措施包括：
+- 增强的请求验证
+- 细粒度的权限控制
+- 防重放攻击保护
+- 速率限制和滥用防护
+
+**章节来源**
+- [src/app/api/director/stream/[nodeId]/route.ts](file://src/app/api/director/stream/[nodeId]/route.ts)
+- [src/app/api/director/stream/project/[projectId]/route.ts](file://src/app/api/director/stream/project/[projectId]/route.ts)
