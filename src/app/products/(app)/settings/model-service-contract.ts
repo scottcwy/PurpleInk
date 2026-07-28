@@ -19,6 +19,7 @@ import type { PlanKey } from '@/features/billing'
 import type {
   ManagedModelDefinition,
   ManagedProviderId,
+  ProviderFunding,
 } from '@/features/ai'
 
 export type StepfunDraft = Record<StepfunModelField, string>
@@ -141,7 +142,13 @@ export interface SettingsResponse {
   managedProviders?: Array<{
     provider: ManagedProviderId
     configured: boolean
-    managed: true
+    funding: ProviderFunding
+    managedConfigured: boolean
+    byokCredential: {
+      configured: boolean
+      verifiedAt: string | null
+      updatedAt: string | null
+    }
     models: readonly ManagedModelDefinition[]
   }>
   availableCatalog?: readonly ManagedModelDefinition[]

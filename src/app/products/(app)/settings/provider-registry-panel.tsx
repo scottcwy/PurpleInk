@@ -19,6 +19,7 @@ import {
   CUSTOM_ENDPOINT_COUNT,
 } from './custom-openai-status'
 import type { ReadyModelSettingsController } from './model-service-contract'
+import { BuiltInProviderService } from './built-in-provider-service'
 
 /**
  * 供应商卡片是**家族**，不是 provider id。
@@ -64,7 +65,7 @@ export function ProviderRegistryPanel({
     <SettingsPanel
       id="providers"
       title="模型供应商"
-      description="内置模型由平台托管；自定义 OpenAI-compatible 继续使用自己的凭据"
+      description="内置模型可选择 PurpleInk 会员服务或自己的 API Key"
       icon={Network}
       summary={`${PROVIDER_CARDS.length} 个供应商`}
       open={openPanels['providers'] ?? false}
@@ -170,24 +171,19 @@ function ManagedProviderDetail(props: ManagedProviderDetailProps) {
   const models = view?.models ?? []
   return (
     <div id={`provider-${props.provider.toLowerCase()}`} className="flex min-w-0 flex-col">
-      <SettingsSeparator />
-      <SettingsField
-        label={`${props.provider} 连接与模型`}
-        hint={
-          locked
-            ? 'Free 方案不可使用 Gemini；升级 Plus 后解锁'
-            : '平台统一提供服务，不需要填写 API Key'
-        }
-      >
-        <StatusPill
-          variant={locked ? 'stale' : view?.configured ? 'rendered' : 'pending'}
-          label={locked ? 'Plus 解锁' : view?.configured ? '平台服务可用' : '平台服务未配置'}
-        />
-      </SettingsField>
+      <BuiltInProviderService
+        provider={props.providerId}
+        label={props.provider}
+        controller={props.controller}
+      />
       <SettingsSeparator />
       <SettingsField
         label="可用模型"
-        hint={locked ? '当前方案未授权该供应商' : '模型目录由服务端统一维护'}
+        hint={
+          locked && view?.funding !== 'byok'
+            ? '托管模式下当前方案未授权该供应商'
+            : '模型目录由服务端统一维护'
+        }
       >
         <div className="flex flex-wrap justify-end gap-1.5">
           {models.length > 0 ? models.map((model) => (
@@ -198,7 +194,7 @@ function ManagedProviderDetail(props: ManagedProviderDetailProps) {
             />
           )) : (
             <span className="text-xs text-ds-text-muted">
-              {locked ? '升级 Plus 解锁' : '暂无可用模型'}
+              {locked && view?.funding !== 'byok' ? '升级 Plus 或使用自己的 Key' : '暂无可用模型'}
             </span>
           )}
         </div>
@@ -237,7 +233,11 @@ function cardStatus(
   const managed = controller.data.managedProviders?.find(
     (entry) => entry.provider === provider,
   )
-  if (provider === 'gemini' && controller.data.planKey === 'free') {
+  if (
+    provider === 'gemini'
+    && controller.data.planKey === 'free'
+    && managed?.funding !== 'byok'
+  ) {
     return { variant: 'stale', label: 'Plus 解锁' }
   }
   const configured = managed?.configured === true
