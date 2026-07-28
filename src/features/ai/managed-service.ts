@@ -222,8 +222,8 @@ export function managedCredentialUnavailableError(): ManagedAiError {
   return new ManagedAiError({
     code: 'MANAGED_CREDENTIAL_UNAVAILABLE',
     status: 503,
-    retryable: true,
-    message: '托管 AI 服务暂时不可用，请稍后重试',
+    retryable: false,
+    message: '托管 AI 服务凭据未配置，请联系管理员完成服务配置。',
   })
 }
 

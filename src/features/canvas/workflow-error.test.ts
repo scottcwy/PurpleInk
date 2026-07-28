@@ -60,6 +60,18 @@ describe('classifyWorkflowError', () => {
     })
   })
 
+  it('does not retry when a managed credential is absent', () => {
+    expect(
+      classifyWorkflowError(
+        new Error('托管 AI 服务凭据未配置，请联系管理员完成服务配置。'),
+        { stage: 'MEDIA_NARRATION' },
+      ),
+    ).toMatchObject({
+      code: 'CONFIGURATION_BLOCKED',
+      retryable: false,
+    })
+  })
+
   it('treats exhausted provider quota as a non-retryable configuration block', () => {
     expect(
       classifyWorkflowError(

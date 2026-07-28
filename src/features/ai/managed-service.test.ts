@@ -4,6 +4,7 @@ import {
   ManagedAiError,
   authorizeManagedRoute,
   filterAuthorizedFallbacks,
+  managedCredentialUnavailableError,
   managedUpstreamError,
   type ManagedUsage,
 } from './managed-service'
@@ -137,5 +138,16 @@ describe('managed usage and errors', () => {
     })
     expect(JSON.stringify(error)).not.toContain('super-secret')
     expect(JSON.stringify(error)).not.toContain('provider raw response')
+  })
+
+  it('marks an absent managed credential as a non-retryable configuration block', () => {
+    const error = managedCredentialUnavailableError()
+
+    expect(error).toMatchObject({
+      code: 'MANAGED_CREDENTIAL_UNAVAILABLE',
+      status: 503,
+      retryable: false,
+      message: '托管 AI 服务凭据未配置，请联系管理员完成服务配置。',
+    })
   })
 })
