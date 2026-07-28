@@ -77,6 +77,8 @@ async function main(): Promise<void> {
     script: { characters: options.script.length },
   }
 
+  await establishSession(options.baseUrl, report)
+
   const projectId = await createProject(options)
   report.projectId = projectId
   console.log(`[e2e] 项目已创建 ${projectId}`)
@@ -190,10 +192,12 @@ function summarize(nodes: readonly GraphNode[]): string {
 }
 
 async function readGraphNodes(projectId: string): Promise<GraphNode[]> {
-  const { getDb, LOCAL_WORKSPACE_ID } = await import('@/lib/db/client')
+  const { getDb } = await import('@/lib/db/client')
   const { canvasNodes } = await import('@/lib/db/schema/index')
-  const { and, eq } = await import('drizzle-orm')
+  const { eq } = await import('drizzle-orm')
   const database = await getDb()
+  // 取证按 projectId 直读（uuid 全局唯一）：登录账号的 workspace 由会话决定，
+  // 不再硬编码历史单工作区（PLAN-002 阶段 B）。
   const rows = await database
     .select({
       id: canvasNodes.id,
@@ -202,12 +206,7 @@ async function readGraphNodes(projectId: string): Promise<GraphNode[]> {
       logicalKey: canvasNodes.logicalKey,
     })
     .from(canvasNodes)
-    .where(
-      and(
-        eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
-        eq(canvasNodes.projectId, projectId)
-      )
-    )
+    .where(eq(canvasNodes.projectId, projectId))
   return rows
 }
 
@@ -223,9 +222,9 @@ interface ArtifactRow {
 
 /** 逐条核对 artifact 的登记哈希与磁盘实际字节 SHA-256。 */
 async function readArtifactInventory(projectId: string): Promise<ArtifactRow[]> {
-  const { getDb, LOCAL_WORKSPACE_ID } = await import('@/lib/db/client')
+  const { getDb } = await import('@/lib/db/client')
   const { artifacts } = await import('@/lib/db/schema/index')
-  const { and, eq } = await import('drizzle-orm')
+  const { eq } = await import('drizzle-orm')
   const { storage } = await import('@/lib/storage')
   const database = await getDb()
   const rows = await database
@@ -238,12 +237,7 @@ async function readArtifactInventory(projectId: string): Promise<ArtifactRow[]> 
       storageKey: artifacts.storageKey,
     })
     .from(artifacts)
-    .where(
-      and(
-        eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
-        eq(artifacts.projectId, projectId)
-      )
-    )
+    .where(eq(artifacts.projectId, projectId))
   const inventory: ArtifactRow[] = []
   for (const row of rows) {
     let actual: Buffer | null = null
@@ -280,6 +274,58 @@ function basicAuthHeaders(): Record<string, string> {
   return { Authorization: `Basic ${Buffer.from(credentials).toString('base64')}` }
 }
 
+/** 登录后的会话 cookie；与 Basic Auth 共用同一个凭据注入出口（PLAN-001 §1.6）。 */
+let sessionCookie = ''
+
+function authHeaders(): Record<string, string> {
+  return {
+    ...basicAuthHeaders(),
+    ...(sessionCookie ? { cookie: sessionCookie } : {}),
+  }
+}
+
+/**
+ * 应用内认证（PLAN-002 阶段 B）：业务 API 全部要求会话。凭据来自 env
+ * `CVC_VERIFY_ACCOUNT`（格式 `email:password`，必须是真实注册账号）；
+ * 先调 `/api/auth/login` 拿会话 cookie，后续请求携带。未设置时如实提示
+ * 并继续（请求会被 401 拒绝，错误信息会说明原因）。
+ */
+async function establishSession(
+  baseUrl: string,
+  report: Record<string, unknown>,
+): Promise<void> {
+  const account = process.env.CVC_VERIFY_ACCOUNT
+  if (!account || !account.includes(':')) {
+    console.warn('[e2e] 未设置 CVC_VERIFY_ACCOUNT（email:password），业务 API 将回 401')
+    report.session = { authenticated: false }
+    return
+  }
+  const separator = account.indexOf(':')
+  const email = account.slice(0, separator)
+  const password = account.slice(separator + 1)
+  const response = await fetch(`${baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...basicAuthHeaders() },
+    body: JSON.stringify({ email, password }),
+  })
+  if (!response.ok) {
+    // 不回显凭据与 provider 原始错误，只报类别。
+    throw new Error(`登录失败（HTTP ${response.status}），请核对 CVC_VERIFY_ACCOUNT`)
+  }
+  const setCookie = response.headers.get('set-cookie') ?? ''
+  const match = /cvc_session=([^;]+)/.exec(setCookie)
+  if (!match) throw new Error('登录响应未携带会话 cookie')
+  sessionCookie = `cvc_session=${match[1]}`
+  report.session = { authenticated: true, email: maskEmail(email) }
+  console.log('[e2e] 会话已建立（真实注册账号）')
+}
+
+function maskEmail(email: string): string {
+  const at = email.indexOf('@')
+  if (at <= 1) return '***'
+  return `${email[0]}***${email.slice(at)}`
+}
+
 async function post(
   baseUrl: string,
   route: string,
@@ -287,7 +333,7 @@ async function post(
 ): Promise<Record<string, unknown>> {
   const response = await fetch(`${baseUrl}${route}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...basicAuthHeaders() },
+    headers: { 'content-type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body),
   })
   const parsed: unknown = await response.json().catch(() => null)
