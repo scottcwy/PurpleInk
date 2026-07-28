@@ -101,12 +101,15 @@ per-workspace: `save`/`validate` resolve the target workspace through
 `currentWorkspaceId()`, so bootstrap wraps its work in
 `runInAuthContext({ workspaceId: LOCAL_WORKSPACE_ID, userId: 'system:bootstrap' })`.
 That means **bootstrap only ever writes the first owner workspace** (the
-historical `LOCAL_WORKSPACE_ID` anchor). Every other registered user brings
-their own key through `/products/settings` — there is no platform-wide key and
-no silent fallback to another workspace's key (that would break the AAD binding
-in `credential-envelope.ts` or cross-charge usage). A future membership /
-usage-quota tier extends on the workspace dimension (quota fields on
-`workspace_settings`); it must not introduce a second ownership truth.
+historical `LOCAL_WORKSPACE_ID` anchor). OpenAI-compatible custom endpoints
+continue to use this per-workspace encrypted path.
+
+StepFun, Gemini, and MiMo platform service credentials are a separate,
+explicitly managed path. They resolve only from `CVC_MANAGED_STEPFUN_API_KEY`,
+`CVC_MANAGED_GEMINI_API_KEY`, and `CVC_MANAGED_MIMO_API_KEY`; they are never a
+fallback for a workspace credential and are never returned to the client.
+Membership and usage accounting remain workspace-scoped. See
+`docs/configuration/billing.md`.
 
 ## 4. Runtime update path (post-bootstrap)
 
