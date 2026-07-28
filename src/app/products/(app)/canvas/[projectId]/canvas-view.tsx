@@ -236,7 +236,12 @@ export function CanvasView({
           total={liveNodes.length}
         />
       </section>
-      <CanvasInspector projectId={projectId} node={selectedNode} onQueued={() => router.refresh()} />
+      <CanvasInspector
+        projectId={projectId}
+        node={selectedNode}
+        onQueued={() => router.refresh()}
+        onQuotaExhausted={() => setPipelineQuotaOpen(true)}
+      />
       <StageErrorDialog
         open={pipelineQuotaOpen}
         stage=""

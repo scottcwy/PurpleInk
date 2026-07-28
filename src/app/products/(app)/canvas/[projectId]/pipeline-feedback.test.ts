@@ -102,6 +102,9 @@ describe('Canvas pipeline feedback wiring', () => {
   it('额度耗尽复用阶段错误弹窗并引导到真实计费页', () => {
     expect(canvasViewSource).toContain("<StageErrorDialog")
     expect(canvasViewSource).toContain("code === 'quota_exhausted'")
+    expect(canvasViewSource).toContain('onQuotaExhausted={() => setPipelineQuotaOpen(true)}')
+    expect(inspectorSource).toContain('cause instanceof BillingQuotaExhaustedError')
+    expect(inspectorSource).toContain('onQuotaExhausted()')
     expect(streamingLogSource).toContain('errorCode={error?.code}')
     expect(stageErrorDialogSource).toContain("errorCode === 'quota_exhausted'")
     expect(stageErrorDialogSource).toContain('PRODUCTS_ROUTES.billing')

@@ -25,6 +25,7 @@ import {
 } from '@/lib/layout/breakpoints'
 import { cn } from '@/lib/utils'
 import {
+  BillingQuotaExhaustedError,
   triggerNodeAction,
   triggerNodeSkip,
   type NodeActionResult,
@@ -38,10 +39,12 @@ export function CanvasInspector({
   projectId,
   node,
   onQueued,
+  onQuotaExhausted,
 }: {
   projectId: string
   node?: CanvasGraphNode
   onQueued: (jobId: string) => void
+  onQuotaExhausted: () => void
 }) {
   const [error, setError] = useState<{
     nodeId: string
@@ -95,6 +98,9 @@ export function CanvasInspector({
       })
       onQueued(result.jobId)
     } catch (cause) {
+      if (cause instanceof BillingQuotaExhaustedError) {
+        onQuotaExhausted()
+      }
       setError({
         nodeId: node.id,
         message: cause instanceof Error ? cause.message : '作业入队失败',
