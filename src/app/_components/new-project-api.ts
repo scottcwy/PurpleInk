@@ -1,8 +1,12 @@
+import { throwIfUnauthenticated } from '@/features/auth/unauthenticated-error'
+
 export async function createProjectAndStartIngest(
   input: { title: string; script: string; visualTheme: 'dark' | 'light' },
   fetcher: typeof fetch = fetch
 ): Promise<{ projectId: string }> {
   const created = await fetcher('/api/projects', jsonRequest(input))
+  // 401 统一映射成可识别错误类型，由 useRequireLogin 接管（PLAN-002 §4.4）。
+  throwIfUnauthenticated(created)
   const creation = await readJson(created)
   if (!created.ok) throw new Error(readError(creation, '请稍后重试'))
   const projectId = readString(creation, 'project', 'id')
@@ -11,6 +15,7 @@ export async function createProjectAndStartIngest(
     '/api/director/stage',
     jsonRequest({ projectId, nodeId, intent: 'execute' })
   )
+  throwIfUnauthenticated(queued)
   const queueResult = await readJson(queued)
   if (!queued.ok) throw new Error(readError(queueResult, '分镜触发失败，可在画布重试'))
   return { projectId }

@@ -16,6 +16,10 @@ import {
   type JobView,
   type JobPhase,
 } from "@/lib/api";
+import {
+  LoginRequiredDialog,
+  useRequireLogin,
+} from "@/features/auth/login-required-dialog";
 
 type Stage = "idle" | "input" | "running" | "done" | "error";
 type Quality = "draft" | "standard" | "high";
@@ -129,6 +133,9 @@ export function LaunchComposer(): ReactNode {
   const startRef = useRef(0);
   const phaseRef = useRef<JobPhase>("queued");
   const phaseStartRef = useRef(0);
+  // 落地页 AI 演示也要求登录（产品决策，PLAN-002 §4.4 第 4 点）：只在 Next 侧
+  // 客户端加门，worker 与 /api/engine/* 代理行为不变。
+  const { loginRequired, closeLoginDialog, ensureLoggedIn } = useRequireLogin();
 
   // 运行中：本地定时器驱动进度爬升 + 已用时长（不依赖后端在途返回耗时）
   useEffect(() => {
@@ -164,6 +171,8 @@ export function LaunchComposer(): ReactNode {
       inputRef.current?.focus();
       return;
     }
+    // 未登录先弹登录引导并中止，不消耗渲染算力。
+    if (!(await ensureLoggedIn())) return;
 
     const now = Date.now();
     startRef.current = now;
@@ -210,7 +219,7 @@ export function LaunchComposer(): ReactNode {
       setStage("error");
       setMessage(friendlyError(err));
     }
-  }, [url, duration, quality]);
+  }, [url, duration, quality, ensureLoggedIn]);
 
   // exactOptionalPropertyTypes: 用条件展开而非传 undefined
   const interactive = prefersReducedMotion
@@ -427,6 +436,7 @@ export function LaunchComposer(): ReactNode {
           </motion.div>
         )}
       </AnimatePresence>
+      <LoginRequiredDialog open={loginRequired} onClose={closeLoginDialog} />
     </div>
   );
 }

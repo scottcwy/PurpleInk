@@ -1,4 +1,5 @@
 import type { CanvasGraphNode } from '@/features/canvas'
+import { throwIfUnauthenticated } from '@/features/auth/unauthenticated-error'
 
 const DIRECTOR_STAGES = new Set([
   'INGEST',
@@ -25,6 +26,8 @@ export async function triggerNodeAction(
     render ? '/api/render' : '/api/director/stage',
     jsonRequest({ projectId, nodeId: node.id, intent: resolveIntent(node) })
   )
+  // 401 统一映射成可识别错误类型，由 useRequireLogin 接管（PLAN-002 §4.4）。
+  throwIfUnauthenticated(response)
   const body: unknown = await response.json()
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw new Error('作业响应无效')
@@ -93,6 +96,7 @@ async function controlPipeline(
     ...jsonRequest({ projectId }),
     method,
   })
+  throwIfUnauthenticated(response)
   const body: unknown = await response.json()
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw new Error('工作流响应无效')

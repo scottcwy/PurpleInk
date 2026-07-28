@@ -20,6 +20,8 @@ const ALLOWLIST = new Set([
   'lib/queue/runtime-config.ts',
   // 文档注释里解释禁令本身。
   'lib/auth/workspace-context.ts',
+  // 历史数据归属认领（仅迁移脚本与 pg 测试消费，不进请求路径）。
+  'features/auth/claim-workspace.ts',
 ])
 
 function collectSourceFiles(dir: string, out: string[] = []): string[] {

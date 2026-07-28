@@ -9,6 +9,10 @@ import { SegmentedControl } from '@/components/ui/segmented-control'
 import { TextArea } from '@/components/ui/text-area'
 import { TextField } from '@/components/ui/text-field'
 import { Toast } from '@/components/ui/toast'
+import {
+  LoginRequiredDialog,
+  useRequireLogin,
+} from '@/features/auth/login-required-dialog'
 import { productCanvasHref } from '@/features/navigation/products-routes'
 import { createProjectAndStartIngest } from './new-project-api'
 
@@ -32,6 +36,8 @@ export function NewProjectDialog({ featured = false }: NewProjectDialogProps) {
   const [visualTheme, setVisualTheme] = useState<'dark' | 'light'>('dark')
   const [error, setError] = useState<string>()
   const [submitting, setSubmitting] = useState(false)
+  // 会话中途过期时 api 层抛 UnauthenticatedError，由登录引导弹窗接管（PLAN-002 §4.4）。
+  const { loginRequired, closeLoginDialog, handleAuthError } = useRequireLogin()
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -54,8 +60,9 @@ export function NewProjectDialog({ featured = false }: NewProjectDialogProps) {
       })
       router.push(productCanvasHref(projectId))
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '请稍后重试')
       setSubmitting(false)
+      if (handleAuthError(cause)) return
+      setError(cause instanceof Error ? cause.message : '请稍后重试')
     }
   }
 
@@ -146,6 +153,7 @@ export function NewProjectDialog({ featured = false }: NewProjectDialogProps) {
           {error && <Toast variant="error" title="创建失败" body={error} className="w-full" />}
         </form>
       </Dialog>
+      <LoginRequiredDialog open={loginRequired} onClose={closeLoginDialog} />
     </>
   )
 }

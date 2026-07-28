@@ -3,6 +3,7 @@ import {
   EXPORT_RESOLUTION_PRESETS,
   type ResolutionPreset,
 } from '@/features/canvas/export-settings'
+import { throwIfUnauthenticated } from '@/features/auth/unauthenticated-error'
 
 export interface ExportReadiness {
   ready: boolean
@@ -46,6 +47,8 @@ export async function loadExportReadiness(
   const response = await fetcher(
     `/api/render/export?projectId=${encodeURIComponent(projectId)}`
   )
+  // 401 统一映射成可识别错误类型，由 useRequireLogin 接管（PLAN-002 §4.4）。
+  throwIfUnauthenticated(response)
   const body = await objectBody(response)
   if (!response.ok) throw new Error(errorOf(body, '导出状态读取失败'))
   if (
@@ -97,6 +100,7 @@ export async function startProjectExport(
       ...(options.degraded ? { degraded: true } : {}),
     }),
   })
+  throwIfUnauthenticated(response)
   const body = await objectBody(response)
   if (!response.ok) throw new Error(exportStartError(body))
   if (typeof body.jobId !== 'string') throw new Error('导出响应缺少 jobId')
@@ -113,6 +117,7 @@ async function waitForExportArtifact(
     const response = await fetcher(
       `/api/jobs/${encodeURIComponent(jobId)}?projectId=${encodeURIComponent(projectId)}`
     )
+    throwIfUnauthenticated(response)
     const body = await objectBody(response)
     if (!response.ok) throw new Error(errorOf(body, '导出作业状态读取失败'))
     const job = body.job
@@ -171,6 +176,7 @@ export async function updateExportResolution(
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ exportSettings: { resolutionPreset } }),
   })
+  throwIfUnauthenticated(response)
   if (!response.ok) {
     const body = await objectBody(response).catch(() => ({}))
     throw new Error(errorOf(body, '导出设置更新失败'))
