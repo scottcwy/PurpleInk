@@ -276,6 +276,40 @@ FINALIZE `export` 节点从 `idle` 到 `succeeded`，最终 MP4 的数据库哈�
 
 ---
 
+## 7.3 模式 I：复合队列丢失 attemptId，内部前置失败污染 Provider 熔断
+
+**症状**：FABRICATE 切换多个模型或供应商仍全部失败；第一次显示具体
+`Director 模型调用失败（provider/model）`，同一供应商连续失败三次后统一变成
+「AI 服务暂时不可用」。看起来像多个外部服务同时故障。
+
+**真实事故**：`render-shot` 是一个复合作业，先在 Next 进程内执行 Director
+FABRICATE，再调用渲染 worker。通用 `director-stage` handler 已把 `job.id` 传给
+`runStage`，但 `render-shot → fabricateShot → createStageRunner` 这条旁路没有传递
+同一个 attempt id。托管计费流因此在出网前抛出「缺少可审计的 attemptId」；
+失败会话的输入/输出 token 均为 0，attempt 在 0.1–1.9 秒内结束，证明没有调用模型。
+Pi Agent 把这条内部错误压成 `errorMessage` 后，旧会话收敛逻辑又无条件调用
+`recordProviderFailure`，把 StepFun 与 MiMo 分别熔断。切换模型只是在重复触发同一个
+内部上下文缺口。
+
+**规则**：
+
+- 复合队列中的子阶段必须继承父 attempt 的真实 id；禁止在子阶段省略、伪造或另建
+  attempt id。凡 handler 已持有 `QueueJob`，跨层调用必须显式传 `job.id`。
+- 「Agent 出现 errorMessage」不等于「Provider 已经被调用」。计费预留、审计、
+  路由授权等出网前失败必须保留原始错误类型，并在 Provider 熔断记账前短路。
+- 熔断失败计数只允许来自已经开始的外部调用。token 为 0、无 HTTP 状态且耗时极短时，
+  必须先检查调用前置链，不能先归因于供应商。
+- 出网前内部不变量失败使用 `INTERNAL_PREFLIGHT_FAILED`，`retryable=false`；
+  用户文案只说明内部执行前置检查失败，不回显 attempt id、凭据或原始上下文。
+
+**已落地护栏**：`render/queue-handler.ts` 把 `job.id` 传入 `fabricateShot`，
+后者继续传给 `createStageRunner`；`queue-handler.test.ts` 锁定这条三参数调用。
+`director-billing-stream.ts` 在调用 Provider 前捕获 preflight failure，
+`pi-session.ts` 优先抛回该原始错误而不进入 Provider 失败记账；
+`workflow-error.test.ts` 锁定内部前置失败不可重试且不得显示为 Provider 故障。
+
+---
+
 ## 8. 工作流类改动的提交前清单
 
 在 `AGENTS.md` §8 的通用门禁之外，涉及本文覆盖的链路时补做：
@@ -288,6 +322,7 @@ FINALIZE `export` 节点从 `idle` 到 `succeeded`，最终 MP4 的数据库哈�
 - [ ] 验证时是否重启过 dev server，并用节点状态与产物哈希作证据（模式 F）。
 - [ ] artifact 指向的文件是否已经停止写入，哈希是否在生产者关闭后计算（模式 G）。
 - [ ] 新增的失败出路是否落在四层护栏之内（租约回收 / 重试预算 / 人为跳过 / 熔断降级），跳过语义是否留下可审计证据且不被自动链路滥用，熔断记账是否只计外部故障（模式 H）。
+- [ ] 复合队列是否把父 `job.id` 贯穿到所有需要审计/计费的子阶段；出网前失败是否保留原始类型并绕过 Provider 熔断（模式 I）。
 - [ ] 真实产物证据：`artifacts.content_hash` 与磁盘字节 SHA-256 逐条核对一致。
 
 真实证据的取法示例：
@@ -313,7 +348,8 @@ docker exec purpleink-dev-postgres-1 psql -U cvc -d cvc -A -t -F "|" -c `
 已修：`shot-sfx` / `shot-subtitle` 无法解析 Director 文本模型（模式 C）、
 `DEFAULT_PROVIDER` 与 `media_routes` 双真值（模式 A）、内部路由矛盾仍走文案
 规则（模式 B）、文档 `measureMp3` 漂移、队列初始化全量并行抖动、终片异步音频
-读取错误（模式 D）、Pi 会话哈希失真（模式 G）——见各节「已落地护栏」。
+读取错误（模式 D）、Pi 会话哈希失真（模式 G）、复合渲染队列丢失 attempt id 并
+污染 Provider 熔断（模式 I）——见各节「已落地护栏」。
 
 ---
 

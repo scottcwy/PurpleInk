@@ -226,6 +226,24 @@ describe('classifyWorkflowError', () => {
     expect(projection.message).toBe('AI 服务暂时不可用，可稍后重试或选择跳过')
   })
 
+  it('classifies a Director preflight invariant as internal and non-retryable', () => {
+    class DirectorPreflightError extends Error {
+      override readonly name = 'DirectorPreflightError'
+    }
+    const projection = classifyWorkflowError(
+      new DirectorPreflightError('托管 Director 调用缺少可审计的 attemptId'),
+      { stage: 'FABRICATE' }
+    )
+
+    expect(projection).toMatchObject({
+      code: 'INTERNAL_PREFLIGHT_FAILED',
+      stage: 'FABRICATE',
+      retryable: false,
+    })
+    expect(projection.message).toContain('调用模型前')
+    expect(projection.message).not.toContain('attemptId')
+  })
+
   it('classifies the persisted outage message without hitting broader rules', () => {
     // 文案持久化到 attempt.failure 后只剩字符串：「AI 服务暂时不可用」含「不可用」，
     // 不得被「配置/凭据不可用」误判成不可重试的 CONFIGURATION_BLOCKED。

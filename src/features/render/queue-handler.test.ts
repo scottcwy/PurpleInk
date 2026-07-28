@@ -83,7 +83,7 @@ describe('render queue handler', () => {
       attempts: 1,
     })
 
-    expect(fabricateShot).toHaveBeenCalledWith('project-1', 'node-1')
+    expect(fabricateShot).toHaveBeenCalledWith('project-1', 'node-1', 'job-1')
     expect(renderer.render).toHaveBeenCalledWith(renderJob)
     expect(recordOutputHash).toHaveBeenCalledWith('node-1', 'hash')
     expect(statuses).toEqual(['running', 'fabricate', 'success', 'advance'])

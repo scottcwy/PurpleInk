@@ -26,6 +26,11 @@ interface DirectorBillingRuntime {
   deductsManagedPool: boolean
 }
 
+/** 模型出网前的内部审计/计费上下文不完整；不得计入 Provider 熔断。 */
+export class DirectorPreflightError extends Error {
+  override readonly name = 'DirectorPreflightError'
+}
+
 export function createDirectorBillingStream(input: {
   model: Model<Api>
   context: Context
@@ -34,6 +39,8 @@ export function createDirectorBillingStream(input: {
   attemptId?: string
   invocationIndex: number
   gateway: ManagedAiGateway
+  /** 出网前的审计、配额或路由前置失败；调用方据此保留原始类型，不得误计 Provider 熔断。 */
+  onPreflightFailure?: (error: unknown) => void
   streamSimple: (
     model: Model<Api>,
     context: Context,
@@ -46,7 +53,13 @@ export function createDirectorBillingStream(input: {
 async function* billedEvents(
   input: Parameters<typeof createDirectorBillingStream>[0],
 ): AsyncGenerator<AssistantMessageEvent> {
-  const handle = await beginInvocation(input)
+  let handle: ManagedAiHandle | null
+  try {
+    handle = await beginInvocation(input)
+  } catch (error) {
+    input.onPreflightFailure?.(error)
+    throw error
+  }
   let providerStarted = false
   let settled = false
   try {
@@ -73,7 +86,7 @@ async function beginInvocation(
 ): Promise<ManagedAiHandle | null> {
   if (!input.runtime.deductsManagedPool) return null
   if (!input.attemptId) {
-    throw new Error('托管 Director 调用缺少可审计的 attemptId')
+    throw new DirectorPreflightError('托管 Director 调用缺少可审计的 attemptId')
   }
   return input.gateway.begin({
     attemptId: input.attemptId,

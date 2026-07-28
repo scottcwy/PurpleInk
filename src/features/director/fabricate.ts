@@ -15,7 +15,11 @@ import { writeValidatedArtifact } from './tools/write-artifact'
  * 渲染队列会在将节点置为 running 后调用本函数；保持 pending/running 状态不变，
  * 使后续渲染流程仍能使用自己的状态机（idle -> pending -> running -> success）。
  */
-export async function fabricateShot(projectId: string, nodeId: string): Promise<void> {
+export async function fabricateShot(
+  projectId: string,
+  nodeId: string,
+  attemptId: string,
+): Promise<void> {
   const repository = new DirectorRuntimeRepository(await getDb(), storage)
   const runner = createStageRunner({
     repository,
@@ -36,5 +40,5 @@ export async function fabricateShot(projectId: string, nodeId: string): Promise<
       // shot-codegen 只有 MP4 渲染成功后才能推进；由 render queue handler 挂接。
     },
   })
-  await runner(projectId, nodeId, 'FABRICATE')
+  await runner(projectId, nodeId, 'FABRICATE', attemptId)
 }

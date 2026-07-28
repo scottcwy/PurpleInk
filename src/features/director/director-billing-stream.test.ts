@@ -145,6 +145,34 @@ describe('Director per-provider-call billing stream', () => {
     expect(streamSimple).toHaveBeenCalledTimes(1)
   })
 
+  it('reports a preflight failure before any provider call starts', async () => {
+    const preflightFailure = new Error('托管 Director 调用缺少可审计的 attemptId')
+    const begin = vi.fn<ManagedAiGateway['begin']>()
+      .mockRejectedValueOnce(preflightFailure)
+    const streamSimple = vi.fn(upstream)
+    const onPreflightFailure = vi.fn()
+
+    const events = await consume(createDirectorBillingStream({
+      model,
+      context,
+      runtime: {
+        providerId: 'stepfun',
+        modelId: model.id,
+        maxOutputTokens: 4_096,
+        deductsManagedPool: true,
+      },
+      attemptId: '00000000-0000-4000-8000-000000000001',
+      invocationIndex: 1,
+      gateway: { begin } as unknown as ManagedAiGateway,
+      onPreflightFailure,
+      streamSimple,
+    }))
+
+    expect(events.at(-1)?.type).toBe('error')
+    expect(onPreflightFailure).toHaveBeenCalledWith(preflightFailure)
+    expect(streamSimple).not.toHaveBeenCalled()
+  })
+
   it('settles a provider error with reported usage before forwarding it', async () => {
     const order: string[] = []
     const billingHandle = handle(order)

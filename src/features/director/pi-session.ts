@@ -93,6 +93,7 @@ export async function createDirectorSession(
     let upstreamFailureStatus: number | null = null
     const gateway = new ManagedAiGateway()
     let invocationIndex = 0
+    let preflightFailure: unknown
     const agent = new Agent({
       initialState: {
         systemPrompt: buildDirectorSystemPrompt(input.stage),
@@ -100,17 +101,23 @@ export async function createDirectorSession(
         messages: [...restored.messages],
         tools: [],
       },
-      streamFn: (model, context, options) => createDirectorBillingStream({
-        model,
-        context,
-        options,
-        runtime,
-        attemptId: input.attemptId,
-        invocationIndex: ++invocationIndex,
-        gateway,
-        streamSimple: (nextModel, nextContext, nextOptions) =>
-          runtime.models.streamSimple(nextModel, nextContext, nextOptions),
-      }),
+      streamFn: (model, context, options) => {
+        preflightFailure = undefined
+        return createDirectorBillingStream({
+          model,
+          context,
+          options,
+          runtime,
+          attemptId: input.attemptId,
+          invocationIndex: ++invocationIndex,
+          gateway,
+          onPreflightFailure: (error) => {
+            preflightFailure = error
+          },
+          streamSimple: (nextModel, nextContext, nextOptions) =>
+            runtime.models.streamSimple(nextModel, nextContext, nextOptions),
+        })
+      },
       getApiKey: () => runtime.apiKey,
       onResponse: (response) => {
         if (response.status >= 400 && response.status <= 599) {
@@ -129,9 +136,11 @@ export async function createDirectorSession(
         try {
           await agent.prompt(runInput.prompt)
           await agent.waitForIdle()
+          if (preflightFailure !== undefined) throw preflightFailure
           assertRunSucceeded(agent, runtime, upstreamFailureStatus)
           return extractDirectorOutput(bridge.runMessages(), runInput.output)
         } catch (error) {
+          if (preflightFailure !== undefined) throw preflightFailure
           // pi 在部分流式失败中会从 prompt() 直接 reject，而不会走到下方
           // assertRunSucceeded。只要本次请求已观察到 HTTP 状态或 Agent 已投影
           // 为 provider error，仍必须收敛成稳定的 DirectorRunError，避免让 4xx

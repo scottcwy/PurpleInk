@@ -4,6 +4,7 @@ export type WorkflowErrorCode =
   | 'UPSTREAM_ARTIFACT_MISSING'
   | 'UPSTREAM_ARTIFACT_INVALID'
   | 'STAGE_INPUT_INVALID'
+  | 'INTERNAL_PREFLIGHT_FAILED'
   | 'ROUTE_CONTRACT_INVALID'
   | 'MEDIA_NOT_READY'
   | 'TASK_INTERRUPTED'
@@ -71,6 +72,13 @@ function classifyByType(
     return {
       code: 'STAGE_INPUT_INVALID',
       message: `${stage} 阶段输入未通过内部数据合同校验（字段：${describeIssuePaths(error)}）。重试不会改变结果，需要先修复上游产物或该阶段的输入合同。`,
+      retryable: false,
+    }
+  }
+  if (error instanceof Error && error.name === 'DirectorPreflightError') {
+    return {
+      code: 'INTERNAL_PREFLIGHT_FAILED',
+      message: `${stage} 阶段在调用模型前未通过内部执行前置检查。重试不会改变结果，需要先修复任务审计或计费上下文。`,
       retryable: false,
     }
   }

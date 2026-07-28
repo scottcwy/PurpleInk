@@ -45,7 +45,11 @@ interface HandlerDependencies {
   repository: HandlerRepository
   transitionNodeStatus: typeof transitionNodeStatus
   renderer: Renderer
-  fabricateShot: (projectId: string, nodeId: string) => Promise<void>
+  fabricateShot: (
+    projectId: string,
+    nodeId: string,
+    attemptId: string,
+  ) => Promise<void>
   advancePipeline: (
     projectId: string,
     completedNodeId: string
@@ -76,7 +80,7 @@ export function registerRenderShotHandler(
     await resolved.transitionNodeStatus(payload.nodeId, 'running')
     try {
       if (!(await resolved.repository.hasFabricateArtifact(payload.projectId, payload.nodeId))) {
-        await resolved.fabricateShot(payload.projectId, payload.nodeId)
+        await resolved.fabricateShot(payload.projectId, payload.nodeId, job.id)
       }
     } catch (error) {
       await failFabricate(payload.nodeId, error, resolved)
