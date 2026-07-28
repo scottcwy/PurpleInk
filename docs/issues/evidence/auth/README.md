@@ -20,12 +20,12 @@
 | --- | --- | --- |
 | 1 注册全链路 → 进入 dashboard | **部分**：链路通，但邮件未真实投递（见下） | `auth-flow-smoke.txt` |
 | 2 验证码 10 分钟过期时间戳对照 | 通过 | 同上，校正后 TTL 599,980ms |
-| 3 未登录访问 `/products/dashboard` 302 带 next | 通过 | 307 → `/login?next=%2Fproducts%2Fdashboard` |
-| 4 未登录调 `POST /api/director/pipeline` 401 | **未通过** | 实测 409 且泄露 projectId，见下 |
-| 5 跨账户产物请求 404 | 未做 | 依赖阶段 B |
-| 6 登录后画布 SSE 正常 + keepalive | 未做 | 依赖阶段 B |
+| 3 未登录访问 `/products/dashboard` 302 带 next | 通过 | 307 → `/login?next=%2Fproducts%2Fdashboard`（阶段 B 复测：`phase-b-http-evidence.md` §3） |
+| 4 未登录调 `POST /api/director/pipeline` 401 | **通过（2026-07-28 阶段 B 收口后重测）** | `phase-b-http-evidence.md` §1：401 且不回显 projectId，旧 409 缺陷已修复 |
+| 5 跨账户产物请求 404 | **通过（2026-07-28）** | `phase-b-http-evidence.md` §5（HTTP）+ `src/features/artifacts/service.pg.test.ts`（字节层） |
+| 6 登录后画布 SSE 正常 + keepalive | **通过（2026-07-28）** | `phase-b-http-evidence.md` §6：snapshot 帧 + 15s keepalive，未登录同 URL 401 |
 | 7 登录页截图 + 控制台无错误 + 海报字节数与 SHA-256 | 通过 | 6 张截图；控制台无 error/warning、无失败请求 |
-| 8 速率限制 429 与 `Retry-After` | 未做 | 需要连续压同一邮箱，留待阶段 B 一并取证 |
+| 8 速率限制 429 与 `Retry-After` | **通过（2026-07-28）** | `phase-b-http-evidence.md` §7 |
 
 ## 海报优化前后
 
@@ -58,7 +58,10 @@ nodemailer 报 `{ code: 'ESOCKET', command: 'CONN' }`。
 邮件。已按泄露性质分级（`src/features/auth/mail-failure.ts`）：通道级失败回 503，
 收件人级拒收仍回 200。
 
-### `POST /api/director/pipeline` 未登录回 409 而非 401
+### `POST /api/director/pipeline` 未登录回 409 而非 401（已修复，2026-07-28）
+
+阶段 B 收口时 13 条既有 API 已全部接 `withApiSession`：未登录统一 401 同一句文案，
+不再回显内部 projectId。新证据见 `phase-b-http-evidence.md` §1。以下为历史记录：
 
 13 条既有 API 尚未接会话守卫（PLAN-002 §3.3，属阶段 B）。当前行为有两个问题：
 

@@ -16,6 +16,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { loadEnvConfig } from '@next/env'
+import { authHeaders, establishSession } from './smoke-session'
 
 /**
  * `src/lib/db/client.ts` 与 `@/lib/storage` 用 `import 'server-only'` 作为 Next
@@ -262,69 +263,7 @@ async function readArtifactInventory(projectId: string): Promise<ArtifactRow[]> 
   return inventory
 }
 
-/**
- * 反代 Basic Auth 凭据（ISSUE-015 P-2）的唯一注入出口。
- * 格式 `user:pass`，来自 env `CVC_VERIFY_BASIC_AUTH`；未设置时返回空对象，
- * 行为与反代落地前完全一致（不发该头）。Node fetch 不接受 URL 内嵌凭据
- * （`https://user:pass@host` 会直接抛 TypeError），因此走请求头而非 URL。
- */
-function basicAuthHeaders(): Record<string, string> {
-  const credentials = process.env.CVC_VERIFY_BASIC_AUTH
-  if (!credentials) return {}
-  return { Authorization: `Basic ${Buffer.from(credentials).toString('base64')}` }
-}
-
-/** 登录后的会话 cookie；与 Basic Auth 共用同一个凭据注入出口（PLAN-001 §1.6）。 */
-let sessionCookie = ''
-
-function authHeaders(): Record<string, string> {
-  return {
-    ...basicAuthHeaders(),
-    ...(sessionCookie ? { cookie: sessionCookie } : {}),
-  }
-}
-
-/**
- * 应用内认证（PLAN-002 阶段 B）：业务 API 全部要求会话。凭据来自 env
- * `CVC_VERIFY_ACCOUNT`（格式 `email:password`，必须是真实注册账号）；
- * 先调 `/api/auth/login` 拿会话 cookie，后续请求携带。未设置时如实提示
- * 并继续（请求会被 401 拒绝，错误信息会说明原因）。
- */
-async function establishSession(
-  baseUrl: string,
-  report: Record<string, unknown>,
-): Promise<void> {
-  const account = process.env.CVC_VERIFY_ACCOUNT
-  if (!account || !account.includes(':')) {
-    console.warn('[e2e] 未设置 CVC_VERIFY_ACCOUNT（email:password），业务 API 将回 401')
-    report.session = { authenticated: false }
-    return
-  }
-  const separator = account.indexOf(':')
-  const email = account.slice(0, separator)
-  const password = account.slice(separator + 1)
-  const response = await fetch(`${baseUrl}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', ...basicAuthHeaders() },
-    body: JSON.stringify({ email, password }),
-  })
-  if (!response.ok) {
-    // 不回显凭据与 provider 原始错误，只报类别。
-    throw new Error(`登录失败（HTTP ${response.status}），请核对 CVC_VERIFY_ACCOUNT`)
-  }
-  const setCookie = response.headers.get('set-cookie') ?? ''
-  const match = /cvc_session=([^;]+)/.exec(setCookie)
-  if (!match) throw new Error('登录响应未携带会话 cookie')
-  sessionCookie = `cvc_session=${match[1]}`
-  report.session = { authenticated: true, email: maskEmail(email) }
-  console.log('[e2e] 会话已建立（真实注册账号）')
-}
-
-function maskEmail(email: string): string {
-  const at = email.indexOf('@')
-  if (at <= 1) return '***'
-  return `${email[0]}***${email.slice(at)}`
-}
+/** 凭据注入（Basic Auth + 应用内会话）收在 `./smoke-session.ts`，唯一出口。 */
 
 async function post(
   baseUrl: string,

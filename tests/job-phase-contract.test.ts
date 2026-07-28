@@ -59,7 +59,8 @@ describe("worker phase contract", () => {
   it("keeps every worker phase in the progress presentation", async () => {
     const [workerPhases, composerSource] = await Promise.all([
       readWorkerPhases(),
-      readFile("src/components/marketing/launch-composer.tsx", "utf8"),
+      // PHASE_LABEL / PHASE_BAND 已拆到展示支撑模块（规模门禁拆分），合同不变。
+      readFile("src/components/marketing/launch-composer-support.tsx", "utf8"),
     ]);
     for (const phase of workerPhases) {
       // PHASE_LABEL: `phase: "..."`；PHASE_BAND: `phase: [lo, hi, tau]`。
