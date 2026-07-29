@@ -1,14 +1,12 @@
 import 'server-only'
 import { createHash, randomUUID } from 'node:crypto'
-import { and, eq, gt, gte, max, min, ne, sql, sum } from 'drizzle-orm'
+import { and, eq, gt, gte, max, min, sql, sum } from 'drizzle-orm'
 import { currentUserId, currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb, type Db } from '@/lib/db/client'
 import {
   providerDispatchCooldowns,
   providerDispatches,
   providerPoolStates,
-  pipelineRuns,
-  taskAttempts,
 } from '@/lib/db/schema'
 import {
   ProviderRequestError,
@@ -30,8 +28,13 @@ import {
   ProviderDispatchWaitError,
   type ProviderDispatchWaitReason,
 } from './provider-dispatch-wait-error'
+import { hasWaitingProviderPeer } from './provider-fairness'
+import {
+  nextProviderWindow,
+  PROVIDER_RATE_WINDOW_MS,
+  providerRateLimitBackoffMs,
+} from './provider-dispatch-window'
 
-const RATE_WINDOW_MS = 60_000
 const DEFAULT_LEASE_MS = 5 * 60_000
 
 export interface ProviderDispatchInput {
@@ -98,7 +101,7 @@ export async function reserveProviderDispatch(
     if (
       actorUserId
       && poolState.lastActorUserId === actorUserId
-      && await hasWaitingPeer(transaction, scopeKey, actorUserId)
+      && await hasWaitingProviderPeer(transaction, scopeKey, actorUserId)
     ) {
       throw dispatchWaitError(
         input,
@@ -135,7 +138,7 @@ export async function reserveProviderDispatch(
         eq(providerDispatches.scopeKey, scopeKey),
         gte(
           providerDispatches.reservedAt,
-          sql`now() - make_interval(secs => ${RATE_WINDOW_MS / 1_000})`,
+          sql`now() - make_interval(secs => ${PROVIDER_RATE_WINDOW_MS / 1_000})`,
         ),
       ))
     const [active] = await transaction
@@ -149,7 +152,7 @@ export async function reserveProviderDispatch(
         eq(providerDispatches.status, 'reserved'),
         gt(providerDispatches.leaseExpiresAt, sql`now()`),
       ))
-    const wait = nextAvailableAt({
+    const wait = nextProviderWindow({
       limits: { ...limits, concurrency: poolState.currentConcurrency },
       rpm: usage?.rpm ?? 0,
       tokens: usage?.tokens ?? 0,
@@ -226,7 +229,7 @@ export async function deferProviderScope(
     .where(eq(providerPoolStates.scopeKey, scopeKey))
     .limit(1)
   const fallback = new Date(
-    Date.now() + rateLimitBackoffMs(state?.failureCount ?? 0),
+    Date.now() + providerRateLimitBackoffMs(state?.failureCount ?? 0),
   )
   const blockedUntil = retryAt && retryAt.getTime() > Date.now() ? retryAt : fallback
   await database
@@ -263,57 +266,6 @@ export function providerScopeKey(input: {
   return createHash('sha256').update(identity).digest('hex')
 }
 
-function nextAvailableAt(input: {
-  limits: ProviderLimits
-  rpm: number
-  tokens: number
-  tokenEstimate: number
-  oldest: Date | null
-  newest: Date | null
-  active: number
-  nextLease: Date | null
-}): { retryAt: Date; reason: ProviderDispatchWaitReason } | undefined {
-  const candidates: Array<{
-    retryAt: Date
-    reason: ProviderDispatchWaitReason
-  }> = []
-  const jitter = () => Math.round(Math.random() * (input.limits.jitterMs ?? 0))
-  if (input.newest && (input.limits.minIntervalMs ?? 0) > 0) {
-    const retryAt = new Date(
-      input.newest.getTime() + (input.limits.minIntervalMs ?? 0) + jitter(),
-    )
-    if (retryAt.getTime() > Date.now()) {
-      candidates.push({ retryAt, reason: 'pacing' })
-    }
-  }
-  if (input.rpm >= input.limits.rpm && input.oldest) {
-    candidates.push({
-      retryAt: new Date(input.oldest.getTime() + RATE_WINDOW_MS + jitter()),
-      reason: 'rpm',
-    })
-  }
-  if (
-    input.limits.tpm !== undefined
-    && input.tokens + input.tokenEstimate > input.limits.tpm
-    && input.oldest
-  ) {
-    candidates.push({
-      retryAt: new Date(input.oldest.getTime() + RATE_WINDOW_MS + jitter()),
-      reason: 'tpm',
-    })
-  }
-  if (input.active >= input.limits.concurrency && input.nextLease) {
-    candidates.push({
-      retryAt: new Date(input.nextLease.getTime() + jitter()),
-      reason: 'concurrency',
-    })
-  }
-  if (candidates.length === 0) return undefined
-  return candidates.reduce((latest, candidate) =>
-    candidate.retryAt.getTime() > latest.retryAt.getTime() ? candidate : latest
-  )
-}
-
 function dispatchLimits(input: ProviderDispatchInput): ProviderLimits {
   if (input.limits) return input.limits
   return input.funding === 'managed'
@@ -337,39 +289,9 @@ function dispatchWaitError(
   })
 }
 
-function rateLimitBackoffMs(failureCount: number): number {
-  const sequence = [2_000, 4_000, 8_000, 16_000, 30_000]
-  const base = sequence[Math.min(Math.max(failureCount, 0), sequence.length - 1)]!
-  return base + Math.round(Math.random() * base * 0.2)
-}
-
 function safeActorUserId(value: string): string | null {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
     .test(value)
     ? value
     : null
-}
-
-async function hasWaitingPeer(
-  transaction: Parameters<Parameters<Db['transaction']>[0]>[0],
-  scopeKey: string,
-  actorUserId: string,
-): Promise<boolean> {
-  const [peer] = await transaction
-    .select({ id: taskAttempts.id })
-    .from(taskAttempts)
-    .innerJoin(
-      pipelineRuns,
-      and(
-        eq(pipelineRuns.workspaceId, taskAttempts.workspaceId),
-        eq(pipelineRuns.id, taskAttempts.runId),
-      ),
-    )
-    .where(and(
-      eq(taskAttempts.status, 'queued'),
-      ne(pipelineRuns.requestedByUserId, actorUserId),
-      sql`${taskAttempts.checkpoint} #>> '{queueMeta,providerScopeKey}' = ${scopeKey}`,
-    ))
-    .limit(1)
-  return peer !== undefined
 }

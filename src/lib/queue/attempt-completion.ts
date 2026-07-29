@@ -7,11 +7,20 @@ import { backoffMs, shouldAutoRetry } from './retry-policy'
 import { classifyWorkflowError } from '@/features/canvas/workflow-error'
 import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
 import type { WorkflowExecutionNotice, WorkflowFault } from '@/features/canvas/workflow-fault'
+import {
+  boundedProviderResumeAt,
+  MAX_PROVIDER_WAIT_MS,
+  ordinaryAttemptNo,
+  patchQueueMeta,
+  providerWaitRemaining,
+  scheduleProviderDispatchWait,
+  scheduleProviderRateLimitWait,
+  type ProviderWaitAttempt,
+} from './provider-wait-scheduler'
 
-export const MAX_PROVIDER_WAIT_MS = 15 * 60_000
-const FALLBACK_PROVIDER_WAIT_MS = 15_000
+export { MAX_PROVIDER_WAIT_MS }
 
-interface CompletingAttemptRow {
+interface CompletingAttemptRow extends ProviderWaitAttempt {
   runId: string
   taskId: string
   entityType: string
@@ -73,7 +82,7 @@ export async function completeAttempt(
       && (options?.allowAutoRetry ?? true)
     ) {
       const resumeAt = new Date(failure.retryAt!)
-      await scheduleDispatchWait(
+      await scheduleProviderDispatchWait(
         transaction,
         workspaceId,
         attemptId,
@@ -100,8 +109,8 @@ export async function completeAttempt(
       && (options?.allowAutoRetry ?? true)
       && providerWaitRemaining(attempt.checkpoint)
     ) {
-      const resumeAt = boundedResumeAt(fault, attempt.checkpoint)
-      await scheduleDeferred(
+      const resumeAt = boundedProviderResumeAt(fault, attempt.checkpoint)
+      await scheduleProviderRateLimitWait(
         transaction,
         workspaceId,
         attemptId,
@@ -234,90 +243,6 @@ function workflowFault(failure: unknown, stage: string): WorkflowFault {
   )
 }
 
-async function scheduleDeferred(
-  transaction: Transaction,
-  workspaceId: string,
-  attemptId: string,
-  attempt: CompletingAttemptRow,
-  fault: WorkflowFault,
-  resumeAt: Date,
-): Promise<void> {
-  await transaction
-    .update(taskAttempts)
-    .set({
-      status: 'superseded',
-      failure: fault,
-      completedAt: sql`now()`,
-      updatedAt: sql`now()`,
-    })
-    .where(and(
-      eq(taskAttempts.workspaceId, workspaceId),
-      eq(taskAttempts.id, attemptId),
-      eq(taskAttempts.status, 'running'),
-    ))
-  await transaction.insert(taskAttempts).values({
-    workspaceId,
-    id: randomUUID(),
-    runId: attempt.runId,
-    taskId: attempt.taskId,
-    entityType: attempt.entityType,
-    entityId: attempt.entityId,
-    attemptNo: attempt.attemptNo + 1,
-    status: 'queued',
-    fingerprint: attempt.fingerprint,
-    checkpoint: patchQueueMeta(attempt.checkpoint, {
-      ordinaryAttemptNo: ordinaryAttemptNo(attempt),
-      providerWaitStartedAt: providerWaitStartedAt(attempt.checkpoint).toISOString(),
-    }),
-    visibleAt: resumeAt,
-  })
-  await transaction
-    .update(pipelineRuns)
-    .set({ status: 'queued', completedAt: null, updatedAt: sql`now()` })
-    .where(and(
-      eq(pipelineRuns.workspaceId, workspaceId),
-      eq(pipelineRuns.id, attempt.runId),
-    ))
-}
-
-async function scheduleDispatchWait(
-  transaction: Transaction,
-  workspaceId: string,
-  attemptId: string,
-  attempt: CompletingAttemptRow,
-  failure: ProviderDispatchWaitError,
-  resumeAt: Date,
-): Promise<void> {
-  await transaction
-    .update(taskAttempts)
-    .set({
-      status: 'queued',
-      failure: null,
-      checkpoint: patchQueueMeta(attempt.checkpoint, {
-        ordinaryAttemptNo: ordinaryAttemptNo(attempt),
-        providerScopeKey: failure.scopeKey,
-        providerWaitReason: failure.waitReason,
-      }),
-      visibleAt: resumeAt,
-      leaseExpiresAt: null,
-      startedAt: null,
-      completedAt: null,
-      updatedAt: sql`now()`,
-    })
-    .where(and(
-      eq(taskAttempts.workspaceId, workspaceId),
-      eq(taskAttempts.id, attemptId),
-      eq(taskAttempts.status, 'running'),
-    ))
-  await transaction
-    .update(pipelineRuns)
-    .set({ status: 'queued', completedAt: null, updatedAt: sql`now()` })
-    .where(and(
-      eq(pipelineRuns.workspaceId, workspaceId),
-      eq(pipelineRuns.id, attempt.runId),
-    ))
-}
-
 /**
  * 自动重试前把节点复位到 pending：两个 handler 开场都走 pending -> running，
  * 而首次失败的补偿已把节点置 failed（failed -> running 非法）。features 依赖
@@ -337,50 +262,6 @@ async function resetNodeForRetry(
     // 节点可能已被用户/其他路径改走（如仍在 running），容错不阻断。
     console.error('[queue] 自动重试的节点复位失败', { nodeId, error })
   }
-}
-
-function ordinaryAttemptNo(attempt: CompletingAttemptRow): number {
-  const meta = queueMeta(attempt.checkpoint)
-  return typeof meta.ordinaryAttemptNo === 'number'
-    ? meta.ordinaryAttemptNo
-    : attempt.attemptNo
-}
-
-function providerWaitRemaining(checkpoint: VersionedPayload): boolean {
-  return Date.now() - providerWaitStartedAt(checkpoint).getTime() < MAX_PROVIDER_WAIT_MS
-}
-
-function boundedResumeAt(fault: WorkflowFault, checkpoint: VersionedPayload): Date {
-  const startedAt = providerWaitStartedAt(checkpoint)
-  const deadline = startedAt.getTime() + MAX_PROVIDER_WAIT_MS
-  const projected = fault.provider?.retryAt
-    ? Date.parse(fault.provider.retryAt)
-    : Date.now() + FALLBACK_PROVIDER_WAIT_MS
-  const valid = Number.isFinite(projected) ? projected : Date.now() + FALLBACK_PROVIDER_WAIT_MS
-  return new Date(Math.min(Math.max(valid, Date.now()), deadline))
-}
-
-function providerWaitStartedAt(checkpoint: VersionedPayload): Date {
-  const value = queueMeta(checkpoint).providerWaitStartedAt
-  if (typeof value === 'string') {
-    const timestamp = Date.parse(value)
-    if (Number.isFinite(timestamp)) return new Date(timestamp)
-  }
-  return new Date()
-}
-
-function queueMeta(checkpoint: VersionedPayload): Record<string, unknown> {
-  const value = checkpoint.queueMeta
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
-}
-
-function patchQueueMeta(
-  checkpoint: VersionedPayload,
-  patch: Record<string, unknown>
-): VersionedPayload {
-  return { ...checkpoint, queueMeta: { ...queueMeta(checkpoint), ...patch } }
 }
 
 /** shouldAutoRetry 的兜底 stage：director 作业取 payload.stage，渲染作业归 RENDER。 */
