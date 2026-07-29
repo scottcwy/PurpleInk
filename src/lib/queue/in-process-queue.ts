@@ -250,6 +250,7 @@ export class InProcessQueue implements QueueAdapter {
         durationMs: Date.now() - startedAt,
         retryAt: fault.provider?.retryAt ?? null,
         errorName: err instanceof Error ? err.name : 'NonErrorThrown',
+        errorMessage: err instanceof Error ? err.message?.slice(0, 300) : null,
         details: safeErrorDetails(err),
       }))
       await completeAttempt(

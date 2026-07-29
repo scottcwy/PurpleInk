@@ -27,15 +27,18 @@ export async function activePlan(
 
 export async function databaseNow(
   transaction: ConcurrencyTransaction,
-  workspaceId: string,
+  _workspaceId?: string,
 ): Promise<Date> {
   const [row] = await transaction
-    .select({ now: sql<Date | string>`now()` })
-    .from(workspaceEntitlements)
-    .where(eq(workspaceEntitlements.workspaceId, workspaceId))
-    .limit(1)
-  if (!row) return new Date()
-  return row.now instanceof Date ? row.now : new Date(row.now)
+    .execute(sql`SELECT now() AS "ts"`)
+  const raw: unknown = (row as Record<string, unknown> | undefined)?.ts
+  if (raw instanceof Date && !Number.isNaN(raw.getTime())) return raw
+  if (typeof raw === 'string') {
+    const parsed = new Date(raw)
+    if (!Number.isNaN(parsed.getTime())) return parsed
+  }
+  // 兜底：无论查询返回何种格式，保证调用方总能拿到可序列化的 Date。
+  return new Date()
 }
 
 function isPlanKey(value: string | undefined): value is PlanKey {

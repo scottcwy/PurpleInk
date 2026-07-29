@@ -1,5 +1,5 @@
 import 'server-only'
-import { eq, gt, sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import type { PlanKey } from '@/features/billing/domain'
 import { subscriptionConcurrencyLimit } from '@/features/billing/domain'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
@@ -27,7 +27,7 @@ export async function getWorkspaceConcurrencyProjection(
       .select({
         active: sql<number>`count(*) filter (
           where ${workflowConcurrencyLeases.status} = 'active'
-          and ${gt(workflowConcurrencyLeases.leaseExpiresAt, now)}
+          and ${workflowConcurrencyLeases.leaseExpiresAt} > ${now.toISOString()}
         )::int`,
         waiting: sql<number>`count(*) filter (
           where ${workflowConcurrencyLeases.status} = 'waiting'

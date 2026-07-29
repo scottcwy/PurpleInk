@@ -500,6 +500,7 @@ UI 投影为未知问题并连续重试；数据库没有 `export-project` attem
 - [ ] Provider 耗时是否由进程单调时钟计算并写入 `provider_duration_ms`；是否错误使用应用与数据库墙钟差值。
 - [ ] 账本与公共投影是否都未持久化或返回 Prompt、消息正文、Tool 参数、凭据、原始 Provider 错误、隐藏推理、成本、哈希或内部调用 ID。
 - [ ] 真实产物证据：`artifacts.content_hash` 与磁盘字节 SHA-256 逐条核对一致。
+- [ ] `databaseNow` 等数据库时钟取值是否不依赖业务表有行；返回值是否经过 `instanceof Date` + `getTime()` 有效性双重验证；传入 Drizzle 算子前是否保证可序列化（模式 O）。
 
 真实证据的取法示例：
 
@@ -517,6 +518,51 @@ docker exec purpleink-dev-postgres-1 psql -U cvc -d cvc -A -t -F "|" -c `
 
 ---
 
+## 7.9 模式 O：databaseNow 返回非 Date 对象导致全阶段 TypeError
+
+**症状**：INGEST 模型调用成功、`director-ingest` 产物正常写入，但节点仍然报
+「执行遇到未知问题」。三次自动重试全部以同一个 TypeError 在数秒内失败，
+`errorName` 为 `TypeError`，attempt 耗时 5–11 秒（模型耗时约 5 秒后的
+剩余时间全在 post-commit 链路），AI 调用表中对应行状态为 `succeeded`。
+UI 投影为 `STAGE_FAILED`（阶段兜底），且同一进程的 dev log 可见
+`TypeError: value.toISOString is not a function` 以及重复的
+`Failed query: ... workflow_concurrency_leases` 错误。
+
+**真实事故**：`workspace-concurrency-context.ts` 的 `databaseNow` 通过
+`sql<Date | string>\`now()\`` 从 `workspace_entitlements` 表获取数据库时钟。
+当 ORM 结果映射返回的 `row.now` 既不满足 `instanceof Date`（跨 realm 或
+驱动映射异常），又不是可解析的 ISO 字符串时，`new Date(row.now)` 创建出
+`Invalid Date` 或非 Date 对象。随后该值被传入 `activePlan` 的
+`lte(startsAt, now)` / `gt(expiresAt, now)`——Drizzle 在序列化参数时调用
+`value.toISOString()` 失败抛出 TypeError。
+
+该 TypeError 发生在 `commitStageResult` → `materializeShotLanes` →
+`registerWorkflowSlotsInTransaction` → `activePlan` 路径，即模型产物
+已写入但分镜通道物化尚未提交的事务窗口内。由于外部事务回滚，泳道节点不入
+库，节点状态落到 `failed`；自动重试仍走同一条路径，每次都复现。
+
+**规则**：
+
+- 获取数据库时钟使用 `SELECT now()` 无表查询（`transaction.execute`），
+  不依赖任何业务表有行。
+- `databaseNow` 的返回值必须经过三层防御：`instanceof Date` + `getTime()`
+  有效性 → 字符串 `new Date(str)` 有效性 → 兜底 `new Date()`。
+- 任何 Date 值在传入 Drizzle `lte` / `gt` 等比较算子前，保证
+  `!Number.isNaN(date.getTime())`；否则应提前抛出明确业务错误，
+  不应落到阶段兜底的 `STAGE_FAILED`。
+- `workspace-concurrency-projection.ts` 内 `sql` 模板中嵌入
+  `gt(timestampColumn, dateValue)` 的用法改为显式 `.toISOString()` 字面量，
+  避免 ORM/Driver 序列化层的不确定性。
+- `in-process-queue.ts` 的 `[workflow-attempt]` 日志必须同时输出
+  `errorMessage`（截断 300 字符），确保 TypeError 等非 Provider 错误的
+  原始信息可追溯，不再只有 `errorName`。
+
+**已落地护栏**：`workspace-concurrency-context.ts` 的 `databaseNow` 使用
+无表 `SELECT now()` 与三层解析防御；`workspace-concurrency-projection.ts`
+改为显式 ISO 字符串参数；`in-process-queue.ts` 补齐 `errorMessage` 日志字段。
+
+---
+
 ## 9. 已知未修项
 
 当前无已确认而未修的代码/文档项。
@@ -527,7 +573,8 @@ docker exec purpleink-dev-postgres-1 psql -U cvc -d cvc -A -t -F "|" -c `
 读取错误（模式 D）、Pi 会话哈希失真（模式 G）、复合渲染队列丢失 attempt id 并
 污染 Provider 熔断（模式 I）、长模型调用被短租约误回收且遗留计费预留（模式 J）
 、静态门禁放过语法错误并重复复用坏 HTML（模式 K）、ASR 小数秒导致字幕结算失败
-（模式 L）、RPM 限流被普通重试与熔断放大（模式 M）——见各节「已落地护栏」。
+（模式 L）、RPM 限流被普通重试与熔断放大（模式 M）、databaseNow 非 Date 返回
+导致 post-commit TypeError（模式 O）——见各节「已落地护栏」。
 
 ---
 
