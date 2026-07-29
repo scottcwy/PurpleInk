@@ -21,7 +21,10 @@ import {
   reserveProviderDispatch,
   type ProviderDispatchLease,
 } from '@/features/ai/provider-dispatch'
-import { ProviderRequestError } from '@/features/ai/provider-request-error'
+import {
+  ProviderRequestError,
+  type ProviderFailureKind,
+} from '@/features/ai/provider-request-error'
 import { billingInvocationNo } from '@/features/billing'
 
 interface DirectorBillingRuntime {
@@ -66,6 +69,7 @@ async function* billedEvents(
 ): AsyncGenerator<AssistantMessageEvent> {
   let handle: ManagedAiHandle
   let dispatch: ProviderDispatchLease | null = null
+  let dispatchOutcome: 'success' | ProviderFailureKind = 'unknown'
   try {
     dispatch = await reserveProviderDispatch({
       providerId: input.runtime.providerId,
@@ -77,7 +81,7 @@ async function* billedEvents(
     })
     handle = await beginInvocation(input)
   } catch (error) {
-    await dispatch?.release()
+    await dispatch?.release('unknown')
     input.onPreflightFailure?.(error)
     throw error
   }
@@ -95,10 +99,12 @@ async function* billedEvents(
       if (event.type === 'done' || event.type === 'error') {
         await settleTerminal(handle, event)
         settled = true
+        dispatchOutcome = event.type === 'done' ? 'success' : 'unknown'
       }
       yield event
     }
   } catch (error) {
+    dispatchOutcome = error instanceof ProviderRequestError ? error.kind : 'unknown'
     if (error instanceof ProviderRequestError && error.kind === 'rate_limit') {
       await dispatch?.defer(error.retryAt ? new Date(error.retryAt) : undefined)
     }
@@ -110,7 +116,7 @@ async function* billedEvents(
     }
     throw error
   } finally {
-    await dispatch?.release()
+    await dispatch?.release(dispatchOutcome)
   }
 }
 

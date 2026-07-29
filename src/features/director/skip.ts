@@ -8,6 +8,7 @@ import {
   type CanvasNodeType,
 } from '@/features/canvas'
 import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
+import { releaseTerminalWorkflowSlotForNode } from '@/features/ai/workspace-concurrency-release'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb, type Db } from '@/lib/db/client'
 import { pipelineRuns, taskAttempts } from '@/lib/db/schema/index'
@@ -101,6 +102,11 @@ export async function skipNodeAction(
   }
   await transitionNodeStatus(input.nodeId, 'skipped', {
     skipMeta: { reason, at: skippedAt, kind: skipKind },
+  })
+  await releaseTerminalWorkflowSlotForNode({
+    workspaceId,
+    nodeId: input.nodeId,
+    database,
   })
   const advanced = await advancePipeline(input.projectId, input.nodeId)
   return {

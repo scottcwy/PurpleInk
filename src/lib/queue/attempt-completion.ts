@@ -5,6 +5,7 @@ import type { Db } from '@/lib/db/client'
 import { pipelineRuns, taskAttempts, type VersionedPayload } from '@/lib/db/schema/index'
 import { backoffMs, shouldAutoRetry } from './retry-policy'
 import { classifyWorkflowError } from '@/features/canvas/workflow-error'
+import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
 import type { WorkflowExecutionNotice, WorkflowFault } from '@/features/canvas/workflow-fault'
 
 export const MAX_PROVIDER_WAIT_MS = 15 * 60_000
@@ -66,6 +67,32 @@ export async function completeAttempt(
     if (attempt.status !== 'running') return null
 
     const stage = retryStage(attempt.checkpoint)
+    if (
+      status === 'failed'
+      && failure instanceof ProviderDispatchWaitError
+      && (options?.allowAutoRetry ?? true)
+    ) {
+      const resumeAt = new Date(failure.retryAt!)
+      await scheduleDispatchWait(
+        transaction,
+        workspaceId,
+        attemptId,
+        attempt,
+        failure,
+        resumeAt,
+      )
+      return attempt.entityType === 'node'
+        ? {
+            nodeId: attempt.entityId,
+            notice: {
+              code: 'PROVIDER_POOL_WAIT' as const,
+              message: `${failure.providerLabel}正在等待可用调用窗口`,
+              resumeAt: resumeAt.toISOString(),
+              providerLabel: failure.providerLabel,
+            },
+          }
+        : null
+    }
     const fault = failure === undefined ? null : workflowFault(failure, stage)
     if (
       status === 'failed'
@@ -244,6 +271,44 @@ async function scheduleDeferred(
     }),
     visibleAt: resumeAt,
   })
+  await transaction
+    .update(pipelineRuns)
+    .set({ status: 'queued', completedAt: null, updatedAt: sql`now()` })
+    .where(and(
+      eq(pipelineRuns.workspaceId, workspaceId),
+      eq(pipelineRuns.id, attempt.runId),
+    ))
+}
+
+async function scheduleDispatchWait(
+  transaction: Transaction,
+  workspaceId: string,
+  attemptId: string,
+  attempt: CompletingAttemptRow,
+  failure: ProviderDispatchWaitError,
+  resumeAt: Date,
+): Promise<void> {
+  await transaction
+    .update(taskAttempts)
+    .set({
+      status: 'queued',
+      failure: null,
+      checkpoint: patchQueueMeta(attempt.checkpoint, {
+        ordinaryAttemptNo: ordinaryAttemptNo(attempt),
+        providerScopeKey: failure.scopeKey,
+        providerWaitReason: failure.waitReason,
+      }),
+      visibleAt: resumeAt,
+      leaseExpiresAt: null,
+      startedAt: null,
+      completedAt: null,
+      updatedAt: sql`now()`,
+    })
+    .where(and(
+      eq(taskAttempts.workspaceId, workspaceId),
+      eq(taskAttempts.id, attemptId),
+      eq(taskAttempts.status, 'running'),
+    ))
   await transaction
     .update(pipelineRuns)
     .set({ status: 'queued', completedAt: null, updatedAt: sql`now()` })
