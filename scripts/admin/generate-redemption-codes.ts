@@ -23,6 +23,22 @@ interface BatchSpec {
   count: number
 }
 
+function parseBatchSpec(value: string): BatchSpec {
+  const [plan, rawCount, ...extra] = value.split(':')
+  const count = Number(rawCount)
+  if (
+    extra.length > 0
+    || !PLAN_KEYS.includes(plan as PlanKey)
+    || plan === 'free'
+  ) {
+    throw new Error('--specs entries must use plus|pro|max:count')
+  }
+  if (!Number.isSafeInteger(count) || count < 1 || count > 1_000) {
+    throw new Error('each redemption code count must be between 1 and 1000')
+  }
+  return { plan: plan as BatchSpec['plan'], count }
+}
+
 function argument(name: string): string | undefined {
   const index = process.argv.indexOf(name)
   return index >= 0 ? process.argv[index + 1] : undefined
@@ -35,6 +51,14 @@ function parseSpecs(): BatchSpec[] {
       { plan: 'pro', count: 5 },
       { plan: 'max', count: 2 },
     ]
+  }
+  const combined = argument('--specs')
+  if (combined) {
+    const specs = combined.split(',').map((entry) => parseBatchSpec(entry.trim()))
+    if (specs.length === 0 || new Set(specs.map(({ plan }) => plan)).size !== specs.length) {
+      throw new Error('--specs must contain unique membership plans')
+    }
+    return specs
   }
   const plan = argument('--plan')
   const count = Number(argument('--count'))
@@ -119,7 +143,7 @@ async function main(): Promise<void> {
         const [created] = await tx.insert(schema.redemptionBatches).values({
           planKey: batch.plan,
           durationDays: 30,
-          label: `initial-${batch.plan}-${now.toISOString()}`,
+          label: `${process.argv.includes('--initial') ? 'initial' : 'generated'}-${batch.plan}-${now.toISOString()}`,
           expiresAt,
         }).returning({ id: schema.redemptionBatches.id })
         await tx.insert(schema.redemptionCodes).values(batch.codes.map((code) => ({
