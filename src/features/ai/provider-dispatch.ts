@@ -80,7 +80,7 @@ export async function reserveProviderDispatch(
     }
     await transaction
       .update(providerDispatches)
-      .set({ status: 'released', releasedAt: new Date() })
+      .set({ status: 'released', releasedAt: sql`now()` })
       .where(and(
         eq(providerDispatches.scopeKey, scopeKey),
         eq(providerDispatches.status, 'reserved'),
@@ -139,7 +139,7 @@ export async function reserveProviderDispatch(
       provider: input.providerId,
       funding: input.funding,
       tokenEstimate: input.tokenEstimate ?? 0,
-      leaseExpiresAt: new Date(Date.now() + DEFAULT_LEASE_MS),
+      leaseExpiresAt: sql`now() + make_interval(secs => ${DEFAULT_LEASE_MS / 1_000})`,
     })
   })
   let released = false
@@ -151,7 +151,7 @@ export async function reserveProviderDispatch(
       released = true
       await database
         .update(providerDispatches)
-        .set({ status: 'released', releasedAt: new Date() })
+        .set({ status: 'released', releasedAt: sql`now()` })
         .where(and(
           eq(providerDispatches.id, id),
           eq(providerDispatches.scopeKey, scopeKey),

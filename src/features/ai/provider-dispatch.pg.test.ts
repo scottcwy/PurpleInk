@@ -68,6 +68,11 @@ describe('provider dispatch Postgres arbitration', () => {
       .orderBy(asc(providerDispatches.reservedAt))
     expect(rows).toHaveLength(5)
     expect(rows.every((row) => row.status === 'released')).toBe(true)
+    expect(rows.every((row) =>
+      row.leaseExpiresAt.getTime() > row.reservedAt.getTime()
+      && row.releasedAt !== null
+      && row.releasedAt.getTime() >= row.reservedAt.getTime()
+    )).toBe(true)
     expect(
       rows.at(-1)!.reservedAt.getTime() - rows[0]!.reservedAt.getTime()
     ).toBeLessThan(60_000)
