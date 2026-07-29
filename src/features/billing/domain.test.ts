@@ -4,6 +4,7 @@ import {
   comparePlans,
   nextRollingPeriod,
   resolveRedemptionTransition,
+  subscriptionConcurrencyLimit,
 } from './domain'
 
 describe('billing plans', () => {
@@ -18,6 +19,13 @@ describe('billing plans', () => {
     expect(comparePlans('free', 'plus')).toBeLessThan(0)
     expect(comparePlans('max', 'pro')).toBeGreaterThan(0)
     expect(comparePlans('pro', 'pro')).toBe(0)
+  })
+
+  it('locks one workspace-wide shot concurrency cap per subscription plan', () => {
+    expect(subscriptionConcurrencyLimit('free')).toBe(3)
+    expect(subscriptionConcurrencyLimit('plus')).toBe(20)
+    expect(subscriptionConcurrencyLimit('pro')).toBe(20)
+    expect(subscriptionConcurrencyLimit('max')).toBe(50)
   })
 })
 

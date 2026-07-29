@@ -16,6 +16,60 @@ export interface ProviderLimits {
   concurrency: number
   rpm: number
   tpm?: number
+  minIntervalMs?: number
+  jitterMs?: number
+}
+
+export interface ProviderPoolPolicy {
+  contractRpm: number
+  softRpm: number
+  hardRpm: number
+  minIntervalMs: number
+  jitterMs: number
+  initialConcurrency: number
+  maxConcurrency: number
+}
+
+const MANAGED_PROVIDER_POLICIES: Record<string, ProviderPoolPolicy> = {
+  gemini: {
+    contractRpm: 1_000,
+    softRpm: 750,
+    hardRpm: 900,
+    minIntervalMs: 80,
+    jitterMs: 8,
+    initialConcurrency: 8,
+    maxConcurrency: 50,
+  },
+  stepfun: {
+    contractRpm: 200,
+    softRpm: 150,
+    hardRpm: 180,
+    minIntervalMs: 400,
+    jitterMs: 40,
+    initialConcurrency: 8,
+    maxConcurrency: 50,
+  },
+  mimo: {
+    contractRpm: 100,
+    softRpm: 75,
+    hardRpm: 90,
+    minIntervalMs: 800,
+    jitterMs: 80,
+    initialConcurrency: 8,
+    maxConcurrency: 50,
+  },
+}
+
+export function providerPoolPolicy(providerId: string): ProviderPoolPolicy {
+  return MANAGED_PROVIDER_POLICIES[providerId] ?? {
+    contractRpm: 60,
+    softRpm: 45,
+    hardRpm: 54,
+    minIntervalMs: 1_334,
+    jitterMs: 134,
+    initialConcurrency: 4,
+    maxConcurrency: 20,
+  }
 }
 
 export interface ProviderDispatchInput {
@@ -200,20 +254,20 @@ export function providerScopeKey(input: {
 }): string {
   const credential = createHash('sha256').update(input.apiKey).digest('hex')
   const identity = input.funding === 'managed'
-    ? `managed:${input.providerId}:${credential}`
+    ? `managed:${input.providerId}`
     : `byok:${input.workspaceId}:${input.providerId}:${credential}`
   return createHash('sha256').update(identity).digest('hex')
 }
 
 export function providerLimits(providerId: string): ProviderLimits {
   const prefix = providerId.replaceAll('-', '_').toUpperCase()
-  const defaults = providerId === 'stepfun'
-    ? { concurrency: 5, rpm: 5 }
-    : { concurrency: 4, rpm: 60 }
+  const policy = providerPoolPolicy(providerId)
   return {
     concurrency: positiveInteger(process.env[`${prefix}_CONCURRENCY_LIMIT`])
-      ?? defaults.concurrency,
-    rpm: positiveInteger(process.env[`${prefix}_RPM_LIMIT`]) ?? defaults.rpm,
+      ?? policy.initialConcurrency,
+    rpm: positiveInteger(process.env[`${prefix}_RPM_LIMIT`]) ?? policy.hardRpm,
+    minIntervalMs: policy.minIntervalMs,
+    jitterMs: policy.jitterMs,
     ...(positiveInteger(process.env[`${prefix}_TPM_LIMIT`]) !== undefined
       ? { tpm: positiveInteger(process.env[`${prefix}_TPM_LIMIT`]) }
       : {}),
