@@ -65,6 +65,16 @@ export interface WorkflowFault {
 
 export type WorkflowErrorProjection = WorkflowFault
 
+/** 业务流程成立但需要用户显式确认时的持久化门禁；它不是执行失败。 */
+export interface WorkflowBlock {
+  code: 'DEGRADED_EXPORT_CONFIRMATION_REQUIRED'
+  message: string
+  recovery: 'confirm_degraded_export'
+  referenceId: string
+  blockedAt: string
+  confirmationFingerprint: string
+}
+
 export interface WorkflowExecutionNotice {
   code: 'PROVIDER_RATE_LIMITED'
   message: string

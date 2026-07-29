@@ -17,7 +17,7 @@ import {
   readInputFingerprint,
   readOutputContentHash,
 } from './content-hash'
-import type { WorkflowExecutionNotice } from './workflow-fault'
+import type { WorkflowBlock, WorkflowExecutionNotice } from './workflow-fault'
 import type { NodeStatus } from './types'
 
 export type { NodeStatus } from './types'
@@ -28,10 +28,11 @@ const ALLOWED_TRANSITIONS: Record<NodeStatus, readonly NodeStatus[]> = {
   pending: ['running', 'cancelled'],
   running: ['success', 'failed', 'cancelled'],
   success: ['stale'],
-  failed: ['pending', 'stale', 'skipped'],
+  failed: ['pending', 'stale', 'skipped', 'blocked'],
   cancelled: ['pending', 'stale', 'skipped'],
-  stale: ['pending', 'skipped'],
+  stale: ['pending', 'skipped', 'blocked'],
   skipped: ['pending'],
+  blocked: ['pending'],
 }
 
 export interface SkipMeta {
@@ -47,6 +48,7 @@ export async function transitionNodeStatus(
   options?: {
     skipMeta?: SkipMeta
     executionNotice?: WorkflowExecutionNotice | null
+    workflowBlock?: WorkflowBlock
   }
 ): Promise<void> {
   const database = await getDb()
@@ -80,6 +82,7 @@ export async function transitionNodeStatus(
       next,
       options?.skipMeta,
       options?.executionNotice,
+      options?.workflowBlock,
     )
     await tx
       .update(canvasNodes)
@@ -262,10 +265,12 @@ const STAGE_ERROR_PAYLOAD_KEYS = [
   'directorError',
   'renderError',
   'executionNotice',
+  'workflowBlock',
 ] as const
 
 const SKIP_META_PAYLOAD_KEY = 'skipMeta'
 const EXECUTION_NOTICE_PAYLOAD_KEY = 'executionNotice'
+const WORKFLOW_BLOCK_PAYLOAD_KEY = 'workflowBlock'
 
 /** 状态迁移时同步清理错误/等待投影并维护 skipMeta。 */
 function resolveTransitionData(
@@ -274,7 +279,15 @@ function resolveTransitionData(
   next: NodeStatus,
   skipMeta: SkipMeta | undefined,
   executionNotice: WorkflowExecutionNotice | null | undefined,
+  workflowBlock: WorkflowBlock | undefined,
 ): VersionedPayload | null {
+  if (next === 'blocked') {
+    if (!workflowBlock) {
+      throw new Error('转入 blocked 必须提供 workflowBlock（确认门禁）')
+    }
+    const cleared = withoutStageErrors(data) ?? data
+    return patchPayload(cleared, { [WORKFLOW_BLOCK_PAYLOAD_KEY]: workflowBlock })
+  }
   if (executionNotice) {
     return patchPayload(data, { [EXECUTION_NOTICE_PAYLOAD_KEY]: executionNotice })
   }
@@ -289,6 +302,9 @@ function resolveTransitionData(
   }
   if (current === 'skipped') {
     return withoutPayloadKeys(data, [SKIP_META_PAYLOAD_KEY])
+  }
+  if (current === 'blocked') {
+    return withoutPayloadKeys(data, [WORKFLOW_BLOCK_PAYLOAD_KEY])
   }
   return null
 }
@@ -342,7 +358,8 @@ function fromPersistedStatus(status: string): NodeStatus {
     status === 'failed' ||
     status === 'cancelled' ||
     status === 'stale' ||
-    status === 'skipped'
+    status === 'skipped' ||
+    status === 'blocked'
   ) {
     return status
   }

@@ -43,6 +43,7 @@ export const NODE_STATUSES = [
   'cancelled',
   'stale',
   'skipped',
+  'blocked',
 ] as const
 
 export const canvasNodes = pgTable(
@@ -98,7 +99,7 @@ export const canvasNodes = pgTable(
     check(
       'canvas_nodes_status_check',
       sql`${table.status} in (
-        'idle', 'queued', 'running', 'succeeded', 'failed', 'cancelled', 'stale', 'skipped'
+        'idle', 'queued', 'running', 'succeeded', 'failed', 'cancelled', 'stale', 'skipped', 'blocked'
       )`,
     ),
     check('canvas_nodes_revision_check', sql`${table.revision} >= 0`),

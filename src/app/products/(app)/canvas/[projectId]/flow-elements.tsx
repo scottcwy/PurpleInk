@@ -1,5 +1,5 @@
 import { MarkerType, type Edge, type Node } from '@xyflow/react'
-import { CircleSlash } from 'lucide-react'
+import { CircleSlash, TriangleAlert } from 'lucide-react'
 import type { ComponentType, ReactNode } from 'react'
 import { StatusPill, type StatusPillVariant } from '@/components/ui/status-pill'
 import type {
@@ -174,6 +174,7 @@ const STATUS_VARIANT: Record<NodeStatus, StatusPillVariant> = {
   cancelled: 'failed',
   stale: 'cached',
   skipped: 'pending',
+  blocked: 'pending',
 }
 
 const STATUS_LABEL: Record<NodeStatus, string> = {
@@ -185,11 +186,13 @@ const STATUS_LABEL: Record<NodeStatus, string> = {
   cancelled: '已取消',
   stale: '需更新',
   skipped: '已跳过',
+  blocked: '等待降级确认',
 }
 
 /** 状态语义靠文本 + 图标共同表达，不只靠颜色；skipped 用 circle-slash（白名单）。 */
 const STATUS_ICON: Partial<Record<NodeStatus, ComponentType<{ className?: string }>>> = {
   skipped: CircleSlash,
+  blocked: TriangleAlert,
 }
 
 export function getNodeStatusPresentation(

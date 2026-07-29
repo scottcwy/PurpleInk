@@ -135,6 +135,14 @@ describe('transitionNodeStatus 状态事件发布', () => {
 })
 
 const SKIP_META = { reason: '素材缺失，先用占位继续', at: '2026-07-28T00:00:00.000Z' }
+const WORKFLOW_BLOCK = {
+  code: 'DEGRADED_EXPORT_CONFIRMATION_REQUIRED' as const,
+  message: '当前终片需要使用占位镜头，请确认降级交付。',
+  recovery: 'confirm_degraded_export' as const,
+  referenceId: 'block-ref-1',
+  blockedAt: '2026-07-29T06:25:05.000Z',
+  confirmationFingerprint: 'sha256:degraded-input',
+}
 
 /** 领域态 -> 持久化种子（pending↔queued、success↔succeeded，skipped 原样）。 */
 const PERSISTED_SEED = {
@@ -146,7 +154,79 @@ const PERSISTED_SEED = {
   cancelled: 'cancelled',
   stale: 'stale',
   skipped: 'skipped',
+  blocked: 'blocked',
 } as const
+
+describe('blocked 状态转移', () => {
+  beforeEach(() => {
+    publishStatus.mockReset()
+    transactionState.committed = false
+    nodeRows = []
+    updateSets = []
+  })
+
+  it.each(['failed', 'stale'] as const)(
+    '%s -> blocked 合法并持久化可审计确认门禁',
+    async (current) => {
+      nodeRows = [{
+        id: 'n1',
+        projectId: 'p1',
+        status: PERSISTED_SEED[current],
+        data: { payload: { directorError: { message: '旧错误' }, keep: 'x' } },
+      }]
+
+      await transitionNodeStatus('n1', 'blocked', { workflowBlock: WORKFLOW_BLOCK })
+
+      expect(updateSets[0]?.status).toBe('blocked')
+      expect(updateSets[0]?.data).toEqual({
+        payload: { keep: 'x', workflowBlock: WORKFLOW_BLOCK },
+      })
+      expect(publishStatus).toHaveBeenCalledWith('p1', 'n1', 'blocked')
+    },
+  )
+
+  it('转入 blocked 没有 workflowBlock 时拒绝写入', async () => {
+    nodeRows = [
+      { id: 'n1', projectId: 'p1', status: 'failed', data: { payload: {} } },
+    ]
+
+    await expect(transitionNodeStatus('n1', 'blocked')).rejects.toThrow(
+      '必须提供 workflowBlock',
+    )
+    expect(updateSets).toHaveLength(0)
+  })
+
+  it('blocked 只能经确认回 pending，并清除 workflowBlock', async () => {
+    nodeRows = [{
+      id: 'n1',
+      projectId: 'p1',
+      status: 'blocked',
+      data: { payload: { workflowBlock: WORKFLOW_BLOCK, keep: 'x' } },
+    }]
+
+    await transitionNodeStatus('n1', 'pending')
+
+    expect(updateSets[0]?.status).toBe('queued')
+    expect(updateSets[0]?.data).toEqual({ payload: { keep: 'x' } })
+  })
+
+  it.each(['idle', 'running', 'success', 'failed', 'cancelled', 'stale', 'skipped', 'blocked'] as const)(
+    'blocked -> %s 除 pending 外全部拒绝',
+    async (next) => {
+      nodeRows = [{
+        id: 'n1',
+        projectId: 'p1',
+        status: 'blocked',
+        data: { payload: { workflowBlock: WORKFLOW_BLOCK } },
+      }]
+
+      await expect(transitionNodeStatus('n1', next)).rejects.toThrow(
+        '非法节点状态转换',
+      )
+      expect(updateSets).toHaveLength(0)
+    },
+  )
+})
 
 describe('skipped 状态转移全组合', () => {
   beforeEach(() => {

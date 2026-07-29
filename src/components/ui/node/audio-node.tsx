@@ -26,6 +26,7 @@ const STATUS_DOT: Record<NodeStatus, string> = {
   cancelled: 'bg-label-tertiary',
   stale: 'bg-warning',
   skipped: 'bg-label-tertiary',
+  blocked: 'bg-warning',
 }
 
 /**
