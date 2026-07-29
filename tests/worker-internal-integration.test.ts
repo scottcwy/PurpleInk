@@ -42,25 +42,25 @@ describe("worker internal integration boundary", () => {
 
     await expect(
       validatePublicUrl("https://user:pass@example.com", publicResolver),
-    ).rejects.toMatchObject<Partial<PublicUrlPolicyError>>({ code: "URL_CREDENTIALS_FORBIDDEN" });
-    await expect(validatePublicUrl("http://localhost:3000", publicResolver)).rejects.toMatchObject<
-      Partial<PublicUrlPolicyError>
-    >({ code: "URL_HOST_FORBIDDEN" });
+    ).rejects.toMatchObject(policyError("URL_CREDENTIALS_FORBIDDEN"));
+    await expect(validatePublicUrl("http://localhost:3000", publicResolver)).rejects.toMatchObject(
+      policyError("URL_HOST_FORBIDDEN"),
+    );
     await expect(validatePublicUrl("http://169.254.169.254/latest", publicResolver)).rejects
-      .toMatchObject<Partial<PublicUrlPolicyError>>({ code: "URL_ADDRESS_NOT_PUBLIC" });
+      .toMatchObject(policyError("URL_ADDRESS_NOT_PUBLIC"));
 
     const privateResolver: PublicDnsResolver = async () => [{ address: "10.20.30.40" }];
-    await expect(validatePublicUrl("https://example.com", privateResolver)).rejects.toMatchObject<
-      Partial<PublicUrlPolicyError>
-    >({ code: "URL_ADDRESS_NOT_PUBLIC" });
+    await expect(validatePublicUrl("https://example.com", privateResolver)).rejects.toMatchObject(
+      policyError("URL_ADDRESS_NOT_PUBLIC"),
+    );
 
     const mixedResolver: PublicDnsResolver = async () => [
       { address: "93.184.216.34" },
       { address: "127.0.0.1" },
     ];
-    await expect(validatePublicUrl("https://example.com", mixedResolver)).rejects.toMatchObject<
-      Partial<PublicUrlPolicyError>
-    >({ code: "URL_ADDRESS_NOT_PUBLIC" });
+    await expect(validatePublicUrl("https://example.com", mixedResolver)).rejects.toMatchObject(
+      policyError("URL_ADDRESS_NOT_PUBLIC"),
+    );
   });
 
   it("normalizes internal URL-only requests and rejects capture or credential overrides", async () => {
@@ -201,6 +201,10 @@ describe("worker internal integration boundary", () => {
     );
   });
 });
+
+function policyError(code: PublicUrlPolicyError["code"]): Partial<PublicUrlPolicyError> {
+  return { code };
+}
 
 function restoreEnv(name: string, value: string | undefined): void {
   if (value === undefined) delete process.env[name];
