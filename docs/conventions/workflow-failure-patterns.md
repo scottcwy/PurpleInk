@@ -563,6 +563,40 @@ UI 投影为 `STAGE_FAILED`（阶段兜底），且同一进程的 dev log 可�
 
 ---
 
+## 7.10 模式 P：并发旁白合成被 Provider 调度 pacing 拒绝后包装为上游失败
+
+**症状**：INGEST 成功、分镜脚本全部完成，但所有 shot-codegen 永久停在 idle。
+配音任务显示 failed；`ai_invocations` 表中第一条 TTS 调用成功（≥ 5s），
+同批其余调用全部在 22–50ms 内失败（`failure_kind: 'unknown'`）。
+重试三次后终态。`errorName` 为 `ManagedAiError`。
+
+**真实事故**：StepFun TTS 的托管池配置 `minIntervalMs: 400ms`（相邻请求间隔
+至少 400ms）。`NARRATION_CONCURRENCY = 4` 个 worker 同时发起 TTS，第一个获取
+调度租约成功，其余 3 个被 `nextProviderWindow` 的 pacing 规则拒绝，
+抛出 `ProviderDispatchWaitError`。
+
+`managed-audio-billing.ts` 的 `invoke()` catch 块把所有异常——包括
+`ProviderDispatchWaitError`——都包装为 `managedUpstreamError`，丢弃了原始的
+`retryAt` 与等待原因。队列层本有专门处理 `ProviderDispatchWaitError` 的
+调度逻辑（`scheduleProviderDispatchWait`，暂停后按 retryAt 恢复），但被
+包装干掉后只能按普通失败做指数退避重试，重试时统一模式再现→
+配音终态失败→ `isMediaReady` 永远返回 false→ shot-codegen 永久阻塞。
+
+**规则**：
+
+- `ProviderDispatchWaitError` 是调度等待而非上游失败，不得被包装为
+  `managedUpstreamError`。必须透传让队列层用内置的 dispatch-wait 调度。
+- 托管音频计费层捕获 `invoke()` 异常前，必须先检查是否为
+  `ProviderDispatchWaitError`；若是，调用 `handle.releaseBeforeCall()` 释放
+  计费预留后直接重抛。
+- 旁白并发不得超过 Provider 池的 minIntervalMs 约束，但调度拒绝
+  必须被各层正确归类为「等待恢复」而非「失败」。
+
+**已落地护栏**：`managed-audio-billing.ts` 在 catch 块开头识别
+`ProviderDispatchWaitError` 并透传，不再包装为 `managedUpstreamError`。
+
+---
+
 ## 9. 已知未修项
 
 当前无已确认而未修的代码/文档项。
@@ -574,7 +608,8 @@ UI 投影为 `STAGE_FAILED`（阶段兜底），且同一进程的 dev log 可�
 污染 Provider 熔断（模式 I）、长模型调用被短租约误回收且遗留计费预留（模式 J）
 、静态门禁放过语法错误并重复复用坏 HTML（模式 K）、ASR 小数秒导致字幕结算失败
 （模式 L）、RPM 限流被普通重试与熔断放大（模式 M）、databaseNow 非 Date 返回
-导致 post-commit TypeError（模式 O）——见各节「已落地护栏」。
+导致 post-commit TypeError（模式 O）、并发旁白调度等待被包装为上游失败导致
+配音永久失败（模式 P）——见各节「已落地护栏」。
 
 ---
 

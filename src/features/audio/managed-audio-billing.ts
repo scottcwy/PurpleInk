@@ -7,6 +7,7 @@ import {
   type ManagedAiHandle,
   type AiProviderId,
 } from '@/features/ai'
+import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
 import type { MaximumUsageEstimate } from '@/features/billing'
 
 export interface AudioBillingContext {
@@ -61,6 +62,12 @@ export async function runManagedAudioBilling<T>(
     await handle.markProviderStarted?.()
     result = await input.invoke()
   } catch (error) {
+    // Provider 调度等待不是上游失败：透传让队列用内置的 dispatch-wait 调度恢复，
+    // 不得包装为 managedUpstreamError（会丢掉 retryAt 并消耗普通重试预算）。
+    if (error instanceof ProviderDispatchWaitError) {
+      await handle.releaseBeforeCall()
+      throw error
+    }
     await handle.settleUnavailable(true, 'unknown')
     throw managedUpstreamError(error)
   }
