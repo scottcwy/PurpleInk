@@ -4,6 +4,8 @@ import type {
   OpenAiCompatibleTtsProfile,
 } from '@/features/ai/openai-compatible-payloads'
 import {
+  type OpenAiCompatibleAsrDependencies,
+  type OpenAiCompatibleTtsDependencies,
   readVerbose,
   synthesizeOpenAiCompatibleSpeech,
   transcribeOpenAiCompatibleSpeech,
@@ -197,18 +199,23 @@ function callInit(fetcher: { mock: { calls: unknown[][] } }): RequestInit {
   return fetcher.mock.calls[0]?.[1] as RequestInit
 }
 
-function harnessTts(fetcher: unknown) {
+function harnessTts(fetcher: unknown): OpenAiCompatibleTtsDependencies {
   return {
     fetcher: fetcher as typeof fetch,
     getProfile: async () => TTS_PROFILE,
     getApiKey: async () => 'secret',
+    dispatch: async (_input, invoke) => invoke(),
   }
 }
 
-function harnessAsr(fetcher: unknown, profile = ASR_PROFILE) {
+function harnessAsr(
+  fetcher: unknown,
+  profile = ASR_PROFILE
+): OpenAiCompatibleAsrDependencies {
   return {
     fetcher: fetcher as typeof fetch,
     getProfile: async () => profile,
     getApiKey: async () => 'secret',
+    dispatch: async (_input, invoke) => invoke(),
   }
 }

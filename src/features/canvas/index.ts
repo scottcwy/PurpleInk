@@ -54,6 +54,7 @@ export {
   type WorkflowFaultCode,
   type WorkflowFaultOrigin,
   type WorkflowRecovery,
+  type WorkflowExecutionNotice,
   type WorkflowErrorCode,
   type WorkflowErrorProjection,
 } from './workflow-error'

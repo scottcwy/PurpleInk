@@ -1,6 +1,7 @@
 import 'server-only'
 import { z } from 'zod'
 import { getStepfunConfig, type StepfunConfig } from '@/features/ai/config'
+import { withProviderDispatch } from '@/features/ai/provider-dispatch'
 import {
   providerErrorFromResponse,
   providerNetworkError,
@@ -79,6 +80,7 @@ const asrErrorSchema = z
 export interface StepfunAudioDependencies {
   fetcher: typeof fetch
   getConfig: () => Promise<StepfunConfig>
+  dispatch?: typeof withProviderDispatch
 }
 
 export interface SynthesizedSpeech {
@@ -104,6 +106,13 @@ export async function synthesizeSpeech(
 ): Promise<SynthesizedSpeech> {
   const parsed = speechInputSchema.parse(input)
   const config = requireKey(await dependencies.getConfig())
+  return (dependencies.dispatch ?? withProviderDispatch)({
+    providerId: 'stepfun',
+    providerLabel: '阶跃星辰',
+    funding: 'managed',
+    apiKey: config.apiKey,
+    tokenEstimate: Array.from(parsed.text).length,
+  }, async () => {
   const response = await request(
     dependencies.fetcher,
     endpoint(config.baseUrl, 'audio/speech'),
@@ -173,6 +182,7 @@ export async function synthesizeSpeech(
     model: config.ttsModel,
     nativeCaptions,
   }
+  })
 }
 
 export async function transcribeSpeech(
@@ -181,6 +191,12 @@ export async function transcribeSpeech(
 ): Promise<TranscribedSpeech> {
   const parsed = transcriptionInputSchema.parse(input)
   const config = requireKey(await dependencies.getConfig())
+  return (dependencies.dispatch ?? withProviderDispatch)({
+    providerId: 'stepfun',
+    providerLabel: '阶跃星辰',
+    funding: 'managed',
+    apiKey: config.apiKey,
+  }, async () => {
   const response = await request(
     dependencies.fetcher,
     endpoint(config.baseUrl, 'audio/asr/sse'),
@@ -252,6 +268,7 @@ export async function transcribeSpeech(
   }
   if (!transcript) throw new Error('StepFun ASR 未返回完整转写')
   return { transcript, model: config.asrModel, captions }
+  })
 }
 
 function parseSse(text: string): unknown[] {

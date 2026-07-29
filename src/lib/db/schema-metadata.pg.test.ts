@@ -5,6 +5,8 @@ const TABLES = [
   'workspaces', 'projects', 'canvas_nodes', 'canvas_edges', 'pipeline_runs',
   'task_attempts', 'artifacts', 'command_receipts', 'model_routes',
   'media_routes', 'provider_credentials', 'ai_invocations', 'workspace_settings',
+  'provider_dispatches',
+  'provider_dispatch_cooldowns',
   'users', 'workspace_members', 'sessions', 'email_verification_codes',
   'auth_throttle', 'managed_model_catalog', 'rate_cards', 'rate_card_units',
   'workspace_entitlements', 'usage_periods', 'redemption_batches',
@@ -42,6 +44,8 @@ const ENUM_CHECKS = {
   ],
   media_routes_media_task_kind_check: ['tts', 'asr'],
   ai_invocations_status_check: ['running', 'succeeded', 'failed', 'cancelled'],
+  provider_dispatches_funding_check: ['managed', 'byok'],
+  provider_dispatches_status_check: ['reserved', 'released'],
   users_status_check: ['active', 'disabled'],
   workspace_members_role_check: ['owner', 'member'],
   email_verification_codes_purpose_check: ['signup', 'password_reset'],
@@ -55,6 +59,7 @@ const NUMERIC_CHECKS = [
   'provider_credentials_nonce_length_check',
   'provider_credentials_auth_tag_length_check',
   'ai_invocations_invocation_no_check', 'ai_invocations_repair_no_check',
+  'provider_dispatches_token_estimate_check',
   'email_verification_codes_attempt_check', 'auth_throttle_count_check',
 ] as const
 const REQUIRED_UNIQUES = [
@@ -81,6 +86,7 @@ const REQUIRED_UNIQUES = [
 ] as const
 const EXPECTED_FOREIGN_KEYS = [
   ...WORKSPACE_TABLES.map((table) => `${table}->workspaces:workspace_id=>id`),
+  'provider_dispatches->workspaces:workspace_id=>id',
   'canvas_nodes->projects:workspace_id,project_id=>workspace_id,id',
   'canvas_edges->projects:workspace_id,project_id=>workspace_id,id',
   'canvas_edges->canvas_nodes:workspace_id,project_id,source=>workspace_id,project_id,id',
@@ -196,6 +202,8 @@ it('creates the complete schema with scoped primary keys', async () => {
     'workspace_settings:workspace_id,key',
     'workspace_entitlements:workspace_id',
     'managed_model_catalog:id',
+    'provider_dispatches:id',
+    'provider_dispatch_cooldowns:scope_key',
     'rate_cards:id',
     'rate_card_units:rate_card_id,unit_kind',
     'redemption_batches:id',
@@ -212,7 +220,7 @@ it('creates the complete schema with scoped primary keys', async () => {
 
 it('locks the exact workspace and identity foreign keys', async () => {
   const signatures = (await foreignKeys()).map(foreignKeySignature).sort()
-  expect(EXPECTED_FOREIGN_KEYS).toHaveLength(40)
+  expect(EXPECTED_FOREIGN_KEYS).toHaveLength(41)
   expect(signatures).toEqual([...EXPECTED_FOREIGN_KEYS].sort())
 })
 
@@ -268,7 +276,7 @@ it('uses UUID identities, bigint revisions, and timestamptz suffixes', async () 
     SELECT table_name, data_type FROM information_schema.columns
     WHERE table_schema = 'public' AND column_name IN ('id', 'workspace_id')
   `
-  expect(identities).toHaveLength(38)
+  expect(identities).toHaveLength(40)
   expect(identities.every((row) => row.data_type === 'uuid')).toBe(true)
   const revisions = await database.sql<{ table_name: string; data_type: string }[]>`
     SELECT table_name, data_type FROM information_schema.columns
@@ -281,7 +289,7 @@ it('uses UUID identities, bigint revisions, and timestamptz suffixes', async () 
     WHERE table_schema = 'public' AND right(column_name, 3) = '_at'
   `
   // 0005 迁移给 task_attempts 增加 lease_expires_at / visible_at 两列。
-  expect(times).toHaveLength(68)
+  expect(times).toHaveLength(72)
   expect(new Set(times.map((row) => row.table_name))).toEqual(
     new Set(TABLES.filter((table) => table !== 'rate_card_units')),
   )

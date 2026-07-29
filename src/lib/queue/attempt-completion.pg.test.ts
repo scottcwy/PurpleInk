@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { and, asc, eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runInAuthContext } from '@/lib/auth/workspace-context'
+import { ProviderRequestError } from '@/features/ai/provider-request-error'
 import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
 import {
   canvasNodes,
@@ -59,8 +60,8 @@ describe('completeAttempt 自动重试', () => {
     const original = await readAttempt(seeded.attemptId)
     expect(original.status).toBe('superseded')
     expect(original.failure).toMatchObject({
-      schemaVersion: 1,
-      message: RETRYABLE_MESSAGE,
+      schemaVersion: 2,
+      code: 'TASK_INTERRUPTED',
     })
     expect(original.completedAt).not.toBeNull()
 
@@ -70,7 +71,10 @@ describe('completeAttempt 自动重试', () => {
     expect(retry.attemptNo).toBe(2)
     expect(retry.status).toBe('queued')
     expect(retry.fingerprint).toBe(original.fingerprint)
-    expect(retry.checkpoint).toEqual(original.checkpoint)
+    expect(retry.checkpoint).toMatchObject({
+      ...original.checkpoint,
+      queueMeta: { ordinaryAttemptNo: 2 },
+    })
     expect(retry.leaseExpiresAt).toBeNull()
     expect(retry.startedAt).toBeNull()
     // 退避 backoffMs(1) = 10s ± 20%：visibleAt 由 DB 时钟写入，须与 DB now()
@@ -179,6 +183,95 @@ describe('completeAttempt 自动重试', () => {
     expect((await readAttempt(seeded.attemptId)).status).toBe('failed')
     expect((await readRun(seeded.runId)).status).toBe('failed')
     expect(await readRunAttempts(seeded.runId)).toHaveLength(1)
+  })
+
+  it('429 自动延期，不消耗普通重试次数、不标记节点失败', async () => {
+    const { completeAttempt } = await import('./attempt-completion')
+    const projectId = await seedProject()
+    const seeded = await seedRunningNodeAttempt(projectId, { nodeStatus: 'failed' })
+    const retryAt = new Date(Date.now() + 30_000)
+    await completeAttempt(
+      database.db,
+      LOCAL_WORKSPACE_ID,
+      seeded.attemptId,
+      'failed',
+      new ProviderRequestError({
+        providerId: 'stepfun',
+        providerLabel: '阶跃星辰',
+        operation: '文本生成',
+        funding: 'managed',
+        httpStatus: 429,
+        retryAt,
+      })
+    )
+    const attempts = await readRunAttempts(seeded.runId)
+    expect(attempts).toHaveLength(2)
+    expect(attempts[0]).toMatchObject({
+      status: 'superseded',
+      failure: {
+        schemaVersion: 2,
+        code: 'PROVIDER_RATE_LIMITED',
+        recovery: 'auto_wait',
+      },
+    })
+    expect(attempts[1]).toMatchObject({
+      status: 'queued',
+      checkpoint: {
+        queueMeta: {
+          ordinaryAttemptNo: 1,
+        },
+      },
+    })
+    expect(attempts[1]!.visibleAt.getTime()).toBeGreaterThanOrEqual(
+      retryAt.getTime() - 1_000
+    )
+    const node = await readNode(seeded.nodeId)
+    expect(node.status).toBe('queued')
+    expect(node.data).toMatchObject({
+      payload: {
+        executionNotice: {
+          code: 'PROVIDER_RATE_LIMITED',
+          providerLabel: '阶跃星辰',
+        },
+      },
+    })
+    expect((await readRun(seeded.runId)).status).toBe('queued')
+  })
+
+  it('累计等待超过 15 分钟后才把 429 终态化', async () => {
+    const { completeAttempt, MAX_PROVIDER_WAIT_MS } = await import('./attempt-completion')
+    const projectId = await seedProject()
+    const seeded = await seedRunningNodeAttempt(projectId, { nodeStatus: 'failed' })
+    await database.db
+      .update(taskAttempts)
+      .set({
+        checkpoint: {
+          schemaVersion: 1,
+          queueMeta: {
+            ordinaryAttemptNo: 1,
+            providerWaitStartedAt: new Date(
+              Date.now() - MAX_PROVIDER_WAIT_MS - 1_000
+            ).toISOString(),
+          },
+        },
+      })
+      .where(eq(taskAttempts.id, seeded.attemptId))
+    await completeAttempt(
+      database.db,
+      LOCAL_WORKSPACE_ID,
+      seeded.attemptId,
+      'failed',
+      new ProviderRequestError({
+        providerId: 'stepfun',
+        providerLabel: '阶跃星辰',
+        operation: '文本生成',
+        funding: 'managed',
+        httpStatus: 429,
+      })
+    )
+    expect(await readRunAttempts(seeded.runId)).toHaveLength(1)
+    expect((await readAttempt(seeded.attemptId)).status).toBe('failed')
+    expect((await readRun(seeded.runId)).status).toBe('failed')
   })
 
   it('租约回收后的迟到完成不覆盖终态，也不再排入自动重试', async () => {

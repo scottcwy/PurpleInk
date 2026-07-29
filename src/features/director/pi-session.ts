@@ -6,6 +6,7 @@ import {
   ProviderRequestError,
   providerFailureKind,
 } from '@/features/ai/provider-request-error'
+import { deferProviderScope } from '@/features/ai/provider-dispatch'
 import {
   recordProviderFailure,
   recordProviderSuccess,
@@ -131,13 +132,18 @@ export async function createDirectorSession(
       id: stored.id,
       storageKey: stored.storageKey,
       run: async (runInput) => {
+        const startedAt = Date.now()
         bridge.beginRun()
         agent.state.tools = adaptDirectorTools(runInput.tools)
         try {
           await agent.prompt(runInput.prompt)
           await agent.waitForIdle()
           if (preflightFailure !== undefined) throw preflightFailure
-          assertRunSucceeded(agent, runtime, upstreamFailureResponse)
+          await assertRunSucceeded(agent, runtime, upstreamFailureResponse, {
+            stage: input.stage,
+            attemptId: input.attemptId,
+            durationMs: Date.now() - startedAt,
+          })
           return extractDirectorOutput(bridge.runMessages(), runInput.output)
         } catch (error) {
           if (preflightFailure !== undefined) throw preflightFailure
@@ -149,7 +155,11 @@ export async function createDirectorSession(
             !(error instanceof ProviderRequestError) &&
             (upstreamFailureResponse !== null || Boolean(agent.state.errorMessage))
           ) {
-            throwDirectorRunFailure(agent, runtime, upstreamFailureResponse)
+            await throwDirectorRunFailure(agent, runtime, upstreamFailureResponse, {
+              stage: input.stage,
+              attemptId: input.attemptId,
+              durationMs: Date.now() - startedAt,
+            })
           }
           throw error
         }
@@ -177,61 +187,78 @@ export async function createDirectorSession(
  * （createDirectorModelRuntime）就已抛出，永远到不了记账点；模型响应后的
  * 输出解析失败也不计入（provider 本身是健康的）。
  */
-function assertRunSucceeded(
+async function assertRunSucceeded(
   agent: Agent,
   runtime: {
     providerId: string
     providerLabel?: string
     routeLabel: string
     funding?: 'managed' | 'byok'
+    apiKey?: string
   },
   response: ObservedProviderResponse | null,
-): void {
+  execution: { stage: string; attemptId?: string; durationMs: number },
+): Promise<void> {
   const errorMessage = agent.state.errorMessage
   if (!errorMessage) {
     recordProviderSuccess(runtime.providerId)
     return
   }
-  throwDirectorRunFailure(agent, runtime, response)
+  await throwDirectorRunFailure(agent, runtime, response, execution)
 }
 
-function throwDirectorRunFailure(
+async function throwDirectorRunFailure(
   agent: Agent,
   runtime: {
     providerId: string
     providerLabel?: string
     routeLabel: string
     funding?: 'managed' | 'byok'
+    apiKey?: string
   },
   response: ObservedProviderResponse | null,
-): never {
+  execution: { stage: string; attemptId?: string; durationMs: number },
+): Promise<never> {
   const status = response?.status ?? upstreamHttpStatus(agent.state.errorMessage ?? '') ?? undefined
   const kind = providerFailureKind(status)
   if (kind === 'timeout' || kind === 'unavailable' || kind === 'network') {
     recordProviderFailure(runtime.providerId)
   }
-  console.error('[director] 模型调用失败', {
-    route: runtime.routeLabel,
-    status,
-    code: kind,
-  })
-  if (response) {
-    throw providerErrorFromResponse({
+  const requestError = response
+    ? providerErrorFromResponse({
       response,
       providerId: runtime.providerId,
       providerLabel: runtime.providerLabel ?? runtime.providerId,
       operation: '文本生成',
       funding: runtime.funding ?? 'managed',
     })
+    : new ProviderRequestError({
+        providerId: runtime.providerId,
+        providerLabel: runtime.providerLabel ?? runtime.providerId,
+        operation: '文本生成',
+        funding: runtime.funding ?? 'managed',
+        httpStatus: status,
+        kind,
+      })
+  if (requestError.kind === 'rate_limit' && runtime.apiKey) {
+    await deferProviderScope({
+      providerId: runtime.providerId,
+      providerLabel: runtime.providerLabel ?? runtime.providerId,
+      funding: runtime.funding ?? 'managed',
+      apiKey: runtime.apiKey,
+    }, requestError.retryAt ? new Date(requestError.retryAt) : undefined)
   }
-  throw new ProviderRequestError({
-    providerId: runtime.providerId,
-    providerLabel: runtime.providerLabel ?? runtime.providerId,
-    operation: '文本生成',
-    funding: runtime.funding ?? 'managed',
-    httpStatus: status,
-    kind,
+  console.error('[director] 模型调用失败', {
+    referenceId: requestError.referenceId,
+    provider: runtime.providerId,
+    model: runtime.routeLabel,
+    status,
+    stage: execution.stage,
+    attemptId: execution.attemptId,
+    duration: execution.durationMs,
+    retryAt: requestError.retryAt,
   })
+  throw requestError
 }
 
 /** 仅保留上游 HTTP 状态码，不能把 provider 原始报文带入工作流错误面。 */

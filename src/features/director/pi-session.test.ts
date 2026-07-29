@@ -109,6 +109,14 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('server-only', () => ({}))
+vi.mock('@/features/ai/provider-dispatch', () => ({
+  deferProviderScope: vi.fn(async () => undefined),
+  reserveProviderDispatch: vi.fn(async () => ({
+    id: 'dispatch-1',
+    scopeKey: 'a'.repeat(64),
+    release: vi.fn(async () => undefined),
+  })),
+}))
 vi.mock('@/lib/stream/stream-bus', () => ({ streamBus: { publish: mocks.publish } }))
 vi.mock('@earendil-works/pi-agent-core', () => ({ Agent: mocks.MockAgent }))
 vi.mock('@earendil-works/pi-ai', () => ({
@@ -503,6 +511,38 @@ describe('createDirectorSession', () => {
     })
     expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
     expect(mocks.recordProviderSuccess).not.toHaveBeenCalled()
+  })
+
+  it.each([429, 451])('does not pollute the breaker with HTTP %s', async (status) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const session = await createDirectorSession({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      stage: 'INGEST',
+    })
+    const agent = mocks.agentInstances[0]!
+    agent.state.errorMessage = `HTTP ${status}`
+    await agent.onResponse?.({ status }, {})
+    await expect(
+      session.run({ prompt: '执行阶段', output: assistantOutput })
+    ).rejects.toMatchObject({ name: 'ProviderRequestError', httpStatus: status })
+    expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
+  })
+
+  it('records a breaker failure for a real provider 503 outage', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const session = await createDirectorSession({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      stage: 'INGEST',
+    })
+    const agent = mocks.agentInstances[0]!
+    agent.state.errorMessage = 'HTTP 503'
+    await agent.onResponse?.({ status: 503 }, {})
+    await expect(
+      session.run({ prompt: '执行阶段', output: assistantOutput })
+    ).rejects.toMatchObject({ name: 'ProviderRequestError', kind: 'unavailable' })
+    expect(mocks.recordProviderFailure).toHaveBeenCalledWith('stepfun')
   })
 
   it('keeps a pi-formatted 4xx status while discarding the provider body', async () => {

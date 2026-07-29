@@ -16,50 +16,20 @@ import {
   ACTIVE_WORKFLOW_VERSION,
   serializeWorkflowVersion,
 } from '@/lib/workflow/version'
+import {
+  parseDirectorError,
+  parseExecutionNotice,
+  parseRenderError,
+  type DirectorNodeError,
+  type RenderNodeError,
+} from './node-error-projection'
+import type { WorkflowExecutionNotice } from './workflow-fault'
+export type { DirectorNodeError, RenderNodeError } from './node-error-projection'
 
 export interface CanvasNodeArtifact {
   id: string
   kind: string
   filename: string
-}
-
-/** 可展示的 Director 阶段失败信息（源自 canvas_nodes.data.directorError）。 */
-export interface DirectorNodeError {
-  stage: string
-  message: string
-  code?: string
-  schemaVersion?: number
-  origin?: string
-  title?: string
-  recovery?: string
-  retryable?: boolean
-  sourceNodeId?: string
-  provider?: NodeErrorProvider
-  referenceId?: string
-  occurredAt?: string
-}
-
-/** 可展示的渲染阶段失败信息（源自 canvas_nodes.data.renderError）；与 `directorError`
- *  互斥存在——render handler 与 fabricate 各自成功时会清掉对方残留的失败标记。 */
-export interface RenderNodeError {
-  message: string
-  code?: string
-  schemaVersion?: number
-  origin?: string
-  title?: string
-  recovery?: string
-  retryable?: boolean
-  sourceNodeId?: string
-  provider?: NodeErrorProvider
-  referenceId?: string
-  occurredAt?: string
-}
-
-export interface NodeErrorProvider {
-  id: string
-  label: string
-  httpStatus?: number
-  retryAt?: string
 }
 
 export interface CanvasGraphNode {
@@ -74,6 +44,7 @@ export interface CanvasGraphNode {
   artifacts: CanvasNodeArtifact[]
   directorError?: DirectorNodeError
   renderError?: RenderNodeError
+  executionNotice?: WorkflowExecutionNotice
 }
 
 /** 挂了渲染坐标的画布节点；坐标只来自 `computeLayout`，不是持久化字段。 */
@@ -180,6 +151,7 @@ export async function getCanvasGraph(projectId: string): Promise<CanvasGraph> {
         artifacts: await getNodeArtifacts(projectId, node.id),
         directorError: parseDirectorError(data),
         renderError: parseRenderError(data),
+        executionNotice: parseExecutionNotice(data.executionNotice),
       }
     })
   )
@@ -229,83 +201,6 @@ export async function getNodeArtifacts(
       kind: row.kind,
       filename: basenameOf(row.storageKey),
     }))
-}
-
-/** 从节点 data 收窄出可展示的 Director 失败信息（无 / 形状不符时返回 undefined）。 */
-export function parseDirectorError(
-  data: Record<string, unknown>
-): DirectorNodeError | undefined {
-  const raw = data.directorError
-  if (!raw || typeof raw !== 'object') return undefined
-  const record = raw as Record<string, unknown>
-  if (typeof record.stage !== 'string' || typeof record.message !== 'string') {
-    return undefined
-  }
-  return {
-    stage: record.stage,
-    message: record.message,
-    ...optionalErrorFields(record),
-  }
-}
-
-/** 从节点 data 收窄出可展示的渲染失败信息（无 / 形状不符时返回 undefined）。 */
-export function parseRenderError(
-  data: Record<string, unknown>
-): RenderNodeError | undefined {
-  const raw = data.renderError
-  if (!raw || typeof raw !== 'object') return undefined
-  const record = raw as Record<string, unknown>
-  if (typeof record.message !== 'string') return undefined
-  return { message: record.message, ...optionalErrorFields(record) }
-}
-
-function optionalErrorFields(record: Record<string, unknown>): {
-  code?: string
-  schemaVersion?: number
-  origin?: string
-  title?: string
-  recovery?: string
-  retryable?: boolean
-  sourceNodeId?: string
-  provider?: NodeErrorProvider
-  referenceId?: string
-  occurredAt?: string
-} {
-  const provider = parseErrorProvider(record.provider)
-  return {
-    ...(typeof record.code === 'string' ? { code: record.code } : {}),
-    ...(typeof record.schemaVersion === 'number'
-      ? { schemaVersion: record.schemaVersion }
-      : {}),
-    ...(typeof record.origin === 'string' ? { origin: record.origin } : {}),
-    ...(typeof record.title === 'string' ? { title: record.title } : {}),
-    ...(typeof record.recovery === 'string' ? { recovery: record.recovery } : {}),
-    ...(typeof record.retryable === 'boolean'
-      ? { retryable: record.retryable }
-      : {}),
-    ...(typeof record.sourceNodeId === 'string'
-      ? { sourceNodeId: record.sourceNodeId }
-      : {}),
-    ...(provider ? { provider } : {}),
-    ...(typeof record.referenceId === 'string'
-      ? { referenceId: record.referenceId }
-      : {}),
-    ...(typeof record.occurredAt === 'string'
-      ? { occurredAt: record.occurredAt }
-      : {}),
-  }
-}
-
-function parseErrorProvider(value: unknown): NodeErrorProvider | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
-  const record = value as Record<string, unknown>
-  if (typeof record.id !== 'string' || typeof record.label !== 'string') return undefined
-  return {
-    id: record.id,
-    label: record.label,
-    ...(typeof record.httpStatus === 'number' ? { httpStatus: record.httpStatus } : {}),
-    ...(typeof record.retryAt === 'string' ? { retryAt: record.retryAt } : {}),
-  }
 }
 
 export interface NodeStreamContext {

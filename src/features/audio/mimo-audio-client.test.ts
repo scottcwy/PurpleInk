@@ -31,7 +31,11 @@ describe('MiMo audio client', () => {
 
     const result = await synthesizeMimoSpeech(
       { text: '你好，MiMo。', voiceId: '冰糖' },
-      { fetcher, getConfig: async () => config }
+      {
+        fetcher,
+        getConfig: async () => config,
+        dispatch: async (_input, invoke) => invoke(),
+      }
     )
 
     const [, init] = requests[0]!
@@ -60,7 +64,11 @@ describe('MiMo audio client', () => {
 
     const result = await transcribeMimoSpeech(
       { audioBytes: Buffer.from('mp3'), audioFormat: 'mp3' },
-      { fetcher, getConfig: async () => config }
+      {
+        fetcher,
+        getConfig: async () => config,
+        dispatch: async (_input, invoke) => invoke(),
+      }
     )
 
     const [, init] = requests[0]!

@@ -13,6 +13,13 @@ import {
 } from './director-billing-stream'
 
 vi.mock('server-only', () => ({}))
+vi.mock('@/features/ai/provider-dispatch', () => ({
+  reserveProviderDispatch: vi.fn(async () => ({
+    id: 'dispatch-1',
+    scopeKey: 'a'.repeat(64),
+    release: vi.fn(async () => undefined),
+  })),
+}))
 
 const model = {
   id: 'step-3.5-flash',
@@ -97,6 +104,9 @@ describe('Director per-provider-call billing stream', () => {
         context,
         runtime: {
           providerId: 'stepfun',
+          providerLabel: '阶跃星辰',
+          funding: 'managed',
+          apiKey: 'test-key',
           modelId: model.id,
           maxOutputTokens: 4_096,
           deductsManagedPool: true,
@@ -138,6 +148,9 @@ describe('Director per-provider-call billing stream', () => {
       },
       runtime: {
         providerId: 'stepfun',
+        providerLabel: '阶跃星辰',
+        funding: 'byok',
+        apiKey: 'test-key',
         modelId: model.id,
         maxOutputTokens: 4_096,
         deductsManagedPool: false,
@@ -166,6 +179,9 @@ describe('Director per-provider-call billing stream', () => {
       context,
       runtime: {
         providerId: 'stepfun' as const,
+        providerLabel: '阶跃星辰',
+        funding: 'managed' as const,
+        apiKey: 'test-key',
         modelId: model.id,
         maxOutputTokens: 4_096,
         deductsManagedPool: true,
@@ -196,6 +212,9 @@ describe('Director per-provider-call billing stream', () => {
       context,
       runtime: {
         providerId: 'stepfun',
+        providerLabel: '阶跃星辰',
+        funding: 'managed',
+        apiKey: 'test-key',
         modelId: model.id,
         maxOutputTokens: 4_096,
         deductsManagedPool: true,
@@ -232,6 +251,9 @@ describe('Director per-provider-call billing stream', () => {
       context,
       runtime: {
         providerId: 'stepfun',
+        providerLabel: '阶跃星辰',
+        funding: 'managed',
+        apiKey: 'test-key',
         modelId: model.id,
         maxOutputTokens: 4_096,
         deductsManagedPool: true,
@@ -268,6 +290,9 @@ describe('Director per-provider-call billing stream', () => {
       context,
       runtime: {
         providerId: 'stepfun',
+        providerLabel: '阶跃星辰',
+        funding: 'managed',
+        apiKey: 'test-key',
         modelId: model.id,
         maxOutputTokens: 4_096,
         deductsManagedPool: true,

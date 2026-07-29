@@ -131,7 +131,7 @@ describe('legacy in-process queue PG compatibility', () => {
         () => inLocalWs(() => getJobSnapshot(projectId, attemptId)),
         'failed'
       )
-      expect(snapshot?.error).toBe('no handler for kind: missing-handler')
+      expect(snapshot?.error).toBe('上游产物缺失或不包含当前镜头，需要先修复上游阶段。')
     } finally {
       queue.stop()
     }

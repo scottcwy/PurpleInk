@@ -17,6 +17,11 @@ import {
   type ManagedAiHandle,
   type ManagedUsage,
 } from '@/features/ai'
+import {
+  reserveProviderDispatch,
+  type ProviderDispatchLease,
+} from '@/features/ai/provider-dispatch'
+import { ProviderRequestError } from '@/features/ai/provider-request-error'
 import { billingInvocationNo } from '@/features/billing'
 
 interface DirectorBillingRuntime {
@@ -24,6 +29,9 @@ interface DirectorBillingRuntime {
   modelId: string
   maxOutputTokens: number
   deductsManagedPool: boolean
+  providerLabel: string
+  funding: 'managed' | 'byok'
+  apiKey: string
 }
 
 /** 单次上游调用的硬上限；队列层负责重试，SDK 内不得再做嵌套重试。 */
@@ -57,9 +65,19 @@ async function* billedEvents(
   input: Parameters<typeof createDirectorBillingStream>[0],
 ): AsyncGenerator<AssistantMessageEvent> {
   let handle: ManagedAiHandle | null
+  let dispatch: ProviderDispatchLease | null = null
   try {
+    dispatch = await reserveProviderDispatch({
+      providerId: input.runtime.providerId,
+      providerLabel: input.runtime.providerLabel,
+      funding: input.runtime.funding,
+      apiKey: input.runtime.apiKey,
+      attemptId: input.attemptId,
+      tokenEstimate: estimatedTokens(input),
+    })
     handle = await beginInvocation(input)
   } catch (error) {
+    await dispatch?.release()
     input.onPreflightFailure?.(error)
     throw error
   }
@@ -80,11 +98,16 @@ async function* billedEvents(
       yield event
     }
   } catch (error) {
+    if (error instanceof ProviderRequestError && error.kind === 'rate_limit') {
+      await dispatch?.defer(error.retryAt ? new Date(error.retryAt) : undefined)
+    }
     if (handle && !settled) {
       if (providerStarted) await handle.settleUnavailable(true)
       else await handle.releaseBeforeCall()
     }
     throw error
+  } finally {
+    await dispatch?.release()
   }
 }
 
@@ -161,4 +184,16 @@ function reportedTextUsage(message: AssistantMessage): ManagedUsage | null {
 
 function isUsageNumber(value: unknown): value is number {
   return Number.isSafeInteger(value) && Number(value) >= 0
+}
+
+function estimatedTokens(
+  input: Parameters<typeof createDirectorBillingStream>[0]
+): number {
+  const inputCharacters = JSON.stringify({
+    systemPrompt: input.context.systemPrompt,
+    messages: input.context.messages,
+    tools: input.context.tools ?? [],
+  }).length
+  return Math.ceil(inputCharacters / 4)
+    + (input.options?.maxTokens ?? input.runtime.maxOutputTokens)
 }

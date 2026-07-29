@@ -17,6 +17,7 @@ import {
   readInputFingerprint,
   readOutputContentHash,
 } from './content-hash'
+import type { WorkflowExecutionNotice } from './workflow-fault'
 import type { NodeStatus } from './types'
 
 export type { NodeStatus } from './types'
@@ -33,17 +34,20 @@ const ALLOWED_TRANSITIONS: Record<NodeStatus, readonly NodeStatus[]> = {
   skipped: ['pending'],
 }
 
-/** 跳过审计元数据：转入 skipped 时写入 data.payload.skipMeta。 */
 export interface SkipMeta {
   reason: string
   at: string
+  kind?: string
 }
 
 /** 原子校验并写入节点状态；stale 只允许由真实上游变化触发。 */
 export async function transitionNodeStatus(
   nodeId: string,
   next: NodeStatus,
-  options?: { skipMeta?: SkipMeta }
+  options?: {
+    skipMeta?: SkipMeta
+    executionNotice?: WorkflowExecutionNotice | null
+  }
 ): Promise<void> {
   const database = await getDb()
   const projectId = await withTransaction(database, async (tx) => {
@@ -70,7 +74,13 @@ export async function transitionNodeStatus(
     if (next === 'stale' && !(await isStaleInTransaction(tx, node))) {
       throw new Error(`节点上游内容未变化，不能标记为 stale：${nodeId}`)
     }
-    const nextData = resolveTransitionData(node.data, current, next, options?.skipMeta)
+    const nextData = resolveTransitionData(
+      node.data,
+      current,
+      next,
+      options?.skipMeta,
+      options?.executionNotice,
+    )
     await tx
       .update(canvasNodes)
       .set({
@@ -248,23 +258,29 @@ async function dependencyHashes(
  * 携带一条早已过期的失败描述（实测存在：一个 succeeded 的 shot-split 仍带着
  * 前一次尝试的 directorError），DB 投影与节点状态互相矛盾。
  */
-const STAGE_ERROR_PAYLOAD_KEYS = ['directorError', 'renderError'] as const
+const STAGE_ERROR_PAYLOAD_KEYS = [
+  'directorError',
+  'renderError',
+  'executionNotice',
+] as const
 
 const SKIP_META_PAYLOAD_KEY = 'skipMeta'
+const EXECUTION_NOTICE_PAYLOAD_KEY = 'executionNotice'
 
-/**
- * 状态迁移伴随的 data 修订：
- * - 转 success / skipped 时清理旧错误字段（skipped 节点不应继续显示可重试错误）；
- * - 转 skipped 时写入 skipMeta（原因与时刻，可审计）；
- * - skipped 转回 pending（重新执行恢复）时移除 skipMeta，离开跳过态即恢复诚实。
- * 无需修订时返回 null，避免无意义写入。
- */
+/** 状态迁移时同步清理错误/等待投影并维护 skipMeta。 */
 function resolveTransitionData(
   data: VersionedPayload,
   current: NodeStatus,
   next: NodeStatus,
-  skipMeta: SkipMeta | undefined
+  skipMeta: SkipMeta | undefined,
+  executionNotice: WorkflowExecutionNotice | null | undefined,
 ): VersionedPayload | null {
+  if (executionNotice) {
+    return patchPayload(data, { [EXECUTION_NOTICE_PAYLOAD_KEY]: executionNotice })
+  }
+  if (executionNotice === null || next === 'running') {
+    return withoutPayloadKeys(data, [EXECUTION_NOTICE_PAYLOAD_KEY])
+  }
   if (next === 'success') return withoutStageErrors(data)
   if (next === 'skipped') {
     if (!skipMeta) throw new Error('转入 skipped 必须提供 skipMeta（跳过原因）')
