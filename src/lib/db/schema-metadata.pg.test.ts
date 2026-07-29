@@ -10,7 +10,7 @@ const TABLES = [
   'users', 'workspace_members', 'sessions', 'email_verification_codes',
   'auth_throttle', 'managed_model_catalog', 'rate_cards', 'rate_card_units',
   'workspace_entitlements', 'usage_periods', 'redemption_batches',
-  'redemption_codes', 'redemption_audits',
+  'redemption_codes', 'redemption_audits', 'telemetry_cutovers',
 ] as const
 const WORKSPACE_TABLES = [
   'projects', 'canvas_nodes', 'canvas_edges', 'pipeline_runs', 'task_attempts',
@@ -44,6 +44,11 @@ const ENUM_CHECKS = {
   ],
   media_routes_media_task_kind_check: ['tts', 'asr'],
   ai_invocations_status_check: ['running', 'succeeded', 'failed', 'cancelled'],
+  ai_invocations_funding_check: ['managed', 'byok', 'custom'],
+  ai_invocations_capability_check: ['text', 'vision', 'tts', 'asr'],
+  ai_invocations_billing_status_check: [
+    'unreserved', 'reserved', 'settled', 'released', 'not_applicable',
+  ],
   provider_dispatches_funding_check: ['managed', 'byok'],
   provider_dispatches_status_check: ['reserved', 'released'],
   users_status_check: ['active', 'disabled'],
@@ -59,6 +64,8 @@ const NUMERIC_CHECKS = [
   'provider_credentials_nonce_length_check',
   'provider_credentials_auth_tag_length_check',
   'ai_invocations_invocation_no_check', 'ai_invocations_repair_no_check',
+  'ai_invocations_telemetry_version_check',
+  'ai_invocations_provider_duration_check',
   'provider_dispatches_token_estimate_check',
   'email_verification_codes_attempt_check', 'auth_throttle_count_check',
 ] as const
@@ -101,6 +108,8 @@ const EXPECTED_FOREIGN_KEYS = [
   'ai_invocations->artifacts:workspace_id,trace_artifact_id=>workspace_id,id',
   'ai_invocations->rate_cards:rate_card_id=>id',
   'ai_invocations->usage_periods:workspace_id,usage_period_id=>workspace_id,id',
+  'ai_invocations->users:actor_user_id=>id',
+  'pipeline_runs->users:requested_by_user_id=>id',
   'rate_card_units->rate_cards:rate_card_id=>id',
   'rate_cards->managed_model_catalog:catalog_id=>id',
   'redemption_audits->redemption_codes:code_id=>id',
@@ -214,13 +223,14 @@ it('creates the complete schema with scoped primary keys', async () => {
     'sessions:id',
     'email_verification_codes:id',
     'auth_throttle:key',
+    'telemetry_cutovers:key',
   ].sort()
   expect(signatures).toEqual(expected)
 })
 
 it('locks the exact workspace and identity foreign keys', async () => {
   const signatures = (await foreignKeys()).map(foreignKeySignature).sort()
-  expect(EXPECTED_FOREIGN_KEYS).toHaveLength(41)
+  expect(EXPECTED_FOREIGN_KEYS).toHaveLength(43)
   expect(signatures).toEqual([...EXPECTED_FOREIGN_KEYS].sort())
 })
 
@@ -289,7 +299,7 @@ it('uses UUID identities, bigint revisions, and timestamptz suffixes', async () 
     WHERE table_schema = 'public' AND right(column_name, 3) = '_at'
   `
   // 0005 迁移给 task_attempts 增加 lease_expires_at / visible_at 两列。
-  expect(times).toHaveLength(72)
+  expect(times).toHaveLength(75)
   expect(new Set(times.map((row) => row.table_name))).toEqual(
     new Set(TABLES.filter((table) => table !== 'rate_card_units')),
   )

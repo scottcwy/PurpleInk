@@ -13,6 +13,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 import { projects, type VersionedPayload, workspaces } from './core'
+import { users } from './auth'
 
 export const RUN_STATUSES = [
   'triggering',
@@ -46,6 +47,9 @@ export const pipelineRuns = pgTable(
       .references(() => workspaces.id, { onDelete: 'cascade' }),
     id: uuid('id').defaultRandom().notNull(),
     projectId: uuid('project_id').notNull(),
+    requestedByUserId: uuid('requested_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
     triggerRunId: text('trigger_run_id'),
     status: text('status').default('triggering').notNull(),
     workflowVersion: text('workflow_version').notNull(),

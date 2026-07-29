@@ -18,6 +18,7 @@ import { artifacts } from './artifacts'
 import { type VersionedPayload, workspaces } from './core'
 import { pipelineRuns, taskAttempts } from './execution'
 import { rateCards, usagePeriods } from './billing'
+import { users } from './auth'
 
 export const AI_TASK_KINDS = [
   'project-plan',
@@ -35,7 +36,7 @@ export const AI_INVOCATION_STATUSES = [
   'cancelled',
 ] as const
 
-export const PROVIDER_DISPATCH_STATUSES = ['reserved', 'released'] as const
+export const AI_INVOCATION_FUNDING = ['managed', 'byok', 'custom'] as const
 
 const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({
   dataType() {
@@ -155,15 +156,23 @@ export const aiInvocations = pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: 'cascade' }),
     id: uuid('id').defaultRandom().notNull(),
-    runId: uuid('run_id').notNull(),
-    attemptId: uuid('attempt_id').notNull(),
-    taskId: text('task_id').notNull(),
+    runId: uuid('run_id'),
+    attemptId: uuid('attempt_id'),
+    taskId: text('task_id'),
     invocationNo: integer('invocation_no').notNull(),
     repairNo: integer('repair_no').default(0).notNull(),
     status: text('status').default('running').notNull(),
     provider: text('provider').notNull(),
     model: text('model').notNull(),
-    inputHash: text('input_hash').notNull(),
+    actorUserId: uuid('actor_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    funding: text('funding').default('managed').notNull(),
+    capability: text('capability'),
+    operation: text('operation').default('workflow').notNull(),
+    source: text('source').default('products').notNull(),
+    telemetryVersion: integer('telemetry_version').default(1).notNull(),
+    inputHash: text('input_hash'),
     outputHash: text('output_hash'),
     usage: jsonb('usage').$type<VersionedPayload>(),
     usagePeriodId: uuid('usage_period_id'),
@@ -178,6 +187,10 @@ export const aiInvocations = pgTable(
     settledCnyMicros: bigint('settled_cny_micros', { mode: 'bigint' }),
     usageStatus: text('usage_status'),
     settledAt: timestamp('settled_at', { withTimezone: true }),
+    providerStartedAt: timestamp('provider_started_at', { withTimezone: true }),
+    providerCompletedAt: timestamp('provider_completed_at', { withTimezone: true }),
+    providerDurationMs: integer('provider_duration_ms'),
+    failureKind: text('failure_kind'),
     traceArtifactId: uuid('trace_artifact_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -232,7 +245,7 @@ export const aiInvocations = pgTable(
     ),
     check(
       'ai_invocations_input_hash_check',
-      sql`length(${table.inputHash}) = 64`,
+      sql`${table.inputHash} is null or length(${table.inputHash}) = 64`,
     ),
     check(
       'ai_invocations_output_hash_check',
@@ -240,7 +253,7 @@ export const aiInvocations = pgTable(
     ),
     check(
       'ai_invocations_billing_status_check',
-      sql`${table.billingStatus} in ('unreserved', 'reserved', 'settled', 'released')`,
+      sql`${table.billingStatus} in ('unreserved', 'reserved', 'settled', 'released', 'not_applicable')`,
     ),
     check(
       'ai_invocations_billing_amounts_check',
@@ -251,66 +264,31 @@ export const aiInvocations = pgTable(
       'ai_invocations_usage_status_check',
       sql`${table.usageStatus} is null or ${table.usageStatus} in ('reported', 'unavailable')`,
     ),
-  ],
-)
-
-/**
- * Provider 出网预留事实。released 行继续保留用于滚动 RPM/TPM 统计；并发只统计
- * lease 尚未过期的 reserved 行。scopeKey 已包含 funding 与凭据指纹，不存 Key。
- */
-export const providerDispatches = pgTable(
-  'provider_dispatches',
-  {
-    id: uuid('id').defaultRandom().primaryKey(),
-    scopeKey: text('scope_key').notNull(),
-    workspaceId: uuid('workspace_id').references(() => workspaces.id, {
-      onDelete: 'cascade',
-    }),
-    attemptId: uuid('attempt_id'),
-    provider: text('provider').notNull(),
-    funding: text('funding').notNull(),
-    status: text('status').default('reserved').notNull(),
-    tokenEstimate: integer('token_estimate').default(0).notNull(),
-    reservedAt: timestamp('reserved_at', { withTimezone: true }).defaultNow().notNull(),
-    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }).notNull(),
-    releasedAt: timestamp('released_at', { withTimezone: true }),
-  },
-  (table) => [
-    index('provider_dispatches_scope_reserved_idx').on(
-      table.scopeKey,
-      table.reservedAt,
-    ),
-    index('provider_dispatches_scope_lease_idx').on(
-      table.scopeKey,
-      table.status,
-      table.leaseExpiresAt,
-    ),
-    check('provider_dispatches_scope_key_check', sql`length(${table.scopeKey}) = 64`),
     check(
-      'provider_dispatches_funding_check',
-      sql`${table.funding} in ('managed', 'byok')`,
+      'ai_invocations_funding_check',
+      sql`${table.funding} in ('managed', 'byok', 'custom')`,
     ),
     check(
-      'provider_dispatches_status_check',
-      sql`${table.status} in ('reserved', 'released')`,
+      'ai_invocations_capability_check',
+      sql`${table.capability} is null or ${table.capability} in ('text', 'vision', 'tts', 'asr')`,
     ),
-    check('provider_dispatches_token_estimate_check', sql`${table.tokenEstimate} >= 0`),
-  ],
-)
-
-/** Provider 真实 429 学到的共享冷却窗口；同 scope 的所有进程在此时间前均不出网。 */
-export const providerDispatchCooldowns = pgTable(
-  'provider_dispatch_cooldowns',
-  {
-    scopeKey: text('scope_key').primaryKey(),
-    provider: text('provider').notNull(),
-    blockedUntil: timestamp('blocked_until', { withTimezone: true }).notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => [
     check(
-      'provider_dispatch_cooldowns_scope_key_check',
-      sql`length(${table.scopeKey}) = 64`,
+      'ai_invocations_telemetry_version_check',
+      sql`${table.telemetryVersion} in (1, 2)`,
+    ),
+    check(
+      'ai_invocations_provider_duration_check',
+      sql`${table.providerDurationMs} is null or ${table.providerDurationMs} >= 0`,
+    ),
+    index('ai_invocations_actor_time_idx').on(
+      table.actorUserId,
+      table.providerStartedAt,
+    ),
+    index('ai_invocations_workspace_managed_period_idx').on(
+      table.workspaceId,
+      table.funding,
+      table.usagePeriodId,
+      table.providerStartedAt,
     ),
   ],
 )
