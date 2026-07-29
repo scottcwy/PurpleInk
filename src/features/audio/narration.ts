@@ -1,7 +1,6 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
 import { measureAudio, type MeasuredAudio } from './measure'
 import {
   registerNarrationAudio,
@@ -38,6 +37,7 @@ const inputSchema = z
     units: z.array(unitSchema).min(1),
     voiceId: z.string().trim().min(1).optional(),
     concurrency: z.number().int().min(1).optional(),
+    staggerMs: z.number().int().min(0).optional(),
     billingContext: z.object({
       attemptId: z.string().min(1),
       invocationNo: z.number().int().min(1),
@@ -139,7 +139,15 @@ export async function synthesizeNarration(
     parsed.concurrency ?? NARRATION_CONCURRENCY,
     requests.length
   )
-  await Promise.all(Array.from({ length: lanes }, worker))
+  // 错开 worker 启动以满足 Provider 调度器的 minIntervalMs pacing 规则。
+  // StepFun 要求相邻请求 >= 400ms；首个 worker 立即启动，后续每隔 450ms。
+  // TTS 单次约 5-7s，错开 1-2s 不影响总体并发效率。
+  const stagger = parsed.staggerMs ?? WORKER_STAGGER_MS
+  await Promise.all(
+    Array.from({ length: lanes }, (_, index) =>
+      (index > 0 && stagger > 0 ? sleep(index * stagger) : Promise.resolve()).then(worker)
+    )
+  )
   return { engine: engine.model, voice, units: units.map(requireUnit) }
 }
 
@@ -181,7 +189,13 @@ async function synthesizeUnit(
     ? null
     : await assertEngine(
         context.engine,
-        await synthesizeWithDispatchRetry(context, dependencies)
+        await dependencies.synthesize({
+          text: context.request.text,
+          voiceId: context.voice,
+          ...(context.billingContext
+            ? { billingContext: context.billingContext }
+            : {}),
+        })
       )
   const bytes = cached ?? speech?.audioBytes
   if (!bytes || bytes.length === 0) {
@@ -233,6 +247,12 @@ function assertUniqueUnitIds(units: readonly { unitId: string }[]): void {
   }
 }
 
+/**
+ * Worker 启动错开间隔。略大于 StepFun 的 minIntervalMs (400ms)，
+ * 确保每个 worker 首次去 reserveProviderDispatch 时上一条请求已超出 pacing 窗口。
+ */
+const WORKER_STAGGER_MS = 450
+
 function defaultDependencies(): NarrationDependencies {
   return {
     resolveEngine: resolveNarrationEngine,
@@ -240,49 +260,6 @@ function defaultDependencies(): NarrationDependencies {
     measure: measureAudio,
     reuseAudio: reuseNarrationAudio,
     registerAudio: registerNarrationAudio,
-  }
-}
-
-/**
- * 单段 TTS 调用内部等待重试。
- *
- * Provider 调度器的 pacing / 并发池会在多 worker 同时出网时抛出
- * ProviderDispatchWaitError。如果透传到上层，整个 narration job 会失败并重入队列，
- * 浪费重试预算且极度缓慢。此处在 worker 内部等待 retryAt 后重试，
- * 让并发 worker 自然错开到 minIntervalMs 之外。
- */
-const MAX_DISPATCH_RETRIES = 6
-
-async function synthesizeWithDispatchRetry(
-  context: {
-    request: z.infer<typeof unitSchema>
-    voice: string
-    billingContext?: AudioBillingContext
-  },
-  dependencies: NarrationDependencies
-): Promise<SynthesizedSpeech> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await dependencies.synthesize({
-        text: context.request.text,
-        voiceId: context.voice,
-        ...(context.billingContext
-          ? { billingContext: context.billingContext }
-          : {}),
-      })
-    } catch (error) {
-      if (
-        !(error instanceof ProviderDispatchWaitError) ||
-        attempt >= MAX_DISPATCH_RETRIES
-      ) {
-        throw error
-      }
-      const waitMs = Math.max(
-        0,
-        new Date(error.retryAt!).getTime() - Date.now()
-      )
-      await sleep(Math.min(waitMs + 50, 5_000))
-    }
   }
 }
 

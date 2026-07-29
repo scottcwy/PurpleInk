@@ -143,6 +143,7 @@ describe('synthesizeNarration', () => {
           text: `第 ${index + 1} 句`,
         })),
         concurrency: 3,
+        staggerMs: 0,
       },
       target.dependencies
     )
