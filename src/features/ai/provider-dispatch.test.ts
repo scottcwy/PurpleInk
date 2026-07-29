@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  providerPoolPolicy,
-  providerScopeKey,
-} from './provider-dispatch'
+import { providerScopeKey } from './provider-dispatch'
+import { providerPoolPolicy } from './provider-pool-policy'
 
 vi.mock('server-only', () => ({}))
 
