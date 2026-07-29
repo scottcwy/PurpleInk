@@ -3,7 +3,10 @@ import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { type Db } from '@/lib/db/client'
 import { canvasEdges, canvasNodes, projects } from '@/lib/db/schema/index'
 import { storage } from '@/lib/storage'
-import type { CanvasNodeType } from '@/features/canvas'
+import {
+  DIRECTOR_INGEST_SOURCE_NODE_TYPES,
+  type CanvasNodeType,
+} from '@/features/canvas'
 import type {
   AdvanceCandidate,
   AdvanceRepository,
@@ -59,11 +62,11 @@ export class AdvanceRepositoryImpl
         and(
           eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.projectId, projectId),
-          eq(canvasNodes.type, 'script-import')
+          inArray(canvasNodes.type, DIRECTOR_INGEST_SOURCE_NODE_TYPES)
         )
       )
       .limit(1)
-    if (!node) throw new Error(`项目缺少 script-import 入口节点：${projectId}`)
+    if (!node) throw new Error(`项目缺少文稿或录音入口节点：${projectId}`)
     return toAdvanceCandidate(node)
   }
 

@@ -77,3 +77,8 @@ export {
   type FabricateSourceInspection,
   type FabricateSourceViolation,
 } from './fabricate-source-contract'
+export {
+  DIRECTOR_INGEST_SOURCE_NODE_TYPES,
+  isDirectorIngestSourceNodeType,
+  type DirectorIngestSourceNodeType,
+} from './director-ingest-source'

@@ -4,6 +4,7 @@ import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { type Db } from '@/lib/db/client'
 import { artifacts, canvasNodes } from '@/lib/db/schema/index'
 import type { StorageAdapter } from '@/lib/storage'
+import { DIRECTOR_INGEST_SOURCE_NODE_TYPES } from '@/features/canvas'
 import {
   loadFinalExportDelivery as loadFinalExportDeliveryRecord,
   type FinalExportDelivery,
@@ -54,7 +55,7 @@ export class DirectorArtifactSource {
   async loadIngestArtifact(projectId: string): Promise<{
     scriptUnits: ScriptUnit[]
   }> {
-    const nodeId = await this.findNodeId(projectId, 'script-import')
+    const nodeId = await this.findWorkflowSourceNodeId(projectId)
     const raw = await this.loadArtifactJson(projectId, nodeId, 'director-ingest')
     const parsed = z.object({ scriptUnits: z.unknown() }).parse(raw)
     return ingestStageResultSchema.parse({ scriptUnits: parsed.scriptUnits })
@@ -73,7 +74,7 @@ export class DirectorArtifactSource {
     audioManifest: AudioManifest
     audioAllocation: AudioAllocation
   }> {
-    const nodeId = await this.findNodeId(projectId, 'script-import')
+    const nodeId = await this.findWorkflowSourceNodeId(projectId)
     const kind = (await this.resolveLatestArtifactKey(
       projectId,
       nodeId,
@@ -99,7 +100,7 @@ export class DirectorArtifactSource {
     )
   }
 
-  /** 从 script-import.payload.visualTheme 读取色调；缺失或非法回落 dark。 */
+  /** 从文稿/录音来源节点读取色调；缺失或非法回落 dark。 */
   async loadVisualTheme(projectId: string): Promise<VisualTheme> {
     const [row] = await this.db
       .select({ data: canvasNodes.data })
@@ -108,7 +109,7 @@ export class DirectorArtifactSource {
         and(
           eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.projectId, projectId),
-          eq(canvasNodes.type, 'script-import')
+          inArray(canvasNodes.type, DIRECTOR_INGEST_SOURCE_NODE_TYPES)
         )
       )
       .limit(1)
@@ -260,6 +261,18 @@ export class DirectorArtifactSource {
       : nodes[0]
     if (!node) throw new Error(`找不到 ${type}${laneKey ? `(${laneKey})` : ''} 节点`)
     return node.id
+  }
+
+  private async findWorkflowSourceNodeId(projectId: string): Promise<string> {
+    const nodes = (
+      await Promise.all(
+        DIRECTOR_INGEST_SOURCE_NODE_TYPES.map((type) =>
+          this.findNodeIds(projectId, type),
+        ),
+      )
+    ).flat()
+    if (nodes.length !== 1) throw new Error('项目必须且只能包含一个文稿或录音来源节点')
+    return nodes[0]!.id
   }
 
   private async findNodeIds(

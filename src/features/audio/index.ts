@@ -49,6 +49,19 @@ export {
   type DecodedUserRecording,
   type UserRecordingAudioSlice,
 } from './user-audio-slicer'
+export {
+  runAudioTranscriptionJob,
+  type AudioTranscriptionDependencies,
+  type AudioTranscriptionJobInput,
+  type AudioTranscriptionState,
+} from './audio-transcription-job'
+export {
+  enqueueAudioTranscription,
+  registerAudioTranscriptionHandler,
+  runAudioTranscriptionQueueJob,
+  type AudioTranscriptionEnqueueDependencies,
+  type AudioTranscriptionQueueInput,
+} from './audio-transcription-queue-handler'
 export type {
   BgmPlan,
   Caption,
