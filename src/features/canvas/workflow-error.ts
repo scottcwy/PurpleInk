@@ -21,9 +21,7 @@ type ClassifiedError = Pick<
   'code' | 'message' | 'retryable'
 >
 
-/**
- * 把任意阶段异常投影成可展示、可判定是否值得重试的业务错误。
- *
+/** 把任意阶段异常投影成可展示、可判定是否值得重试的业务错误。
  * 判定顺序是三段，且**类型优先于文案**：
  * 1. `classifyByType`：能靠类型确定的结构性错误（zod 合同、语义门禁）。
  *    必须最先判定——zod 报文里天然含 `required` / `invalid` 之类词，落进文案
@@ -31,7 +29,6 @@ type ClassifiedError = Pick<
  * 2. `classifyByMessage`：只能从文案识别的外部原因（凭据、额度、缺失产物…）。
  * 3. `classifyByStage`：兜底按阶段职责给类别，不再让所有未识别错误都自称
  *    「镜头渲染失败」。
- *
  * 三段都不回显 provider 原始响应、prompt、凭据或隐藏推理。
  */
 export function classifyWorkflowError(

@@ -1,21 +1,13 @@
 import 'server-only'
 import {
-  getCanvasGraph,
-  invalidateNodeForRegeneration,
-  setProjectAutopilot,
   type CanvasGraph,
   type CanvasGraphNode,
 } from '@/features/canvas'
-import { enqueueRenderShot, type RenderShotInput } from '@/features/render'
-import { getDb } from '@/lib/db/client'
-import { storage } from '@/lib/storage'
-import { enqueueDirectorStage, type DirectorStageJobInput } from './queue-handler'
-import { DirectorArtifactSource } from './runtime-artifact-source'
+import type { RenderShotInput } from '@/features/render'
+import type { DirectorStageJobInput } from './queue-handler'
 import { PIPELINE_STAGES, type PipelineStage } from './types'
-import {
-  requestExportFinalization,
-  type ExportFinalizationResult,
-} from './export-finalization'
+import type { ExportFinalizationResult } from './export-finalization'
+import { createRecoveryDependencies } from './recovery-dependencies'
 
 export type NodeActionIntent = 'execute' | 'repair' | 'regenerate' | 'rerender'
 
@@ -63,7 +55,7 @@ export async function repairProjectFrontier(
   projectId: string,
   dependencies?: NodeRecoveryDependencies
 ): Promise<ProjectRepairResult> {
-  const resolved = dependencies ?? await createDependencies()
+  const resolved = dependencies ?? await createRecoveryDependencies()
   const graph = await resolved.getGraph(projectId)
   const result: ProjectRepairResult = {
     enqueuedNodeIds: [],
@@ -152,7 +144,7 @@ export async function executeNodeAction(
   },
   dependencies?: NodeRecoveryDependencies
 ): Promise<NodeActionResult> {
-  const resolved = dependencies ?? await createDependencies()
+  const resolved = dependencies ?? await createRecoveryDependencies()
   const graph = await resolved.getGraph(input.projectId)
   const requested = findNode(graph, input.nodeId)
   assertActionAllowed(requested)
@@ -328,40 +320,4 @@ function result(
 
 function isPipelineStage(stage: string | null): stage is PipelineStage {
   return stage !== null && PIPELINE_STAGES.includes(stage as PipelineStage)
-}
-
-async function createDependencies(): Promise<NodeRecoveryDependencies> {
-  const database = await getDb()
-  const source = new DirectorArtifactSource(database, storage)
-  return {
-    getGraph: getCanvasGraph,
-    setAutopilot: async (projectId, enabled) => {
-      await setProjectAutopilot(projectId, enabled)
-    },
-    inspectShotSpec: async (projectId, laneKey, sourceUnitId) => {
-      const shotPlan = await source.loadShotSpecArtifact(projectId, laneKey)
-      if (shotPlan.shots.length !== 1) return false
-      const [shot] = shotPlan.shots
-      if (!shot || shot.id !== laneKey) return false
-      if (!sourceUnitId) return true
-      const sourceUnitIds = Array.isArray(shot.sourceUnitIds)
-        ? shot.sourceUnitIds
-        : []
-      const audioBinding =
-        shot.audioBinding &&
-        typeof shot.audioBinding === 'object' &&
-        !Array.isArray(shot.audioBinding)
-          ? shot.audioBinding as Record<string, unknown>
-          : null
-      return (
-        sourceUnitIds.length === 1 &&
-        sourceUnitIds[0] === sourceUnitId &&
-        audioBinding?.unitId === sourceUnitId
-      )
-    },
-    invalidate: invalidateNodeForRegeneration,
-    enqueueDirectorStage,
-    enqueueRenderShot,
-    requestExportFinalization,
-  }
 }

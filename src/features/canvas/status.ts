@@ -5,7 +5,6 @@ import { getDb } from '@/lib/db/client'
 import {
   canvasEdges,
   canvasNodes,
-  type VersionedPayload,
 } from '@/lib/db/schema/index'
 import {
   withTransaction,
@@ -18,6 +17,12 @@ import {
   readOutputContentHash,
 } from './content-hash'
 import type { WorkflowBlock, WorkflowExecutionNotice } from './workflow-fault'
+import {
+  fromPersistedStatus,
+  patchPayload,
+  resolveTransitionData,
+  toPersistedStatus,
+} from './status-payload'
 import type { NodeStatus } from './types'
 
 export type { NodeStatus } from './types'
@@ -127,7 +132,6 @@ export async function isStale(nodeId: string): Promise<boolean> {
     return isStaleInTransaction(tx, node)
   })
 }
-
 /** 在节点入队前记录本次将消费的真实上游输出指纹。 */
 export async function captureNodeInputFingerprint(nodeId: string): Promise<string | null> {
   const database = await getDb()
@@ -254,114 +258,4 @@ async function dependencyHashes(
       outputContentHash: readOutputContentHash(node.data),
     }))
     .sort((left, right) => left.id.localeCompare(right.id))
-}
-
-/**
- * 上一次失败留下的错误字段。成功转换必须清掉它们，否则 `succeeded` 节点会长期
- * 携带一条早已过期的失败描述（实测存在：一个 succeeded 的 shot-split 仍带着
- * 前一次尝试的 directorError），DB 投影与节点状态互相矛盾。
- */
-const STAGE_ERROR_PAYLOAD_KEYS = [
-  'directorError',
-  'renderError',
-  'executionNotice',
-  'workflowBlock',
-] as const
-
-const SKIP_META_PAYLOAD_KEY = 'skipMeta'
-const EXECUTION_NOTICE_PAYLOAD_KEY = 'executionNotice'
-const WORKFLOW_BLOCK_PAYLOAD_KEY = 'workflowBlock'
-
-/** 状态迁移时同步清理错误/等待投影并维护 skipMeta。 */
-function resolveTransitionData(
-  data: VersionedPayload,
-  current: NodeStatus,
-  next: NodeStatus,
-  skipMeta: SkipMeta | undefined,
-  executionNotice: WorkflowExecutionNotice | null | undefined,
-  workflowBlock: WorkflowBlock | undefined,
-): VersionedPayload | null {
-  if (next === 'blocked') {
-    if (!workflowBlock) {
-      throw new Error('转入 blocked 必须提供 workflowBlock（确认门禁）')
-    }
-    const cleared = withoutStageErrors(data) ?? data
-    return patchPayload(cleared, { [WORKFLOW_BLOCK_PAYLOAD_KEY]: workflowBlock })
-  }
-  if (executionNotice) {
-    return patchPayload(data, { [EXECUTION_NOTICE_PAYLOAD_KEY]: executionNotice })
-  }
-  if (executionNotice === null || next === 'running') {
-    return withoutPayloadKeys(data, [EXECUTION_NOTICE_PAYLOAD_KEY])
-  }
-  if (next === 'success') return withoutStageErrors(data)
-  if (next === 'skipped') {
-    if (!skipMeta) throw new Error('转入 skipped 必须提供 skipMeta（跳过原因）')
-    const cleared = withoutStageErrors(data) ?? data
-    return patchPayload(cleared, { [SKIP_META_PAYLOAD_KEY]: skipMeta })
-  }
-  if (current === 'skipped') {
-    return withoutPayloadKeys(data, [SKIP_META_PAYLOAD_KEY])
-  }
-  if (current === 'blocked') {
-    return withoutPayloadKeys(data, [WORKFLOW_BLOCK_PAYLOAD_KEY])
-  }
-  return null
-}
-
-/** 返回去掉错误字段后的 data；本来就没有可清理字段时返回 null，避免无意义写入。 */
-function withoutStageErrors(value: VersionedPayload): VersionedPayload | null {
-  return withoutPayloadKeys(value, STAGE_ERROR_PAYLOAD_KEYS)
-}
-
-function withoutPayloadKeys(
-  value: VersionedPayload,
-  keys: readonly string[]
-): VersionedPayload | null {
-  const payload = value.payload
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    return null
-  }
-  const entries = payload as Record<string, unknown>
-  const present = keys.filter((key) =>
-    Object.hasOwn(entries, key)
-  )
-  if (present.length === 0) return null
-  const nextPayload = { ...entries }
-  for (const key of present) delete nextPayload[key]
-  return { ...value, payload: nextPayload }
-}
-
-function patchPayload(
-  value: VersionedPayload,
-  patch: Record<string, unknown>
-): VersionedPayload {
-  const current =
-    value.payload && typeof value.payload === 'object' && !Array.isArray(value.payload)
-      ? value.payload as Record<string, unknown>
-      : {}
-  return { ...value, payload: { ...current, ...patch } }
-}
-
-function toPersistedStatus(status: NodeStatus): string {
-  if (status === 'pending') return 'queued'
-  if (status === 'success') return 'succeeded'
-  return status
-}
-
-function fromPersistedStatus(status: string): NodeStatus {
-  if (status === 'queued') return 'pending'
-  if (status === 'succeeded') return 'success'
-  if (
-    status === 'idle' ||
-    status === 'running' ||
-    status === 'failed' ||
-    status === 'cancelled' ||
-    status === 'stale' ||
-    status === 'skipped' ||
-    status === 'blocked'
-  ) {
-    return status
-  }
-  throw new Error(`未知节点状态：${status}`)
 }
