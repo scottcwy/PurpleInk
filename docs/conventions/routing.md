@@ -153,14 +153,14 @@
 | --- | --- | --- | --- | --- |
 | `/api/ping` | GET | — | 无 | `wired` |
 | `/api/projects` | GET, POST | — | GET：`@/features/canvas`；POST：`@/features/projects` | `wired`；POST 接受判别联合 `kind=script|audio|website`，兼容旧文稿 JSON；audio 仅接受 MP3/WAV multipart，最大 100 MiB / 30 分钟 |
-| `/api/projects/[id]/start` | POST | `id` path | 按项目 `workflowKind` 委托对应工作流入口 | `planned`；统一启动端点尚未创建，当前文本项目仍由既有 Director 入口启动 |
+| `/api/projects/[id]/start` | POST | `id` path | `@/features/projects` 按已持久化 `workflowKind` 分派 script Director、audio ASR、website video 队列 | `wired`；精确校验 kind + active workflowVersion，再由真实来源入口按资金来源预检（managed 进入统一会员额度，BYOK 不检查会员额度）；返回真实 kind、工作流状态、入口节点、attempt/job id、attempt 状态与是否复用；succeeded audio 续推下游，succeeded website 返回 `complete` |
 | `/api/projects/[id]` | PATCH | `id` path | `@/features/canvas` `updateExportSettings` | `wired` |
 | `/api/artifacts/[id]` | GET | `id` path + `projectId` query（必填） | `@/features/artifacts` | `wired` |
 | `/api/jobs/[id]` | GET | `id` path + `projectId` query | `@/lib/queue`、`@/features/artifacts` | `wired` |
 | `/api/render` | POST | body `{projectId,nodeId,intent}`；`intent=execute|repair|rerender` | `@/features/director/recovery` | `wired` |
 | `/api/render/export` | GET, POST | GET `projectId` query；POST body `{projectId, degraded?, confirmationFingerprint?}`；`degraded=true` 时确认指纹必填 | `@/features/render/export-service`、`@/features/render/export-degraded`、`@/features/director/export-finalization` | `wired` |
 | `/api/render/thumbnails` | GET | `projectId`、`nodeId` | `@/features/render` | `wired` |
-| `/api/director/pipeline` | POST, DELETE | body `{projectId}`；POST 返回 `started|blocked|complete` 与修复根/阻塞明细 | `@/features/director/advance` | `wired` |
+| `/api/director/pipeline` | POST, DELETE | body `{projectId}`；POST 返回 `started|blocked|complete` 与修复根/阻塞明细 | `@/features/director/advance` | `wired`；仅为既有 script 客户端保留，POST / DELETE 在队列或 autopilot 操作前按持久化 kind 拒绝 audio / website；额度由真实节点按 managed / BYOK 来源预检；新入口统一使用 `/api/projects/[id]/start` |
 | `/api/director/stage` | POST | body `{projectId,nodeId,intent,skipReason?}`；`intent=execute|repair|regenerate|skip|cancel-wait`（`skip` 时 `skipReason` 必填 1-200 字）；`cancel-wait` 仅取消尚未领取的 Provider 限流等待 attempt | `@/features/director/recovery`、`@/features/director/skip`、`@/features/director/cancel-wait` | `wired` |
 | `/api/director/stream/[nodeId]` | GET (SSE) | `nodeId` path + `projectId` query | `@/lib/stream/stream-bus` | `wired` |
 | `/api/director/stream/project/[projectId]` | GET (SSE) | `projectId` path | `@/lib/stream/status-bus` | `wired` |

@@ -34,3 +34,11 @@ export {
   ProjectCreateInputError,
   type ProjectCreateRequestDependencies,
 } from './project-create-request'
+export {
+  startProjectWorkflow,
+  loadProjectWorkflowStartDescriptor,
+  ProjectWorkflowStartError,
+  type ProjectWorkflowStartDependencies,
+  type ProjectWorkflowStartDescriptor,
+  type ProjectWorkflowStartResult,
+} from './project-workflow-start'

@@ -18,8 +18,22 @@ export interface ProjectTopologyEdge {
 }
 
 export interface ProjectTopology {
+  entryLogicalKey: string
   nodes: ProjectTopologyNode[]
   edges: ProjectTopologyEdge[]
+}
+
+export function projectWorkflowEntryLogicalKey(
+  kind: ProjectSourcePayload['kind'],
+): string {
+  switch (kind) {
+    case 'script':
+      return 'global:script-import'
+    case 'audio':
+      return 'source:audio-transcribe'
+    case 'website':
+      return 'website:capture'
+  }
 }
 
 const reusedWorkflowNodes = (): ProjectTopologyNode[] => [
@@ -58,11 +72,12 @@ function scriptTopology(
   script: string,
   visualTheme: 'dark' | 'light',
 ): ProjectTopology {
-  const entry = node('script-import', 'INGEST', 'global:script-import', {
+  const entry = node('script-import', 'INGEST', projectWorkflowEntryLogicalKey('script'), {
     directorInput: { rawScript: script },
     visualTheme,
   })
   return {
+    entryLogicalKey: entry.logicalKey,
     nodes: [entry, ...reusedWorkflowNodes()],
     edges: reusedWorkflowEdges(entry.logicalKey),
   }
@@ -72,19 +87,21 @@ function audioTopology(visualTheme: 'dark' | 'light'): ProjectTopology {
   const entry = node(
     'audio-transcribe',
     'INGEST',
-    'source:audio-transcribe',
+    projectWorkflowEntryLogicalKey('audio'),
     {
       workflowKind: 'audio',
       visualTheme,
     },
   )
   return {
+    entryLogicalKey: entry.logicalKey,
     nodes: [entry, ...reusedWorkflowNodes()],
     edges: reusedWorkflowEdges(entry.logicalKey),
   }
 }
 
 function websiteTopology(visualTheme: 'dark' | 'light'): ProjectTopology {
+  const entryLogicalKey = projectWorkflowEntryLogicalKey('website')
   const phases = [
     ['capture', 'INGEST'],
     ['script', 'DIRECT'],
@@ -104,7 +121,7 @@ function websiteTopology(visualTheme: 'dark' | 'light'): ProjectTopology {
   const edges = nodes.slice(0, -1).map((current, index) =>
     edge(current.logicalKey, nodes[index + 1]!.logicalKey),
   )
-  return { nodes, edges }
+  return { entryLogicalKey, nodes, edges }
 }
 
 function node(

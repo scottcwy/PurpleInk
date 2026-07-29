@@ -126,7 +126,7 @@ describe('createProjectWithSource', () => {
     expect(nodes).toHaveLength(topology.nodes.length)
     expect(edges).toHaveLength(topology.edges.length)
     expect(result.entryNodeId).toBe(
-      nodes.find(({ logicalKey }) => logicalKey === topology.nodes[0]?.logicalKey)?.id,
+      nodes.find(({ logicalKey }) => logicalKey === topology.entryLogicalKey)?.id,
     )
   })
 

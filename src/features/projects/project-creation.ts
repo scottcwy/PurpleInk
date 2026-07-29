@@ -100,13 +100,12 @@ export async function createProjectWithSource(
       logicalKey: definition.logicalKey,
       data: definition.data,
     }))
-    const entryNode = nodeRows[0]
-    if (!entryNode) throw new Error('项目工作流没有入口节点')
     await transaction.insert(canvasNodes).values(nodeRows)
 
     const nodeIds = new Map(
       nodeRows.map((node) => [node.logicalKey, node.id] as const),
     )
+    const entryNodeId = requiredNodeId(nodeIds, topology.entryLogicalKey)
     const edgeRows = topology.edges.map((definition) => ({
       workspaceId,
       id: nextId(),
@@ -117,7 +116,7 @@ export async function createProjectWithSource(
     if (edgeRows.length > 0) {
       await transaction.insert(canvasEdges).values(edgeRows)
     }
-    return { project, entryNodeId: entryNode.id }
+    return { project, entryNodeId }
   })
 }
 

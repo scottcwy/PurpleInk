@@ -15,6 +15,7 @@ describe('buildProjectTopology', () => {
 
     expect(JSON.stringify(topology)).toBe(
       JSON.stringify({
+        entryLogicalKey: 'global:script-import',
         nodes: [
           {
             type: 'script-import',
@@ -78,6 +79,7 @@ describe('buildProjectTopology', () => {
       }),
     )
 
+    expect(topology.entryLogicalKey).toBe('source:audio-transcribe')
     expect(topology.nodes.map(({ type }) => type)).toEqual([
       'audio-transcribe',
       'shot-split',
@@ -110,6 +112,7 @@ describe('buildProjectTopology', () => {
       }),
     )
 
+    expect(topology.entryLogicalKey).toBe('website:capture')
     expect(
       topology.nodes.map(({ type, stage, logicalKey }) => ({
         type,
