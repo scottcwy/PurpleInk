@@ -8,6 +8,7 @@ import {
   pipelineRuns,
   projects,
   taskAttempts,
+  users,
   workspaces,
 } from '@/lib/db/schema/index'
 import {
@@ -39,7 +40,10 @@ afterAll(async () => {
   await database.close()
 })
 
-const AUTH = { workspaceId: LOCAL_WORKSPACE_ID, userId: 'test-user' }
+const AUTH = {
+  workspaceId: LOCAL_WORKSPACE_ID,
+  userId: '00000000-0000-4000-8000-000000000099',
+}
 
 describe('countRecentFailures', () => {
   it('只统计窗口内 status=failed 且同 fingerprint 的 attempt', async () => {
@@ -150,6 +154,12 @@ async function seedProject(): Promise<string> {
     .insert(workspaces)
     .values({ id: LOCAL_WORKSPACE_ID, slug: 'local', name: 'Local workspace' })
     .onConflictDoNothing()
+  await database.db.insert(users).values({
+    id: AUTH.userId,
+    email: 'retry-policy@example.test',
+    name: 'Retry policy test',
+    passwordHash: 'test-only',
+  }).onConflictDoNothing()
   await database.db.insert(projects).values({
     workspaceId: LOCAL_WORKSPACE_ID,
     id: projectId,

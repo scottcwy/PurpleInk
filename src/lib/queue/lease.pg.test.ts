@@ -8,6 +8,7 @@ import {
   pipelineRuns,
   projects,
   taskAttempts,
+  users,
   workspaces,
 } from '@/lib/db/schema/index'
 import {
@@ -15,6 +16,7 @@ import {
   type PgTestDatabase,
 } from '@/lib/db/test/pg-test-database'
 
+const TEST_USER_ID = '00000000-0000-4000-8000-000000000099'
 const getDbMock = vi.hoisted(() => vi.fn())
 
 vi.mock('server-only', () => ({}))
@@ -142,7 +144,7 @@ describe('claim 租约与 visibleAt 门', () => {
     })
 
     const attemptId = await runInAuthContext(
-      { workspaceId: LOCAL_WORKSPACE_ID, userId: 'test-user' },
+      { workspaceId: LOCAL_WORKSPACE_ID, userId: TEST_USER_ID },
       () => queue.enqueue('director-stage', { stage: 'INGEST' }, { projectId })
     )
     // 先把 visibleAt 推到未来：claim 不得领取。
@@ -182,6 +184,12 @@ async function seedProject(): Promise<string> {
     .insert(workspaces)
     .values({ id: LOCAL_WORKSPACE_ID, slug: 'local', name: 'Local workspace' })
     .onConflictDoNothing()
+  await database.db.insert(users).values({
+    id: TEST_USER_ID,
+    email: 'queue-lease@example.test',
+    name: 'Queue lease test',
+    passwordHash: 'test-only',
+  }).onConflictDoNothing()
   await database.db.insert(projects).values({
     workspaceId: LOCAL_WORKSPACE_ID,
     id: projectId,
