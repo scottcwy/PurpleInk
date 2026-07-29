@@ -165,7 +165,7 @@ describe('blocked 状态转移', () => {
     updateSets = []
   })
 
-  it.each(['failed', 'stale'] as const)(
+  it.each(['idle', 'failed', 'stale'] as const)(
     '%s -> blocked 合法并持久化可审计确认门禁',
     async (current) => {
       nodeRows = [{

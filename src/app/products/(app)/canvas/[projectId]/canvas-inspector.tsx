@@ -13,7 +13,10 @@ import { Toast } from '@/components/ui/toast'
 import type { CanvasGraphNode } from '@/features/canvas'
 import { ArtifactHoverChip } from '@/features/canvas/artifact-hover-chip'
 import { AnimatedAside, DrawerOverlay } from '@/features/navigation/collapsible-panel'
-import { productShotHref } from '@/features/navigation/products-routes'
+import {
+  productExportHref,
+  productShotHref,
+} from '@/features/navigation/products-routes'
 import { useMediaQuery } from '@/lib/hooks/use-media-query'
 import { usePersistentToggle } from '@/lib/hooks/use-persistent-toggle'
 import { useResizablePanel } from '@/lib/hooks/use-resizable-panel'
@@ -291,14 +294,20 @@ function InspectorBody({
         onSkip={onSkip}
         onCancelWait={onCancelWait}
       />
-      <Button
-        variant={node.type === 'shot-codegen' ? 'destructive' : 'tinted'}
-        icon={RefreshCw}
-        onClick={onExecute}
-        disabled={submitting || isNodeActionBlocked(node)}
-      >
-        {nodeActionLabel(node)}
-      </Button>
+      {node.type === 'export' && node.status === 'blocked' ? (
+        <Link href={productExportHref(projectId)}>
+          <Button variant="tinted">{nodeActionLabel(node)}</Button>
+        </Link>
+      ) : (
+        <Button
+          variant={node.type === 'shot-codegen' ? 'destructive' : 'tinted'}
+          icon={RefreshCw}
+          onClick={onExecute}
+          disabled={submitting || isNodeActionBlocked(node)}
+        >
+          {nodeActionLabel(node)}
+        </Button>
+      )}
       {node.type === 'shot-codegen' && (
         <Link href={productShotHref(node.id, projectId)}>
           <Button variant="gray">查看代码</Button>

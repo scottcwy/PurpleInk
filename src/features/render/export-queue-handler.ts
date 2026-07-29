@@ -27,7 +27,12 @@ import { assertProjectWorkflowSupported } from '@/features/projects/project-comp
 export const EXPORT_PROJECT_KIND = 'export-project'
 
 const exportJobPayloadSchema = z
-  .object({ projectId: z.string().min(1), degraded: z.boolean().optional() })
+  .object({
+    projectId: z.string().min(1),
+    degraded: z.boolean().optional(),
+    exportNodeId: z.string().min(1).optional(),
+    confirmationFingerprint: z.string().min(1).optional(),
+  })
   .strict()
 
 export type ExportProjectInput = z.infer<typeof exportJobPayloadSchema>

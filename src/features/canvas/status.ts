@@ -24,7 +24,7 @@ export type { NodeStatus } from './types'
 export { computeContentHash } from './content-hash'
 
 const ALLOWED_TRANSITIONS: Record<NodeStatus, readonly NodeStatus[]> = {
-  idle: ['pending'],
+  idle: ['pending', 'blocked'],
   pending: ['running', 'cancelled'],
   running: ['success', 'failed', 'cancelled'],
   success: ['stale'],

@@ -12,15 +12,25 @@ import { storage } from '@/lib/storage'
 import { enqueueDirectorStage, type DirectorStageJobInput } from './queue-handler'
 import { DirectorArtifactSource } from './runtime-artifact-source'
 import { PIPELINE_STAGES, type PipelineStage } from './types'
+import {
+  requestExportFinalization,
+  type ExportFinalizationResult,
+} from './export-finalization'
 
 export type NodeActionIntent = 'execute' | 'repair' | 'regenerate' | 'rerender'
 
 export interface NodeActionResult {
   ok: true
-  action: 'execute' | 'repair-upstream' | 'regenerate' | 'rerender' | 'skip'
+  action:
+    | 'execute'
+    | 'repair-upstream'
+    | 'regenerate'
+    | 'rerender'
+    | 'skip'
+    | 'confirm-degraded-export'
   requestedNodeId: string
   queuedNodeId: string
-  jobId: string
+  jobId: string | null
   message: string
 }
 
@@ -35,6 +45,11 @@ export interface NodeRecoveryDependencies {
   invalidate(nodeId: string, reason: string): Promise<void>
   enqueueDirectorStage(input: DirectorStageJobInput): Promise<string>
   enqueueRenderShot(input: RenderShotInput): Promise<string>
+  requestExportFinalization(input: {
+    projectId: string
+    exportNodeId: string
+    trigger: 'manual-node'
+  }): Promise<ExportFinalizationResult>
 }
 
 export interface ProjectRepairResult {
@@ -58,10 +73,38 @@ export async function repairProjectFrontier(
   }
   await resolved.setAutopilot(projectId, true)
   for (const node of graph.nodes) {
+    if (node.status === 'blocked' && node.workflowBlock) {
+      result.blockedNodes.push({
+        nodeId: node.id,
+        code: node.workflowBlock.code,
+        message: node.workflowBlock.message,
+      })
+      continue
+    }
     if (node.status !== 'failed' && node.status !== 'stale') {
       continue
     }
     const error = node.directorError ?? node.renderError
+    if (
+      node.type === 'export'
+      && error?.code === 'STAGE_FAILED'
+    ) {
+      const finalization = await resolved.requestExportFinalization({
+        projectId,
+        exportNodeId: node.id,
+        trigger: 'manual-node',
+      })
+      if (finalization.status === 'blocked') {
+        result.blockedNodes.push({
+          nodeId: node.id,
+          code: finalization.block.code,
+          message: finalization.block.message,
+        })
+      } else {
+        result.enqueuedNodeIds.push(node.id)
+      }
+      continue
+    }
     if (node.status === 'failed' && error?.retryable === false) {
       result.blockedNodes.push({
         nodeId: node.id,
@@ -114,6 +157,30 @@ export async function executeNodeAction(
   const requested = findNode(graph, input.nodeId)
   assertActionAllowed(requested)
   await resolved.setAutopilot(input.projectId, true)
+
+  if (requested.type === 'export') {
+    const finalization = await resolved.requestExportFinalization({
+      projectId: input.projectId,
+      exportNodeId: requested.id,
+      trigger: 'manual-node',
+    })
+    if (finalization.status === 'blocked') {
+      return result(
+        'confirm-degraded-export',
+        requested.id,
+        requested.id,
+        null,
+        finalization.block.message,
+      )
+    }
+    return result(
+      'execute',
+      requested.id,
+      requested.id,
+      finalization.jobId,
+      '已排队合成终片，完成后将继续最终审阅',
+    )
+  }
 
   if (input.intent === 'rerender') {
     if (requested.type !== 'shot-codegen') {
@@ -253,7 +320,7 @@ function result(
   action: NodeActionResult['action'],
   requestedNodeId: string,
   queuedNodeId: string,
-  jobId: string,
+  jobId: string | null,
   message: string
 ): NodeActionResult {
   return { ok: true, action, requestedNodeId, queuedNodeId, jobId, message }
@@ -295,5 +362,6 @@ async function createDependencies(): Promise<NodeRecoveryDependencies> {
     invalidate: invalidateNodeForRegeneration,
     enqueueDirectorStage,
     enqueueRenderShot,
+    requestExportFinalization,
   }
 }

@@ -54,6 +54,31 @@ describe('enqueueProjectExport', () => {
     ).rejects.toThrow()
     expect(enqueue).not.toHaveBeenCalled()
   })
+
+  it('preserves export continuation identity and confirmation fingerprint', async () => {
+    const { adapter, enqueue } = queueStub()
+
+    await enqueueProjectExport(
+      {
+        projectId: 'project-1',
+        degraded: true,
+        exportNodeId: 'export-node',
+        confirmationFingerprint: 'sha256:current',
+      },
+      adapter
+    )
+
+    expect(enqueue).toHaveBeenCalledWith(
+      EXPORT_PROJECT_KIND,
+      {
+        projectId: 'project-1',
+        degraded: true,
+        exportNodeId: 'export-node',
+        confirmationFingerprint: 'sha256:current',
+      },
+      { projectId: 'project-1' }
+    )
+  })
 })
 
 describe('runProjectExport', () => {

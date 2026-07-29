@@ -12,6 +12,7 @@ export type {
   WorkflowFaultOrigin,
   WorkflowRecovery,
   WorkflowExecutionNotice,
+  WorkflowBlock,
 } from './workflow-fault'
 
 /** 分类结果：只含类别本身，stage 与来源节点由调用上下文补齐。 */

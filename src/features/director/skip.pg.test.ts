@@ -140,6 +140,7 @@ describe('skipNodeAction（阶段 3：人为跳过）', () => {
     })
 
     // attempt：跳过的承载 attempt 成功终态，jobId 即 attemptId。
+    if (result.jobId === null) throw new Error('跳过动作必须返回承载 attempt')
     const [attempt] = await database.db
       .select({ status: taskAttempts.status, entityId: taskAttempts.entityId })
       .from(taskAttempts)

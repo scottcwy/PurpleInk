@@ -169,6 +169,8 @@ export async function getExportReadiness(
   placeholderCandidateLanes: string[]
   /** 降级导出是否可行（无项目级完整性阻塞）。 */
   degradedReady: boolean
+  /** 当前降级范围与输入真值的确认摘要；仅 degradedReady 时存在。 */
+  confirmationFingerprint: string | null
   /** 最新成片若为降级产物，列出其占位镜头。 */
   degradedExport: { placeholderLanes: string[]; waivedQaLanes: string[] } | null
   artifactDelivery:
@@ -184,8 +186,10 @@ export async function getExportReadiness(
     plan.mediaAssemblyPlan !== null
   let placeholderCandidateLanes: string[] = []
   let degradedReady = false
+  let degradedPlan: RenderExportPlan | null = null
   if (!ready) {
     const probe = await repository.getExportPlan(projectId, { degraded: true })
+    degradedPlan = probe
     placeholderCandidateLanes = probe.placeholderCandidates
       .map((candidate) => candidate.laneKey)
       .sort()
@@ -203,9 +207,45 @@ export async function getExportReadiness(
     media: plan.media,
     placeholderCandidateLanes,
     degradedReady,
+    confirmationFingerprint: degradedReady && degradedPlan
+      ? degradedConfirmationFingerprint({
+          plan,
+          degradedPlan,
+          placeholderCandidateLanes,
+        })
+      : null,
     degradedExport: await repository.findDegradedExport(projectId),
     artifactDelivery: finalDelivery(finalArtifact),
   }
+}
+
+function degradedConfirmationFingerprint(input: {
+  plan: RenderExportPlan
+  degradedPlan: RenderExportPlan
+  placeholderCandidateLanes: string[]
+}): string {
+  const shotQa = Object.entries(input.plan.shotQa)
+    .sort(([left], [right]) => left.localeCompare(right))
+  const blockingIssues = input.degradedPlan.blockingIssues
+    .map((issue) => ({
+      laneKey: issue.laneKey,
+      kind: issue.kind,
+      code: issue.code,
+    }))
+    .sort((left, right) =>
+      `${left.laneKey ?? ''}:${left.kind}:${left.code}`.localeCompare(
+        `${right.laneKey ?? ''}:${right.kind}:${right.code}`,
+      )
+    )
+  const canonical = JSON.stringify({
+    incompleteNodeIds: [...input.plan.incompleteNodeIds].sort(),
+    placeholderCandidateLanes: [...input.placeholderCandidateLanes].sort(),
+    waivedQaLanes: [...input.plan.waivedQaLanes].sort(),
+    resolutionPreset: input.plan.resolutionPreset,
+    shotQa,
+    blockingIssues,
+  })
+  return createHash('sha256').update(canonical).digest('hex')
 }
 
 /** 幂等触发分镜 Final QA 检测并写回 shot-qa 节点。 */

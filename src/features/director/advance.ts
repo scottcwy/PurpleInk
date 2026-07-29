@@ -4,6 +4,10 @@ import { assertProjectWorkflowSupported } from '@/features/projects/project-comp
 import type { CanvasNodeType, NodeStatus } from '@/features/canvas'
 import { AdvanceRepositoryImpl } from './advance-repository'
 import { PIPELINE_STAGES, type PipelineStage } from './types'
+import type {
+  ExportFinalizationResult,
+  ExportFinalizationTrigger,
+} from './export-finalization'
 
 export interface AdvanceCandidate {
   id: string
@@ -53,19 +57,30 @@ export interface AdvanceDependencies {
   repository: AdvanceRepository
   enqueueDirectorStage: EnqueueDirectorStage
   enqueueRenderShot: EnqueueRenderShot
-  prepareFinalExport: (projectId: string) => Promise<void>
+  requestExportFinalization(input: {
+    projectId: string
+    exportNodeId: string
+    trigger: ExportFinalizationTrigger
+  }): Promise<ExportFinalizationResult>
+}
+
+export interface PipelineBlock {
+  nodeId: string
+  code: string
+  message: string
 }
 
 export interface AdvanceResult {
   enqueuedNodeIds: string[]
   failedNodeIds: string[]
+  blockedNodes?: PipelineBlock[]
 }
 
 export interface PipelineStartResult extends AdvanceResult {
   autopilot: true
   status: 'started' | 'blocked' | 'complete'
   repairRootNodeIds: string[]
-  blockedNodes: Array<{ nodeId: string; code: string; message: string }>
+  blockedNodes: PipelineBlock[]
 }
 
 interface PipelineControlDependencies {
@@ -79,7 +94,7 @@ interface PipelineControlDependencies {
     enqueuedNodeIds: string[]
     repairRootNodeIds: string[]
     handledSuccessfulNodeIds: string[]
-    blockedNodes: Array<{ nodeId: string; code: string; message: string }>
+    blockedNodes: PipelineBlock[]
   }>
 }
 
@@ -125,10 +140,23 @@ export async function advancePipeline(
       if (candidate.type === 'shot-codegen') {
         if (!(await resolved.repository.isMediaReady(projectId))) continue
         await resolved.enqueueRenderShot({ projectId, nodeId: candidate.id })
-      } else {
-        if (candidate.type === 'export') {
-          await resolved.prepareFinalExport(projectId)
+      } else if (candidate.type === 'export') {
+        const finalization = await resolved.requestExportFinalization({
+          projectId,
+          exportNodeId: candidate.id,
+          trigger: 'autopilot',
+        })
+        if (finalization.status === 'blocked') {
+          const blockedNodes = result.blockedNodes ?? []
+          blockedNodes.push({
+            nodeId: candidate.id,
+            code: finalization.block.code,
+            message: finalization.block.message,
+          })
+          result.blockedNodes = blockedNodes
+          continue
         }
+      } else {
         await resolved.enqueueDirectorStage({
           projectId,
           nodeId: candidate.id,
@@ -180,6 +208,7 @@ export async function startProjectPipeline(
       const result = await resolved.advance(projectId, completedNodeId)
       result.enqueuedNodeIds.forEach((nodeId) => enqueued.add(nodeId))
       result.failedNodeIds.forEach((nodeId) => failed.add(nodeId))
+      blockedNodes.push(...(result.blockedNodes ?? []))
     }
   } else if (['idle', 'failed', 'stale'].includes(entry.status)) {
     if (entry.stage !== 'INGEST') {
@@ -226,26 +255,20 @@ export async function stopProjectPipeline(
 }
 
 async function createDefaultDependencies(): Promise<AdvanceDependencies> {
-  const [{ enqueueDirectorStage }, { enqueueRenderShot }] = await Promise.all([
+  const [
+    { enqueueDirectorStage },
+    { enqueueRenderShot },
+    { requestExportFinalization },
+  ] = await Promise.all([
     import('./queue-handler'),
     import('@/features/render/queue-handler'),
+    import('./export-finalization'),
   ])
   return {
     repository: new AdvanceRepositoryImpl(await getDb()),
     enqueueDirectorStage,
     enqueueRenderShot,
-    /**
-     * 成片必须先存在，`export` 节点的 FINALIZE 阶段才有 final-mp4 可消费。
-     * 拼接经项目级队列作业执行——final-mp4 按项目聚合提交，只有 project 级
-     * attempt 才能归属；直接在这里调 exportProject 会落在上游节点的 attempt 上
-     * 而必然提交失败（ffmpeg 白跑一遍后回滚）。
-     */
-    prepareFinalExport: async (projectId) => {
-      const { runProjectExport } = await import(
-        '@/features/render/export-queue-handler'
-      )
-      await runProjectExport(projectId)
-    },
+    requestExportFinalization,
   }
 }
 

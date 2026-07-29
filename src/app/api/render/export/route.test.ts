@@ -4,7 +4,7 @@ import { GET, POST } from './route'
 const mocks = vi.hoisted(() => ({
   ensureShotQaChecked: vi.fn(),
   getExportReadiness: vi.fn(),
-  enqueueProjectExport: vi.fn(),
+  requestExportFinalization: vi.fn(),
   initQueue: vi.fn(),
   assertProjectWorkflowSupported: vi.fn(),
 }))
@@ -12,7 +12,6 @@ const mocks = vi.hoisted(() => ({
 class UnsupportedProjectWorkflowError extends Error {}
 
 vi.mock('server-only', () => ({}))
-// 会话层单独有 pg 测试覆盖；这里只验路由业务分支，直接以假会话放行。
 vi.mock('@/features/auth/api-session', () => ({
   withApiSession: (handler: (session: unknown) => Promise<Response>) =>
     handler({
@@ -28,8 +27,8 @@ vi.mock('@/features/render/export-service', () => ({
   ensureShotQaChecked: mocks.ensureShotQaChecked,
   getExportReadiness: mocks.getExportReadiness,
 }))
-vi.mock('@/features/render/export-queue-handler', () => ({
-  enqueueProjectExport: mocks.enqueueProjectExport,
+vi.mock('@/features/director/export-finalization', () => ({
+  requestExportFinalization: mocks.requestExportFinalization,
 }))
 vi.mock('@/lib/queue/init', () => ({ initQueue: mocks.initQueue }))
 vi.mock('@/features/projects/project-compatibility', () => ({
@@ -44,6 +43,7 @@ function readiness(overrides: Record<string, unknown> = {}) {
     shotQa: { S001: true },
     resolutionPreset: '1920x1080',
     finalArtifactId: null,
+    confirmationFingerprint: null,
     ...overrides,
   }
 }
@@ -51,54 +51,56 @@ function readiness(overrides: Record<string, unknown> = {}) {
 describe('POST /api/render/export', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.enqueueProjectExport.mockResolvedValue('job-export-1')
+    mocks.requestExportFinalization.mockResolvedValue({
+      status: 'queued',
+      nodeId: 'export-node',
+      jobId: 'job-export-1',
+      mode: 'complete',
+    })
   })
 
   it('returns 400 for invalid input', async () => {
     const response = await POST(request({ projectId: '' }))
     expect(response.status).toBe(400)
-    expect(mocks.enqueueProjectExport).not.toHaveBeenCalled()
+    expect(mocks.requestExportFinalization).not.toHaveBeenCalled()
   })
 
-  it('returns every incomplete node with status 409 and does not enqueue', async () => {
+  it('returns the safe not-ready details with status 409', async () => {
     const blockingIssues = [
       { laneKey: 'S001', kind: 'narration', code: 'artifact-missing' },
     ]
-    mocks.getExportReadiness.mockResolvedValue(
-      readiness({
-        ready: false,
-        incompleteNodeIds: ['node-1', 'node-2'],
-        blockingIssues,
-      })
-    )
+    const error = new Error('项目尚未满足终片导出条件')
+    error.name = 'ExportFinalizationNotReadyError'
+    Object.assign(error, {
+      safeDetails: { incompleteNodeIds: ['node-1', 'node-2'], blockingIssues },
+    })
+    mocks.requestExportFinalization.mockRejectedValue(error)
 
     const response = await POST(request({ projectId: 'project-1' }))
 
     expect(response.status).toBe(409)
     await expect(response.json()).resolves.toEqual({
       ok: false,
+      code: 'EXPORT_NOT_READY',
+      error: '项目尚未满足终片导出条件',
       incompleteNodeIds: ['node-1', 'node-2'],
       blockingIssues,
     })
-    expect(mocks.enqueueProjectExport).not.toHaveBeenCalled()
   })
 
-  it('rejects an unsupported workflow before queue or readiness writes', async () => {
+  it('rejects an unsupported workflow before queue initialization', async () => {
     mocks.assertProjectWorkflowSupported.mockRejectedValueOnce(
-      new UnsupportedProjectWorkflowError('旧版项目暂不可用')
+      new UnsupportedProjectWorkflowError('旧版项目暂不可用'),
     )
 
     const response = await POST(request({ projectId: 'old-project' }))
 
     expect(response.status).toBe(409)
     expect(mocks.initQueue).not.toHaveBeenCalled()
-    expect(mocks.getExportReadiness).not.toHaveBeenCalled()
-    expect(mocks.enqueueProjectExport).not.toHaveBeenCalled()
+    expect(mocks.requestExportFinalization).not.toHaveBeenCalled()
   })
 
-  it('enqueues a project-level export job and returns its id', async () => {
-    mocks.getExportReadiness.mockResolvedValue(readiness())
-
+  it('queues a normal export through the single coordinator', async () => {
     const response = await POST(request({ projectId: 'project-1' }))
 
     expect(response.status).toBe(200)
@@ -106,42 +108,68 @@ describe('POST /api/render/export', () => {
       ok: true,
       jobId: 'job-export-1',
     })
-    expect(mocks.enqueueProjectExport).toHaveBeenCalledWith({
+    expect(mocks.requestExportFinalization).toHaveBeenCalledWith({
       projectId: 'project-1',
+      trigger: 'manual-node',
     })
   })
 
-  it('maps an enqueue failure to 409 without leaking the raw cause', async () => {
-    mocks.getExportReadiness.mockResolvedValue(readiness())
-    mocks.enqueueProjectExport.mockRejectedValueOnce(new Error('队列不可用'))
+  it('requires and forwards the current fingerprint for degraded confirmation', async () => {
+    const missing = await POST(request({ projectId: 'project-1', degraded: true }))
+    expect(missing.status).toBe(400)
 
-    const response = await POST(request({ projectId: 'project-1' }))
+    const response = await POST(request({
+      projectId: 'project-1',
+      degraded: true,
+      confirmationFingerprint: 'sha256:current',
+    }))
+
+    expect(response.status).toBe(200)
+    expect(mocks.requestExportFinalization).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      trigger: 'confirmed-degraded',
+      confirmationFingerprint: 'sha256:current',
+    })
+  })
+
+  it('returns 409 when the confirmed degraded scope is stale', async () => {
+    const error = new Error('导出范围已变化，请刷新后重新确认降级交付')
+    error.name = 'StaleDegradedConfirmationError'
+    mocks.requestExportFinalization.mockRejectedValueOnce(error)
+
+    const response = await POST(request({
+      projectId: 'project-1',
+      degraded: true,
+      confirmationFingerprint: 'sha256:stale',
+    }))
 
     expect(response.status).toBe(409)
-    await expect(response.json()).resolves.toEqual({
+    await expect(response.json()).resolves.toMatchObject({
       ok: false,
-      error: '队列不可用',
+      code: 'DEGRADED_CONFIRMATION_STALE',
     })
   })
 })
 
 describe('GET /api/render/export', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
+  beforeEach(() => vi.clearAllMocks())
 
-  it('returns a controlled URL for the latest final artifact', async () => {
+  it('returns a controlled URL and the current confirmation fingerprint', async () => {
     mocks.getExportReadiness.mockReturnValue(
-      readiness({ finalArtifactId: 'artifact-final' })
+      readiness({
+        finalArtifactId: 'artifact-final',
+        confirmationFingerprint: 'sha256:current',
+      }),
     )
 
     const response = await GET(
-      new Request('http://localhost/api/render/export?projectId=project-1')
+      new Request('http://localhost/api/render/export?projectId=project-1'),
     )
 
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toMatchObject({
       artifactUrl: '/api/artifacts/artifact-final?projectId=project-1',
+      confirmationFingerprint: 'sha256:current',
     })
   })
 })

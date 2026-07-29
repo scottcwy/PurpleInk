@@ -21,6 +21,7 @@ export interface ExportReadiness {
   waivedQaLanes: string[]
   /** 降级导出是否可行（无项目级完整性阻塞）。 */
   degradedReady: boolean
+  confirmationFingerprint: string | null
   /** 最新成片若为降级产物，列出其占位镜头。 */
   degradedExport: { placeholderLanes: string[]; waivedQaLanes: string[] } | null
   artifactDelivery:
@@ -74,6 +75,10 @@ export async function loadExportReadiness(
     placeholderCandidateLanes: toStringArray(body.placeholderCandidateLanes),
     waivedQaLanes: toStringArray(body.waivedQaLanes),
     degradedReady: body.degradedReady === true,
+    confirmationFingerprint:
+      typeof body.confirmationFingerprint === 'string'
+        ? body.confirmationFingerprint
+        : null,
     degradedExport: toDegradedExport(body.degradedExport),
     artifactDelivery: isArtifactDelivery(body.artifactDelivery)
       ? body.artifactDelivery
@@ -93,14 +98,23 @@ export async function startProjectExport(
   projectId: string,
   fetcher: typeof fetch = fetch,
   wait: (milliseconds: number) => Promise<void> = delay,
-  options: { degraded?: boolean } = {}
+  options: {
+    degraded?: boolean
+    confirmationFingerprint?: string
+  } = {}
 ): Promise<string> {
+  if (options.degraded && !options.confirmationFingerprint) {
+    throw new Error('降级确认已失效，请刷新导出状态后重试')
+  }
   const response = await fetcher('/api/render/export', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       projectId,
       ...(options.degraded ? { degraded: true } : {}),
+      ...(options.confirmationFingerprint
+        ? { confirmationFingerprint: options.confirmationFingerprint }
+        : {}),
     }),
   })
   throwIfUnauthenticated(response)

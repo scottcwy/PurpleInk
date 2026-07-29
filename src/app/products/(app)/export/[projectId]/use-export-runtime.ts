@@ -32,11 +32,18 @@ export function useExportRuntime(projectId: string) {
 
   /** 降级导出：缺失分镜以占位顶替（用户显式确认后调用）。 */
   async function exportDegraded(): Promise<string | undefined> {
-    return runExport({ degraded: true })
+    if (!readiness?.confirmationFingerprint) {
+      setError('降级确认已失效，请刷新导出状态后重试')
+      return undefined
+    }
+    return runExport({
+      degraded: true,
+      confirmationFingerprint: readiness.confirmationFingerprint,
+    })
   }
 
   async function runExport(
-    options: { degraded?: boolean }
+    options: { degraded?: boolean; confirmationFingerprint?: string }
   ): Promise<string | undefined> {
     setExporting(true)
     setError(undefined)

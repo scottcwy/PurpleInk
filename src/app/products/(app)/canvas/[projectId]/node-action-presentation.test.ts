@@ -54,4 +54,15 @@ describe('node action presentation', () => {
     expect(isNodeActionBlocked(skipped)).toBe(false)
     expect(nodeActionLabel(skipped)).toBe('重新执行以恢复此环节')
   })
+
+  it('routes an export confirmation block to the export workspace', () => {
+    const blocked = node({
+      type: 'export',
+      stage: 'FINALIZE',
+      status: 'blocked',
+    })
+
+    expect(isNodeActionBlocked(blocked)).toBe(true)
+    expect(nodeActionLabel(blocked)).toBe('前往导出页确认')
+  })
 })
