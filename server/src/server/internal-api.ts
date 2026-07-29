@@ -90,7 +90,8 @@ async function startIntegratedRender(
   const created = createIntegratedJob(
     normalized.url,
     normalized.requestId,
-    fingerprintInternalRenderRequest(normalized)
+    fingerprintInternalRenderRequest(normalized),
+    normalized.duration
   )
   if (created.kind === "conflict") {
     sendJson(res, 409, {

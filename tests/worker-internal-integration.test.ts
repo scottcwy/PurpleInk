@@ -102,8 +102,17 @@ describe("worker internal integration boundary", () => {
 
   it("reuses the same integrated job for an identical request and rejects conflicts", () => {
     const requestId = `test-${randomUUID()}`;
-    const first = createIntegratedJob("https://example.com/demo?q=1", requestId, "fingerprint-a");
+    const first = createIntegratedJob(
+      "https://example.com/demo?q=1",
+      requestId,
+      "fingerprint-a",
+      24,
+    );
     expect(first.kind).toBe("created");
+    expect(toIntegratedJobView(first.job)).toMatchObject({
+      durationSec: 24,
+      durationSource: "request",
+    });
 
     const repeated = createIntegratedJob(
       "https://example.com/demo?q=1",

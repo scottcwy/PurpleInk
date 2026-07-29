@@ -24,6 +24,7 @@ export interface Job {
   /** Products 侧稳定幂等键，仅 integrated Job 存在。 */
   requestId?: string
   requestFingerprint?: string
+  requestedDurationSec?: number
   /** url = 端到端；capture = 从已有 capture/ 目录渲染 */
   kind: "url" | "capture"
   /** 原始输入（URL 或 captureDir） */
@@ -78,7 +79,8 @@ export type IntegratedJobCreateResult = {
 export function createIntegratedJob(
   input: string,
   requestId: string,
-  requestFingerprint: string
+  requestFingerprint: string,
+  requestedDurationSec?: number
 ): IntegratedJobCreateResult {
   const existingId = integratedRequests.get(requestId)
   const existing = existingId ? jobs.get(existingId) : undefined
@@ -92,6 +94,7 @@ export function createIntegratedJob(
   job.integrated = true
   job.requestId = requestId
   job.requestFingerprint = requestFingerprint
+  job.requestedDurationSec = requestedDurationSec
   integratedRequests.set(requestId, job.id)
   return { kind: "created", job }
 }
@@ -147,7 +150,13 @@ export function toIntegratedJobView(job: Job) {
     origin,
     status: job.status,
     phase: job.phase,
-    durationSec: job.durationSec ?? null,
+    durationSec: job.durationSec ?? job.requestedDurationSec ?? null,
+    durationSource:
+      job.durationSec != null
+        ? "output"
+        : job.requestedDurationSec != null
+          ? "request"
+          : null,
     elapsedSec: job.elapsedSec ?? null,
     checkPassed: job.checkPassed ?? null,
     goldenVerified: job.goldenVerified ?? null,
