@@ -153,6 +153,23 @@ describe('director prompt templates', () => {
     ).toContain('shot-qa')
   })
 
+  it('states semantic split granularity in INGEST and per-shot planning in DIRECT', () => {
+    const ingestPrompt = buildIngestPrompt({ rawScript: '测试文稿' })
+    expect(ingestPrompt).toContain('1-2 句话一个 unit')
+    expect(ingestPrompt).toContain('禁止把多个独立语义点合并进同一个 unit')
+    expect(ingestPrompt).toContain('拆分粒度直接决定镜头精度')
+    expect(ingestPrompt).toContain('unit 总数不超过 999')
+
+    const directPrompt = buildDirectPrompt({
+      projectTitle: '测试',
+      scriptUnits,
+      audioManifest,
+      audioAllocation,
+    })
+    expect(directPrompt).toContain('一镜一个核心判断')
+    expect(directPrompt).toContain('相邻镜头必须变化拓扑、视角或信息职责')
+  })
+
   it('forbids describing degraded FINALIZE input as complete quality approval', () => {
     const prompt = buildExportFinalizePrompt({
       shotPlan,
