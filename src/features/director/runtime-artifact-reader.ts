@@ -157,12 +157,17 @@ export class DirectorArtifactReader {
 
   private async resolveFinalizeInput(row: StageContextRow): Promise<unknown> {
     if (row.nodeType === 'export') {
-      const [shotPlan, draftArtifactKey, qaFindings] = await Promise.all([
+      const [shotPlan, finalExport, qaFindings] = await Promise.all([
         this.source.loadAllShotSpecs(row.nodeProjectId),
-        this.source.loadFinalExportArtifact(row.nodeProjectId),
+        this.source.loadFinalExportDelivery(row.nodeProjectId),
         this.source.loadShotQaFindings(row.nodeProjectId),
       ])
-      return { shotPlan, draftArtifactKey, qaFindings }
+      return {
+        shotPlan,
+        draftArtifactKey: finalExport.storageKey,
+        qaFindings,
+        delivery: finalExport.delivery,
+      }
     }
     if (row.nodeType !== 'shot-qa') {
       throw new Error(`未知 FINALIZE 节点类型：${row.nodeType}`)

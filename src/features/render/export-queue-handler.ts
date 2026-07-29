@@ -10,6 +10,11 @@ import { exportProject, getExportReadiness } from './export-service'
 import { exportDegradedProject } from './export-degraded'
 import { RenderRepository } from './repository'
 import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
+import {
+  continueExportFinalReview,
+  type FinalReviewContinuationInput,
+} from '@/features/director/final-review-continuation'
+import { getCanvasGraph, transitionNodeStatus } from '@/features/canvas'
 
 /**
  * 成片导出的队列接线。
@@ -40,6 +45,14 @@ export type ExportProjectInput = z.infer<typeof exportJobPayloadSchema>
 interface ExportHandlerDependencies {
   exportProject: typeof exportProject
   exportDegradedProject: typeof exportDegradedProject
+  continueFinalReview?: (
+    input: FinalReviewContinuationInput
+  ) => Promise<string>
+  assertDegradedConfirmation?: (input: {
+    projectId: string
+    exportNodeId: string
+    confirmationFingerprint: string
+  }) => Promise<void>
 }
 
 export function registerExportProjectHandler(
@@ -47,14 +60,31 @@ export function registerExportProjectHandler(
   dependencies: ExportHandlerDependencies = {
     exportProject,
     exportDegradedProject,
+    continueFinalReview: continueExportFinalReview,
+    assertDegradedConfirmation: assertCurrentDegradedConfirmation,
   }
 ): void {
   targetQueue.register(EXPORT_PROJECT_KIND, async (job) => {
     const payload = exportJobPayloadSchema.parse(job.payload)
+    if (
+      payload.degraded
+      && payload.exportNodeId
+      && payload.confirmationFingerprint
+      && dependencies.assertDegradedConfirmation
+    ) {
+      await dependencies.assertDegradedConfirmation({
+        projectId: payload.projectId,
+        exportNodeId: payload.exportNodeId,
+        confirmationFingerprint: payload.confirmationFingerprint,
+      })
+    }
     // 降级导出只由用户显式触发（payload.degraded）；自动推进不传该标志。
     const result = payload.degraded
       ? await dependencies.exportDegradedProject(payload.projectId, {
           repository: new RenderRepository(),
+          ...(payload.confirmationFingerprint
+            ? { confirmationFingerprint: payload.confirmationFingerprint }
+            : {}),
         })
       : await dependencies.exportProject(payload.projectId)
     if (!result.ok) {
@@ -84,7 +114,58 @@ export function registerExportProjectHandler(
         { incompleteNodeCount: result.incompleteNodeIds.length }
       )
     }
+    if (payload.exportNodeId && dependencies.continueFinalReview) {
+      await dependencies.continueFinalReview({
+        projectId: payload.projectId,
+        exportNodeId: payload.exportNodeId,
+        mode: payload.degraded ? 'degraded' : 'complete',
+        finalArtifactHash: result.contentHash,
+        ...(payload.confirmationFingerprint
+          ? { confirmationFingerprint: payload.confirmationFingerprint }
+          : {}),
+      })
+    }
   })
+}
+
+async function assertCurrentDegradedConfirmation(input: {
+  projectId: string
+  exportNodeId: string
+  confirmationFingerprint: string
+}): Promise<void> {
+  const readiness = await getExportReadiness(input.projectId)
+  if (
+    readiness.degradedReady
+    && readiness.confirmationFingerprint === input.confirmationFingerprint
+  ) {
+    return
+  }
+  const graph = await getCanvasGraph(input.projectId)
+  const node = graph.nodes.find(
+    (candidate) =>
+      candidate.id === input.exportNodeId && candidate.type === 'export'
+  )
+  if (node && readiness.degradedReady && readiness.confirmationFingerprint) {
+    await transitionNodeStatus(node.id, 'blocked', {
+      workflowBlock: {
+        code: 'DEGRADED_EXPORT_CONFIRMATION_REQUIRED',
+        message: '导出范围已变化，请刷新后重新确认降级交付。',
+        recovery: 'confirm_degraded_export',
+        referenceId: globalThis.crypto.randomUUID(),
+        blockedAt: new Date().toISOString(),
+        confirmationFingerprint: readiness.confirmationFingerprint,
+      },
+    })
+  }
+  throw new StaleDegradedConfirmationError()
+}
+
+export class StaleDegradedConfirmationError extends Error {
+  override readonly name = 'StaleDegradedConfirmationError'
+
+  constructor() {
+    super('导出范围已变化，请刷新后重新确认降级交付')
+  }
 }
 
 export class ExportProjectBlockedError extends Error {

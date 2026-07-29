@@ -22,6 +22,7 @@ const directorStageJobSchema = z
     projectId: z.string().min(1),
     nodeId: z.string().min(1),
     stage: z.enum(PIPELINE_STAGES),
+    finalArtifactHash: z.string().length(64).optional(),
   })
   .strict()
 
@@ -36,7 +37,10 @@ type RunStage = (
 
 interface EnqueueDependencies {
   queue: QueueAdapter
-  assertEnqueueable(input: DirectorStageJobInput): Promise<void>
+  assertEnqueueable(
+    input: DirectorStageJobInput,
+    options?: { allowPending?: boolean }
+  ): Promise<void>
   captureInputFingerprint?(nodeId: string): Promise<unknown>
   transitionNodeStatus: typeof transitionNodeStatus
   /** 毒任务闸门（可选）：重试预算耗尽时拒绝再次入队。 */
@@ -69,14 +73,19 @@ export function startDirectorQueue(
 
 export async function enqueueDirectorStage(
   input: DirectorStageJobInput,
-  dependencies?: EnqueueDependencies
+  dependencies?: EnqueueDependencies,
+  options: { preservePending?: boolean } = {}
 ): Promise<string> {
   const payload = directorStageJobSchema.parse(input)
   if (!dependencies) await assertProjectWorkflowSupported(payload.projectId)
   const resolved = dependencies ?? (await createDefaultEnqueueDependencies())
-  await resolved.assertEnqueueable(payload)
+  await resolved.assertEnqueueable(payload, {
+    allowPending: options.preservePending === true,
+  })
   await resolved.captureInputFingerprint?.(payload.nodeId)
-  await resolved.transitionNodeStatus(payload.nodeId, 'pending')
+  if (!options.preservePending) {
+    await resolved.transitionNodeStatus(payload.nodeId, 'pending')
+  }
   try {
     // 闸门在 try 内：预算耗尽走既有补偿链，落节点 failed + directorError 投影。
     await resolved.assertRetryBudget?.('director-stage', payload)
@@ -95,8 +104,13 @@ async function createDefaultEnqueueDependencies(): Promise<EnqueueDependencies> 
   const repository = new DirectorRuntimeRepository(await getDb(), storage)
   return {
     queue: defaultQueue,
-    assertEnqueueable: (input) =>
-      repository.assertEnqueueable(input.projectId, input.nodeId, input.stage),
+    assertEnqueueable: (input, options) =>
+      repository.assertEnqueueable(
+        input.projectId,
+        input.nodeId,
+        input.stage,
+        options?.allowPending
+      ),
     captureInputFingerprint: captureNodeInputFingerprint,
     transitionNodeStatus,
     assertRetryBudget: assertEnqueueRetryBudget,

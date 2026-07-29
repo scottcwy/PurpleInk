@@ -153,6 +153,23 @@ describe('director prompt templates', () => {
     ).toContain('shot-qa')
   })
 
+  it('forbids describing degraded FINALIZE input as complete quality approval', () => {
+    const prompt = buildExportFinalizePrompt({
+      shotPlan,
+      draftArtifactKey: 'exports/final.mp4',
+      qaFindings: [],
+      delivery: {
+        mode: 'degraded',
+        placeholderLanes: ['S007'],
+        waivedQaLanes: ['S007'],
+      },
+    })
+
+    expect(prompt).toContain('降级交付')
+    expect(prompt).toContain('不得描述为完整质量通过')
+    expect(prompt).toContain('S007')
+  })
+
   it('ports all ten positive visual laws without omissions', () => {
     const prompts = [
       buildDirectPrompt({ projectTitle: '测试', scriptUnits, audioManifest, audioAllocation }),

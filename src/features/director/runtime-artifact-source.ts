@@ -35,6 +35,12 @@ const ingestAudioSchema = z.object({
   audioAllocation: audioAllocationSchema,
 })
 
+const degradedDeliverySchema = z.object({
+  finalContentHash: z.string().length(64),
+  placeholderLanes: z.array(z.string()),
+  waivedQaLanes: z.array(z.string()).optional(),
+})
+
 interface NodeLane {
   id: string
   laneKey: string | null
@@ -224,8 +230,24 @@ export class DirectorArtifactSource {
   }
 
   async loadFinalExportArtifact(projectId: string): Promise<string> {
+    return (await this.loadFinalExportDelivery(projectId)).storageKey
+  }
+
+  async loadFinalExportDelivery(projectId: string): Promise<{
+    storageKey: string
+    delivery:
+      | { mode: 'complete' }
+      | {
+          mode: 'degraded'
+          placeholderLanes: string[]
+          waivedQaLanes: string[]
+        }
+  }> {
     const [artifact] = await this.db
-      .select({ storageKey: artifacts.storageKey })
+      .select({
+        storageKey: artifacts.storageKey,
+        contentHash: artifacts.contentHash,
+      })
       .from(artifacts)
       .where(
         and(
@@ -239,7 +261,40 @@ export class DirectorArtifactSource {
       .orderBy(desc(artifacts.version), desc(artifacts.id))
       .limit(1)
     if (!artifact) throw new Error('请先完成合成导出：项目尚无 final-mp4 产物')
-    return artifact.storageKey
+    const [manifest] = await this.db
+      .select({ storageKey: artifacts.storageKey })
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.workspaceId, currentWorkspaceId()),
+          eq(artifacts.projectId, projectId),
+          eq(artifacts.aggregateType, 'project'),
+          eq(artifacts.aggregateId, projectId),
+          eq(artifacts.kind, 'final-mp4-degraded-manifest')
+        )
+      )
+      .orderBy(desc(artifacts.version), desc(artifacts.id))
+      .limit(1)
+    if (manifest) {
+      try {
+        const parsed = degradedDeliverySchema.parse(
+          JSON.parse((await this.storage.get(manifest.storageKey)).toString('utf-8'))
+        )
+        if (parsed.finalContentHash === artifact.contentHash) {
+          return {
+            storageKey: artifact.storageKey,
+            delivery: {
+              mode: 'degraded',
+              placeholderLanes: parsed.placeholderLanes,
+              waivedQaLanes: parsed.waivedQaLanes ?? [],
+            },
+          }
+        }
+      } catch {
+        // 清单损坏或不匹配时不能把完整成片误标为降级；Artifact 合同由独立门禁报告。
+      }
+    }
+    return { storageKey: artifact.storageKey, delivery: { mode: 'complete' } }
   }
 
   async loadShotQaFindings(projectId: string): Promise<string[]> {

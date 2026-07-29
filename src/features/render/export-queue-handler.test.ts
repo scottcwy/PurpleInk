@@ -158,6 +158,37 @@ describe('registerExportProjectHandler', () => {
     expect(exportDegradedProject).not.toHaveBeenCalled()
   })
 
+  it('continues a successful export through FINALIZE exactly with the final hash', async () => {
+    const { adapter, handlers } = queueStub()
+    const continueFinalReview = vi.fn(async () => 'director-attempt-1')
+    const exportProject = vi.fn(async () => ({
+      ok: true as const,
+      artifactId: 'artifact-1',
+      outputKey: 'exports/final.mp4',
+      contentHash: 'a'.repeat(64),
+    }))
+    registerExportProjectHandler(adapter, {
+      exportProject,
+      exportDegradedProject: vi.fn() as never,
+      continueFinalReview,
+    })
+
+    await handlers.get(EXPORT_PROJECT_KIND)?.(
+      job({
+        projectId: 'project-1',
+        exportNodeId: 'export-node',
+      })
+    )
+
+    expect(continueFinalReview).toHaveBeenCalledOnce()
+    expect(continueFinalReview).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      exportNodeId: 'export-node',
+      mode: 'complete',
+      finalArtifactHash: 'a'.repeat(64),
+    })
+  })
+
   it('routes a degraded payload to the degraded export path', async () => {
     const { adapter, handlers } = queueStub()
     const exportProject = vi.fn()
@@ -182,6 +213,76 @@ describe('registerExportProjectHandler', () => {
       repository: expect.anything(),
     })
     expect(exportProject).not.toHaveBeenCalled()
+  })
+
+  it('carries degraded confirmation truth into export and final review', async () => {
+    const { adapter, handlers } = queueStub()
+    const continueFinalReview = vi.fn(async () => 'director-attempt-1')
+    const exportDegradedProject = vi.fn(async () => ({
+      ok: true as const,
+      artifactId: 'artifact-degraded',
+      outputKey: 'exports/final.mp4',
+      contentHash: 'b'.repeat(64),
+      placeholderLanes: ['S007'],
+      waivedQaLanes: ['S007'],
+    }))
+    registerExportProjectHandler(adapter, {
+      exportProject: vi.fn() as never,
+      exportDegradedProject,
+      continueFinalReview,
+    })
+
+    await handlers.get(EXPORT_PROJECT_KIND)?.(
+      job({
+        projectId: 'project-1',
+        degraded: true,
+        exportNodeId: 'export-node',
+        confirmationFingerprint: 'confirmation-v1',
+      })
+    )
+
+    expect(exportDegradedProject).toHaveBeenCalledWith('project-1', {
+      repository: expect.anything(),
+      confirmationFingerprint: 'confirmation-v1',
+    })
+    expect(continueFinalReview).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      exportNodeId: 'export-node',
+      mode: 'degraded',
+      finalArtifactHash: 'b'.repeat(64),
+      confirmationFingerprint: 'confirmation-v1',
+    })
+  })
+
+  it('revalidates a degraded confirmation before spending export work', async () => {
+    const { adapter, handlers } = queueStub()
+    const assertDegradedConfirmation = vi.fn(async () => {
+      throw new Error('stale confirmation')
+    })
+    const exportDegradedProject = vi.fn()
+    registerExportProjectHandler(adapter, {
+      exportProject: vi.fn() as never,
+      exportDegradedProject: exportDegradedProject as never,
+      assertDegradedConfirmation,
+    })
+
+    await expect(
+      handlers.get(EXPORT_PROJECT_KIND)?.(
+        job({
+          projectId: 'project-1',
+          degraded: true,
+          exportNodeId: 'export-node',
+          confirmationFingerprint: 'confirmation-v1',
+        })
+      )
+    ).rejects.toThrow('stale confirmation')
+
+    expect(assertDegradedConfirmation).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      exportNodeId: 'export-node',
+      confirmationFingerprint: 'confirmation-v1',
+    })
+    expect(exportDegradedProject).not.toHaveBeenCalled()
   })
 
   it('fails the attempt with the incomplete nodes when the project is not exportable', async () => {

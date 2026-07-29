@@ -12,10 +12,22 @@ export const exportFinalizePromptInputSchema = z
     shotPlan: directorShotPlanSchema,
     draftArtifactKey: z.string().min(1),
     qaFindings: z.array(z.string().min(1)),
+    delivery: z
+      .discriminatedUnion('mode', [
+        z.object({ mode: z.literal('complete') }).strict(),
+        z
+          .object({
+            mode: z.literal('degraded'),
+            placeholderLanes: z.array(z.string()),
+            waivedQaLanes: z.array(z.string()),
+          })
+          .strict(),
+      ])
+      .default({ mode: 'complete' }),
   })
   .strict()
 
-export type ExportFinalizePromptInput = z.infer<typeof exportFinalizePromptInputSchema>
+export type ExportFinalizePromptInput = z.input<typeof exportFinalizePromptInputSchema>
 
 /** 构建 FINALIZE · export 阶段的全片最终 QA 与交付提示词。 */
 export function buildExportFinalizePrompt(input: ExportFinalizePromptInput): string {
@@ -34,6 +46,10 @@ ${JSON.stringify(parsed.shotPlan)}
 draft artifact key：${parsed.draftArtifactKey}
 已知 QA findings：
 ${JSON.stringify(parsed.qaFindings)}
+交付模式：
+${parsed.delivery.mode === 'degraded'
+    ? `降级交付；占位镜头=${JSON.stringify(parsed.delivery.placeholderLanes)}；QA 豁免=${JSON.stringify(parsed.delivery.waivedQaLanes)}。不得描述为完整质量通过。`
+    : '完整交付。'}
 
 返回结构化的通过/阻塞结论、证据与需要重做的 shot IDs。`
 }

@@ -128,7 +128,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
       aggregateType: 'project',
       aggregateId: input.projectId,
       kind: 'final-mp4-degraded-manifest',
-      schemaVersion: 'cvc.final-degraded-manifest/v2',
+      schemaVersion: 'cvc.final-degraded-manifest/v3',
       storageKey: input.storageKey,
       sizeBytes: input.sizeBytes,
       contentHash: input.contentHash,
