@@ -53,14 +53,15 @@
 
 ## 更新摘要
 **变更内容**   
+- **重要简化**：AI网关系统已大幅简化，复杂度显著降低，因为调用处理已统一化
+- **增强调度逻辑**：提供商调度逻辑得到增强，但保持相同的外部接口兼容性
 - 新增双路径架构，支持PurpleInk托管服务和BYOK（自带密钥）选项，满足企业用户需求
-- 增强托管网关功能，提供统一的服务入口和路由管理
 - 实现智能回退机制，确保服务的高可用性和容错能力
 - 优化提供商管理与路由策略，提升系统灵活性和可扩展性
-- **最新变更**：托管服务组件支持通过路由解析的新凭据消费模式，保持与更新后的提供商接口兼容性
-- **重要更新**：新增托管模型目录仓库(managed-model-catalog-repository.ts)，重构了模型路由系统和提供商设置投影逻辑，增强了网关和降级机制的健壮性
-- **新增功能**：引入托管视觉执行器(managed-vision-executor.ts)，提供专门的视觉AI操作处理能力
-- **增强功能**：改进供应商调用的预订结算机制，提升资源管理和成本控制能力
+- 托管服务组件支持通过路由解析的新凭据消费模式，保持与更新后的提供商接口兼容性
+- 新增托管模型目录仓库，重构了模型路由系统和提供商设置投影逻辑，增强了网关和降级机制的健壮性
+- 引入托管视觉执行器，提供专门的视觉AI操作处理能力
+- 改进供应商调用的预订结算机制，提升资源管理和成本控制能力
 
 ## 目录
 1. [简介](#简介)
@@ -77,7 +78,7 @@
 ## 简介
 本仓库实现了一个面向AI的"托管服务"平台，提供多模型提供商的统一接入、编排与调度能力，涵盖内容生成（导演/流水线）、TTS语音合成、媒体渲染导出、采集代理等关键能力。系统采用前后端分离：前端基于Next.js应用，后端通过独立的Node服务承载API、作业调度与外部AI/TTS/渲染能力的集成。部署层面支持Docker与反向代理，便于本地开发与生产环境一致化运行。
 
-**最新更新**：平台现已集成统一的模型服务层，实现了集中化的成本计量、托管凭据管理和智能回退机制，为StepFun、MiMo和Gemini等服务提供了增强的稳定性和成本控制能力。**最新变更**：托管服务组件已更新以支持通过路由解析的新凭据消费模式，同时保持与更新后的提供商接口的兼容性。**重要更新**：新增了托管模型目录仓库，重构了模型路由系统和提供商设置投影逻辑，显著增强了网关和降级机制的健壮性和可扩展性。**新增功能**：引入了托管视觉执行器，专门处理视觉AI操作，包括图像识别、OCR、视觉问答等功能，并通过改进的预订结算机制优化供应商调用成本。**重要更新**：提供商设置投影逻辑和降级机制得到显著增强，提升了系统的健壮性和可维护性。
+**最新更新**：平台现已集成统一的模型服务层，实现了集中化的成本计量、托管凭据管理和智能回退机制，为StepFun、MiMo和Gemini等服务提供了增强的稳定性和成本控制能力。**重要简化**：AI网关系统已大幅简化，复杂度显著降低，因为调用处理已统一化，同时保持了相同的外部接口兼容性。**增强功能**：提供商调度逻辑得到增强，提升了系统的稳定性和响应能力。**最新变更**：托管服务组件已更新以支持通过路由解析的新凭据消费模式，同时保持与更新后的提供商接口的兼容性。**重要更新**：新增了托管模型目录仓库，重构了模型路由系统和提供商设置投影逻辑，显著增强了网关和降级机制的健壮性和可扩展性。**新增功能**：引入了托管视觉执行器，专门处理视觉AI操作，包括图像识别、OCR、视觉问答等功能，并通过改进的预订结算机制优化供应商调用成本。
 
 ## 项目结构
 - 前端应用位于 src 目录，包含页面路由、业务功能模块（features）与通用UI组件（components）。
@@ -100,8 +101,8 @@ BE_Compose["编排/流水线<br/>server/src/compose/*"]
 BE_TTS["TTS编排<br/>server/src/tts/*"]
 BE_Capture["采集代理<br/>server/src/capture/*"]
 end
-subgraph "AI托管服务层"
-AI_Gateway["AI网关<br/>src/features/ai/managed-gateway.ts"]
+subgraph "简化的AI托管服务层"
+AI_Gateway["简化AI网关<br/>src/features/ai/managed-gateway.ts"]
 AI_Credentials["托管凭据<br/>src/features/ai/managed-credentials.ts"]
 AI_Metering["成本计量<br/>src/features/ai/managed-service.ts"]
 AI_Fallback["回退机制<br/>src/features/ai/managed-fallback.ts"]
@@ -161,7 +162,8 @@ DP_Prod --> BE_API
 - [docker-compose.prod.yml](file://docker-compose.prod.yml)
 
 ## 核心组件
-- 统一AI网关与提供商注册：集中管理多模型提供商的配置、适配与路由策略，屏蔽底层差异。
+- **简化** 统一AI网关与提供商注册：经过简化的网关统一管理提供商配置、凭证、路由策略与降级；对外暴露统一的调用接口，复杂度显著降低。
+- **增强** 提供商调度逻辑：提供商调度逻辑得到增强，但保持相同的外部接口兼容性，提升了系统的稳定性和响应能力。
 - **新增** 托管凭据管理：安全存储和管理各提供商的API密钥和认证信息。
 - **新增** 集中成本计量：跟踪和记录各模型调用的成本，支持配额控制和预算告警。
 - **新增** 智能回退机制：当主提供商不可用时自动切换到备用提供商。
@@ -192,7 +194,7 @@ DP_Prod --> BE_API
 - [server/src/capture/ai-capture-agent.ts](file://server/src/capture/ai-capture-agent.ts)
 
 ## 架构总览
-整体架构遵循"前端请求 -> API网关 -> 作业调度 -> 领域服务（AI/TTS/渲染/采集）-> 存储/外部服务"的分层模式。反向代理负责鉴权与流量转发，作业运行器保证异步任务的可靠执行，领域服务通过适配器对接不同提供商。**新增的统一AI托管服务层**提供了集中化的凭据管理、成本计量、智能回退、路由解析、模型目录管理和视觉执行能力，显著增强了系统的健壮性和可扩展性。**新增的视觉执行器**专门处理视觉相关AI操作，通过改进的预订结算机制优化资源使用。
+整体架构遵循"前端请求 -> API网关 -> 作业调度 -> 领域服务（AI/TTS/渲染/采集）-> 存储/外部服务"的分层模式。反向代理负责鉴权与流量转发，作业运行器保证异步任务的可靠执行，领域服务通过适配器对接不同提供商。**简化的统一AI托管服务层**提供了集中化的凭据管理、成本计量、智能回退、路由解析、模型目录管理和视觉执行能力，显著降低了系统复杂度并增强了可靠性。**新增的视觉执行器**专门处理视觉相关AI操作，通过改进的预订结算机制优化资源使用。**增强后的提供商调度逻辑**在保持相同外部接口的同时提升了系统的稳定性和响应能力。
 
 ```mermaid
 graph TB
@@ -201,7 +203,7 @@ Proxy --> NextApp["Next.js应用<br/>src/app"]
 NextApp --> API["API路由<br/>src/app/api/*"]
 API --> JobRunner["作业运行器<br/>server/src/server/job-runner.ts"]
 JobRunner --> Store["作业存储<br/>server/src/server/job-store.ts"]
-API --> AI_GW["AI网关<br/>src/features/ai/managed-gateway.ts"]
+API --> AI_GW["简化AI网关<br/>src/features/ai/managed-gateway.ts"]
 API --> TTS["TTS编排<br/>server/src/tts/orchestrate.ts"]
 API --> Render["渲染服务<br/>src/features/render/export-service.ts"]
 API --> Capture["采集代理<br/>server/src/capture/ai-capture-agent.ts"]
@@ -246,9 +248,9 @@ VisionExecutor --> ReservationSettlement["预订结算机制<br/>资源管理"]
 
 ## 详细组件分析
 
-### AI托管网关与提供商注册
-- 职责：统一管理提供商配置、凭证、路由策略与降级；对外暴露统一的调用接口。
-- 关键模块：
+### 简化的AI网关与提供商注册
+- **简化** 职责：经过简化的网关统一管理提供商配置、凭证、路由策略与降级；对外暴露统一的调用接口，复杂度显著降低。
+- **增强** 关键模块：
   - 提供商注册表：维护提供商实例与能力元数据。
   - 模型路由：根据负载、成本、可用性选择最优提供商。
   - OpenAI兼容、Gemini、Mimo、StepFun等适配器：封装具体协议与载荷。
@@ -257,7 +259,7 @@ VisionExecutor --> ReservationSettlement["预订结算机制<br/>资源管理"]
   - **重要新增** 模型目录仓库：统一管理模型元数据和版本信息。
   - **新增** 视觉执行器集成：专门处理视觉相关AI操作。
 
-**更新**：新增了托管凭据管理、集中成本计量、智能回退机制、路由解析功能和模型目录仓库，显著提升了系统的稳定性、成本控制能力、接口兼容性和模型管理能力。**新增的视觉执行器**为视觉AI操作提供了专门的处理能力，通过改进的预订结算机制优化资源使用。
+**更新**：**重要简化** 经过简化的AI网关系统复杂度显著降低，因为调用处理已统一化，同时保持了相同的外部接口兼容性。**增强功能** 提供商调度逻辑得到增强，提升了系统的稳定性和响应能力。**新增功能** 托管凭据管理、集中成本计量、智能回退机制、路由解析功能和模型目录仓库，显著提升了系统的稳定性、成本控制能力、接口兼容性和模型管理能力。**新增的视觉执行器** 为视觉AI操作提供了专门的处理能力，通过改进的预订结算机制优化资源使用。
 
 ```mermaid
 classDiagram
@@ -266,7 +268,7 @@ class ProviderRegistry {
 +get(name)
 +list()
 }
-class ManagedGateway {
+class SimplifiedManagedGateway {
 +call(target, payload)
 +fallbackChain()
 +metrics()
@@ -349,20 +351,20 @@ class GeminiAdapter {
 +invoke(payload)
 +checkQuota()
 }
-ProviderRegistry --> ManagedGateway : "提供实例"
-ManagedGateway --> ModelRouting : "路由决策"
-ManagedGateway --> ManagedCredentials : "凭据管理"
-ManagedGateway --> CostMetering : "成本计量"
-ManagedGateway --> FallbackManager : "回退控制"
-ManagedGateway --> RouteResolver : "路由解析"
-ManagedGateway --> ModelCatalogRepository : "模型查询"
-ManagedGateway --> VisionExecutor : "视觉执行"
-ManagedGateway --> OpenAICompatibleConfig : "配置"
-ManagedGateway --> GeminiConfig : "配置"
-ManagedGateway --> MimoConfig : "配置"
-ManagedGateway --> StepFunAdapter : "调用"
-ManagedGateway --> MimoAdapter : "调用"
-ManagedGateway --> GeminiAdapter : "调用"
+ProviderRegistry --> SimplifiedManagedGateway : "提供实例"
+SimplifiedManagedGateway --> ModelRouting : "路由决策"
+SimplifiedManagedGateway --> ManagedCredentials : "凭据管理"
+SimplifiedManagedGateway --> CostMetering : "成本计量"
+SimplifiedManagedGateway --> FallbackManager : "回退控制"
+SimplifiedManagedGateway --> RouteResolver : "路由解析"
+SimplifiedManagedGateway --> ModelCatalogRepository : "模型查询"
+SimplifiedManagedGateway --> VisionExecutor : "视觉执行"
+SimplifiedManagedGateway --> OpenAICompatibleConfig : "配置"
+SimplifiedManagedGateway --> GeminiConfig : "配置"
+SimplifiedManagedGateway --> MimoConfig : "配置"
+SimplifiedManagedGateway --> StepFunAdapter : "调用"
+SimplifiedManagedGateway --> MimoAdapter : "调用"
+SimplifiedManagedGateway --> GeminiAdapter : "调用"
 ```
 
 **图示来源** 
@@ -410,7 +412,7 @@ ManagedGateway --> GeminiAdapter : "调用"
 ```mermaid
 sequenceDiagram
 participant Client as "客户端"
-participant Gateway as "AI网关"
+participant Gateway as "简化AI网关"
 participant VisionExec as "视觉执行器"
 participant VisionProviders as "视觉提供商"
 participant Settlement as "预订结算"
@@ -442,7 +444,7 @@ Gateway-->>Client : "返回视觉处理结果"
 ```mermaid
 sequenceDiagram
 participant Client as "客户端"
-participant Gateway as "AI网关"
+participant Gateway as "简化AI网关"
 participant Catalog as "模型目录仓库"
 participant Registry as "模型注册表"
 participant Health as "健康检查"
@@ -474,7 +476,7 @@ Gateway-->>Client : "返回模型选择结果"
 ```mermaid
 sequenceDiagram
 participant Client as "客户端"
-participant Gateway as "AI网关"
+participant Gateway as "简化AI网关"
 participant Credentials as "托管凭据"
 participant RouteResolver as "路由解析器"
 participant Storage as "安全存储"
@@ -744,14 +746,14 @@ API-->>Client : "返回采集结果"
 ## 依赖关系分析
 - 前端依赖Next.js生态，通过API路由与服务端通信。
 - 服务端依赖作业调度、存储抽象与外部AI/TTS/渲染服务。
-- **新增** AI托管服务层依赖凭据管理、成本计量、回退机制、路由解析、模型目录仓库和视觉执行器。
+- **简化** AI托管服务层依赖凭据管理、成本计量、回退机制、路由解析、模型目录仓库和视觉执行器，但复杂度显著降低。
 - 部署依赖Docker与反向代理，确保网络与安全边界。
 
 ```mermaid
 graph LR
 FE["前端(Next.js)"] --> API["API路由"]
 API --> JR["作业运行器"]
-API --> AI["AI网关"]
+API --> AI["简化AI网关"]
 API --> TTS["TTS编排"]
 API --> RND["渲染服务"]
 API --> CAP["采集代理"]
@@ -806,6 +808,7 @@ VISION --> SETTLEMENT["预订结算"]
 - **重要新增** 提供商设置投影缓存：缓存提供商配置投影结果，提升配置处理效率。
 - **新增** 视觉任务缓存：缓存视觉处理结果，减少重复计算。
 - **新增** 预订结算优化：通过改进的资源管理机制，提升资源利用效率。
+- **简化优势** 简化的AI网关减少了调用处理的复杂性，提升了整体性能和响应速度。
 
 ## 故障排查指南
 - 日志与诊断：启用结构化日志，记录作业生命周期、错误堆栈与指标。
@@ -820,13 +823,14 @@ VISION --> SETTLEMENT["预订结算"]
 - **重要新增** 提供商设置投影调试：记录配置投影过程，便于配置问题排查。
 - **新增** 视觉执行器监控：监控视觉任务执行状态和资源使用情况。
 - **新增** 预订结算监控：监控资源结算情况和异常事件。
+- **简化优势** 简化的AI网关使得故障排查更加简单直接，减少了复杂的调用链路分析问题。
 
 **章节来源**
 - [server/src/lib/logger.ts](file://server/src/lib/logger.ts)
 - [server/src/lib/load-env.ts](file://server/src/lib/load-env.ts)
 
 ## 结论
-该AI托管服务通过统一网关、作业调度与领域服务分层，实现了多提供商接入、稳定编排与高效渲染/TTS能力。**新增的统一AI托管服务层**进一步增强了系统的可靠性、安全性和成本控制能力，通过集中化的凭据管理、成本计量、智能回退、路由解析、模型目录管理和视觉执行能力，为StepFun、MiMo和Gemini等服务提供了更好的稳定性和经济性。**新增的视觉执行器**专门处理视觉AI操作，通过改进的预订结算机制优化资源使用。**最新的路由解析功能和模型目录仓库**确保了与新凭据消费模式的兼容性，提升了系统的灵活性和可扩展性。**重要更新的提供商设置投影逻辑和增强的降级机制**显著提升了系统的健壮性和可维护性。配合容器化与反向代理，具备良好可扩展性与可运维性。建议持续完善监控告警、容量规划与成本治理，以提升整体稳定性与经济性。
+该AI托管服务通过统一网关、作业调度与领域服务分层，实现了多提供商接入、稳定编排与高效渲染/TTS能力。**简化的统一AI托管服务层**进一步增强了系统的可靠性、安全性和成本控制能力，通过集中化的凭据管理、成本计量、智能回退、路由解析、模型目录管理和视觉执行能力，为StepFun、MiMo和Gemini等服务提供了更好的稳定性和经济性。**重要简化** AI网关系统已大幅简化，复杂度显著降低，因为调用处理已统一化，同时保持了相同的外部接口兼容性。**增强功能** 提供商调度逻辑得到增强，提升了系统的稳定性和响应能力。**新增的视觉执行器**专门处理视觉AI操作，通过改进的预订结算机制优化资源使用。**最新的路由解析功能和模型目录仓库**确保了与新凭据消费模式的兼容性，提升了系统的灵活性和可扩展性。**重要更新的提供商设置投影逻辑和增强的降级机制**显著提升了系统的健壮性和可维护性。配合容器化与反向代理，具备良好可扩展性与可运维性。建议持续完善监控告警、容量规划与成本治理，以提升整体稳定性与经济性。
 
 ## 附录
 - 开发环境与生产环境编排：参考 docker-compose 文件与反向代理配置。
@@ -839,6 +843,7 @@ VISION --> SETTLEMENT["预订结算"]
 - **重要新增** 提供商设置投影：参考提供商配置投影逻辑和自定义配置方法。
 - **新增** 视觉执行器配置：参考视觉AI操作的相关配置和参数设置。
 - **新增** 预订结算配置：参考资源管理和成本控制的配置方法。
+- **简化说明** 简化的AI网关配置更加简洁明了，减少了配置复杂度。
 
 **章节来源**
 - [docker-compose.dev.yml](file://docker-compose.dev.yml)

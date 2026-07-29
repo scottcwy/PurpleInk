@@ -9,6 +9,7 @@
 - [src/components/ui/settings-panel.tsx](file://src/components/ui/settings-panel.tsx)
 - [src/components/ui/settings-group.tsx](file://src/components/ui/settings-group.tsx)
 - [src/components/ui/settings-row.tsx](file://src/components/ui/settings-row.tsx)
+- [src/components/ui/usage-trend-chart.tsx](file://src/components/ui/usage-trend-chart.tsx)
 - [src/app/design-system.css](file://src/app/design-system.css)
 - [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
 - [src/app/providers.tsx](file://src/app/providers.tsx)
@@ -20,6 +21,7 @@
 - 新增SettingsField基础组件，提供统一的设置字段输入体验
 - SettingsPanel组件得到全面改进，支持更丰富的设置项管理
 - 新增SettingsGroup和SettingsRow组件，优化设置界面的组织结构
+- **新增**：UsageTrendChart组件，显示累计配额进度线和每日调用堆栈列
 - 整体UI组件现代化升级，提升视觉一致性和用户体验
 
 ## 目录
@@ -31,14 +33,15 @@
 6. [Button v2设计系统](#button-v2设计系统)
 7. [SettingsField基础组件](#settingsfield基础组件)
 8. [SettingsPanel全面改进](#settingspanel全面改进)
-9. [依赖关系分析](#依赖关系分析)
-10. [性能考量](#性能考量)
-11. [故障排查指南](#故障排查指南)
-12. [结论](#结论)
-13. [附录](#附录)
+9. [UsageTrendChart数据可视化组件](#usagetrendchart数据可视化组件)
+10. [依赖关系分析](#依赖关系分析)
+11. [性能考量](#性能考量)
+12. [故障排查指南](#故障排查指南)
+13. [结论](#结论)
+14. [附录](#附录)
 
 ## 简介
-本文件面向开发者与产品/设计人员，系统化梳理本项目中基础UI组件（Button、Dialog、Card、SettingsField、SettingsPanel等）的设计与实现。内容涵盖：
+本文件面向开发者与产品/设计人员，系统化梳理本项目中基础UI组件（Button、Dialog、Card、SettingsField、SettingsPanel、UsageTrendChart等）的设计与实现。内容涵盖：
 - Props接口定义与类型契约
 - 事件处理机制与可组合性模式
 - 样式定制选项与主题适配
@@ -48,6 +51,7 @@
 - **新增**：Button v2设计系统与扁平化纯色配色
 - **新增**：SettingsField基础组件的统一输入体验
 - **新增**：SettingsPanel的全面改进与增强功能
+- **新增**：UsageTrendChart数据可视化组件的配额监控功能
 
 ## 项目结构
 基础UI组件位于 src/components/ui 目录下，采用"按功能拆分"的组织方式，每个组件独立文件并配套演示与测试文件。主题与全局样式集中在 src/app/design-system.css，运行时主题切换由 src/lib/theme-mode.ts 提供，应用级Provider在 src/app/providers.tsx 中注入。
@@ -63,12 +67,14 @@ C --> G["设置字段 SettingsField<br/>src/components/ui/settings-field.tsx"]
 C --> H["设置面板 SettingsPanel<br/>src/components/ui/settings-panel.tsx"]
 C --> I["设置分组 SettingsGroup<br/>src/components/ui/settings-group.tsx"]
 C --> J["设置行 SettingsRow<br/>src/components/ui/settings-row.tsx"]
-D --> K["扁平化纯色配色<br/>v2设计系统"]
-G --> L["统一输入体验<br/>标准化表单控件"]
-H --> M["全面改进<br/>增强的设置管理"]
+C --> K["使用趋势图表 UsageTrendChart<br/>src/components/ui/usage-trend-chart.tsx"]
+D --> L["扁平化纯色配色<br/>v2设计系统"]
+G --> M["统一输入体验<br/>标准化表单控件"]
+H --> N["全面改进<br/>增强的设置管理"]
+K --> O["数据可视化<br/>配额监控"]
 ```
 
-图表来源 
+**章节来源**
 - [src/app/providers.tsx](file://src/app/providers.tsx)
 - [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
 - [src/app/design-system.css](file://src/app/design-system.css)
@@ -79,14 +85,10 @@ H --> M["全面改进<br/>增强的设置管理"]
 - [src/components/ui/settings-panel.tsx](file://src/components/ui/settings-panel.tsx)
 - [src/components/ui/settings-group.tsx](file://src/components/ui/settings-group.tsx)
 - [src/components/ui/settings-row.tsx](file://src/components/ui/settings-row.tsx)
-
-章节来源
-- [src/app/design-system.css](file://src/app/design-system.css)
-- [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
-- [src/app/providers.tsx](file://src/app/providers.tsx)
+- [src/components/ui/usage-trend-chart.tsx](file://src/components/ui/usage-trend-chart.tsx)
 
 ## 核心组件
-本节对 Button v2、Dialog、Card、SettingsField、SettingsPanel 等核心组件进行统一说明，包括：
+本节对 Button v2、Dialog、Card、SettingsField、SettingsPanel、UsageTrendChart 等核心组件进行统一说明，包括：
 - 设计目标与职责边界
 - 关键Props与类型契约
 - 事件模型与回调约定
@@ -95,7 +97,7 @@ H --> M["全面改进<br/>增强的设置管理"]
 - 响应式策略
 - 可组合性与扩展方法
 
-章节来源
+**章节来源**
 - [src/components/ui/button.tsx](file://src/components/ui/button.tsx)
 - [src/components/ui/dialog.tsx](file://src/components/ui/dialog.tsx)
 - [src/components/ui/card.tsx](file://src/components/ui/card.tsx)
@@ -103,6 +105,7 @@ H --> M["全面改进<br/>增强的设置管理"]
 - [src/components/ui/settings-panel.tsx](file://src/components/ui/settings-panel.tsx)
 - [src/components/ui/settings-group.tsx](file://src/components/ui/settings-group.tsx)
 - [src/components/ui/settings-row.tsx](file://src/components/ui/settings-row.tsx)
+- [src/components/ui/usage-trend-chart.tsx](file://src/components/ui/usage-trend-chart.tsx)
 - [src/app/design-system.css](file://src/app/design-system.css)
 - [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
 
@@ -114,6 +117,7 @@ H --> M["全面改进<br/>增强的设置管理"]
 - 主题层：通过Provider与CSS变量驱动明暗主题与品牌色
 - **新增**：v2设计系统提供扁平化纯色配色方案
 - **新增**：SettingsField组件提供统一的设置字段输入体验
+- **新增**：UsageTrendChart组件提供数据可视化能力
 
 ```mermaid
 classDiagram
@@ -162,17 +166,14 @@ class SettingsPanel {
 +loading : boolean
 +children : ReactNode
 }
-class SettingsGroup {
-+title : string
-+description : string
-+children : ReactNode
-}
-class SettingsRow {
-+label : string
-+description : string
-+action : ReactNode
-+align : "left" | "center" | "right"
-+children : ReactNode
+class UsageTrendChart {
++data : UsageData[]
++quotaLimit : number
++showEmptyState : boolean
++handleKeyboardInput : function
++onPlaybookRegistration : function
++renderStackColumns : boolean
++renderProgressLine : boolean
 }
 class DesignSystemV2 {
 +flatColors : ColorPalette
@@ -186,9 +187,10 @@ SettingsField --> DesignSystemV2 : "使用v2设计系统"
 SettingsPanel --> DesignSystemV2 : "使用v2设计系统"
 SettingsGroup --> DesignSystemV2 : "使用v2设计系统"
 SettingsRow --> DesignSystemV2 : "使用v2设计系统"
+UsageTrendChart --> DesignSystemV2 : "使用v2设计系统"
 ```
 
-图表来源 
+**图表来源** 
 - [src/components/ui/button.tsx](file://src/components/ui/button.tsx)
 - [src/components/ui/dialog.tsx](file://src/components/ui/dialog.tsx)
 - [src/components/ui/card.tsx](file://src/components/ui/card.tsx)
@@ -196,6 +198,7 @@ SettingsRow --> DesignSystemV2 : "使用v2设计系统"
 - [src/components/ui/settings-panel.tsx](file://src/components/ui/settings-panel.tsx)
 - [src/components/ui/settings-group.tsx](file://src/components/ui/settings-group.tsx)
 - [src/components/ui/settings-row.tsx](file://src/components/ui/settings-row.tsx)
+- [src/components/ui/usage-trend-chart.tsx](file://src/components/ui/usage-trend-chart.tsx)
 - [src/app/design-system.css](file://src/app/design-system.css)
 
 ## 详细组件分析
@@ -491,6 +494,73 @@ SettingsPanel的典型使用模式：
 - [src/components/ui/settings-row.tsx](file://src/components/ui/settings-row.tsx)
 - [src/app/design-system.css](file://src/app/design-system.css)
 
+## UsageTrendChart数据可视化组件
+
+### 组件概述
+UsageTrendChart是一个专门用于显示API使用趋势和数据可视化的组件，提供配额监控和使用量分析功能：
+
+- **累计配额进度线**：直观显示当前配额使用情况，支持部分覆盖场景
+- **每日调用堆栈列**：按日期维度展示调用量分布，便于趋势分析
+- **空状态处理**：当无数据时显示友好的空状态提示
+- **API失败处理**：优雅处理API请求失败的情况
+- **键盘数字输入**：支持键盘操作的数值输入控件
+- **Playbook注册工作流**：集成Playbook注册流程的交互支持
+
+### 核心功能特性
+- **数据可视化**：使用SVG或Canvas技术绘制趋势图和柱状图
+- **交互式图表**：支持鼠标悬停查看详细信息
+- **响应式设计**：自适应不同屏幕尺寸
+- **主题适配**：支持明暗主题切换
+- **无障碍访问**：完整的ARIA属性和键盘导航支持
+
+### Props接口
+UsageTrendChart组件提供丰富的配置选项：
+
+- **data**：使用数据数组，包含日期和调用量信息
+- **quotaLimit**：配额限制值，用于计算使用百分比
+- **showEmptyState**：是否显示空状态
+- **handleKeyboardInput**：键盘输入处理函数
+- **onPlaybookRegistration**：Playbook注册回调函数
+- **renderStackColumns**：是否渲染堆叠列
+- **renderProgressLine**：是否渲染进度线
+
+### 使用示例
+UsageTrendChart组件的典型使用方式：
+
+```tsx
+<UsageTrendChart
+  data={usageData}
+  quotaLimit={1000}
+  showEmptyState={!hasData}
+  handleKeyboardInput={handleInput}
+  onPlaybookRegistration={handleRegistration}
+  renderStackColumns={true}
+  renderProgressLine={true}
+/>
+```
+
+### 数据格式
+UsageTrendChart期望的数据结构：
+
+```typescript
+interface UsageData {
+  date: string;
+  calls: number;
+  quotaUsed: number;
+  quotaRemaining: number;
+}
+```
+
+### 交互行为
+- **鼠标悬停**：显示详细的调用信息和配额使用情况
+- **键盘导航**：支持Tab键在图表元素间导航
+- **数值输入**：支持键盘直接输入数值进行过滤或搜索
+- **Playbook注册**：通过特定交互触发Playbook注册流程
+
+**章节来源**   
+- [src/components/ui/usage-trend-chart.tsx](file://src/components/ui/usage-trend-chart.tsx)
+- [src/app/design-system.css](file://src/app/design-system.css)
+
 ## 依赖关系分析
 - 组件与样式：所有组件均依赖 design-system.css 提供的CSS变量与基础样式，保证主题一致性与可定制性。
 - 组件与主题：通过 theme-mode.ts 暴露的主题模式，组件根据当前模式动态调整颜色与对比度。
@@ -498,6 +568,7 @@ SettingsPanel的典型使用模式：
 - **新增**：Button v2设计系统与扁平化纯色配色的依赖关系。
 - **新增**：SettingsField组件与验证机制的依赖关系。
 - **新增**：SettingsPanel与SettingsGroup、SettingsRow的组合依赖关系。
+- **新增**：UsageTrendChart组件与数据可视化库的依赖关系。
 
 ```mermaid
 graph LR
@@ -510,15 +581,19 @@ CSS --> SettingsField["SettingsField<br/>src/components/ui/settings-field.tsx"]
 CSS --> SettingsPanel["SettingsPanel<br/>src/components/ui/settings-panel.tsx"]
 CSS --> SettingsGroup["SettingsGroup<br/>src/components/ui/settings-group.tsx"]
 CSS --> SettingsRow["SettingsRow<br/>src/components/ui/settings-row.tsx"]
+CSS --> UsageTrendChart["UsageTrendChart<br/>src/components/ui/usage-trend-chart.tsx"]
 ButtonV2 --> DesignSystemV2["v2设计系统<br/>扁平化纯色配色"]
 SettingsPanel --> SettingsGroup : "包含"
 SettingsPanel --> SettingsRow : "包含"
 SettingsPanel --> SettingsField : "使用"
 SettingsGroup --> SettingsRow : "包含"
 SettingsRow --> SettingsField : "使用"
+UsageTrendChart --> DataVisualization : "数据可视化"
+UsageTrendChart --> KeyboardInput : "键盘输入处理"
+UsageTrendChart --> PlaybookWorkflow : "Playbook工作流"
 ```
 
-图表来源 
+**图表来源** 
 - [src/app/providers.tsx](file://src/app/providers.tsx)
 - [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
 - [src/app/design-system.css](file://src/app/design-system.css)
@@ -529,8 +604,9 @@ SettingsRow --> SettingsField : "使用"
 - [src/components/ui/settings-panel.tsx](file://src/components/ui/settings-panel.tsx)
 - [src/components/ui/settings-group.tsx](file://src/components/ui/settings-group.tsx)
 - [src/components/ui/settings-row.tsx](file://src/components/ui/settings-row.tsx)
+- [src/components/ui/usage-trend-chart.tsx](file://src/components/ui/usage-trend-chart.tsx)
 
-章节来源
+**章节来源**
 - [src/app/providers.tsx](file://src/app/providers.tsx)
 - [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
 - [src/app/design-system.css](file://src/app/design-system.css)
@@ -543,6 +619,7 @@ SettingsRow --> SettingsField : "使用"
 - **新增**：Button v2设计系统的样式优化，减少不必要的重绘。
 - **新增**：SettingsField组件的受控组件优化，避免不必要的重新渲染。
 - **新增**：SettingsPanel的懒加载和虚拟滚动优化，提升大量设置项的性能。
+- **新增**：UsageTrendChart组件的虚拟化渲染，优化大数据集的性能表现。
 
 ## 故障排查指南
 - 主题未生效
@@ -566,6 +643,10 @@ SettingsRow --> SettingsField : "使用"
 - **新增**：SettingsPanel保存问题
   - 检查onSave回调是否正确实现
   - 确认表单验证是否通过
+- **新增**：UsageTrendChart数据显示问题
+  - 检查数据格式是否符合预期
+  - 确认配额限制值设置正确
+  - 验证API请求是否成功
 
 **章节来源**   
 - [src/app/providers.tsx](file://src/app/providers.tsx)
@@ -575,15 +656,17 @@ SettingsRow --> SettingsField : "使用"
 - [src/components/ui/card.tsx](file://src/components/ui/card.tsx)
 - [src/components/ui/settings-field.tsx](file://src/components/ui/settings-field.tsx)
 - [src/components/ui/settings-panel.tsx](file://src/components/ui/settings-panel.tsx)
+- [src/components/ui/usage-trend-chart.tsx](file://src/components/ui/usage-trend-chart.tsx)
 
 ## 结论
-Button v2、Dialog、Card、SettingsField、SettingsPanel等基础组件在本项目中以"语义化 + 可访问性 + 主题化 + 设计系统驱动"为核心设计原则，通过CSS变量与Provider实现灵活的样式与主题定制。**Button v2设计系统的扁平化纯色配色**提供了现代化的视觉体验，**SettingsField基础组件**实现了统一的设置字段输入体验，**SettingsPanel的全面改进**提供了强大的设置界面管理能力。建议在实际使用中：
+Button v2、Dialog、Card、SettingsField、SettingsPanel、UsageTrendChart等基础组件在本项目中以"语义化 + 可访问性 + 主题化 + 设计系统驱动"为核心设计原则，通过CSS变量与Provider实现灵活的样式与主题定制。**Button v2设计系统的扁平化纯色配色**提供了现代化的视觉体验，**SettingsField基础组件**实现了统一的设置字段输入体验，**SettingsPanel的全面改进**提供了强大的设置界面管理能力，**UsageTrendChart组件**提供了专业的数据可视化功能。建议在实际使用中：
 - 优先使用语义化标签与ARIA属性保障无障碍体验
 - 通过CSS变量与className进行样式定制，避免内联样式
 - 结合业务场景封装可复用的组合组件
 - **新增**：充分利用Button v2设计系统的扁平化配色方案
 - **新增**：充分利用SettingsField组件的统一输入体验
 - **新增**：充分利用SettingsPanel的强大设置管理能力
+- **新增**：充分利用UsageTrendChart的数据可视化功能
 
 ## 附录
 - 使用示例与最佳实践
@@ -592,6 +675,7 @@ Button v2、Dialog、Card、SettingsField、SettingsPanel等基础组件在本�
   - Card：交互态使用button或a；非交互态使用article/div
   - SettingsField：合理使用各种输入类型；实现完整的验证逻辑；提供清晰的错误提示
   - SettingsPanel：合理使用SettingsGroup和SettingsRow组织设置项；实现完整的保存流程
+  - UsageTrendChart：正确格式化数据；处理空状态和API失败；实现键盘导航支持
   - **新增**：v2设计系统：理解扁平化配色理念；选择合适的按钮变体；确保足够的对比度
 - 常见问题解决方案
   - 主题不一致：检查CSS变量覆盖范围与优先级
@@ -600,3 +684,4 @@ Button v2、Dialog、Card、SettingsField、SettingsPanel等基础组件在本�
   - **新增**：Button v2样式问题：检查CSS变量加载；确认设计系统初始化
   - **新增**：SettingsField验证问题：检查验证逻辑；确认错误状态管理
   - **新增**：SettingsPanel保存问题：检查保存逻辑；确认表单状态管理
+  - **新增**：UsageTrendChart数据问题：检查数据格式；确认API连接状态
