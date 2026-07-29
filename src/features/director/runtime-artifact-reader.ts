@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { Db } from '@/lib/db/client'
 import type { StorageAdapter } from '@/lib/storage'
 import { DirectorArtifactSource } from './runtime-artifact-source'
+import { styleBibleToneExcerpt } from './style-bible-excerpt'
 import type { AudioAllocation, ShotAllocation } from './schemas/ingest'
 import type { DirectorShot } from './schemas/director-shot-plan'
 import type { PipelineStage } from './types'
@@ -194,15 +195,6 @@ export class DirectorArtifactReader {
     if (!shot) throw new Error(`shot plan 中找不到 ${laneKey}`)
     return shot
   }
-}
-
-/**
- * ASSEMBLE 阶段（score/shot-sfx）只需基调参考，不需要完整样式圣经：
- * 取 styleBible 首段落并限制在约 1000 字符内。
- */
-function styleBibleToneExcerpt(styleBible: string): string {
-  const firstParagraph = styleBible.split(/\n\s*\n/, 1)[0] ?? styleBible
-  return firstParagraph.slice(0, 1000)
 }
 
 function requireShotAllocation(
