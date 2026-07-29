@@ -456,7 +456,7 @@ describe('Director provider routing', () => {
     })
     expect(warn).toHaveBeenCalledWith(
       '[ai] provider_fallback',
-      { from: 'gemini', to: 'stepfun' },
+      { from: 'gemini', to: 'stepfun', stage: 'project-plan', capability: 'text' },
     )
   })
 
