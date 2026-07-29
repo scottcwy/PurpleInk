@@ -399,6 +399,45 @@ runtime 失败补偿和 rejected 版本不再命中。
 
 ---
 
+## 7.7 模式 M：RPM 限流被普通重试与熔断放大
+
+**症状**：多个镜头同时进入 Director / FABRICATE 后，StepFun 返回 HTTP 429；节点立即标红，
+普通自动重试又在同一速率窗口内继续出网，最终把一次可恢复的流量整形问题放大成批量失败，
+甚至推动 Provider 熔断。切换到额度更高的模型后链路正常，容易被误判成模型兼容性问题。
+
+**真实事故**：工作流的 `director-stage=12` 只限制本机 CPU 作业并发，不代表供应商 API 额度。
+StepFun 当前账户的约束是 `5 RPM`；并发、RPM、TPM 是三个独立维度。Autopilot 一次发现多个
+可执行节点后，旧实现会让它们直接同时出网，没有按共享凭据预留速率槽位。429 随后被当成普通
+Provider 失败，既消耗重试预算，又污染连续失败计数。
+
+**规则**：
+
+- 出网前必须按真实共享凭据进入 Provider 调度器。BYOK 的键为
+  `workspace + provider + credential fingerprint`；平台托管凭据按 provider 跨 workspace
+  共享预算。不得把本机 lane 并发数当成外部 RPM。
+- 并发、RPM、TPM 分开配置和记账。未知 BYOK 额度使用保守默认，并从真实 429 学习冷却窗口；
+  不得把“5 RPM”写成“并发 5”。
+- 429 优先遵循 `Retry-After`（秒数或 HTTP 日期），缺失时按滚动窗口计算下一可用时间并加入
+  小幅抖动。等待 attempt 必须是 `superseded -> queued`，节点保持 pending/queued，
+  不计普通重试预算、30 分钟失败预算或熔断失败次数。
+- 单任务累计限流等待最多 15 分钟；超过后才终态化为 `PROVIDER_RATE_LIMITED`。
+  401/402/403/429/451、平台内部错误都不得推动熔断；只有真实 5xx、网络故障与上游超时计数。
+- 等待态使用 `executionNotice` 的安全投影，不弹失败对话框、不显示红色失败状态、不建议跳过
+  关键入口节点。用户可以等待、切换模型或取消等待，但系统不得擅自切换 Provider。
+- Provider 原始响应正文只能作为瞬时内部 cause；数据库、Artifact、浏览器响应、日志与 UI
+  只允许结构化 `WorkflowFault` 和安全字段。日志只记录 referenceId、provider、model、
+  status、stage、attemptId、duration 与 retryAt。
+
+**已落地护栏**：`provider-dispatch.ts` 使用 PostgreSQL advisory lock 原子预留共享预算，
+`attempt-completion.ts` 将 429 延后为新 queued attempt，`provider-breaker.ts` 只统计真实外部
+故障；`workflow-fault.ts`、`workflow-fault-display.ts` 与阶段对话框共同提供 v2 安全投影。
+PostgreSQL 测试锁定滚动 60 秒最多 5 次、共享托管预算、`Retry-After` 两种格式、重启后续跑、
+15 分钟终态上限和取消等待。迁移 journal 还必须保持 idx 与时间戳严格递增，并在迁移后核对
+目标表真实存在；否则 Drizzle 可能报告成功却因 journal 顺序跳过新 SQL。调度租约的创建、
+过期判断与释放时间统一使用 PostgreSQL 时钟，禁止混用应用时钟与数据库时钟导致租约提前过期。
+
+---
+
 ## 7.8 模式 N：降级确认被恢复入口绕过，FINALIZE 在终片产生前执行
 
 **症状**：用户跳过一个可降级镜头或验收节点后，全局导出节点在 `FINALIZE` 阶段快速失败，
@@ -448,6 +487,8 @@ UI 投影为未知问题并连续重试；数据库没有 `export-project` attem
 - [ ] Provider 硬超时是否短于阶段执行上限，SDK 内重试是否关闭；租约是否覆盖完整执行窗口，父 attempt 终态后是否仍存在 `running/reserved` 孤儿调用（模式 J）。
 - [ ] FABRICATE HTML 是否实际通过 JavaScript 解析与 Chromium runtime admission；动态证明无效的 draft 是否转为 rejected，自动重试是否会重新生成而非复用坏缓存（模式 K）。
 - [ ] TTS 字符与 ASR 音频秒是否按各自计费原子归一化；音频探针的小数秒是否在预留和实际结算两条路径保持一致（模式 L）。
+- [ ] Provider 并发、RPM、TPM 是否按共享凭据分别建模；429 是否只延后且不消耗普通重试/失败预算/熔断计数，等待上限与取消路径是否可恢复（模式 M）。
+- [ ] Provider 调度迁移的 journal 是否严格递增且目标表真实存在；租约创建、过期判断与释放是否使用同一数据库时钟（模式 M）。
 - [ ] 自动推进、节点恢复和显式降级导出是否共用唯一终结协调器；等待确认是否为 `blocked` 且零 Director attempt，终片登记后是否只续接一次最终审阅（模式 N）。
 - [ ] 真实产物证据：`artifacts.content_hash` 与磁盘字节 SHA-256 逐条核对一致。
 
@@ -477,7 +518,7 @@ docker exec purpleink-dev-postgres-1 psql -U cvc -d cvc -A -t -F "|" -c `
 读取错误（模式 D）、Pi 会话哈希失真（模式 G）、复合渲染队列丢失 attempt id 并
 污染 Provider 熔断（模式 I）、长模型调用被短租约误回收且遗留计费预留（模式 J）
 、静态门禁放过语法错误并重复复用坏 HTML（模式 K）、ASR 小数秒导致字幕结算失败
-（模式 L）——见各节「已落地护栏」。
+（模式 L）、RPM 限流被普通重试与熔断放大（模式 M）——见各节「已落地护栏」。
 
 ---
 
