@@ -300,6 +300,14 @@ Canonical 状态集合：`loading / empty / ready / running / succeeded / failed
 
 ---
 
+### 8.1 工作流错误与限流等待投影
+
+- Streaming Log、节点 Inspector、阶段对话框与项目 Pipeline 必须消费同一份安全错误投影，不得各自拼接供应商原始文案。
+- `auto_wait` 是 `pending` 的运行状态：使用 `ds-blue-soft` 或 `ds-amber-soft`，同时显示“系统已自动排队”、恢复时间或倒计时；不得使用红色失败表面，也不得自动弹出失败对话框。
+- 终态错误对话框依次呈现责任标签、“发生了什么”“系统正在做什么”“你可以做什么”。技术详情默认折叠，只允许供应商、HTTP 状态码、发生时间、阶段和参考号。
+- 恢复动作由结构化 `recovery` 字段决定；不得依据错误文案猜测。限流等待只提供切换模型与取消等待，不展示跳过建议。
+- 颜色只承担辅助语义：责任标签、等待状态、失败状态都必须同时有可读文本与 Lucide 图标。
+
 ## 9. 图标白名单
 
 **应用壳与导航**：`clapperboard`、`layout-dashboard`、`folder`、`waypoints`、`film`、`download`、`settings`

@@ -49,6 +49,12 @@ export {
 export { materializeShotLanes } from './fan-out'
 export type { ShotLaneSeed } from './contracts'
 export {
+  workflowFaultDisplay,
+  responsibilityLabel,
+  type WorkflowFaultDisplay,
+  type WorkflowFaultDisplayInput,
+} from './workflow-fault-display'
+export {
   classifyWorkflowError,
   type WorkflowFault,
   type WorkflowFaultCode,

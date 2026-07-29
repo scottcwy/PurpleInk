@@ -160,7 +160,7 @@
 | `/api/render/export` | GET, POST | GET `projectId` query；POST body `{projectId, degraded?}` | `@/features/render/export-service`、`@/features/render/export-degraded` | `wired` |
 | `/api/render/thumbnails` | GET | `projectId`、`nodeId` | `@/features/render` | `wired` |
 | `/api/director/pipeline` | POST, DELETE | body `{projectId}`；POST 返回 `started|blocked|complete` 与修复根/阻塞明细 | `@/features/director/advance` | `wired` |
-| `/api/director/stage` | POST | body `{projectId,nodeId,intent,skipReason?}`；`intent=execute|repair|regenerate|skip`（`skip` 时 `skipReason` 必填 1-200 字），阶段由服务端节点投影决定 | `@/features/director/recovery`、`@/features/director/skip` | `wired` |
+| `/api/director/stage` | POST | body `{projectId,nodeId,intent,skipReason?}`；`intent=execute|repair|regenerate|skip|cancel-wait`（`skip` 时 `skipReason` 必填 1-200 字）；`cancel-wait` 仅取消尚未领取的 Provider 限流等待 attempt | `@/features/director/recovery`、`@/features/director/skip`、`@/features/director/cancel-wait` | `wired` |
 | `/api/director/stream/[nodeId]` | GET (SSE) | `nodeId` path + `projectId` query | `@/lib/stream/stream-bus` | `wired` |
 | `/api/director/stream/project/[projectId]` | GET (SSE) | `projectId` path | `@/lib/stream/status-bus` | `wired` |
 | `/api/share/[shareId]` | GET | `shareId` path | `@/features/share`（待建） | `planned` |

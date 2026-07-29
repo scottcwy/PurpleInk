@@ -76,9 +76,27 @@ async function parseNodeActionResponse(response: Response): Promise<NodeActionRe
   }
 }
 
+export async function triggerCancelProviderWait(
+  projectId: string,
+  node: CanvasGraphNode,
+  fetcher: typeof fetch = fetch
+): Promise<NodeActionResult> {
+  const response = await fetcher(
+    '/api/director/stage',
+    jsonRequest({ projectId, nodeId: node.id, intent: 'cancel-wait' })
+  )
+  return parseNodeActionResponse(response)
+}
+
 export interface NodeActionResult {
   ok: true
-  action: 'execute' | 'repair-upstream' | 'regenerate' | 'rerender' | 'skip'
+  action:
+    | 'execute'
+    | 'repair-upstream'
+    | 'regenerate'
+    | 'rerender'
+    | 'skip'
+    | 'cancel-wait'
   requestedNodeId: string
   queuedNodeId: string
   jobId: string
@@ -194,7 +212,14 @@ function resolveIntent(
 }
 
 function isNodeAction(value: unknown): value is NodeActionResult['action'] {
-  return ['execute', 'repair-upstream', 'regenerate', 'rerender', 'skip'].includes(
+  return [
+    'execute',
+    'repair-upstream',
+    'regenerate',
+    'rerender',
+    'skip',
+    'cancel-wait',
+  ].includes(
     String(value)
   )
 }

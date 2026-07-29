@@ -185,8 +185,9 @@ describe('completeAttempt 自动重试', () => {
     expect(await readRunAttempts(seeded.runId)).toHaveLength(1)
   })
 
-  it('429 自动延期，不消耗普通重试次数、不标记节点失败', async () => {
+  it('429 自动延期且延期任务可以被明确取消', async () => {
     const { completeAttempt } = await import('./attempt-completion')
+    const { cancelDeferredAttempt } = await import('./cancel-deferred')
     const projectId = await seedProject()
     const seeded = await seedRunningNodeAttempt(projectId, { nodeStatus: 'failed' })
     const retryAt = new Date(Date.now() + 30_000)
@@ -236,6 +237,15 @@ describe('completeAttempt 自动重试', () => {
       },
     })
     expect((await readRun(seeded.runId)).status).toBe('queued')
+
+    const cancelledAttemptId = await cancelDeferredAttempt(database.db, {
+      workspaceId: LOCAL_WORKSPACE_ID,
+      projectId,
+      nodeId: seeded.nodeId,
+    })
+    expect(cancelledAttemptId).toBe(attempts[1]!.id)
+    expect((await readAttempt(cancelledAttemptId)).status).toBe('cancelled')
+    expect((await readRun(seeded.runId)).status).toBe('cancelled')
   })
 
   it('累计等待超过 15 分钟后才把 429 终态化', async () => {

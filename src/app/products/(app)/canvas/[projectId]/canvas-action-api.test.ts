@@ -4,6 +4,7 @@ import {
   BillingQuotaExhaustedError,
   startPipeline,
   stopPipeline,
+  triggerCancelProviderWait,
   triggerNodeAction,
   triggerNodeSkip,
 } from './canvas-action-api'
@@ -159,6 +160,33 @@ describe('triggerNodeSkip', () => {
   })
 })
 
+describe('triggerCancelProviderWait', () => {
+  it('posts intent=cancel-wait to the stage endpoint', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      response(actionResult('attempt-2', 'cancel-wait'))
+    )
+
+    await expect(
+      triggerCancelProviderWait(
+        'project-1',
+        node({ type: 'shot-script', stage: 'SHOT_SPEC', status: 'pending' }),
+        fetcher
+      )
+    ).resolves.toMatchObject({ jobId: 'attempt-2', action: 'cancel-wait' })
+
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/director/stage',
+      expect.objectContaining({
+        body: JSON.stringify({
+          projectId: 'project-1',
+          nodeId: 'node-1',
+          intent: 'cancel-wait',
+        }),
+      })
+    )
+  })
+})
+
 describe('pipeline controls', () => {
   it('preserves the public quota contract for the upgrade dialog', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
@@ -249,7 +277,13 @@ function response(body: unknown): Response {
 
 function actionResult(
   jobId: string,
-  action: 'execute' | 'repair-upstream' | 'regenerate' | 'rerender' | 'skip',
+  action:
+    | 'execute'
+    | 'repair-upstream'
+    | 'regenerate'
+    | 'rerender'
+    | 'skip'
+    | 'cancel-wait',
   queuedNodeId = 'node-1'
 ) {
   return {

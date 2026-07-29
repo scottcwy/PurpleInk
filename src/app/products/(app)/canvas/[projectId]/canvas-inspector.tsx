@@ -17,15 +17,14 @@ import { productShotHref } from '@/features/navigation/products-routes'
 import { useMediaQuery } from '@/lib/hooks/use-media-query'
 import { usePersistentToggle } from '@/lib/hooks/use-persistent-toggle'
 import { useResizablePanel } from '@/lib/hooks/use-resizable-panel'
-import {
-  BP_SECONDARY_PANEL_COLLAPSE,
-  INSPECTOR_DEFAULT_WIDTH,
-  INSPECTOR_MAX_WIDTH,
-  INSPECTOR_MIN_WIDTH,
-} from '@/lib/layout/breakpoints'
+import { BP_SECONDARY_PANEL_COLLAPSE, INSPECTOR_DEFAULT_WIDTH, INSPECTOR_MAX_WIDTH, INSPECTOR_MIN_WIDTH } from '@/lib/layout/breakpoints'
 import { cn } from '@/lib/utils'
 import {
-  BillingQuotaExhaustedError, triggerNodeAction, triggerNodeSkip, type NodeActionResult,
+  BillingQuotaExhaustedError,
+  triggerCancelProviderWait,
+  triggerNodeAction,
+  triggerNodeSkip,
+  type NodeActionResult,
 } from './canvas-action-api'
 import { getNodeStatusLabel, getNodeStatusPresentation } from './flow-elements'
 import { isNodeActionBlocked, nodeActionLabel } from './node-action-presentation'
@@ -43,15 +42,9 @@ export function CanvasInspector({
   onQueued: (jobId: string) => void
   onQuotaExhausted: () => void
 }) {
-  const [error, setError] = useState<{
-    nodeId: string
-    message: string
-  }>()
-  const [queuedJob, setQueuedJob] = useState<{
-    nodeId: string
-    jobId: string
-    message: string
-  }>()
+  const [error, setError] = useState<{ nodeId: string; message: string }>()
+  const [queuedJob, setQueuedJob] =
+    useState<{ nodeId: string; jobId: string; message: string }>()
   const [submitting, setSubmitting] = useState(false)
   const autoCollapse = useMediaQuery(`(max-width: ${BP_SECONDARY_PANEL_COLLAPSE - 1}px)`)
   const [manualCollapsed, setManualCollapsed] = usePersistentToggle(
@@ -79,9 +72,7 @@ export function CanvasInspector({
     return () => window.removeEventListener('keydown', onKey)
   }, [overlayOpen])
 
-  async function run(
-    task: (target: CanvasGraphNode) => Promise<NodeActionResult>
-  ) {
+  async function run(task: (target: CanvasGraphNode) => Promise<NodeActionResult>) {
     if (!node) return
     setSubmitting(true)
     setError(undefined)
@@ -119,6 +110,7 @@ export function CanvasInspector({
       queuedFeedback={queuedFeedback}
       onExecute={() => run((target) => triggerNodeAction(projectId, target))}
       onSkip={(reason) => run((target) => triggerNodeSkip(projectId, target, reason))}
+      onCancelWait={() => run((target) => triggerCancelProviderWait(projectId, target))}
       onCollapse={() => {
         setManualCollapsed(true)
         setOverlayRequested(false)
@@ -221,6 +213,7 @@ function InspectorBody({
   queuedFeedback,
   onExecute,
   onSkip,
+  onCancelWait,
   onCollapse,
   showCollapse,
 }: {
@@ -231,6 +224,7 @@ function InspectorBody({
   queuedFeedback?: { jobId: string; message: string }
   onExecute: () => void
   onSkip: (reason: string) => void
+  onCancelWait: () => void
   onCollapse: () => void
   showCollapse: boolean
 }) {
@@ -290,10 +284,12 @@ function InspectorBody({
         stage={node.stage}
         directorError={node.directorError}
         renderError={node.renderError}
+        executionNotice={node.executionNotice}
         onRetry={onExecute}
         retrying={submitting}
         skipKind={skipKindForNodeType(node.type) ?? undefined}
         onSkip={onSkip}
+        onCancelWait={onCancelWait}
       />
       <Button
         variant={node.type === 'shot-codegen' ? 'destructive' : 'tinted'}

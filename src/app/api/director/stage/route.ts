@@ -6,7 +6,11 @@ import {
   QuotaExhaustedError,
 } from '@/features/billing'
 import { classifyWorkflowError } from '@/features/canvas'
-import { executeNodeAction, skipNodeAction } from '@/features/director'
+import {
+  cancelProviderWaitAction,
+  executeNodeAction,
+  skipNodeAction,
+} from '@/features/director'
 import {
   SKIP_REASON_MAX_LENGTH,
   SKIP_REASON_MIN_LENGTH,
@@ -19,7 +23,7 @@ const requestSchema = z
   .object({
     projectId: z.string().min(1),
     nodeId: z.string().min(1),
-    intent: z.enum(['execute', 'repair', 'regenerate', 'skip']),
+    intent: z.enum(['execute', 'repair', 'regenerate', 'skip', 'cancel-wait']),
     skipReason: z
       .string()
       .trim()
@@ -55,6 +59,9 @@ async function handlePost(request: Request) {
       return NextResponse.json(
         await skipNodeAction({ projectId, nodeId, reason: skipReason! })
       )
+    }
+    if (intent === 'cancel-wait') {
+      return NextResponse.json(await cancelProviderWaitAction({ projectId, nodeId }))
     }
     await assertBillingAvailable()
     await initQueue()

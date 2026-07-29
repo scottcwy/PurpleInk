@@ -4,6 +4,7 @@ import { POST } from './route'
 
 const mocks = vi.hoisted(() => ({
   assertBillingAvailable: vi.fn(),
+  cancelProviderWaitAction: vi.fn(),
   executeNodeAction: vi.fn(),
   skipNodeAction: vi.fn(),
 }))
@@ -26,6 +27,7 @@ vi.mock('@/features/auth/api-session', () => ({
     }),
 }))
 vi.mock('@/features/director', () => ({
+  cancelProviderWaitAction: mocks.cancelProviderWaitAction,
   executeNodeAction: mocks.executeNodeAction,
   skipNodeAction: mocks.skipNodeAction,
 }))
@@ -34,6 +36,14 @@ describe('POST /api/director/stage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.assertBillingAvailable.mockResolvedValue(undefined)
+    mocks.cancelProviderWaitAction.mockResolvedValue({
+      ok: true,
+      action: 'cancel-wait',
+      requestedNodeId: 'node-1',
+      queuedNodeId: 'node-1',
+      jobId: 'attempt-2',
+      message: '已取消供应商限流等待',
+    })
     mocks.executeNodeAction.mockResolvedValue({
       ok: true,
       action: 'execute',
@@ -98,6 +108,28 @@ describe('POST /api/director/stage', () => {
       jobId: 'job-1',
     })
     expect(mocks.executeNodeAction).toHaveBeenCalledWith(input)
+  })
+
+  it('cancels a deferred provider wait without billing admission or execution', async () => {
+    const input = {
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      intent: 'cancel-wait',
+    }
+    const response = await POST(request(input))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      action: 'cancel-wait',
+      jobId: 'attempt-2',
+    })
+    expect(mocks.cancelProviderWaitAction).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+    })
+    expect(mocks.assertBillingAvailable).not.toHaveBeenCalled()
+    expect(mocks.executeNodeAction).not.toHaveBeenCalled()
   })
 
   it('rejects skip without a reason and never touches the action layer', async () => {
