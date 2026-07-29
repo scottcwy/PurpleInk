@@ -219,7 +219,7 @@ describe('director prompt templates', () => {
       'window.__CVC_RENDER__ = { version: 1, seek(frame, fps) }',
       '第一个字符必须是 <',
       '禁止 Markdown 围栏',
-      '16000 个字符以内',
+      '64000 个字符以内',
       '不能因追求细节输出半截 HTML',
       '固定 1920×1080',
       'width=1920, height=1080',
@@ -231,6 +231,15 @@ describe('director prompt templates', () => {
     ]) {
       expect(prompt).toContain(term)
     }
+  })
+
+  it('leads FABRICATE with wishful visual-quality directives', () => {
+    const prompt = buildFabricatePrompt({ shot, audioAllocation, styleBible: '风格圣经' })
+    expect(prompt).toContain('优先保证视觉效果')
+    expect(prompt).toContain('具体设计方向由你自行决策')
+    expect(prompt).toContain('拿出你的最强能力')
+    expect(prompt).toContain('clip-path 揭示')
+    expect(prompt).toContain('禁止为凑长度堆无意义代码')
   })
 
   it('injects dark/light visual theme hard constraints into DIRECT and FABRICATE', () => {
