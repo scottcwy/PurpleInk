@@ -94,5 +94,6 @@ export function buildFabricateRetryPrompt(
 ${parsed.errors.map((error, index) => `${index + 1}. ${error}`).join('\n')}
 
 只修正这些违规及其直接影响，不改变 shot 职责、文案、时长、视觉合同或已正确部分。
+修正违规时不得为通过门禁而删减视觉细节、动效或设计质量；本会话历史中的 style bible、shot contract 与视觉法则仍然全部有效，修正后的版本必须保持同等或更高的视觉丰富度。
 重新输出完整 HTML，不要输出补丁、解释、Markdown 围栏或省略内容；最终 HTML 仍须自包含并满足 window.__CVC_RENDER__@v1。`
 }

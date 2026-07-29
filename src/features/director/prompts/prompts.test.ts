@@ -303,6 +303,8 @@ describe('director prompt templates', () => {
     expect(fabricateRetry).toContain('set-interval@457')
     expect(fabricateRetry).toContain('第 1/2 次')
     expect(fabricateRetry).toContain('重新输出完整 HTML')
+    expect(fabricateRetry).toContain('不得为通过门禁而删减视觉细节、动效或设计质量')
+    expect(fabricateRetry).toContain('保持同等或更高的视觉丰富度')
 
     const shotSpecRetry = buildShotSpecRetryPrompt({
       retry: 2,
@@ -312,6 +314,8 @@ describe('director prompt templates', () => {
     expect(shotSpecRetry).toContain('shots.0.mustShow')
     expect(shotSpecRetry).toContain('第 2/2 次')
     expect(shotSpecRetry).toContain('完整 JSON')
+    expect(shotSpecRetry).toContain('不得为通过门禁而删减视觉细节、动效或设计质量')
+    expect(shotSpecRetry).toContain('镜头合同与视觉法则仍然全部有效')
   })
 })
 
