@@ -14,6 +14,8 @@ import {
 import { workspaces } from './core'
 
 export const USER_STATUSES = ['active', 'disabled'] as const
+/** 全局角色：`admin` 可访问 /admin 管理后台；与 workspace 级角色（owner/member）是两套概念。 */
+export const USER_ROLES = ['user', 'admin'] as const
 export const WORKSPACE_MEMBER_ROLES = ['owner', 'member'] as const
 export const VERIFICATION_PURPOSES = ['signup', 'password_reset'] as const
 
@@ -40,6 +42,7 @@ export const users = pgTable(
       .defaultNow()
       .notNull(),
     status: text('status').default('active').notNull(),
+    role: text('role').default('user').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -47,6 +50,7 @@ export const users = pgTable(
     // 唯一性建在 lower(email) 上：A@x.com 与 a@x.com 是同一个人，不允许重复注册。
     uniqueIndex('users_email_lower_unique').on(sql`lower(${table.email})`),
     check('users_status_check', sql`${table.status} in ('active', 'disabled')`),
+    check('users_role_check', sql`${table.role} in ('user', 'admin')`),
     check('users_email_shape_check', sql`position('@' in ${table.email}) > 1`),
   ],
 )

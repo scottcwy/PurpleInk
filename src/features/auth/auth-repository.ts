@@ -27,6 +27,8 @@ export interface SessionOwner {
   workspaceId: string
   email: string
   name: string
+  /** 全局角色（user/admin），/admin 守卫消费。 */
+  role: string
   workspaceName: string
   sessionId: string
 }
@@ -162,6 +164,7 @@ export async function findSessionOwner(
       workspaceId: sessions.workspaceId,
       email: users.email,
       name: users.name,
+      role: users.role,
       workspaceName: workspaces.name,
     })
     .from(sessions)

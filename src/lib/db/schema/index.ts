@@ -7,6 +7,7 @@ export {
 export type { VersionedPayload } from './core'
 
 export {
+  USER_ROLES,
   USER_STATUSES,
   VERIFICATION_PURPOSES,
   WORKSPACE_MEMBER_ROLES,
@@ -16,6 +17,14 @@ export {
   users,
   workspaceMembers,
 } from './auth'
+
+export {
+  RENDER_JOB_KINDS,
+  RENDER_JOB_PHASES,
+  RENDER_JOB_STATUSES,
+  renderJobs,
+} from './render-jobs'
+export type { RenderJobLogEntry } from './render-jobs'
 
 export {
   CANVAS_NODE_STAGES,

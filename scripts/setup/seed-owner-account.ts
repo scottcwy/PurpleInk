@@ -50,6 +50,8 @@ interface Options {
   name: string
   /** `local` = 绑定 LOCAL_WORKSPACE_ID（默认）；`new` = 另建一个 workspace。 */
   workspace: 'local' | 'new'
+  /** 全局角色：`--role admin` 用于创建首个管理员，之后的提升/降级走管理页。 */
+  role: 'user' | 'admin'
 }
 
 function parseArgs(argv: readonly string[]): Options | null {
@@ -58,6 +60,7 @@ function parseArgs(argv: readonly string[]): Options | null {
     password: DEFAULT_PASSWORD,
     name: DEFAULT_NAME,
     workspace: 'local',
+    role: 'user',
   }
   // `--from-env` 供容器编排使用：从 CVC_DEMO_ACCOUNT_* 取凭据。
   // 二者任一缺失即返回 null（不建号、退出 0），这样生产 compose 可以无条件挂这个
@@ -80,6 +83,9 @@ function parseArgs(argv: readonly string[]): Options | null {
     else if (flag === '--name') options.name = value
     else if (flag === '--workspace' && (value === 'local' || value === 'new')) {
       options.workspace = value
+    }
+    else if (flag === '--role' && (value === 'user' || value === 'admin')) {
+      options.role = value
     }
     index += 1
   }
@@ -175,6 +181,7 @@ async function main(): Promise<void> {
           passwordUpdatedAt: now,
           emailVerifiedAt: now,
           status: 'active',
+          role: options.role,
           updatedAt: now,
         })
         .where(eq(schema.users.id, userId))
@@ -191,6 +198,7 @@ async function main(): Promise<void> {
           // 本脚本绕过验证码，因此直接标记邮箱已验证；产品路径不会走到这里。
           emailVerifiedAt: now,
           status: 'active',
+          role: options.role,
         })
         .returning({ id: schema.users.id })
       if (!row) throw new Error('账号创建失败')

@@ -43,3 +43,18 @@ export async function withApiSession(
     () => handler(session),
   )
 }
+
+/**
+ * 仅全局 admin 可执行 handler。非 admin 一律回 404 而不是 403：
+ * 不向普通用户泄露 /api/admin 这层表面的存在（与未登录的 401 类别文案同思路）。
+ */
+export async function withAdminSession(
+  handler: (session: SessionOwner) => Promise<Response>,
+): Promise<Response> {
+  return withApiSession(async (session) => {
+    if (session.role !== 'admin') {
+      return NextResponse.json({ ok: false, error: 'not found' }, { status: 404 })
+    }
+    return handler(session)
+  })
+}

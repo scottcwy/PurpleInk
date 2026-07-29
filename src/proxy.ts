@@ -29,7 +29,7 @@ export function proxy(request: NextRequest): NextResponse {
     request.cookies.get(SESSION_COOKIE_NAME)?.value ?? '',
   )
 
-  if (pathname.startsWith('/products')) {
+  if (pathname.startsWith('/products') || pathname.startsWith('/admin')) {
     if (hasSessionCookie) return NextResponse.next()
     const target = new URL('/login', request.nextUrl)
     target.searchParams.set('next', `${pathname}${search}`)
@@ -40,5 +40,5 @@ export function proxy(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  matcher: ['/products/:path*'],
+  matcher: ['/products/:path*', '/admin/:path*'],
 }
