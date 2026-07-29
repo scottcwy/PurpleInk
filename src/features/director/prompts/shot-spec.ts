@@ -54,6 +54,8 @@ export function buildShotSpecPrompt(input: ShotSpecPromptInput): string {
 正向视觉法则 7：Three.js、Shader、复杂文字与粒子只能表达关系，不能只做装饰。
 正向视觉法则 8：组件复用用于建立视觉记忆；连续镜头必须改变状态、拓扑、视角或信息职责。
 正向视觉法则 9：连续三镜同拓扑必须警告；只有连续状态机或明确 montage 可声明例外。
+运动密度：运动阶段与关键帧应覆盖镜头全时长，避免长时间完全静止；按内容叠加主动画/环境层/强调节拍，力度由内容决定、克制不堆砌。
+能力规划：需要文字逐字、线绘、图表、代码高亮、伪 3D、路径运动等特殊表现力时，在 capabilities 中声明能力类别，由 FABRICATE 从确定性库白名单选型；不得规划依赖 video、hover 或联网资源的效果。
 
 可用构图模式仅限：${compositionModeSchema.options.join('、')}。
 

@@ -38,6 +38,10 @@ export function buildFabricatePrompt(
 代码层面请拿出你的最强能力：充分使用 GSAP 高级特性（clip-path 揭示、
 transform-origin 精准控制、贝塞尔缓动、错峰入场、多相位编排），
 用尽可能丰富的动效优化画面表现力。
+镜头全时长内尽量保持画面有可感知的运动：入场、持续微动或环境层漂移、
+强调节拍、出场可以错峰叠加；一镜可按内容需要叠加多种动画效果
+（主动画 + 环境层持续运动 + 强调节拍）。运动必须服务内容与节奏，
+克制不堆砌，禁止为动而动。
 
 正向视觉法则 10：所有重要可见元素必须位于 TitleRegion、HeroRegion、SupportRegion 或通用 VisualRegion，并带稳定 QA 标识。
 
@@ -49,6 +53,32 @@ transform-origin 精准控制、贝塞尔缓动、错峰入场、多相位编排
 - GSAP 只能使用 paused timeline，并由 frame/fps 显式 seek。
 - 相同 frame、fps、seed 必须得到相同像素。
 
+确定性动效库白名单（只能使用下列固定版本 CDN；所有库一律禁用自带播放/循环/rAF 能力，一切运动只能被 seek(frame, fps) 单向驱动）：
+- 核心：GSAP@3.14.2 https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js —— paused timeline + 显式 seek —— 一切编排的唯一驱动。
+- GSAP 官方插件（同版本，URL 格式 https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/插件名.min.js，注册进同一 paused timeline）：SplitText（文字切分错峰入场）、DrawSVGPlugin（线绘揭示）、MorphSVGPlugin（形状变形）、MotionPathPlugin（路径运动）、ScrambleTextPlugin（乱序文字定格）、TextPlugin（打字机效果必须用它，禁止 Typed.js）、CustomEase（自定义缓动曲线）。
+- 数据可视化：Chart.js@4.4.9 https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js —— animation:false，seek 内改数据后 update('none') —— 柱/线/饼图；
+  ECharts@5.6.0 https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js —— animation:false 静态渲染 —— 复杂图表；
+  d3@7.9.0 https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js —— 纯函数式，进度由 frame 计算 —— 自定义数据图形；
+  ProgressBar.js@1.1.1 https://cdn.jsdelivr.net/npm/progressbar.js@1.1.1/dist/progressbar.min.js —— set(progress) 手动驱动 —— 进度/环形指标。
+- 代码与文本：Prism.js@1.30.0 https://cdn.jsdelivr.net/npm/prismjs@1.30.0/prism.min.js 或 highlight.js@11.11.1 https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/highlight.min.js —— 静态高亮 —— 代码演示；
+  Splitting.js@1.1.0 https://cdn.jsdelivr.net/npm/splitting@1.1.0/dist/splitting.min.js —— 切分后交 GSAP 错峰 —— 字符级动画。
+- SVG/图形：Vivus@0.4.6 https://cdn.jsdelivr.net/npm/vivus@0.4.6/dist/vivus.min.js —— 手动 progress —— SVG 线绘；
+  rough.js@4.6.6 https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js —— 固定 seed 静态绘制 —— 手绘风图形；
+  SVG.js@3.2.4 https://cdn.jsdelivr.net/npm/@svgdotjs/svg.js@3.2.4/dist/svg.min.js —— 只做静态构建，运动交 GSAP —— SVG 场景搭建；
+  flubber@0.4.2 https://cdn.jsdelivr.net/npm/flubber@0.4.2/build/flubber.min.js —— 插值器进度由 frame 驱动 —— 路径形状过渡。
+- 伪 3D：zdog@1.1.3 https://cdn.jsdelivr.net/npm/zdog@1.1.3/dist/zdog.dist.min.js —— seek 内更新 rotate 后 updateRenderGraph() —— 轻量立体图形。
+- 粒子：不引库；用 seeded PRNG + 纯函数位置计算自写，粒子位置必须是 frame 的纯函数。
+- 明确禁止：three.js、p5.js、pixi.js、Babylon.js 以及任何白名单之外的 CDN。
+
+截帧兼容性（headless 逐帧截图环境，违反会导致空帧或内容缺失）：
+- 禁止 video/audio 元素；多媒体表现用 Canvas/DOM 重建。
+- 尽量避免 WebGL；确需使用时必须 preserveDrawingBuffer: true，否则截图为空。
+- 图片一律内联 data URL 并显式 loading="eager"；禁止外链图片。
+- 禁止依赖 :hover/:focus 等交互态呈现内容；需要该状态时用 GSAP 直接设定。
+- 字体必须在 head 内静态声明（内联 data URL @font-face）；禁止运行时动态加载字体。
+- 避免 backdrop-filter（跨平台渲染差异），改用 filter 或半透明叠层替代。
+- 保持 overflow: hidden，杜绝滚动条参与布局。
+
 实现约束：
 - 唯一母版固定 1920×1080；viewport 必须明确写为 width=1920, height=1080。
 - 唯一根画布必须带 data-composition-id、data-width="1920"、data-height="1080"。
@@ -59,7 +89,8 @@ transform-origin 精准控制、贝塞尔缓动、错峰入场、多相位编排
 - 画面必须满足 shot 的 mustShow，且不得出现 mustAvoid。
 - 不读取远程运行时素材，不改写镜头职责、音频时长或核心文案。
 - HTML 必须可从任意 StorageAdapter 本地路径独立加载，不得引用工作区相对
-  node_modules/docs 路径；所需运行时代码与素材必须内联或使用 data URL。
+  node_modules/docs 路径；除上述白名单 CDN 库外，其余运行时代码与素材必须
+  内联或使用 data URL；禁止白名单之外的任何远程请求。
 - 必须在内联脚本中暴露精确合同：
   window.__CVC_RENDER__ = { version: 1, seek(frame, fps) }
   seek 必须同步或返回 Promise，并只根据传入的 frame/fps 更新当前帧。
