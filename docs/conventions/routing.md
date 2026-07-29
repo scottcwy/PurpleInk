@@ -49,7 +49,7 @@
 
 `(public)` 组的壳是 `src/app/(public)/layout.tsx`：无侧栏、无写操作入口。
 
-`/` 右上角 **Try it** 已接线到 `PRODUCTS_ROUTES.projects`（`/products/projects`），是进入 L3 的主 CTA。未登录点击会被 §9 的守卫收敛到 `/login?next=/products/projects`。Contact 与 footer 仍多为 `#` / 空串。
+`/` 右上角 **Try it** 已接线到 `PRODUCTS_ROUTES.projects`（`/products/projects`），是进入 L3 的主 CTA。未登录点击会被 §9 的守卫收敛到 `/login?next=/products/projects`。首页 `LaunchComposer` 接收公开 HTTP(S) URL 后只创建 `website` 项目并调用 `/api/projects/[id]/start`，随后进入项目画布；不得绕过项目工作流直接轮询 `/api/engine/*` 或从营销页下载终片。Contact 与 footer 仍多为 `#` / 空串。
 
 ### 2.2 L2 认证
 
@@ -276,7 +276,7 @@ S3 画布 DAG 节点 UI 唯一消费 `@/components/ui/pipeline-node`（Canonical
 
 S2 是 S1 的模态状态，**不允许**为它开一条路由。任何「新建 / 编辑 / 确认」类模态默认不进 URL；只有需要分享或刷新保持的模态才允许升级为路由，并须在本文件登记。
 
-S2 的目标形态是同一模态内的三来源选择：文稿视频（`script`）、录音转视频（`audio`）和网站介绍视频（`website`）。选择器与对应折叠内容、audio / website 提交接线目前均为 `planned`；当前生产表单仍只提交文稿项目。三类项目的版本、Artifact、计费与容灾边界以 `docs/conventions/project-workflows.md` 为唯一真值。
+S2 在同一模态内提供三来源选择：文稿视频（`script`）、录音转视频（`audio`）和网站介绍视频（`website`）。三类来源共用标题、视觉主题与 `/api/projects` → `/api/projects/[id]/start` 创建合同；选中来源后只展开对应 `CollapsibleCard`。录音仅接受 MP3/WAV（最大 100 MB），网站仅接受公开 HTTP(S) URL。客户端不得提交 workflow version、入口节点或目标 worker。三类项目的版本、Artifact、计费与容灾边界以 `docs/conventions/project-workflows.md` 为唯一真值。
 
 ## 8. `/artifacts` 与 `/share`
 
@@ -372,7 +372,7 @@ Project（可变，L3 内部）
 | `caseSlug` 不存在 | 404 | 已实现（与认证无关） |
 | 上下文缺失但路由本身合法 | 不进入页面；侧栏项禁用并给出原因 | 已实现 |
 | 非生产环境外访问 `/playbook/*` | 404 | 已实现（与认证无关） |
-| 营销页 AI 演示（LaunchComposer） | 未登录先弹登录引导并中止（客户端门，worker 代理行为不变） | 已实现 |
+| 营销页 AI 演示（LaunchComposer） | 未登录先弹登录引导并中止；登录后创建 `website` 项目、统一启动并进入画布，不直接访问 worker | 已实现 |
 
 一律用 404 掩盖归属错误，不区分「不存在」与「无权限」，避免泄露其他 workspace 中对象是否存在。前端不得为了让页面渲染成功而隐式创建缺失数据。
 

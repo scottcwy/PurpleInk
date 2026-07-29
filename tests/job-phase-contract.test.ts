@@ -56,21 +56,16 @@ describe("worker phase contract", () => {
     expect(webPhases.slice().sort()).toEqual(workerPhases.slice().sort());
   });
 
-  it("keeps every worker phase in the progress presentation", async () => {
-    const [workerPhases, composerSource] = await Promise.all([
-      readWorkerPhases(),
-      // PHASE_LABEL / PHASE_BAND 已拆到展示支撑模块（规模门禁拆分），合同不变。
-      readFile("src/components/marketing/launch-composer-support.tsx", "utf8"),
-    ]);
-    for (const phase of workerPhases) {
-      // PHASE_LABEL: `phase: "..."`；PHASE_BAND: `phase: [lo, hi, tau]`。
-      const occurrences = composerSource.match(
-        new RegExp(`^\\s*${phase}:\\s*["\\[]`, "gm"),
-      );
-      expect(
-        occurrences?.length ?? 0,
-        `launch-composer 缺少 "${phase}" 的标签或进度带`,
-      ).toBeGreaterThanOrEqual(2);
-    }
+  it("keeps the marketing composer on the project workflow boundary", async () => {
+    const composerSource = await readFile(
+      "src/components/marketing/launch-composer.tsx",
+      "utf8",
+    );
+    expect(composerSource).toContain("@/features/projects/project-create-client");
+    expect(composerSource).toContain("productCanvasHref");
+    expect(composerSource).not.toContain("@/lib/api");
+    expect(composerSource).not.toContain("PHASE_BAND");
+    expect(composerSource).not.toContain("downloadVideo");
+    expect(composerSource).not.toContain("/api/engine/");
   });
 });
