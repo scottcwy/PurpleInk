@@ -1,6 +1,7 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
+import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
 import { measureAudio, type MeasuredAudio } from './measure'
 import {
   registerNarrationAudio,
@@ -180,13 +181,7 @@ async function synthesizeUnit(
     ? null
     : await assertEngine(
         context.engine,
-        await dependencies.synthesize({
-          text: context.request.text,
-          voiceId: context.voice,
-          ...(context.billingContext
-            ? { billingContext: context.billingContext }
-            : {}),
-        })
+        await synthesizeWithDispatchRetry(context, dependencies)
       )
   const bytes = cached ?? speech?.audioBytes
   if (!bytes || bytes.length === 0) {
@@ -246,4 +241,51 @@ function defaultDependencies(): NarrationDependencies {
     reuseAudio: reuseNarrationAudio,
     registerAudio: registerNarrationAudio,
   }
+}
+
+/**
+ * 单段 TTS 调用内部等待重试。
+ *
+ * Provider 调度器的 pacing / 并发池会在多 worker 同时出网时抛出
+ * ProviderDispatchWaitError。如果透传到上层，整个 narration job 会失败并重入队列，
+ * 浪费重试预算且极度缓慢。此处在 worker 内部等待 retryAt 后重试，
+ * 让并发 worker 自然错开到 minIntervalMs 之外。
+ */
+const MAX_DISPATCH_RETRIES = 6
+
+async function synthesizeWithDispatchRetry(
+  context: {
+    request: z.infer<typeof unitSchema>
+    voice: string
+    billingContext?: AudioBillingContext
+  },
+  dependencies: NarrationDependencies
+): Promise<SynthesizedSpeech> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await dependencies.synthesize({
+        text: context.request.text,
+        voiceId: context.voice,
+        ...(context.billingContext
+          ? { billingContext: context.billingContext }
+          : {}),
+      })
+    } catch (error) {
+      if (
+        !(error instanceof ProviderDispatchWaitError) ||
+        attempt >= MAX_DISPATCH_RETRIES
+      ) {
+        throw error
+      }
+      const waitMs = Math.max(
+        0,
+        new Date(error.retryAt!).getTime() - Date.now()
+      )
+      await sleep(Math.min(waitMs + 50, 5_000))
+    }
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }

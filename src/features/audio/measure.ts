@@ -18,6 +18,11 @@ export type DecodeSampleBytes = (
   sampleRateHz: number
 ) => Promise<number>
 
+export type DecodeMonoPcm = (
+  bytes: Buffer,
+  sampleRateHz: number
+) => Promise<Buffer>
+
 /**
  * 实测音频时长：解码真实字节并统计采样数，不使用 TTS 自报时长，也不按字数估算。
  *
@@ -45,7 +50,34 @@ export async function measureAudio(
 }
 
 /** 以原生采样率解码为 16-bit 单声道 PCM 并统计字节数。 */
-function decodePcmByteCount(bytes: Buffer, sampleRateHz: number): Promise<number> {
+async function decodePcmByteCount(
+  bytes: Buffer,
+  sampleRateHz: number
+): Promise<number> {
+  let total = 0
+  await streamMonoPcm(bytes, sampleRateHz, (chunk) => {
+    total += chunk.length
+  })
+  return total
+}
+
+/** 以原生采样率只解码一次，返回 16-bit 单声道 PCM 字节。 */
+export async function decodeMonoPcm(
+  bytes: Buffer,
+  sampleRateHz: number
+): Promise<Buffer> {
+  const chunks: Buffer[] = []
+  await streamMonoPcm(bytes, sampleRateHz, (chunk) => {
+    chunks.push(chunk)
+  })
+  return Buffer.concat(chunks)
+}
+
+function streamMonoPcm(
+  bytes: Buffer,
+  sampleRateHz: number,
+  onChunk: (chunk: Buffer) => void
+): Promise<void> {
   const executable = ffmpegPath
   if (!executable) throw new Error('ffmpeg-static 未提供当前平台二进制')
   return new Promise((resolve, reject) => {
@@ -72,10 +104,9 @@ function decodePcmByteCount(bytes: Buffer, sampleRateHz: number): Promise<number
       ],
       { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] }
     )
-    let total = 0
     let stderr = ''
     child.stdout.on('data', (chunk: Buffer) => {
-      total += chunk.length
+      onChunk(chunk)
     })
     child.stderr.setEncoding('utf8')
     child.stderr.on('data', (chunk: string) => {
@@ -85,7 +116,7 @@ function decodePcmByteCount(bytes: Buffer, sampleRateHz: number): Promise<number
       reject(new Error(`ffmpeg 启动失败：${error.message}`, { cause: error }))
     })
     child.once('close', (code) => {
-      if (code === 0) resolve(total)
+      if (code === 0) resolve()
       else reject(new Error(`ffmpeg 解码失败（exit ${String(code)}）：${stderr.trim()}`))
     })
     // 解码器提前退出时 stdin 会 EPIPE；真实失败由 close 的非零退出码报告。

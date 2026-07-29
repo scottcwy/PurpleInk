@@ -1,4 +1,9 @@
-export { measureAudio, type MeasuredAudio } from './measure'
+export {
+  decodeMonoPcm,
+  measureAudio,
+  type DecodeMonoPcm,
+  type MeasuredAudio,
+} from './measure'
 export {
   detectAudioContainer,
   readAudioStreamInfo,
@@ -31,6 +36,19 @@ export {
   AudioRuntimeRepository,
   type LoadedNarration,
 } from './runtime-repository'
+export {
+  buildUserAudioTimeline,
+  type UserAudioSlicePlan,
+  type UserAudioTimeline,
+  type UserAudioTimelineInput,
+  type UserRecordingScriptUnit,
+} from './user-audio-timeline'
+export {
+  decodeUserRecording,
+  sliceDecodedUserRecording,
+  type DecodedUserRecording,
+  type UserRecordingAudioSlice,
+} from './user-audio-slicer'
 export type {
   BgmPlan,
   Caption,
