@@ -64,7 +64,7 @@ describe('WebsiteEngineClient', () => {
   })
 
   it('reads only the safe integrated job contract', async () => {
-    const fetcher = vi.fn(async () =>
+    const fetcher = vi.fn(async (_url: string | URL | Request) =>
       Response.json({
         ...JOB,
         rawError: 'must not be accepted',
@@ -83,7 +83,7 @@ describe('WebsiteEngineClient', () => {
 
   it('downloads non-empty MP4 bytes through the protected endpoint', async () => {
     const bytes = Buffer.from('real-mp4-bytes')
-    const fetcher = vi.fn(async () =>
+    const fetcher = vi.fn(async (_url: string | URL | Request) =>
       new Response(bytes, {
         headers: {
           'content-type': 'video/mp4',
