@@ -40,6 +40,13 @@ const ALLOWED_TRANSITIONS: Record<NodeStatus, readonly NodeStatus[]> = {
   blocked: ['pending'],
 }
 
+export function isNodeStatusTransitionAllowed(
+  current: NodeStatus,
+  next: NodeStatus,
+): boolean {
+  return ALLOWED_TRANSITIONS[current].includes(next)
+}
+
 export interface SkipMeta {
   reason: string
   at: string
@@ -75,7 +82,7 @@ export async function transitionNodeStatus(
       .for('update')
     if (!node) throw new Error(`节点不存在：${nodeId}`)
     const current = fromPersistedStatus(node.status)
-    if (!ALLOWED_TRANSITIONS[current].includes(next)) {
+    if (!isNodeStatusTransitionAllowed(current, next)) {
       throw new Error(`非法节点状态转换：${current} -> ${next}`)
     }
     if (next === 'stale' && !(await isStaleInTransaction(tx, node))) {

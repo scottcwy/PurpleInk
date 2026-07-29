@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  readResponseBodyWithLimit,
   WebsiteEngineClient,
   WebsiteEngineError,
   type WebsiteEngineJob,
@@ -101,6 +102,32 @@ describe('WebsiteEngineClient', () => {
     expect(String(fetcher.mock.calls[0]?.[0])).toBe(
       'http://worker:8787/internal/jobs/job%2F1/video',
     )
+  })
+
+  it('rejects a chunked download as soon as its actual bytes exceed the limit', async () => {
+    const response = new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(Uint8Array.from([1, 2, 3]))
+        controller.enqueue(Uint8Array.from([4, 5, 6]))
+        controller.close()
+      },
+    }), {
+      headers: { 'content-type': 'video/mp4' },
+    })
+
+    await expect(readResponseBodyWithLimit(response, 5)).rejects.toMatchObject({
+      code: 'ENGINE_VIDEO_INVALID',
+    })
+  })
+
+  it('rejects an oversized declared length before reading its body', async () => {
+    const response = new Response(Buffer.from('small'), {
+      headers: { 'content-length': '6' },
+    })
+
+    await expect(readResponseBodyWithLimit(response, 5)).rejects.toMatchObject({
+      code: 'ENGINE_VIDEO_INVALID',
+    })
   })
 
   it('classifies missing jobs as a retryable restart boundary', async () => {

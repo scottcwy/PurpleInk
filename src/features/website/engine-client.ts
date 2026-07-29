@@ -1,6 +1,8 @@
 import 'server-only'
 import { z } from 'zod'
 
+const MAX_WEBSITE_VIDEO_BYTES = 1_073_741_824
+
 const enginePhaseSchema = z.enum([
   'queued',
   'capturing',
@@ -128,15 +130,7 @@ export class WebsiteEngineClient {
     if (!response.headers.get('content-type')?.startsWith('video/mp4')) {
       throw new WebsiteEngineError('ENGINE_VIDEO_INVALID', false, response.status)
     }
-    const declaredSize = Number(response.headers.get('content-length') ?? 0)
-    if (Number.isFinite(declaredSize) && declaredSize > 1_073_741_824) {
-      throw new WebsiteEngineError('ENGINE_VIDEO_INVALID', false, response.status)
-    }
-    const bytes = Buffer.from(await response.arrayBuffer())
-    if (bytes.byteLength === 0) {
-      throw new WebsiteEngineError('ENGINE_VIDEO_INVALID', false, response.status)
-    }
-    return bytes
+    return readResponseBodyWithLimit(response, MAX_WEBSITE_VIDEO_BYTES)
   }
 
   private async request(
@@ -168,6 +162,47 @@ export class WebsiteEngineClient {
       response.status,
     )
   }
+}
+
+export async function readResponseBodyWithLimit(
+  response: Response,
+  maxBytes: number,
+): Promise<Buffer> {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
+    throw new WebsiteEngineError('ENGINE_VIDEO_INVALID', false, response.status)
+  }
+  const declaredHeader = response.headers.get('content-length')
+  if (declaredHeader !== null) {
+    const declaredSize = Number(declaredHeader)
+    if (
+      !Number.isSafeInteger(declaredSize)
+      || declaredSize < 0
+      || declaredSize > maxBytes
+    ) {
+      throw new WebsiteEngineError('ENGINE_VIDEO_INVALID', false, response.status)
+    }
+  }
+  if (!response.body) {
+    throw new WebsiteEngineError('ENGINE_VIDEO_INVALID', false, response.status)
+  }
+
+  const chunks: Buffer[] = []
+  const reader = response.body.getReader()
+  let sizeBytes = 0
+  while (true) {
+    const chunk = await reader.read()
+    if (chunk.done) break
+    sizeBytes += chunk.value.byteLength
+    if (sizeBytes > maxBytes) {
+      await reader.cancel().catch(() => undefined)
+      throw new WebsiteEngineError('ENGINE_VIDEO_INVALID', false, response.status)
+    }
+    chunks.push(Buffer.from(chunk.value))
+  }
+  if (sizeBytes === 0) {
+    throw new WebsiteEngineError('ENGINE_VIDEO_INVALID', false, response.status)
+  }
+  return Buffer.concat(chunks, sizeBytes)
 }
 
 async function parseJson<T extends z.ZodType>(

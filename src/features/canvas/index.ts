@@ -69,9 +69,16 @@ export {
 export {
   captureNodeInputFingerprint,
   invalidateNodeForRegeneration,
+  isNodeStatusTransitionAllowed,
   isStale,
   transitionNodeStatus,
 } from './status'
+export {
+  fromPersistedStatus,
+  patchPayload,
+  resolveTransitionData,
+  toPersistedStatus,
+} from './status-payload'
 export {
   inspectFabricateSource,
   type FabricateSourceInspection,
