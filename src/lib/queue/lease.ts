@@ -93,7 +93,7 @@ export async function renewLeases(db: Db, attemptIds: string[]): Promise<void> {
   for (const [kind, ids] of byKind) {
     await db
       .update(taskAttempts)
-      .set({ leaseExpiresAt: leaseDeadline(kind), updatedAt: new Date() })
+      .set({ leaseExpiresAt: leaseDeadline(kind), updatedAt: sql`now()` })
       .where(
         and(
           eq(taskAttempts.status, 'running'),
@@ -152,8 +152,8 @@ export async function sweepExpiredLeases(db: Db): Promise<string[]> {
         .set({
           status: 'failed',
           failure: { schemaVersion: 1, message: LEASE_EXPIRED_FAILURE_MESSAGE },
-          completedAt: new Date(),
-          updatedAt: new Date(),
+          completedAt: sql`now()`,
+          updatedAt: sql`now()`,
         })
         .where(
           and(
@@ -163,7 +163,7 @@ export async function sweepExpiredLeases(db: Db): Promise<string[]> {
         )
       await transaction
         .update(pipelineRuns)
-        .set({ status: 'failed', completedAt: new Date(), updatedAt: new Date() })
+        .set({ status: 'failed', completedAt: sql`now()`, updatedAt: sql`now()` })
         .where(
           and(
             eq(pipelineRuns.workspaceId, row.workspaceId),

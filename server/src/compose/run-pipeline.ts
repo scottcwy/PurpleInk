@@ -10,7 +10,7 @@ import { runCapture, type RunCaptureOptions } from "../capture/run-capture"
 import { logger } from "../lib/logger"
 import { buildRootHtml } from "./chapters/root-html"
 import { splitScenesToChapters } from "./chapters/split"
-import { generateChapters, buildComposeContext } from "./chapters/generate"
+import { generateChapters, buildComposeContext, summarizeComposeError } from "./chapters/generate"
 import { getTtsEnv } from "../../../src/lib/tts/config"
 import { prepareNarrationAssets } from "../tts/orchestrate"
 import {
@@ -123,7 +123,7 @@ export async function renderFromCapture(
       const errStack = err instanceof Error ? err.stack : undefined
       logger.error("pipeline:compose_llm_failed", { error: errMsg, stack: errStack?.slice(0, 500) })
       // Fall back to template path on catastrophic failure
-      logger.info("pipeline:fallback_template", { reason: errMsg })
+      logger.warn("pipeline:fallback_template", { source: "template", reason: summarizeComposeError(err) })
       written = await writeProject(visualModel, projectDir, captureDir)
     }
   } else {

@@ -1,7 +1,7 @@
 # 基础UI组件
 
 <cite>
-**本文引用的文件**
+**本文引用的文件**   
 - [src/components/ui/button.tsx](file://src/components/ui/button.tsx)
 - [src/components/ui/dialog.tsx](file://src/components/ui/dialog.tsx)
 - [src/components/ui/card.tsx](file://src/components/ui/card.tsx)
@@ -15,7 +15,7 @@
 </cite>
 
 ## 更新摘要
-**变更内容**
+**变更内容**   
 - Button组件采用v2设计系统，引入扁平化纯色配色方案
 - 新增SettingsField基础组件，提供统一的设置字段输入体验
 - SettingsPanel组件得到全面改进，支持更丰富的设置项管理
@@ -68,7 +68,7 @@ G --> L["统一输入体验<br/>标准化表单控件"]
 H --> M["全面改进<br/>增强的设置管理"]
 ```
 
-图表来源
+图表来源 
 - [src/app/providers.tsx](file://src/app/providers.tsx)
 - [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
 - [src/app/design-system.css](file://src/app/design-system.css)
@@ -188,7 +188,7 @@ SettingsGroup --> DesignSystemV2 : "使用v2设计系统"
 SettingsRow --> DesignSystemV2 : "使用v2设计系统"
 ```
 
-图表来源
+图表来源 
 - [src/components/ui/button.tsx](file://src/components/ui/button.tsx)
 - [src/components/ui/dialog.tsx](file://src/components/ui/dialog.tsx)
 - [src/components/ui/card.tsx](file://src/components/ui/card.tsx)
@@ -243,7 +243,7 @@ I --> J
 C --> J
 ```
 
-**章节来源**
+**章节来源**   
 - [src/components/ui/button.tsx](file://src/components/ui/button.tsx)
 - [src/app/design-system.css](file://src/app/design-system.css)
 - [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
@@ -291,7 +291,7 @@ D->>D : 设置 open=false
 D->>F : 恢复滚动/返回焦点
 ```
 
-**章节来源**
+**章节来源**   
 - [src/components/ui/dialog.tsx](file://src/components/ui/dialog.tsx)
 - [src/app/design-system.css](file://src/app/design-system.css)
 - [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
@@ -343,7 +343,7 @@ Card --> CardBody : "包含"
 Card --> CardFooter : "包含"
 ```
 
-**章节来源**
+**章节来源**   
 - [src/components/ui/card.tsx](file://src/components/ui/card.tsx)
 - [src/app/design-system.css](file://src/app/design-system.css)
 - [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
@@ -381,7 +381,7 @@ Button v2支持三种标准尺寸：
 - **Destructive**：破坏性操作，使用红色系
 - **Outline**：轮廓按钮，仅显示边框
 
-**章节来源**
+**章节来源**   
 - [src/components/ui/button.tsx](file://src/components/ui/button.tsx)
 - [src/app/design-system.css](file://src/app/design-system.css)
 
@@ -432,7 +432,7 @@ SettingsField内置了强大的验证机制：
 - **自定义验证**：通过onChange回调实现自定义逻辑
 - **错误显示**：统一的错误消息展示
 
-**章节来源**
+**章节来源**   
 - [src/components/ui/settings-field.tsx](file://src/components/ui/settings-field.tsx)
 - [src/app/design-system.css](file://src/app/design-system.css)
 
@@ -485,7 +485,7 @@ SettingsPanel的典型使用模式：
 - **性能优化**：按需渲染和状态管理优化
 - **主题适配**：完整的明暗主题支持
 
-**章节来源**
+**章节来源**   
 - [src/components/ui/settings-panel.tsx](file://src/components/ui/settings-panel.tsx)
 - [src/components/ui/settings-group.tsx](file://src/components/ui/settings-group.tsx)
 - [src/components/ui/settings-row.tsx](file://src/components/ui/settings-row.tsx)
@@ -518,7 +518,7 @@ SettingsGroup --> SettingsRow : "包含"
 SettingsRow --> SettingsField : "使用"
 ```
 
-图表来源
+图表来源 
 - [src/app/providers.tsx](file://src/app/providers.tsx)
 - [src/lib/theme-mode.ts](file://src/lib/theme-mode.ts)
 - [src/app/design-system.css](file://src/app/design-system.css)
@@ -567,7 +567,7 @@ SettingsRow --> SettingsField : "使用"
   - 检查onSave回调是否正确实现
   - 确认表单验证是否通过
 
-**章节来源**
+**章节来源**   
 - [src/app/providers.tsx](file://src/app/providers.tsx)
 - [src/app/design-system.css](file://src/app/design-system.css)
 - [src/components/ui/dialog.tsx](file://src/components/ui/dialog.tsx)

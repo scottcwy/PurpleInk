@@ -98,6 +98,43 @@ describe('executeNodeAction', () => {
       nodeId: 'codegen-s002',
     })
   })
+
+  it('routes a blocked export to confirmation without enqueuing Director FINALIZE', async () => {
+    const test = harness(true)
+    test.graph.nodes.push(node({
+      id: 'export',
+      type: 'export',
+      stage: 'FINALIZE',
+      status: 'blocked',
+      workflowBlock: {
+        code: 'DEGRADED_EXPORT_CONFIRMATION_REQUIRED',
+        message: '当前终片需要使用占位镜头，请确认降级交付。',
+        recovery: 'confirm_degraded_export',
+        referenceId: 'ref-1',
+        blockedAt: '2026-07-29T06:25:05.000Z',
+        confirmationFingerprint: 'sha256:current',
+      },
+    }))
+
+    const result = await executeNodeAction(
+      { projectId: 'project-1', nodeId: 'export', intent: 'execute' },
+      test.dependencies,
+    )
+
+    expect(test.requestExportFinalization).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      exportNodeId: 'export',
+      trigger: 'manual-node',
+    })
+    expect(test.enqueueDirectorStage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ nodeId: 'export' }),
+    )
+    expect(result).toMatchObject({
+      action: 'confirm-degraded-export',
+      requestedNodeId: 'export',
+      jobId: null,
+    })
+  })
 })
 
 describe('repairProjectFrontier', () => {
@@ -144,6 +181,38 @@ describe('repairProjectFrontier', () => {
       expect.objectContaining({ nodeId: 'export' })
     )
   })
+
+  it('reconciles only a legacy generic export failure into the confirmation block', async () => {
+    const test = harness(true)
+    test.graph.nodes.push(node({
+      id: 'export',
+      type: 'export',
+      stage: 'FINALIZE',
+      status: 'failed',
+      directorError: {
+        stage: 'FINALIZE',
+        message: '执行遇到未知问题',
+        code: 'STAGE_FAILED',
+        retryable: true,
+      },
+    }))
+
+    const result = await repairProjectFrontier('project-1', test.dependencies)
+
+    expect(test.requestExportFinalization).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      exportNodeId: 'export',
+      trigger: 'manual-node',
+    })
+    expect(result.blockedNodes).toContainEqual({
+      nodeId: 'export',
+      code: 'DEGRADED_EXPORT_CONFIRMATION_REQUIRED',
+      message: '当前终片需要使用占位镜头，请确认降级交付。',
+    })
+    expect(test.enqueueDirectorStage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ nodeId: 'export' }),
+    )
+  })
 })
 
 function harness(shotSpecValid: boolean, codegenStatus: CanvasGraphNode['status'] = 'failed') {
@@ -170,6 +239,18 @@ function harness(shotSpecValid: boolean, codegenStatus: CanvasGraphNode['status'
   const invalidate = vi.fn(async () => {})
   const enqueueDirectorStage = vi.fn(async () => 'director-job')
   const enqueueRenderShot = vi.fn(async () => 'render-job')
+  const requestExportFinalization = vi.fn(async () => ({
+    status: 'blocked' as const,
+    nodeId: 'export',
+    block: {
+      code: 'DEGRADED_EXPORT_CONFIRMATION_REQUIRED' as const,
+      message: '当前终片需要使用占位镜头，请确认降级交付。',
+      recovery: 'confirm_degraded_export' as const,
+      referenceId: 'ref-1',
+      blockedAt: '2026-07-29T06:25:05.000Z',
+      confirmationFingerprint: 'sha256:current',
+    },
+  }))
   const dependencies: NodeRecoveryDependencies = {
     getGraph: vi.fn(async () => graph),
     setAutopilot: vi.fn(async () => {}),
@@ -177,12 +258,14 @@ function harness(shotSpecValid: boolean, codegenStatus: CanvasGraphNode['status'
     invalidate,
     enqueueDirectorStage,
     enqueueRenderShot,
+    requestExportFinalization,
   }
   return {
     graph,
     invalidate,
     enqueueDirectorStage,
     enqueueRenderShot,
+    requestExportFinalization,
     dependencies,
   }
 }

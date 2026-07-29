@@ -33,6 +33,12 @@ export function buildFabricatePrompt(
   const parsed = fabricatePromptInputSchema.parse(input)
   return `你正在执行 CodeVideoCanvas 的 FABRICATE 阶段，只实现当前分镜。
 
+优先保证视觉效果：用最能把本镜头叙述内容可视化、最有价值的前端设计来呈现；
+对产品界面、数据、流程等内容尽量高质量还原；具体设计方向由你自行决策。
+代码层面请拿出你的最强能力：充分使用 GSAP 高级特性（clip-path 揭示、
+transform-origin 精准控制、贝塞尔缓动、错峰入场、多相位编排），
+用尽可能丰富的动效优化画面表现力。
+
 正向视觉法则 10：所有重要可见元素必须位于 TitleRegion、HeroRegion、SupportRegion 或通用 VisualRegion，并带稳定 QA 标识。
 
 确定性红线（任何一项出现都判失败）：
@@ -59,17 +65,17 @@ export function buildFabricatePrompt(
   seek 必须同步或返回 Promise，并只根据传入的 frame/fps 更新当前帧。
 - 输出的第一个字符必须是 <，最后一个字符必须是 >；禁止 Markdown 围栏、
   解释、前后缀或省略内容。
-- 完整 HTML 必须控制在 16000 个字符以内；优先复用 CSS class 与短函数，禁止为装饰
-  重复堆叠节点、内联超长 SVG path 或 Base64 素材。必须在预算内完整闭合文档并调用工具，
+- 完整 HTML 必须控制在 64000 个字符以内；避免无意义重复节点与超长 Base64 素材，
+  禁止为凑长度堆无意义代码。必须在预算内完整闭合文档并调用工具，
   不能因追求细节输出半截 HTML。
 - ${visualThemeConstraint(parsed.visualTheme)}
 
-shot contract：
-${JSON.stringify(parsed.shot)}
-audio allocation：
-${JSON.stringify(parsed.audioAllocation)}
 style bible：
 ${parsed.styleBible}
+audio allocation（项目级共享时序）：
+${JSON.stringify(parsed.audioAllocation)}
+shot contract（当前镜头专属合同）：
+${JSON.stringify(parsed.shot)}
 
 提交方式：必须调用 check_determinism 工具，把完整 HTML 作为 source 实参提交，不要把实参当作普通文本输出。
 工具返回违规时，按返回的错误逐条修订后再次调用同一工具。
@@ -88,5 +94,6 @@ export function buildFabricateRetryPrompt(
 ${parsed.errors.map((error, index) => `${index + 1}. ${error}`).join('\n')}
 
 只修正这些违规及其直接影响，不改变 shot 职责、文案、时长、视觉合同或已正确部分。
+修正违规时不得为通过门禁而删减视觉细节、动效或设计质量；本会话历史中的 style bible、shot contract 与视觉法则仍然全部有效，修正后的版本必须保持同等或更高的视觉丰富度。
 重新输出完整 HTML，不要输出补丁、解释、Markdown 围栏或省略内容；最终 HTML 仍须自包含并满足 window.__CVC_RENDER__@v1。`
 }

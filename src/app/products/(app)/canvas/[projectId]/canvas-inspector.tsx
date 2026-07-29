@@ -13,7 +13,10 @@ import { Toast } from '@/components/ui/toast'
 import type { CanvasGraphNode } from '@/features/canvas'
 import { ArtifactHoverChip } from '@/features/canvas/artifact-hover-chip'
 import { AnimatedAside, DrawerOverlay } from '@/features/navigation/collapsible-panel'
-import { productShotHref } from '@/features/navigation/products-routes'
+import {
+  productExportHref,
+  productShotHref,
+} from '@/features/navigation/products-routes'
 import { useMediaQuery } from '@/lib/hooks/use-media-query'
 import { usePersistentToggle } from '@/lib/hooks/use-persistent-toggle'
 import { useResizablePanel } from '@/lib/hooks/use-resizable-panel'
@@ -26,6 +29,7 @@ import {
   triggerNodeSkip,
   type NodeActionResult,
 } from './canvas-action-api'
+import { ARTIFACT_FILENAME, NODE_LABEL } from './canvas-inspector-labels'
 import { getNodeStatusLabel, getNodeStatusPresentation } from './flow-elements'
 import { isNodeActionBlocked, nodeActionLabel } from './node-action-presentation'
 import { StreamingLogCard } from './streaming-log-card'
@@ -291,14 +295,20 @@ function InspectorBody({
         onSkip={onSkip}
         onCancelWait={onCancelWait}
       />
-      <Button
-        variant={node.type === 'shot-codegen' ? 'destructive' : 'tinted'}
-        icon={RefreshCw}
-        onClick={onExecute}
-        disabled={submitting || isNodeActionBlocked(node)}
-      >
-        {nodeActionLabel(node)}
-      </Button>
+      {node.type === 'export' && node.status === 'blocked' ? (
+        <Link href={productExportHref(projectId)}>
+          <Button variant="tinted">{nodeActionLabel(node)}</Button>
+        </Link>
+      ) : (
+        <Button
+          variant={node.type === 'shot-codegen' ? 'destructive' : 'tinted'}
+          icon={RefreshCw}
+          onClick={onExecute}
+          disabled={submitting || isNodeActionBlocked(node)}
+        >
+          {nodeActionLabel(node)}
+        </Button>
+      )}
       {node.type === 'shot-codegen' && (
         <Link href={productShotHref(node.id, projectId)}>
           <Button variant="gray">查看代码</Button>
@@ -315,32 +325,4 @@ function InspectorBody({
       {error && <Toast variant="error" title="失败" body={error} className="w-full" />}
     </div>
   )
-}
-
-/** 已知产物 kind 的展示层友好文件名；真实 key 内含内容哈希，直接展示会破坏布局。 */
-const ARTIFACT_FILENAME: Record<string, string> = {
-  'director-ingest': 'script-units.json',
-  'director-direct': 'style-bible.md',
-  'director-shot-spec': 'shot-plan.json',
-  'director-fabricate': 'shot.html',
-  'director-assemble': 'assemble-plan.json',
-  'director-finalize': 'finalize-report.json',
-  'voiceover-audio': 'voiceover.mp3',
-  'voiceover-metadata': 'voiceover-metadata.json',
-  'subtitle-track': 'subtitle-track.json',
-  'qa-vision-report': 'vision-qa-report.json',
-  'render-mp4': 'render.mp4',
-  'final-mp4': 'final.mp4',
-}
-
-const NODE_LABEL: Record<CanvasGraphNode['type'], string> = {
-  'script-import': 'Ingest 语义分镜',
-  'shot-split': 'Direct 风格圣经',
-  score: 'Assemble 合成',
-  export: 'Finalize 导出',
-  'shot-script': 'Shot-Spec 分镜合同',
-  'shot-codegen': 'Shot 分镜节点',
-  'shot-sfx': 'Audio 配音字幕',
-  'shot-subtitle': 'Audio 配音字幕',
-  'shot-qa': 'Finalize 验收',
 }

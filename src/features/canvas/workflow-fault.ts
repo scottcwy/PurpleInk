@@ -13,6 +13,7 @@ export type WorkflowFaultCode =
   | 'PLATFORM_RENDER_FAILED'
   | 'PLATFORM_INTERNAL_ERROR'
   | 'UPSTREAM_ARTIFACT_MISSING'
+  | 'FINAL_ARTIFACT_NOT_READY'
   | 'UPSTREAM_ARTIFACT_INVALID'
   | 'STAGE_INPUT_INVALID'
   | 'INTERNAL_PREFLIGHT_FAILED'
@@ -64,6 +65,16 @@ export interface WorkflowFault {
 }
 
 export type WorkflowErrorProjection = WorkflowFault
+
+/** 业务流程成立但需要用户显式确认时的持久化门禁；它不是执行失败。 */
+export interface WorkflowBlock {
+  code: 'DEGRADED_EXPORT_CONFIRMATION_REQUIRED'
+  message: string
+  recovery: 'confirm_degraded_export'
+  referenceId: string
+  blockedAt: string
+  confirmationFingerprint: string
+}
 
 export interface WorkflowExecutionNotice {
   code: 'PROVIDER_RATE_LIMITED'
@@ -203,6 +214,8 @@ function presentationFor(code: WorkflowFaultCode): {
     case 'UPSTREAM_ARTIFACT_MISSING':
     case 'UPSTREAM_ARTIFACT_INVALID':
       return { origin: 'platform', title: '生成结果未通过系统校验', recovery: 'manual_retry' }
+    case 'FINAL_ARTIFACT_NOT_READY':
+      return { origin: 'platform', title: '终片尚未生成', recovery: 'confirm_degraded_export' }
     case 'STAGE_INPUT_INVALID':
       return { origin: 'content', title: '上游内容或素材需要修复', recovery: 'edit_input' }
     case 'TASK_INTERRUPTED':

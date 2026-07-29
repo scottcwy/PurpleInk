@@ -162,7 +162,9 @@ describe('exportDegradedProject', () => {
     const manifestPut = puts.find((entry) => entry.key.endsWith('.degraded.json'))
     const manifest = JSON.parse(manifestPut!.bytes.toString('utf-8')) as {
       schemaVersion: number
+      deliveryMode: string
       finalContentHash: string
+      confirmationFingerprint: string | null
       placeholderLanes: string[]
       waivedQaLanes: string[]
     }
@@ -171,7 +173,9 @@ describe('exportDegradedProject', () => {
     }
     expect(manifest.placeholderLanes).toEqual(['S007'])
     expect(manifest.waivedQaLanes).toEqual(['S004'])
-    expect(manifest.schemaVersion).toBe(2)
+    expect(manifest.schemaVersion).toBe(3)
+    expect(manifest.deliveryMode).toBe('degraded')
+    expect(manifest.confirmationFingerprint).toBeNull()
   })
 
   it('records a QA-only waiver as degraded even when no placeholder is needed', async () => {

@@ -24,6 +24,37 @@ function stageInputError(): unknown {
 }
 
 describe('classifyWorkflowError', () => {
+  it('reuses one safe reference when the same failure crosses node, queue, and log projections', () => {
+    const failure = new Error('unexpected')
+    const first = classifyWorkflowError(failure, { stage: 'FINALIZE' })
+    const second = classifyWorkflowError(failure, { stage: 'QUEUE' })
+
+    expect(second).toBe(first)
+    expect(second.referenceId).toBe(first.referenceId)
+    expect(second.stage).toBe('FINALIZE')
+  })
+
+  it('does not reclassify an already structured workflow fault', () => {
+    const fault = classifyWorkflowError(new Error('unexpected'), {
+      stage: 'FINALIZE',
+    })
+
+    expect(classifyWorkflowError(fault, { stage: 'QUEUE' })).toBe(fault)
+  })
+
+  it('treats missing final-mp4 as a non-retryable export precondition', () => {
+    const failure = Object.assign(new Error('missing final artifact'), {
+      name: 'FinalArtifactNotReadyError',
+    })
+
+    expect(
+      classifyWorkflowError(failure, { stage: 'FINALIZE' })
+    ).toMatchObject({
+      code: 'FINAL_ARTIFACT_NOT_READY',
+      retryable: false,
+      recovery: 'confirm_degraded_export',
+    })
+  })
   it.each([
     [401, 'auth', 'PROVIDER_AUTH_FAILED'],
     [402, 'balance', 'PROVIDER_BALANCE_EXHAUSTED'],

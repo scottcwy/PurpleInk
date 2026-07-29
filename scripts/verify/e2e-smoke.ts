@@ -60,6 +60,7 @@ interface GraphNode {
 }
 
 const TERMINAL = new Set(['succeeded', 'success', 'failed', 'cancelled'])
+const ACTIVE = new Set(['queued', 'running'])
 
 /** 会话进行中持续 append 的实时日志 kind：登记哈希是开始时刻快照，不做等值断言。 */
 const LIVE_LOG_KINDS = new Set(['pi-session'])
@@ -171,6 +172,12 @@ async function waitForTerminalGraph(
       lastSummary = summary
     }
     if (pending.length === 0 && nodes.length > 0) return nodes
+    if (
+      nodes.some((node) => node.status === 'failed')
+      && !nodes.some((node) => ACTIVE.has(node.status))
+    ) {
+      return nodes
+    }
     if (Date.now() > deadline) {
       throw new Error(
         `等待超时（${Math.round(options.timeoutMs / 1000)}s），仍未终态：` +

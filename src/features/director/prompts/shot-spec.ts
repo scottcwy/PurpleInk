@@ -48,21 +48,14 @@ const retryPromptInputSchema = z
 /** 构建 SHOT-SPEC 阶段的 canonical shot-plan 提示词。 */
 export function buildShotSpecPrompt(input: ShotSpecPromptInput): string {
   const parsed = shotSpecPromptInputSchema.parse(input)
-  return `你正在执行 CodeVideoCanvas 的 SHOT-SPEC 阶段。
-
-当前唯一目标镜头：${parsed.target.laneKey}
-当前唯一来源单元：${parsed.target.sourceUnitId}
-来源原文：${parsed.target.sourceUnit.text}
-
-只生成当前镜头的一份 canonical shot plan；shots 必须且只能包含一个镜头，只允许包含 ${parsed.target.laneKey}。该镜头的 sourceUnitIds 与 audioBinding.unitId 必须绑定 ${parsed.target.sourceUnitId}。
-必须完整填写职责、音频绑定、视觉增幅、构图、hero anatomy、屏幕文字、运动阶段、关键帧、能力、素材、音效与 mustShow/mustAvoid。
-
-可用构图模式仅限：${compositionModeSchema.options.join('、')}。
+  return `你正在执行 CodeVideoCanvas 的 SHOT-SPEC 阶段，每次只为一个目标镜头生成 canonical shot plan。
 
 正向视觉法则 6：默认使用全画布；空间不足时优先横移、纵移、推进、缩放、分阶段揭示或深度场景。
 正向视觉法则 7：Three.js、Shader、复杂文字与粒子只能表达关系，不能只做装饰。
 正向视觉法则 8：组件复用用于建立视觉记忆；连续镜头必须改变状态、拓扑、视角或信息职责。
 正向视觉法则 9：连续三镜同拓扑必须警告；只有连续状态机或明确 montage 可声明例外。
+
+可用构图模式仅限：${compositionModeSchema.options.join('、')}。
 
 master plan：
 ${parsed.masterPlan}
@@ -72,6 +65,13 @@ script units：
 ${JSON.stringify(parsed.scriptUnits)}
 音频时序（异步生成；未就绪时只绑定来源文本，不得编造时长）：
 ${JSON.stringify(parsed.audioAllocation ?? { status: 'pending' })}
+
+当前唯一目标镜头：${parsed.target.laneKey}
+当前唯一来源单元：${parsed.target.sourceUnitId}
+来源原文：${parsed.target.sourceUnit.text}
+
+只生成当前镜头的一份 canonical shot plan；shots 必须且只能包含一个镜头，只允许包含 ${parsed.target.laneKey}。该镜头的 sourceUnitIds 与 audioBinding.unitId 必须绑定 ${parsed.target.sourceUnitId}。
+必须完整填写职责、音频绑定、视觉增幅、构图、hero anatomy、屏幕文字、运动阶段、关键帧、能力、素材、音效与 mustShow/mustAvoid。
 
 提交方式：必须调用 validate_shot_plan 工具，把完整 shot plan 作为 shotPlan 实参提交，不要把实参当作普通文本输出。
 工具返回校验失败时，按返回的错误逐条修订后再次调用同一工具。
@@ -90,5 +90,6 @@ export function buildShotSpecRetryPrompt(
 ${parsed.errors.map((error, index) => `${index + 1}. ${error}`).join('\n')}
 
 只修正这些 schema 或当前镜头绑定错误及其直接影响，不改写 master plan、style bible、原稿事实或已正确的镜头合同。
+修正违规时不得为通过门禁而删减视觉细节、动效或设计质量；本会话历史中的 style bible、镜头合同与视觉法则仍然全部有效，修正后的版本必须保持同等或更高的视觉丰富度。
 重新输出一份可直接解析的完整 JSON，不要输出补丁、解释、Markdown 围栏或省略内容。`
 }

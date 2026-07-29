@@ -40,18 +40,23 @@ function harness(
     vi.fn<AdvanceDependencies['enqueueDirectorStage']>(async () => 'director-job')
   const enqueueRenderShot =
     vi.fn<AdvanceDependencies['enqueueRenderShot']>(async () => 'render-job')
-  const prepareFinalExport =
-    vi.fn<AdvanceDependencies['prepareFinalExport']>(async () => {})
+  const requestExportFinalization =
+    vi.fn<AdvanceDependencies['requestExportFinalization']>(async (input) => ({
+      status: 'queued',
+      nodeId: input.exportNodeId,
+      jobId: 'export-job',
+      mode: 'complete',
+    }))
   return {
     repository,
     enqueueDirectorStage,
     enqueueRenderShot,
-    prepareFinalExport,
+    requestExportFinalization,
     dependencies: {
       repository,
       enqueueDirectorStage,
       enqueueRenderShot,
-      prepareFinalExport,
+      requestExportFinalization,
     } satisfies AdvanceDependencies,
   }
 }
@@ -112,23 +117,49 @@ describe('advancePipeline', () => {
     expect(test.repository.recordStageError).not.toHaveBeenCalled()
   })
 
-  it('creates the trusted final MP4 before enqueuing export FINALIZE', async () => {
+  it('routes export through the single finalization coordinator', async () => {
     const test = harness([
       candidate({ id: 'export', type: 'export', stage: 'FINALIZE' }),
     ])
 
     const result = await advancePipeline('project-1', 'score', test.dependencies)
 
-    expect(test.prepareFinalExport).toHaveBeenCalledWith('project-1')
-    expect(test.enqueueDirectorStage).toHaveBeenCalledWith({
+    expect(test.requestExportFinalization).toHaveBeenCalledWith({
       projectId: 'project-1',
-      nodeId: 'export',
-      stage: 'FINALIZE',
+      exportNodeId: 'export',
+      trigger: 'autopilot',
     })
-    expect(test.prepareFinalExport.mock.invocationCallOrder[0]).toBeLessThan(
-      test.enqueueDirectorStage.mock.invocationCallOrder[0]!
-    )
+    expect(test.enqueueDirectorStage).not.toHaveBeenCalled()
     expect(result.enqueuedNodeIds).toEqual(['export'])
+  })
+
+  it('returns an explicit confirmation block without recording a stage failure', async () => {
+    const test = harness([
+      candidate({ id: 'export', type: 'export', stage: 'FINALIZE' }),
+    ])
+    test.requestExportFinalization.mockResolvedValue({
+      status: 'blocked',
+      nodeId: 'export',
+      block: {
+        code: 'DEGRADED_EXPORT_CONFIRMATION_REQUIRED',
+        message: '当前终片需要使用占位镜头，请确认降级交付。',
+        recovery: 'confirm_degraded_export',
+        referenceId: 'ref-1',
+        blockedAt: '2026-07-29T06:25:05.000Z',
+        confirmationFingerprint: 'sha256:current',
+      },
+    })
+
+    const result = await advancePipeline('project-1', 'score', test.dependencies)
+
+    expect(result.enqueuedNodeIds).toEqual([])
+    expect(result.failedNodeIds).toEqual([])
+    expect(result.blockedNodes).toEqual([{
+      nodeId: 'export',
+      code: 'DEGRADED_EXPORT_CONFIRMATION_REQUIRED',
+      message: '当前终片需要使用占位镜头，请确认降级交付。',
+    }])
+    expect(test.repository.recordStageError).not.toHaveBeenCalled()
   })
 
   it.each(['pending', 'running', 'success'] as const)(

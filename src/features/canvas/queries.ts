@@ -20,10 +20,11 @@ import {
   parseDirectorError,
   parseExecutionNotice,
   parseRenderError,
+  parseWorkflowBlock,
   type DirectorNodeError,
   type RenderNodeError,
 } from './node-error-projection'
-import type { WorkflowExecutionNotice } from './workflow-fault'
+import type { WorkflowBlock, WorkflowExecutionNotice } from './workflow-fault'
 export type { DirectorNodeError, RenderNodeError } from './node-error-projection'
 
 export interface CanvasNodeArtifact {
@@ -45,6 +46,7 @@ export interface CanvasGraphNode {
   directorError?: DirectorNodeError
   renderError?: RenderNodeError
   executionNotice?: WorkflowExecutionNotice
+  workflowBlock?: WorkflowBlock
 }
 
 /** 挂了渲染坐标的画布节点；坐标只来自 `computeLayout`，不是持久化字段。 */
@@ -152,6 +154,7 @@ export async function getCanvasGraph(projectId: string): Promise<CanvasGraph> {
         directorError: parseDirectorError(data),
         renderError: parseRenderError(data),
         executionNotice: parseExecutionNotice(data.executionNotice),
+        workflowBlock: parseWorkflowBlock(data.workflowBlock),
       }
     })
   )
@@ -254,7 +257,8 @@ function fromPersistedStatus(status: string): NodeStatus {
     status === 'failed' ||
     status === 'cancelled' ||
     status === 'stale' ||
-    status === 'skipped'
+    status === 'skipped' ||
+    status === 'blocked'
   ) {
     return status
   }

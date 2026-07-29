@@ -1,7 +1,7 @@
 # 阶段执行API
 
 <cite>
-**本文引用的文件**
+**本文引用的文件**   
 - [server/src/server/api.ts](file://server/src/server/api.ts)
 - [server/src/server/job-runner.ts](file://server/src/server/job-runner.ts)
 - [server/src/server/job-store.ts](file://server/src/server/job-store.ts)
@@ -22,7 +22,7 @@
 </cite>
 
 ## 更新摘要
-**变更内容**
+**变更内容**   
 - 增强阶段级配额验证，在队列初始化前进行预检查
 - 阶段API在所有入口点实现一致的配额检查行为
 - 优化资源管理和限流机制

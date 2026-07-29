@@ -1,4 +1,4 @@
-import type { WorkflowExecutionNotice } from './workflow-fault'
+import type { WorkflowBlock, WorkflowExecutionNotice } from './workflow-fault'
 
 export interface DirectorNodeError {
   stage: string
@@ -76,6 +76,27 @@ export function parseExecutionNotice(value: unknown): WorkflowExecutionNotice | 
     message: record.message,
     resumeAt: record.resumeAt,
     providerLabel: record.providerLabel,
+  }
+}
+
+export function parseWorkflowBlock(value: unknown): WorkflowBlock | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  if (
+    record.code !== 'DEGRADED_EXPORT_CONFIRMATION_REQUIRED'
+    || record.recovery !== 'confirm_degraded_export'
+    || typeof record.message !== 'string'
+    || typeof record.referenceId !== 'string'
+    || typeof record.blockedAt !== 'string'
+    || typeof record.confirmationFingerprint !== 'string'
+  ) return undefined
+  return {
+    code: record.code,
+    message: record.message,
+    recovery: record.recovery,
+    referenceId: record.referenceId,
+    blockedAt: record.blockedAt,
+    confirmationFingerprint: record.confirmationFingerprint,
   }
 }
 

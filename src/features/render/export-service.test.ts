@@ -256,6 +256,7 @@ describe('getExportReadiness', () => {
       placeholderCandidateLanes: ['S002'],
       degradedReady: true,
     })
+    expect(result.confirmationFingerprint).toMatch(/^[a-f0-9]{64}$/)
     expect(getExportPlan).toHaveBeenNthCalledWith(2, 'project-1', {
       degraded: true,
     })
@@ -296,6 +297,7 @@ describe('getExportReadiness', () => {
       shotQa: { S004: false },
       waivedQaLanes: ['S004'],
     })
+    expect(result.confirmationFingerprint).toMatch(/^[a-f0-9]{64}$/)
   })
 })
 

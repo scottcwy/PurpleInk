@@ -1,5 +1,5 @@
 {
-  "id": "69ebfdc1-488d-4c28-a252-771f268b22fd",
+  "id": "45e530f8-32c6-49f8-96cb-4736e743abfe",
   "prevId": "e9600347-96d6-407e-adaa-3b5da6c84d87",
   "version": "7",
   "dialect": "postgresql",
@@ -867,7 +867,7 @@
         },
         "canvas_nodes_status_check": {
           "name": "canvas_nodes_status_check",
-          "value": "\"canvas_nodes\".\"status\" in (\n        'idle', 'queued', 'running', 'succeeded', 'failed', 'cancelled', 'stale', 'skipped'\n      )"
+          "value": "\"canvas_nodes\".\"status\" in (\n        'idle', 'queued', 'running', 'succeeded', 'failed', 'cancelled', 'stale', 'skipped', 'blocked'\n      )"
         },
         "canvas_nodes_revision_check": {
           "name": "canvas_nodes_revision_check",
@@ -2489,142 +2489,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.render_jobs": {
-      "name": "render_jobs",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "input": {
-          "name": "input",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'queued'"
-        },
-        "phase": {
-          "name": "phase",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'queued'"
-        },
-        "error": {
-          "name": "error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "elapsed_sec": {
-          "name": "elapsed_sec",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "duration_sec": {
-          "name": "duration_sec",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "check_passed": {
-          "name": "check_passed",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "golden_verified": {
-          "name": "golden_verified",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "logs": {
-          "name": "logs",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "render_jobs_created_idx": {
-          "name": "render_jobs_created_idx",
-          "columns": [
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": false,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "render_jobs_status_idx": {
-          "name": "render_jobs_status_idx",
-          "columns": [
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "render_jobs_status_check": {
-          "name": "render_jobs_status_check",
-          "value": "\"render_jobs\".\"status\" in ('queued', 'running', 'done', 'failed')"
-        },
-        "render_jobs_kind_check": {
-          "name": "render_jobs_kind_check",
-          "value": "\"render_jobs\".\"kind\" in ('url', 'capture')"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.sessions": {
       "name": "sessions",
       "schema": "",
@@ -3142,13 +3006,6 @@
           "notNull": true,
           "default": "'active'"
         },
-        "role": {
-          "name": "role",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'user'"
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -3189,10 +3046,6 @@
         "users_status_check": {
           "name": "users_status_check",
           "value": "\"users\".\"status\" in ('active', 'disabled')"
-        },
-        "users_role_check": {
-          "name": "users_role_check",
-          "value": "\"users\".\"role\" in ('user', 'admin')"
         },
         "users_email_shape_check": {
           "name": "users_email_shape_check",

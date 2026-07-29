@@ -3,6 +3,7 @@ import os from 'node:os'
 import { and, asc, eq, like, lte, notInArray, sql } from 'drizzle-orm'
 import {
   currentWorkspaceId,
+  currentUserId,
   runInAuthContext,
   SYSTEM_USER_ID,
 } from '@/lib/auth/workspace-context'
@@ -15,6 +16,7 @@ import {
 } from '@/lib/workflow/version'
 import { completeAttempt } from './attempt-completion'
 import { parseCheckpoint, queueFingerprint } from './attempt-checkpoint'
+import { safeErrorDetails } from './queue-error-details'
 import {
   HEARTBEAT_INTERVAL_MS,
   SWEEP_INTERVAL_MS,
@@ -78,7 +80,7 @@ export class InProcessQueue implements QueueAdapter {
   async enqueue(
     kind: string,
     payload: Record<string, unknown> = {},
-    opts: { projectId?: string; nodeId?: string } = {},
+    opts: { projectId?: string; nodeId?: string; requestedByUserId?: string } = {},
   ): Promise<string> {
     if (!opts.projectId) {
       throw new Error('legacy queue enqueue requires a trusted projectId')
@@ -86,6 +88,9 @@ export class InProcessQueue implements QueueAdapter {
     // 入队发生在请求上下文内，归属取自当前会话；无上下文即抛错，
     // 不回落到常量（PLAN-002 §5.3 / §10 禁区 5）。
     const workspaceId = currentWorkspaceId()
+    const contextUserId = opts.requestedByUserId ?? currentUserId()
+    const requestedByUserId =
+      contextUserId === SYSTEM_USER_ID ? null : contextUserId
     const database = await getDb()
     const runId = randomUUID()
     const attemptId = randomUUID()
@@ -95,6 +100,7 @@ export class InProcessQueue implements QueueAdapter {
         workspaceId,
         id: runId,
         projectId: opts.projectId!,
+        requestedByUserId,
         status: 'queued',
         workflowVersion: serializeWorkflowVersion(ACTIVE_WORKFLOW_VERSION),
         fingerprint,
@@ -219,8 +225,16 @@ export class InProcessQueue implements QueueAdapter {
           taskId: taskAttempts.taskId,
           checkpoint: taskAttempts.checkpoint,
           attemptNo: taskAttempts.attemptNo,
+          requestedByUserId: pipelineRuns.requestedByUserId,
         })
         .from(taskAttempts)
+        .innerJoin(
+          pipelineRuns,
+          and(
+            eq(pipelineRuns.workspaceId, taskAttempts.workspaceId),
+            eq(pipelineRuns.id, taskAttempts.runId),
+          ),
+        )
         .where(
           // 不按 workspace 过滤：消费者要处理全部 workspace 的作业，
           // 归属由领到的 attempt 行自身的 workspaceId 决定（PLAN-002 §5.3）。
@@ -240,8 +254,8 @@ export class InProcessQueue implements QueueAdapter {
         .set({
           status: 'running',
           leaseExpiresAt: leaseDeadline(row.taskId.slice('legacy.'.length)),
-          startedAt: new Date(),
-          updatedAt: new Date(),
+          startedAt: sql`now()`,
+          updatedAt: sql`now()`,
         })
         .where(
           and(
@@ -254,7 +268,7 @@ export class InProcessQueue implements QueueAdapter {
       if (!claimed) return null
       await transaction
         .update(pipelineRuns)
-        .set({ status: 'running', startedAt: new Date(), updatedAt: new Date() })
+        .set({ status: 'running', startedAt: sql`now()`, updatedAt: sql`now()` })
         .where(
           and(
             eq(pipelineRuns.workspaceId, row.workspaceId),
@@ -265,6 +279,7 @@ export class InProcessQueue implements QueueAdapter {
       return {
         id: row.id,
         workspaceId: row.workspaceId,
+        requestedByUserId: row.requestedByUserId,
         kind: checkpoint.kind,
         status: 'running',
         payload: checkpoint.payload,
@@ -275,8 +290,8 @@ export class InProcessQueue implements QueueAdapter {
 
   /**
    * 执行已领取的作业。handler 在 attempt 行自身的 workspace 上下文内运行：
-   * 队列是没有请求上下文的后台消费者，userId 用 SYSTEM_USER_ID 占位，
-   * 真实归属由 attempt 行决定（PLAN-002 §5.3）。
+   * 队列没有请求上下文，但 run 已固化真实发起账号；历史 run 无法归属时才使用
+   * SYSTEM_USER_ID。重试、fallback 与自动续接因此不会覆盖原始发起人。
    */
   private async run(job: QueueJob): Promise<void> {
     const database = await getDb()
@@ -297,7 +312,10 @@ export class InProcessQueue implements QueueAdapter {
     try {
       await withExecutionTimeout(job.kind, () =>
         runInAuthContext(
-          { workspaceId: job.workspaceId, userId: SYSTEM_USER_ID },
+          {
+            workspaceId: job.workspaceId,
+            userId: job.requestedByUserId ?? SYSTEM_USER_ID,
+          },
           () => handler(job)
         )
       )
@@ -327,18 +345,4 @@ export class InProcessQueue implements QueueAdapter {
       )
     }
   }
-}
-
-function safeErrorDetails(error: unknown): Record<string, unknown> | null {
-  if (
-    !(error instanceof Error)
-    || !['ExportProjectBlockedError', 'ExportExecutionError'].includes(error.name)
-    || !('safeDetails' in error)
-  ) {
-    return null
-  }
-  const details: unknown = error.safeDetails
-  return details && typeof details === 'object' && !Array.isArray(details)
-    ? details as Record<string, unknown>
-    : null
 }

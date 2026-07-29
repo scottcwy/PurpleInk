@@ -4,6 +4,10 @@ import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { type Db } from '@/lib/db/client'
 import { artifacts, canvasNodes } from '@/lib/db/schema/index'
 import type { StorageAdapter } from '@/lib/storage'
+import {
+  loadFinalExportDelivery as loadFinalExportDeliveryRecord,
+  type FinalExportDelivery,
+} from './final-export-artifact-source'
 import { readLaneKey } from './runtime-node-data'
 import {
   audioAllocationSchema,
@@ -224,22 +228,11 @@ export class DirectorArtifactSource {
   }
 
   async loadFinalExportArtifact(projectId: string): Promise<string> {
-    const [artifact] = await this.db
-      .select({ storageKey: artifacts.storageKey })
-      .from(artifacts)
-      .where(
-        and(
-          eq(artifacts.workspaceId, currentWorkspaceId()),
-          eq(artifacts.projectId, projectId),
-          eq(artifacts.aggregateType, 'project'),
-          eq(artifacts.aggregateId, projectId),
-          eq(artifacts.kind, 'final-mp4')
-        )
-      )
-      .orderBy(desc(artifacts.version), desc(artifacts.id))
-      .limit(1)
-    if (!artifact) throw new Error('请先完成合成导出：项目尚无 final-mp4 产物')
-    return artifact.storageKey
+    return (await this.loadFinalExportDelivery(projectId)).storageKey
+  }
+
+  async loadFinalExportDelivery(projectId: string): Promise<FinalExportDelivery> {
+    return loadFinalExportDeliveryRecord(this.db, this.storage, projectId)
   }
 
   async loadShotQaFindings(projectId: string): Promise<string[]> {

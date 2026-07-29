@@ -34,6 +34,8 @@ export function buildDirectPrompt(
 - style bible：世界观、色彩职责、中文排版、形状材质、背景演进、构图重量、运动 ownership、共享组件和禁止项。
 - 明确 2–3 个代表性校准镜；校准未通过不得批量制作。
 - 不把原稿逐句换成卡片，不引入原文之外的确定性事实。
+- master plan 必须按「一镜一个核心判断」逐 unit 规划，每镜承载内容少而精；
+  相邻镜头必须变化拓扑、视角或信息职责。
 - ${visualThemeConstraint(parsed.visualTheme)}
   style bible 的色彩职责必须服从上述色调硬约束。
 

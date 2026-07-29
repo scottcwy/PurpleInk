@@ -44,6 +44,25 @@ afterAll(async () => {
 const RETRYABLE_MESSAGE = '执行进程中断，租约过期自动回收'
 
 describe('completeAttempt 自动重试', () => {
+  it('uses the database clock for completion timestamps', async () => {
+    const { completeAttempt } = await import('./attempt-completion')
+    const projectId = await seedProject()
+    const seeded = await seedRunningNodeAttempt(projectId, { nodeStatus: 'running' })
+
+    await completeAttempt(
+      database.db,
+      LOCAL_WORKSPACE_ID,
+      seeded.attemptId,
+      'succeeded'
+    )
+
+    const completed = await readAttempt(seeded.attemptId)
+    const dbNow = await readDbNowMs()
+    expect(completed.completedAt).not.toBeNull()
+    // 只以 Postgres now() 为基准；实现写入 sql`now()`，不读取应用主机时间。
+    expect(Math.abs(completed.completedAt!.getTime() - dbNow)).toBeLessThan(10_000)
+  })
+
   it('可重试失败：原 attempt 置 superseded，同 run 追加退避后的新 attempt', async () => {
     const { completeAttempt } = await import('./attempt-completion')
     const projectId = await seedProject()

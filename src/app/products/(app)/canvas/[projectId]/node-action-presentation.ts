@@ -3,13 +3,17 @@ import type { CanvasGraphNode } from '@/features/canvas'
 export function isNodeActionBlocked(node: CanvasGraphNode): boolean {
   return (
     node.status === 'pending' ||
-    node.status === 'running'
+    node.status === 'running' ||
+    node.status === 'blocked'
   )
 }
 
 export function nodeActionLabel(node: CanvasGraphNode): string {
   if (node.status === 'pending') return '等待执行'
   if (node.status === 'running') return '正在执行'
+  if (node.status === 'blocked' && node.type === 'export') {
+    return '前往导出页确认'
+  }
   if (
     node.status === 'failed' &&
     (node.directorError ?? node.renderError)?.retryable === false

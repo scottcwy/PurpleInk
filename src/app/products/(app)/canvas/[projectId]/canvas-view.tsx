@@ -21,10 +21,13 @@ import { useProjectStatusStream } from '@/lib/hooks/use-project-status-stream'
 import { usePublishNavContext } from '@/features/navigation/nav-context'
 import { productExportHref } from '@/features/navigation/products-routes'
 import { CanvasAutoHideTopBar } from './canvas-auto-hide-top-bar'
+import { CanvasFlowNode } from './canvas-flow-node'
 import { CanvasInspector } from './canvas-inspector'
 import { CanvasMiniMap } from './canvas-minimap'
 import { CanvasViewportToolbar } from './canvas-viewport-toolbar'
 import { StageErrorDialog } from './stage-error-dialog'
+
+const canvasNodeTypes = { pipeline: CanvasFlowNode }
 import {
   BillingQuotaExhaustedError,
   startPipeline,
@@ -212,6 +215,7 @@ export function CanvasView({
           <ReactFlow
             nodes={flowNodes}
             edges={flowEdges}
+            nodeTypes={canvasNodeTypes}
             fitView
             // 不用 onlyRenderVisibleElements：拓扑刷新后视口未重 fit 时，
             // 一端离屏会导致边被跳过渲染（重进页面 remount 才恢复）。

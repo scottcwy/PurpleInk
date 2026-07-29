@@ -58,6 +58,8 @@ export async function resolveAuthorizedFallback(input: {
   console.warn('[ai] provider_fallback', {
     from: input.primary,
     to: authorizedFallback,
+    stage: input.target.kind,
+    capability: input.capability,
   })
   return {
     provider: authorizedFallback,

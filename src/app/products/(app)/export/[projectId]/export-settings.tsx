@@ -143,7 +143,7 @@ function degradedSummary(
   placeholderLanes: string[],
   waivedQaLanes: string[]
 ): string {
-  return `降级导出 · ${placeholderLanes.length} 镜占位 · ${waivedQaLanes.length} 镜未验收`
+  return `已完成 · 降级交付 · ${placeholderLanes.length} 镜占位 · ${waivedQaLanes.length} 镜未验收`
 }
 
 function degradedLaneDetails(

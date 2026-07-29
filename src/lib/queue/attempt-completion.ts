@@ -122,8 +122,8 @@ export async function completeAttempt(
         failure: failure === undefined
           ? null
           : fault ?? workflowFault(failure, stage),
-        completedAt: new Date(),
-        updatedAt: new Date(),
+        completedAt: sql`now()`,
+        updatedAt: sql`now()`,
       })
       .where(
         and(
@@ -133,7 +133,7 @@ export async function completeAttempt(
       )
     await transaction
       .update(pipelineRuns)
-      .set({ status, completedAt: new Date(), updatedAt: new Date() })
+      .set({ status, completedAt: sql`now()`, updatedAt: sql`now()` })
       .where(
         and(
           eq(pipelineRuns.workspaceId, workspaceId),
@@ -162,8 +162,8 @@ async function scheduleRetry(
     .set({
       status: 'superseded',
       failure,
-      completedAt: new Date(),
-      updatedAt: new Date(),
+      completedAt: sql`now()`,
+      updatedAt: sql`now()`,
     })
     .where(
       and(
@@ -191,7 +191,7 @@ async function scheduleRetry(
   })
   await transaction
     .update(pipelineRuns)
-    .set({ status: 'queued', updatedAt: new Date() })
+    .set({ status: 'queued', updatedAt: sql`now()` })
     .where(
       and(
         eq(pipelineRuns.workspaceId, workspaceId),
@@ -220,8 +220,8 @@ async function scheduleDeferred(
     .set({
       status: 'superseded',
       failure: fault,
-      completedAt: new Date(),
-      updatedAt: new Date(),
+      completedAt: sql`now()`,
+      updatedAt: sql`now()`,
     })
     .where(and(
       eq(taskAttempts.workspaceId, workspaceId),
@@ -246,7 +246,7 @@ async function scheduleDeferred(
   })
   await transaction
     .update(pipelineRuns)
-    .set({ status: 'queued', completedAt: null, updatedAt: new Date() })
+    .set({ status: 'queued', completedAt: null, updatedAt: sql`now()` })
     .where(and(
       eq(pipelineRuns.workspaceId, workspaceId),
       eq(pipelineRuns.id, attempt.runId),

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { withApiSession } from '@/features/auth/api-session'
-import { enqueueProjectExport } from '@/features/render/export-queue-handler'
+import { requestExportFinalization } from '@/features/director/export-finalization'
 import {
   ensureShotQaChecked,
   getExportReadiness,
@@ -12,8 +12,20 @@ import { assertProjectWorkflowSupported } from '@/features/projects/project-comp
 export const dynamic = 'force-dynamic'
 
 const requestSchema = z
-  .object({ projectId: z.string().min(1), degraded: z.boolean().optional() })
+  .object({
+    projectId: z.string().min(1),
+    degraded: z.boolean().optional(),
+    confirmationFingerprint: z.string().min(1).optional(),
+  })
   .strict()
+  .refine(
+    (input) => input.degraded !== true || input.confirmationFingerprint !== undefined,
+    { message: '确认降级导出时必须携带 confirmationFingerprint' },
+  )
+  .refine(
+    (input) => input.degraded === true || input.confirmationFingerprint === undefined,
+    { message: '仅降级确认允许携带 confirmationFingerprint' },
+  )
 
 export function GET(request: Request): Promise<Response> {
   return withApiSession(() => handleGet(request))
@@ -64,29 +76,54 @@ async function handlePost(request: Request) {
   try {
     await assertProjectWorkflowSupported(parsed.data.projectId)
     await initQueue()
-    // 未就绪在入队前如实拒绝，保持既有 409 + incompleteNodeIds 契约；
-    // 拼接与产物提交交给项目级队列作业（需要 project 级 attempt 才能提交 final-mp4）。
-    const readiness = await getExportReadiness(parsed.data.projectId)
-    // 降级导出：已就绪则忽略降级标志走正常导出；仅当 degradedReady 才放行。
-    const degraded = parsed.data.degraded === true && !readiness.ready
-    if (!readiness.ready && !(degraded && readiness.degradedReady)) {
+    const finalization = await requestExportFinalization({
+      projectId: parsed.data.projectId,
+      trigger: parsed.data.degraded === true
+        ? 'confirmed-degraded'
+        : 'manual-node',
+      ...(parsed.data.confirmationFingerprint
+        ? { confirmationFingerprint: parsed.data.confirmationFingerprint }
+        : {}),
+    })
+    if (finalization.status === 'blocked') {
       return NextResponse.json(
         {
           ok: false,
-          incompleteNodeIds: readiness.incompleteNodeIds,
-          blockingIssues: readiness.blockingIssues,
+          code: finalization.block.code,
+          error: finalization.block.message,
+          confirmationFingerprint: finalization.block.confirmationFingerprint,
         },
         { status: 409 }
       )
     }
     return NextResponse.json({
       ok: true,
-      jobId: await enqueueProjectExport({
-        projectId: parsed.data.projectId,
-        ...(degraded ? { degraded: true } : {}),
-      }),
+      jobId: finalization.jobId,
     })
   } catch (error) {
+    if (
+      error instanceof Error
+      && error.name === 'ExportFinalizationNotReadyError'
+    ) {
+      const details = readSafeDetails(error)
+      return NextResponse.json({
+        ok: false,
+        code: 'EXPORT_NOT_READY',
+        error: error.message,
+        incompleteNodeIds: details.incompleteNodeIds,
+        blockingIssues: details.blockingIssues,
+      }, { status: 409 })
+    }
+    if (
+      error instanceof Error
+      && error.name === 'StaleDegradedConfirmationError'
+    ) {
+      return NextResponse.json({
+        ok: false,
+        code: 'DEGRADED_CONFIRMATION_STALE',
+        error: error.message,
+      }, { status: 409 })
+    }
     return NextResponse.json(
       {
         ok: false,
@@ -94,5 +131,26 @@ async function handlePost(request: Request) {
       },
       { status: 409 }
     )
+  }
+}
+
+function readSafeDetails(error: Error): {
+  incompleteNodeIds: string[]
+  blockingIssues: unknown[]
+} {
+  const value = (error as Error & { safeDetails?: unknown }).safeDetails
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { incompleteNodeIds: [], blockingIssues: [] }
+  }
+  const details = value as Record<string, unknown>
+  return {
+    incompleteNodeIds: Array.isArray(details.incompleteNodeIds)
+      ? details.incompleteNodeIds.filter(
+          (item): item is string => typeof item === 'string',
+        )
+      : [],
+    blockingIssues: Array.isArray(details.blockingIssues)
+      ? details.blockingIssues
+      : [],
   }
 }

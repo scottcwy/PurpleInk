@@ -153,6 +153,40 @@ describe('director prompt templates', () => {
     ).toContain('shot-qa')
   })
 
+  it('states semantic split granularity in INGEST and per-shot planning in DIRECT', () => {
+    const ingestPrompt = buildIngestPrompt({ rawScript: '测试文稿' })
+    expect(ingestPrompt).toContain('1-2 句话一个 unit')
+    expect(ingestPrompt).toContain('禁止把多个独立语义点合并进同一个 unit')
+    expect(ingestPrompt).toContain('拆分粒度直接决定镜头精度')
+    expect(ingestPrompt).toContain('unit 总数不超过 999')
+
+    const directPrompt = buildDirectPrompt({
+      projectTitle: '测试',
+      scriptUnits,
+      audioManifest,
+      audioAllocation,
+    })
+    expect(directPrompt).toContain('一镜一个核心判断')
+    expect(directPrompt).toContain('相邻镜头必须变化拓扑、视角或信息职责')
+  })
+
+  it('forbids describing degraded FINALIZE input as complete quality approval', () => {
+    const prompt = buildExportFinalizePrompt({
+      shotPlan,
+      draftArtifactKey: 'exports/final.mp4',
+      qaFindings: [],
+      delivery: {
+        mode: 'degraded',
+        placeholderLanes: ['S007'],
+        waivedQaLanes: ['S007'],
+      },
+    })
+
+    expect(prompt).toContain('降级交付')
+    expect(prompt).toContain('不得描述为完整质量通过')
+    expect(prompt).toContain('S007')
+  })
+
   it('ports all ten positive visual laws without omissions', () => {
     const prompts = [
       buildDirectPrompt({ projectTitle: '测试', scriptUnits, audioManifest, audioAllocation }),
@@ -185,7 +219,7 @@ describe('director prompt templates', () => {
       'window.__CVC_RENDER__ = { version: 1, seek(frame, fps) }',
       '第一个字符必须是 <',
       '禁止 Markdown 围栏',
-      '16000 个字符以内',
+      '64000 个字符以内',
       '不能因追求细节输出半截 HTML',
       '固定 1920×1080',
       'width=1920, height=1080',
@@ -197,6 +231,15 @@ describe('director prompt templates', () => {
     ]) {
       expect(prompt).toContain(term)
     }
+  })
+
+  it('leads FABRICATE with wishful visual-quality directives', () => {
+    const prompt = buildFabricatePrompt({ shot, audioAllocation, styleBible: '风格圣经' })
+    expect(prompt).toContain('优先保证视觉效果')
+    expect(prompt).toContain('具体设计方向由你自行决策')
+    expect(prompt).toContain('拿出你的最强能力')
+    expect(prompt).toContain('clip-path 揭示')
+    expect(prompt).toContain('禁止为凑长度堆无意义代码')
   })
 
   it('injects dark/light visual theme hard constraints into DIRECT and FABRICATE', () => {
@@ -228,6 +271,29 @@ describe('director prompt templates', () => {
     expect(resolveVisualTheme('neon')).toBe('dark')
   })
 
+  it('places per-shot dynamic context after project-shared context for prompt caching', () => {
+    const shotSpecPrompt = buildShotSpecPrompt({
+      target: shotSpecTarget,
+      scriptUnits,
+      audioAllocation,
+      masterPlan: '导演总纲',
+      styleBible: '风格圣经',
+    })
+    const shotSpecDynamicAt = shotSpecPrompt.indexOf('当前唯一目标镜头')
+    expect(shotSpecDynamicAt).toBeGreaterThan(shotSpecPrompt.indexOf('master plan：'))
+    expect(shotSpecDynamicAt).toBeGreaterThan(shotSpecPrompt.indexOf('style bible：'))
+    expect(shotSpecDynamicAt).toBeGreaterThan(shotSpecPrompt.indexOf('音频时序'))
+
+    const fabricatePrompt = buildFabricatePrompt({
+      shot,
+      audioAllocation,
+      styleBible: '风格圣经',
+    })
+    const fabricateDynamicAt = fabricatePrompt.indexOf('shot contract')
+    expect(fabricateDynamicAt).toBeGreaterThan(fabricatePrompt.indexOf('style bible：'))
+    expect(fabricateDynamicAt).toBeGreaterThan(fabricatePrompt.indexOf('audio allocation'))
+  })
+
   it('builds typed gate feedback prompts with exact violations and full-output instructions', () => {
     const fabricateRetry = buildFabricateRetryPrompt({
       retry: 1,
@@ -237,6 +303,8 @@ describe('director prompt templates', () => {
     expect(fabricateRetry).toContain('set-interval@457')
     expect(fabricateRetry).toContain('第 1/2 次')
     expect(fabricateRetry).toContain('重新输出完整 HTML')
+    expect(fabricateRetry).toContain('不得为通过门禁而删减视觉细节、动效或设计质量')
+    expect(fabricateRetry).toContain('保持同等或更高的视觉丰富度')
 
     const shotSpecRetry = buildShotSpecRetryPrompt({
       retry: 2,
@@ -246,6 +314,8 @@ describe('director prompt templates', () => {
     expect(shotSpecRetry).toContain('shots.0.mustShow')
     expect(shotSpecRetry).toContain('第 2/2 次')
     expect(shotSpecRetry).toContain('完整 JSON')
+    expect(shotSpecRetry).toContain('不得为通过门禁而删减视觉细节、动效或设计质量')
+    expect(shotSpecRetry).toContain('镜头合同与视觉法则仍然全部有效')
   })
 })
 

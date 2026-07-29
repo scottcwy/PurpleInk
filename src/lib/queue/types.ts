@@ -4,6 +4,8 @@ export interface QueueJob {
   id: string
   /** attempt 行自身的归属；handler 在该 workspace 上下文内执行（PLAN-002 §5.3）。 */
   workspaceId: string
+  /** 发起账号来自不可变 run 事实；历史无法归属的作业为 null。 */
+  requestedByUserId?: string | null
   kind: string
   status: JobStatus
   payload: Record<string, unknown>
@@ -22,7 +24,7 @@ export interface QueueAdapter {
   enqueue(
     kind: string,
     payload?: Record<string, unknown>,
-    opts?: { projectId?: string; nodeId?: string },
+    opts?: { projectId?: string; nodeId?: string; requestedByUserId?: string },
   ): Promise<string>
   register(kind: string, handler: JobHandler): void
   start(lanes?: LaneQuotas): void

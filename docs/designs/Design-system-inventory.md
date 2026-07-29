@@ -8,6 +8,9 @@
 > **2026-07-28 同步挂起说明**：本轮"按钮状态系统 + 设置面板体系"重构经用户确认**代码先行**
 > （主 CTA 回到深海军蓝、token 去雾提纯、新增 SettingsField 原语、行高 44→48、卡片圆角 12）。
 > `canvas.pen` 尚未回写，待下一次 Pencil 编辑器会话以本文件与代码为准同步 B0 母组件。
+>
+> **2026-07-29**：S3 生产画布已接线 `PipelineNode`（`NodeStatus` + `selected`）；Pencil `Qsovp` 选中态
+> 待同一次会话回写。
 
 ---
 
@@ -197,7 +200,7 @@ Primary 按钮为**扁平实心**（Vercel/Linear 式）：零渐变、零投影
 | `ArtifactChip/Canonical` | `OJzNk` | Artifact 标识/链接外观 | muted surface + mono |
 | `InspectorTabs/Canonical` | `N4FZZS` | 固定四页签 | Data / Source / Gates / Execution |
 | `ProjectCard/Canonical` | `S1xDL` | 项目摘要 | surface / muted preview |
-| `PipelineNode/Canonical` | `Qsovp` | DAG 任务与 checkpoint | surface + semantic status |
+| `PipelineNode/Canonical` | `Qsovp` | DAG 任务与 checkpoint | surface + semantic status；生产挂载 `/products/canvas/[projectId]`；状态枚举为领域 `NodeStatus`；实例 override 含 `selected` |
 | `QueueBar/Canonical` | `XL8t8` | Trigger/队列摘要 | surface + border |
 
 规则：
@@ -218,7 +221,7 @@ Primary 按钮为**扁平实心**（Vercel/Linear 式）：零渐变、零投影
 | 模块 | 消费组件 | 正式消费点 |
 |---|---|---|
 | C1 Workbench | Primary Button、ProjectCard | S1、S2 背景 |
-| C2 Pipeline | PipelineNode、QueueBar | S3 |
+| C2 Pipeline | PipelineNode、QueueBar | S3（画布 DAG 节点 UI 唯一消费 `PipelineNode`，禁止 page 内联平行节点壳） |
 | C3 Inspector | InspectorTabs、Progress、MediaViewport、状态与预览表面 | S3、S4 |
 
 C 只负责稳定布局与业务组合，不定义新颜色。任何可复用的新 viewer、trace、gate、source、run control 或 status bar，必须先按 N6 顺序加入 B0/B 区，再进入 C/S。

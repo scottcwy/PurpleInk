@@ -12,6 +12,7 @@ export type {
   WorkflowFaultOrigin,
   WorkflowRecovery,
   WorkflowExecutionNotice,
+  WorkflowBlock,
 } from './workflow-fault'
 
 /** 分类结果：只含类别本身，stage 与来源节点由调用上下文补齐。 */
@@ -20,9 +21,7 @@ type ClassifiedError = Pick<
   'code' | 'message' | 'retryable'
 >
 
-/**
- * 把任意阶段异常投影成可展示、可判定是否值得重试的业务错误。
- *
+/** 把任意阶段异常投影成可展示、可判定是否值得重试的业务错误。
  * 判定顺序是三段，且**类型优先于文案**：
  * 1. `classifyByType`：能靠类型确定的结构性错误（zod 合同、语义门禁）。
  *    必须最先判定——zod 报文里天然含 `required` / `invalid` 之类词，落进文案
@@ -30,21 +29,61 @@ type ClassifiedError = Pick<
  * 2. `classifyByMessage`：只能从文案识别的外部原因（凭据、额度、缺失产物…）。
  * 3. `classifyByStage`：兜底按阶段职责给类别，不再让所有未识别错误都自称
  *    「镜头渲染失败」。
- *
  * 三段都不回显 provider 原始响应、prompt、凭据或隐藏推理。
  */
 export function classifyWorkflowError(
   error: unknown,
   context: { stage: string; sourceNodeId?: string }
 ): WorkflowErrorProjection {
+  const existing = embeddedWorkflowFault(error)
+  if (existing) return existing
   const raw = error instanceof Error ? error.message : String(error)
   const providerFault = projectProviderFault(error, context)
-  if (providerFault) return providerFault
+  if (providerFault) return rememberWorkflowFault(error, providerFault)
   const classified =
     classifyByType(error, context.stage) ??
     classifyByMessage(raw) ??
     classifyByStage(context.stage)
-  return completeWorkflowFault(classified, context)
+  return rememberWorkflowFault(
+    error,
+    completeWorkflowFault(classified, context)
+  )
+}
+
+const WORKFLOW_FAULT = Symbol('workflowFault')
+
+function embeddedWorkflowFault(error: unknown): WorkflowErrorProjection | undefined {
+  if (isWorkflowFault(error)) return error
+  if (!(error instanceof Error)) return undefined
+  return (error as Error & {
+    [WORKFLOW_FAULT]?: WorkflowErrorProjection
+  })[WORKFLOW_FAULT]
+}
+
+function rememberWorkflowFault(
+  error: unknown,
+  fault: WorkflowErrorProjection
+): WorkflowErrorProjection {
+  if (error instanceof Error) {
+    Object.defineProperty(error, WORKFLOW_FAULT, {
+      value: fault,
+      configurable: false,
+      enumerable: false,
+      writable: false,
+    })
+  }
+  return fault
+}
+
+function isWorkflowFault(value: unknown): value is WorkflowErrorProjection {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  return record.schemaVersion === 2
+    && typeof record.code === 'string'
+    && typeof record.stage === 'string'
+    && typeof record.referenceId === 'string'
+    && typeof record.occurredAt === 'string'
+    && typeof record.retryable === 'boolean'
 }
 
 function classifyByType(
@@ -89,6 +128,13 @@ function classifyByType(
       code: 'PLATFORM_RENDER_FAILED',
       message: '终片导出在平台执行阶段失败，系统已保留安全参考号以便诊断。',
       retryable: true,
+    }
+  }
+  if (error instanceof Error && error.name === 'FinalArtifactNotReadyError') {
+    return {
+      code: 'FINAL_ARTIFACT_NOT_READY',
+      message: '终片尚未生成，系统不会提前执行最终审阅。请先完成正常或降级合成。',
+      retryable: false,
     }
   }
   // 路由 / 能力矛盾来自 features/ai；同样只按类型名判定，避免反向依赖。报文里

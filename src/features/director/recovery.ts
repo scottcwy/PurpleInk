@@ -1,26 +1,28 @@
 import 'server-only'
 import {
-  getCanvasGraph,
-  invalidateNodeForRegeneration,
-  setProjectAutopilot,
   type CanvasGraph,
   type CanvasGraphNode,
 } from '@/features/canvas'
-import { enqueueRenderShot, type RenderShotInput } from '@/features/render'
-import { getDb } from '@/lib/db/client'
-import { storage } from '@/lib/storage'
-import { enqueueDirectorStage, type DirectorStageJobInput } from './queue-handler'
-import { DirectorArtifactSource } from './runtime-artifact-source'
+import type { RenderShotInput } from '@/features/render'
+import type { DirectorStageJobInput } from './queue-handler'
 import { PIPELINE_STAGES, type PipelineStage } from './types'
+import type { ExportFinalizationResult } from './export-finalization'
+import { createRecoveryDependencies } from './recovery-dependencies'
 
 export type NodeActionIntent = 'execute' | 'repair' | 'regenerate' | 'rerender'
 
 export interface NodeActionResult {
   ok: true
-  action: 'execute' | 'repair-upstream' | 'regenerate' | 'rerender' | 'skip'
+  action:
+    | 'execute'
+    | 'repair-upstream'
+    | 'regenerate'
+    | 'rerender'
+    | 'skip'
+    | 'confirm-degraded-export'
   requestedNodeId: string
   queuedNodeId: string
-  jobId: string
+  jobId: string | null
   message: string
 }
 
@@ -35,6 +37,11 @@ export interface NodeRecoveryDependencies {
   invalidate(nodeId: string, reason: string): Promise<void>
   enqueueDirectorStage(input: DirectorStageJobInput): Promise<string>
   enqueueRenderShot(input: RenderShotInput): Promise<string>
+  requestExportFinalization(input: {
+    projectId: string
+    exportNodeId: string
+    trigger: 'manual-node'
+  }): Promise<ExportFinalizationResult>
 }
 
 export interface ProjectRepairResult {
@@ -48,7 +55,7 @@ export async function repairProjectFrontier(
   projectId: string,
   dependencies?: NodeRecoveryDependencies
 ): Promise<ProjectRepairResult> {
-  const resolved = dependencies ?? await createDependencies()
+  const resolved = dependencies ?? await createRecoveryDependencies()
   const graph = await resolved.getGraph(projectId)
   const result: ProjectRepairResult = {
     enqueuedNodeIds: [],
@@ -58,10 +65,38 @@ export async function repairProjectFrontier(
   }
   await resolved.setAutopilot(projectId, true)
   for (const node of graph.nodes) {
+    if (node.status === 'blocked' && node.workflowBlock) {
+      result.blockedNodes.push({
+        nodeId: node.id,
+        code: node.workflowBlock.code,
+        message: node.workflowBlock.message,
+      })
+      continue
+    }
     if (node.status !== 'failed' && node.status !== 'stale') {
       continue
     }
     const error = node.directorError ?? node.renderError
+    if (
+      node.type === 'export'
+      && error?.code === 'STAGE_FAILED'
+    ) {
+      const finalization = await resolved.requestExportFinalization({
+        projectId,
+        exportNodeId: node.id,
+        trigger: 'manual-node',
+      })
+      if (finalization.status === 'blocked') {
+        result.blockedNodes.push({
+          nodeId: node.id,
+          code: finalization.block.code,
+          message: finalization.block.message,
+        })
+      } else {
+        result.enqueuedNodeIds.push(node.id)
+      }
+      continue
+    }
     if (node.status === 'failed' && error?.retryable === false) {
       result.blockedNodes.push({
         nodeId: node.id,
@@ -109,11 +144,35 @@ export async function executeNodeAction(
   },
   dependencies?: NodeRecoveryDependencies
 ): Promise<NodeActionResult> {
-  const resolved = dependencies ?? await createDependencies()
+  const resolved = dependencies ?? await createRecoveryDependencies()
   const graph = await resolved.getGraph(input.projectId)
   const requested = findNode(graph, input.nodeId)
   assertActionAllowed(requested)
   await resolved.setAutopilot(input.projectId, true)
+
+  if (requested.type === 'export') {
+    const finalization = await resolved.requestExportFinalization({
+      projectId: input.projectId,
+      exportNodeId: requested.id,
+      trigger: 'manual-node',
+    })
+    if (finalization.status === 'blocked') {
+      return result(
+        'confirm-degraded-export',
+        requested.id,
+        requested.id,
+        null,
+        finalization.block.message,
+      )
+    }
+    return result(
+      'execute',
+      requested.id,
+      requested.id,
+      finalization.jobId,
+      '已排队合成终片，完成后将继续最终审阅',
+    )
+  }
 
   if (input.intent === 'rerender') {
     if (requested.type !== 'shot-codegen') {
@@ -253,7 +312,7 @@ function result(
   action: NodeActionResult['action'],
   requestedNodeId: string,
   queuedNodeId: string,
-  jobId: string,
+  jobId: string | null,
   message: string
 ): NodeActionResult {
   return { ok: true, action, requestedNodeId, queuedNodeId, jobId, message }
@@ -261,39 +320,4 @@ function result(
 
 function isPipelineStage(stage: string | null): stage is PipelineStage {
   return stage !== null && PIPELINE_STAGES.includes(stage as PipelineStage)
-}
-
-async function createDependencies(): Promise<NodeRecoveryDependencies> {
-  const database = await getDb()
-  const source = new DirectorArtifactSource(database, storage)
-  return {
-    getGraph: getCanvasGraph,
-    setAutopilot: async (projectId, enabled) => {
-      await setProjectAutopilot(projectId, enabled)
-    },
-    inspectShotSpec: async (projectId, laneKey, sourceUnitId) => {
-      const shotPlan = await source.loadShotSpecArtifact(projectId, laneKey)
-      if (shotPlan.shots.length !== 1) return false
-      const [shot] = shotPlan.shots
-      if (!shot || shot.id !== laneKey) return false
-      if (!sourceUnitId) return true
-      const sourceUnitIds = Array.isArray(shot.sourceUnitIds)
-        ? shot.sourceUnitIds
-        : []
-      const audioBinding =
-        shot.audioBinding &&
-        typeof shot.audioBinding === 'object' &&
-        !Array.isArray(shot.audioBinding)
-          ? shot.audioBinding as Record<string, unknown>
-          : null
-      return (
-        sourceUnitIds.length === 1 &&
-        sourceUnitIds[0] === sourceUnitId &&
-        audioBinding?.unitId === sourceUnitId
-      )
-    },
-    invalidate: invalidateNodeForRegeneration,
-    enqueueDirectorStage,
-    enqueueRenderShot,
-  }
 }

@@ -1,7 +1,7 @@
 # AI托管服务架构
 
 <cite>
-**本文引用的文件**
+**本文引用的文件**   
 - [package.json](file://package.json)
 - [next.config.ts](file://next.config.ts)
 - [tsconfig.json](file://tsconfig.json)
@@ -52,11 +52,11 @@
 </cite>
 
 ## 更新摘要
-**变更内容**
-- 新增统一平台模型服务，集中管理成本计量与凭据管理
-- 实现免费Gemini访问门控机制
-- 增强StepFun、MiMo和Gemini服务的回退过滤能力
-- 优化AI网关的提供商管理与路由策略
+**变更内容**   
+- 新增双路径架构，支持PurpleInk托管服务和BYOK（自带密钥）选项，满足企业用户需求
+- 增强托管网关功能，提供统一的服务入口和路由管理
+- 实现智能回退机制，确保服务的高可用性和容错能力
+- 优化提供商管理与路由策略，提升系统灵活性和可扩展性
 - **最新变更**：托管服务组件支持通过路由解析的新凭据消费模式，保持与更新后的提供商接口兼容性
 - **重要更新**：新增托管模型目录仓库(managed-model-catalog-repository.ts)，重构了模型路由系统和提供商设置投影逻辑，增强了网关和降级机制的健壮性
 - **新增功能**：引入托管视觉执行器(managed-vision-executor.ts)，提供专门的视觉AI操作处理能力
@@ -134,7 +134,7 @@ DP_Dev --> BE_API
 DP_Prod --> BE_API
 ```
 
-**图示来源**
+**图示来源** 
 - [server/src/server/api.ts](file://server/src/server/api.ts)
 - [server/src/server/job-runner.ts](file://server/src/server/job-runner.ts)
 - [server/src/server/job-store.ts](file://server/src/server/job-store.ts)
@@ -225,7 +225,7 @@ ModelCatalog --> VersionManager["版本管理器"]
 VisionExecutor --> ReservationSettlement["预订结算机制<br/>资源管理"]
 ```
 
-**图示来源**
+**图示来源** 
 - [src/app/api/render/route.ts](file://src/app/api/render/route.ts)
 - [src/app/api/director/pipeline/route.ts](file://src/app/api/director/pipeline/route.ts)
 - [src/app/api/jobs/[id]/route.ts](file://src/app/api/jobs/[id]/route.ts)
@@ -365,7 +365,7 @@ ManagedGateway --> MimoAdapter : "调用"
 ManagedGateway --> GeminiAdapter : "调用"
 ```
 
-**图示来源**
+**图示来源** 
 - [src/features/ai/provider-registry.ts](file://src/features/ai/provider-registry.ts)
 - [src/features/ai/managed-gateway.ts](file://src/features/ai/managed-gateway.ts)
 - [src/features/ai/model-routing.ts](file://src/features/ai/model-routing.ts)
@@ -424,7 +424,7 @@ VisionExec-->>Gateway : "返回处理结果"
 Gateway-->>Client : "返回视觉处理结果"
 ```
 
-**图示来源**
+**图示来源** 
 - [src/features/ai/managed-vision-executor.ts](file://src/features/ai/managed-vision-executor.ts)
 
 **章节来源**
@@ -456,7 +456,7 @@ Catalog-->>Gateway : "返回可用模型列表"
 Gateway-->>Client : "返回模型选择结果"
 ```
 
-**图示来源**
+**图示来源** 
 - [src/features/ai/managed-model-catalog-repository.ts](file://src/features/ai/managed-model-catalog-repository.ts)
 
 **章节来源**
@@ -490,7 +490,7 @@ Credentials-->>Gateway : "返回可用凭据"
 Gateway-->>Client : "使用凭据调用提供商"
 ```
 
-**图示来源**
+**图示来源** 
 - [src/features/ai/managed-credentials.ts](file://src/features/ai/managed-credentials.ts)
 
 **章节来源**
@@ -519,7 +519,7 @@ Settlement --> Report["生成报告"]
 Report --> End(["结束"])
 ```
 
-**图示来源**
+**图示来源** 
 - [src/features/ai/managed-service.ts](file://src/features/ai/managed-service.ts)
 
 **章节来源**
@@ -546,7 +546,7 @@ Tertiary --> Primary : 主提供商恢复
 Fallback --> Primary : 快速恢复
 ```
 
-**图示来源**
+**图示来源** 
 - [src/features/ai/managed-fallback.ts](file://src/features/ai/managed-fallback.ts)
 
 **章节来源**
@@ -572,7 +572,7 @@ ApplyCredentials --> CallProvider["调用提供商"]
 CallProvider --> Response["返回响应"]
 ```
 
-**图示来源**
+**图示来源** 
 - [src/features/ai/model-routing.ts](file://src/features/ai/model-routing.ts)
 
 **章节来源**
@@ -603,7 +603,7 @@ Client->>API : "GET /api/jobs/ : id (查询状态)"
 API-->>Client : "返回作业状态/结果"
 ```
 
-**图示来源**
+**图示来源** 
 - [src/app/api/jobs/[id]/route.ts](file://src/app/api/jobs/[id]/route.ts)
 - [server/src/server/job-runner.ts](file://server/src/server/job-runner.ts)
 - [server/src/server/job-store.ts](file://server/src/server/job-store.ts)
@@ -637,7 +637,7 @@ Done --> |是| Commit["提交最终结果"]
 Commit --> End(["结束"])
 ```
 
-**图示来源**
+**图示来源** 
 - [src/features/director/pipeline.ts](file://src/features/director/pipeline.ts)
 - [src/features/director/stage-runner.ts](file://src/features/director/stage-runner.ts)
 - [server/src/compose/run-pipeline.ts](file://server/src/compose/run-pipeline.ts)
@@ -673,7 +673,7 @@ Orchestrator->>RuntimeRepo : "更新运行时状态"
 API-->>Client : "返回任务ID/结果"
 ```
 
-**图示来源**
+**图示来源** 
 - [src/app/api/render/route.ts](file://src/app/api/render/route.ts)
 - [server/src/tts/orchestrate.ts](file://server/src/tts/orchestrate.ts)
 - [src/features/audio/narration-queue-handler.ts](file://src/features/audio/narration-queue-handler.ts)
@@ -705,7 +705,7 @@ Export --> Persist["持久化与索引"]
 Persist --> Done["返回结果"]
 ```
 
-**图示来源**
+**图示来源** 
 - [src/features/render/export-service.ts](file://src/features/render/export-service.ts)
 - [src/features/render/renderer.ts](file://src/features/render/renderer.ts)
 
@@ -734,7 +734,7 @@ Agent->>Store : "保存结构化结果"
 API-->>Client : "返回采集结果"
 ```
 
-**图示来源**
+**图示来源** 
 - [src/app/api/director/pipeline/route.ts](file://src/app/api/director/pipeline/route.ts)
 - [server/src/capture/ai-capture-agent.ts](file://server/src/capture/ai-capture-agent.ts)
 
@@ -773,7 +773,7 @@ CATALOG --> REGISTRY["模型注册表"]
 VISION --> SETTLEMENT["预订结算"]
 ```
 
-**图示来源**
+**图示来源** 
 - [server/src/server/job-runner.ts](file://server/src/server/job-runner.ts)
 - [server/src/server/job-store.ts](file://server/src/server/job-store.ts)
 - [src/features/ai/managed-gateway.ts](file://src/features/ai/managed-gateway.ts)

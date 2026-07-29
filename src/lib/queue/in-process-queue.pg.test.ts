@@ -2,11 +2,18 @@ import { randomUUID } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  currentUserId,
   currentWorkspaceId,
   runInAuthContext,
 } from '@/lib/auth/workspace-context'
 import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
-import { pipelineRuns, projects, taskAttempts, workspaces } from '@/lib/db/schema/index'
+import {
+  pipelineRuns,
+  projects,
+  taskAttempts,
+  users,
+  workspaces,
+} from '@/lib/db/schema/index'
 import {
   createPgTestDatabase,
   type PgTestDatabase,
@@ -23,10 +30,11 @@ vi.mock('@/lib/db/client', async (importOriginal) => {
 })
 
 const database = {} as PgTestDatabase
+const TEST_USER_ID = '00000000-0000-4000-8000-000000000099'
 
 /** 模拟请求上下文：enqueue 与 getJobSnapshot 都要求已建立归属上下文。 */
 function inWorkspace<T>(workspaceId: string, operation: () => Promise<T>): Promise<T> {
-  return runInAuthContext({ workspaceId, userId: 'test-user' }, operation)
+  return runInAuthContext({ workspaceId, userId: TEST_USER_ID }, operation)
 }
 
 const inLocalWs = <T>(operation: () => Promise<T>) =>
@@ -38,6 +46,12 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await database.reset()
+  await database.db.insert(users).values({
+    id: TEST_USER_ID,
+    email: 'queue-user@example.test',
+    name: 'Queue User',
+    passwordHash: 'test-only-password-hash',
+  })
   getDbMock.mockReset()
   getDbMock.mockResolvedValue(database.db)
 })
@@ -65,6 +79,7 @@ describe('legacy in-process queue PG compatibility', () => {
     const runs = await database.db.select().from(pipelineRuns)
     const attempts = await database.db.select().from(taskAttempts)
     expect(runs).toHaveLength(1)
+    expect(runs[0]?.requestedByUserId).toBe(TEST_USER_ID)
     expect(attempts).toMatchObject([
       {
         id: attemptId,
@@ -84,7 +99,9 @@ describe('legacy in-process queue PG compatibility', () => {
     ])
     const projectId = await seedProject()
     const queue = new InProcessQueue()
-    const handler = vi.fn(async () => undefined)
+    const handler = vi.fn(async () => {
+      expect(currentUserId()).toBe(TEST_USER_ID)
+    })
     queue.register('director-stage', handler)
     const attemptId = await inLocalWs(() =>
       queue.enqueue('director-stage', { stage: 'INGEST' }, { projectId })

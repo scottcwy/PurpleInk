@@ -54,6 +54,7 @@ export interface DegradedExportDependencies {
   repository: DegradedExportRepository
   storage?: StorageAdapter
   concat?: typeof concatExport
+  confirmationFingerprint?: string
 }
 
 interface DegradedPlan {
@@ -185,6 +186,7 @@ export async function exportDegradedProject(
       sizeBytes: bytes.byteLength,
       placeholderLanes: degraded.placeholderLanes,
       waivedQaLanes: degraded.waivedQaLanes,
+      confirmationFingerprint: dependencies.confirmationFingerprint,
     })
   } finally {
     await storage.removeTempDir(workDirectory)
@@ -198,12 +200,15 @@ async function commitDegraded(
   input: FinalArtifactInput & {
     placeholderLanes: string[]
     waivedQaLanes: string[]
+    confirmationFingerprint?: string
   }
 ): Promise<DegradedExportResult> {
   const manifestBytes = Buffer.from(
     JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      deliveryMode: 'degraded',
       finalContentHash: input.contentHash,
+      confirmationFingerprint: input.confirmationFingerprint ?? null,
       placeholderLanes: input.placeholderLanes,
       waivedQaLanes: input.waivedQaLanes,
     }),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CanvasNodeType } from '@/features/canvas/types'
-import { nodeTypeColorToken, nodeTypeFillClass } from './stage-colors'
+import { nodeTypeBorderClass, nodeTypeColorToken, nodeTypeFillClass } from './stage-colors'
 
 const nodeTypes: CanvasNodeType[] = [
   'script-import',
@@ -17,6 +17,7 @@ const nodeTypes: CanvasNodeType[] = [
 describe('node type visual tokens', () => {
   it.each(nodeTypes)('maps %s to explicit border and fill tokens', (nodeType) => {
     expect(nodeTypeColorToken(nodeType)).toMatch(/^text-stage-\w+ border-stage-\w+$/)
+    expect(nodeTypeBorderClass(nodeType)).toMatch(/^border-stage-\w+$/)
     expect(nodeTypeFillClass(nodeType)).toMatch(/^bg-stage-\w+$/)
   })
 })

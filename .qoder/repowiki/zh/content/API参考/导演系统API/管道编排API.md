@@ -1,7 +1,7 @@
 # 管道编排API
 
 <cite>
-**本文档引用的文件**
+**本文档引用的文件**   
 - [src/app/api/director/pipeline/route.ts](file://src/app/api/director/pipeline/route.ts)
 - [src/app/api/director/stage/route.ts](file://src/app/api/director/stage/route.ts)
 - [src/app/api/director/stream/[nodeId]/route.ts](file://src/app/api/director/stream/[nodeId]/route.ts)
@@ -83,7 +83,7 @@ StageRunner --> PiProvider["PiProvider AI 提供者"]
 QuotaCheck --> BillingContract["计费合同验证"]
 ```
 
-**图表来源**
+**图表来源** 
 - [src/app/api/director/pipeline/route.ts](file://src/app/api/director/pipeline/route.ts)
 - [src/app/api/director/stage/route.ts](file://src/app/api/director/stage/route.ts)
 - [src/app/api/director/stream/[nodeId]/route.ts](file://src/app/api/director/stream/[nodeId]/route.ts)
@@ -170,7 +170,7 @@ end
 Note over C,V : "通过流式接口订阅进度与事件"
 ```
 
-**图表来源**
+**图表来源** 
 - [src/app/api/director/pipeline/route.ts](file://src/app/api/director/pipeline/route.ts)
 - [src/app/api/director/stage/route.ts](file://src/app/api/director/stage/route.ts)
 - [src/features/director/stage-runner.ts](file://src/features/director/stage-runner.ts)
@@ -225,7 +225,7 @@ Return402 --> End
 Return201 --> End
 ```
 
-**图表来源**
+**图表来源** 
 - [src/app/api/director/pipeline/route.ts](file://src/app/api/director/pipeline/route.ts)
 - [src/features/director/pipeline.ts](file://src/features/director/pipeline.ts)
 - [src/features/director/advance.ts](file://src/features/director/advance.ts)
@@ -266,7 +266,7 @@ S-->>C : "409 Conflict"
 end
 ```
 
-**图表来源**
+**图表来源** 
 - [src/app/api/director/stage/route.ts](file://src/app/api/director/stage/route.ts)
 - [src/features/director/stage-runner.ts](file://src/features/director/stage-runner.ts)
 - [src/features/director/advance.ts](file://src/features/director/advance.ts)
@@ -299,7 +299,7 @@ Stream-->>C : "推送事件(进度/日志/工件)"
 Note over C,Stream : "支持心跳与重连"
 ```
 
-**图表来源**
+**图表来源** 
 - [src/app/api/director/stream/[nodeId]/route.ts](file://src/app/api/director/stream/[nodeId]/route.ts)
 - [src/app/api/director/stream/project/[projectId]/route.ts](file://src/app/api/director/stream/project/[projectId]/route.ts)
 - [src/features/director/runtime-repository.ts](file://src/features/director/runtime-repository.ts)
@@ -346,7 +346,7 @@ StageRunner --> RuntimeArtifactWriter : "写入输出"
 StageRunner --> StageEffects : "触发副作用"
 ```
 
-**图表来源**
+**图表来源** 
 - [src/features/director/stage-runner.ts](file://src/features/director/stage-runner.ts)
 - [src/features/director/stage-effects.ts](file://src/features/director/stage-effects.ts)
 - [src/features/director/runtime-artifact-source.ts](file://src/features/director/runtime-artifact-source.ts)
@@ -384,7 +384,7 @@ class SessionStore {
 RuntimeRepository <.. SessionStore : "共享执行上下文"
 ```
 
-**图表来源**
+**图表来源** 
 - [src/features/director/runtime-repository.ts](file://src/features/director/runtime-repository.ts)
 - [src/features/director/session-store.ts](file://src/features/director/session-store.ts)
 
@@ -413,7 +413,7 @@ stateDiagram-v2
 失败 --> 待运行 : "重试/修复后重启"
 ```
 
-**图表来源**
+**图表来源** 
 - [src/features/director/advance.ts](file://src/features/director/advance.ts)
 - [src/features/director/recovery.ts](file://src/features/director/recovery.ts)
 
@@ -444,7 +444,7 @@ StageRunner --> PiProvider : "AI调用"
 PiProvider --> PiSession : "会话上下文"
 ```
 
-**图表来源**
+**图表来源** 
 - [src/features/director/pi-provider.ts](file://src/features/director/pi-provider.ts)
 - [src/features/director/pi-session.ts](file://src/features/director/pi-session.ts)
 
@@ -475,7 +475,7 @@ Retry --> |是| Backoff["退避后重试"]
 Retry --> |否| Fail["标记失败"]
 ```
 
-**图表来源**
+**图表来源** 
 - [src/features/director/queue-handler.ts](file://src/features/director/queue-handler.ts)
 
 **章节来源**
@@ -519,7 +519,7 @@ API --> Quota["配额验证器"]
 Quota --> Billing["计费系统"]
 ```
 
-**图表来源**
+**图表来源** 
 - [src/app/api/director/pipeline/route.ts](file://src/app/api/director/pipeline/route.ts)
 - [src/app/api/director/stage/route.ts](file://src/app/api/director/stage/route.ts)
 - [src/app/api/director/stream/[nodeId]/route.ts](file://src/app/api/director/stream/[nodeId]/route.ts)

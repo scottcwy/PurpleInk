@@ -1,4 +1,5 @@
 import 'server-only'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   getJobSnapshot,
@@ -10,6 +11,15 @@ import { exportProject, getExportReadiness } from './export-service'
 import { exportDegradedProject } from './export-degraded'
 import { RenderRepository } from './repository'
 import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
+import {
+  continueExportFinalReview,
+  type FinalReviewContinuationInput,
+} from '@/features/director/final-review-continuation'
+import { getCanvasGraph, transitionNodeStatus } from '@/features/canvas'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb } from '@/lib/db/client'
+import { taskAttempts } from '@/lib/db/schema/index'
+import { queueFingerprint } from '@/lib/queue/attempt-checkpoint'
 
 /**
  * 成片导出的队列接线。
@@ -27,7 +37,13 @@ import { assertProjectWorkflowSupported } from '@/features/projects/project-comp
 export const EXPORT_PROJECT_KIND = 'export-project'
 
 const exportJobPayloadSchema = z
-  .object({ projectId: z.string().min(1), degraded: z.boolean().optional() })
+  .object({
+    projectId: z.string().min(1),
+    degraded: z.boolean().optional(),
+    exportNodeId: z.string().min(1).optional(),
+    confirmationFingerprint: z.string().min(1).optional(),
+    inputFingerprint: z.string().length(64).optional(),
+  })
   .strict()
 
 export type ExportProjectInput = z.infer<typeof exportJobPayloadSchema>
@@ -35,6 +51,14 @@ export type ExportProjectInput = z.infer<typeof exportJobPayloadSchema>
 interface ExportHandlerDependencies {
   exportProject: typeof exportProject
   exportDegradedProject: typeof exportDegradedProject
+  continueFinalReview?: (
+    input: FinalReviewContinuationInput
+  ) => Promise<string>
+  assertDegradedConfirmation?: (input: {
+    projectId: string
+    exportNodeId: string
+    confirmationFingerprint: string
+  }) => Promise<void>
 }
 
 export function registerExportProjectHandler(
@@ -42,14 +66,31 @@ export function registerExportProjectHandler(
   dependencies: ExportHandlerDependencies = {
     exportProject,
     exportDegradedProject,
+    continueFinalReview: continueExportFinalReview,
+    assertDegradedConfirmation: assertCurrentDegradedConfirmation,
   }
 ): void {
   targetQueue.register(EXPORT_PROJECT_KIND, async (job) => {
     const payload = exportJobPayloadSchema.parse(job.payload)
+    if (
+      payload.degraded
+      && payload.exportNodeId
+      && payload.confirmationFingerprint
+      && dependencies.assertDegradedConfirmation
+    ) {
+      await dependencies.assertDegradedConfirmation({
+        projectId: payload.projectId,
+        exportNodeId: payload.exportNodeId,
+        confirmationFingerprint: payload.confirmationFingerprint,
+      })
+    }
     // 降级导出只由用户显式触发（payload.degraded）；自动推进不传该标志。
     const result = payload.degraded
       ? await dependencies.exportDegradedProject(payload.projectId, {
           repository: new RenderRepository(),
+          ...(payload.confirmationFingerprint
+            ? { confirmationFingerprint: payload.confirmationFingerprint }
+            : {}),
         })
       : await dependencies.exportProject(payload.projectId)
     if (!result.ok) {
@@ -79,7 +120,58 @@ export function registerExportProjectHandler(
         { incompleteNodeCount: result.incompleteNodeIds.length }
       )
     }
+    if (payload.exportNodeId && dependencies.continueFinalReview) {
+      await dependencies.continueFinalReview({
+        projectId: payload.projectId,
+        exportNodeId: payload.exportNodeId,
+        mode: payload.degraded ? 'degraded' : 'complete',
+        finalArtifactHash: result.contentHash,
+        ...(payload.confirmationFingerprint
+          ? { confirmationFingerprint: payload.confirmationFingerprint }
+          : {}),
+      })
+    }
   })
+}
+
+async function assertCurrentDegradedConfirmation(input: {
+  projectId: string
+  exportNodeId: string
+  confirmationFingerprint: string
+}): Promise<void> {
+  const readiness = await getExportReadiness(input.projectId)
+  if (
+    readiness.degradedReady
+    && readiness.confirmationFingerprint === input.confirmationFingerprint
+  ) {
+    return
+  }
+  const graph = await getCanvasGraph(input.projectId)
+  const node = graph.nodes.find(
+    (candidate) =>
+      candidate.id === input.exportNodeId && candidate.type === 'export'
+  )
+  if (node && readiness.degradedReady && readiness.confirmationFingerprint) {
+    await transitionNodeStatus(node.id, 'blocked', {
+      workflowBlock: {
+        code: 'DEGRADED_EXPORT_CONFIRMATION_REQUIRED',
+        message: '导出范围已变化，请刷新后重新确认降级交付。',
+        recovery: 'confirm_degraded_export',
+        referenceId: globalThis.crypto.randomUUID(),
+        blockedAt: new Date().toISOString(),
+        confirmationFingerprint: readiness.confirmationFingerprint,
+      },
+    })
+  }
+  throw new StaleDegradedConfirmationError()
+}
+
+export class StaleDegradedConfirmationError extends Error {
+  override readonly name = 'StaleDegradedConfirmationError'
+
+  constructor() {
+    super('导出范围已变化，请刷新后重新确认降级交付')
+  }
 }
 
 export class ExportProjectBlockedError extends Error {
@@ -106,6 +198,12 @@ export async function enqueueProjectExport(
   const payload = exportJobPayloadSchema.parse(input)
   if (targetQueue === defaultQueue) {
     await assertProjectWorkflowSupported(payload.projectId)
+    if (payload.inputFingerprint) {
+      return enqueueProjectExportOnce(
+        { ...payload, inputFingerprint: payload.inputFingerprint },
+        targetQueue
+      )
+    }
   }
   // 不传 nodeId：导出的聚合是项目本身，attempt 必须是 project 级。
   return targetQueue.enqueue(EXPORT_PROJECT_KIND, payload, {
@@ -149,6 +247,35 @@ export async function runProjectExport(
     await resolved.wait(POLL_INTERVAL_MS)
   }
   throw new Error(`终片导出作业未在预期时间内完成：${jobId}`)
+}
+
+async function enqueueProjectExportOnce(
+  payload: ExportProjectInput & { inputFingerprint: string },
+  targetQueue: QueueAdapter
+): Promise<string> {
+  const database = await getDb()
+  const fingerprint = queueFingerprint(EXPORT_PROJECT_KIND, payload)
+  return database.transaction(async (transaction) => {
+    const lockKey = `${payload.projectId}:${payload.inputFingerprint}`
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`
+    )
+    const [attempt] = await transaction
+      .select({ id: taskAttempts.id })
+      .from(taskAttempts)
+      .where(and(
+        eq(taskAttempts.workspaceId, currentWorkspaceId()),
+        eq(taskAttempts.entityType, 'project'),
+        eq(taskAttempts.entityId, payload.projectId),
+        eq(taskAttempts.fingerprint, fingerprint),
+        inArray(taskAttempts.status, ['queued', 'running', 'succeeded'])
+      ))
+      .limit(1)
+    if (attempt) return attempt.id
+    return targetQueue.enqueue(EXPORT_PROJECT_KIND, payload, {
+      projectId: payload.projectId,
+    })
+  })
 }
 
 export class DegradedExportConfirmationRequiredError extends Error {

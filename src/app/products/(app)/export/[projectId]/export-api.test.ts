@@ -42,6 +42,7 @@ describe('export API client', () => {
       placeholderCandidateLanes: [],
       waivedQaLanes: [],
       degradedReady: false,
+      confirmationFingerprint: null,
       degradedExport: null,
       artifactDelivery: 'legacy-silent-v1',
       artifactUrl: '/api/artifacts/final?projectId=project-1',
@@ -68,6 +69,7 @@ describe('export API client', () => {
       placeholderCandidateLanes: [],
       waivedQaLanes: [],
       degradedReady: false,
+      confirmationFingerprint: null,
       degradedExport: null,
       artifactDelivery: 'none',
     })
@@ -121,6 +123,34 @@ describe('export API client', () => {
     ).rejects.toThrow('还有 2 个节点未产出可用分镜')
   })
 
+  it('binds a degraded export request to the readiness confirmation fingerprint', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(json({ ok: true, jobId: 'job-1' }))
+      .mockResolvedValueOnce(
+        json({
+          ok: true,
+          job: { status: 'done' },
+          artifactUrl: '/api/artifacts/final?projectId=project-1',
+        }),
+      )
+
+    await startProjectExport('project-1', fetcher, async () => {}, {
+      degraded: true,
+      confirmationFingerprint: 'sha256:current',
+    })
+
+    expect(fetcher).toHaveBeenNthCalledWith(1, '/api/render/export', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        projectId: 'project-1',
+        degraded: true,
+        confirmationFingerprint: 'sha256:current',
+      }),
+    })
+  })
+
   it('projects waived QA lanes and keeps old degraded manifests compatible', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       json({
@@ -130,6 +160,7 @@ describe('export API client', () => {
         shotCount: 2,
         waivedQaLanes: ['S002'],
         degradedReady: true,
+        confirmationFingerprint: 'sha256:current',
         degradedExport: { placeholderLanes: ['S001'] },
       })
     )
@@ -137,6 +168,7 @@ describe('export API client', () => {
     const readiness = await loadExportReadiness('project-1', fetcher)
 
     expect(readiness.waivedQaLanes).toEqual(['S002'])
+    expect(readiness.confirmationFingerprint).toBe('sha256:current')
     expect(readiness.degradedExport).toEqual({
       placeholderLanes: ['S001'],
       waivedQaLanes: [],

@@ -1,13 +1,14 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { CanvasGraphNode, CanvasNodeType } from '@/features/canvas'
+import type { CanvasGraphNode, CanvasNodeType, PositionedCanvasNode } from '@/features/canvas'
 import {
   buildLaneSummaries,
   getNodeStatusLabel,
   getNodeStatusPresentation,
   LaneSummaryDetails,
   miniMapNodeColor,
+  toFlowNode,
 } from './flow-elements'
 
 const NODE_TYPES: CanvasNodeType[] = [
@@ -40,7 +41,7 @@ describe('miniMapNodeColor', () => {
       miniMapNodeColor({
         id: type,
         position: { x: 0, y: 0 },
-        data: { type },
+        data: { nodeType: type },
       })
     ).toBe(EXPECTED_MINIMAP_COLOR[type])
   })
@@ -50,9 +51,39 @@ describe('miniMapNodeColor', () => {
       miniMapNodeColor({
         id: 'x',
         position: { x: 0, y: 0 },
-        data: { type: 'unknown' },
+        data: { nodeType: 'unknown' },
       })
     ).toBe('var(--ds-text-muted)')
+  })
+})
+
+describe('toFlowNode', () => {
+  it('emits pipeline node type with serializable data and no ReactNode label', () => {
+    const node = toFlowNode(
+      {
+        id: 'n1',
+        type: 'shot-script',
+        status: 'running',
+        stage: null,
+        data: {},
+        laneKey: 'S001',
+        laneRole: 'shot-script',
+        position: { x: 10, y: 20 },
+      } as PositionedCanvasNode,
+      new Set(),
+      new Set(['S001']),
+      true,
+    )
+
+    expect(node.type).toBe('pipeline')
+    expect(node.selected).toBe(true)
+    expect(node.data).toEqual({
+      nodeType: 'shot-script',
+      status: 'running',
+      laneKey: 'S001',
+      collapsed: true,
+    })
+    expect(node.className).toContain('!bg-transparent')
   })
 })
 
