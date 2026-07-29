@@ -7,6 +7,8 @@ export {
 } from './core'
 export type { VersionedPayload } from './core'
 
+export { projectSources } from './project-sources'
+
 export {
   USER_STATUSES,
   VERIFICATION_PURPOSES,

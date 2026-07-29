@@ -53,6 +53,15 @@ async function seedCoreAndCanvas(): Promise<void> {
       (${IDS.otherWorkspace}, ${IDS.foreignNode}, ${IDS.otherProject}, 'foreign',
         'script-import', 'INGEST', 'idle', '{"schemaVersion":1}'::jsonb)
   `
+  await database.sql`
+    INSERT INTO project_sources (
+      workspace_id, project_id, kind, source_payload, source_fingerprint
+    ) VALUES (
+      ${IDS.workspace}, ${IDS.project}, 'script',
+      '{"schemaVersion":1,"kind":"script","script":"脚本一","visualTheme":"dark"}'::jsonb,
+      repeat('0', 64)
+    )
+  `
 }
 
 async function seedExecution(): Promise<void> {
@@ -160,6 +169,10 @@ it('rejects invalid lifecycle, route, attempt, and revision values', async () =>
   const invalidStatements = [
     database.sql`UPDATE projects SET status = 'invalid' WHERE id = ${IDS.project}`,
     database.sql`UPDATE projects SET workflow_kind = 'invalid' WHERE id = ${IDS.project}`,
+    database.sql`UPDATE project_sources SET source_fingerprint = repeat('A', 64)
+      WHERE project_id = ${IDS.project}`,
+    database.sql`UPDATE project_sources SET source_payload = '{"schemaVersion":2}'::jsonb
+      WHERE project_id = ${IDS.project}`,
     database.sql`UPDATE canvas_nodes SET type = 'invalid' WHERE id = ${IDS.sourceNode}`,
     database.sql`UPDATE canvas_nodes SET stage = 'invalid' WHERE id = ${IDS.sourceNode}`,
     database.sql`UPDATE canvas_nodes SET status = 'invalid' WHERE id = ${IDS.sourceNode}`,
@@ -186,6 +199,14 @@ it('defaults existing project writes to the script workflow kind', async () => {
     WHERE workspace_id = ${IDS.workspace} AND id = ${IDS.project}
   `
   expect(row?.workflow_kind).toBe('script')
+})
+
+it('binds each project source kind to the owning project kind', async () => {
+  await seedCoreAndCanvas()
+  await expect(database.sql`
+    UPDATE project_sources SET kind = 'audio'
+    WHERE workspace_id = ${IDS.workspace} AND project_id = ${IDS.project}
+  `).rejects.toThrow(/foreign key constraint/i)
 })
 
 it('prevents cross-project edges and freezes approved or released artifacts', async () => {

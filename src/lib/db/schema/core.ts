@@ -102,5 +102,10 @@ export const projects = pgTable(
       sql`${table.workflowKind} in ('script', 'audio', 'website')`,
     ),
     check('projects_revision_check', sql`${table.revision} >= 0`),
+    unique('projects_workspace_id_id_workflow_kind_unique').on(
+      table.workspaceId,
+      table.id,
+      table.workflowKind,
+    ),
   ],
 )
