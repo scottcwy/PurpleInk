@@ -5,7 +5,7 @@ import {
   managedUpstreamError,
   type ManagedAiBeginInput,
   type ManagedAiHandle,
-  type ManagedProviderId,
+  type AiProviderId,
 } from '@/features/ai'
 import type { MaximumUsageEstimate } from '@/features/billing'
 
@@ -16,7 +16,7 @@ export interface AudioBillingContext {
 }
 
 export interface ManagedAudioBillingInput<T> {
-  provider: ManagedProviderId
+  provider: AiProviderId
   model: string
   capability: 'tts' | 'asr'
   billingContext?: AudioBillingContext
@@ -25,7 +25,9 @@ export interface ManagedAudioBillingInput<T> {
   prepare?: () => Promise<void>
   invoke: () => Promise<T>
   outputBytes: (result: T) => string | Uint8Array
-  usageFromResult: (result: T) => Parameters<ManagedAiHandle['settle']>[0]
+  usageFromResult: (
+    result: T,
+  ) => Parameters<ManagedAiHandle['settle']>[0] | null
 }
 
 export interface ManagedAudioBillingDependencies {
@@ -56,15 +58,18 @@ export async function runManagedAudioBilling<T>(
 
   let result: T
   try {
+    await handle.markProviderStarted?.()
     result = await input.invoke()
   } catch (error) {
-    await handle.settleUnavailable(true)
+    await handle.settleUnavailable(true, 'unknown')
     throw managedUpstreamError(error)
   }
   const outputHash = createHash('sha256')
     .update(input.outputBytes(result))
     .digest('hex')
-  await handle.settle(input.usageFromResult(result), outputHash)
+  const usage = input.usageFromResult(result)
+  if (usage) await handle.settle(usage, outputHash)
+  else await handle.settleUnavailable()
   return result
 }
 

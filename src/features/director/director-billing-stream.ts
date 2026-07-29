@@ -64,7 +64,7 @@ export function createDirectorBillingStream(input: {
 async function* billedEvents(
   input: Parameters<typeof createDirectorBillingStream>[0],
 ): AsyncGenerator<AssistantMessageEvent> {
-  let handle: ManagedAiHandle | null
+  let handle: ManagedAiHandle
   let dispatch: ProviderDispatchLease | null = null
   try {
     dispatch = await reserveProviderDispatch({
@@ -84,12 +84,13 @@ async function* billedEvents(
   let providerStarted = false
   let settled = false
   try {
+    await handle.markProviderStarted?.()
+    providerStarted = true
     const upstream = input.streamSimple(
       input.model,
       input.context,
       providerOptions(input.options),
     )
-    providerStarted = true
     for await (const event of upstream) {
       if (event.type === 'done' || event.type === 'error') {
         await settleTerminal(handle, event)
@@ -102,7 +103,9 @@ async function* billedEvents(
       await dispatch?.defer(error.retryAt ? new Date(error.retryAt) : undefined)
     }
     if (handle && !settled) {
-      if (providerStarted) await handle.settleUnavailable(true)
+      if (providerStarted) {
+        await handle.settleUnavailable(true, safeFailureKind(error))
+      }
       else await handle.releaseBeforeCall()
     }
     throw error
@@ -126,10 +129,9 @@ function providerOptions(
 
 async function beginInvocation(
   input: Parameters<typeof createDirectorBillingStream>[0],
-): Promise<ManagedAiHandle | null> {
-  if (!input.runtime.deductsManagedPool) return null
+): Promise<ManagedAiHandle> {
   if (!input.attemptId) {
-    throw new DirectorPreflightError('托管 Director 调用缺少可审计的 attemptId')
+    throw new DirectorPreflightError('Director 调用缺少可审计的 attemptId')
   }
   return input.gateway.begin({
     attemptId: input.attemptId,
@@ -148,10 +150,9 @@ async function beginInvocation(
 }
 
 async function settleTerminal(
-  handle: ManagedAiHandle | null,
+  handle: ManagedAiHandle,
   event: Extract<AssistantMessageEvent, { type: 'done' | 'error' }>,
 ): Promise<void> {
-  if (!handle) return
   const message = event.type === 'done' ? event.message : event.error
   const usage = reportedTextUsage(message)
   if (!usage) {
@@ -162,6 +163,10 @@ async function settleTerminal(
     .update(JSON.stringify(message))
     .digest('hex')
   await handle.settle(usage, outputHash, event.type === 'error')
+}
+
+function safeFailureKind(error: unknown): string {
+  return error instanceof ProviderRequestError ? error.kind : 'unknown'
 }
 
 function reportedTextUsage(message: AssistantMessage): ManagedUsage | null {

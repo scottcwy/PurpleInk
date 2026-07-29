@@ -76,6 +76,7 @@ export async function executeManagedVisionQa(
     )
   }
   try {
+    await handle.markProviderStarted?.()
     const completion = await dependencies.complete({
       apiKey,
       baseUrl: target.baseUrl,
@@ -94,7 +95,7 @@ export async function executeManagedVisionQa(
       content: completion.content,
     }
   } catch (error) {
-    await handle.settleUnavailable(true)
+    await handle.settleUnavailable(true, 'unknown')
     throw error
   }
 }

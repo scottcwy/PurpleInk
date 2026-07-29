@@ -115,7 +115,7 @@ describe('managed audio billing adapter', () => {
       message: '托管 AI 服务本次执行失败，请稍后重试',
     })
 
-    expect(handle.settleUnavailable).toHaveBeenCalledWith(true)
+    expect(handle.settleUnavailable).toHaveBeenCalledWith(true, 'unknown')
   })
 
   it('releases the gateway reservation when preparation fails before invocation', async () => {

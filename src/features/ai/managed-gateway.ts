@@ -8,7 +8,6 @@ import {
   releaseManagedReservation,
   reserveManagedInvocation,
   settleManagedInvocation,
-  type BillableUsage,
   type MaximumUsageEstimate,
 } from '@/features/billing'
 import { requireManagedCredential } from './managed-credentials'
@@ -16,15 +15,25 @@ import {
   authorizeManagedRoute,
   isManagedProvider,
   type ManagedProviderId,
-  type ManagedUsage,
 } from './managed-service'
-import type { AiProviderId, ProviderCapability } from './provider-registry'
+import type { AiProviderId } from './provider-registry'
 import { RouteContractError } from './route-contract-error'
 import {
   fundingForProvider,
   getAiConfigDependencies,
 } from './config'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import {
+  createUnbilledInvocation,
+  markProviderInvocationStarted,
+  releaseUnbilledInvocation,
+  settleUnbilledInvocation,
+} from './invocation-ledger'
+import {
+  createManagedHandle,
+  createUnbilledHandle,
+  type ManagedAiHandle,
+} from './invocation-handles'
 
 export interface ManagedAiGatewayDependencies {
   getCurrentPlanKey: typeof getCurrentPlanKey
@@ -41,6 +50,10 @@ export interface ManagedAiGatewayDependencies {
   authorizeManagedRoute: typeof authorizeManagedRoute
   fundingForProvider: typeof fundingForProvider
   loadByokCredential: (provider: AiProviderId) => Promise<string | null>
+  createUnbilledInvocation?: typeof createUnbilledInvocation
+  markProviderInvocationStarted?: typeof markProviderInvocationStarted
+  settleUnbilledInvocation?: typeof settleUnbilledInvocation
+  releaseUnbilledInvocation?: typeof releaseUnbilledInvocation
 }
 
 const DEFAULT_DEPENDENCIES: ManagedAiGatewayDependencies = {
@@ -59,6 +72,10 @@ const DEFAULT_DEPENDENCIES: ManagedAiGatewayDependencies = {
       currentWorkspaceId(),
       provider,
     ),
+  createUnbilledInvocation,
+  markProviderInvocationStarted,
+  settleUnbilledInvocation,
+  releaseUnbilledInvocation,
 }
 
 interface BeginBase {
@@ -68,6 +85,8 @@ interface BeginBase {
   provider: AiProviderId
   model: string
   rawInput: string | Uint8Array
+  operation?: string
+  source?: string
 }
 
 export type ManagedAiBeginInput = BeginBase & (
@@ -85,19 +104,7 @@ export type ManagedAiBeginInput = BeginBase & (
     }
 )
 
-export interface ManagedAiHandle {
-  invocationId: string | null
-  funding: 'managed' | 'byok'
-  deductsManagedPool: boolean
-  credential: string | null
-  settle: (
-    usage: ManagedUsage,
-    outputHash?: string,
-    failed?: boolean,
-  ) => Promise<void>
-  settleUnavailable: (failed?: boolean) => Promise<void>
-  releaseBeforeCall: () => Promise<void>
-}
+export type { ManagedAiHandle } from './invocation-handles'
 
 export class ManagedAiGateway {
   constructor(
@@ -120,7 +127,35 @@ export class ManagedAiGateway {
       if (!credential) {
         throw new RouteContractError('所选供应商尚未配置自己的 API Key')
       }
-      return byokHandle(credential)
+      const invocationId = invocationUuid(input)
+      const ledgerFunding = isManagedProvider(input.provider) ? 'byok' : 'custom'
+      await (this.dependencies.createUnbilledInvocation ?? createUnbilledInvocation)({
+        invocationId,
+        attemptId: input.attemptId,
+        invocationNo: input.invocationNo,
+        repairNo: input.repairNo,
+        provider: input.provider,
+        model: input.model,
+        funding: ledgerFunding,
+        capability: input.capability,
+        operation: input.operation ?? 'workflow',
+        source: input.source,
+        inputHash: sha256(input.rawInput),
+      })
+      return createUnbilledHandle({
+        invocationId,
+        funding: ledgerFunding,
+        capability: input.capability,
+        credential,
+        lifecycle: {
+          markStarted: this.dependencies.markProviderInvocationStarted
+            ?? markProviderInvocationStarted,
+          settle: this.dependencies.settleUnbilledInvocation
+            ?? settleUnbilledInvocation,
+          release: this.dependencies.releaseUnbilledInvocation
+            ?? releaseUnbilledInvocation,
+        },
+      })
     }
 
     const provider = requireManagedProvider(input.provider)
@@ -155,75 +190,25 @@ export class ManagedAiGateway {
         provider,
         model: input.model,
         inputHash,
+        capability: input.capability,
+        operation: input.operation ?? 'workflow',
+        source: input.source,
       },
     })
-    return this.managedHandle({
-      input,
+    return createManagedHandle({
       invocationId,
       credential,
+      capability: input.capability,
       prices: rateCard.prices,
       maximumCostCnyMicros,
+      lifecycle: {
+        markStarted: this.dependencies.markProviderInvocationStarted
+          ?? markProviderInvocationStarted,
+        calculateCost: this.dependencies.calculateActualCost,
+        settle: this.dependencies.settleManagedInvocation,
+        release: this.dependencies.releaseManagedReservation,
+      },
     })
-  }
-
-  private managedHandle(input: {
-    input: ManagedAiBeginInput
-    invocationId: string
-    credential: string
-    prices: Parameters<typeof calculateActualCost>[0]
-    maximumCostCnyMicros: bigint
-  }): ManagedAiHandle {
-    let terminal: Promise<void> | null = null
-    const once = (action: () => Promise<void>): Promise<void> => {
-      if (!terminal) {
-        terminal = action().catch((error: unknown) => {
-          terminal = null
-          throw error
-        })
-      }
-      return terminal
-    }
-    return {
-      invocationId: input.invocationId,
-      funding: 'managed',
-      deductsManagedPool: true,
-      credential: input.credential,
-      settle: (usage, outputHash, failed = false) => once(async () => {
-        validateOutputHash(outputHash)
-        const billable = billableUsage(input.input.capability, usage)
-        await this.dependencies.settleManagedInvocation({
-          invocationId: input.invocationId,
-          actualCostCnyMicros: this.dependencies.calculateActualCost(
-            input.prices,
-            billable,
-          ),
-          usageStatus: 'reported',
-          invocationStatus: failed ? 'failed' : 'succeeded',
-          outputHash,
-          usage: {
-            schemaVersion: 1,
-            capability: input.input.capability,
-            ...usage,
-          },
-        })
-      }),
-      settleUnavailable: (failed = false) => once(() =>
-        this.dependencies.settleManagedInvocation({
-          invocationId: input.invocationId,
-          actualCostCnyMicros: input.maximumCostCnyMicros,
-          usageStatus: 'unavailable',
-          invocationStatus: failed ? 'failed' : 'succeeded',
-          usage: {
-            schemaVersion: 1,
-            capability: input.input.capability,
-            unavailable: true,
-          },
-        })),
-      releaseBeforeCall: () => once(() =>
-        this.dependencies.releaseManagedReservation({
-          invocationId: input.invocationId,
-        })),
-    }
   }
 }
 
@@ -241,41 +226,9 @@ function maximumEstimate(input: ManagedAiBeginInput): MaximumUsageEstimate {
   }
 }
 
-function billableUsage(
-  capability: ProviderCapability,
-  usage: ManagedUsage,
-): BillableUsage {
-  if (capability === 'tts' && usage.kind === 'tts') {
-    return { kind: 'tts', characters: usage.inputCharacters }
-  }
-  if (capability === 'asr' && usage.kind === 'asr') {
-    return { kind: 'asr', audioSeconds: usage.inputAudioSeconds }
-  }
-  if (
-    (capability === 'text' || capability === 'vision') &&
-    usage.kind === 'text'
-  ) {
-    return { ...usage, kind: capability }
-  }
-  throw new RouteContractError('托管用量类型与模型能力不匹配')
-}
-
 function requireManagedProvider(provider: AiProviderId): ManagedProviderId {
   if (isManagedProvider(provider)) return provider
   throw new RouteContractError('BYOK provider 不应进入托管预留流程')
-}
-
-function byokHandle(credential: string): ManagedAiHandle {
-  const done = Promise.resolve()
-  return {
-    invocationId: null,
-    funding: 'byok',
-    deductsManagedPool: false,
-    credential,
-    settle: () => done,
-    settleUnavailable: () => done,
-    releaseBeforeCall: () => done,
-  }
 }
 
 function sha256(value: string | Uint8Array): string {
@@ -302,9 +255,4 @@ function invocationUuid(input: ManagedAiBeginInput): string {
     hex.slice(16, 20),
     hex.slice(20),
   ].join('-')
-}
-
-function validateOutputHash(outputHash?: string): void {
-  if (outputHash === undefined || /^[0-9a-f]{64}$/.test(outputHash)) return
-  throw new RouteContractError('托管输出哈希必须是 SHA-256 十六进制')
 }

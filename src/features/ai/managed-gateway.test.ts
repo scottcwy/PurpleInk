@@ -44,6 +44,10 @@ function dependencies() {
     fundingForProvider: vi.fn(async (provider) =>
       provider === 'openai-compatible' ? 'byok' as const : 'managed' as const),
     loadByokCredential: vi.fn(async () => 'workspace-secret'),
+    createUnbilledInvocation: vi.fn(async () => undefined),
+    markProviderInvocationStarted: vi.fn(async () => undefined),
+    settleUnbilledInvocation: vi.fn(async () => undefined),
+    releaseUnbilledInvocation: vi.fn(async () => undefined),
     authorizeManagedRoute: vi.fn(async (input) =>
       input.funding === 'byok'
         ? { funding: 'byok' as const, deductsManagedPool: false }
@@ -77,6 +81,7 @@ describe('ManagedAiGateway', () => {
       provider: 'openai-compatible',
       model: 'user-model',
     })
+    await handle.markProviderStarted?.()
     await handle.settle({
       kind: 'text',
       inputTokens: 10,
@@ -84,7 +89,7 @@ describe('ManagedAiGateway', () => {
     })
 
     expect(handle).toMatchObject({
-      funding: 'byok',
+      funding: 'custom',
       deductsManagedPool: false,
       credential: 'workspace-secret',
     })
@@ -93,6 +98,12 @@ describe('ManagedAiGateway', () => {
     expect(deps.getCurrentRateCard).not.toHaveBeenCalled()
     expect(deps.reserveManagedInvocation).not.toHaveBeenCalled()
     expect(deps.settleManagedInvocation).not.toHaveBeenCalled()
+    expect(deps.createUnbilledInvocation).toHaveBeenCalledWith(
+      expect.objectContaining({ funding: 'custom', capability: 'text' }),
+    )
+    expect(deps.settleUnbilledInvocation).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'succeeded', usageStatus: 'reported' }),
+    )
   })
 
   it('lets Free Gemini BYOK bypass managed credentials and the cost pool', async () => {
@@ -111,7 +122,7 @@ describe('ManagedAiGateway', () => {
       funding: 'byok',
       deductsManagedPool: false,
       credential: 'user-gemini-key',
-      invocationId: null,
+      invocationId: expect.any(String),
     })
     expect(deps.requireManagedCredential).not.toHaveBeenCalled()
     expect(deps.reserveManagedInvocation).not.toHaveBeenCalled()
@@ -162,6 +173,9 @@ describe('ManagedAiGateway', () => {
         provider: 'stepfun',
         model: 'step-3.5-flash',
         inputHash: expectedHash,
+        capability: 'text',
+        operation: 'workflow',
+        source: undefined,
       },
     })
     const reservation = vi.mocked(deps.reserveManagedInvocation).mock.calls[0]![0]
@@ -225,6 +239,7 @@ describe('ManagedAiGateway', () => {
   it('settles reported usage once with schema version and safe hashes', async () => {
     const deps = dependencies()
     const handle = await new ManagedAiGateway(deps).begin(TEXT_INPUT)
+    await handle.markProviderStarted?.()
     const usage = {
       kind: 'text',
       inputTokens: 10,
@@ -249,16 +264,18 @@ describe('ManagedAiGateway', () => {
       invocationStatus: 'succeeded',
       outputHash: 'a'.repeat(64),
       usage: {
-        schemaVersion: 1,
+        schemaVersion: 2,
         capability: 'text',
         ...usage,
       },
+      providerDurationMs: expect.any(Number),
     })
   })
 
   it('settles unavailable usage fully or releases before the provider call', async () => {
     const successfulDeps = dependencies()
     const successful = await new ManagedAiGateway(successfulDeps).begin(TEXT_INPUT)
+    await successful.markProviderStarted?.()
     await successful.settleUnavailable()
     expect(successfulDeps.settleManagedInvocation).toHaveBeenCalledWith(
       expect.objectContaining({ invocationStatus: 'succeeded' }),
@@ -266,13 +283,16 @@ describe('ManagedAiGateway', () => {
 
     const failedDeps = dependencies()
     const failed = await new ManagedAiGateway(failedDeps).begin(TEXT_INPUT)
+    await failed.markProviderStarted?.()
     await failed.settleUnavailable(true)
     expect(failedDeps.settleManagedInvocation).toHaveBeenCalledWith({
       invocationId: failed.invocationId,
       actualCostCnyMicros: BigInt(100),
       usageStatus: 'unavailable',
       invocationStatus: 'failed',
-      usage: { schemaVersion: 1, capability: 'text', unavailable: true },
+      usage: { schemaVersion: 2, capability: 'text', unavailable: true },
+      providerDurationMs: expect.any(Number),
+      failureKind: undefined,
     })
 
     const releasedDeps = dependencies()

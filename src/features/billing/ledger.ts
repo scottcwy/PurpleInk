@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db/client'
 import type { VersionedPayload } from '@/lib/db/schema/core'
 import {
   aiInvocations,
+  pipelineRuns,
   taskAttempts,
   usagePeriods,
 } from '@/lib/db/schema/index'
@@ -22,6 +23,9 @@ export interface ManagedInvocationReservation {
     provider: string
     model: string
     inputHash: string
+    capability?: 'text' | 'vision' | 'tts' | 'asr'
+    operation?: string
+    source?: string
   }
 }
 
@@ -46,7 +50,14 @@ export async function reserveManagedInvocation(
       const [attempt] = await tx.select({
         runId: taskAttempts.runId,
         taskId: taskAttempts.taskId,
-      }).from(taskAttempts).where(and(
+        actorUserId: pipelineRuns.requestedByUserId,
+      }).from(taskAttempts).innerJoin(
+        pipelineRuns,
+        and(
+          eq(pipelineRuns.workspaceId, taskAttempts.workspaceId),
+          eq(pipelineRuns.id, taskAttempts.runId),
+        ),
+      ).where(and(
         eq(taskAttempts.workspaceId, workspaceId),
         eq(taskAttempts.id, input.create.attemptId),
       )).for('update')
@@ -61,6 +72,12 @@ export async function reserveManagedInvocation(
         repairNo: input.create.repairNo ?? 0,
         provider: input.create.provider,
         model: input.create.model,
+        actorUserId: attempt.actorUserId,
+        funding: 'managed',
+        capability: input.create.capability ?? 'text',
+        operation: input.create.operation ?? 'workflow',
+        source: input.create.source ?? 'products',
+        telemetryVersion: 2,
         inputHash: input.create.inputHash,
       }).onConflictDoNothing().returning()
       if (!invocation) {
@@ -124,6 +141,8 @@ export async function settleManagedInvocation(input: {
   invocationStatus?: 'succeeded' | 'failed' | 'cancelled'
   outputHash?: string
   billingStatus?: 'settled' | 'released'
+  providerDurationMs?: number
+  failureKind?: string
 }): Promise<void> {
   const database = await getDb()
   const workspaceId = scopedWorkspace(input.workspaceId)
@@ -160,6 +179,9 @@ export async function settleManagedInvocation(input: {
       usageStatus: input.usageStatus,
       outputHash: input.outputHash,
       settledAt: now,
+      providerCompletedAt: invocation.providerStartedAt ? now : undefined,
+      providerDurationMs: input.providerDurationMs,
+      failureKind: input.failureKind,
       completedAt: now,
       updatedAt: now,
     }).where(and(
