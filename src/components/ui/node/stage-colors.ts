@@ -15,6 +15,13 @@ export function nodeTypeColorToken(nodeType: CanvasNodeType): string {
   return map[nodeType]
 }
 
+/** 仅阶段色描边，避免 text-stage-* 污染整卡正文。 */
+export function nodeTypeBorderClass(nodeType: CanvasNodeType): string {
+  return nodeTypeColorToken(nodeType)
+    .split(/\s+/)
+    .find((token) => token.startsWith('border-')) ?? 'border-ds-border'
+}
+
 export function nodeTypeFillClass(nodeType: CanvasNodeType): string {
   const map: Record<CanvasNodeType, string> = {
     'script-import': 'bg-stage-ingest',
