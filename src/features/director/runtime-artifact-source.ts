@@ -260,7 +260,7 @@ export class DirectorArtifactSource {
       )
       .orderBy(desc(artifacts.version), desc(artifacts.id))
       .limit(1)
-    if (!artifact) throw new Error('请先完成合成导出：项目尚无 final-mp4 产物')
+    if (!artifact) throw new FinalArtifactNotReadyError()
     const [manifest] = await this.db
       .select({ storageKey: artifacts.storageKey })
       .from(artifacts)
@@ -383,6 +383,14 @@ export class DirectorArtifactSource {
     } catch {
       throw new Error(`${kind} 产物不是合法 JSON`)
     }
+  }
+}
+
+export class FinalArtifactNotReadyError extends Error {
+  override readonly name = 'FinalArtifactNotReadyError'
+
+  constructor() {
+    super('请先完成合成导出：项目尚无 final-mp4 产物')
   }
 }
 

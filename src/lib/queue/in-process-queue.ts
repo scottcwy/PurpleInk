@@ -240,8 +240,8 @@ export class InProcessQueue implements QueueAdapter {
         .set({
           status: 'running',
           leaseExpiresAt: leaseDeadline(row.taskId.slice('legacy.'.length)),
-          startedAt: new Date(),
-          updatedAt: new Date(),
+          startedAt: sql`now()`,
+          updatedAt: sql`now()`,
         })
         .where(
           and(
@@ -254,7 +254,7 @@ export class InProcessQueue implements QueueAdapter {
       if (!claimed) return null
       await transaction
         .update(pipelineRuns)
-        .set({ status: 'running', startedAt: new Date(), updatedAt: new Date() })
+        .set({ status: 'running', startedAt: sql`now()`, updatedAt: sql`now()` })
         .where(
           and(
             eq(pipelineRuns.workspaceId, row.workspaceId),

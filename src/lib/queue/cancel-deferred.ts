@@ -34,7 +34,6 @@ export async function cancelDeferredAttempt(
     if (!attempt || !isProviderWait(attempt.checkpoint)) {
       throw new Error('当前节点没有可取消的限流等待任务')
     }
-    const completedAt = new Date()
     await transaction
       .update(taskAttempts)
       .set({
@@ -44,8 +43,8 @@ export async function cancelDeferredAttempt(
           code: 'TASK_INTERRUPTED',
           message: '用户已取消限流等待',
         },
-        completedAt,
-        updatedAt: completedAt,
+        completedAt: sql`now()`,
+        updatedAt: sql`now()`,
       })
       .where(and(
         eq(taskAttempts.workspaceId, input.workspaceId),
@@ -56,8 +55,8 @@ export async function cancelDeferredAttempt(
       .update(pipelineRuns)
       .set({
         status: 'cancelled',
-        completedAt,
-        updatedAt: completedAt,
+        completedAt: sql`now()`,
+        updatedAt: sql`now()`,
         revision: sql`${pipelineRuns.revision} + 1`,
       })
       .where(and(

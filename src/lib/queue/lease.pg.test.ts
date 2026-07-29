@@ -43,11 +43,12 @@ describe('sweepExpiredLeases', () => {
   it('回收租约过期的 running attempt：attempt/run 置 failed，节点投影 TASK_INTERRUPTED', async () => {
     const { sweepExpiredLeases } = await import('./lease')
     const projectId = await seedProject()
+    const dbNow = await readDbNowMs()
     const expired = await seedRunningNodeAttempt(projectId, {
-      leaseExpiresAt: new Date(Date.now() - 60_000),
+      leaseExpiresAt: new Date(dbNow - 60_000),
     })
     const fresh = await seedRunningNodeAttempt(projectId, {
-      leaseExpiresAt: new Date(Date.now() + 60_000),
+      leaseExpiresAt: new Date(dbNow + 60_000),
     })
 
     const swept = await sweepExpiredLeases(database.db)
@@ -80,8 +81,9 @@ describe('sweepExpiredLeases', () => {
     try {
       const { sweepExpiredLeases } = await import('./lease')
       const projectId = await seedProject()
+      const dbNow = await readDbNowMs()
       const expired = await seedRunningNodeAttempt(projectId, {
-        leaseExpiresAt: new Date(Date.now() - 60_000),
+        leaseExpiresAt: new Date(dbNow - 60_000),
         nodeStatus: 'succeeded',
       })
 
@@ -104,7 +106,7 @@ describe('renewLeases', () => {
   it('只续租传入的 attempt id，其余 running attempt 的租约不动', async () => {
     const { renewLeases } = await import('./lease')
     const projectId = await seedProject()
-    const lease = new Date(Date.now() + 5_000)
+    const lease = new Date((await readDbNowMs()) + 5_000)
     const renewed = await seedRunningNodeAttempt(projectId, { leaseExpiresAt: lease })
     const untouched = await seedRunningNodeAttempt(projectId, { leaseExpiresAt: lease })
 
@@ -236,6 +238,12 @@ async function seedRunningNodeAttempt(
     leaseExpiresAt: options.leaseExpiresAt,
   })
   return { nodeId, runId, attemptId }
+}
+
+async function readDbNowMs(): Promise<number> {
+  const [row] = await database.sql<{ now: string | Date }[]>`select now()`
+  if (!row) throw new Error('select now() 未返回行')
+  return new Date(row.now).getTime()
 }
 
 async function readAttempt(attemptId: string) {

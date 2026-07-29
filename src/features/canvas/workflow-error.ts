@@ -38,14 +38,55 @@ export function classifyWorkflowError(
   error: unknown,
   context: { stage: string; sourceNodeId?: string }
 ): WorkflowErrorProjection {
+  const existing = embeddedWorkflowFault(error)
+  if (existing) return existing
   const raw = error instanceof Error ? error.message : String(error)
   const providerFault = projectProviderFault(error, context)
-  if (providerFault) return providerFault
+  if (providerFault) return rememberWorkflowFault(error, providerFault)
   const classified =
     classifyByType(error, context.stage) ??
     classifyByMessage(raw) ??
     classifyByStage(context.stage)
-  return completeWorkflowFault(classified, context)
+  return rememberWorkflowFault(
+    error,
+    completeWorkflowFault(classified, context)
+  )
+}
+
+const WORKFLOW_FAULT = Symbol('workflowFault')
+
+function embeddedWorkflowFault(error: unknown): WorkflowErrorProjection | undefined {
+  if (isWorkflowFault(error)) return error
+  if (!(error instanceof Error)) return undefined
+  return (error as Error & {
+    [WORKFLOW_FAULT]?: WorkflowErrorProjection
+  })[WORKFLOW_FAULT]
+}
+
+function rememberWorkflowFault(
+  error: unknown,
+  fault: WorkflowErrorProjection
+): WorkflowErrorProjection {
+  if (error instanceof Error) {
+    Object.defineProperty(error, WORKFLOW_FAULT, {
+      value: fault,
+      configurable: false,
+      enumerable: false,
+      writable: false,
+    })
+  }
+  return fault
+}
+
+function isWorkflowFault(value: unknown): value is WorkflowErrorProjection {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  return record.schemaVersion === 2
+    && typeof record.code === 'string'
+    && typeof record.stage === 'string'
+    && typeof record.referenceId === 'string'
+    && typeof record.occurredAt === 'string'
+    && typeof record.retryable === 'boolean'
 }
 
 function classifyByType(
@@ -90,6 +131,13 @@ function classifyByType(
       code: 'PLATFORM_RENDER_FAILED',
       message: '终片导出在平台执行阶段失败，系统已保留安全参考号以便诊断。',
       retryable: true,
+    }
+  }
+  if (error instanceof Error && error.name === 'FinalArtifactNotReadyError') {
+    return {
+      code: 'FINAL_ARTIFACT_NOT_READY',
+      message: '终片尚未生成，系统不会提前执行最终审阅。请先完成正常或降级合成。',
+      retryable: false,
     }
   }
   // 路由 / 能力矛盾来自 features/ai；同样只按类型名判定，避免反向依赖。报文里
