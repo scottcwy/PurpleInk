@@ -10,7 +10,6 @@ export type {
   WorkflowSourceNodeType,
   NodeStatus,
 } from './types'
-export { createProjectSchema, type CreateProjectInput } from './schemas'
 export {
   EXPORT_RESOLUTION_PRESETS,
   DEFAULT_EXPORT_SETTINGS,
@@ -45,7 +44,6 @@ export {
   type NodePosition,
 } from './layout'
 export {
-  createProject,
   setProjectAutopilot,
   updateExportSettings,
 } from './actions'

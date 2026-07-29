@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { withApiSession } from '@/features/auth/api-session'
-import { createProject, getCanvasGraph, listProjects } from '@/features/canvas'
+import { listProjects } from '@/features/canvas'
+import {
+  createProjectFromRequest,
+  ProjectCreateInputError,
+} from '@/features/projects'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,18 +19,28 @@ export function POST(request: Request): Promise<Response> {
 }
 
 async function handlePost(request: Request) {
-  const body: unknown = await request.json().catch(() => null)
   try {
-    const project = await createProject(body)
-    const ingestNodeId = (await getCanvasGraph(project.id)).nodes.find(
-      ({ type }) => type === 'script-import'
-    )?.id
-    if (!ingestNodeId) throw new Error('项目初始 INGEST 节点创建失败')
-    return NextResponse.json({ ok: true, project, ingestNodeId }, { status: 201 })
-  } catch (err) {
+    const { project, entryNodeId } = await createProjectFromRequest(request)
     return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : '创建失败' },
-      { status: 400 },
+      {
+        ok: true,
+        project,
+        entryNodeId,
+        // 旧版文稿创建客户端仍读取该字段；统一启动入口接线后删除此兼容别名。
+        ingestNodeId: entryNodeId,
+      },
+      { status: 201 },
+    )
+  } catch (error) {
+    if (error instanceof ProjectCreateInputError) {
+      return NextResponse.json(
+        { ok: false, error: error.message, code: error.code },
+        { status: error.statusCode },
+      )
+    }
+    return NextResponse.json(
+      { ok: false, error: '项目创建失败，请稍后重试', code: 'PROJECT_CREATE_FAILED' },
+      { status: 500 },
     )
   }
 }

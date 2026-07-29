@@ -152,7 +152,7 @@
 | 路由 | 方法 | 上下文参数 | 委托 | 状态 |
 | --- | --- | --- | --- | --- |
 | `/api/ping` | GET | — | 无 | `wired` |
-| `/api/projects` | GET, POST | — | `@/features/canvas` | GET 与文本项目 POST 已 `wired`；POST 判别联合（`kind=script|audio|website`）中 audio / website 为 `planned` |
+| `/api/projects` | GET, POST | — | GET：`@/features/canvas`；POST：`@/features/projects` | `wired`；POST 接受判别联合 `kind=script|audio|website`，兼容旧文稿 JSON；audio 仅接受 MP3/WAV multipart，最大 100 MiB / 30 分钟 |
 | `/api/projects/[id]/start` | POST | `id` path | 按项目 `workflowKind` 委托对应工作流入口 | `planned`；统一启动端点尚未创建，当前文本项目仍由既有 Director 入口启动 |
 | `/api/projects/[id]` | PATCH | `id` path | `@/features/canvas` `updateExportSettings` | `wired` |
 | `/api/artifacts/[id]` | GET | `id` path + `projectId` query（必填） | `@/features/artifacts` | `wired` |

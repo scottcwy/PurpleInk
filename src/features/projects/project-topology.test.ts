@@ -3,7 +3,7 @@ import { parseProjectSourcePayload } from './project-source'
 import { buildProjectTopology } from './project-topology'
 
 describe('buildProjectTopology', () => {
-  it('keeps the script workflow serialized exactly like the existing createProject baseline', () => {
+  it('keeps the script workflow serialized exactly like the established baseline', () => {
     const topology = buildProjectTopology(
       parseProjectSourcePayload({
         schemaVersion: 1,

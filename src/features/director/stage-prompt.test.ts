@@ -37,7 +37,7 @@ describe('buildStagePrompt', () => {
   })
 
   it('keeps INGEST parseable when visualTheme stays outside directorInput', () => {
-    // createProject 把 visualTheme 存在 payload 旁路；INGEST 只吃 directorInput。
+    // 项目创建服务把 visualTheme 存在 payload 旁路；INGEST 只吃 directorInput。
     expect(() =>
       buildStagePrompt('INGEST', {
         projectTitle: '演示项目',

@@ -55,7 +55,7 @@ export async function findUserByEmail(email: string): Promise<UserRecord | null>
  * 首个用量周期必须同生同死，
  * 任一步失败全回滚，绝不留下「有账号但没有 workspace」的半成品。
  *
- * workspace 的创建点唯一在这里——`createProject()` 里那段 upsert 本地
+ * workspace 的创建点唯一在这里——项目创建服务只消费当前会话归属，
  * workspace 的逻辑已在阶段 B 删除，项目创建只消费当前会话归属（§5.2）。
  */
 export async function createUserWithWorkspace(input: {
