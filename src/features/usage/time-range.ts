@@ -14,7 +14,7 @@ export function dateKeysBetween(
   timeZone: string,
 ): string[] {
   const startKey = localDate(start, timeZone)
-  const endKey = localDate(new Date(Math.min(end.getTime(), Date.now())), timeZone)
+  const endKey = localDate(end, timeZone)
   const cursor = new Date(`${startKey}T12:00:00.000Z`)
   const last = new Date(`${endKey}T12:00:00.000Z`)
   const keys: string[] = []

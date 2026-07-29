@@ -57,13 +57,14 @@ const EXPECTED_UI_FAMILIES = [
   "settings-panel",
   "skeleton",
   "verification-code-field",
+  "usage-trend-chart",
 ] as const;
 
 describe("Track P playbook registry", () => {
   it("tracks the latest Pencil inventory and every translated application family", () => {
     expect(PENCIL_REUSABLE_SYMBOL_COUNT).toBe(113);
     expect(PENCIL_COMPONENT_FAMILY_COUNT).toBe(35);
-    expect(UI_COMPONENT_FAMILY_COUNT).toBe(45);
+    expect(UI_COMPONENT_FAMILY_COUNT).toBe(46);
     expect(
       entriesByCategory("ui")
         .map(({ id }) => id)

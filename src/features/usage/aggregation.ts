@@ -12,6 +12,7 @@ export interface UsageRow {
   operation: string
   usage: unknown
   usageStatus: string | null
+  telemetryVersion: number
   startedAt: Date | null
   durationMs: number | null
   localDate: string | null
@@ -33,7 +34,7 @@ export function summarize(
   const terminal = succeeded + failed
   const tokens = rows.reduce((total, row) => addUsage(total, row), emptyUsage())
   const durations = rows
-    .map((row) => row.durationMs)
+    .map((row) => row.telemetryVersion >= 2 ? row.durationMs : null)
     .filter((value): value is number => value !== null)
     .sort((left, right) => left - right)
   const recent = rows.reduce<Date | null>(

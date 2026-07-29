@@ -11,6 +11,11 @@
 >
 > **2026-07-29**：S3 生产画布已接线 `PipelineNode`（`NodeStatus` + `selected`）；Pencil `Qsovp` 选中态
 > 待同一次会话回写。
+>
+> **2026-07-30**：真实 AI 调用统计新增代码侧 `UsageTrendChart`，登记
+> `cumulative-line` 与 `stacked-bars` 两种变体。Pencil MCP 因编辑器未打开
+> `canvas.pen` 无法读取 schema，本轮不得绕过加密文件直接修改；B0 母组件与 S1/S6
+> 实例同步继续挂起，React、Playbook 与正式路由已按既有 token 合同接线。
 
 ---
 
@@ -212,7 +217,9 @@ Primary 按钮为**扁平实心**（Vercel/Linear 式）：零渐变、零投影
 
 代码侧补充原语（已登记 `/playbook`，待 Pencil 会话补登记为 reusable symbol）：
 `SectionNav`（S6 右栏目录）、`SettingsPanel`（S6 折叠面板）、`SettingsField`（S6 表单行，
-2026-07-28 新增，吸收原 SettingsRow 行高覆写场景）。
+2026-07-28 新增，吸收原 SettingsRow 行高覆写场景）、`UsageTrendChart`
+（2026-07-30 新增；同一母组件提供会员累计额度阶梯线与账号每日调用堆叠柱；
+只接收真实 projection，fixture 仅存在于 `.demo.tsx` 与 `/playbook`）。
 
 ---
 

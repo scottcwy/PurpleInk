@@ -9,6 +9,12 @@ import type { BillingUiProjection } from '@/features/billing/ui/projection-contr
 import { getCanvasGraph, listProjects } from '@/features/canvas'
 import { buildProductsDashboardView } from '@/features/dashboard/products-dashboard-view-model'
 import { PublishNavContext } from '@/features/navigation/nav-context'
+import {
+  getAiUsageProjection,
+  type AiUsageProjectionV1,
+  type AiUsageRange,
+  type AiUsageView,
+} from '@/features/usage'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,10 +23,12 @@ export default async function ProductsDashboardPage() {
   return withPageSession('/products/dashboard', renderDashboard)
 }
 
-async function renderDashboard() {
-  const [projects, billing] = await Promise.all([
+async function renderDashboard(session: { userId: string }) {
+  const [projects, billing, accountUsage, managedUsage] = await Promise.all([
     listProjects(),
     getBillingProjection(),
+    optionalUsage(session.userId, 'account', '7d'),
+    optionalUsage(session.userId, 'managed-cycle', 'cycle'),
   ])
   const billingProjection: BillingUiProjection = billing
   const graphEntries = await Promise.all(
@@ -57,16 +65,37 @@ async function renderDashboard() {
             </div>
             <p className="text-xs text-ds-text-muted">{dashboard.updatedLabel}</p>
           </header>
-          <BillingDashboardUsage projection={billingProjection} />
+          <BillingDashboardUsage
+            projection={billingProjection}
+            usageProjection={managedUsage}
+          />
           <ProjectStatisticsPanel
             metrics={dashboard.metrics}
             statusDistribution={dashboard.statusDistribution}
             trendUnavailableLabel="尚无历史快照可绘制"
             updatedLabel={dashboard.updatedLabel}
+            apiUsage={accountUsage}
           />
           <RecentProjectsPanel projects={dashboard.recentProjects.slice(0, 3)} />
         </div>
       </main>
     </>
   )
+}
+
+async function optionalUsage(
+  userId: string,
+  view: AiUsageView,
+  range: AiUsageRange,
+): Promise<AiUsageProjectionV1 | null> {
+  try {
+    return await getAiUsageProjection({
+      userId,
+      view,
+      range,
+      timeZone: 'UTC',
+    })
+  } catch {
+    return null
+  }
 }

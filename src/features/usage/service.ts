@@ -146,6 +146,7 @@ function selection(timeZone: string) {
     operation: aiInvocations.operation,
     usage: aiInvocations.usage,
     usageStatus: aiInvocations.usageStatus,
+    telemetryVersion: aiInvocations.telemetryVersion,
     startedAt: aiInvocations.providerStartedAt,
     durationMs: aiInvocations.providerDurationMs,
     localDate: sql<string>`to_char(

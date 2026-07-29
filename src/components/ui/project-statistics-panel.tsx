@@ -3,6 +3,7 @@
 import { Activity, BarChart3, LineChart } from 'lucide-react'
 import Link from 'next/link'
 import { useState } from 'react'
+import type { AiUsageProjectionV1 } from '@/features/usage/client'
 import { cn } from '@/lib/utils'
 import { ProjectStatisticsApiView } from './project-statistics-api-view'
 
@@ -24,6 +25,7 @@ export interface ProjectStatisticsPanelProps {
   statusDistribution?: ProjectStatusDistribution
   trendUnavailableLabel?: string
   updatedLabel?: string
+  apiUsage: AiUsageProjectionV1 | null
   className?: string
 }
 
@@ -50,6 +52,7 @@ export function ProjectStatisticsPanel({
   statusDistribution = EMPTY_STATUS,
   trendUnavailableLabel = '尚无历史快照可绘制',
   updatedLabel = '等待项目快照',
+  apiUsage,
   className,
 }: ProjectStatisticsPanelProps) {
   const [view, setView] = useState<StatsView>('project')
@@ -82,7 +85,7 @@ export function ProjectStatisticsPanel({
               DATA SOURCE
             </p>
             <p className="mt-0.5 break-all font-mono text-[10px]">
-              {isProject ? 'WorkspaceStatisticsSnapshotV1' : 'PlaybookFixture'}
+              {isProject ? 'WorkspaceStatisticsSnapshotV1' : 'AiUsageProjectionV1'}
             </p>
           </div>
           <Link
@@ -103,7 +106,7 @@ export function ProjectStatisticsPanel({
             updatedLabel={updatedLabel}
           />
         ) : (
-          <ProjectStatisticsApiView />
+          <ProjectStatisticsApiView initialProjection={apiUsage} />
         )}
         <div className="flex justify-end md:hidden">
           <Link
