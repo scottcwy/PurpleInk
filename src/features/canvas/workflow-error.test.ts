@@ -120,6 +120,31 @@ describe('classifyWorkflowError', () => {
     })
   })
 
+  it('assigns an invalid model-generated artifact to platform recovery', () => {
+    const error = Object.assign(new Error('raw validation detail'), {
+      name: 'ArtifactValidationError',
+    })
+    expect(classifyWorkflowError(error, { stage: 'FABRICATE' })).toMatchObject({
+      code: 'UPSTREAM_ARTIFACT_INVALID',
+      origin: 'platform',
+      title: '生成结果未通过系统校验',
+      message: '模型生成的产物未通过系统可信合同，坏版本已被拒绝，系统可重新生成。',
+      recovery: 'manual_retry',
+      retryable: true,
+    })
+  })
+
+  it('classifies a missing Director tool submission without message regex guessing', () => {
+    const error = Object.assign(new Error('tool output was truncated'), {
+      name: 'DirectorToolOutputError',
+    })
+    expect(classifyWorkflowError(error, { stage: 'FABRICATE' })).toMatchObject({
+      code: 'UPSTREAM_ARTIFACT_INVALID',
+      origin: 'platform',
+      recovery: 'manual_retry',
+    })
+  })
+
   it('does not retry when a managed credential is absent', () => {
     expect(
       classifyWorkflowError(

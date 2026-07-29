@@ -73,7 +73,14 @@ function classifyByType(
   if (error instanceof Error && error.name === 'ArtifactValidationError') {
     return {
       code: 'UPSTREAM_ARTIFACT_INVALID',
-      message: '上游产物未通过当前阶段的可信合同校验。',
+      message: '模型生成的产物未通过系统可信合同，坏版本已被拒绝，系统可重新生成。',
+      retryable: true,
+    }
+  }
+  if (error instanceof Error && error.name === 'DirectorToolOutputError') {
+    return {
+      code: 'UPSTREAM_ARTIFACT_INVALID',
+      message: '模型未提交完整的结构化产物，当前不完整结果已被拒绝，系统可重新生成。',
       retryable: true,
     }
   }

@@ -59,6 +59,9 @@ export function buildFabricatePrompt(
   seek 必须同步或返回 Promise，并只根据传入的 frame/fps 更新当前帧。
 - 输出的第一个字符必须是 <，最后一个字符必须是 >；禁止 Markdown 围栏、
   解释、前后缀或省略内容。
+- 完整 HTML 必须控制在 16000 个字符以内；优先复用 CSS class 与短函数，禁止为装饰
+  重复堆叠节点、内联超长 SVG path 或 Base64 素材。必须在预算内完整闭合文档并调用工具，
+  不能因追求细节输出半截 HTML。
 - ${visualThemeConstraint(parsed.visualTheme)}
 
 shot contract：

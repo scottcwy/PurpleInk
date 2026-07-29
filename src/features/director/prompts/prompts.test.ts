@@ -185,6 +185,8 @@ describe('director prompt templates', () => {
       'window.__CVC_RENDER__ = { version: 1, seek(frame, fps) }',
       '第一个字符必须是 <',
       '禁止 Markdown 围栏',
+      '16000 个字符以内',
+      '不能因追求细节输出半截 HTML',
       '固定 1920×1080',
       'width=1920, height=1080',
       'data-composition-id',

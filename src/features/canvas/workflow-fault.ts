@@ -202,6 +202,7 @@ function presentationFor(code: WorkflowFaultCode): {
       return { origin: 'user', title: '运行设置需要调整', recovery: 'fix_settings' }
     case 'UPSTREAM_ARTIFACT_MISSING':
     case 'UPSTREAM_ARTIFACT_INVALID':
+      return { origin: 'platform', title: '生成结果未通过系统校验', recovery: 'manual_retry' }
     case 'STAGE_INPUT_INVALID':
       return { origin: 'content', title: '上游内容或素材需要修复', recovery: 'edit_input' }
     case 'TASK_INTERRUPTED':
