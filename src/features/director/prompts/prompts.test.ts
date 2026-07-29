@@ -271,6 +271,29 @@ describe('director prompt templates', () => {
     expect(resolveVisualTheme('neon')).toBe('dark')
   })
 
+  it('places per-shot dynamic context after project-shared context for prompt caching', () => {
+    const shotSpecPrompt = buildShotSpecPrompt({
+      target: shotSpecTarget,
+      scriptUnits,
+      audioAllocation,
+      masterPlan: '导演总纲',
+      styleBible: '风格圣经',
+    })
+    const shotSpecDynamicAt = shotSpecPrompt.indexOf('当前唯一目标镜头')
+    expect(shotSpecDynamicAt).toBeGreaterThan(shotSpecPrompt.indexOf('master plan：'))
+    expect(shotSpecDynamicAt).toBeGreaterThan(shotSpecPrompt.indexOf('style bible：'))
+    expect(shotSpecDynamicAt).toBeGreaterThan(shotSpecPrompt.indexOf('音频时序'))
+
+    const fabricatePrompt = buildFabricatePrompt({
+      shot,
+      audioAllocation,
+      styleBible: '风格圣经',
+    })
+    const fabricateDynamicAt = fabricatePrompt.indexOf('shot contract')
+    expect(fabricateDynamicAt).toBeGreaterThan(fabricatePrompt.indexOf('style bible：'))
+    expect(fabricateDynamicAt).toBeGreaterThan(fabricatePrompt.indexOf('audio allocation'))
+  })
+
   it('builds typed gate feedback prompts with exact violations and full-output instructions', () => {
     const fabricateRetry = buildFabricateRetryPrompt({
       retry: 1,

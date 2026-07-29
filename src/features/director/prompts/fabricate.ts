@@ -70,12 +70,12 @@ transform-origin 精准控制、贝塞尔缓动、错峰入场、多相位编排
   不能因追求细节输出半截 HTML。
 - ${visualThemeConstraint(parsed.visualTheme)}
 
-shot contract：
-${JSON.stringify(parsed.shot)}
-audio allocation：
-${JSON.stringify(parsed.audioAllocation)}
 style bible：
 ${parsed.styleBible}
+audio allocation（项目级共享时序）：
+${JSON.stringify(parsed.audioAllocation)}
+shot contract（当前镜头专属合同）：
+${JSON.stringify(parsed.shot)}
 
 提交方式：必须调用 check_determinism 工具，把完整 HTML 作为 source 实参提交，不要把实参当作普通文本输出。
 工具返回违规时，按返回的错误逐条修订后再次调用同一工具。

@@ -114,7 +114,7 @@ export class DirectorArtifactReader {
         this.source.loadRenderedArtifactInventory(row.nodeProjectId),
       ])
       return {
-        styleBible: direct.styleBible,
+        styleBible: styleBibleToneExcerpt(direct.styleBible),
         shotPlan,
         audioAllocation: ingestAudio.audioAllocation,
         renderedArtifactKeys: rendered.rendered.map((item) => item.storageKey),
@@ -149,7 +149,7 @@ export class DirectorArtifactReader {
           row.nodeProjectId,
           row.laneKey
         ),
-        styleBible: direct.styleBible,
+        styleBible: styleBibleToneExcerpt(direct.styleBible),
       }
     }
     return { shot, scriptUnit, shotAllocation }
@@ -194,6 +194,15 @@ export class DirectorArtifactReader {
     if (!shot) throw new Error(`shot plan 中找不到 ${laneKey}`)
     return shot
   }
+}
+
+/**
+ * ASSEMBLE 阶段（score/shot-sfx）只需基调参考，不需要完整样式圣经：
+ * 取 styleBible 首段落并限制在约 1000 字符内。
+ */
+function styleBibleToneExcerpt(styleBible: string): string {
+  const firstParagraph = styleBible.split(/\n\s*\n/, 1)[0] ?? styleBible
+  return firstParagraph.slice(0, 1000)
 }
 
 function requireShotAllocation(
