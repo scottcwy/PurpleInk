@@ -19,6 +19,7 @@ import {
   Info,
   LayoutDashboard,
   LoaderCircle,
+  Maximize2,
   Music,
   Palette,
   Play,
@@ -37,6 +38,8 @@ import {
   Volume2,
   Waypoints,
   X,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react'
 
 const ICONS: ReadonlyArray<{ name: string; Icon: LucideIcon }> = [
@@ -56,6 +59,9 @@ const ICONS: ReadonlyArray<{ name: string; Icon: LucideIcon }> = [
   { name: 'ellipsis', Icon: Ellipsis },
   { name: 'chevron-right', Icon: ChevronRight },
   { name: 'arrow-left', Icon: ArrowLeft },
+  { name: 'zoom-in', Icon: ZoomIn },
+  { name: 'zoom-out', Icon: ZoomOut },
+  { name: 'maximize-2', Icon: Maximize2 },
   { name: 'play', Icon: Play },
   { name: 'skip-back', Icon: SkipBack },
   { name: 'skip-forward', Icon: SkipForward },

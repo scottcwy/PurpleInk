@@ -304,7 +304,7 @@ Canonical 状态集合：`loading / empty / ready / running / succeeded / failed
 
 **应用壳与导航**：`clapperboard`、`layout-dashboard`、`folder`、`waypoints`、`film`、`download`、`settings`
 
-**操作**：`plus`、`save`、`settings-2`、`ellipsis`、`x`、`upload`、`refresh-cw`、`arrow-left`、`chevron-right`、`skip-forward`
+**操作**：`plus`、`save`、`settings-2`、`ellipsis`、`x`、`upload`、`refresh-cw`、`arrow-left`、`chevron-right`、`skip-forward`、`zoom-in`、`zoom-out`、`maximize-2`
 
 **执行与内容**：`list-tree`、`sparkles`、`combine`、`file-code`、`play`、`loader-circle`
 

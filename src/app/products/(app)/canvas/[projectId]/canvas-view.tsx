@@ -7,7 +7,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Background,
-  Controls,
   ReactFlow,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -24,6 +23,7 @@ import { productExportHref } from '@/features/navigation/products-routes'
 import { CanvasAutoHideTopBar } from './canvas-auto-hide-top-bar'
 import { CanvasInspector } from './canvas-inspector'
 import { CanvasMiniMap } from './canvas-minimap'
+import { CanvasViewportToolbar } from './canvas-viewport-toolbar'
 import { StageErrorDialog } from './stage-error-dialog'
 import {
   BillingQuotaExhaustedError,
@@ -215,6 +215,8 @@ export function CanvasView({
             fitView
             // 不用 onlyRenderVisibleElements：拓扑刷新后视口未重 fit 时，
             // 一端离屏会导致边被跳过渲染（重进页面 remount 才恢复）。
+            nodesDraggable={false}
+            nodesConnectable={false}
             minZoom={0.05}
             maxZoom={2}
             proOptions={{ hideAttribution: true }}
@@ -222,7 +224,7 @@ export function CanvasView({
           >
             <Background color="var(--ds-text-muted)" gap={20} size={1} />
             <CanvasMiniMap onSelectNode={setSelectedNodeId} />
-            <Controls className="!border-ds-border !bg-ds-surface !shadow-[var(--ds-shadow)]" />
+            <CanvasViewportToolbar />
           </ReactFlow>
           <LanePanel
             laneSummaries={laneSummaries}
