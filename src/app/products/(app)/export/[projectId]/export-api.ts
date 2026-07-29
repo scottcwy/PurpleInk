@@ -17,10 +17,12 @@ export interface ExportReadiness {
   media: ExportMediaReadiness
   /** 当前缺渲染产物、可占位出片的 lane。 */
   placeholderCandidateLanes: string[]
+  /** 已人工豁免 QA、仍属于未验收的 lane。 */
+  waivedQaLanes: string[]
   /** 降级导出是否可行（无项目级完整性阻塞）。 */
   degradedReady: boolean
   /** 最新成片若为降级产物，列出其占位镜头。 */
-  degradedExport: { placeholderLanes: string[] } | null
+  degradedExport: { placeholderLanes: string[]; waivedQaLanes: string[] } | null
   artifactDelivery:
     | 'none'
     | 'legacy-silent-v1'
@@ -70,6 +72,7 @@ export async function loadExportReadiness(
     blockingIssues: toBlockingIssues(body.blockingIssues),
     media: toMediaReadiness(body.media, body.shotCount),
     placeholderCandidateLanes: toStringArray(body.placeholderCandidateLanes),
+    waivedQaLanes: toStringArray(body.waivedQaLanes),
     degradedReady: body.degradedReady === true,
     degradedExport: toDegradedExport(body.degradedExport),
     artifactDelivery: isArtifactDelivery(body.artifactDelivery)
@@ -272,10 +275,13 @@ function toStringArray(value: unknown): string[] {
 
 function toDegradedExport(
   value: unknown
-): { placeholderLanes: string[] } | null {
+): { placeholderLanes: string[]; waivedQaLanes: string[] } | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  const lanes = toStringArray((value as Record<string, unknown>).placeholderLanes)
-  return { placeholderLanes: lanes }
+  const raw = value as Record<string, unknown>
+  return {
+    placeholderLanes: toStringArray(raw.placeholderLanes),
+    waivedQaLanes: toStringArray(raw.waivedQaLanes),
+  }
 }
 
 export function blockingIssueLabel(issue: ExportBlockingIssue): string {

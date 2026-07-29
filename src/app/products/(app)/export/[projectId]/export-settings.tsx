@@ -73,10 +73,13 @@ export function ExportSettings({
           <div className="flex items-center justify-between gap-2 px-4 py-3">
             <StatusPill
               variant="stale"
-              label={`降级导出 · ${readiness.degradedExport.placeholderLanes.length} 镜占位`}
+              label={degradedSummary(
+                readiness.degradedExport.placeholderLanes,
+                readiness.degradedExport.waivedQaLanes
+              )}
             />
             <span className="truncate text-xs text-ds-text-muted">
-              {readiness.degradedExport.placeholderLanes.join('、')}
+              {degradedLaneDetails(readiness.degradedExport)}
             </span>
           </div>
         </>
@@ -92,13 +95,15 @@ export function ExportSettings({
               disabled={exporting}
               onClick={onDegradedExport}
             >
-              {`降级导出（${degradedLaneCount(readiness)} 个镜头将以占位呈现）`}
+              {degradedActionLabel(readiness)}
             </Button>
             <p className="text-[11px] leading-relaxed text-ds-text-muted">
-              失败或已跳过的分镜将以黑场占位、无字幕（旁白保留）。已跳过的环节将导出为降级版本；
-              修复后重新导出可自动升级为完整版。
+              占位镜头将以黑场、无字幕呈现（旁白保留）；QA 豁免镜头保持现有画面，但明确标记为未验收。
+              本操作需要人工确认，修复并重新执行后可恢复为完整版。
               {readiness.placeholderCandidateLanes.length > 0 &&
                 `待占位：${readiness.placeholderCandidateLanes.join('、')}`}
+              {readiness.waivedQaLanes.length > 0 &&
+                ` 未验收：${readiness.waivedQaLanes.join('、')}`}
             </p>
           </div>
         )}
@@ -128,4 +133,29 @@ function degradedLaneCount(readiness: ExportReadiness): number {
       .filter((issue) => issue.kind === 'render' && issue.laneKey !== null)
       .map((issue) => issue.laneKey)
   ).size
+}
+
+function degradedActionLabel(readiness: ExportReadiness): string {
+  return `降级导出（${degradedLaneCount(readiness)} 镜占位 · ${readiness.waivedQaLanes.length} 镜未验收）`
+}
+
+function degradedSummary(
+  placeholderLanes: string[],
+  waivedQaLanes: string[]
+): string {
+  return `降级导出 · ${placeholderLanes.length} 镜占位 · ${waivedQaLanes.length} 镜未验收`
+}
+
+function degradedLaneDetails(
+  degraded: NonNullable<ExportReadiness['degradedExport']>
+): string {
+  const details = [
+    degraded.placeholderLanes.length > 0
+      ? `占位：${degraded.placeholderLanes.join('、')}`
+      : '',
+    degraded.waivedQaLanes.length > 0
+      ? `未验收：${degraded.waivedQaLanes.join('、')}`
+      : '',
+  ].filter(Boolean)
+  return details.join('；')
 }

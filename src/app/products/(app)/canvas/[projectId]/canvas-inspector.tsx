@@ -27,10 +27,10 @@ import { cn } from '@/lib/utils'
 import {
   BillingQuotaExhaustedError, triggerNodeAction, triggerNodeSkip, type NodeActionResult,
 } from './canvas-action-api'
-import { getNodeStatusPresentation } from './flow-elements'
+import { getNodeStatusLabel, getNodeStatusPresentation } from './flow-elements'
 import { isNodeActionBlocked, nodeActionLabel } from './node-action-presentation'
 import { StreamingLogCard } from './streaming-log-card'
-import { isSkippableNodeType } from '@/features/director/skip-policy'
+import { skipKindForNodeType } from '@/features/director/skip-policy'
 
 export function CanvasInspector({
   projectId,
@@ -242,7 +242,7 @@ function InspectorBody({
           {node.laneKey ?? NODE_LABEL[node.type]}
         </h2>
         <div className="flex shrink-0 items-center gap-1">
-          <StatusPill variant={status.variant} label={status.label} />
+          <StatusPill variant={status.variant} label={getNodeStatusLabel(node.type, node.status)} />
           {showCollapse && (
             <IconButton
               icon={ChevronRight}
@@ -292,7 +292,7 @@ function InspectorBody({
         renderError={node.renderError}
         onRetry={onExecute}
         retrying={submitting}
-        skippable={isSkippableNodeType(node.type)}
+        skipKind={skipKindForNodeType(node.type) ?? undefined}
         onSkip={onSkip}
       />
       <Button

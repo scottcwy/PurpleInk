@@ -9,6 +9,7 @@ import type {
   RenderNodeError,
 } from '@/features/canvas'
 import { useStageStream } from '@/lib/hooks/use-stage-stream'
+import type { SkipKind } from '@/features/director/skip-policy'
 import { SkipNodeDialog } from './skip-node-dialog'
 import { StageErrorDialog } from './stage-error-dialog'
 
@@ -29,8 +30,8 @@ export interface StreamingLogCardProps {
   /** 重试：重新入队该阶段。 */
   onRetry: () => void
   retrying?: boolean
-  /** 节点类型可跳过时为 true（skip-policy SKIPPABLE）；否则不渲染跳过入口。 */
-  skippable?: boolean
+  /** 跳过语义；未提供时不渲染跳过入口。 */
+  skipKind?: SkipKind
   /** 确认跳过：携带必填原因调 intent=skip。 */
   onSkip?: (reason: string) => void
 }
@@ -77,7 +78,7 @@ export function StreamingLogCard({
   renderError,
   onRetry,
   retrying,
-  skippable,
+  skipKind,
   onSkip,
 }: StreamingLogCardProps) {
   const stream = useStageStream(projectId, nodeId, status)
@@ -161,7 +162,7 @@ export function StreamingLogCard({
         }}
         retrying={retrying}
         retryable={error?.retryable !== false}
-        {...(skippable && onSkip
+        {...(skipKind && onSkip
           ? {
               onSkip: () => {
                 setDialogOpen(false)
@@ -173,6 +174,7 @@ export function StreamingLogCard({
       <SkipNodeDialog
         open={skipConfirmOpen}
         stage={error?.stage ?? stage ?? ''}
+        skipKind={skipKind ?? 'output-degradation'}
         onClose={() => setSkipConfirmOpen(false)}
         onConfirm={(reason) => {
           setSkipConfirmOpen(false)

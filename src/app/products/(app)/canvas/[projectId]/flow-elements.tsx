@@ -158,7 +158,7 @@ function nodeLabel(node: CanvasGraphNode, collapsed: boolean): ReactNode {
         label={
           collapsed && node.type === 'shot-script'
             ? '已折叠 · 5 节点'
-            : getNodeStatusPresentation(node.status).label
+            : getNodeStatusLabel(node.type, node.status)
         }
       />
     </div>
@@ -206,6 +206,15 @@ export function getNodeStatusPresentation(
   }
 }
 
+export function getNodeStatusLabel(
+  type: CanvasGraphNode['type'],
+  status: NodeStatus
+): string {
+  return type === 'shot-qa' && status === 'skipped'
+    ? '已跳过 · 未验收'
+    : STATUS_LABEL[status]
+}
+
 export function getLaneNodeLabel(type: ShotLaneNodeType): string {
   return LANE_NODE_LABEL[type]
 }
@@ -226,7 +235,7 @@ export function LaneSummaryDetails({ summary }: { summary: LaneSummary }) {
               key={node.type}
               variant={status.variant}
               icon={status.icon}
-              label={`${getLaneNodeLabel(node.type)} · ${status.label}`}
+              label={`${getLaneNodeLabel(node.type)} · ${getNodeStatusLabel(node.type, node.status)}`}
             />
           )
         })}

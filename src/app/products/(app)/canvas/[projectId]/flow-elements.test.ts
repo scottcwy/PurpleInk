@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { CanvasGraphNode, CanvasNodeType } from '@/features/canvas'
 import {
   buildLaneSummaries,
+  getNodeStatusLabel,
   getNodeStatusPresentation,
   LaneSummaryDetails,
   miniMapNodeColor,
@@ -68,6 +69,11 @@ describe('getNodeStatusPresentation', () => {
       variant: 'failed',
       label: '失败',
     })
+  })
+
+  it('labels a skipped QA node as unaccepted while keeping other skips generic', () => {
+    expect(getNodeStatusLabel('shot-qa', 'skipped')).toBe('已跳过 · 未验收')
+    expect(getNodeStatusLabel('shot-codegen', 'skipped')).toBe('已跳过')
   })
 })
 

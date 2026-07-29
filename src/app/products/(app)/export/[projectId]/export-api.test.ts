@@ -40,6 +40,7 @@ describe('export API client', () => {
         delivery: 'narration-hard-subtitle-v2',
       },
       placeholderCandidateLanes: [],
+      waivedQaLanes: [],
       degradedReady: false,
       degradedExport: null,
       artifactDelivery: 'legacy-silent-v1',
@@ -65,6 +66,7 @@ describe('export API client', () => {
         delivery: 'narration-hard-subtitle-v2',
       },
       placeholderCandidateLanes: [],
+      waivedQaLanes: [],
       degradedReady: false,
       degradedExport: null,
       artifactDelivery: 'none',
@@ -117,6 +119,28 @@ describe('export API client', () => {
     await expect(
       startProjectExport('project-1', fetcher, async () => {})
     ).rejects.toThrow('还有 2 个节点未产出可用分镜')
+  })
+
+  it('projects waived QA lanes and keeps old degraded manifests compatible', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      json({
+        ok: true,
+        ready: false,
+        incompleteNodeIds: ['shot-qa-s002'],
+        shotCount: 2,
+        waivedQaLanes: ['S002'],
+        degradedReady: true,
+        degradedExport: { placeholderLanes: ['S001'] },
+      })
+    )
+
+    const readiness = await loadExportReadiness('project-1', fetcher)
+
+    expect(readiness.waivedQaLanes).toEqual(['S002'])
+    expect(readiness.degradedExport).toEqual({
+      placeholderLanes: ['S001'],
+      waivedQaLanes: [],
+    })
   })
 
   it('explains media blocking issues without exposing artifact paths', async () => {

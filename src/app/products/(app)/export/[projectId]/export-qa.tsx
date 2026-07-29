@@ -55,6 +55,9 @@ export function ExportQa({ laneKeys, readiness, error }: ExportQaProps) {
                 />
               )
             })}
+            {readiness.waivedQaLanes.map((laneKey) => (
+              <ArtifactChip key={`waived-${laneKey}`} filename={`${laneKey} · 未验收`} />
+            ))}
           </div>
         </>
       )}

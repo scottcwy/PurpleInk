@@ -3,7 +3,7 @@ import {
   SKIP_REASON_MAX_LENGTH,
   SKIP_REASON_MIN_LENGTH,
 } from '@/features/director/skip-policy'
-import { isValidSkipReason } from './skip-node-dialog'
+import { getSkipDialogCopy, isValidSkipReason } from './skip-node-dialog'
 
 describe('isValidSkipReason', () => {
   it('accepts a trimmed reason within the 1-200 contract', () => {
@@ -25,5 +25,16 @@ describe('isValidSkipReason', () => {
     expect(isValidSkipReason(` ${'x'.repeat(SKIP_REASON_MAX_LENGTH)} `)).toBe(
       true
     )
+  })
+})
+
+describe('getSkipDialogCopy', () => {
+  it('describes QA skip as an unaccepted waiver instead of media placeholders', () => {
+    const copy = getSkipDialogCopy('qa-waiver')
+
+    expect(copy.description).toContain('不会标记验收通过')
+    expect(copy.description).toContain('未验收')
+    expect(copy.description).toContain('显式降级导出')
+    expect(copy.description).not.toContain('黑场')
   })
 })
