@@ -255,6 +255,24 @@ describe('classifyWorkflowError', () => {
     expect(projection.message).toContain('跳过')
   })
 
+  it('classifies automatic degraded export as an explicit user confirmation gate', () => {
+    class DegradedExportConfirmationRequiredError extends Error {
+      override readonly name = 'DegradedExportConfirmationRequiredError'
+    }
+    const projection = classifyWorkflowError(
+      new DegradedExportConfirmationRequiredError(),
+      { stage: 'FINALIZE', sourceNodeId: 'export' }
+    )
+
+    expect(projection).toMatchObject({
+      code: 'DEGRADED_EXPORT_CONFIRMATION_REQUIRED',
+      origin: 'user',
+      recovery: 'confirm_degraded_export',
+      retryable: false,
+    })
+    expect(projection.message).toContain('显式确认降级导出')
+  })
+
   it('classifies the persisted budget message without hitting broader rules', () => {
     // 闸门文案持久化到 attempt.failure 后会被再次分类（只剩字符串）：
     // 「已暂停重试」是独有词，不得被「修复配置」误判成 CONFIGURATION_BLOCKED。

@@ -38,6 +38,7 @@ const ingestAudioSchema = z.object({
 interface NodeLane {
   id: string
   laneKey: string | null
+  status: string
 }
 
 export class DirectorArtifactSource {
@@ -162,12 +163,15 @@ export class DirectorArtifactSource {
     return key
   }
 
-  async loadAllRenderedArtifactKeys(
+  async loadRenderedArtifactInventory(
     projectId: string
-  ): Promise<Array<{ laneKey: string; storageKey: string }>> {
+  ): Promise<{
+    rendered: Array<{ laneKey: string; storageKey: string }>
+    skippedLanes: string[]
+  }> {
     const nodes = await this.findNodeIds(projectId, 'shot-codegen')
     const lanes = nodes.filter(
-      (node): node is { id: string; laneKey: string } => node.laneKey !== null
+      (node): node is NodeLane & { laneKey: string } => node.laneKey !== null
     )
     if (lanes.length === 0) throw new Error('项目缺少 shot-codegen 分镜渲染节点')
     const rows = await this.db
@@ -193,13 +197,30 @@ export class DirectorArtifactSource {
     for (const row of rows) {
       if (!latest.has(row.nodeId)) latest.set(row.nodeId, row.storageKey)
     }
-    return lanes
-      .map(({ id, laneKey }) => {
-        const storageKey = latest.get(id)
-        if (!storageKey) throw new Error(`找不到 render-mp4 产物：${laneKey}`)
-        return { laneKey, storageKey }
-      })
-      .sort((left, right) => left.laneKey.localeCompare(right.laneKey))
+    const rendered: Array<{ laneKey: string; storageKey: string }> = []
+    const skippedLanes: string[] = []
+    for (const { id, laneKey, status } of lanes.sort(compareLane)) {
+      if (status === 'skipped') {
+        skippedLanes.push(laneKey)
+        continue
+      }
+      const storageKey = latest.get(id)
+      if (!storageKey) throw new Error(`找不到 render-mp4 产物：${laneKey}`)
+      rendered.push({ laneKey, storageKey })
+    }
+    return { rendered, skippedLanes }
+  }
+
+  async loadAllRenderedArtifactKeys(
+    projectId: string
+  ): Promise<Array<{ laneKey: string; storageKey: string }>> {
+    const inventory = await this.loadRenderedArtifactInventory(projectId)
+    if (inventory.skippedLanes.length > 0) {
+      throw new Error(
+        `分镜已跳过渲染，只能进入降级合成：${inventory.skippedLanes.join('、')}`
+      )
+    }
+    return inventory.rendered
   }
 
   async loadFinalExportArtifact(projectId: string): Promise<string> {
@@ -253,7 +274,11 @@ export class DirectorArtifactSource {
     type: string
   ): Promise<NodeLane[]> {
     const rows = await this.db
-      .select({ id: canvasNodes.id, data: canvasNodes.data })
+      .select({
+        id: canvasNodes.id,
+        data: canvasNodes.data,
+        status: canvasNodes.status,
+      })
       .from(canvasNodes)
       .where(
         and(
@@ -262,7 +287,11 @@ export class DirectorArtifactSource {
           eq(canvasNodes.type, type)
         )
       )
-    return rows.map((row) => ({ id: row.id, laneKey: readLaneKey(row.data) }))
+    return rows.map((row) => ({
+      id: row.id,
+      laneKey: readLaneKey(row.data),
+      status: row.status,
+    }))
   }
 
   private async resolveLatestArtifactKey(

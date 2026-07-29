@@ -278,9 +278,44 @@ describe('DirectorRuntimeRepository Postgres', () => {
     const input = context.directorInput as {
       shotPlan: { shots: Array<{ id: string }> }
       renderedArtifactKeys: string[]
+      skippedRenderLanes: string[]
     }
     expect(input.shotPlan.shots.map(({ id }) => id)).toEqual(['S001'])
     expect(input.renderedArtifactKeys).toEqual(['render/S001.mp4'])
+    expect(input.skippedRenderLanes).toEqual([])
+  })
+
+  it('assembles score input with explicit skipped render lanes but rejects no evidence', async () => {
+    await db
+      .update(canvasNodes)
+      .set({ status: 'skipped' })
+      .where(eq(canvasNodes.id, CODEGEN_ID))
+    await db
+      .delete(artifacts)
+      .where(
+        and(
+          eq(artifacts.aggregateId, CODEGEN_ID),
+          eq(artifacts.kind, 'render-mp4')
+        )
+      )
+
+    const context = await repository.loadStageContext(
+      PROJECT_ID,
+      SCORE_ID,
+      'ASSEMBLE'
+    )
+    expect(context.directorInput).toMatchObject({
+      renderedArtifactKeys: [],
+      skippedRenderLanes: ['S001'],
+    })
+
+    await db
+      .update(canvasNodes)
+      .set({ status: 'failed' })
+      .where(eq(canvasNodes.id, CODEGEN_ID))
+    await expect(
+      repository.loadStageContext(PROJECT_ID, SCORE_ID, 'ASSEMBLE')
+    ).rejects.toThrow('找不到 render-mp4 产物：S001')
   })
 })
 
@@ -351,7 +386,7 @@ function node(
   id: string,
   type: 'script-import' | 'shot-split' | 'score' | 'shot-script' | 'shot-codegen',
   stage: 'INGEST' | 'DIRECT' | 'ASSEMBLE' | 'SHOT_SPEC' | 'FABRICATE',
-  status: 'queued' | 'succeeded',
+  status: 'queued' | 'succeeded' | 'failed' | 'skipped',
   payload: Record<string, unknown> = {}
 ) {
   return {

@@ -27,6 +27,8 @@ import {
   isSkippableNodeType,
   SKIP_REASON_MAX_LENGTH,
   SKIP_REASON_MIN_LENGTH,
+  skipKindForNodeType,
+  type SkipKind,
 } from './skip-policy'
 
 /** 跳过请求被业务规则拒绝（类型不可跳过 / 状态非法 / 原因缺失）；route 层映射为 422。 */
@@ -65,6 +67,10 @@ export async function skipNodeAction(
   }
   await assertProjectWorkflowSupported(input.projectId)
   const node = await loadSkippableNode(input.projectId, input.nodeId)
+  const skipKind = skipKindForNodeType(node.type)
+  if (!skipKind) {
+    throw new SkipRejectedError('该环节是成片的硬前置，不能跳过')
+  }
 
   const database = await getDb()
   const workspaceId = currentWorkspaceId()
@@ -75,6 +81,7 @@ export async function skipNodeAction(
       projectId: input.projectId,
       nodeId: input.nodeId,
       nodeType: node.type,
+      skipKind,
       reason,
       skippedAt,
       attemptId,
@@ -93,7 +100,7 @@ export async function skipNodeAction(
     throw error
   }
   await transitionNodeStatus(input.nodeId, 'skipped', {
-    skipMeta: { reason, at: skippedAt },
+    skipMeta: { reason, at: skippedAt, kind: skipKind },
   })
   const advanced = await advancePipeline(input.projectId, input.nodeId)
   return {
@@ -102,11 +109,15 @@ export async function skipNodeAction(
     requestedNodeId: input.nodeId,
     queuedNodeId: input.nodeId,
     jobId: attemptId,
-    message:
-      advanced.enqueuedNodeIds.length > 0
-        ? '已跳过此环节，成片将以占位/缺省产出继续，并已推进下游'
-        : '已跳过此环节，成片将以占位/缺省产出继续',
+    message: skipResultMessage(skipKind, advanced.enqueuedNodeIds.length > 0),
   }
+}
+
+function skipResultMessage(kind: SkipKind, advanced: boolean): string {
+  const suffix = advanced ? '，并已推进下游' : ''
+  return kind === 'qa-waiver'
+    ? `已豁免此分镜验收；该镜仍为未验收，只能降级交付${suffix}`
+    : `已跳过此环节，成片将以占位/缺省产出继续${suffix}`
 }
 
 async function loadSkippableNode(
@@ -173,6 +184,7 @@ interface SkipMarkerInput {
   projectId: string
   nodeId: string
   nodeType: CanvasNodeType
+  skipKind: SkipKind
   reason: string
   skippedAt: string
   attemptId: string
@@ -186,10 +198,11 @@ async function registerSkipMarker(
 ): Promise<void> {
   const storageKey = `node-skip/${input.projectId}/${input.nodeId}.json`
   const marker = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     projectId: input.projectId,
     nodeId: input.nodeId,
     nodeType: input.nodeType,
+    skipKind: input.skipKind,
     reason: input.reason,
     skippedAt: input.skippedAt,
   }
@@ -204,7 +217,7 @@ async function registerSkipMarker(
       aggregateType: 'node',
       aggregateId: input.nodeId,
       kind: SKIP_MARKER_ARTIFACT_KIND,
-      schemaVersion: 'cvc.node-skip-marker/v1',
+      schemaVersion: 'cvc.node-skip-marker/v2',
       storageKey,
       sizeBytes: bytes.byteLength,
       contentHash,

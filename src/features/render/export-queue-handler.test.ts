@@ -63,6 +63,10 @@ describe('runProjectExport', () => {
     const queued = [...snapshots]
     return {
       enqueue: vi.fn(async () => 'job-1'),
+      getReadiness: vi.fn(async () => ({
+        ready: true,
+        degradedReady: false,
+      }) as never),
       getJobSnapshot: vi.fn(async () => (queued.shift() ?? null) as never),
       wait: vi.fn(async () => {}),
       maxPolls: 5,
@@ -92,6 +96,19 @@ describe('runProjectExport', () => {
       '未在预期时间内完成'
     )
     expect(deps.getJobSnapshot).toHaveBeenCalledTimes(5)
+  })
+
+  it('stops automatic export at the explicit degraded-delivery confirmation gate', async () => {
+    const deps = awaitDeps([])
+    deps.getReadiness.mockResolvedValue({
+      ready: false,
+      degradedReady: true,
+    } as never)
+
+    await expect(runProjectExport('project-1', deps)).rejects.toMatchObject({
+      name: 'DegradedExportConfirmationRequiredError',
+    })
+    expect(deps.enqueue).not.toHaveBeenCalled()
   })
 })
 
@@ -125,6 +142,7 @@ describe('registerExportProjectHandler', () => {
       outputKey: 'exports/final.mp4',
       contentHash: 'a'.repeat(64),
       placeholderLanes: ['S007'],
+      waivedQaLanes: [],
     }))
     registerExportProjectHandler(adapter, {
       exportProject: exportProject as never,

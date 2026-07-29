@@ -11,6 +11,7 @@ export type {
   WorkflowFaultCode,
   WorkflowFaultOrigin,
   WorkflowRecovery,
+  WorkflowExecutionNotice,
 } from './workflow-fault'
 
 /** 分类结果：只含类别本身，stage 与来源节点由调用上下文补齐。 */
@@ -90,6 +91,16 @@ function classifyByType(
   // 反向依赖队列层。预算耗尽是硬停：继续重试只会继续烧预算，必须不可重试。
   if (error instanceof Error && error.name === 'RetryBudgetExhaustedError') {
     return RETRY_BUDGET_EXHAUSTED_PROJECTION
+  }
+  if (
+    error instanceof Error &&
+    error.name === 'DegradedExportConfirmationRequiredError'
+  ) {
+    return {
+      code: 'DEGRADED_EXPORT_CONFIRMATION_REQUIRED',
+      message: '项目包含已跳过或未验收分镜，请前往导出页显式确认降级导出。',
+      retryable: false,
+    }
   }
   // 熔断降级链的「主备均不可用」来自 features/ai；同样只按类型名判定。
   // 这是外部服务故障，熔断窗口过后重试有意义，必须可重试（模式 B）。

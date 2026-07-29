@@ -6,7 +6,7 @@ import {
   type JobSnapshot,
   type QueueAdapter,
 } from '@/lib/queue'
-import { exportProject } from './export-service'
+import { exportProject, getExportReadiness } from './export-service'
 import { exportDegradedProject } from './export-degraded'
 import { RenderRepository } from './repository'
 import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
@@ -95,6 +95,7 @@ export async function enqueueProjectExport(
 
 export interface AwaitExportDependencies {
   enqueue: (input: ExportProjectInput) => Promise<string>
+  getReadiness: typeof getExportReadiness
   getJobSnapshot: (projectId: string, jobId: string) => Promise<JobSnapshot | null>
   wait: (milliseconds: number) => Promise<void>
   /** 轮询上限，防止无界等待；超时如实报出，不假装成功。 */
@@ -113,6 +114,10 @@ export async function runProjectExport(
   dependencies?: AwaitExportDependencies
 ): Promise<void> {
   const resolved = dependencies ?? defaultAwaitDependencies()
+  const readiness = await resolved.getReadiness(projectId)
+  if (!readiness.ready && readiness.degradedReady) {
+    throw new DegradedExportConfirmationRequiredError()
+  }
   const jobId = await resolved.enqueue({ projectId })
   const maxPolls = resolved.maxPolls ?? DEFAULT_MAX_POLLS
   for (let poll = 0; poll < maxPolls; poll += 1) {
@@ -126,6 +131,13 @@ export async function runProjectExport(
   throw new Error(`终片导出作业未在预期时间内完成：${jobId}`)
 }
 
+export class DegradedExportConfirmationRequiredError extends Error {
+  constructor() {
+    super('项目包含已跳过或未验收分镜，请前往导出页显式确认降级导出')
+    this.name = 'DegradedExportConfirmationRequiredError'
+  }
+}
+
 const POLL_INTERVAL_MS = 1_000
 /** 30 分钟上限：足够长片拼接，又不会无界挂住调用方。 */
 const DEFAULT_MAX_POLLS = 1_800
@@ -133,6 +145,7 @@ const DEFAULT_MAX_POLLS = 1_800
 function defaultAwaitDependencies(): AwaitExportDependencies {
   return {
     enqueue: (input) => enqueueProjectExport(input),
+    getReadiness: getExportReadiness,
     getJobSnapshot,
     wait: (milliseconds) =>
       new Promise((resolve) => setTimeout(resolve, milliseconds)),

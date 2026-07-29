@@ -114,6 +114,7 @@ describe('director prompt templates', () => {
         shotPlan,
         audioAllocation,
         renderedArtifactKeys: ['shots/S001.mp4'],
+        skippedRenderLanes: [],
       })
     ).toContain('ASSEMBLE')
     expect(

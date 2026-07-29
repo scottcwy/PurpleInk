@@ -257,6 +257,43 @@ describe('getExportReadiness', () => {
       degraded: true,
     })
   })
+
+  it('lists a QA waiver as degraded-ready without claiming QA passed', async () => {
+    const getExportPlan = vi
+      .fn()
+      .mockResolvedValueOnce({
+        incompleteNodeIds: ['qa-S004'],
+        shots: [{ nodeId: 'codegen-S004', laneKey: 'S004', outputKey: 'render/S004.mp4' }],
+        musicKey: null,
+        targetResolution: { width: 1920, height: 1080 },
+        resolutionPreset: '1920x1080' as const,
+        shotQa: { S004: false },
+        ...mediaFields(completeMediaPlan()),
+        waivedQaLanes: ['S004'],
+      })
+      .mockResolvedValueOnce({
+        incompleteNodeIds: ['qa-S004'],
+        shots: [{ nodeId: 'codegen-S004', laneKey: 'S004', outputKey: 'render/S004.mp4' }],
+        musicKey: null,
+        targetResolution: { width: 1920, height: 1080 },
+        resolutionPreset: '1920x1080' as const,
+        shotQa: { S004: false },
+        ...mediaFields(completeMediaPlan()),
+        waivedQaLanes: ['S004'],
+      })
+    const result = await getExportReadiness('project-1', {
+      getExportPlan,
+      findLatestFinalArtifact: vi.fn(async () => null),
+      findDegradedExport: vi.fn(async () => null),
+    })
+
+    expect(result).toMatchObject({
+      ready: false,
+      degradedReady: true,
+      shotQa: { S004: false },
+      waivedQaLanes: ['S004'],
+    })
+  })
 })
 
 function createStorage(): StorageAdapter {
@@ -325,6 +362,7 @@ function completeMediaPlan(): MediaAssemblyPlan {
 
 function mediaFields(mediaAssemblyPlan: ReturnType<typeof completeMediaPlan> | null) {
   return {
+    waivedQaLanes: [],
     mediaAssemblyPlan,
     blockingIssues: [],
     placeholderCandidates: [],

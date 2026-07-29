@@ -106,6 +106,7 @@ describe('skipNodeAction（阶段 3：人为跳过）', () => {
     expect(node.status).toBe('skipped')
     const payload = (node.data as { payload: Record<string, unknown> }).payload
     expect(payload.skipMeta).toMatchObject({ reason: '素材缺失，先用占位继续' })
+    expect(payload.skipMeta).toMatchObject({ kind: 'output-degradation' })
     expect(payload.directorError).toBeUndefined()
     expect(payload.laneKey).toBe('S001')
 
@@ -130,10 +131,11 @@ describe('skipNodeAction（阶段 3：人为跳过）', () => {
     )
     const marker = JSON.parse(bytes!.toString('utf8')) as Record<string, unknown>
     expect(marker).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       projectId,
       nodeId,
       nodeType: 'shot-sfx',
+      skipKind: 'output-degradation',
       reason: '素材缺失，先用占位继续',
     })
 
@@ -145,15 +147,48 @@ describe('skipNodeAction（阶段 3：人为跳过）', () => {
     expect(attempt).toEqual({ status: 'succeeded', entityId: nodeId })
   })
 
-  it('不可跳过类型（shot-qa）被 SkipRejectedError 拒绝，节点与存储零变化', async () => {
+  it('失败的 shot-qa 可被人工豁免，但明确保持未验收语义', async () => {
     const nodeId = await insertNode(database.db, projectId, {
       type: 'shot-qa',
       stage: 'FINALIZE',
       status: 'failed',
+      payload: { laneKey: 'S004' },
+    })
+
+    const result = await skipNodeAction({
+      projectId,
+      nodeId,
+      reason: '接受当前镜头未验收风险',
+    })
+
+    expect(result.message).toContain('未验收')
+    expect(result.message).toContain('降级交付')
+    const node = await readNode(database.db, nodeId)
+    expect(node.status).toBe('skipped')
+    const payload = (node.data as { payload: Record<string, unknown> }).payload
+    expect(payload.skipMeta).toMatchObject({
+      reason: '接受当前镜头未验收风险',
+      kind: 'qa-waiver',
+    })
+    const marker = JSON.parse(
+      [...memoryFiles.values()][0]!.toString('utf8')
+    ) as Record<string, unknown>
+    expect(marker).toMatchObject({
+      schemaVersion: 2,
+      nodeType: 'shot-qa',
+      skipKind: 'qa-waiver',
+    })
+  })
+
+  it('不可跳过的 score 被拒绝且节点与存储零变化', async () => {
+    const nodeId = await insertNode(database.db, projectId, {
+      type: 'score',
+      stage: 'ASSEMBLE',
+      status: 'failed',
     })
 
     await expect(
-      skipNodeAction({ projectId, nodeId, reason: '想跳过质检' })
+      skipNodeAction({ projectId, nodeId, reason: '不能跳过硬前置' })
     ).rejects.toBeInstanceOf(SkipRejectedError)
     expect((await readNode(database.db, nodeId)).status).toBe('failed')
     expect(memoryFiles.size).toBe(0)

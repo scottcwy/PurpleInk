@@ -111,13 +111,14 @@ export class DirectorArtifactReader {
       const [ingestAudio, shotPlan, rendered] = await Promise.all([
         this.source.loadIngestAudioArtifact(row.nodeProjectId),
         this.source.loadAllShotSpecs(row.nodeProjectId),
-        this.source.loadAllRenderedArtifactKeys(row.nodeProjectId),
+        this.source.loadRenderedArtifactInventory(row.nodeProjectId),
       ])
       return {
         styleBible: direct.styleBible,
         shotPlan,
         audioAllocation: ingestAudio.audioAllocation,
-        renderedArtifactKeys: rendered.map((item) => item.storageKey),
+        renderedArtifactKeys: rendered.rendered.map((item) => item.storageKey),
+        skippedRenderLanes: rendered.skippedLanes,
       }
     }
     if (row.nodeType !== 'shot-sfx' && row.nodeType !== 'shot-subtitle') {

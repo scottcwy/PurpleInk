@@ -32,6 +32,7 @@ function plan(overrides: Partial<RenderExportPlan> = {}): RenderExportPlan {
     targetResolution: RESOLUTION,
     resolutionPreset: '1920x1080',
     shotQa: {},
+    waivedQaLanes: [],
     mediaAssemblyPlan: null,
     blockingIssues: [],
     placeholderCandidates: [],
@@ -119,11 +120,15 @@ describe('resolveDegradedPlan', () => {
 
 describe('exportDegradedProject', () => {
   it('concats the degraded plan and registers final + manifest with matching hash', async () => {
-    const assembled = plan({ mediaAssemblyPlan: assemblyPlan(), placeholderLaneKeys: ['S007'] })
+    const assembled = plan({
+      mediaAssemblyPlan: assemblyPlan(),
+      placeholderLaneKeys: ['S007'],
+    })
     const getExportPlan = vi
       .fn()
       .mockResolvedValueOnce(
         plan({
+          waivedQaLanes: ['S004'],
           placeholderCandidates: [
             { laneKey: 'S007', durationInFrames: 60, audioUnitId: 'U007', needsVideo: true, needsNarration: false },
           ],
@@ -147,18 +152,63 @@ describe('exportDegradedProject', () => {
       concat: concat as never,
     })
 
-    expect(result).toMatchObject({ ok: true, placeholderLanes: ['S007'] })
+    expect(result).toMatchObject({
+      ok: true,
+      placeholderLanes: ['S007'],
+      waivedQaLanes: ['S004'],
+    })
     expect(registerFinalArtifact).toHaveBeenCalledOnce()
     // 清单字节含与成片一致的 finalContentHash。
     const manifestPut = puts.find((entry) => entry.key.endsWith('.degraded.json'))
     const manifest = JSON.parse(manifestPut!.bytes.toString('utf-8')) as {
+      schemaVersion: number
       finalContentHash: string
       placeholderLanes: string[]
+      waivedQaLanes: string[]
     }
     if (result.ok) {
       expect(manifest.finalContentHash).toBe(result.contentHash)
     }
     expect(manifest.placeholderLanes).toEqual(['S007'])
+    expect(manifest.waivedQaLanes).toEqual(['S004'])
+    expect(manifest.schemaVersion).toBe(2)
+  })
+
+  it('records a QA-only waiver as degraded even when no placeholder is needed', async () => {
+    const getExportPlan = vi
+      .fn()
+      .mockResolvedValueOnce(
+        plan({
+          incompleteNodeIds: ['qa-S004'],
+          waivedQaLanes: ['S004'],
+          mediaAssemblyPlan: assemblyPlan(),
+        })
+      )
+      .mockResolvedValueOnce(
+        plan({
+          incompleteNodeIds: ['qa-S004'],
+          waivedQaLanes: ['S004'],
+          mediaAssemblyPlan: assemblyPlan(),
+        })
+      )
+    const storage = createStorage()
+    vi.mocked(storage.readLocalFile).mockResolvedValue(Buffer.from('final-mp4-bytes'))
+
+    const result = await exportDegradedProject('p1', {
+      repository: {
+        getExportPlan,
+        registerFinalArtifact: vi.fn(async () => 'final'),
+        registerDegradedManifest: vi.fn(async () => 'manifest'),
+      },
+      storage,
+      concat: vi.fn(async () => 'ok') as never,
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      placeholderLanes: [],
+      waivedQaLanes: ['S004'],
+    })
   })
 
   it('returns blocking issues without concat when not degradable', async () => {

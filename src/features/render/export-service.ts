@@ -43,7 +43,7 @@ interface ExportReadinessRepository {
   findLatestFinalArtifact(projectId: string): Promise<FinalArtifactRecord | null>
   findDegradedExport(
     projectId: string
-  ): Promise<{ placeholderLanes: string[] } | null>
+  ): Promise<{ placeholderLanes: string[]; waivedQaLanes: string[] } | null>
 }
 
 export async function exportProject(
@@ -119,6 +119,8 @@ export async function getExportReadiness(
   incompleteNodeIds: string[]
   shotCount: number
   shotQa: Record<string, boolean | null>
+  /** 当前被人工豁免、未经验收的分镜。 */
+  waivedQaLanes: string[]
   resolutionPreset: ResolutionPreset
   finalArtifactId: string | null
   blockingIssues: RenderExportPlan['blockingIssues']
@@ -128,7 +130,7 @@ export async function getExportReadiness(
   /** 降级导出是否可行（无项目级完整性阻塞）。 */
   degradedReady: boolean
   /** 最新成片若为降级产物，列出其占位镜头。 */
-  degradedExport: { placeholderLanes: string[] } | null
+  degradedExport: { placeholderLanes: string[]; waivedQaLanes: string[] } | null
   artifactDelivery:
     | 'none'
     | 'legacy-silent-v1'
@@ -154,6 +156,7 @@ export async function getExportReadiness(
     incompleteNodeIds: plan.incompleteNodeIds,
     shotCount: plan.shots.length,
     shotQa: plan.shotQa,
+    waivedQaLanes: plan.waivedQaLanes,
     resolutionPreset: plan.resolutionPreset,
     finalArtifactId: finalArtifact?.artifactId ?? null,
     blockingIssues: plan.blockingIssues,

@@ -24,7 +24,7 @@ export interface FinalArtifactInput {
   sizeBytes: number
 }
 
-/** 降级导出的占位清单产物（JSON 字节）：与 final-mp4 同一 project attempt 提交。 */
+/** 降级导出的占位/未验收清单（JSON 字节）：与 final-mp4 同一 project attempt 提交。 */
 export interface DegradedManifestInput {
   projectId: string
   storageKey: string
@@ -109,7 +109,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
   }
 
   /**
-   * 登记降级导出的占位清单（真实 JSON 字节已落盘）。内容含 `finalContentHash`
+   * 登记降级导出的交付清单（真实 JSON 字节已落盘）。内容含 `finalContentHash`
    * 与当次 final-mp4 精确对应，读取时据此判定“最新成片是否为降级产物”。
    */
   async registerDegradedManifest(
@@ -128,7 +128,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
       aggregateType: 'project',
       aggregateId: input.projectId,
       kind: 'final-mp4-degraded-manifest',
-      schemaVersion: 'cvc.final-degraded-manifest/v1',
+      schemaVersion: 'cvc.final-degraded-manifest/v2',
       storageKey: input.storageKey,
       sizeBytes: input.sizeBytes,
       contentHash: input.contentHash,

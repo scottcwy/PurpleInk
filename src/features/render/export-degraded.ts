@@ -35,6 +35,7 @@ export type DegradedExportResult =
       outputKey: string
       contentHash: string
       placeholderLanes: string[]
+      waivedQaLanes: string[]
     }
 
 interface DegradedPlanRepository {
@@ -58,6 +59,7 @@ export interface DegradedExportDependencies {
 interface DegradedPlan {
   plan: MediaAssemblyPlan | null
   placeholderLanes: string[]
+  waivedQaLanes: string[]
   blockingIssues: RenderExportPlan['blockingIssues']
   degradable: boolean
 }
@@ -86,6 +88,7 @@ export async function resolveDegradedPlan(
     return {
       plan: null,
       placeholderLanes: [],
+      waivedQaLanes: probe.waivedQaLanes,
       blockingIssues: probe.blockingIssues,
       degradable: false,
     }
@@ -130,6 +133,7 @@ export async function resolveDegradedPlan(
   return {
     plan: assembled.mediaAssemblyPlan,
     placeholderLanes: [...assembled.placeholderLaneKeys].sort(),
+    waivedQaLanes: [...probe.waivedQaLanes].sort(),
     blockingIssues: assembled.blockingIssues,
     degradable: true,
   }
@@ -180,6 +184,7 @@ export async function exportDegradedProject(
       contentHash,
       sizeBytes: bytes.byteLength,
       placeholderLanes: degraded.placeholderLanes,
+      waivedQaLanes: degraded.waivedQaLanes,
     })
   } finally {
     await storage.removeTempDir(workDirectory)
@@ -190,13 +195,17 @@ export async function exportDegradedProject(
 async function commitDegraded(
   repository: DegradedExportRepository,
   storage: StorageAdapter,
-  input: FinalArtifactInput & { placeholderLanes: string[] }
+  input: FinalArtifactInput & {
+    placeholderLanes: string[]
+    waivedQaLanes: string[]
+  }
 ): Promise<DegradedExportResult> {
   const manifestBytes = Buffer.from(
     JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       finalContentHash: input.contentHash,
       placeholderLanes: input.placeholderLanes,
+      waivedQaLanes: input.waivedQaLanes,
     }),
     'utf-8'
   )
@@ -224,6 +233,7 @@ async function commitDegraded(
       outputKey: input.outputKey,
       contentHash: input.contentHash,
       placeholderLanes: input.placeholderLanes,
+      waivedQaLanes: input.waivedQaLanes,
     }
   } catch (error) {
     await storage.delete(input.outputKey)

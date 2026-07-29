@@ -115,6 +115,7 @@ describe('buildStagePrompt', () => {
         shotPlan,
         audioAllocation,
         renderedArtifactKeys: ['shots/S001.mp4'],
+        skippedRenderLanes: [],
       },
     })
     expect(score).toContain('score 全局节点')

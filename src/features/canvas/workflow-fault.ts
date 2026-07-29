@@ -20,6 +20,7 @@ export type WorkflowFaultCode =
   | 'MEDIA_NOT_READY'
   | 'TASK_INTERRUPTED'
   | 'RETRY_BUDGET_EXHAUSTED'
+  | 'DEGRADED_EXPORT_CONFIRMATION_REQUIRED'
   | 'QUOTA_EXHAUSTED'
   | 'CONFIGURATION_BLOCKED'
   | 'PROVIDER_FAILED'
@@ -38,9 +39,11 @@ export type WorkflowRecovery =
   | 'upgrade_plan'
   | 'edit_input'
   | 'switch_provider'
+  | 'confirm_degraded_export'
   | 'contact_support'
 
 export interface WorkflowFault {
+  [key: string]: unknown
   schemaVersion: 2
   code: WorkflowFaultCode
   origin: WorkflowFaultOrigin
@@ -61,6 +64,13 @@ export interface WorkflowFault {
 }
 
 export type WorkflowErrorProjection = WorkflowFault
+
+export interface WorkflowExecutionNotice {
+  code: 'PROVIDER_RATE_LIMITED'
+  message: string
+  resumeAt: string
+  providerLabel: string
+}
 
 interface ProviderErrorShape extends Error {
   providerId: string
@@ -199,6 +209,8 @@ function presentationFor(code: WorkflowFaultCode): {
       return { origin: 'platform', title: '任务暂时等待恢复', recovery: 'manual_retry' }
     case 'RETRY_BUDGET_EXHAUSTED':
       return { origin: 'platform', title: '自动重试已暂停', recovery: 'contact_support' }
+    case 'DEGRADED_EXPORT_CONFIRMATION_REQUIRED':
+      return { origin: 'user', title: '需要确认降级导出', recovery: 'confirm_degraded_export' }
     case 'PROVIDER_FAILED':
       return { origin: 'provider', title: '第三方服务暂时不可用', recovery: 'manual_retry' }
     case 'INTERNAL_PREFLIGHT_FAILED':

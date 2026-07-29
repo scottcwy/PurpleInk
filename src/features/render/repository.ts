@@ -47,6 +47,8 @@ export interface RenderExportPlan {
   targetResolution: { width: number; height: number }
   resolutionPreset: ResolutionPreset
   shotQa: Record<string, boolean | null>
+  /** 人工豁免、未经验收的分镜；不等于 QA 通过。 */
+  waivedQaLanes: string[]
   mediaAssemblyPlan: MediaAssemblyPlan | null
   blockingIssues: ExportBlockingIssue[]
   /** 降级导出待占位的 lane（正常模式恒空）。 */
@@ -169,6 +171,14 @@ export class RenderRepository extends RenderArtifactRepository {
         shotQa[node.laneKey] = qaPassedOf(node.payload)
       }
     }
+    const waivedQaLanes = nodes
+      .filter(
+        (node) =>
+          node.type === 'shot-qa' &&
+          legacyNodeStatus(node.status) === 'skipped'
+      )
+      .map((node) => node.laneKey)
+      .sort()
     const media = await loadMediaAssembly({
       database,
       storage: this.suppliedStorage,
@@ -196,6 +206,7 @@ export class RenderRepository extends RenderArtifactRepository {
       targetResolution: resolutionForPreset(settings.resolutionPreset),
       resolutionPreset: settings.resolutionPreset,
       shotQa,
+      waivedQaLanes,
       mediaAssemblyPlan: media.plan,
       blockingIssues: media.blockingIssues,
       placeholderCandidates: media.placeholderCandidates,
@@ -212,7 +223,7 @@ export class RenderRepository extends RenderArtifactRepository {
    */
   async findDegradedExport(
     projectId: string
-  ): Promise<{ placeholderLanes: string[] } | null> {
+  ): Promise<{ placeholderLanes: string[]; waivedQaLanes: string[] } | null> {
     const final = await this.findLatestFinalArtifact(projectId)
     if (!final) return null
     const database = await this.database()
@@ -238,12 +249,19 @@ export class RenderRepository extends RenderArtifactRepository {
         ) as unknown
       )
       const lanes = parsed.placeholderLanes
+      const waived = parsed.waivedQaLanes
       if (
         parsed.finalContentHash === final.contentHash &&
         Array.isArray(lanes) &&
-        lanes.every((lane): lane is string => typeof lane === 'string')
+        lanes.every((lane): lane is string => typeof lane === 'string') &&
+        (waived === undefined ||
+          (Array.isArray(waived) &&
+            waived.every((lane): lane is string => typeof lane === 'string')))
       ) {
-        return { placeholderLanes: lanes }
+        return {
+          placeholderLanes: lanes,
+          waivedQaLanes: Array.isArray(waived) ? waived : [],
+        }
       }
     } catch {
       // 清单不可读时保守处理：视为非降级，不阻断 readiness。
