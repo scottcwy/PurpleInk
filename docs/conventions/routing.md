@@ -167,6 +167,7 @@
 | `/api/settings` | GET, POST | — | `@/features/ai/*`、`@/lib/queue/runtime-config` | `wired` |
 | `/api/billing` | GET | — | `@/features/billing` | `wired` |
 | `/api/billing/redemptions` | POST | header `Idempotency-Key` + body `{code}` | `@/features/billing` | `wired` |
+| `/api/ai-usage` | GET | query `view=account\|managed-cycle`、`range=7d\|30d\|cycle`、`timeZone=<IANA>`；账号与 workspace 只取当前会话 | `@/features/usage` | `wired` |
 
 约定：
 
@@ -185,6 +186,8 @@
 4. 除 `/api/ping` 外全部 `export const dynamic = 'force-dynamic'`。
 5. `/api/billing` 只返回方案、周期、额度比例和脱敏 usage 汇总，不返回 `limit_cny_micros`、`used_cny_micros`、供应商单价、汇率或平台 Key。`/api/billing/redemptions` 仅 workspace owner 可用；无效、过期、撤销或已消费代码统一返回不可用语义。
 6. 平台托管额度耗尽统一返回 402 `{code:'quota_exhausted',resetAt,billingUrl:'/products/billing'}`；Free 不能通过直接 API、历史路由或 fallback 使用 Gemini 托管服务，越权返回 403 且不得产生外部调用或账本写入。Free 使用已验证的 workspace Gemini BYOK 不受会员门禁且不写平台成本账本。
+7. `/api/ai-usage` 返回 `AiUsageProjectionV1`。`view=managed-cycle` 只查询当前 workspace、当前会员周期和 `funding=managed`；`view=account` 只查询当前 `actor_user_id`，跨其 workspace 汇总 `managed | byok | custom`。调用数只计 `provider_started_at is not null`；成功率排除 running；Token 只计 `usage_status=reported`；P95 只使用 `provider_duration_ms`。响应禁止包含人民币成本、额度金额、单价、汇率、Prompt、消息正文、凭据、输入输出哈希、内部调用 ID、原始错误或隐藏推理。
+8. `/api/ai-usage` 的 `range=cycle` 只允许 `managed-cycle`；`account` 只允许 `7d | 30d`。`timeZone` 必须是合法 IANA 时区。营销页 `/api/engine/render` worker 不属于 Products 账号调用账本，也不进入该投影。
 
 ### 4.2 引擎代理
 

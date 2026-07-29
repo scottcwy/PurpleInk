@@ -490,6 +490,10 @@ UI 投影为未知问题并连续重试；数据库没有 `export-project` attem
 - [ ] Provider 并发、RPM、TPM 是否按共享凭据分别建模；429 是否只延后且不消耗普通重试/失败预算/熔断计数，等待上限与取消路径是否可恢复（模式 M）。
 - [ ] Provider 调度迁移的 journal 是否严格递增且目标表真实存在；租约创建、过期判断与释放是否使用同一数据库时钟（模式 M）。
 - [ ] 自动推进、节点恢复和显式降级导出是否共用唯一终结协调器；等待确认是否为 `blocked` 且零 Director attempt，终片登记后是否只续接一次最终审阅（模式 N）。
+- [ ] 每次真实 Provider 出网是否恰好对应一条 `ai_invocations`；出网前失败是否 release 且不进入调用量，fallback/重试是否各自独立记录。
+- [ ] `pipeline_runs.requested_by_user_id` 是否由用户入口固化，并在后台领取、重试、续接中保持不变；是否存在被 `SYSTEM_USER_ID` 覆盖的路径。
+- [ ] Provider 耗时是否由进程单调时钟计算并写入 `provider_duration_ms`；是否错误使用应用与数据库墙钟差值。
+- [ ] 账本与公共投影是否都未持久化或返回 Prompt、消息正文、Tool 参数、凭据、原始 Provider 错误、隐藏推理、成本、哈希或内部调用 ID。
 - [ ] 真实产物证据：`artifacts.content_hash` 与磁盘字节 SHA-256 逐条核对一致。
 
 真实证据的取法示例：
