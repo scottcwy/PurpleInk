@@ -1,4 +1,4 @@
-import { and, eq, gt, lte, ne, sql } from 'drizzle-orm'
+import { and, eq, gt, isNull, lte, ne, sql } from 'drizzle-orm'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb } from '@/lib/db/client'
 import type { VersionedPayload } from '@/lib/db/schema/core'
@@ -9,6 +9,7 @@ import {
   usagePeriods,
 } from '@/lib/db/schema/index'
 import { QuotaExhaustedError } from './contracts'
+import type { BillingCapability } from './rate-card'
 
 export interface ManagedInvocationReservation {
   workspaceId?: string
@@ -23,10 +24,29 @@ export interface ManagedInvocationReservation {
     provider: string
     model: string
     inputHash: string
-    capability?: 'text' | 'vision' | 'tts' | 'asr'
+    capability?: BillingCapability
     operation?: string
     source?: string
   }
+}
+
+export async function markManagedInvocationStarted(input: {
+  workspaceId?: string
+  invocationId: string
+}): Promise<void> {
+  const database = await getDb()
+  const workspaceId = scopedWorkspace(input.workspaceId)
+  const now = new Date()
+  await database.update(aiInvocations).set({
+    providerStartedAt: now,
+    updatedAt: now,
+  }).where(and(
+    eq(aiInvocations.workspaceId, workspaceId),
+    eq(aiInvocations.id, input.invocationId),
+    eq(aiInvocations.status, 'running'),
+    eq(aiInvocations.billingStatus, 'reserved'),
+    isNull(aiInvocations.providerStartedAt),
+  ))
 }
 
 function scopedWorkspace(explicit?: string): string {

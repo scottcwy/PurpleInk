@@ -11,6 +11,7 @@ export {
 } from './domain'
 export {
   failManagedInvocation,
+  markManagedInvocationStarted,
   reconcileOrphanedManagedInvocations,
   reserveManagedInvocation,
   releaseManagedReservation,
@@ -34,6 +35,8 @@ export {
 export {
   calculateActualCost,
   estimateMaximumCost,
+  wholeVideoSeconds,
+  type BillingCapability,
   type BillableUsage,
   type MaximumUsageEstimate,
   type RateCardPrice,

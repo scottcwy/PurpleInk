@@ -30,6 +30,36 @@ describe('rate card calculation', () => {
     expect(calculateActualCost(prices, { kind: 'asr', audioSeconds: 3.001 })).toBe(BigInt(400))
   })
 
+  it('prices website workflow output by whole video seconds', () => {
+    const workflowPrices: RateCardPrice[] = [
+      { unitKind: 'video_second', unitSize: BigInt(1), unitPriceCnyMicros: BigInt(125) },
+    ]
+
+    expect(calculateActualCost(workflowPrices, {
+      kind: 'workflow',
+      videoSeconds: 3.001,
+    })).toBe(BigInt(500))
+    expect(estimateMaximumCost(workflowPrices, {
+      kind: 'workflow',
+      videoSeconds: 12.2,
+    })).toBe(BigInt(1_625))
+  })
+
+  it('rejects invalid website workflow duration instead of undercharging it', () => {
+    const workflowPrices: RateCardPrice[] = [
+      { unitKind: 'video_second', unitSize: BigInt(1), unitPriceCnyMicros: BigInt(125) },
+    ]
+
+    expect(() => calculateActualCost(workflowPrices, {
+      kind: 'workflow',
+      videoSeconds: Number.POSITIVE_INFINITY,
+    })).toThrow('invalid video_second usage')
+    expect(() => estimateMaximumCost(workflowPrices, {
+      kind: 'workflow',
+      videoSeconds: -1,
+    })).toThrow('invalid video_second usage')
+  })
+
   it('uses UTF-8 bytes as a conservative text input token bound', () => {
     expect(estimateMaximumCost(prices, {
       kind: 'text',
