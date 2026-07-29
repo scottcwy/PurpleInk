@@ -35,6 +35,9 @@ export function runJob(job: Job, req: RenderRequest): void {
     updateJob(job.id, { phase: phase as JobPhase })
   }
 
+  const capture = job.integrated
+    ? { ...req.capture, credentialMode: "none" as const, publicOnly: true }
+    : req.capture
   const options: UrlToVideoOptions = {
     ...(req.duration != null ? { durationSec: req.duration } : {}),
     ...(req.name != null ? { name: req.name } : {}),
@@ -42,9 +45,12 @@ export function runJob(job: Job, req: RenderRequest): void {
     ...(req.skipCheck != null ? { skipCheck: req.skipCheck } : {}),
     ...(req.ffmpegDir != null ? { ffmpegDir: req.ffmpegDir } : {}),
     ...(req.refresh != null ? { refresh: req.refresh } : {}),
-    ...(req.capture != null ? { capture: req.capture } : {}),
+    ...(capture != null ? { capture } : {}),
     ...(req.fps != null ? { fps: req.fps } : {}),
     ...(req.generation != null ? { generation: req.generation } : {}),
+    ...(job.integrated && job.requestId
+      ? { integratedRequestId: job.requestId }
+      : {}),
     onPhase,
   }
 

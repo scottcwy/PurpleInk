@@ -19,6 +19,11 @@ export type JobPhase =
 
 export interface Job {
   id: string
+  /** 由 Products 工作流受控创建；legacy /render 始终为 false。 */
+  integrated: boolean
+  /** Products 侧稳定幂等键，仅 integrated Job 存在。 */
+  requestId?: string
+  requestFingerprint?: string
   /** url = 端到端；capture = 从已有 capture/ 目录渲染 */
   kind: "url" | "capture"
   /** 原始输入（URL 或 captureDir） */
@@ -42,11 +47,13 @@ export interface Job {
 }
 
 const jobs = new Map<string, Job>()
+const integratedRequests = new Map<string, string>()
 
 export function createJob(kind: Job["kind"], input: string): Job {
   const now = Date.now()
   const job: Job = {
     id: randomUUID(),
+    integrated: false,
     kind,
     input,
     status: "queued",
@@ -57,6 +64,36 @@ export function createJob(kind: Job["kind"], input: string): Job {
   }
   jobs.set(job.id, job)
   return job
+}
+
+export type IntegratedJobCreateResult = {
+  kind: "created" | "reused" | "conflict"
+  job: Job
+}
+
+/**
+ * requestId 是集成 API 的幂等边界。相同规范输入复用；同 key 不同输入明确冲突，
+ * 绝不悄悄覆盖或再起一个昂贵渲染任务。
+ */
+export function createIntegratedJob(
+  input: string,
+  requestId: string,
+  requestFingerprint: string
+): IntegratedJobCreateResult {
+  const existingId = integratedRequests.get(requestId)
+  const existing = existingId ? jobs.get(existingId) : undefined
+  if (existing) {
+    const sameInput =
+      existing.input === input && existing.requestFingerprint === requestFingerprint
+    return { kind: sameInput ? "reused" : "conflict", job: existing }
+  }
+
+  const job = createJob("url", input)
+  job.integrated = true
+  job.requestId = requestId
+  job.requestFingerprint = requestFingerprint
+  integratedRequests.set(requestId, job.id)
+  return { kind: "created", job }
 }
 
 export function getJob(id: string): Job | undefined {
@@ -98,5 +135,25 @@ export function toPublicJob(job: Job) {
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
     logs: job.logs,
+  }
+}
+
+/** 受控集成视图：不含 query、原始错误/日志、本机路径或输入正文。 */
+export function toIntegratedJobView(job: Job) {
+  const origin = new URL(job.input).origin
+  return {
+    id: job.id,
+    requestId: job.requestId,
+    origin,
+    status: job.status,
+    phase: job.phase,
+    durationSec: job.durationSec ?? null,
+    elapsedSec: job.elapsedSec ?? null,
+    checkPassed: job.checkPassed ?? null,
+    goldenVerified: job.goldenVerified ?? null,
+    goldenCheckCount: job.goldenDetails?.length ?? 0,
+    hasVideo: Boolean(job.videoPath),
+    videoUrl: job.videoPath ? `/internal/jobs/${encodeURIComponent(job.id)}/video` : null,
+    failure: job.status === "failed" ? { code: "ENGINE_JOB_FAILED" } : null,
   }
 }

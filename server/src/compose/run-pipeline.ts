@@ -2,6 +2,7 @@
 // - renderFromCapture: 已有 capture/ 目录 → video.mp4
 // - urlToVideo:        URL → (M3 采集) → capture/ → video.mp4（端到端）
 import { basename, dirname, extname, join } from "node:path"
+import { createHash } from "node:crypto"
 import { access, readdir, rm } from "node:fs/promises"
 import { buildVideoModel } from "./model"
 import { writeProject, writeProjectDirect } from "./project"
@@ -187,6 +188,8 @@ export interface UrlToVideoOptions extends RenderFromCaptureOptions {
   cacheRoot?: string
   /** 强制重新采集，忽略缓存（站点更新后用） */
   refresh?: boolean
+  /** Products 集成请求的稳定幂等键；存在时缓存纳入完整 canonical URL。 */
+  integratedRequestId?: string
 }
 
 /**
@@ -196,11 +199,12 @@ export interface UrlToVideoOptions extends RenderFromCaptureOptions {
  */
 export async function urlToVideo(url: string, options: UrlToVideoOptions = {}): Promise<PipelineResult> {
   const cacheRoot = options.cacheRoot || join(process.cwd(), "out", "cache")
-  const cacheDir = join(cacheRoot, slugFromUrl(url))
+  const cacheDir = join(cacheRoot, cacheSlugForUrl(url, options.integratedRequestId))
+  const logTarget = options.integratedRequestId ? new URL(url).origin : url
 
   // 命中缓存：直接复用已采集的 capture/，跳过采集阶段。
   if (!options.refresh && (await isUsableCapture(cacheDir))) {
-    logger.info("pipeline:capture_cache_hit", { url, cacheDir })
+    logger.info("pipeline:capture_cache_hit", { url: logTarget, cacheDir })
     options.onPhase?.("capturing") // 短暂经过该阶段，前端进度提示保持一致
     return renderFromCapture(cacheDir, options)
   }
@@ -208,7 +212,7 @@ export async function urlToVideo(url: string, options: UrlToVideoOptions = {}): 
   // 未命中/强制刷新：清掉旧缓存再重采，避免残留旧资产污染模型。
   await rm(cacheDir, { recursive: true, force: true }).catch(() => {})
   options.onPhase?.("capturing")
-  logger.info("pipeline:capture_start", { url, cacheDir })
+  logger.info("pipeline:capture_start", { url: logTarget, cacheDir })
   const manifest = await runCapture(url, { ...options.capture, outDir: options.capture?.outDir ?? cacheDir })
   logger.info("pipeline:capture_done", { captureDir: manifest.outDir, assets: manifest.assets.length })
   return renderFromCapture(manifest.outDir, options)
@@ -226,7 +230,16 @@ async function isUsableCapture(dir: string): Promise<boolean> {
 }
 
 /** 从 URL 主机名 + 路径派生稳定 slug 作为缓存目录名（区分同站不同页） */
-function slugFromUrl(url: string): string {
+export function cacheSlugForUrl(url: string, integratedRequestId?: string): string {
+  if (integratedRequestId) {
+    const digest = createHash("sha256")
+      .update(integratedRequestId)
+      .update("\0")
+      .update(url)
+      .digest("hex")
+      .slice(0, 32)
+    return `integrated-${digest}`
+  }
   try {
     const u = new URL(url)
     const raw = `${u.hostname.replace(/^www\./, "")}${u.pathname}`

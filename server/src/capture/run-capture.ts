@@ -8,6 +8,7 @@ import { extractPageTokensInBrowser } from "../adapter/extract-page-tokens"
 import { createDriver, type DriverType } from "./browser-driver"
 import { AiCaptureAgent } from "./ai-capture-agent"
 import { resolveCredentials } from "./credentials"
+import type { CredentialMode } from "./credentials"
 import { logger } from "../lib/logger"
 import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
@@ -34,6 +35,10 @@ export interface RunCaptureOptions {
   maxSteps?: number
   /** 是否有头（调试用），默认 headless */
   headful?: boolean
+  /** omit/legacy 保持旧凭据行为；public/none 禁止登录、注册与 IMAP。 */
+  credentialMode?: CredentialMode
+  /** 仅公网采集；Playwright 会在导航及请求边界执行 URL 门禁。 */
+  publicOnly?: boolean
 }
 
 /**
@@ -42,7 +47,10 @@ export interface RunCaptureOptions {
  */
 export async function runCapture(url: string, options: RunCaptureOptions = {}): Promise<AdapterManifest> {
   const driver = await createDriver(options.driver)
-  await driver.launch({ headless: !options.headful })
+  await driver.launch({
+    headless: !options.headful,
+    ...(options.publicOnly != null ? { publicOnly: options.publicOnly } : {}),
+  })
 
   // onSnapshot 回填的语义快照（index 与截图对齐），用于拼 visible-text.txt
   const snapshots: StepSnapshot[] = []
@@ -69,6 +77,7 @@ export async function runCapture(url: string, options: RunCaptureOptions = {}): 
 
     // 2. 解析凭据（提供账号→登录优先；配了 IMAP→自助注册；都没有→仅采集公开内容）
     const credentials = await resolveCredentials({
+      ...(options.credentialMode != null ? { credentialMode: options.credentialMode } : {}),
       ...(options.testEmail != null ? { testEmail: options.testEmail } : {}),
       ...(options.testPassword != null ? { testPassword: options.testPassword } : {}),
     })
