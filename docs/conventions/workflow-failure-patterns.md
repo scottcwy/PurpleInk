@@ -244,12 +244,14 @@ FINALIZE `export` 节点从 `idle` 到 `succeeded`，最终 MP4 的数据库哈�
 2. **自动重试 + 预算闸门（阶段 2）**：`retry-policy.ts` 的
    `assertEnqueueRetryBudget` 限制同一节点的重试次数；耗尽后落到
    `RETRY_BUDGET_EXHAUSTED`（`retryable=false`，文案引导用户选择跳过）。
-3. **人为跳过（阶段 3）**：`skipped` 是一等节点状态，仅限可降级占位的节点
-   类型（`shot-codegen` / `shot-sfx` / `shot-subtitle`，`SKIPPABLE` 全集映射 +
-   全集遍历断言，见模式 C），仅限 `failed` / `stale` / `cancelled` 状态；
-   跳过必须留下可审计证据（`node-skip-marker` 产物 + `skipMeta.reason`），
-   下游推进把 `skipped` 视为前置满足，导出走既有降级链占位并在
-   `final-mp4-degraded-manifest` 如实登记，不得宣称完全成功。
+3. **人为跳过（阶段 3）**：`skipped` 是一等节点状态，仅限可降级交付的节点
+   类型（`shot-codegen` / `shot-sfx` / `shot-subtitle` / `shot-qa`，
+   `SKIPPABLE` 全集映射 + 全集遍历断言，见模式 C），仅限 `failed` / `stale` /
+   `cancelled` 状态。媒体节点跳过记为 `output-degradation`，验收节点跳过记为
+   `qa-waiver`；后者表示「未验收」而非通过。跳过必须留下可审计证据
+   （`node-skip-marker` 产物 + `skipMeta.reason/kind`），下游推进把 `skipped`
+   视为前置满足；正常导出继续阻断，只有用户显式确认的降级导出可在
+   `final-mp4-degraded-manifest` 如实登记占位与未验收泳道，不得宣称完全成功。
 4. **Provider 熔断 + 显式备选降级（阶段 4）**：`provider-breaker.ts` 按
    provider 独立计数（连续失败 ≥3 次 open 5 分钟，窗口后 half-open 单次
    试探）；记账**单一收敛点**在 `pi-session.ts` 的 run 结果处，只有外部
