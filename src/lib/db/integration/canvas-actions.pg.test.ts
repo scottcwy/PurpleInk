@@ -82,7 +82,9 @@ describe('createProject', () => {
     const edges = await database.db.select().from(canvasEdges)
 
     expect(project.title).toBe('RAG 十分钟入门')
+    expect(project.kind).toBe('script')
     const [persistedProject] = await database.db.select().from(projects)
+    expect(persistedProject?.workflowKind).toBe('script')
     expect(persistedProject?.workflowVersion).toBe(
       serializeWorkflowVersion(ACTIVE_WORKFLOW_VERSION)
     )

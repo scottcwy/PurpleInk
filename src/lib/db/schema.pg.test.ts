@@ -159,6 +159,7 @@ it('rejects invalid lifecycle, route, attempt, and revision values', async () =>
   await seedAll()
   const invalidStatements = [
     database.sql`UPDATE projects SET status = 'invalid' WHERE id = ${IDS.project}`,
+    database.sql`UPDATE projects SET workflow_kind = 'invalid' WHERE id = ${IDS.project}`,
     database.sql`UPDATE canvas_nodes SET type = 'invalid' WHERE id = ${IDS.sourceNode}`,
     database.sql`UPDATE canvas_nodes SET stage = 'invalid' WHERE id = ${IDS.sourceNode}`,
     database.sql`UPDATE canvas_nodes SET status = 'invalid' WHERE id = ${IDS.sourceNode}`,
@@ -176,6 +177,15 @@ it('rejects invalid lifecycle, route, attempt, and revision values', async () =>
   for (const statement of invalidStatements) {
     await expect(statement).rejects.toThrow(/check constraint/i)
   }
+})
+
+it('defaults existing project writes to the script workflow kind', async () => {
+  await seedCoreAndCanvas()
+  const [row] = await database.sql<{ workflow_kind: string }[]>`
+    SELECT workflow_kind FROM projects
+    WHERE workspace_id = ${IDS.workspace} AND id = ${IDS.project}
+  `
+  expect(row?.workflow_kind).toBe('script')
 })
 
 it('prevents cross-project edges and freezes approved or released artifacts', async () => {

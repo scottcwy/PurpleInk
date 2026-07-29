@@ -1,5 +1,6 @@
 export type {
   Project,
+  ProjectWorkflowKind,
   CanvasNode,
   CanvasEdge,
   CanvasNodeType,

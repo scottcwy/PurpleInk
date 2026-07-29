@@ -21,6 +21,7 @@ const WORKSPACE_TABLES = [
 ] as const
 const ENUM_CHECKS = {
   projects_status_check: ['active', 'archived'],
+  projects_workflow_kind_check: ['script', 'audio', 'website'],
   canvas_nodes_type_check: [
     'script-import', 'shot-split', 'score', 'export', 'shot-script',
     'shot-codegen', 'shot-sfx', 'shot-subtitle', 'shot-qa',

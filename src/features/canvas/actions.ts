@@ -9,10 +9,7 @@ import {
   projects,
 } from '@/lib/db/schema/index'
 import { withTransaction } from '@/lib/db/transaction'
-import {
-  ACTIVE_WORKFLOW_VERSION,
-  serializeWorkflowVersion,
-} from '@/lib/workflow/version'
+import { activeWorkflowVersionFor } from '@/lib/workflow/project-workflow-registry'
 import { DEFAULT_EXPORT_SETTINGS } from './export-settings'
 import { createProjectSchema, exportSettingsSchema, type ExportSettings } from './schemas'
 import type { Project } from './types'
@@ -44,7 +41,8 @@ export async function createProject(input: unknown): Promise<Project> {
         id: randomUUID(),
         title,
         script,
-        workflowVersion: serializeWorkflowVersion(ACTIVE_WORKFLOW_VERSION),
+        workflowKind: 'script',
+        workflowVersion: activeWorkflowVersionFor('script'),
         exportSettings: {
           schemaVersion: 1,
           settings: DEFAULT_EXPORT_SETTINGS,
@@ -52,6 +50,7 @@ export async function createProject(input: unknown): Promise<Project> {
       })
       .returning({
         id: projects.id,
+        kind: projects.workflowKind,
         title: projects.title,
         script: projects.script,
         createdAt: projects.createdAt,

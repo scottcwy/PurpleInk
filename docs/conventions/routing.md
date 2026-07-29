@@ -71,7 +71,7 @@
 | --- | --- | --- | --- | --- |
 | `/products` | `src/app/products/page.tsx` | `redirect` → `/products/dashboard` | 无 | — |
 | `/products/dashboard` | `src/app/products/(app)/dashboard/page.tsx` | `wired` | 无 | 空状态引导新建项目 |
-| `/products/projects` | `src/app/products/(app)/projects/page.tsx` | `wired` | 无 | 空状态 |
+| `/products/projects` | `src/app/products/(app)/projects/page.tsx` | `wired` | 无 | 空状态；文本/录音与网站介绍双栏投影为 `planned` |
 | `/products/canvas/[projectId]` | `src/app/products/(app)/canvas/[projectId]/page.tsx` | `wired` | `projectId` path | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明 |
 | `/products/shots/[shotId]` | `src/app/products/(app)/shots/[shotId]/page.tsx` | `wired` | `shotId` path + `projectId` query（必填） | 缺失项目/镜头 `notFound()`；旧 workflow 显示保留数据说明 |
 | `/products/export/[projectId]` | `src/app/products/(app)/export/[projectId]/page.tsx` | `wired` | `projectId` path | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明 |
@@ -152,7 +152,8 @@
 | 路由 | 方法 | 上下文参数 | 委托 | 状态 |
 | --- | --- | --- | --- | --- |
 | `/api/ping` | GET | — | 无 | `wired` |
-| `/api/projects` | GET, POST | — | `@/features/canvas` | `wired` |
+| `/api/projects` | GET, POST | — | `@/features/canvas` | GET 与文本项目 POST 已 `wired`；POST 判别联合（`kind=script|audio|website`）中 audio / website 为 `planned` |
+| `/api/projects/[id]/start` | POST | `id` path | 按项目 `workflowKind` 委托对应工作流入口 | `planned`；统一启动端点尚未创建，当前文本项目仍由既有 Director 入口启动 |
 | `/api/projects/[id]` | PATCH | `id` path | `@/features/canvas` `updateExportSettings` | `wired` |
 | `/api/artifacts/[id]` | GET | `id` path + `projectId` query（必填） | `@/features/artifacts` | `wired` |
 | `/api/jobs/[id]` | GET | `id` path + `projectId` query | `@/lib/queue`、`@/features/artifacts` | `wired` |
@@ -252,7 +253,7 @@
 | `AppSection` | URL 段 | 中文标签 | Pencil 屏 |
 | --- | --- | --- | --- |
 | `workbench` | `dashboard` | 工作台 | S1 / S2 |
-| `projects` | `projects` | 项目 | — |
+| `projects` | `projects` | 项目 | —（文本/录音与网站介绍双栏为 `planned`） |
 | `canvas` | `canvas` | 画布 | S3 |
 | `renderer` | `shots` | 镜头 | S4 |
 | `export` | `export` | 导出 | S5 |
@@ -274,6 +275,8 @@
 S3 画布 DAG 节点 UI 唯一消费 `@/components/ui/pipeline-node`（Canonical `Qsovp`，状态枚举为领域 `NodeStatus`，含 `selected` 实例态）；禁止在 page 内联平行节点壳。`StageNode` / `ShotNode` / `AudioNode` / `ExportNode` 仅作 `/playbook` 标本，不挂载生产 React Flow。
 
 S2 是 S1 的模态状态，**不允许**为它开一条路由。任何「新建 / 编辑 / 确认」类模态默认不进 URL；只有需要分享或刷新保持的模态才允许升级为路由，并须在本文件登记。
+
+S2 的目标形态是同一模态内的三来源选择：文稿视频（`script`）、录音转视频（`audio`）和网站介绍视频（`website`）。选择器与对应折叠内容、audio / website 提交接线目前均为 `planned`；当前生产表单仍只提交文稿项目。三类项目的版本、Artifact、计费与容灾边界以 `docs/conventions/project-workflows.md` 为唯一真值。
 
 ## 8. `/artifacts` 与 `/share`
 
