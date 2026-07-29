@@ -4,6 +4,7 @@ import { runInAuthContext, SYSTEM_USER_ID } from '@/lib/auth/workspace-context'
 import type { Db } from '@/lib/db/client'
 import { pipelineRuns, taskAttempts, type VersionedPayload } from '@/lib/db/schema/index'
 import { backoffMs, shouldAutoRetry } from './retry-policy'
+import { classifyWorkflowError } from '@/features/canvas/workflow-error'
 
 interface CompletingAttemptRow {
   runId: string
@@ -30,7 +31,7 @@ export async function completeAttempt(
   workspaceId: string,
   attemptId: string,
   status: 'succeeded' | 'failed',
-  message?: string,
+  failure?: unknown,
   options?: { allowAutoRetry?: boolean }
 ): Promise<void> {
   const retriedNodeId = await database.transaction(async (transaction) => {
@@ -62,11 +63,17 @@ export async function completeAttempt(
 
     const retryable =
       status === 'failed' &&
-      message !== undefined &&
+      failure !== undefined &&
       (options?.allowAutoRetry ?? true) &&
-      shouldAutoRetry(message, attempt.attemptNo, retryStage(attempt.checkpoint))
+      shouldAutoRetry(failure, attempt.attemptNo, retryStage(attempt.checkpoint))
     if (retryable) {
-      await scheduleRetry(transaction, workspaceId, attemptId, attempt, message!)
+      await scheduleRetry(
+        transaction,
+        workspaceId,
+        attemptId,
+        attempt,
+        serializeFailure(failure, retryStage(attempt.checkpoint))
+      )
       return attempt.entityType === 'node' ? attempt.entityId : null
     }
 
@@ -74,7 +81,9 @@ export async function completeAttempt(
       .update(taskAttempts)
       .set({
         status,
-        failure: message ? { schemaVersion: 1, message } : null,
+        failure: failure === undefined
+          ? null
+          : serializeFailure(failure, retryStage(attempt.checkpoint)),
         completedAt: new Date(),
         updatedAt: new Date(),
       })
@@ -106,13 +115,13 @@ async function scheduleRetry(
   workspaceId: string,
   attemptId: string,
   attempt: CompletingAttemptRow,
-  message: string
+  failure: VersionedPayload
 ): Promise<void> {
   await transaction
     .update(taskAttempts)
     .set({
       status: 'superseded',
-      failure: { schemaVersion: 1, message },
+      failure,
       completedAt: new Date(),
       updatedAt: new Date(),
     })
@@ -147,6 +156,14 @@ async function scheduleRetry(
         eq(pipelineRuns.id, attempt.runId)
       )
     )
+}
+
+function serializeFailure(failure: unknown, stage: string): VersionedPayload {
+  const fault = classifyWorkflowError(
+    typeof failure === 'string' ? new Error(failure) : failure,
+    { stage }
+  )
+  return { ...fault, message: fault.message }
 }
 
 /**

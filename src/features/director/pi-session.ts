@@ -2,6 +2,11 @@ import 'server-only'
 import { Agent } from '@earendil-works/pi-agent-core'
 import { ManagedAiGateway } from '@/features/ai'
 import {
+  providerErrorFromResponse,
+  ProviderRequestError,
+  providerFailureKind,
+} from '@/features/ai/provider-request-error'
+import {
   recordProviderFailure,
   recordProviderSuccess,
 } from '@/features/ai/provider-breaker'
@@ -59,14 +64,9 @@ export interface DirectorSessionInput {
   resumeSessionKey?: string
 }
 
-class DirectorRunError extends Error {
-  readonly code = 'DIRECTOR_RUN_FAILED'
-
-  constructor(routeLabel: string, httpStatus: number | null) {
-    const status = httpStatus === null ? '' : `，HTTP ${httpStatus}`
-    super(`Director 模型调用失败（${routeLabel}${status}）`)
-    this.name = 'DirectorRunError'
-  }
+interface ObservedProviderResponse {
+  status: number
+  headers?: Headers | Record<string, string>
 }
 
 /**
@@ -90,7 +90,7 @@ export async function createDirectorSession(
       streamKey: `${input.projectId}:${input.nodeId}`,
       appendMessage: (message) => stored.session.appendMessage(message),
     })
-    let upstreamFailureStatus: number | null = null
+    let upstreamFailureResponse: ObservedProviderResponse | null = null
     const gateway = new ManagedAiGateway()
     let invocationIndex = 0
     let preflightFailure: unknown
@@ -121,7 +121,7 @@ export async function createDirectorSession(
       getApiKey: () => runtime.apiKey,
       onResponse: (response) => {
         if (response.status >= 400 && response.status <= 599) {
-          upstreamFailureStatus = response.status
+          upstreamFailureResponse = response
         }
       },
     })
@@ -137,7 +137,7 @@ export async function createDirectorSession(
           await agent.prompt(runInput.prompt)
           await agent.waitForIdle()
           if (preflightFailure !== undefined) throw preflightFailure
-          assertRunSucceeded(agent, runtime, upstreamFailureStatus)
+          assertRunSucceeded(agent, runtime, upstreamFailureResponse)
           return extractDirectorOutput(bridge.runMessages(), runInput.output)
         } catch (error) {
           if (preflightFailure !== undefined) throw preflightFailure
@@ -146,10 +146,10 @@ export async function createDirectorSession(
           // 为 provider error，仍必须收敛成稳定的 DirectorRunError，避免让 4xx
           // 被重试策略当作未知瞬态错误。
           if (
-            !(error instanceof DirectorRunError) &&
-            (upstreamFailureStatus !== null || Boolean(agent.state.errorMessage))
+            !(error instanceof ProviderRequestError) &&
+            (upstreamFailureResponse !== null || Boolean(agent.state.errorMessage))
           ) {
-            throwDirectorRunFailure(agent, runtime, upstreamFailureStatus)
+            throwDirectorRunFailure(agent, runtime, upstreamFailureResponse)
           }
           throw error
         }
@@ -179,31 +179,59 @@ export async function createDirectorSession(
  */
 function assertRunSucceeded(
   agent: Agent,
-  runtime: { providerId: string; routeLabel: string },
-  responseStatus: number | null,
+  runtime: {
+    providerId: string
+    providerLabel?: string
+    routeLabel: string
+    funding?: 'managed' | 'byok'
+  },
+  response: ObservedProviderResponse | null,
 ): void {
   const errorMessage = agent.state.errorMessage
   if (!errorMessage) {
     recordProviderSuccess(runtime.providerId)
     return
   }
-  throwDirectorRunFailure(agent, runtime, responseStatus)
+  throwDirectorRunFailure(agent, runtime, response)
 }
 
 function throwDirectorRunFailure(
   agent: Agent,
-  runtime: { providerId: string; routeLabel: string },
-  responseStatus: number | null,
+  runtime: {
+    providerId: string
+    providerLabel?: string
+    routeLabel: string
+    funding?: 'managed' | 'byok'
+  },
+  response: ObservedProviderResponse | null,
 ): never {
-  recordProviderFailure(runtime.providerId)
+  const status = response?.status ?? upstreamHttpStatus(agent.state.errorMessage ?? '') ?? undefined
+  const kind = providerFailureKind(status)
+  if (kind === 'timeout' || kind === 'unavailable' || kind === 'network') {
+    recordProviderFailure(runtime.providerId)
+  }
   console.error('[director] 模型调用失败', {
     route: runtime.routeLabel,
-    code: 'DIRECTOR_RUN_FAILED',
+    status,
+    code: kind,
   })
-  throw new DirectorRunError(
-    runtime.routeLabel,
-    responseStatus ?? upstreamHttpStatus(agent.state.errorMessage ?? ''),
-  )
+  if (response) {
+    throw providerErrorFromResponse({
+      response,
+      providerId: runtime.providerId,
+      providerLabel: runtime.providerLabel ?? runtime.providerId,
+      operation: '文本生成',
+      funding: runtime.funding ?? 'managed',
+    })
+  }
+  throw new ProviderRequestError({
+    providerId: runtime.providerId,
+    providerLabel: runtime.providerLabel ?? runtime.providerId,
+    operation: '文本生成',
+    funding: runtime.funding ?? 'managed',
+    httpStatus: status,
+    kind,
+  })
 }
 
 /** 仅保留上游 HTTP 状态码，不能把 provider 原始报文带入工作流错误面。 */

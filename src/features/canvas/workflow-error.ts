@@ -1,30 +1,17 @@
 import { z } from 'zod'
-
-export type WorkflowErrorCode =
-  | 'UPSTREAM_ARTIFACT_MISSING'
-  | 'UPSTREAM_ARTIFACT_INVALID'
-  | 'STAGE_INPUT_INVALID'
-  | 'INTERNAL_PREFLIGHT_FAILED'
-  | 'ROUTE_CONTRACT_INVALID'
-  | 'MEDIA_NOT_READY'
-  | 'TASK_INTERRUPTED'
-  | 'RETRY_BUDGET_EXHAUSTED'
-  | 'QUOTA_EXHAUSTED'
-  | 'CONFIGURATION_BLOCKED'
-  | 'PROVIDER_FAILED'
-  | 'FABRICATE_FAILED'
-  | 'RENDER_FAILED'
-  | 'MEDIA_FAILED'
-  | 'QUEUE_FAILED'
-  | 'STAGE_FAILED'
-
-export interface WorkflowErrorProjection {
-  code: WorkflowErrorCode
-  stage: string
-  message: string
-  retryable: boolean
-  sourceNodeId?: string
-}
+import {
+  completeWorkflowFault,
+  projectProviderFault,
+  type WorkflowErrorProjection,
+} from './workflow-fault'
+export type {
+  WorkflowErrorCode,
+  WorkflowErrorProjection,
+  WorkflowFault,
+  WorkflowFaultCode,
+  WorkflowFaultOrigin,
+  WorkflowRecovery,
+} from './workflow-fault'
 
 /** 分类结果：只含类别本身，stage 与来源节点由调用上下文补齐。 */
 type ClassifiedError = Pick<
@@ -50,15 +37,13 @@ export function classifyWorkflowError(
   context: { stage: string; sourceNodeId?: string }
 ): WorkflowErrorProjection {
   const raw = error instanceof Error ? error.message : String(error)
+  const providerFault = projectProviderFault(error, context)
+  if (providerFault) return providerFault
   const classified =
     classifyByType(error, context.stage) ??
     classifyByMessage(raw) ??
     classifyByStage(context.stage)
-  return {
-    ...classified,
-    stage: context.stage,
-    ...(context.sourceNodeId ? { sourceNodeId: context.sourceNodeId } : {}),
-  }
+  return completeWorkflowFault(classified, context)
 }
 
 function classifyByType(

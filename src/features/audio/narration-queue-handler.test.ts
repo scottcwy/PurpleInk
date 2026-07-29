@@ -76,13 +76,13 @@ describe('media narration queue', () => {
       'ingest-1',
       expect.objectContaining({
         status: 'failed',
-        error: {
+        error: expect.objectContaining({
           code: 'PROVIDER_FAILED',
           stage: 'MEDIA_NARRATION',
           message: '外部生成服务本次执行失败，可以稍后重试。',
           retryable: true,
           sourceNodeId: 'ingest-1',
-        },
+        }),
       })
     )
     expect(deps.advance).not.toHaveBeenCalled()

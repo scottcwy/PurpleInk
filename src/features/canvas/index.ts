@@ -50,6 +50,10 @@ export { materializeShotLanes } from './fan-out'
 export type { ShotLaneSeed } from './contracts'
 export {
   classifyWorkflowError,
+  type WorkflowFault,
+  type WorkflowFaultCode,
+  type WorkflowFaultOrigin,
+  type WorkflowRecovery,
   type WorkflowErrorCode,
   type WorkflowErrorProjection,
 } from './workflow-error'

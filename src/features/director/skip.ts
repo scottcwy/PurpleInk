@@ -87,7 +87,7 @@ export async function skipNodeAction(
       workspaceId,
       attemptId,
       'failed',
-      error instanceof Error ? error.message : String(error),
+      error,
       { allowAutoRetry: false }
     ).catch(() => undefined)
     throw error

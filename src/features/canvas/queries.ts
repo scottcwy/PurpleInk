@@ -28,8 +28,15 @@ export interface DirectorNodeError {
   stage: string
   message: string
   code?: string
+  schemaVersion?: number
+  origin?: string
+  title?: string
+  recovery?: string
   retryable?: boolean
   sourceNodeId?: string
+  provider?: NodeErrorProvider
+  referenceId?: string
+  occurredAt?: string
 }
 
 /** 可展示的渲染阶段失败信息（源自 canvas_nodes.data.renderError）；与 `directorError`
@@ -37,8 +44,22 @@ export interface DirectorNodeError {
 export interface RenderNodeError {
   message: string
   code?: string
+  schemaVersion?: number
+  origin?: string
+  title?: string
+  recovery?: string
   retryable?: boolean
   sourceNodeId?: string
+  provider?: NodeErrorProvider
+  referenceId?: string
+  occurredAt?: string
+}
+
+export interface NodeErrorProvider {
+  id: string
+  label: string
+  httpStatus?: number
+  retryAt?: string
 }
 
 export interface CanvasGraphNode {
@@ -240,17 +261,50 @@ export function parseRenderError(
 
 function optionalErrorFields(record: Record<string, unknown>): {
   code?: string
+  schemaVersion?: number
+  origin?: string
+  title?: string
+  recovery?: string
   retryable?: boolean
   sourceNodeId?: string
+  provider?: NodeErrorProvider
+  referenceId?: string
+  occurredAt?: string
 } {
+  const provider = parseErrorProvider(record.provider)
   return {
     ...(typeof record.code === 'string' ? { code: record.code } : {}),
+    ...(typeof record.schemaVersion === 'number'
+      ? { schemaVersion: record.schemaVersion }
+      : {}),
+    ...(typeof record.origin === 'string' ? { origin: record.origin } : {}),
+    ...(typeof record.title === 'string' ? { title: record.title } : {}),
+    ...(typeof record.recovery === 'string' ? { recovery: record.recovery } : {}),
     ...(typeof record.retryable === 'boolean'
       ? { retryable: record.retryable }
       : {}),
     ...(typeof record.sourceNodeId === 'string'
       ? { sourceNodeId: record.sourceNodeId }
       : {}),
+    ...(provider ? { provider } : {}),
+    ...(typeof record.referenceId === 'string'
+      ? { referenceId: record.referenceId }
+      : {}),
+    ...(typeof record.occurredAt === 'string'
+      ? { occurredAt: record.occurredAt }
+      : {}),
+  }
+}
+
+function parseErrorProvider(value: unknown): NodeErrorProvider | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  if (typeof record.id !== 'string' || typeof record.label !== 'string') return undefined
+  return {
+    id: record.id,
+    label: record.label,
+    ...(typeof record.httpStatus === 'number' ? { httpStatus: record.httpStatus } : {}),
+    ...(typeof record.retryAt === 'string' ? { retryAt: record.retryAt } : {}),
   }
 }
 

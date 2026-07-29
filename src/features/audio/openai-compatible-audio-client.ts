@@ -4,6 +4,10 @@ import type {
   OpenAiCompatibleAsrProfile,
   OpenAiCompatibleTtsProfile,
 } from '@/features/ai/openai-compatible-payloads'
+import {
+  providerErrorFromResponse,
+  providerNetworkError,
+} from '@/features/ai/provider-request-error'
 import type { Caption } from './types'
 import type { SynthesizedSpeech, TranscribedSpeech } from './stepfun-audio-client'
 
@@ -103,7 +107,13 @@ export async function synthesizeOpenAiCompatibleSpeech(
     '自定义兼容 TTS',
   )
   if (!response.ok) {
-    throw new Error(`自定义兼容 TTS 请求失败（HTTP ${response.status}）`)
+    throw providerErrorFromResponse({
+      response,
+      providerId: 'openai-compatible-tts',
+      providerLabel: '自定义兼容 TTS',
+      operation: '配音',
+      funding: 'byok',
+    })
   }
   const audioBytes = Buffer.from(await response.arrayBuffer())
   if (audioBytes.length === 0) {
@@ -143,7 +153,13 @@ export async function transcribeOpenAiCompatibleSpeech(
     '自定义兼容 ASR',
   )
   if (!response.ok) {
-    throw new Error(`自定义兼容 ASR 请求失败（HTTP ${response.status}）`)
+    throw providerErrorFromResponse({
+      response,
+      providerId: 'openai-compatible-asr',
+      providerLabel: '自定义兼容 ASR',
+      operation: '语音识别',
+      funding: 'byok',
+    })
   }
   const payload: unknown = await response.json()
   const { transcript, captions } = profile.timestampMode === 'segment'
@@ -241,14 +257,16 @@ async function request(
       signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
     })
   } catch (error) {
-    if (
-      error instanceof Error
-      && (error.name === 'AbortError' || error.name === 'TimeoutError')
-    ) {
-      throw new Error(
-        `${operation} 请求超时（${PROVIDER_TIMEOUT_MS / 1000} 秒）`,
-      )
-    }
-    throw error
+    throw providerNetworkError({
+      providerId: operation.includes('TTS')
+        ? 'openai-compatible-tts'
+        : 'openai-compatible-asr',
+      providerLabel: operation.includes('TTS')
+        ? '自定义兼容 TTS'
+        : '自定义兼容 ASR',
+      operation,
+      funding: 'byok',
+      cause: error,
+    })
   }
 }

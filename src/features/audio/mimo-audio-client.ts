@@ -1,6 +1,10 @@
 import 'server-only'
 import { z } from 'zod'
 import { getMimoConfig, type MimoConfig } from '@/features/ai/mimo-config'
+import {
+  providerErrorFromResponse,
+  providerNetworkError,
+} from '@/features/ai/provider-request-error'
 import type {
   SynthesizedSpeech,
   TranscribedSpeech,
@@ -132,14 +136,23 @@ async function request(
       }
     )
     if (!response.ok) {
-      throw new Error(`${operation} 请求失败（HTTP ${response.status}）`)
+      throw providerErrorFromResponse({
+        response,
+        providerId: 'mimo',
+        providerLabel: '小米 MiMo',
+        operation,
+        funding: 'managed',
+      })
     }
     return response
   } catch (error) {
-    if (error instanceof Error && error.name === 'TimeoutError') {
-      throw new Error(`${operation} 请求超时（${PROVIDER_TIMEOUT_MS / 1000} 秒）`)
-    }
-    throw error
+    throw providerNetworkError({
+      providerId: 'mimo',
+      providerLabel: '小米 MiMo',
+      operation,
+      funding: 'managed',
+      cause: error,
+    })
   }
 }
 

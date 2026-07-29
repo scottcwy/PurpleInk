@@ -306,7 +306,7 @@ export class InProcessQueue implements QueueAdapter {
         job.workspaceId,
         job.id,
         'failed',
-        err instanceof Error ? err.message : String(err)
+        err
       )
     }
   }

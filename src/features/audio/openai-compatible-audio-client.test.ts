@@ -142,12 +142,17 @@ describe('OpenAI-compatible ASR', () => {
     expect(result.transcript).toBe('整段文本')
   })
 
-  it('surfaces the HTTP status on rejection', async () => {
+  it('preserves the HTTP status without exposing the response body', async () => {
     const fetcher = vi.fn(async () => new Response('nope', { status: 413 }))
     await expect(transcribeOpenAiCompatibleSpeech(
       { audioBytes: Buffer.from([1]), audioFormat: 'wav' },
       harnessAsr(fetcher),
-    )).rejects.toThrow('HTTP 413')
+    )).rejects.toMatchObject({
+      name: 'ProviderRequestError',
+      httpStatus: 413,
+      kind: 'request',
+      funding: 'byok',
+    })
   })
 
   it('maps a provider timeout to an explicit message', async () => {

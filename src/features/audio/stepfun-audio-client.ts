@@ -1,6 +1,11 @@
 import 'server-only'
 import { z } from 'zod'
 import { getStepfunConfig, type StepfunConfig } from '@/features/ai/config'
+import {
+  providerErrorFromResponse,
+  providerNetworkError,
+  ProviderRequestError,
+} from '@/features/ai/provider-request-error'
 import type { Caption } from './types'
 
 const speechInputSchema = z
@@ -119,7 +124,13 @@ export async function synthesizeSpeech(
     'StepFun TTS',
   )
   if (!response.ok) {
-    throw new Error(`StepFun TTS 请求失败（HTTP ${response.status}）`)
+    throw providerErrorFromResponse({
+      response,
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      operation: '配音',
+      funding: 'managed',
+    })
   }
   if (response.headers.get('content-type')?.startsWith('audio/')) {
     return {
@@ -145,7 +156,13 @@ export async function synthesizeSpeech(
     'StepFun TTS 音频下载',
   )
   if (!audioResponse.ok) {
-    throw new Error(`StepFun TTS 音频下载失败（HTTP ${audioResponse.status}）`)
+    throw providerErrorFromResponse({
+      response: audioResponse,
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      operation: '音频下载',
+      funding: 'managed',
+    })
   }
   return {
     audioBytes: Buffer.from(await audioResponse.arrayBuffer()),
@@ -192,14 +209,28 @@ export async function transcribeSpeech(
     'StepFun ASR',
   )
   if (!response.ok) {
-    throw new Error(`StepFun ASR 请求失败（HTTP ${response.status}）`)
+    throw providerErrorFromResponse({
+      response,
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      operation: '语音识别',
+      funding: 'managed',
+    })
   }
   const events = parseSse(await response.text())
   const captions: Caption[] = []
   let transcript: string | undefined
   for (const event of events) {
     const errorEvent = asrErrorSchema.safeParse(event)
-    if (errorEvent.success) throw new Error(`StepFun ASR 失败：${errorEvent.data.message}`)
+    if (errorEvent.success) {
+      throw new ProviderRequestError({
+        providerId: 'stepfun',
+        providerLabel: '阶跃星辰',
+        operation: '语音识别',
+        funding: 'managed',
+        kind: 'unknown',
+      })
+    }
     const doneEvent = asrDoneSchema.safeParse(event)
     if (doneEvent.success) {
       transcript = doneEvent.data.text
@@ -267,10 +298,13 @@ async function request(
     })
     return await Promise.race([response, timeout])
   } catch (error) {
-    if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
-      throw new Error(`${operation} 请求超时（${PROVIDER_TIMEOUT_MS / 1000} 秒）`)
-    }
-    throw error
+    throw providerNetworkError({
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      operation,
+      funding: 'managed',
+      cause: error,
+    })
   } finally {
     if (timeoutId) clearTimeout(timeoutId)
   }

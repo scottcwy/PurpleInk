@@ -461,7 +461,7 @@ describe('createDirectorSession', () => {
     expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
   })
 
-  it('records a provider failure when the model run itself fails', async () => {
+  it('does not pollute the breaker with a provider account failure', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const session = await createDirectorSession({
       projectId: 'project-1',
@@ -473,8 +473,12 @@ describe('createDirectorSession', () => {
 
     await expect(
       session.run({ prompt: '执行阶段', output: assistantOutput })
-    ).rejects.toThrow('Director 模型调用失败（stepfun/step-chat，HTTP 402）')
-    expect(mocks.recordProviderFailure).toHaveBeenCalledWith('stepfun')
+    ).rejects.toMatchObject({
+      name: 'ProviderRequestError',
+      httpStatus: 402,
+      kind: 'balance',
+    })
+    expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
     expect(mocks.recordProviderSuccess).not.toHaveBeenCalled()
   })
 
@@ -492,8 +496,12 @@ describe('createDirectorSession', () => {
 
     await expect(
       session.run({ prompt: '执行阶段', output: assistantOutput })
-    ).rejects.toThrow('Director 模型调用失败（stepfun/step-chat，HTTP 402）')
-    expect(mocks.recordProviderFailure).toHaveBeenCalledWith('stepfun')
+    ).rejects.toMatchObject({
+      name: 'ProviderRequestError',
+      httpStatus: 402,
+      kind: 'balance',
+    })
+    expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
     expect(mocks.recordProviderSuccess).not.toHaveBeenCalled()
   })
 
@@ -510,9 +518,13 @@ describe('createDirectorSession', () => {
       .then(() => null, (error: unknown) => error)
     const message = failure instanceof Error ? failure.message : String(failure)
 
-    expect(message).toBe('Director 模型调用失败（stepfun/step-chat，HTTP 402）')
+    expect(failure).toMatchObject({
+      name: 'ProviderRequestError',
+      httpStatus: 402,
+      kind: 'balance',
+    })
     expect(message).not.toContain('providerDetail')
-    expect(mocks.recordProviderFailure).toHaveBeenCalledWith('stepfun')
+    expect(mocks.recordProviderFailure).not.toHaveBeenCalled()
   })
 
   it('does not count an internal route contract contradiction against the breaker', async () => {

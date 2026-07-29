@@ -38,12 +38,13 @@ export function backoffMs(attemptNo: number): number {
  * 未识别报文的兜底类别，队列侧默认 QUEUE。
  */
 export function shouldAutoRetry(
-  failureMessage: string,
+  failure: unknown,
   attemptNo: number,
   stage = 'QUEUE'
 ): boolean {
   if (attemptNo > MAX_AUTO_RETRIES) return false
-  return classifyWorkflowError(new Error(failureMessage), { stage }).retryable
+  const error = typeof failure === 'string' ? new Error(failure) : failure
+  return classifyWorkflowError(error, { stage }).retryable
 }
 
 /** 窗口内同 fingerprint 的 failed attempt 数；按 completedAt（失败落定时刻）统计。 */

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ProviderRequestError } from '@/features/ai/provider-request-error'
 import { z } from 'zod'
 import { classifyWorkflowError } from './workflow-error'
 
@@ -23,6 +24,65 @@ function stageInputError(): unknown {
 }
 
 describe('classifyWorkflowError', () => {
+  it.each([
+    [401, 'auth', 'PROVIDER_AUTH_FAILED'],
+    [402, 'balance', 'PROVIDER_BALANCE_EXHAUSTED'],
+    [403, 'permission', 'PROVIDER_PERMISSION_DENIED'],
+  ] as const)('assigns BYOK HTTP %s to the user', (httpStatus, kind, code) => {
+    const fault = classifyWorkflowError(new ProviderRequestError({
+      providerId: 'openai-compatible',
+      providerLabel: '自定义模型',
+      operation: '文本生成',
+      funding: 'byok',
+      httpStatus,
+      kind,
+    }), { stage: 'INGEST' })
+    expect(fault).toMatchObject({
+      schemaVersion: 2,
+      code,
+      origin: 'user',
+      recovery: code === 'PROVIDER_BALANCE_EXHAUSTED' ? 'upgrade_plan' : 'fix_settings',
+      provider: { httpStatus },
+    })
+  })
+
+  it('assigns a managed credential failure to the platform', () => {
+    const fault = classifyWorkflowError(new ProviderRequestError({
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      operation: '文本生成',
+      funding: 'managed',
+      httpStatus: 401,
+    }), { stage: 'SHOT_SPEC' })
+    expect(fault).toMatchObject({
+      code: 'PROVIDER_AUTH_FAILED',
+      origin: 'platform',
+      recovery: 'contact_support',
+    })
+    expect(fault.message).toContain('无需检查你自己的 Key')
+  })
+
+  it('projects 429 as provider-owned automatic waiting', () => {
+    const fault = classifyWorkflowError(new ProviderRequestError({
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      operation: '文本生成',
+      funding: 'managed',
+      httpStatus: 429,
+      retryAt: new Date('2026-07-29T00:01:00.000Z'),
+    }), { stage: 'FABRICATE' })
+    expect(fault).toMatchObject({
+      code: 'PROVIDER_RATE_LIMITED',
+      origin: 'provider',
+      retryable: true,
+      recovery: 'auto_wait',
+      provider: {
+        label: '阶跃星辰',
+        httpStatus: 429,
+        retryAt: '2026-07-29T00:01:00.000Z',
+      },
+    })
+  })
   it('projects quota exhaustion as a non-retryable workflow stop', () => {
     const error = Object.assign(new Error('Managed AI quota is exhausted'), {
       name: 'QuotaExhaustedError',
@@ -39,7 +99,7 @@ describe('classifyWorkflowError', () => {
         new Error('shot plan 中找不到 S002；provider payload=secret'),
         { stage: 'FABRICATE', sourceNodeId: 'shot-script-s002' }
       )
-    ).toEqual({
+    ).toMatchObject({
       code: 'UPSTREAM_ARTIFACT_MISSING',
       stage: 'FABRICATE',
       message: '上游产物缺失或不包含当前镜头，需要先修复上游阶段。',
@@ -154,7 +214,7 @@ describe('classifyWorkflowError', () => {
       classifyWorkflowError(new Error('执行进程中断，租约过期自动回收'), {
         stage: 'INGEST',
       })
-    ).toEqual({
+    ).toMatchObject({
       code: 'TASK_INTERRUPTED',
       stage: 'INGEST',
       message: '执行进程中断，任务已自动回收。这是系统回收僵尸任务的保护机制，可放心重试',

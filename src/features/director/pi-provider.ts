@@ -63,6 +63,8 @@ export interface DirectorModelRuntime {
   apiKey: string
   /** 实际执行的 provider id：熔断记账（pi-session 收敛点）按它计数。 */
   providerId: AiProviderId
+  providerLabel: string
+  funding: 'managed' | 'byok'
   /** 供失败分类使用的选型描述，不含任何凭据。 */
   routeLabel: string
   modelId: string
@@ -132,6 +134,8 @@ export async function createDirectorModelRuntime(input: {
     model,
     apiKey: target.apiKey,
     providerId: target.provider,
+    providerLabel: PROVIDER_LABEL[target.provider],
+    funding: target.funding ?? (target.deductsManagedPool === true ? 'managed' : 'byok'),
     modelId: target.modelId,
     maxOutputTokens: requestShape.maxTokens,
     deductsManagedPool: target.deductsManagedPool === true,

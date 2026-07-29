@@ -141,7 +141,11 @@ describe('synthesizeSpeech', () => {
 
     await expect(
       synthesizeSpeech({ text: '你好' }, dependencies(fetcher))
-    ).rejects.toThrow('TTS 请求超时')
+    ).rejects.toMatchObject({
+      name: 'ProviderRequestError',
+      kind: 'timeout',
+      providerId: 'stepfun',
+    })
   })
 })
 
@@ -214,7 +218,11 @@ describe('transcribeSpeech', () => {
         { audioBytes: Buffer.from([1]), audioFormat: 'mp3' },
         dependencies(fetcher)
       )
-    ).rejects.toThrow('音频格式不支持')
+    ).rejects.toMatchObject({
+      name: 'ProviderRequestError',
+      kind: 'unknown',
+      providerId: 'stepfun',
+    })
   })
 
   it('rejects malformed SSE JSON and a missing done event', async () => {
