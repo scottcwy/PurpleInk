@@ -84,6 +84,13 @@ function classifyByType(
       retryable: true,
     }
   }
+  if (error instanceof Error && error.name === 'ExportExecutionError') {
+    return {
+      code: 'PLATFORM_RENDER_FAILED',
+      message: '终片导出在平台执行阶段失败，系统已保留安全参考号以便诊断。',
+      retryable: true,
+    }
+  }
   // 路由 / 能力矛盾来自 features/ai；同样只按类型名判定，避免反向依赖。报文里
   // 常含「模型 / TTS / ASR」，若落进文案规则会被误判成可重试的 PROVIDER_FAILED
   // （真实事故：shot-sfx 的路由矛盾曾被这样误判）。

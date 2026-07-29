@@ -8,6 +8,7 @@ import {
 } from '@/lib/auth/workspace-context'
 import { getDb } from '@/lib/db/client'
 import { pipelineRuns, taskAttempts } from '@/lib/db/schema/index'
+import { classifyWorkflowError } from '@/features/canvas/workflow-error'
 import {
   ACTIVE_WORKFLOW_VERSION,
   serializeWorkflowVersion,
@@ -292,6 +293,7 @@ export class InProcessQueue implements QueueAdapter {
       )
       return
     }
+    const startedAt = Date.now()
     try {
       await withExecutionTimeout(job.kind, () =>
         runInAuthContext(
@@ -301,6 +303,21 @@ export class InProcessQueue implements QueueAdapter {
       )
       await completeAttempt(database, job.workspaceId, job.id, 'succeeded')
     } catch (err) {
+      const fault = classifyWorkflowError(err, { stage: 'QUEUE' })
+      console.error('[workflow-attempt]', JSON.stringify({
+        referenceId: fault.referenceId,
+        code: fault.code,
+        origin: fault.origin,
+        provider: fault.provider?.id ?? null,
+        status: fault.provider?.httpStatus ?? null,
+        stage: fault.stage,
+        attemptId: job.id,
+        kind: job.kind,
+        durationMs: Date.now() - startedAt,
+        retryAt: fault.provider?.retryAt ?? null,
+        errorName: err instanceof Error ? err.name : 'NonErrorThrown',
+        details: safeErrorDetails(err),
+      }))
       await completeAttempt(
         database,
         job.workspaceId,
@@ -310,4 +327,18 @@ export class InProcessQueue implements QueueAdapter {
       )
     }
   }
+}
+
+function safeErrorDetails(error: unknown): Record<string, unknown> | null {
+  if (
+    !(error instanceof Error)
+    || !['ExportProjectBlockedError', 'ExportExecutionError'].includes(error.name)
+    || !('safeDetails' in error)
+  ) {
+    return null
+  }
+  const details: unknown = error.safeDetails
+  return details && typeof details === 'object' && !Array.isArray(details)
+    ? details as Record<string, unknown>
+    : null
 }

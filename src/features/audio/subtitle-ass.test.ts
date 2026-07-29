@@ -2,9 +2,24 @@ import { describe, expect, it } from 'vitest'
 import {
   buildAssDocument,
   normalizeSubtitleTrack,
+  normalizeSubtitleTrackWithWholeClipFallback,
 } from './subtitle-ass'
 
 describe('normalizeSubtitleTrack', () => {
+  it('uses trusted source text for one valid whole-clip timestamp with ASR drift', () => {
+    expect(normalizeSubtitleTrackWithWholeClipFallback({
+      sourceText: 'Chromium 按时间轴渲染镜头并保存真实 MP4',
+      audioDurationMs: 1_000,
+      captions: [{
+        text: '按时间轴渲染镜头并保存视频',
+        startMs: 0,
+        endMs: 900,
+      }],
+    }).map((cue) => cue.text).join('')).toBe(
+      'Chromium 按时间轴渲染镜头并保存真实 MP4'
+    )
+  })
+
   it('merges zero-duration captions and always renders the source script', () => {
     const cues = normalizeSubtitleTrack({
       sourceText: '你好，真实世界。',

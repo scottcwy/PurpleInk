@@ -7,6 +7,7 @@ import {
   type TranscribedSpeech,
 } from './media-provider'
 import { measureAudio, type MeasuredAudio } from './measure'
+import { normalizeSubtitleTrackWithWholeClipFallback } from './subtitle-ass'
 import {
   storeAudioArtifact,
   type StoreAudioArtifactInput,
@@ -77,6 +78,17 @@ export async function generateSubtitle(
   }
   if (captions.length === 0) {
     throw new Error('ASR 未返回可用的字幕时间戳')
+  }
+  const normalized = normalizeSubtitleTrackWithWholeClipFallback({
+    sourceText: parsed.script,
+    captions,
+    audioDurationMs: measured.durationMs,
+  })
+  if (
+    captions.length === 1
+    && normalized.map((cue) => cue.text).join('') === parsed.script
+  ) {
+    captions = [{ ...captions[0]!, text: parsed.script }]
   }
   const trackContent = {
     version: 1,

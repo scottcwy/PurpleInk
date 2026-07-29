@@ -149,6 +149,79 @@ describe('generateSubtitle', () => {
       { text: '你好世界', startMs: 0, endMs: 1250 },
     ])
   })
+
+  it('repairs a drifting whole-shot ASR caption with the trusted source text', async () => {
+    let storedData = ''
+    const storeArtifact = vi.fn(async (input: unknown) => {
+      storedData = (input as { data: string }).data
+      return {
+        id: 'subtitle-artifact',
+        storageKey: 'subtitle.json',
+        contentHash: 'hash',
+      }
+    })
+    const result = await generateSubtitle(
+      {
+        projectId: 'project-1',
+        nodeId: 'subtitle-node',
+        shotId: 'S005',
+        script: 'Chromium 按时间轴渲染镜头并保存真实 MP4',
+        audioArtifactId: 'audio-artifact',
+        audioKey: 'voiceover.wav',
+        audioBytes: Buffer.from([1, 2, 3]),
+        audioFormat: 'wav',
+      },
+      {
+        transcribe: vi.fn(async () => ({
+          transcript: '按时间轴渲染镜头并保存视频',
+          model: 'mimo-v2.5-asr',
+          captions: [
+            { text: '按时间轴渲染镜头并保存视频', startMs: 0, endMs: 900 },
+          ],
+          alignmentSource: 'mimo-asr-segment' as const,
+        })),
+        measure: measuredAudio,
+        storeArtifact,
+      }
+    )
+
+    expect(result.captions).toEqual([{
+      text: 'Chromium 按时间轴渲染镜头并保存真实 MP4',
+      startMs: 0,
+      endMs: 900,
+    }])
+    expect(JSON.parse(storedData).transcript).toBe('按时间轴渲染镜头并保存视频')
+  })
+
+  it('rejects multi-segment ASR drift instead of persisting an invalid track', async () => {
+    const storeArtifact = vi.fn()
+    await expect(generateSubtitle(
+      {
+        projectId: 'project-1',
+        nodeId: 'subtitle-node',
+        shotId: 'S005',
+        script: '这是完整且可信的原稿内容',
+        audioArtifactId: 'audio-artifact',
+        audioKey: 'voiceover.wav',
+        audioBytes: Buffer.from([1, 2, 3]),
+        audioFormat: 'wav',
+      },
+      {
+        transcribe: vi.fn(async () => ({
+          transcript: '完全不同',
+          model: 'mimo-v2.5-asr',
+          captions: [
+            { text: '完全', startMs: 0, endMs: 400 },
+            { text: '不同', startMs: 400, endMs: 900 },
+          ],
+          alignmentSource: 'mimo-asr-segment' as const,
+        })),
+        measure: measuredAudio,
+        storeArtifact,
+      }
+    )).rejects.toThrow('漂移')
+    expect(storeArtifact).not.toHaveBeenCalled()
+  })
 })
 
 async function measuredAudio() {

@@ -219,6 +219,11 @@ function presentationFor(code: WorkflowFaultCode): {
     case 'FABRICATE_FAILED':
     case 'RENDER_FAILED':
     case 'MEDIA_FAILED':
+    case 'PLATFORM_PREFLIGHT_FAILED':
+    case 'PLATFORM_QUEUE_FAILED':
+    case 'PLATFORM_STORAGE_FAILED':
+    case 'PLATFORM_RENDER_FAILED':
+    case 'PLATFORM_INTERNAL_ERROR':
       return { origin: 'platform', title: '平台执行遇到问题', recovery: 'manual_retry' }
     default:
       return { origin: 'unknown', title: '执行遇到未知问题', recovery: 'contact_support' }

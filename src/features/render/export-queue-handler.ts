@@ -69,13 +69,33 @@ export function registerExportProjectHandler(
               ? '产物缺失'
               : '节点未完成'
         const prefix = payload.degraded ? '降级导出失败' : '终片导出失败'
-        throw new Error(`${prefix}：${target} ${media}${reason}`)
+        throw new ExportProjectBlockedError(
+          `${prefix}：${target} ${media}${reason}`,
+          mediaIssue
+        )
       }
-      throw new Error(
-        `终片导出失败：以下节点尚未产出可用分镜 ${result.incompleteNodeIds.join('、')}`
+      throw new ExportProjectBlockedError(
+        `终片导出失败：以下节点尚未产出可用分镜 ${result.incompleteNodeIds.join('、')}`,
+        { incompleteNodeCount: result.incompleteNodeIds.length }
       )
     }
   })
+}
+
+export class ExportProjectBlockedError extends Error {
+  override readonly name = 'ExportProjectBlockedError'
+
+  constructor(
+    message: string,
+    readonly safeDetails: {
+      laneKey?: string | null
+      kind?: string
+      code?: string
+      incompleteNodeCount?: number
+    }
+  ) {
+    super(message)
+  }
 }
 
 /** 入队一次项目级导出，返回可用于 `GET /api/jobs/{id}` 轮询的 jobId。 */

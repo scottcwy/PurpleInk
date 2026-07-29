@@ -56,7 +56,9 @@ export async function exportProject(
   const repository = dependencies.repository ?? new RenderRepository()
   const storage = dependencies.storage ?? defaultStorage
   const concat = dependencies.concat ?? concatExport
-  const exportPlan = await repository.getExportPlan(projectId)
+  const exportPlan = await exportPhase('plan', () =>
+    repository.getExportPlan(projectId)
+  )
   if (exportPlan.incompleteNodeIds.length > 0) {
     return incomplete(exportPlan.incompleteNodeIds)
   }
@@ -68,11 +70,15 @@ export async function exportProject(
     }
   }
   const assembly = exportPlan.mediaAssemblyPlan
-  const subtitleAss = await buildSubtitleAss(assembly, storage)
-  const workDirectory = await storage.tempDir('cvc-export-')
+  const subtitleAss = await exportPhase('subtitle', () =>
+    buildSubtitleAss(assembly, storage)
+  )
+  const workDirectory = await exportPhase('workspace', () =>
+    storage.tempDir('cvc-export-')
+  )
   try {
     const temporaryOutput = path.join(workDirectory, 'final.mp4')
-    await concat(
+    await exportPhase('concat', () => concat(
       assembly,
       {
         videoPaths: assembly.shots.map((shot) =>
@@ -87,20 +93,26 @@ export async function exportProject(
       },
       subtitleAss,
       temporaryOutput
+    ))
+    const bytes = await exportPhase('read-output', () =>
+      storage.readLocalFile(temporaryOutput)
     )
-    const bytes = await storage.readLocalFile(temporaryOutput)
     const contentHash = createHash('sha256').update(bytes).digest('hex')
-    const outputKey = await storage.put(
-      `exports/${projectId}/final-${contentHash}.mp4`,
-      bytes
+    const outputKey = await exportPhase('store-output', () =>
+      storage.put(
+        `exports/${projectId}/final-${contentHash}.mp4`,
+        bytes
+      )
     )
     try {
-      const artifactId = await repository.registerFinalArtifact({
-        projectId,
-        outputKey,
-        contentHash,
-        sizeBytes: bytes.byteLength,
-      })
+      const artifactId = await exportPhase('register-artifact', () =>
+        repository.registerFinalArtifact({
+          projectId,
+          outputKey,
+          contentHash,
+          sizeBytes: bytes.byteLength,
+        })
+      )
       return { ok: true, artifactId, outputKey, contentHash }
     } catch (error) {
       await storage.delete(outputKey)
@@ -108,6 +120,34 @@ export async function exportProject(
     }
   } finally {
     await storage.removeTempDir(workDirectory)
+  }
+}
+
+export class ExportExecutionError extends Error {
+  override readonly name = 'ExportExecutionError'
+
+  constructor(
+    readonly safeDetails: {
+      phase: string
+      causeName: string
+    }
+  ) {
+    super('终片导出在平台执行阶段失败')
+  }
+}
+
+async function exportPhase<T>(
+  phase: string,
+  run: () => Promise<T>
+): Promise<T> {
+  try {
+    return await run()
+  } catch (error) {
+    if (error instanceof ExportExecutionError) throw error
+    throw new ExportExecutionError({
+      phase,
+      causeName: error instanceof Error ? error.name : 'NonErrorThrown',
+    })
   }
 }
 

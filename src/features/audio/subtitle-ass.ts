@@ -53,6 +53,32 @@ export function normalizeSubtitleTrack(
   return aggregateReadableCues(mapped)
 }
 
+/**
+ * 单段 ASR 已提供可信的整段时间范围、但英文品牌词等导致识别文本长度漂移时，
+ * 保留真实时间范围并改用可信原稿。多段或非法时间轴仍由严格门禁拒绝。
+ */
+export function normalizeSubtitleTrackWithWholeClipFallback(
+  input: SubtitleTrackInput
+): ReadableSubtitleCue[] {
+  try {
+    return normalizeSubtitleTrack(input)
+  } catch (error) {
+    const only = input.captions.length === 1 ? input.captions[0] : undefined
+    if (
+      !only
+      || only.startMs !== 0
+      || only.endMs <= 0
+      || only.endMs > input.audioDurationMs
+    ) {
+      throw error
+    }
+    return normalizeSubtitleTrack({
+      ...input,
+      captions: [{ ...only, text: input.sourceText }],
+    })
+  }
+}
+
 export function buildAssDocument(input: AssDocumentInput): string {
   void input.targetResolution
   const dialogue: string[] = []

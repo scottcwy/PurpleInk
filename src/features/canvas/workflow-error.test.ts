@@ -145,6 +145,18 @@ describe('classifyWorkflowError', () => {
     })
   })
 
+  it('keeps an export execution failure on the platform side', () => {
+    const error = Object.assign(new Error('internal export detail'), {
+      name: 'ExportExecutionError',
+    })
+    expect(classifyWorkflowError(error, { stage: 'FINALIZE' })).toMatchObject({
+      code: 'PLATFORM_RENDER_FAILED',
+      origin: 'platform',
+      recovery: 'manual_retry',
+      retryable: true,
+    })
+  })
+
   it('does not retry when a managed credential is absent', () => {
     expect(
       classifyWorkflowError(

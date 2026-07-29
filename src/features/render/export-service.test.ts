@@ -175,7 +175,10 @@ describe('exportProject', () => {
         storage,
         concat,
       })
-    ).rejects.toThrow('ffmpeg boom')
+    ).rejects.toMatchObject({
+      name: 'ExportExecutionError',
+      safeDetails: { phase: 'concat', causeName: 'Error' },
+    })
 
     expect(storage.removeTempDir).toHaveBeenCalledOnce()
   })

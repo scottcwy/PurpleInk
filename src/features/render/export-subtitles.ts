@@ -1,6 +1,9 @@
 import 'server-only'
 import { z } from 'zod'
-import { buildAssDocument } from '@/features/audio/subtitle-ass'
+import {
+  buildAssDocument,
+  normalizeSubtitleTrackWithWholeClipFallback,
+} from '@/features/audio/subtitle-ass'
 import type { StorageAdapter } from '@/lib/storage'
 import type { MediaAssemblyPlan } from './media-assembly'
 
@@ -52,6 +55,11 @@ export async function buildSubtitleAss(
         sourceText: parsed.sourceText,
         audioDurationMs: shot.narration.endInUnitMs,
         captions: parsed.captions,
+        precomputedCues: normalizeSubtitleTrackWithWholeClipFallback({
+          sourceText: parsed.sourceText,
+          audioDurationMs: shot.narration.endInUnitMs,
+          captions: parsed.captions,
+        }),
       }
     })
   )
