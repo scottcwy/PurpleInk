@@ -123,6 +123,26 @@ it('seeds a queryable immutable managed rate card', async () => {
   ]))
 })
 
+it('seeds the website composite workflow rate in the shared managed catalog', async () => {
+  const { getCurrentRateCard } = await import('./rate-card-repository')
+  const card = await getCurrentRateCard({
+    provider: 'purpleink-engine',
+    model: 'website-video-v1',
+    capability: 'workflow',
+    now: new Date('2026-07-30T12:00:00.000Z'),
+  })
+  expect(card).toMatchObject({
+    version: 1,
+    priceCurrency: 'CNY',
+    fxCnyMicrosPerCurrencyUnit: BigInt(1_000_000),
+  })
+  expect(card.prices).toEqual([{
+    unitKind: 'video_second',
+    unitSize: BigInt(1),
+    unitPriceCnyMicros: BigInt(120_000),
+  }])
+})
+
 it('rolls an expired workspace into a fresh Free period', async () => {
   await provision(new Date(Date.now() - 31 * 24 * 60 * 60 * 1_000))
   const { getCurrentPlanKey } = await import('./period-service')

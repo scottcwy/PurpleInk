@@ -51,9 +51,13 @@ const ENUM_CHECKS = {
   media_routes_media_task_kind_check: ['tts', 'asr'],
   ai_invocations_status_check: ['running', 'succeeded', 'failed', 'cancelled'],
   ai_invocations_funding_check: ['managed', 'byok', 'custom'],
-  ai_invocations_capability_check: ['text', 'vision', 'tts', 'asr'],
+  ai_invocations_capability_check: ['text', 'vision', 'tts', 'asr', 'workflow'],
   ai_invocations_billing_status_check: [
     'unreserved', 'reserved', 'settled', 'released', 'not_applicable',
+  ],
+  rate_card_units_kind_check: [
+    'input_token', 'cached_input_token', 'output_token',
+    'tts_character', 'audio_second', 'video_second',
   ],
   provider_dispatches_funding_check: ['managed', 'byok'],
   provider_dispatches_status_check: ['reserved', 'released'],
