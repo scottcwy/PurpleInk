@@ -3,7 +3,8 @@
  *
  * 两类凭据都从这里进：
  * - 反代 Basic Auth（ISSUE-015 P-2）：env `CVC_VERIFY_BASIC_AUTH`（user:pass）；
- * - 应用内会话（PLAN-002 阶段 B）：env `CVC_VERIFY_ACCOUNT`（email:password），
+ * - 应用内会话（PLAN-002 阶段 B）：优先读取 `CVC_VERIFY_ACCOUNT`
+ *   （email:password），本地无人值守验证可回退到 demo 账号的两个 server-only env；
  *   先调 `/api/auth/login` 拿会话 cookie，后续请求经 `authHeaders()` 携带。
  *
  * Node fetch 不接受 URL 内嵌凭据（`https://user:pass@host` 直接抛 TypeError），
@@ -37,6 +38,7 @@ export async function establishSession(
   report: Record<string, unknown>,
 ): Promise<void> {
   const account = process.env.CVC_VERIFY_ACCOUNT
+    ?? demoVerificationAccount()
   if (!account || !account.includes(':')) {
     console.warn('[e2e] 未设置 CVC_VERIFY_ACCOUNT（email:password），业务 API 将回 401')
     report.session = { authenticated: false }
@@ -59,6 +61,12 @@ export async function establishSession(
   sessionCookie = `cvc_session=${match[1]}`
   report.session = { authenticated: true, email: maskEmail(email) }
   console.log('[e2e] 会话已建立（真实注册账号）')
+}
+
+function demoVerificationAccount(): string | undefined {
+  const email = process.env.CVC_DEMO_ACCOUNT_EMAIL
+  const password = process.env.CVC_DEMO_ACCOUNT_PASSWORD
+  return email && password ? `${email}:${password}` : undefined
 }
 
 function maskEmail(email: string): string {
