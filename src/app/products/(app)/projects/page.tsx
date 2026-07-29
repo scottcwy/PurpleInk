@@ -36,9 +36,10 @@ async function renderProjects() {
         graph.nodes.every((node) => node.status === 'success')
       return {
         id: project.id,
+        kind: project.kind,
         title: project.title,
         href: productCanvasHref(project.id),
-        meta: `${shots.length} 个镜头 · ${project.updatedAt.toLocaleString('zh-CN')}`,
+        meta: projectMeta(project.kind, shots.length, project.updatedAt),
         status: hasFailure
           ? 'failed'
           : hasActive
@@ -65,19 +66,24 @@ async function renderProjects() {
           actions={<NewProjectDialog />}
         />
         <div className="mx-auto flex max-w-[1160px] flex-col gap-6 p-5 sm:p-8">
-          {projects.length > 0 ? (
-            <ProjectList projects={summaries} />
-          ) : (
-            <div className="ds-dot-grid flex min-h-80 flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-ds-border text-center">
-              <h1 className="text-lg font-semibold">还没有项目</h1>
-              <p className="text-sm text-ds-text-muted">
-                创建项目后会保存真实源文本，并启动 INGEST Pipeline。
-              </p>
-              <NewProjectDialog />
-            </div>
-          )}
+          <ProjectList
+            projects={summaries}
+            authoredEmptyAction={<NewProjectDialog initialKind="script" />}
+            websiteEmptyAction={<NewProjectDialog initialKind="website" />}
+          />
         </div>
       </main>
     </>
   )
+}
+
+function projectMeta(
+  kind: ProjectSummary['kind'],
+  shotCount: number,
+  updatedAt: Date,
+): string {
+  const updated = updatedAt.toLocaleString('zh-CN')
+  if (kind === 'website') return `网站介绍 · ${updated}`
+  const source = kind === 'audio' ? '原录音' : '文稿'
+  return `${source} · ${shotCount} 个镜头 · ${updated}`
 }

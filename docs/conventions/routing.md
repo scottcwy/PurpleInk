@@ -71,7 +71,7 @@
 | --- | --- | --- | --- | --- |
 | `/products` | `src/app/products/page.tsx` | `redirect` → `/products/dashboard` | 无 | — |
 | `/products/dashboard` | `src/app/products/(app)/dashboard/page.tsx` | `wired` | 无 | 空状态引导新建项目 |
-| `/products/projects` | `src/app/products/(app)/projects/page.tsx` | `wired` | 无 | 空状态；文本/录音与网站介绍双栏投影为 `planned` |
+| `/products/projects` | `src/app/products/(app)/projects/page.tsx` | `wired` | 无 | 文稿/录音与网站介绍双栏真实投影；空分组保留对应创建入口 |
 | `/products/canvas/[projectId]` | `src/app/products/(app)/canvas/[projectId]/page.tsx` | `wired` | `projectId` path | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明 |
 | `/products/shots/[shotId]` | `src/app/products/(app)/shots/[shotId]/page.tsx` | `wired` | `shotId` path + `projectId` query（必填） | 缺失项目/镜头 `notFound()`；旧 workflow 显示保留数据说明 |
 | `/products/export/[projectId]` | `src/app/products/(app)/export/[projectId]/page.tsx` | `wired` | `projectId` path | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明 |
@@ -253,7 +253,7 @@
 | `AppSection` | URL 段 | 中文标签 | Pencil 屏 |
 | --- | --- | --- | --- |
 | `workbench` | `dashboard` | 工作台 | S1 / S2 |
-| `projects` | `projects` | 项目 | —（文本/录音与网站介绍双栏为 `planned`） |
+| `projects` | `projects` | 项目 | Projects Light / Dark 双栏屏 |
 | `canvas` | `canvas` | 画布 | S3 |
 | `renderer` | `shots` | 镜头 | S4 |
 | `export` | `export` | 导出 | S5 |
