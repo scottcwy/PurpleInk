@@ -6,37 +6,42 @@ scope:
     - '**'
 source_files:
     - package.json
-    - server/package.json
     - pnpm-workspace.yaml
-    - pnpm-lock.yaml
+    - server/package.json
     - patches/@earendil-works__pi-ai.patch
+    - Dockerfile
+    - server/Dockerfile
 ---
 
-本仓库使用 pnpm 作为统一的包管理器，采用多包工作区（workspace）模式组织前端 Next.js 应用与独立 Node.js 后端服务，并通过 lockfile 和 patch 机制确保依赖版本一致性与可重现构建。
+本项目采用 pnpm 作为包管理器，通过 pnpm-workspace.yaml 定义双包工作区（根模块 `ai-saas` 与独立后端服务 `purpleink-server`），并使用 pnpm-lock.yaml 锁定依赖版本。核心特征如下：
 
-**系统/工具链**
-- 包管理器：pnpm@10.30.0（通过 `packageManager` 字段锁定版本）
-- 工作区：`pnpm-workspace.yaml` 声明根目录 `.` 与 `server` 两个包
-- Lockfile：`pnpm-lock.yaml`（lockfileVersion 9.0），记录所有依赖精确版本、完整性校验及 patchedDependencies
-- Node 引擎要求：`engines.node >= 22.11.0`
+**包管理器与工作区结构**
+- 根 `package.json` 声明 `packageManager: "pnpm@10.30.0"` 和 `engines.node: ">=22.11.0"`，强制统一环境。
+- `pnpm-workspace.yaml` 将 `.` 与 `server` 纳入同一工作区，共享锁文件 `pnpm-lock.yaml`。
+- 根脚本通过 `pnpm --filter purpleink-server dev` 启动子包，实现前后端并行开发。
 
-**关键文件与结构**
-- 根 `package.json`：定义 Next.js 前端依赖（react 19.2.x、next 16.2.x、zod 4.4.3、openai 等）与开发工具（vitest、eslint、prettier、drizzle-kit）
-- `server/package.json`：独立后端包，依赖 imapflow、mailparser、playwright、sharp、zod
-- `pnpm-workspace.yaml`：声明 workspace 包含 `.` 和 `server`
-- `pnpm-lock.yaml`：完整锁文件，含 `patchedDependencies` 段记录对 `@earendil-works/pi-ai` 的补丁哈希
-- `patches/@earendil-works__pi-ai.patch`：对第三方包的本地补丁，修改错误处理与 fetch 回调逻辑
+**依赖声明与版本策略**
+- 生产依赖集中在根 `package.json` 的 `dependencies` 中（Next.js、React、Playwright、OpenAI、Zod 等），子包 `server/package.json` 仅声明服务端特有依赖（imapflow、mailparser、sharp）。
+- 开发依赖（eslint、prettier、vitest、tsconfig 等）全部放在根 `devDependencies`，避免重复安装。
+- 关键依赖使用精确或较窄范围（如 `next: ^16.2.0`、`react: 19.2.x`、`postgres: 3.4.9`），配合 lockfile 保证可重现构建。
 
-**架构与约定**
-- 前后端分离：Next.js 前端与 server 子包各自维护独立的 `package.json`，共享 pnpm workspace 进行统一安装
-- 依赖版本策略：生产依赖使用语义化版本范围（如 `^16.2.0`、`^4.4.3`），部分关键依赖使用精确版本（如 `postgres: 3.4.9`、`nodemailer: 9.0.3`）
-- 构建优化：通过 `pnpm.onlyBuiltDependencies` 仅允许 esbuild、ffmpeg-static、sharp 三个包执行原生构建，减少安装开销
-- 补丁管理：通过 `pnpm.patchedDependencies` 将 `@earendil-works/pi-ai` 的补丁映射到 `patches/` 目录下的 diff 文件，确保补丁在 CI 中可重现应用
-- 测试隔离：提供 `vitest.pg.config.ts` 用于 PostgreSQL 集成测试，与主测试配置分离
+**原生依赖优化**
+- 通过 `pnpm.onlyBuiltDependencies` 白名单限制 `esbuild`、`ffmpeg-static`、`sharp` 三个需要编译的原生包，减少无关依赖的安装体积。
 
-**约束与规则**
-- 必须使用 pnpm 作为包管理器（由 `packageManager` 字段强制）
-- Node.js 版本必须 ≥ 22.11.0（由 `engines` 字段声明）
-- 仅允许 esbuild、ffmpeg-static、sharp 执行原生构建（由 `onlyBuiltDependencies` 限制）
-- 第三方包补丁必须放在 `patches/` 目录并通过 `pnpm-workspace` 的 `patchedDependencies` 注册
-- 工作区内的包通过相对路径引用，不发布到 npm registry（两个包均标记为 `private: true`）
+**补丁机制（patchedDependencies）**
+- 项目对第三方包 `@earendil-works/pi-ai` 应用了自定义补丁，位于 `patches/@earendil-works__pi-ai.patch`。
+- 补丁修改了 OpenAI 流式响应的错误处理逻辑，增加 `onResponse` 回调以捕获 HTTP 状态码，并将错误消息规范化为稳定的 HTTP 类别（如 `HTTP 4xx/5xx`），避免泄露 provider 响应体到持久化表面。
+- 该补丁通过 `pnpm.patchedDependencies` 字段注册，在 `pnpm install` 时自动应用。
+
+**容器化与依赖缓存**
+- Dockerfile 分阶段构建：先 COPY `pnpm-workspace.yaml`、`package.json`、`pnpm-lock.yaml` 执行 `pnpm install --frozen-lockfile` 缓存依赖层，再 COPY 源码，确保依赖变更时才重新安装。
+- 文档明确说明此策略用于加速 CI 构建。
+
+**私有仓库与认证**
+- 未发现 `.npmrc`、`.pnpmrc` 或 `registry` 配置，表明未使用私有 npm registry；依赖从官方 npm 源拉取。
+- 环境变量通过 `.env.example` 和 `server/.env.example` 管理，不包含 registry 相关配置。
+
+**约束与约定**
+- Lockfile 必须提交至版本控制（Dockerfile 使用 `--frozen-lockfile` 强制校验）。
+- 新增依赖需更新 `package.json` 并运行 `pnpm install` 生成新的 lockfile。
+- 原生依赖必须加入 `onlyBuiltDependencies` 白名单，避免意外安装编译型包。

@@ -7,69 +7,51 @@ scope:
 source_files:
     - src/app/globals.css
     - src/app/design-system.css
-    - src/lib/utils.ts
-    - src/lib/theme-mode.ts
-    - src/components/ui/button.tsx
     - postcss.config.mjs
+    - src/lib/utils.ts
+    - src/app/layout.tsx
     - next.config.ts
 ---
 
-## 样式系统与架构
+本项目采用 Tailwind CSS v4（通过 @tailwindcss/postcss）作为样式核心，结合 CSS 自定义属性（CSS Variables）构建完整的设计系统与主题体系。
 
-PurpleInk 前端采用 **Tailwind CSS v4**（通过 `@tailwindcss/postcss`）作为核心样式方案，结合原生 CSS 自定义属性（CSS Variables）构建完整的设计系统。样式入口为 `src/app/globals.css`，通过 `@import "./design-system.css"` 引入独立的设计令牌文件。
+## 样式架构与工具链
+- 构建流程：PostCSS 仅配置 @tailwindcss/postcss 插件，无额外预处理层；Tailwind v4 使用新的 @import "tailwindcss" 语法替代传统 tailwind.config.js。
+- 字体系统：通过 Next.js next/font/google 注入 Geist Sans/Mono，以 CSS 变量 --font-geist-sans / --font-geist-mono 暴露给 Tailwind 的 --font-sans / --font-mono。
+- 类名合并：所有组件统一通过 src/lib/utils.ts 导出的 cn() 函数（基于 clsx + tailwind-merge）合并 className，避免 Tailwind 类冲突。
 
-### 设计令牌体系
+## 设计令牌（Design Tokens）
+全局令牌定义在两个 CSS 文件中，均支持 .dark 模式切换：
 
-项目维护两套并行的设计令牌：
-- **CodeVideoCanvas 令牌**（`globals.css`）：面向视频编辑画布的专业色彩体系，包含 `--color-stage-*` 系列阶段色、`--color-canvas-*` 画布色、阴影与圆角等
-- **Design System 令牌**（`design-system.css`）：面向通用 UI 组件的 ds-* 命名空间令牌，如 `--ds-surface`、`--ds-primary`、`--ds-blue-soft` 等
+1. src/app/globals.css — 应用级基础令牌：
+   - 基础色板：--background、--foreground、--muted、--border、--ring、--accent 等
+   - CodeVideoCanvas 专用令牌：--color-accent、--color-success、--color-warning、--color-danger、--color-purple、--color-teal 及各阶段颜色（--color-stage-ingest、--color-stage-direct 等）
+   - 布局令牌：--radius-*、--shadow-card、--shadow-float、--duration-*、--ease-*、滚动条样式
+   - 通过 @theme inline 将 CSS 变量映射到 Tailwind 可识别的 --color-* 命名空间
 
-两套令牌均通过 `@theme inline` 映射到 Tailwind 的语义化颜色变量（如 `--color-accent`、`--color-background`），实现设计令牌与实用类之间的解耦。
+2. src/app/design-system.css — 设计系统专属令牌：
+   - 品牌色系：--ds-primary、--ds-blue、--ds-green、--ds-red、--ds-amber、--ds-magenta
+   - 表面与画布：--ds-surface、--ds-surface-muted、--ds-border、--ds-canvas、--ds-scrim
+   - 按钮规范：扁平实心风格（注释明确“Vercel/Linear 式零投影”），通过 --ds-button-bg / --ds-button-fg 控制明暗模式反转
+   - 提供 .ds-app-gradient、.ds-dot-grid、.ds-primary-button 等可直接复用的样式类
 
-### 主题模式
+## 主题策略
+- 暗色模式：通过 <html class="dark"> 切换，根组件在 layout.tsx 中通过内联脚本在 hydration 前检测 localStorage('theme-mode') 和 prefers-color-scheme 设置初始主题，避免闪烁。
+- 颜色方案：html { color-scheme: light/dark } 配合 viewport.themeColor 实现浏览器原生主题适配。
+- 无障碍：内置 prefers-reduced-motion 媒体查询禁用动画，全局 focus-visible 样式统一 ring 边框，提供 .skip-to-content 跳过链接。
 
-主题切换基于 HTML 元素的 `.dark` 类实现，支持三种模式：`light` | `dark` | `system`。根布局 `layout.tsx` 通过内联脚本在 hydration 前同步设置 dark 类，避免闪烁。`src/lib/theme-mode.ts` 提供模式切换逻辑和工具函数。
+## 组件库组织
+- UI 组件集中在 src/components/ui/，每个组件独立文件并配套 .demo.tsx 与可选 .test.ts 测试文件
+- 营销页面组件位于 src/components/marketing/
+- 图标使用 lucide-react，Logo 相关组件在 src/components/icons/
 
-### 组件样式约定
+## 响应式与移动端
+- 通过 Tailwind 默认断点系统实现响应式布局
+- 禁止水平滚动：html, body { overflow-x: hidden; overscroll-behavior-x: none }
+- 移动端视口配置：width=device-width, initialScale=1, maximumScale=5
 
-UI 组件位于 `src/components/ui/`，遵循统一约定：
-- 使用 `clsx` + `tailwind-merge` 组合 className（通过 `cn()` 工具函数）
-- 每个组件配套 `.demo.tsx` 演示文件
-- 变体通过 props 控制（如 Button 的 `variant` 和 `size`）
-- 所有交互样式（hover、transition）集中在组件内部定义
-
-### 动画与动效
-
-- 基础动画：`globals.css` 中定义 shimmer keyframes 和 `animate-shimmer`
-- 高级动效：通过 `gsap` 和 `motion`（Framer Motion）库实现
-- 无障碍：`prefers-reduced-motion` 媒体查询自动禁用动画
-
-### 响应式策略
-
-- 移动端优先，使用 Tailwind 断点系统
-- 字体通过 Next.js Font Optimization 加载 Geist Sans/Mono
-- viewport 配置支持主题色和缩放限制
-
-### 构建与工具链
-
-- PostCSS 仅配置 `@tailwindcss/postcss` 插件
-- Prettier 通过 `prettier-plugin-tailwindcss` 自动排序 Tailwind 类
-- ESLint 使用 `eslint-config-next` 确保 React/Next.js 最佳实践
-
-## 关键文件
-
-- `src/app/globals.css` - 全局样式与设计令牌定义
-- `src/app/design-system.css` - 设计系统令牌与通用样式
-- `src/lib/utils.ts` - clsx + tailwind-merge 工具函数
-- `src/lib/theme-mode.ts` - 主题模式管理逻辑
-- `src/components/ui/button.tsx` - 按钮组件示例（SSOT 模式）
-- `postcss.config.mjs` - Tailwind v4 配置
-- `next.config.ts` - Next.js 构建与代理配置
-
-## 约束与规范
-
-1. 所有 UI 组件必须从 `src/components/ui/` 目录导入，禁止重复造轮子
-2. 样式变更需同时更新对应 demo 文件
-3. 设计令牌变更需保持 light/dark 双模式一致性
-4. 生产环境移除 console.log（保留 error/warn）
-5. 所有外部图片域名需在 next.config.ts 中白名单注册
+## 约束与约定
+- 所有新增样式必须通过 CSS 变量或 Tailwind 原子类表达，禁止硬编码颜色值
+- 组件 className 必须经 cn() 函数处理，确保类合并安全
+- 设计令牌变更需同时更新明暗两套变量定义
+- 滚动条样式通过全局 * 选择器统一覆盖，隐藏滚动条使用 .scrollbar-hide 类
