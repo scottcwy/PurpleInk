@@ -14,7 +14,7 @@ import type {
 import type { OpenAiCompatibleAudioFormat } from '@/features/ai/openai-compatible-payloads'
 import type { OpenAiCompatibleProfileView } from '@/features/ai/openai-compatible-config'
 import type { MimoConfigField, MimoConfigView } from '@/features/ai/mimo-config'
-import type { CanvasNodeType } from '@/features/canvas/types'
+import type { DirectorCanvasNodeType } from '@/features/canvas/types'
 import type { PlanKey } from '@/features/billing'
 import type {
   ManagedModelDefinition,
@@ -46,7 +46,7 @@ export type OpenAiCompatibleAsrDraft = {
   baseUrl: string
   model: string
 }
-export type RouteDraft = Record<CanvasNodeType, AiProviderId>
+export type RouteDraft = Record<DirectorCanvasNodeType, AiProviderId>
 
 export const STEPFUN_FIELDS: Array<[StepfunModelField, string]> = [
   ['baseUrl', '端点（普通 v1 或 Step Plan）'],
@@ -91,7 +91,7 @@ export const OPENAI_COMPATIBLE_ASR_FIELDS: Array<
   ['model', 'ASR 模型 ID'],
 ]
 
-export const ROUTE_ROWS: Array<[CanvasNodeType, string]> = [
+export const ROUTE_ROWS: Array<[DirectorCanvasNodeType, string]> = [
   ['script-import', '脚本导入 / INGEST'],
   ['shot-split', '导演拆分 / DIRECT'],
   ['shot-script', '分镜合同 / SHOT_SPEC'],
@@ -165,7 +165,7 @@ export interface SettingsResponse {
   customOpenAi?: OpenAiCompatibleProfileView
   customOpenAiTts?: TtsProfileView
   customOpenAiAsr?: AsrProfileView
-  routes?: Record<CanvasNodeType, DirectorRouteView>
+  routes?: Record<DirectorCanvasNodeType, DirectorRouteView>
   laneQuotas?: LaneQuotasView
   requiresRestart?: boolean
   error?: string
@@ -198,7 +198,7 @@ export interface ReadyModelSettingsController {
     field: keyof OpenAiCompatibleAsrDraft,
     value: string,
   ) => void
-  setRoute: (nodeType: CanvasNodeType, provider: AiProviderId) => void
+  setRoute: (nodeType: DirectorCanvasNodeType, provider: AiProviderId) => void
   setLaneQuotaField: (
     field: keyof LaneQuotasDraft,
     value: string,

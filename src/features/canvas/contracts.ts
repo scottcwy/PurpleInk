@@ -2,10 +2,12 @@ export type {
   CanvasEdge,
   CanvasNode,
   CanvasNodeType,
+  DirectorCanvasNodeType,
   GlobalCanvasNodeType,
   NodeStatus,
   Project,
   ShotLaneNodeType,
+  WorkflowSourceNodeType,
 } from './types'
 export {
   DEFAULT_EXPORT_SETTINGS,

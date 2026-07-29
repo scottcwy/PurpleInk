@@ -4,8 +4,10 @@ export type {
   CanvasNode,
   CanvasEdge,
   CanvasNodeType,
+  DirectorCanvasNodeType,
   GlobalCanvasNodeType,
   ShotLaneNodeType,
+  WorkflowSourceNodeType,
   NodeStatus,
 } from './types'
 export { createProjectSchema, type CreateProjectInput } from './schemas'

@@ -12,6 +12,8 @@ const nodeTypes: CanvasNodeType[] = [
   'shot-sfx',
   'shot-subtitle',
   'shot-qa',
+  'audio-transcribe',
+  'website-stage',
 ]
 
 describe('node type visual tokens', () => {

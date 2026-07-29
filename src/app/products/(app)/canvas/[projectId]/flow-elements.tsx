@@ -34,6 +34,8 @@ const STAGE_TOKEN: Record<CanvasGraphNode['type'], StageToken> = {
   'shot-sfx': 'audio',
   'shot-subtitle': 'audio',
   'shot-qa': 'finalize',
+  'audio-transcribe': 'audio',
+  'website-stage': 'direct',
 }
 
 export interface LaneSummaryNode {

@@ -28,6 +28,7 @@ const ENUM_CHECKS = {
   canvas_nodes_type_check: [
     'script-import', 'shot-split', 'score', 'export', 'shot-script',
     'shot-codegen', 'shot-sfx', 'shot-subtitle', 'shot-qa',
+    'audio-transcribe', 'website-stage',
   ],
   canvas_nodes_stage_check: [
     'INGEST', 'DIRECT', 'SHOT_SPEC', 'FABRICATE', 'ASSEMBLE', 'FINALIZE',

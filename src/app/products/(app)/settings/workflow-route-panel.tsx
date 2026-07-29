@@ -13,7 +13,7 @@ import {
   providersFor,
   type ProviderCapability,
 } from '@/features/ai/provider-registry'
-import type { CanvasNodeType } from '@/features/canvas/types'
+import type { DirectorCanvasNodeType } from '@/features/canvas/types'
 import { ROUTE_ROWS, type RouteDraft } from './model-service-contract'
 
 export function WorkflowRoutePanel({
@@ -27,10 +27,10 @@ export function WorkflowRoutePanel({
   onPanelOpenChange,
 }: {
   routes: RouteDraft
-  effective?: Record<CanvasNodeType, DirectorRouteView>
+  effective?: Record<DirectorCanvasNodeType, DirectorRouteView>
   planKey: PlanKey
   busy: boolean
-  onChange: (nodeType: CanvasNodeType, provider: AiProviderId) => void
+  onChange: (nodeType: DirectorCanvasNodeType, provider: AiProviderId) => void
   onSave: () => void
   openPanels: Record<string, boolean>
   onPanelOpenChange: (id: string, open: boolean) => void
@@ -84,7 +84,7 @@ export function WorkflowRoutePanel({
   )
 }
 
-function capabilityFor(nodeType: CanvasNodeType): ProviderCapability {
+function capabilityFor(nodeType: DirectorCanvasNodeType): ProviderCapability {
   if (nodeType === 'shot-sfx') return 'tts'
   if (nodeType === 'shot-subtitle') return 'asr'
   if (nodeType === 'shot-qa') return 'vision'

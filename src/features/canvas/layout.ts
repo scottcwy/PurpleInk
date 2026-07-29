@@ -11,6 +11,8 @@ const GLOBAL_TYPES = new Set<CanvasNodeType>([
   'shot-split',
   'score',
   'export',
+  'audio-transcribe',
+  'website-stage',
 ])
 
 export interface LayoutNode {

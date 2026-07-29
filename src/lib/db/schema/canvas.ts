@@ -23,6 +23,8 @@ export const CANVAS_NODE_TYPES = [
   'shot-sfx',
   'shot-subtitle',
   'shot-qa',
+  'audio-transcribe',
+  'website-stage',
 ] as const
 
 export const CANVAS_NODE_STAGES = [
@@ -87,7 +89,8 @@ export const canvasNodes = pgTable(
       'canvas_nodes_type_check',
       sql`${table.type} in (
         'script-import', 'shot-split', 'score', 'export', 'shot-script',
-        'shot-codegen', 'shot-sfx', 'shot-subtitle', 'shot-qa'
+        'shot-codegen', 'shot-sfx', 'shot-subtitle', 'shot-qa',
+        'audio-transcribe', 'website-stage'
       )`,
     ),
     check(

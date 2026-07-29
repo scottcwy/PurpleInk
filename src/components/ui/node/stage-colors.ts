@@ -11,6 +11,8 @@ export function nodeTypeColorToken(nodeType: CanvasNodeType): string {
     'shot-sfx': 'text-stage-audio border-stage-audio',
     'shot-subtitle': 'text-stage-audio border-stage-audio',
     'shot-qa': 'text-stage-finalize border-stage-finalize',
+    'audio-transcribe': 'text-stage-audio border-stage-audio',
+    'website-stage': 'text-stage-direct border-stage-direct',
   }
   return map[nodeType]
 }
@@ -33,6 +35,8 @@ export function nodeTypeFillClass(nodeType: CanvasNodeType): string {
     'shot-sfx': 'bg-stage-audio',
     'shot-subtitle': 'bg-stage-audio',
     'shot-qa': 'bg-stage-finalize',
+    'audio-transcribe': 'bg-stage-audio',
+    'website-stage': 'bg-stage-direct',
   }
   return map[nodeType]
 }

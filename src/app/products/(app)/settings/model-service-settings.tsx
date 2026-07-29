@@ -9,7 +9,7 @@ import type { StepfunModelField } from '@/features/ai/config'
 import type { GeminiConfigField } from '@/features/ai/gemini-config'
 import type { MimoConfigField } from '@/features/ai/mimo-config'
 import type { AiProviderId } from '@/features/ai/model-routing'
-import type { CanvasNodeType } from '@/features/canvas/types'
+import type { DirectorCanvasNodeType } from '@/features/canvas/types'
 import {
   GEMINI_FIELDS,
   MIMO_FIELDS,
@@ -93,7 +93,7 @@ export function useModelSettingsController(): ModelSettingsController {
   useSettingsLoader(setters, setError)
   const submit = useSettingsSubmitter(setters, setBusy, setError)
 
-  function setRoute(nodeType: CanvasNodeType, provider: AiProviderId) {
+  function setRoute(nodeType: DirectorCanvasNodeType, provider: AiProviderId) {
     setRoutes((current) => current && { ...current, [nodeType]: provider })
   }
   function setStepfunField(field: StepfunModelField, value: string) {

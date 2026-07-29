@@ -21,6 +21,8 @@ const NODE_TYPES: CanvasNodeType[] = [
   'shot-sfx',
   'shot-subtitle',
   'shot-qa',
+  'audio-transcribe',
+  'website-stage',
 ]
 
 const EXPECTED_MINIMAP_COLOR: Record<CanvasNodeType, string> = {
@@ -33,6 +35,8 @@ const EXPECTED_MINIMAP_COLOR: Record<CanvasNodeType, string> = {
   'shot-sfx': 'var(--color-stage-audio)',
   'shot-subtitle': 'var(--color-stage-audio)',
   'shot-qa': 'var(--color-stage-finalize)',
+  'audio-transcribe': 'var(--color-stage-audio)',
+  'website-stage': 'var(--color-stage-direct)',
 }
 
 describe('miniMapNodeColor', () => {

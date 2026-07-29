@@ -1,7 +1,7 @@
 import 'server-only'
 import { z } from 'zod'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
-import type { CanvasNodeType } from '@/features/canvas'
+import type { DirectorCanvasNodeType } from '@/features/canvas'
 import type { AiTaskKind } from '@/features/routing'
 import {
   fundingForProvider,
@@ -44,7 +44,7 @@ export const DIRECTOR_NODE_TYPES = [
   'shot-sfx',
   'shot-subtitle',
   'shot-qa',
-] as const satisfies readonly CanvasNodeType[]
+] as const satisfies readonly DirectorCanvasNodeType[]
 
 const providerSchema = z.enum(AI_PROVIDER_IDS)
 
@@ -108,7 +108,7 @@ interface ResolvedRoute {
   secret: string | null
 }
 
-function sessionTarget(nodeType: CanvasNodeType): AiRouteTarget {
+function sessionTarget(nodeType: DirectorCanvasNodeType): AiRouteTarget {
   const target = ROUTE_TARGET[nodeType]
   return target.domain === 'ai'
     ? target
@@ -159,7 +159,7 @@ async function resolveRoute(
 }
 
 export async function getDirectorProvider(
-  nodeType: CanvasNodeType,
+  nodeType: DirectorCanvasNodeType,
   deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<DirectorProviderView> {
   const target = ROUTE_TARGET[nodeType]
@@ -178,7 +178,7 @@ export async function getDirectorProvider(
  * 不能当作会话模型，也不能因此让整个节点无法执行。
  */
 export async function resolveDirectorModelTarget(
-  nodeType: CanvasNodeType,
+  nodeType: DirectorCanvasNodeType,
   capability: ModelCapability = 'text',
   deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<DirectorModelTarget> {
@@ -244,7 +244,7 @@ export async function resolveDirectorModelTarget(
 
 export async function describeDirectorRoutes(
   deps: AiConfigDependencies = getAiConfigDependencies(),
-): Promise<Record<CanvasNodeType, DirectorRouteView>> {
+): Promise<Record<DirectorCanvasNodeType, DirectorRouteView>> {
   const plan = await currentPlan(deps)
   const entries = await Promise.all(DIRECTOR_NODE_TYPES.map(async (nodeType) => {
     const target = ROUTE_TARGET[nodeType]
@@ -263,11 +263,11 @@ export async function describeDirectorRoutes(
     }, deps.managedModelCatalog)
     return [nodeType, { ...provider, model }] as const
   }))
-  return Object.fromEntries(entries) as Record<CanvasNodeType, DirectorRouteView>
+  return Object.fromEntries(entries) as Record<DirectorCanvasNodeType, DirectorRouteView>
 }
 
 export type DirectorRouteSettingsInput = Partial<
-  Record<CanvasNodeType, AiProviderId>
+  Record<DirectorCanvasNodeType, AiProviderId>
 >
 
 export async function saveDirectorRoutes(

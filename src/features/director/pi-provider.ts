@@ -6,7 +6,7 @@ import {
 import type { Api, ApiKeyAuth, Model, MutableModels } from '@earendil-works/pi-ai'
 import { googleGenerativeAIApi } from '@earendil-works/pi-ai/api/google-generative-ai.lazy'
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy'
-import type { CanvasNodeType } from '@/features/canvas'
+import type { DirectorCanvasNodeType } from '@/features/canvas'
 import { assertBillingAvailable } from '@/features/billing'
 import {
   DIRECTOR_NODE_TYPES,
@@ -17,7 +17,7 @@ import { RouteContractError } from '@/features/ai/route-contract-error'
 import type { PipelineStage } from './types'
 
 /** 阶段兜底节点类型：仅在节点类型缺失/不可信时使用，与全局泳道播种保持一致。 */
-const STAGE_FALLBACK_NODE_TYPE: Record<PipelineStage, CanvasNodeType> = {
+const STAGE_FALLBACK_NODE_TYPE: Record<PipelineStage, DirectorCanvasNodeType> = {
   INGEST: 'script-import',
   DIRECT: 'shot-split',
   SHOT_SPEC: 'shot-script',
@@ -164,7 +164,7 @@ export async function assertDirectorBillingAvailable(input: {
 function trustedNodeType(
   nodeType: string | null | undefined,
   stage: PipelineStage,
-): CanvasNodeType {
+): DirectorCanvasNodeType {
   const trusted = DIRECTOR_NODE_TYPES.find((candidate) => candidate === nodeType)
   return trusted ?? STAGE_FALLBACK_NODE_TYPE[stage]
 }

@@ -17,6 +17,8 @@ export const canvasNodeTypeSchema = z.enum([
   'shot-sfx',
   'shot-subtitle',
   'shot-qa',
+  'audio-transcribe',
+  'website-stage',
 ])
 
 const genericNodeDataSchema = z.record(z.string(), z.unknown())
@@ -31,6 +33,8 @@ export const canvasNodeDataSchemas = {
   'shot-sfx': genericNodeDataSchema,
   'shot-subtitle': genericNodeDataSchema,
   'shot-qa': genericNodeDataSchema,
+  'audio-transcribe': genericNodeDataSchema,
+  'website-stage': genericNodeDataSchema,
 } satisfies Record<CanvasNodeType, typeof genericNodeDataSchema>
 
 export type CreateProjectInput = z.infer<typeof createProjectSchema>
