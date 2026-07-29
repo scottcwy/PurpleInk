@@ -97,3 +97,21 @@ v1 费率为每个向上取整的视频秒 `120000 CNY micros`（¥0.12）；
 降级不能伪造外部网站采集或媒体产物。模板回退、缓存命中和 Playwright 备用路径都
 必须作为可追溯的安全状态展示。诊断与验收继续遵循
 `docs/conventions/workflow-failure-patterns.md`。
+
+## 8. 网站阶段右侧检查器
+
+网站节点沿用唯一 `CanvasInspector`，不得新建第二套右侧面板。选中
+`website-stage` 时，面板使用已登记的 `SegmentedControl` 呈现固定四页：
+`Data / Source / Gates / Execution`。
+
+- 运行事实只从 `node.data.websiteExecution` 白名单读取：`phase`、`state`、
+  `enginePhase`、时长与耗时、`verification`、最终 Artifact 元数据、安全失败码和
+  `updatedAt`。畸形或缺失字段显示“等待受控 worker 回传”，不得猜造。
+- `Source / Gates / Execution` 可以说明版本内固定的执行合同，例如生产默认路径为
+  Playwright Chromium、公开网络 DNS fail-closed、匿名采集、45 分钟引擎截止与
+  50 分钟队列保护；这些必须标成“默认合同”或“策略”，不能冒充本次运行事实。
+- 当前项目 SSE 只保证节点状态与终态刷新；同一 `running` 状态内的
+  `websiteExecution` 是阶段检查点投影，不宣称逐秒实时。
+- 禁止展示或序列化完整 URL 的 path/query/hash、header、cookie、DOM、credential、
+  prompt、provider 原始错误、worker 原始日志、缓存目录或隐藏推理。缓存未投影
+  hit/miss 时只显示隔离策略，不显示伪造命中结果。
