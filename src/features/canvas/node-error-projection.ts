@@ -65,17 +65,26 @@ export function parseRenderError(
 export function parseExecutionNotice(value: unknown): WorkflowExecutionNotice | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const record = value as Record<string, unknown>
+  const code = record.code
   if (
-    record.code !== 'PROVIDER_RATE_LIMITED'
+    (
+      code !== 'PROVIDER_RATE_LIMITED'
+      && code !== 'PROVIDER_POOL_WAIT'
+      && code !== 'PLAN_CONCURRENCY_WAIT'
+    )
     || typeof record.message !== 'string'
     || typeof record.resumeAt !== 'string'
-    || typeof record.providerLabel !== 'string'
   ) return undefined
   return {
-    code: 'PROVIDER_RATE_LIMITED',
+    code,
     message: record.message,
     resumeAt: record.resumeAt,
-    providerLabel: record.providerLabel,
+    ...(typeof record.providerLabel === 'string'
+      ? { providerLabel: record.providerLabel }
+      : {}),
+    ...(typeof record.active === 'number' ? { active: record.active } : {}),
+    ...(typeof record.limit === 'number' ? { limit: record.limit } : {}),
+    ...(typeof record.waiting === 'number' ? { waiting: record.waiting } : {}),
   }
 }
 

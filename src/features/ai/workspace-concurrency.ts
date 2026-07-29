@@ -1,9 +1,14 @@
 import 'server-only'
-import { and, asc, eq, gt, lte, max, sql } from 'drizzle-orm'
-import type { PlanKey } from '@/features/billing/domain'
+import { and, eq, lte, max, sql } from 'drizzle-orm'
 import { subscriptionConcurrencyLimit } from '@/features/billing/domain'
 import type { Db } from '@/lib/db/client'
-import { workflowConcurrencyLeases, workspaceEntitlements } from '@/lib/db/schema'
+import { workflowConcurrencyLeases } from '@/lib/db/schema'
+import {
+  activePlan,
+  type ConcurrencyTransaction,
+  databaseNow,
+} from './workspace-concurrency-context'
+import { workspaceConcurrencyEnforced } from './concurrency-rollout'
 
 const SHOT_STAGGER_MS = 500
 const SLOT_LEASE_MS = 20 * 60_000
@@ -25,6 +30,7 @@ export type WorkflowSlotDecision = {
   waiting: number
   resumeAt?: Date
   leaseExpiresAt?: Date
+  shadowWaitReason?: 'plan_limit'
 }
 
 /** 原子申请 workspace 级分镜槽；同一 workUnitKey 重入只续租，不重复计数。 */
@@ -36,14 +42,14 @@ export async function tryAcquireWorkflowSlot(
 }
 
 export async function tryAcquireWorkflowSlotInTransaction(
-  transaction: Transaction,
+  transaction: ConcurrencyTransaction,
   input: Omit<WorkflowSlotInput, 'database'>,
 ): Promise<WorkflowSlotDecision> {
   return acquireWorkflowSlot(transaction, input)
 }
 
 export async function registerWorkflowSlotsInTransaction(
-  transaction: Transaction,
+  transaction: ConcurrencyTransaction,
   input: {
     workspaceId: string
     actorUserId: string | null
@@ -71,7 +77,7 @@ export async function registerWorkflowSlotsInTransaction(
 }
 
 async function acquireWorkflowSlot(
-  transaction: Transaction,
+  transaction: ConcurrencyTransaction,
   input: Omit<WorkflowSlotInput, 'database'>,
 ): Promise<WorkflowSlotDecision> {
     await transaction.execute(sql`
@@ -114,18 +120,24 @@ async function acquireWorkflowSlot(
       })
     }
     if (existing?.status === 'waiting') {
-      await transaction
-        .update(workflowConcurrencyLeases)
-        .set({
-          actorUserId: input.actorUserId,
-          projectId: input.projectId,
-          planKey,
-          updatedAt: now,
-        })
-        .where(and(
-          eq(workflowConcurrencyLeases.workspaceId, input.workspaceId),
-          eq(workflowConcurrencyLeases.workUnitKey, input.workUnitKey),
-        ))
+      if (
+        existing.actorUserId !== input.actorUserId
+        || existing.projectId !== input.projectId
+        || existing.planKey !== planKey
+      ) {
+        await transaction
+          .update(workflowConcurrencyLeases)
+          .set({
+            actorUserId: input.actorUserId,
+            projectId: input.projectId,
+            planKey,
+            updatedAt: now,
+          })
+          .where(and(
+            eq(workflowConcurrencyLeases.workspaceId, input.workspaceId),
+            eq(workflowConcurrencyLeases.workUnitKey, input.workUnitKey),
+          ))
+      }
     } else if (existing) {
       await transaction
         .update(workflowConcurrencyLeases)
@@ -157,7 +169,11 @@ async function acquireWorkflowSlot(
         updatedAt: now,
       })
     }
-    const counts = await readCounts(transaction, input.workspaceId)
+    const queueState = await readQueueState(transaction, input.workspaceId)
+    const counts = {
+      active: queueState.active,
+      waiting: queueState.waiting,
+    }
     if (existing?.status === 'waiting' && existing.notBefore.getTime() > now.getTime()) {
       return {
         status: 'waiting',
@@ -166,51 +182,31 @@ async function acquireWorkflowSlot(
         resumeAt: existing.notBefore,
       }
     }
+    let shadowWaitReason: WorkflowSlotDecision['shadowWaitReason']
     if (counts.active >= limit) {
-      return {
-        status: 'waiting',
-        limit,
-        ...counts,
-        resumeAt: new Date(now.getTime() + RECONCILE_MS),
+      if (workspaceConcurrencyEnforced(input.workspaceId)) {
+        return {
+          status: 'waiting',
+          limit,
+          ...counts,
+          resumeAt: new Date(now.getTime() + RECONCILE_MS),
+        }
       }
+      shadowWaitReason = 'plan_limit'
     }
-    const [oldestWaiting] = await transaction
-      .select({
-        workUnitKey: workflowConcurrencyLeases.workUnitKey,
-        notBefore: workflowConcurrencyLeases.notBefore,
-      })
-      .from(workflowConcurrencyLeases)
-      .where(and(
-        eq(workflowConcurrencyLeases.workspaceId, input.workspaceId),
-        eq(workflowConcurrencyLeases.status, 'waiting'),
-      ))
-      .orderBy(
-        asc(workflowConcurrencyLeases.requestedAt),
-        asc(workflowConcurrencyLeases.workUnitKey),
-      )
-      .limit(1)
-    if (oldestWaiting?.workUnitKey !== input.workUnitKey) {
+    if (queueState.oldestWorkUnitKey !== input.workUnitKey) {
       return {
         status: 'waiting',
         limit,
         ...counts,
         resumeAt: new Date(Math.max(
-          oldestWaiting?.notBefore.getTime() ?? now.getTime(),
+          queueState.oldestNotBefore?.getTime() ?? now.getTime(),
           now.getTime() + RECONCILE_MS,
         )),
       }
     }
-    const [latest] = await transaction
-      .select({
-        activatedAt: max(workflowConcurrencyLeases.activatedAt),
-      })
-      .from(workflowConcurrencyLeases)
-      .where(and(
-        eq(workflowConcurrencyLeases.workspaceId, input.workspaceId),
-        gt(workflowConcurrencyLeases.activatedAt, new Date(0)),
-      ))
-    const staggerUntil = latest?.activatedAt
-      ? new Date(latest.activatedAt.getTime() + SHOT_STAGGER_MS)
+    const staggerUntil = queueState.latestActivatedAt
+      ? new Date(queueState.latestActivatedAt.getTime() + SHOT_STAGGER_MS)
       : now
     if (staggerUntil.getTime() > now.getTime()) {
       await transaction
@@ -240,48 +236,34 @@ async function acquireWorkflowSlot(
         eq(workflowConcurrencyLeases.workspaceId, input.workspaceId),
         eq(workflowConcurrencyLeases.workUnitKey, input.workUnitKey),
       ))
-    return decisionCounts(transaction, input.workspaceId, limit, {
+    return {
       status: 'active',
+      limit,
+      active: counts.active + 1,
+      waiting: Math.max(0, counts.waiting - 1),
       leaseExpiresAt,
-    })
-}
-
-type Transaction = Parameters<Parameters<Db['transaction']>[0]>[0]
-
-async function activePlan(
-  transaction: Transaction,
-  workspaceId: string,
-  now: Date,
-): Promise<PlanKey> {
-  const [entitlement] = await transaction
-    .select({ planKey: workspaceEntitlements.planKey })
-    .from(workspaceEntitlements)
-    .where(and(
-      eq(workspaceEntitlements.workspaceId, workspaceId),
-      eq(workspaceEntitlements.status, 'active'),
-      lte(workspaceEntitlements.startsAt, now),
-      gt(workspaceEntitlements.expiresAt, now),
-    ))
-    .limit(1)
-  return isPlanKey(entitlement?.planKey) ? entitlement.planKey : 'free'
-}
-
-async function databaseNow(
-  transaction: Transaction,
-  workspaceId: string,
-): Promise<Date> {
-  const [row] = await transaction
-    .select({ now: sql<Date>`now()` })
-    .from(workspaceEntitlements)
-    .where(eq(workspaceEntitlements.workspaceId, workspaceId))
-    .limit(1)
-  return row?.now ?? new Date()
+      ...(shadowWaitReason ? { shadowWaitReason } : {}),
+    }
 }
 
 async function readCounts(
-  transaction: Transaction,
+  transaction: ConcurrencyTransaction,
   workspaceId: string,
 ): Promise<{ active: number; waiting: number }> {
+  const state = await readQueueState(transaction, workspaceId)
+  return { active: state.active, waiting: state.waiting }
+}
+
+async function readQueueState(
+  transaction: ConcurrencyTransaction,
+  workspaceId: string,
+): Promise<{
+  active: number
+  waiting: number
+  latestActivatedAt: Date | null
+  oldestWorkUnitKey: string | null
+  oldestNotBefore: Date | null
+}> {
   const [row] = await transaction
     .select({
       active: sql<number>`count(*) filter (
@@ -290,21 +272,40 @@ async function readCounts(
       waiting: sql<number>`count(*) filter (
         where ${workflowConcurrencyLeases.status} = 'waiting'
       )::int`,
+      latestActivatedAt: max(workflowConcurrencyLeases.activatedAt),
+      oldestWorkUnitKey: sql<string | null>`(
+        select queue.work_unit_key
+        from workflow_concurrency_leases queue
+        where queue.workspace_id = ${workspaceId}
+          and queue.status = 'waiting'
+        order by queue.requested_at asc, queue.work_unit_key asc
+        limit 1
+      )`,
+      oldestNotBefore: sql<Date | null>`(
+        select queue.not_before
+        from workflow_concurrency_leases queue
+        where queue.workspace_id = ${workspaceId}
+          and queue.status = 'waiting'
+        order by queue.requested_at asc, queue.work_unit_key asc
+        limit 1
+      )`.mapWith(workflowConcurrencyLeases.notBefore),
     })
     .from(workflowConcurrencyLeases)
     .where(eq(workflowConcurrencyLeases.workspaceId, workspaceId))
-  return { active: row?.active ?? 0, waiting: row?.waiting ?? 0 }
+  return {
+    active: row?.active ?? 0,
+    waiting: row?.waiting ?? 0,
+    latestActivatedAt: row?.latestActivatedAt ?? null,
+    oldestWorkUnitKey: row?.oldestWorkUnitKey ?? null,
+    oldestNotBefore: row?.oldestNotBefore ?? null,
+  }
 }
 
 async function decisionCounts(
-  transaction: Transaction,
+  transaction: ConcurrencyTransaction,
   workspaceId: string,
   limit: number,
   decision: Pick<WorkflowSlotDecision, 'status' | 'leaseExpiresAt'>,
 ): Promise<WorkflowSlotDecision> {
   return { ...decision, limit, ...await readCounts(transaction, workspaceId) }
-}
-
-function isPlanKey(value: string | undefined): value is PlanKey {
-  return value === 'free' || value === 'plus' || value === 'pro' || value === 'max'
 }

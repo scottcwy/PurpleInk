@@ -189,10 +189,12 @@ export function StreamingLogCard({
         stage={error?.stage ?? stage ?? ''}
         message={error?.message ?? ''}
         errorCode={error?.code}
-        origin={error?.origin ?? (executionNotice ? 'provider' : undefined)}
-        title={error?.title ?? (executionNotice ? '请求过于频繁，系统已自动排队' : undefined)}
+        origin={error?.origin ?? (executionNotice
+          ? executionNotice.code === 'PLAN_CONCURRENCY_WAIT' ? 'user' : 'provider'
+          : undefined)}
+        title={error?.title ?? noticeTitle(executionNotice)}
         recovery={error?.recovery ?? (executionNotice ? 'auto_wait' : undefined)}
-        provider={error?.provider ?? (executionNotice
+        provider={error?.provider ?? (executionNotice?.providerLabel
           ? {
               id: 'provider',
               label: executionNotice.providerLabel,
@@ -231,6 +233,15 @@ export function StreamingLogCard({
       />
     </>
   )
+}
+
+function noticeTitle(
+  notice: WorkflowExecutionNotice | undefined,
+): string | undefined {
+  if (!notice) return undefined
+  if (notice.code === 'PLAN_CONCURRENCY_WAIT') return '套餐分镜并发已满'
+  if (notice.code === 'PROVIDER_POOL_WAIT') return '正在等待可用调用窗口'
+  return '服务繁忙，系统已自动排队'
 }
 
 function formatCountdown(resumeAt: string, now: number): string {

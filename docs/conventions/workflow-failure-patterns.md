@@ -405,8 +405,8 @@ runtime 失败补偿和 rejected 版本不再命中。
 普通自动重试又在同一速率窗口内继续出网，最终把一次可恢复的流量整形问题放大成批量失败，
 甚至推动 Provider 熔断。切换到额度更高的模型后链路正常，容易被误判成模型兼容性问题。
 
-**真实事故**：工作流的 `director-stage=12` 只限制本机 CPU 作业并发，不代表供应商 API 额度。
-StepFun 当前账户的约束是 `5 RPM`；并发、RPM、TPM 是三个独立维度。Autopilot 一次发现多个
+**真实事故**：工作流的 `director-stage` 只限制本机作业并发，不代表供应商 API 额度。
+并发、RPM、TPM 是三个独立维度。Autopilot 一次发现多个
 可执行节点后，旧实现会让它们直接同时出网，没有按共享凭据预留速率槽位。429 随后被当成普通
 Provider 失败，既消耗重试预算，又污染连续失败计数。
 
@@ -415,11 +415,15 @@ Provider 失败，既消耗重试预算，又污染连续失败计数。
 - 出网前必须按真实共享凭据进入 Provider 调度器。BYOK 的键为
   `workspace + provider + credential fingerprint`；平台托管凭据按 provider 跨 workspace
   共享预算。不得把本机 lane 并发数当成外部 RPM。
-- 并发、RPM、TPM 分开配置和记账。未知 BYOK 额度使用保守默认，并从真实 429 学习冷却窗口；
-  不得把“5 RPM”写成“并发 5”。
-- 429 优先遵循 `Retry-After`（秒数或 HTTP 日期），缺失时按滚动窗口计算下一可用时间并加入
-  小幅抖动。等待 attempt 必须是 `superseded -> queued`，节点保持 pending/queued，
-  不计普通重试预算、30 分钟失败预算或熔断失败次数。
+- Gemini、StepFun、MiMo 分别使用 `managed:gemini`、`managed:stepfun`、`managed:mimo`
+  独立池；Key 轮换不能产生新池。一家降速不得阻塞另一家。
+- 托管池硬滚动 60 秒保护线分别为 900 / 180 / 90，请求发送最小间隔分别为
+  80–88ms / 400–440ms / 800–880ms。RPM 与真实在途数分开记账。
+- 在途上限从 8 起步、最高 50。最近至少完成 20 次且连续 5 分钟稳定才增加 1；
+  真实 429 立即降 25%，503/网络/超时样本率超过 2% 同样降 25%。
+- 429 优先遵循 `Retry-After`（秒数或 HTTP 日期），缺失时按 2/4/8/16/30 秒退避并抖动。
+  调度器发送前发现的亚秒等待必须复用原 attempt，只更新 `visible_at`；只有真实外部 429
+  才使用 `superseded -> queued` 延迟恢复记录。两者都不计普通重试或熔断失败次数。
 - 单任务累计限流等待最多 15 分钟；超过后才终态化为 `PROVIDER_RATE_LIMITED`。
   401/402/403/429/451、平台内部错误都不得推动熔断；只有真实 5xx、网络故障与上游超时计数。
 - 等待态使用 `executionNotice` 的安全投影，不弹失败对话框、不显示红色失败状态、不建议跳过
@@ -429,9 +433,10 @@ Provider 失败，既消耗重试预算，又污染连续失败计数。
   status、stage、attemptId、duration 与 retryAt。
 
 **已落地护栏**：`provider-dispatch.ts` 使用 PostgreSQL advisory lock 原子预留共享预算，
-`attempt-completion.ts` 将 429 延后为新 queued attempt，`provider-breaker.ts` 只统计真实外部
+`provider-pool-control.ts` 持久化自适应在途状态，`attempt-completion.ts` 区分发送前等待与真实
+429，`provider-breaker.ts` 只统计真实外部
 故障；`workflow-fault.ts`、`workflow-fault-display.ts` 与阶段对话框共同提供 v2 安全投影。
-PostgreSQL 测试锁定滚动 60 秒最多 5 次、共享托管预算、`Retry-After` 两种格式、重启后续跑、
+PostgreSQL 测试锁定三池隔离、硬滚动保护、共享托管预算、Key 轮换、公平轮转、重启后续跑、
 15 分钟终态上限和取消等待。迁移 journal 还必须保持 idx 与时间戳严格递增，并在迁移后核对
 目标表真实存在；否则 Drizzle 可能报告成功却因 journal 顺序跳过新 SQL。调度租约的创建、
 过期判断与释放时间统一使用 PostgreSQL 时钟，禁止混用应用时钟与数据库时钟导致租约提前过期。

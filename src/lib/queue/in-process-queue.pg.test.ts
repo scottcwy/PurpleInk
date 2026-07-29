@@ -290,6 +290,14 @@ describe('legacy in-process queue PG compatibility', () => {
       expect(leases.filter((lease) => lease.status === 'active')).toHaveLength(3)
       expect(leases.filter((lease) => lease.status === 'waiting').length)
         .toBeGreaterThanOrEqual(1)
+      const queuedNodes = await database.db.select().from(canvasNodes)
+      expect(queuedNodes.some((node) => {
+        const payload = (node.data as { payload?: Record<string, unknown> }).payload
+        const notice = payload?.executionNotice as Record<string, unknown> | undefined
+        return notice?.code === 'PLAN_CONCURRENCY_WAIT'
+          && notice.limit === 3
+          && typeof notice.waiting === 'number'
+      })).toBe(true)
     } finally {
       release()
       await new Promise((resolve) => setTimeout(resolve, 100))

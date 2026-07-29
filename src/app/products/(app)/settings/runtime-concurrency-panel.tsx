@@ -44,24 +44,21 @@ export function RuntimeConcurrencyPanel({
     <SettingsPanel
       id="runtime"
       title="运行与导出"
-      description="本地渲染并发、输出规格"
+      description="套餐分镜并发、本地渲染并发"
       icon={Cpu}
       summary="账号级 · 重启后生效"
       open={openPanels['runtime'] ?? false}
       onOpenChange={(open) => onPanelOpenChange('runtime', open)}
     >
-      <SettingsField label="Director 阶段并发">
-        <LaneField
-          ariaLabel="Director 阶段并发"
-          value={controller.laneQuotasDraft.directorStageConcurrency}
-          onChange={(v) =>
-            controller.setLaneQuotaField('directorStageConcurrency', v)
-          }
-          min={LANE_QUOTA_LIMITS.directorStageMin}
-          max={LANE_QUOTA_LIMITS.directorStageMax}
-        />
-        <LaneSourcePill field={view?.directorStage} />
-      </SettingsField>
+      <SettingsRow label="AI 分镜并发" chevron={false}>
+        <span className="flex items-center gap-2 text-[13px] text-ds-text-muted">
+          <StatusPill
+            variant="pending"
+            label={`${controller.data.shotConcurrency?.limit ?? 3} 个`}
+          />
+          套餐上限，只读
+        </span>
+      </SettingsRow>
       <SettingsSeparator />
       <SettingsField label="渲染并发">
         <LaneField
@@ -164,17 +161,10 @@ function SaveRow({
   controller: ReadyModelSettingsController
   busy: boolean
 }) {
-  const director = Number(controller.laneQuotasDraft.directorStageConcurrency)
   const render = Number(controller.laneQuotasDraft.renderShotConcurrency)
-  const bothEmpty =
-    controller.laneQuotasDraft.directorStageConcurrency === '' &&
-    controller.laneQuotasDraft.renderShotConcurrency === ''
   const valid =
-    !bothEmpty &&
-    Number.isInteger(director) &&
+    controller.laneQuotasDraft.renderShotConcurrency !== '' &&
     Number.isInteger(render) &&
-    director >= LANE_QUOTA_LIMITS.directorStageMin &&
-    director <= LANE_QUOTA_LIMITS.directorStageMax &&
     render >= LANE_QUOTA_LIMITS.renderShotMin &&
     render <= LANE_QUOTA_LIMITS.renderShotMax
 
@@ -183,7 +173,6 @@ function SaveRow({
     await controller.submit(
       {
         laneQuotas: {
-          directorStageConcurrency: director,
           renderShotConcurrency: render,
         },
       },

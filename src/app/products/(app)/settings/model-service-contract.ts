@@ -139,6 +139,10 @@ export const LANE_QUOTA_LIMITS = {
 
 export interface SettingsResponse {
   planKey?: PlanKey
+  shotConcurrency?: {
+    planKey: PlanKey
+    limit: number
+  }
   managedProviders?: Array<{
     provider: ManagedProviderId
     configured: boolean

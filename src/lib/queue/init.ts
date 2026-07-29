@@ -1,5 +1,4 @@
 import 'server-only'
-import { queue } from './singleton'
 
 /**
  * 初始化标志锚定到 globalThis：instrumentation.ts 与各 API 路由分处不同模块图时，
@@ -32,7 +31,8 @@ export async function initQueue(): Promise<void> {
   if (globalStore.__cvcQueueInitializing) return globalStore.__cvcQueueInitializing
   globalStore.__cvcQueueInitializing = (async () => {
     try {
-      const [directorMod, renderMod, exportMod, mediaMod, lanes] = await Promise.all([
+      const [queueMod, directorMod, renderMod, exportMod, mediaMod, lanes] = await Promise.all([
+        import('./singleton'),
         import('@/features/director/queue-handler'),
         import('@/features/render/queue-handler'),
         import('@/features/render/export-queue-handler'),
@@ -41,6 +41,7 @@ export async function initQueue(): Promise<void> {
           ({ loadLaneQuotasForStart }) => loadLaneQuotasForStart()
         ),
       ])
+      const { queue } = queueMod
       if (typeof directorMod.registerDirectorStageHandler === 'function') {
         directorMod.registerDirectorStageHandler(queue)
       }

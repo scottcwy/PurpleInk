@@ -1,6 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import os from 'node:os'
-import { and, asc, eq, like, lte, notInArray, sql } from 'drizzle-orm'
 import {
   currentWorkspaceId,
   currentUserId,
@@ -8,39 +6,33 @@ import {
   SYSTEM_USER_ID,
 } from '@/lib/auth/workspace-context'
 import { getDb } from '@/lib/db/client'
-import { canvasNodes, pipelineRuns, taskAttempts } from '@/lib/db/schema/index'
+import { pipelineRuns, taskAttempts } from '@/lib/db/schema/index'
 import { classifyWorkflowError } from '@/features/canvas/workflow-error'
-import {
-  tryAcquireWorkflowSlotInTransaction,
-} from '@/features/ai/workspace-concurrency'
 import { releaseTerminalWorkflowSlotForNode } from '@/features/ai/workspace-concurrency-release'
 import {
   ACTIVE_WORKFLOW_VERSION,
   serializeWorkflowVersion,
 } from '@/lib/workflow/version'
 import { completeAttempt } from './attempt-completion'
-import { parseCheckpoint, queueFingerprint } from './attempt-checkpoint'
+import { queueFingerprint } from './attempt-checkpoint'
 import { safeErrorDetails } from './queue-error-details'
 import {
   HEARTBEAT_INTERVAL_MS,
   SWEEP_INTERVAL_MS,
-  leaseDeadline,
   renewLeases,
   sweepExpiredLeases,
   withExecutionTimeout,
 } from './lease'
 import type { JobHandler, LaneQuotas, QueueAdapter, QueueJob } from './types'
+import type { ClaimFilter } from './queue-claim'
+import {
+  DEFAULT_DIRECTOR_STAGE_CONCURRENCY,
+  defaultRenderShotConcurrency,
+} from './queue-defaults'
 
 /** 未在 `start(lanes)` 中显式配额的 kind 落入此通道，固定配额 1。 */
 const FALLBACK_LANE = '__fallback__'
 const FALLBACK_LANE_QUOTA = 1
-
-export const DEFAULT_DIRECTOR_STAGE_CONCURRENCY = 12
-
-export function defaultRenderShotConcurrency(): number {
-  // 容器 cgroup 限额下 cpus() 会高估；availableParallelism 更贴近真实可用并行度。
-  return Math.min(8, Math.max(1, os.availableParallelism()))
-}
 
 function defaultLaneQuotas(): Record<string, number> {
   return {
@@ -68,8 +60,6 @@ function resolveLanes(lanes: LaneQuotas): Record<string, number> {
   }
   return resolved
 }
-
-type ClaimFilter = { kind: string } | { excludeKinds: string[] }
 
 export class InProcessQueue implements QueueAdapter {
   private readonly handlers = new Map<string, JobHandler>()
@@ -198,8 +188,9 @@ export class InProcessQueue implements QueueAdapter {
     quota: number,
     filter: ClaimFilter
   ): Promise<void> {
+    const { claimNextJob } = await import('./queue-claim')
     while ((this.running.get(laneKey) ?? 0) < quota) {
-      const job = await this.claim(filter)
+      const job = await claimNextJob(filter)
       if (!job) return
       this.heldAttempts.add(job.id)
       this.running.set(laneKey, (this.running.get(laneKey) ?? 0) + 1)
@@ -210,126 +201,6 @@ export class InProcessQueue implements QueueAdapter {
         this.heldAttempts.delete(job.id)
       })
     }
-  }
-
-  private async claim(filter: ClaimFilter): Promise<QueueJob | null> {
-    const database = await getDb()
-    return database.transaction(async (transaction) => {
-      const kindCondition =
-        'kind' in filter
-          ? eq(taskAttempts.taskId, `legacy.${filter.kind}`)
-          : and(
-              like(taskAttempts.taskId, 'legacy.%'),
-              notInArray(
-                taskAttempts.taskId,
-                filter.excludeKinds.map((kind) => `legacy.${kind}`)
-              )
-            )
-      const [row] = await transaction
-        .select({
-          id: taskAttempts.id,
-          workspaceId: taskAttempts.workspaceId,
-          runId: taskAttempts.runId,
-          taskId: taskAttempts.taskId,
-          checkpoint: taskAttempts.checkpoint,
-          attemptNo: taskAttempts.attemptNo,
-          entityType: taskAttempts.entityType,
-          entityId: taskAttempts.entityId,
-          projectId: pipelineRuns.projectId,
-          requestedByUserId: pipelineRuns.requestedByUserId,
-        })
-        .from(taskAttempts)
-        .innerJoin(
-          pipelineRuns,
-          and(
-            eq(pipelineRuns.workspaceId, taskAttempts.workspaceId),
-            eq(pipelineRuns.id, taskAttempts.runId),
-          ),
-        )
-        .where(
-          // 不按 workspace 过滤：消费者要处理全部 workspace 的作业，
-          // 归属由领到的 attempt 行自身的 workspaceId 决定（PLAN-002 §5.3）。
-          // visible_at 非空且默认 now()，直接比较即可（退避重排属阶段 2）。
-          and(
-            eq(taskAttempts.status, 'queued'),
-            lte(taskAttempts.visibleAt, sql`now()`),
-            kindCondition
-          )
-        )
-        .orderBy(asc(taskAttempts.createdAt), asc(taskAttempts.id))
-        .limit(1)
-        .for('update', { skipLocked: true })
-      if (!row) return null
-      if (row.entityType === 'node') {
-        const [node] = await transaction
-          .select({ data: canvasNodes.data })
-          .from(canvasNodes)
-          .where(and(
-            eq(canvasNodes.workspaceId, row.workspaceId),
-            eq(canvasNodes.id, row.entityId),
-          ))
-          .limit(1)
-        const workUnitKey = readLaneKey(node?.data)
-        if (workUnitKey) {
-          const decision = await tryAcquireWorkflowSlotInTransaction(transaction, {
-            workspaceId: row.workspaceId,
-            actorUserId: row.requestedByUserId,
-            projectId: row.projectId,
-            workUnitKey,
-          })
-          if (decision.status === 'waiting') {
-            await transaction
-              .update(taskAttempts)
-              .set({
-                visibleAt: decision.resumeAt ?? sql`now() + interval '1 second'`,
-                updatedAt: sql`now()`,
-              })
-              .where(and(
-                eq(taskAttempts.workspaceId, row.workspaceId),
-                eq(taskAttempts.id, row.id),
-                eq(taskAttempts.status, 'queued'),
-              ))
-            return null
-          }
-        }
-      }
-      const [claimed] = await transaction
-        .update(taskAttempts)
-        .set({
-          status: 'running',
-          leaseExpiresAt: leaseDeadline(row.taskId.slice('legacy.'.length)),
-          startedAt: sql`now()`,
-          updatedAt: sql`now()`,
-        })
-        .where(
-          and(
-            eq(taskAttempts.workspaceId, row.workspaceId),
-            eq(taskAttempts.id, row.id),
-            eq(taskAttempts.status, 'queued')
-          )
-        )
-        .returning({ id: taskAttempts.id })
-      if (!claimed) return null
-      await transaction
-        .update(pipelineRuns)
-        .set({ status: 'running', startedAt: sql`now()`, updatedAt: sql`now()` })
-        .where(
-          and(
-            eq(pipelineRuns.workspaceId, row.workspaceId),
-            eq(pipelineRuns.id, row.runId)
-          )
-        )
-      const checkpoint = parseCheckpoint(row.checkpoint)
-      return {
-        id: row.id,
-        workspaceId: row.workspaceId,
-        requestedByUserId: row.requestedByUserId,
-        kind: checkpoint.kind,
-        status: 'running',
-        payload: checkpoint.payload,
-        attempts: row.attemptNo,
-      }
-    })
   }
 
   /**
@@ -409,12 +280,4 @@ async function releaseTerminalSlot(
   } catch (error) {
     console.error('[queue] 分镜并发租约释放失败', { nodeId, error })
   }
-}
-
-function readLaneKey(value: unknown): string | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  const payload = (value as Record<string, unknown>).payload
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null
-  const laneKey = (payload as Record<string, unknown>).laneKey
-  return typeof laneKey === 'string' && laneKey.length > 0 ? laneKey : null
 }

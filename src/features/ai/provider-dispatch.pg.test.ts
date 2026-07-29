@@ -1,6 +1,15 @@
 import { randomUUID } from 'node:crypto'
 import { asc, eq } from 'drizzle-orm'
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
 import { runInAuthContext } from '@/lib/auth/workspace-context'
 import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
 import {
@@ -37,6 +46,7 @@ beforeEach(async () => {
 afterAll(async () => {
   await database.close()
 })
+afterEach(() => vi.unstubAllEnvs())
 
 describe('provider dispatch Postgres arbitration', () => {
   it('paces StepFun globally at 400-440ms without treating RPM as concurrency', async () => {
@@ -78,6 +88,34 @@ describe('provider dispatch Postgres arbitration', () => {
         expect(retryAt - latest.reservedAt.getTime()).toBeLessThanOrEqual(440)
       },
     )
+  })
+
+  it('records a provider wait decision without blocking in global shadow mode', async () => {
+    vi.stubEnv('AI_PROVIDER_POOL_MODE', 'shadow')
+    const { reserveProviderDispatch } = await import('./provider-dispatch')
+    await runInAuthContext(
+      { workspaceId: LOCAL_WORKSPACE_ID, userId: 'test-user' },
+      async () => {
+        const first = await reserveProviderDispatch({
+          providerId: 'stepfun',
+          providerLabel: '阶跃星辰',
+          funding: 'managed',
+          apiKey: 'managed-key-a',
+          database: database.db,
+        })
+        await first.release()
+        const second = await reserveProviderDispatch({
+          providerId: 'stepfun',
+          providerLabel: '阶跃星辰',
+          funding: 'managed',
+          apiKey: 'managed-key-b',
+          database: database.db,
+        })
+        expect(second.shadowWaitReason).toBe('pacing')
+        await second.release()
+      },
+    )
+    expect(await database.db.select().from(providerDispatches)).toHaveLength(2)
   })
 
   it('atomically admits at most 5 requests in a rolling minute', async () => {

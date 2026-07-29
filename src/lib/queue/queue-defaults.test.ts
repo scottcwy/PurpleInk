@@ -17,7 +17,7 @@ describe('defaultRenderShotConcurrency', () => {
   })
 
   it('用 os.availableParallelism() 推导并 clamp 到 1..8', async () => {
-    const { defaultRenderShotConcurrency } = await import('./in-process-queue')
+    const { defaultRenderShotConcurrency } = await import('./queue-defaults')
 
     availableParallelism.mockReturnValue(32)
     expect(defaultRenderShotConcurrency()).toBe(8)

@@ -34,6 +34,7 @@ import {
   PROVIDER_RATE_WINDOW_MS,
   providerRateLimitBackoffMs,
 } from './provider-dispatch-window'
+import { providerPoolMode } from './concurrency-rollout'
 
 const DEFAULT_LEASE_MS = 5 * 60_000
 
@@ -51,6 +52,7 @@ export interface ProviderDispatchInput {
 export interface ProviderDispatchLease {
   id: string
   scopeKey: string
+  shadowWaitReason?: ProviderDispatchWaitReason
   release(outcome?: 'success' | ProviderFailureKind): Promise<void>
   defer(retryAt?: Date): Promise<void>
 }
@@ -88,6 +90,8 @@ export async function reserveProviderDispatch(
   })
   const limits = dispatchLimits(input)
   const id = randomUUID()
+  const mode = providerPoolMode()
+  let shadowWaitReason: ProviderDispatchWaitReason | undefined
   await database.transaction(async (transaction) => {
     await transaction.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${scopeKey}, 0))`
@@ -103,12 +107,15 @@ export async function reserveProviderDispatch(
       && poolState.lastActorUserId === actorUserId
       && await hasWaitingProviderPeer(transaction, scopeKey, actorUserId)
     ) {
-      throw dispatchWaitError(
-        input,
-        scopeKey,
-        new Date(Date.now() + 100 + Math.round(Math.random() * 100)),
-        'fairness',
-      )
+      if (mode === 'enforce') {
+        throw dispatchWaitError(
+          input,
+          scopeKey,
+          new Date(Date.now() + 100 + Math.round(Math.random() * 100)),
+          'fairness',
+        )
+      }
+      shadowWaitReason = 'fairness'
     }
     const [cooldown] = await transaction
       .select({ blockedUntil: providerDispatchCooldowns.blockedUntil })
@@ -116,7 +123,10 @@ export async function reserveProviderDispatch(
       .where(eq(providerDispatchCooldowns.scopeKey, scopeKey))
       .limit(1)
     if (cooldown && cooldown.blockedUntil.getTime() > Date.now()) {
-      throw dispatchWaitError(input, scopeKey, cooldown.blockedUntil, 'cooldown')
+      if (mode === 'enforce') {
+        throw dispatchWaitError(input, scopeKey, cooldown.blockedUntil, 'cooldown')
+      }
+      shadowWaitReason ??= 'cooldown'
     }
     await transaction
       .update(providerDispatches)
@@ -163,7 +173,10 @@ export async function reserveProviderDispatch(
       nextLease: active?.nextLease ?? null,
     })
     if (wait) {
-      throw dispatchWaitError(input, scopeKey, wait.retryAt, wait.reason)
+      if (mode === 'enforce') {
+        throw dispatchWaitError(input, scopeKey, wait.retryAt, wait.reason)
+      }
+      shadowWaitReason ??= wait.reason
     }
     await transaction.insert(providerDispatches).values({
       id,
@@ -186,6 +199,7 @@ export async function reserveProviderDispatch(
   return {
     id,
     scopeKey,
+    ...(shadowWaitReason ? { shadowWaitReason } : {}),
     release: async (outcome = deferred ? 'rate_limit' : 'success') => {
       if (released) return
       released = true
