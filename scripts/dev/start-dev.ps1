@@ -238,7 +238,7 @@ function Stop-PortOwner {
         Write-Step "$Label port $Port is already free."
         return $true
     }
-    if (-not (Confirm-Action "Stop $($owner.Name) (pid $($owner.Pid)) holding $Label port $Port?")) {
+    if (-not (Confirm-Action "Stop $($owner.Name) (pid $($owner.Pid)) holding $Label port ${Port}?")) {
         Write-Warn "Left pid $($owner.Pid) running on port $Port."
         return $false
     }
