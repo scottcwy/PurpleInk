@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { classifyWorkflowError } from '@/features/canvas'
 import type { QueueAdapter, QueueJob } from '@/lib/queue'
+import { activeWorkflowVersionFor } from '@/lib/workflow/project-workflow-registry'
 import {
   registerWebsiteVideoHandler,
   runWebsiteVideoQueueJob,
@@ -69,7 +70,10 @@ function job(): QueueJob {
     workspaceId: WORKSPACE_ID,
     kind: 'website-video',
     status: 'running',
-    payload: { projectId: PROJECT_ID },
+    payload: {
+      projectId: PROJECT_ID,
+      workflowVersion: activeWorkflowVersionFor('website'),
+    },
     attempts: 1,
   }
 }

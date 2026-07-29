@@ -12,6 +12,7 @@ import {
 } from '@/lib/db/test/pg-test-database'
 import { queueFingerprint } from '@/lib/queue/attempt-checkpoint'
 import type { QueueAdapter } from '@/lib/queue'
+import { activeWorkflowVersionFor } from '@/lib/workflow/project-workflow-registry'
 import { enqueueWebsiteVideo } from './website-queue-handler'
 
 vi.mock('server-only', () => ({}))
@@ -43,7 +44,7 @@ beforeEach(async () => {
     title: '网站介绍',
     script: '',
     workflowKind: 'website',
-    workflowVersion: 'website:1.0.0',
+    workflowVersion: activeWorkflowVersionFor('website'),
     exportSettings: { schemaVersion: 1 },
   })
 })
@@ -61,11 +62,18 @@ describe('website video enqueue idempotency', () => {
       const preflight = vi.fn()
 
       await expect(enqueueWebsiteVideo(
-        { projectId: PROJECT_ID },
+        {
+          projectId: PROJECT_ID,
+          workflowVersion: activeWorkflowVersionFor('website'),
+        },
         adapter(enqueue),
         preflight,
         database.db,
-      )).resolves.toBe(existingId)
+      )).resolves.toEqual({
+        attemptId: existingId,
+        status,
+        reused: true,
+      })
       expect(preflight).not.toHaveBeenCalled()
       expect(enqueue).not.toHaveBeenCalled()
     },
@@ -78,16 +86,29 @@ describe('website video enqueue idempotency', () => {
     const preflight = vi.fn(async () => undefined)
 
     await expect(enqueueWebsiteVideo(
-      { projectId: PROJECT_ID },
+      {
+        projectId: PROJECT_ID,
+        workflowVersion: activeWorkflowVersionFor('website'),
+      },
       adapter(enqueue),
       preflight,
       database.db,
-    )).resolves.toBe(replacementId)
+    )).resolves.toEqual({
+      attemptId: replacementId,
+      status: 'queued',
+      reused: false,
+    })
     expect(preflight).toHaveBeenCalledOnce()
     expect(enqueue).toHaveBeenCalledWith(
       'website-video',
-      { projectId: PROJECT_ID },
-      { projectId: PROJECT_ID },
+      {
+        projectId: PROJECT_ID,
+        workflowVersion: activeWorkflowVersionFor('website'),
+      },
+      {
+        projectId: PROJECT_ID,
+        workflowVersion: activeWorkflowVersionFor('website'),
+      },
     )
   })
 })
@@ -95,7 +116,10 @@ describe('website video enqueue idempotency', () => {
 async function seedAttempt(
   status: 'queued' | 'running' | 'succeeded' | 'failed',
 ): Promise<string> {
-  const payload = { projectId: PROJECT_ID }
+  const payload = {
+    projectId: PROJECT_ID,
+    workflowVersion: activeWorkflowVersionFor('website'),
+  }
   const fingerprint = queueFingerprint('website-video', payload)
   const runId = randomUUID()
   const attemptId = randomUUID()
@@ -104,7 +128,7 @@ async function seedAttempt(
     id: runId,
     projectId: PROJECT_ID,
     status: status === 'failed' ? 'failed' : status,
-    workflowVersion: 'website:1.0.0',
+    workflowVersion: activeWorkflowVersionFor('website'),
     fingerprint,
   })
   await database.db.insert(taskAttempts).values({

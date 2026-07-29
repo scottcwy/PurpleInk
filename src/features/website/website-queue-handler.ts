@@ -9,9 +9,11 @@ import { taskAttempts } from '@/lib/db/schema'
 import {
   queue as defaultQueue,
   type QueueAdapter,
+  type QueueEnqueueReceipt,
   type QueueJob,
 } from '@/lib/queue'
 import { queueFingerprint } from '@/lib/queue/attempt-checkpoint'
+import { activeWorkflowVersionFor } from '@/lib/workflow/project-workflow-registry'
 import {
   runWebsiteVideo,
   type RunWebsiteVideoInput,
@@ -22,7 +24,10 @@ import {
 import type { WebsiteExecutionFailureCode } from './website-stage-contract'
 
 const websiteVideoJobSchema = z
-  .object({ projectId: z.string().uuid() })
+  .object({
+    projectId: z.string().uuid(),
+    workflowVersion: z.literal(activeWorkflowVersionFor('website')),
+  })
   .strict()
 
 export type WebsiteVideoJobInput = z.infer<typeof websiteVideoJobSchema>
@@ -90,7 +95,7 @@ export async function enqueueWebsiteVideo(
   targetQueue: QueueAdapter = defaultQueue,
   preflight: () => Promise<void> = assertBillingAvailable,
   database?: Db,
-): Promise<string> {
+): Promise<QueueEnqueueReceipt> {
   const payload = websiteVideoJobSchema.parse(input)
   return enqueueWebsiteVideoOnce(
     payload,
@@ -105,7 +110,7 @@ async function enqueueWebsiteVideoOnce(
   targetQueue: QueueAdapter,
   preflight: () => Promise<void>,
   database: Db,
-): Promise<string> {
+): Promise<QueueEnqueueReceipt> {
   const fingerprint = queueFingerprint('website-video', payload)
   return database.transaction(async (transaction) => {
     const lockKey = `website-video:${payload.projectId}:${fingerprint}`
@@ -113,7 +118,7 @@ async function enqueueWebsiteVideoOnce(
       sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
     )
     const [attempt] = await transaction
-      .select({ id: taskAttempts.id })
+      .select({ id: taskAttempts.id, status: taskAttempts.status })
       .from(taskAttempts)
       .where(and(
         eq(taskAttempts.workspaceId, currentWorkspaceId()),
@@ -123,10 +128,21 @@ async function enqueueWebsiteVideoOnce(
         inArray(taskAttempts.status, ['queued', 'running', 'succeeded']),
       ))
       .limit(1)
-    if (attempt) return attempt.id
+    if (attempt) {
+      return {
+        attemptId: attempt.id,
+        status: z.enum(['queued', 'running', 'succeeded']).parse(attempt.status),
+        reused: true,
+      }
+    }
     await preflight()
-    return targetQueue.enqueue('website-video', payload, {
-      projectId: payload.projectId,
-    })
+    return {
+      attemptId: await targetQueue.enqueue('website-video', payload, {
+        projectId: payload.projectId,
+        workflowVersion: payload.workflowVersion,
+      }),
+      status: 'queued',
+      reused: false,
+    }
   })
 }

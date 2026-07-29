@@ -80,6 +80,8 @@ describe('initQueue 失败可重试', () => {
     vi.doUnmock('@/features/render/queue-handler')
     vi.doUnmock('@/features/render/export-queue-handler')
     vi.doUnmock('@/features/audio/narration-queue-handler')
+    vi.doUnmock('@/features/audio/audio-transcription-queue-handler')
+    vi.doUnmock('@/features/website/website-queue-handler')
   })
 
   it('首次启动失败不缓存 rejected promise，第二次调用可重试成功', async () => {
@@ -87,9 +89,12 @@ describe('initQueue 失败可重试', () => {
       .fn()
       .mockRejectedValueOnce(new Error('DB 未就绪'))
       .mockResolvedValueOnce({})
+    const start = vi.fn()
+    const registerAudioTranscriptionHandler = vi.fn()
+    const registerWebsiteVideoHandler = vi.fn()
     vi.doMock('./runtime-config', () => ({ loadLaneQuotasForStart }))
     vi.doMock('./singleton', () => ({
-      queue: { start: vi.fn() },
+      queue: { start },
     }))
     vi.doMock('@/features/director/queue-handler', () => ({
       registerDirectorStageHandler: vi.fn(),
@@ -102,6 +107,12 @@ describe('initQueue 失败可重试', () => {
     }))
     vi.doMock('@/features/audio/narration-queue-handler', () => ({
       registerMediaNarrationHandler: vi.fn(),
+    }))
+    vi.doMock('@/features/audio/audio-transcription-queue-handler', () => ({
+      registerAudioTranscriptionHandler,
+    }))
+    vi.doMock('@/features/website/website-queue-handler', () => ({
+      registerWebsiteVideoHandler,
     }))
     // 绕过测试环境短路，走真实启动路径（instrumentation 首跑失败 -> API 路由兜底重试的场景）。
     vi.stubEnv('NODE_ENV', 'development')
@@ -116,6 +127,9 @@ describe('initQueue 失败可重试', () => {
     await expect(initQueue()).resolves.toBeUndefined()
     expect(store.__cvcQueueInitialized).toBe(true)
     expect(loadLaneQuotasForStart).toHaveBeenCalledTimes(2)
+    expect(registerAudioTranscriptionHandler).toHaveBeenCalledOnce()
+    expect(registerWebsiteVideoHandler).toHaveBeenCalledOnce()
+    expect(start).toHaveBeenCalledOnce()
   })
 })
 

@@ -32,4 +32,16 @@ describe('defaultRenderShotConcurrency', () => {
     availableParallelism.mockReturnValue(0)
     expect(defaultRenderShotConcurrency()).toBe(1)
   })
+
+  it('isolates long audio and website work from the legacy fallback lane', async () => {
+    const { defaultQueueLaneQuotas } = await import('./queue-defaults')
+    availableParallelism.mockReturnValue(4)
+
+    expect(defaultQueueLaneQuotas()).toEqual({
+      'director-stage': 12,
+      'render-shot': 4,
+      'audio-transcription': 1,
+      'website-video': 1,
+    })
+  })
 })

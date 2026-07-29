@@ -17,9 +17,11 @@ import {
   assertEnqueueRetryBudget,
   queue as defaultQueue,
   type QueueAdapter,
+  type QueueEnqueueReceipt,
   type QueueJob,
 } from '@/lib/queue'
 import { queueFingerprint } from '@/lib/queue/attempt-checkpoint'
+import { activeWorkflowVersionFor } from '@/lib/workflow/project-workflow-registry'
 import {
   runAudioTranscriptionJob,
   type AudioTranscriptionJobInput,
@@ -27,10 +29,12 @@ import {
 import { describeMediaProvider } from './media-provider'
 
 const AUDIO_TRANSCRIPTION_KIND = 'audio-transcription'
+const AUDIO_WORKFLOW_VERSION = activeWorkflowVersionFor('audio')
 const audioTranscriptionPayloadSchema = z
   .object({
     projectId: z.string().uuid(),
     nodeId: z.string().uuid(),
+    workflowVersion: z.literal(AUDIO_WORKFLOW_VERSION),
   })
   .strict()
 
@@ -42,7 +46,7 @@ export interface AudioTranscriptionEnqueueDependencies {
   enqueueOnce(
     payload: AudioTranscriptionQueueInput,
     enqueue: () => Promise<string>,
-  ): Promise<string>
+  ): Promise<QueueEnqueueReceipt>
   preflight(): Promise<void>
   captureFingerprint(nodeId: string): Promise<unknown>
   assertRetryBudget(
@@ -59,8 +63,9 @@ export async function runAudioTranscriptionQueueJob(
     runAudioTranscriptionJob,
 ): Promise<void> {
   const payload = audioTranscriptionPayloadSchema.parse(job.payload)
+  const { workflowVersion: _workflowVersion, ...input } = payload
   await run({
-    ...payload,
+    ...input,
     billingContext: {
       attemptId: z.string().uuid().parse(job.id),
       invocationNo: billingInvocationNo('source-asr', 1),
@@ -81,7 +86,7 @@ export function registerAudioTranscriptionHandler(
 export async function enqueueAudioTranscription(
   input: AudioTranscriptionQueueInput,
   dependencies?: AudioTranscriptionEnqueueDependencies,
-): Promise<string> {
+): Promise<QueueEnqueueReceipt> {
   const payload = audioTranscriptionPayloadSchema.parse(input)
   const resolved = dependencies ?? defaultEnqueueDependencies()
   return resolved.enqueueOnce(payload, async () => {
@@ -93,6 +98,7 @@ export async function enqueueAudioTranscription(
       return await resolved.queue.enqueue(AUDIO_TRANSCRIPTION_KIND, payload, {
         projectId: payload.projectId,
         nodeId: payload.nodeId,
+        workflowVersion: payload.workflowVersion,
       })
     } catch (error) {
       await compensateEnqueueFailure(payload.nodeId, resolved, error)
@@ -120,7 +126,7 @@ async function assertAudioTranscriptionBillingAvailable(): Promise<void> {
 async function enqueueAudioOnce(
   payload: AudioTranscriptionQueueInput,
   enqueue: () => Promise<string>,
-): Promise<string> {
+): Promise<QueueEnqueueReceipt> {
   const database = await getDb()
   const fingerprint = queueFingerprint(AUDIO_TRANSCRIPTION_KIND, payload)
   return database.transaction(async (transaction) => {
@@ -129,7 +135,7 @@ async function enqueueAudioOnce(
       sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
     )
     const [attempt] = await transaction
-      .select({ id: taskAttempts.id })
+      .select({ id: taskAttempts.id, status: taskAttempts.status })
       .from(taskAttempts)
       .where(
         and(
@@ -141,7 +147,18 @@ async function enqueueAudioOnce(
         ),
       )
       .limit(1)
-    return attempt?.id ?? enqueue()
+    if (attempt) {
+      return {
+        attemptId: attempt.id,
+        status: z.enum(['queued', 'running', 'succeeded']).parse(attempt.status),
+        reused: true,
+      }
+    }
+    return {
+      attemptId: await enqueue(),
+      status: 'queued',
+      reused: false,
+    }
   })
 }
 

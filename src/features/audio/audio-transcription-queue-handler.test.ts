@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { QueueAdapter, QueueJob } from '@/lib/queue'
+import { activeWorkflowVersionFor } from '@/lib/workflow/project-workflow-registry'
 import {
   enqueueAudioTranscription,
   registerAudioTranscriptionHandler,
@@ -12,11 +13,19 @@ vi.mock('server-only', () => ({}))
 const PROJECT_ID = '10000000-0000-4000-8000-000000000001'
 const NODE_ID = '20000000-0000-4000-8000-000000000001'
 const ATTEMPT_ID = '30000000-0000-4000-8000-000000000001'
-const PAYLOAD = { projectId: PROJECT_ID, nodeId: NODE_ID }
+const PAYLOAD = {
+  projectId: PROJECT_ID,
+  nodeId: NODE_ID,
+  workflowVersion: activeWorkflowVersionFor('audio'),
+}
 
 function dependencies(): AudioTranscriptionEnqueueDependencies {
   return {
-    enqueueOnce: vi.fn(async (_payload, enqueue) => enqueue()),
+    enqueueOnce: vi.fn(async (_payload, enqueue) => ({
+      attemptId: await enqueue(),
+      status: 'queued' as const,
+      reused: false,
+    })),
     preflight: vi.fn(async () => undefined),
     captureFingerprint: vi.fn(async () => undefined),
     assertRetryBudget: vi.fn(async () => undefined),
@@ -46,7 +55,8 @@ describe('audio transcription queue integration', () => {
     )
 
     expect(run).toHaveBeenCalledWith({
-      ...PAYLOAD,
+      projectId: PROJECT_ID,
+      nodeId: NODE_ID,
       billingContext: {
         attemptId: ATTEMPT_ID,
         invocationNo: 40_000,
@@ -56,7 +66,11 @@ describe('audio transcription queue integration', () => {
 
   it('runs preflight and node projection only when enqueueOnce creates a job', async () => {
     const deps = dependencies()
-    await expect(enqueueAudioTranscription(PAYLOAD, deps)).resolves.toBe(ATTEMPT_ID)
+    await expect(enqueueAudioTranscription(PAYLOAD, deps)).resolves.toEqual({
+      attemptId: ATTEMPT_ID,
+      status: 'queued',
+      reused: false,
+    })
 
     expect(deps.preflight).toHaveBeenCalledOnce()
     expect(deps.captureFingerprint).toHaveBeenCalledWith(NODE_ID)
@@ -68,15 +82,27 @@ describe('audio transcription queue integration', () => {
     expect(deps.queue.enqueue).toHaveBeenCalledWith(
       'audio-transcription',
       PAYLOAD,
-      { projectId: PROJECT_ID, nodeId: NODE_ID },
+      {
+        projectId: PROJECT_ID,
+        nodeId: NODE_ID,
+        workflowVersion: activeWorkflowVersionFor('audio'),
+      },
     )
   })
 
   it('reuses an active attempt without repeating preflight or node transitions', async () => {
     const deps = dependencies()
-    deps.enqueueOnce = vi.fn(async () => ATTEMPT_ID)
+    deps.enqueueOnce = vi.fn(async () => ({
+      attemptId: ATTEMPT_ID,
+      status: 'running' as const,
+      reused: true,
+    }))
 
-    await expect(enqueueAudioTranscription(PAYLOAD, deps)).resolves.toBe(ATTEMPT_ID)
+    await expect(enqueueAudioTranscription(PAYLOAD, deps)).resolves.toEqual({
+      attemptId: ATTEMPT_ID,
+      status: 'running',
+      reused: true,
+    })
     expect(deps.preflight).not.toHaveBeenCalled()
     expect(deps.transition).not.toHaveBeenCalled()
     expect(deps.queue.enqueue).not.toHaveBeenCalled()

@@ -15,13 +15,16 @@ const MINUTE_MS = 60_000
  * 按 kind 的执行超时；未登记的 kind 用 DEFAULT_EXECUTION_TIMEOUT_MS 兜底。
  *
  * 成片导出会轮询最多 30 分钟，异步旁白也可能连续合成多个片段，因此两者不能
- * 落入 10 分钟的通用保护期，否则队列会在业务合同结束前误回收它们。
+ * 落入 10 分钟的通用保护期。网站执行器内部在 45 分钟主动收口，外层多留
+ * 5 分钟用于写入安全终态、结算与 Artifact，避免外层竞速先把 attempt 回收。
  */
 export const EXECUTION_TIMEOUT_MS: Readonly<Record<string, number>> = {
   'director-stage': 10 * MINUTE_MS,
   'render-shot': 15 * MINUTE_MS,
   'export-project': 30 * MINUTE_MS,
   'media-narration': 30 * MINUTE_MS,
+  'audio-transcription': 30 * MINUTE_MS,
+  'website-video': 50 * MINUTE_MS,
 }
 export const DEFAULT_EXECUTION_TIMEOUT_MS = 10 * MINUTE_MS
 

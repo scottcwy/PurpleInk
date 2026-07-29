@@ -25,20 +25,14 @@ import {
 } from './lease'
 import type { JobHandler, LaneQuotas, QueueAdapter, QueueJob } from './types'
 import type { ClaimFilter } from './queue-claim'
-import {
-  DEFAULT_DIRECTOR_STAGE_CONCURRENCY,
-  defaultRenderShotConcurrency,
-} from './queue-defaults'
+import { defaultQueueLaneQuotas } from './queue-defaults'
 
 /** 未在 `start(lanes)` 中显式配额的 kind 落入此通道，固定配额 1。 */
 const FALLBACK_LANE = '__fallback__'
 const FALLBACK_LANE_QUOTA = 1
 
 function defaultLaneQuotas(): Record<string, number> {
-  return {
-    'director-stage': DEFAULT_DIRECTOR_STAGE_CONCURRENCY,
-    'render-shot': defaultRenderShotConcurrency(),
-  }
+  return defaultQueueLaneQuotas()
 }
 
 export function isPositiveInteger(value: number): boolean {
@@ -74,7 +68,12 @@ export class InProcessQueue implements QueueAdapter {
   async enqueue(
     kind: string,
     payload: Record<string, unknown> = {},
-    opts: { projectId?: string; nodeId?: string; requestedByUserId?: string } = {},
+    opts: {
+      projectId?: string
+      nodeId?: string
+      requestedByUserId?: string
+      workflowVersion?: string
+    } = {},
   ): Promise<string> {
     if (!opts.projectId) {
       throw new Error('legacy queue enqueue requires a trusted projectId')
@@ -96,7 +95,8 @@ export class InProcessQueue implements QueueAdapter {
         projectId: opts.projectId!,
         requestedByUserId,
         status: 'queued',
-        workflowVersion: serializeWorkflowVersion(ACTIVE_WORKFLOW_VERSION),
+        workflowVersion:
+          opts.workflowVersion ?? serializeWorkflowVersion(ACTIVE_WORKFLOW_VERSION),
         fingerprint,
       })
       await transaction.insert(taskAttempts).values({

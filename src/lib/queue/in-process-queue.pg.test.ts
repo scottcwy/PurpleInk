@@ -94,6 +94,26 @@ describe('legacy in-process queue PG compatibility', () => {
     ])
   })
 
+  it('persists a trusted project-family workflow version on the real run', async () => {
+    const { InProcessQueue } = await import('./in-process-queue')
+    const projectId = await seedProject()
+    const queue = new InProcessQueue()
+
+    await inLocalWs(() =>
+      queue.enqueue(
+        'website-video',
+        { projectId, workflowVersion: 'purpleink-website-intro-video-v1' },
+        {
+          projectId,
+          workflowVersion: 'purpleink-website-intro-video-v1',
+        },
+      ),
+    )
+
+    const [run] = await database.db.select().from(pipelineRuns)
+    expect(run?.workflowVersion).toBe('purpleink-website-intro-video-v1')
+  })
+
   it('executes a registered handler and exposes a workspace/project-safe snapshot', async () => {
     const [{ InProcessQueue }, { getJobSnapshot }] = await Promise.all([
       import('./in-process-queue'),
@@ -217,8 +237,10 @@ describe('legacy in-process queue PG compatibility', () => {
     ])
     const projectId = await seedProject()
     const queue = new InProcessQueue()
-    const director = makeConcurrencyProbe()
-    const render = makeConcurrencyProbe()
+    // 领取一次 PG attempt 在低性能 CI 上可能超过 40ms；留足窗口验证通道配额，
+    // 避免把数据库延迟误判为队列只允许单并发。
+    const director = makeConcurrencyProbe(250)
+    const render = makeConcurrencyProbe(250)
     queue.register('director-stage', director.handler)
     queue.register('render-shot', render.handler)
 
@@ -245,6 +267,55 @@ describe('legacy in-process queue PG compatibility', () => {
       expect(director.state.max).toBe(2)
       expect(render.state.max).toBe(1)
     } finally {
+      queue.stop()
+    }
+  })
+
+  it('isolates audio and website jobs from the fallback lane used by the main workflow', async () => {
+    const [{ InProcessQueue }, { getJobSnapshot }] = await Promise.all([
+      import('./in-process-queue'),
+      import('./query'),
+    ])
+    const projectId = await seedProject()
+    const queue = new InProcessQueue()
+    const started = new Set<string>()
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    for (const kind of [
+      'audio-transcription',
+      'website-video',
+      'media-narration',
+    ]) {
+      queue.register(kind, async () => {
+        started.add(kind)
+        await gate
+      })
+    }
+    const ids = await Promise.all(
+      ['audio-transcription', 'website-video', 'media-narration'].map((kind) =>
+        inLocalWs(() => queue.enqueue(kind, {}, { projectId })),
+      ),
+    )
+
+    queue.start()
+    try {
+      for (let attempt = 0; attempt < 100 && started.size < 3; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+      expect([...started].sort()).toEqual([
+        'audio-transcription',
+        'media-narration',
+        'website-video',
+      ])
+    } finally {
+      release()
+      await waitForAllStatuses(
+        (id) => inLocalWs(() => getJobSnapshot(projectId, id)),
+        ids,
+        'done',
+      )
       queue.stop()
     }
   })
