@@ -20,6 +20,7 @@ export interface ExportFinalizationReadiness {
   ready: boolean
   degradedReady: boolean
   confirmationFingerprint: string | null
+  inputFingerprint?: string | null
   finalArtifactId: string | null
   incompleteNodeIds?: string[]
   blockingIssues?: unknown[]
@@ -85,6 +86,8 @@ export async function requestExportFinalization(
       degraded: true,
       exportNodeId: node.id,
       confirmationFingerprint: readiness.confirmationFingerprint,
+      inputFingerprint:
+        readiness.inputFingerprint ?? readiness.confirmationFingerprint,
     })
     await dependencies.transitionNodeStatus(node.id, 'pending')
     return { status: 'queued', nodeId: node.id, jobId, mode: 'degraded' }
@@ -93,6 +96,9 @@ export async function requestExportFinalization(
   const jobId = await dependencies.enqueueProjectExport({
     projectId: input.projectId,
     exportNodeId: node.id,
+    ...(readiness.inputFingerprint
+      ? { inputFingerprint: readiness.inputFingerprint }
+      : {}),
   })
   await dependencies.transitionNodeStatus(node.id, 'pending')
   return { status: 'queued', nodeId: node.id, jobId, mode: 'complete' }

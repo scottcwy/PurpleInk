@@ -64,6 +64,7 @@ describe('enqueueProjectExport', () => {
         degraded: true,
         exportNodeId: 'export-node',
         confirmationFingerprint: 'sha256:current',
+        inputFingerprint: 'b'.repeat(64),
       },
       adapter
     )
@@ -75,6 +76,7 @@ describe('enqueueProjectExport', () => {
         degraded: true,
         exportNodeId: 'export-node',
         confirmationFingerprint: 'sha256:current',
+        inputFingerprint: 'b'.repeat(64),
       },
       { projectId: 'project-1' }
     )

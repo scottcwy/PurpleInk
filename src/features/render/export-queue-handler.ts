@@ -1,4 +1,5 @@
 import 'server-only'
+import { and, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   getJobSnapshot,
@@ -15,6 +16,10 @@ import {
   type FinalReviewContinuationInput,
 } from '@/features/director/final-review-continuation'
 import { getCanvasGraph, transitionNodeStatus } from '@/features/canvas'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb } from '@/lib/db/client'
+import { taskAttempts } from '@/lib/db/schema/index'
+import { queueFingerprint } from '@/lib/queue/attempt-checkpoint'
 
 /**
  * 成片导出的队列接线。
@@ -37,6 +42,7 @@ const exportJobPayloadSchema = z
     degraded: z.boolean().optional(),
     exportNodeId: z.string().min(1).optional(),
     confirmationFingerprint: z.string().min(1).optional(),
+    inputFingerprint: z.string().length(64).optional(),
   })
   .strict()
 
@@ -192,6 +198,8 @@ export async function enqueueProjectExport(
   const payload = exportJobPayloadSchema.parse(input)
   if (targetQueue === defaultQueue) {
     await assertProjectWorkflowSupported(payload.projectId)
+    const existing = await findExistingProjectExportAttempt(payload)
+    if (existing) return existing
   }
   // 不传 nodeId：导出的聚合是项目本身，attempt 必须是 project 级。
   return targetQueue.enqueue(EXPORT_PROJECT_KIND, payload, {
@@ -235,6 +243,26 @@ export async function runProjectExport(
     await resolved.wait(POLL_INTERVAL_MS)
   }
   throw new Error(`终片导出作业未在预期时间内完成：${jobId}`)
+}
+
+async function findExistingProjectExportAttempt(
+  payload: ExportProjectInput
+): Promise<string | null> {
+  if (!payload.inputFingerprint) return null
+  const database = await getDb()
+  const fingerprint = queueFingerprint(EXPORT_PROJECT_KIND, payload)
+  const [attempt] = await database
+    .select({ id: taskAttempts.id })
+    .from(taskAttempts)
+    .where(and(
+      eq(taskAttempts.workspaceId, currentWorkspaceId()),
+      eq(taskAttempts.entityType, 'project'),
+      eq(taskAttempts.entityId, payload.projectId),
+      eq(taskAttempts.fingerprint, fingerprint),
+      inArray(taskAttempts.status, ['queued', 'running', 'succeeded'])
+    ))
+    .limit(1)
+  return attempt?.id ?? null
 }
 
 export class DegradedExportConfirmationRequiredError extends Error {

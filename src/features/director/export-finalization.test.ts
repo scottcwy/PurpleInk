@@ -108,6 +108,7 @@ describe('requestExportFinalization', () => {
       degraded: true,
       exportNodeId: 'export-node',
       confirmationFingerprint: 'sha256:current',
+      inputFingerprint: 'sha256:current',
     })
     expect(result).toEqual({
       status: 'queued',

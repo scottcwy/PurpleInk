@@ -171,6 +171,8 @@ export async function getExportReadiness(
   degradedReady: boolean
   /** 当前降级范围与输入真值的确认摘要；仅 degradedReady 时存在。 */
   confirmationFingerprint: string | null
+  /** 当前完整或降级装配输入的规范化摘要，用于导出任务幂等。 */
+  inputFingerprint: string
   /** 最新成片若为降级产物，列出其占位镜头。 */
   degradedExport: { placeholderLanes: string[]; waivedQaLanes: string[] } | null
   artifactDelivery:
@@ -214,9 +216,41 @@ export async function getExportReadiness(
           placeholderCandidateLanes,
         })
       : null,
+    inputFingerprint: exportInputFingerprint(ready ? plan : (degradedPlan ?? plan)),
     degradedExport: await repository.findDegradedExport(projectId),
     artifactDelivery: finalDelivery(finalArtifact),
   }
+}
+
+function exportInputFingerprint(plan: RenderExportPlan): string {
+  const canonical = JSON.stringify({
+    incompleteNodeIds: [...plan.incompleteNodeIds].sort(),
+    shots: plan.shots
+      .map((shot) => ({
+        nodeId: shot.nodeId,
+        laneKey: shot.laneKey,
+        outputKey: shot.outputKey,
+      }))
+      .sort((left, right) => left.laneKey.localeCompare(right.laneKey)),
+    resolutionPreset: plan.resolutionPreset,
+    shotQa: Object.entries(plan.shotQa).sort(([left], [right]) =>
+      left.localeCompare(right)
+    ),
+    waivedQaLanes: [...plan.waivedQaLanes].sort(),
+    placeholderLanes: [...plan.placeholderLaneKeys].sort(),
+    blockingIssues: plan.blockingIssues
+      .map((issue) => ({
+        laneKey: issue.laneKey,
+        kind: issue.kind,
+        code: issue.code,
+      }))
+      .sort((left, right) =>
+        `${left.laneKey ?? ''}:${left.kind}:${left.code}`.localeCompare(
+          `${right.laneKey ?? ''}:${right.kind}:${right.code}`
+        )
+      ),
+  })
+  return createHash('sha256').update(canonical).digest('hex')
 }
 
 function degradedConfirmationFingerprint(input: {
