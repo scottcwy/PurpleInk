@@ -8,8 +8,12 @@ import {
   SYSTEM_USER_ID,
 } from '@/lib/auth/workspace-context'
 import { getDb } from '@/lib/db/client'
-import { pipelineRuns, taskAttempts } from '@/lib/db/schema/index'
+import { canvasNodes, pipelineRuns, taskAttempts } from '@/lib/db/schema/index'
 import { classifyWorkflowError } from '@/features/canvas/workflow-error'
+import {
+  tryAcquireWorkflowSlotInTransaction,
+} from '@/features/ai/workspace-concurrency'
+import { releaseTerminalWorkflowSlotForNode } from '@/features/ai/workspace-concurrency-release'
 import {
   ACTIVE_WORKFLOW_VERSION,
   serializeWorkflowVersion,
@@ -129,7 +133,11 @@ export class InProcessQueue implements QueueAdapter {
     const resolved = resolveLanes(lanes)
     if (this.timer) return
     this.lanes = resolved
-    this.timer = setInterval(() => void this.tick(), 200)
+    this.timer = setInterval(() => {
+      void this.tick().catch((error) => {
+        if (this.timer) console.error('[queue] 消费循环失败', error)
+      })
+    }, 200)
     this.heartbeatTimer = setInterval(
       () => void this.heartbeat(),
       HEARTBEAT_INTERVAL_MS
@@ -225,6 +233,9 @@ export class InProcessQueue implements QueueAdapter {
           taskId: taskAttempts.taskId,
           checkpoint: taskAttempts.checkpoint,
           attemptNo: taskAttempts.attemptNo,
+          entityType: taskAttempts.entityType,
+          entityId: taskAttempts.entityId,
+          projectId: pipelineRuns.projectId,
           requestedByUserId: pipelineRuns.requestedByUserId,
         })
         .from(taskAttempts)
@@ -249,6 +260,39 @@ export class InProcessQueue implements QueueAdapter {
         .limit(1)
         .for('update', { skipLocked: true })
       if (!row) return null
+      if (row.entityType === 'node') {
+        const [node] = await transaction
+          .select({ data: canvasNodes.data })
+          .from(canvasNodes)
+          .where(and(
+            eq(canvasNodes.workspaceId, row.workspaceId),
+            eq(canvasNodes.id, row.entityId),
+          ))
+          .limit(1)
+        const workUnitKey = readLaneKey(node?.data)
+        if (workUnitKey) {
+          const decision = await tryAcquireWorkflowSlotInTransaction(transaction, {
+            workspaceId: row.workspaceId,
+            actorUserId: row.requestedByUserId,
+            projectId: row.projectId,
+            workUnitKey,
+          })
+          if (decision.status === 'waiting') {
+            await transaction
+              .update(taskAttempts)
+              .set({
+                visibleAt: decision.resumeAt ?? sql`now() + interval '1 second'`,
+                updatedAt: sql`now()`,
+              })
+              .where(and(
+                eq(taskAttempts.workspaceId, row.workspaceId),
+                eq(taskAttempts.id, row.id),
+                eq(taskAttempts.status, 'queued'),
+              ))
+            return null
+          }
+        }
+      }
       const [claimed] = await transaction
         .update(taskAttempts)
         .set({
@@ -306,6 +350,7 @@ export class InProcessQueue implements QueueAdapter {
         `no handler for kind: ${job.kind}`,
         { allowAutoRetry: false }
       )
+      await releaseTerminalSlot(database, job)
       return
     }
     const startedAt = Date.now()
@@ -343,6 +388,33 @@ export class InProcessQueue implements QueueAdapter {
         'failed',
         err
       )
+    } finally {
+      await releaseTerminalSlot(database, job)
     }
   }
+}
+
+async function releaseTerminalSlot(
+  database: Awaited<ReturnType<typeof getDb>>,
+  job: QueueJob,
+): Promise<void> {
+  const nodeId = typeof job.payload.nodeId === 'string' ? job.payload.nodeId : null
+  if (!nodeId) return
+  try {
+    await releaseTerminalWorkflowSlotForNode({
+      workspaceId: job.workspaceId,
+      nodeId,
+      database,
+    })
+  } catch (error) {
+    console.error('[queue] 分镜并发租约释放失败', { nodeId, error })
+  }
+}
+
+function readLaneKey(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const payload = (value as Record<string, unknown>).payload
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null
+  const laneKey = (payload as Record<string, unknown>).laneKey
+  return typeof laneKey === 'string' && laneKey.length > 0 ? laneKey : null
 }

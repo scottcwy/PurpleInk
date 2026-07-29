@@ -3,6 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('server-only', () => ({}))
 
 const publishTopology = vi.fn()
+const { registerWorkflowSlotsInTransaction } = vi.hoisted(() => ({
+  registerWorkflowSlotsInTransaction: vi.fn(async () => undefined),
+}))
+vi.mock('@/features/ai/workspace-concurrency', () => ({
+  registerWorkflowSlotsInTransaction,
+}))
 vi.mock('@/lib/stream/status-bus', () => ({
   statusBus: {
     publishStatus: vi.fn(),
@@ -72,6 +78,7 @@ const LANE_ROLES = [
 describe('materializeShotLanes 拓扑事件发布', () => {
   beforeEach(() => {
     publishTopology.mockReset()
+    registerWorkflowSlotsInTransaction.mockClear()
     transactionState.committed = false
     selectResults = []
   })
@@ -87,6 +94,10 @@ describe('materializeShotLanes 拓扑事件发布', () => {
 
     expect(publishTopology).toHaveBeenCalledTimes(1)
     expect(publishTopology).toHaveBeenCalledWith('p1')
+    expect(registerWorkflowSlotsInTransaction).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ projectId: 'p1', workUnitKeys: ['S001', 'S002'] }),
+    )
     expect(committedAtPublish).toBe(true)
   })
 

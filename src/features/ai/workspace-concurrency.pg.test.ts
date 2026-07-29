@@ -93,10 +93,8 @@ describe('workspace shot concurrency', () => {
   })
 
   it('releases a terminal shot and admits the oldest waiting shot after the stagger', async () => {
-    const {
-      releaseWorkflowSlot,
-      tryAcquireWorkflowSlot,
-    } = await import('./workspace-concurrency')
+    const { tryAcquireWorkflowSlot } = await import('./workspace-concurrency')
+    const { releaseWorkflowSlot } = await import('./workspace-concurrency-release')
     for (let index = 0; index < 4; index += 1) {
       await tryAcquireWorkflowSlot({
         workspaceId: WORKSPACE_ID,

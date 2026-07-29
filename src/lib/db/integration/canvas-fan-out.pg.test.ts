@@ -5,6 +5,7 @@ import {
   canvasEdges,
   canvasNodes,
   projects,
+  workflowConcurrencyLeases,
   workspaces,
 } from '@/lib/db/schema/index'
 import {
@@ -66,6 +67,16 @@ describe('materializeShotLanes', () => {
     )
     expect(laneNodes).toHaveLength(15)
     expect(await database.db.select().from(canvasEdges)).toHaveLength(18)
+    const leases = await database.db
+      .select()
+      .from(workflowConcurrencyLeases)
+    expect(leases).toHaveLength(3)
+    expect(leases.every((lease) => lease.status === 'waiting')).toBe(true)
+    const ordered = [...leases].sort(
+      (left, right) => left.notBefore.getTime() - right.notBefore.getTime(),
+    )
+    expect(ordered[1]!.notBefore.getTime() - ordered[0]!.notBefore.getTime()).toBe(500)
+    expect(ordered[2]!.notBefore.getTime() - ordered[1]!.notBefore.getTime()).toBe(500)
 
     const firstLane = laneNodes.filter((node) =>
       node.logicalKey.startsWith('shot:shot-1:')

@@ -3,10 +3,7 @@ import { and, asc, eq, gt, lte, max, sql } from 'drizzle-orm'
 import type { PlanKey } from '@/features/billing/domain'
 import { subscriptionConcurrencyLimit } from '@/features/billing/domain'
 import type { Db } from '@/lib/db/client'
-import {
-  workflowConcurrencyLeases,
-  workspaceEntitlements,
-} from '@/lib/db/schema'
+import { workflowConcurrencyLeases, workspaceEntitlements } from '@/lib/db/schema'
 
 const SHOT_STAGGER_MS = 500
 const SLOT_LEASE_MS = 20 * 60_000
@@ -34,7 +31,49 @@ export type WorkflowSlotDecision = {
 export async function tryAcquireWorkflowSlot(
   input: WorkflowSlotInput,
 ): Promise<WorkflowSlotDecision> {
-  return input.database.transaction(async (transaction) => {
+  return input.database.transaction((transaction) =>
+    acquireWorkflowSlot(transaction, input))
+}
+
+export async function tryAcquireWorkflowSlotInTransaction(
+  transaction: Transaction,
+  input: Omit<WorkflowSlotInput, 'database'>,
+): Promise<WorkflowSlotDecision> {
+  return acquireWorkflowSlot(transaction, input)
+}
+
+export async function registerWorkflowSlotsInTransaction(
+  transaction: Transaction,
+  input: {
+    workspaceId: string
+    actorUserId: string | null
+    projectId: string
+    workUnitKeys: readonly string[]
+    now?: Date
+  },
+): Promise<void> {
+  if (input.workUnitKeys.length === 0) return
+  const now = input.now ?? await databaseNow(transaction, input.workspaceId)
+  const planKey = await activePlan(transaction, input.workspaceId, now)
+  await transaction
+    .insert(workflowConcurrencyLeases)
+    .values(input.workUnitKeys.map((workUnitKey, index) => ({
+      workspaceId: input.workspaceId,
+      workUnitKey,
+      projectId: input.projectId,
+      actorUserId: input.actorUserId,
+      planKey,
+      requestedAt: now,
+      notBefore: new Date(now.getTime() + index * SHOT_STAGGER_MS),
+      updatedAt: now,
+    })))
+    .onConflictDoNothing()
+}
+
+async function acquireWorkflowSlot(
+  transaction: Transaction,
+  input: Omit<WorkflowSlotInput, 'database'>,
+): Promise<WorkflowSlotDecision> {
     await transaction.execute(sql`
       select pg_advisory_xact_lock(
         hashtextextended(${`workflow-concurrency:${input.workspaceId}`}, 0)
@@ -74,7 +113,20 @@ export async function tryAcquireWorkflowSlot(
         leaseExpiresAt,
       })
     }
-    if (existing) {
+    if (existing?.status === 'waiting') {
+      await transaction
+        .update(workflowConcurrencyLeases)
+        .set({
+          actorUserId: input.actorUserId,
+          projectId: input.projectId,
+          planKey,
+          updatedAt: now,
+        })
+        .where(and(
+          eq(workflowConcurrencyLeases.workspaceId, input.workspaceId),
+          eq(workflowConcurrencyLeases.workUnitKey, input.workUnitKey),
+        ))
+    } else if (existing) {
       await transaction
         .update(workflowConcurrencyLeases)
         .set({
@@ -106,6 +158,14 @@ export async function tryAcquireWorkflowSlot(
       })
     }
     const counts = await readCounts(transaction, input.workspaceId)
+    if (existing?.status === 'waiting' && existing.notBefore.getTime() > now.getTime()) {
+      return {
+        status: 'waiting',
+        limit,
+        ...counts,
+        resumeAt: existing.notBefore,
+      }
+    }
     if (counts.active >= limit) {
       return {
         status: 'waiting',
@@ -184,28 +244,6 @@ export async function tryAcquireWorkflowSlot(
       status: 'active',
       leaseExpiresAt,
     })
-  })
-}
-
-export async function releaseWorkflowSlot(input: {
-  workspaceId: string
-  workUnitKey: string
-  outcome: 'released' | 'cancelled'
-  database: Db
-  now?: Date
-}): Promise<void> {
-  await input.database
-    .update(workflowConcurrencyLeases)
-    .set({
-      status: input.outcome,
-      releasedAt: input.now ?? new Date(),
-      leaseExpiresAt: null,
-      updatedAt: input.now ?? new Date(),
-    })
-    .where(and(
-      eq(workflowConcurrencyLeases.workspaceId, input.workspaceId),
-      eq(workflowConcurrencyLeases.workUnitKey, input.workUnitKey),
-    ))
 }
 
 type Transaction = Parameters<Parameters<Db['transaction']>[0]>[0]

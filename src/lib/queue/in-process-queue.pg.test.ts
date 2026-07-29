@@ -8,10 +8,12 @@ import {
 } from '@/lib/auth/workspace-context'
 import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
 import {
+  canvasNodes,
   pipelineRuns,
   projects,
   taskAttempts,
   users,
+  workflowConcurrencyLeases,
   workspaces,
 } from '@/lib/db/schema/index'
 import {
@@ -247,6 +249,54 @@ describe('legacy in-process queue PG compatibility', () => {
     }
   })
 
+  it('gates shot jobs by the workspace Free cap even when the process lane is larger', async () => {
+    const { InProcessQueue } = await import('./in-process-queue')
+    const projectId = await seedProject()
+    const nodeIds = Array.from({ length: 5 }, () => randomUUID())
+    await database.db.insert(canvasNodes).values(nodeIds.map((id, index) => ({
+      workspaceId: LOCAL_WORKSPACE_ID,
+      id,
+      projectId,
+      logicalKey: `shot:queue-${index}:shot-script`,
+      type: 'shot-script',
+      stage: 'SHOT_SPEC',
+      status: 'queued',
+      data: {
+        schemaVersion: 1,
+        payload: { laneKey: `queue-${index}`, laneRole: 'shot-script' },
+      },
+    })))
+    const queue = new InProcessQueue()
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const handler = vi.fn(async () => gate)
+    queue.register('director-stage', handler)
+    await Promise.all(nodeIds.map((nodeId) => inLocalWs(() =>
+      queue.enqueue(
+        'director-stage',
+        { projectId, nodeId, stage: 'SHOT_SPEC' },
+        { projectId, nodeId },
+      )
+    )))
+
+    queue.start({ 'director-stage': 12 })
+    try {
+      await waitForCallCount(handler, 3)
+      await new Promise((resolve) => setTimeout(resolve, 700))
+      expect(handler).toHaveBeenCalledTimes(3)
+      const leases = await database.db.select().from(workflowConcurrencyLeases)
+      expect(leases.filter((lease) => lease.status === 'active')).toHaveLength(3)
+      expect(leases.filter((lease) => lease.status === 'waiting').length)
+        .toBeGreaterThanOrEqual(1)
+    } finally {
+      release()
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      queue.stop()
+    }
+  })
+
   it('does not let a render-shot job at the queue head block director-stage behind it (head-of-line regression)', async () => {
     const [{ InProcessQueue }, { getJobSnapshot }] = await Promise.all([
       import('./in-process-queue'),
@@ -461,4 +511,15 @@ function makeConcurrencyProbe(delayMs = 40): {
     state.current -= 1
   })
   return { handler, state }
+}
+
+async function waitForCallCount(
+  handler: ReturnType<typeof vi.fn>,
+  count: number,
+): Promise<void> {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    if (handler.mock.calls.length >= count) return
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  throw new Error(`timed out waiting for ${count} handler calls`)
 }
