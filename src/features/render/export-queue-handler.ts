@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   getJobSnapshot,
@@ -198,8 +198,12 @@ export async function enqueueProjectExport(
   const payload = exportJobPayloadSchema.parse(input)
   if (targetQueue === defaultQueue) {
     await assertProjectWorkflowSupported(payload.projectId)
-    const existing = await findExistingProjectExportAttempt(payload)
-    if (existing) return existing
+    if (payload.inputFingerprint) {
+      return enqueueProjectExportOnce(
+        { ...payload, inputFingerprint: payload.inputFingerprint },
+        targetQueue
+      )
+    }
   }
   // 不传 nodeId：导出的聚合是项目本身，attempt 必须是 project 级。
   return targetQueue.enqueue(EXPORT_PROJECT_KIND, payload, {
@@ -245,24 +249,33 @@ export async function runProjectExport(
   throw new Error(`终片导出作业未在预期时间内完成：${jobId}`)
 }
 
-async function findExistingProjectExportAttempt(
-  payload: ExportProjectInput
-): Promise<string | null> {
-  if (!payload.inputFingerprint) return null
+async function enqueueProjectExportOnce(
+  payload: ExportProjectInput & { inputFingerprint: string },
+  targetQueue: QueueAdapter
+): Promise<string> {
   const database = await getDb()
   const fingerprint = queueFingerprint(EXPORT_PROJECT_KIND, payload)
-  const [attempt] = await database
-    .select({ id: taskAttempts.id })
-    .from(taskAttempts)
-    .where(and(
-      eq(taskAttempts.workspaceId, currentWorkspaceId()),
-      eq(taskAttempts.entityType, 'project'),
-      eq(taskAttempts.entityId, payload.projectId),
-      eq(taskAttempts.fingerprint, fingerprint),
-      inArray(taskAttempts.status, ['queued', 'running', 'succeeded'])
-    ))
-    .limit(1)
-  return attempt?.id ?? null
+  return database.transaction(async (transaction) => {
+    const lockKey = `${payload.projectId}:${payload.inputFingerprint}`
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`
+    )
+    const [attempt] = await transaction
+      .select({ id: taskAttempts.id })
+      .from(taskAttempts)
+      .where(and(
+        eq(taskAttempts.workspaceId, currentWorkspaceId()),
+        eq(taskAttempts.entityType, 'project'),
+        eq(taskAttempts.entityId, payload.projectId),
+        eq(taskAttempts.fingerprint, fingerprint),
+        inArray(taskAttempts.status, ['queued', 'running', 'succeeded'])
+      ))
+      .limit(1)
+    if (attempt) return attempt.id
+    return targetQueue.enqueue(EXPORT_PROJECT_KIND, payload, {
+      projectId: payload.projectId,
+    })
+  })
 }
 
 export class DegradedExportConfirmationRequiredError extends Error {
