@@ -213,7 +213,8 @@ export function CanvasView({
             nodes={flowNodes}
             edges={flowEdges}
             fitView
-            onlyRenderVisibleElements
+            // 不用 onlyRenderVisibleElements：拓扑刷新后视口未重 fit 时，
+            // 一端离屏会导致边被跳过渲染（重进页面 remount 才恢复）。
             minZoom={0.05}
             maxZoom={2}
             proOptions={{ hideAttribution: true }}
