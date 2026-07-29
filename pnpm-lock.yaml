@@ -140,6 +140,9 @@ importers:
       playwright:
         specifier: ^1.61.1
         version: 1.62.0
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
       sharp:
         specifier: ^0.35.3
         version: 0.35.3(@types/node@22.20.1)

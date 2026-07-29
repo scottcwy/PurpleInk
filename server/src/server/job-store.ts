@@ -1,6 +1,8 @@
 // 内存任务表：本地开发够用（不引队列/DB）。
 // 每个 render 请求起一个后台 Job，前端/curl 轮询 GET /jobs/:id 拿进度与产物。
+// 另异步落影到 render_jobs 表（job-db.ts）供管理后台监控，失败不影响主流程。
 import { randomUUID } from "node:crypto"
+import { persistJob } from "./job-db"
 
 export type JobStatus = "queued" | "running" | "done" | "failed"
 /** 阶段：与 run-pipeline 的 onPhase 对齐 */
@@ -56,6 +58,7 @@ export function createJob(kind: Job["kind"], input: string): Job {
     logs: [{ at: now, msg: "queued" }],
   }
   jobs.set(job.id, job)
+  persistJob(job)
   return job
 }
 
@@ -76,6 +79,7 @@ export function updateJob(id: string, patch: Partial<Job>): Job | undefined {
   }
   Object.assign(job, patch)
   job.updatedAt = Date.now()
+  persistJob(job)
   return job
 }
 
