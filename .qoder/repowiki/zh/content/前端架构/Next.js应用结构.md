@@ -1,7 +1,7 @@
 # Next.js应用结构
 
 <cite>
-**本文引用的文件**
+**本文引用的文件**   
 - [next.config.ts](file://next.config.ts)
 - [src/app/layout.tsx](file://src/app/layout.tsx)
 - [src/app/providers.tsx](file://src/app/providers.tsx)
@@ -30,7 +30,7 @@
 </cite>
 
 ## 更新摘要
-**变更内容**
+**变更内容**   
 - 更新了画布应用组件结构，反映了部分组件文件的删除和重构
 - 重新组织了products/(app)/canvas目录下的组件架构
 - 优化了画布相关功能的模块划分和依赖关系

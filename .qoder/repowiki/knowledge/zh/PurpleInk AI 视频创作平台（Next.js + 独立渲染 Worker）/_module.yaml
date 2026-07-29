@@ -1,6 +1,6 @@
 schema_version: 1
 module_path: ""
-title: PurpleInk AI 视频生成平台（Next.js + 独立渲染 Worker）
+title: PurpleInk AI 视频创作平台（Next.js + 独立渲染 Worker）
 scope: []
 source_files: []
 depends_on: []
