@@ -1,7 +1,9 @@
 import { MarkerType, type Edge, type Node } from '@xyflow/react'
-import { CircleSlash, TriangleAlert } from 'lucide-react'
-import type { ComponentType, ReactNode } from 'react'
-import { StatusPill, type StatusPillVariant } from '@/components/ui/status-pill'
+import { StatusPill } from '@/components/ui/status-pill'
+import {
+  getNodeStatusLabel,
+  getNodeStatusPresentation,
+} from '@/components/ui/pipeline-node-status'
 import type {
   CanvasGraphEdge,
   CanvasGraphNode,
@@ -10,18 +12,16 @@ import type {
   ShotLaneNodeType,
 } from '@/features/canvas'
 import { NODE_HEIGHT, NODE_WIDTH } from '@/features/canvas/layout'
-import { cn } from '@/lib/utils'
+import type { CanvasFlowNodeData } from './canvas-flow-node'
 
-type ViewNodeData = {
-  label: ReactNode
-  type: CanvasGraphNode['type']
-  status: CanvasGraphNode['status']
-  laneKey: string | null
-}
+export {
+  getNodeStatusLabel,
+  getNodeStatusPresentation,
+} from '@/components/ui/pipeline-node-status'
 
-type ViewNode = Node<ViewNodeData>
+type ViewNode = Node<CanvasFlowNodeData, 'pipeline'>
 
-/** 与画布节点边框同一套 stage token，驱动 border class 与 MiniMap 填色。 */
+/** 与画布节点边框同一套 stage token，驱动 MiniMap 填色。 */
 type StageToken = 'ingest' | 'direct' | 'shot' | 'audio' | 'assemble' | 'finalize'
 
 const STAGE_TOKEN: Record<CanvasGraphNode['type'], StageToken> = {
@@ -101,7 +101,7 @@ export function buildLaneSummaries(nodes: readonly CanvasGraphNode[]): LaneSumma
 }
 
 export function miniMapNodeColor(node: Node): string {
-  const type = node.data.type
+  const type = node.data.nodeType ?? node.data.type
   if (!isCanvasNodeType(type)) return 'var(--ds-text-muted)'
   return `var(--color-stage-${STAGE_TOKEN[type]})`
 }
@@ -113,23 +113,21 @@ export function toFlowNode(
   selected = false
 ): ViewNode {
   const collapsed = Boolean(node.laneKey && collapsedLanes.has(node.laneKey))
-  const stage = STAGE_TOKEN[node.type]
   return {
     id: node.id,
+    type: 'pipeline',
     position: node.position,
     width: NODE_WIDTH,
     height: NODE_HEIGHT,
     selected,
     hidden: hiddenNodeIds.has(node.id),
-    className: cn(
-      '!w-[220px] !rounded-lg !border !border-ds-border !bg-ds-surface !p-0 !text-ds-text !shadow-[var(--ds-shadow)]',
-      `!border-stage-${stage}`
-    ),
+    // 外壳透明，选中/阶段描边由 PipelineNode 承担，避免与 RF 默认 .selected 叠样式。
+    className: '!bg-transparent !border-0 !p-0 !shadow-none',
     data: {
-      type: node.type,
+      nodeType: node.type,
       status: node.status,
       laneKey: node.laneKey,
-      label: nodeLabel(node, collapsed),
+      collapsed,
     },
   }
 }
@@ -141,81 +139,6 @@ export function toFlowEdge(edge: CanvasGraphEdge, hiddenNodeIds: Set<string>): E
     markerEnd: { type: MarkerType.ArrowClosed },
     style: { stroke: 'var(--ds-text-muted)' },
   }
-}
-
-function nodeLabel(node: CanvasGraphNode, collapsed: boolean): ReactNode {
-  return (
-    <div className="flex min-h-20 flex-col items-start justify-between gap-3 p-3 text-left">
-      <div>
-        <p className="text-[13px] font-semibold text-ds-text">{NODE_LABEL[node.type]}</p>
-        {node.laneKey && (
-          <p className="mt-1 text-[11px] text-ds-text-muted">{node.laneKey}</p>
-        )}
-      </div>
-      <StatusPill
-        variant={getNodeStatusPresentation(node.status).variant}
-        icon={getNodeStatusPresentation(node.status).icon}
-        label={
-          collapsed && node.type === 'shot-script'
-            ? '已折叠 · 5 节点'
-            : getNodeStatusLabel(node.type, node.status)
-        }
-      />
-    </div>
-  )
-}
-
-const STATUS_VARIANT: Record<NodeStatus, StatusPillVariant> = {
-  idle: 'pending',
-  pending: 'pending',
-  running: 'generating',
-  success: 'rendered',
-  failed: 'failed',
-  cancelled: 'failed',
-  stale: 'cached',
-  skipped: 'pending',
-  blocked: 'pending',
-}
-
-const STATUS_LABEL: Record<NodeStatus, string> = {
-  idle: '空闲',
-  pending: '待执行',
-  running: '执行中',
-  success: '已完成',
-  failed: '失败',
-  cancelled: '已取消',
-  stale: '需更新',
-  skipped: '已跳过',
-  blocked: '等待降级确认',
-}
-
-/** 状态语义靠文本 + 图标共同表达，不只靠颜色；skipped 用 circle-slash（白名单）。 */
-const STATUS_ICON: Partial<Record<NodeStatus, ComponentType<{ className?: string }>>> = {
-  skipped: CircleSlash,
-  blocked: TriangleAlert,
-}
-
-export function getNodeStatusPresentation(
-  status: NodeStatus
-): {
-  variant: StatusPillVariant
-  label: string
-  icon?: ComponentType<{ className?: string }>
-} {
-  return {
-    variant: STATUS_VARIANT[status],
-    label: STATUS_LABEL[status],
-    ...(STATUS_ICON[status] ? { icon: STATUS_ICON[status] } : {}),
-  }
-}
-
-export function getNodeStatusLabel(
-  type: CanvasGraphNode['type'],
-  status: NodeStatus
-): string {
-  return type === 'shot-qa' && status === 'skipped'
-    ? '已跳过 · 未验收'
-    : STATUS_LABEL[status]
 }
 
 export function getLaneNodeLabel(type: ShotLaneNodeType): string {
@@ -251,18 +174,6 @@ export function LaneSummaryDetails({ summary }: { summary: LaneSummary }) {
       )}
     </div>
   )
-}
-
-const NODE_LABEL: Record<CanvasGraphNode['type'], string> = {
-  'script-import': '脚本导入',
-  'shot-split': '语义拆分',
-  score: '全局配乐',
-  export: '合并导出',
-  'shot-script': '分镜脚本',
-  'shot-codegen': '代码生成',
-  'shot-sfx': '音效',
-  'shot-subtitle': '字幕',
-  'shot-qa': '验收',
 }
 
 const LANE_NODE_LABEL: Record<ShotLaneNodeType, string> = {

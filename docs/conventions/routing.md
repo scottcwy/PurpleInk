@@ -268,6 +268,8 @@
 | S5 | `/export/[projectId]` | `/products/export/[projectId]` |
 | S6 | `/settings` | `/products/settings?projectId=` |
 
+S3 画布 DAG 节点 UI 唯一消费 `@/components/ui/pipeline-node`（Canonical `Qsovp`，状态枚举为领域 `NodeStatus`，含 `selected` 实例态）；禁止在 page 内联平行节点壳。`StageNode` / `ShotNode` / `AudioNode` / `ExportNode` 仅作 `/playbook` 标本，不挂载生产 React Flow。
+
 S2 是 S1 的模态状态，**不允许**为它开一条路由。任何「新建 / 编辑 / 确认」类模态默认不进 URL；只有需要分享或刷新保持的模态才允许升级为路由，并须在本文件登记。
 
 ## 8. `/artifacts` 与 `/share`
