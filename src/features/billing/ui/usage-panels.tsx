@@ -129,8 +129,8 @@ export function BillingDashboardUsage({
       }).format(new Date(projection.lastInvocationAt))
     : '暂无调用'
   return (
-    <Card className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.7fr)]">
-      <div>
+    <Card className="grid min-w-0 gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.7fr)]">
+      <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-base font-semibold">本周期用量</h2>
           <StatusPill

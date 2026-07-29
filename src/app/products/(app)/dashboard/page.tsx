@@ -49,7 +49,7 @@ async function renderDashboard(session: { userId: string }) {
         projectId={currentProject?.id}
         rendererNodeId={currentShot?.id}
       />
-      <main className="min-h-0 flex-1 overflow-y-auto">
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <TopBar
           title="工作台"
           meta="本地项目与 Pipeline 运行概览"
