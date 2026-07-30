@@ -98,7 +98,13 @@ function executionState(
       : 'failed'
   }
   if (attempt.status !== 'succeeded') return 'failed'
-  if (facts.project.workflowKind !== 'website') return 'succeeded'
+  if (facts.project.workflowKind !== 'website') {
+    const complete = facts.nodes.length > 0
+      && facts.nodes.every((node) =>
+        node.status === 'succeeded' || node.status === 'skipped')
+    if (complete) return 'succeeded'
+    return facts.project.autopilot ? 'recovering' : 'idle'
+  }
   const passed = stages.length === WEBSITE_WORKFLOW_PHASES.length
     && stages.every((stage) => stage.state === 'succeeded')
     && delivery?.verification?.outcome === 'passed'

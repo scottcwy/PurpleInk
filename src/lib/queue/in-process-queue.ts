@@ -133,6 +133,10 @@ export class InProcessQueue implements QueueAdapter {
         './execution-reconciliation'
       )
       await reconcileStaleExecutionEpochs(database)
+      const { reconcileDirectorFrontiers } = await import(
+        '@/features/director/frontier-reconciliation'
+      )
+      await reconcileDirectorFrontiers(database)
       const { reconcileExpiredProviderTickets } = await import(
         '@/features/ai/provider-dispatch-ticket'
       )

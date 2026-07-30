@@ -10,6 +10,49 @@ const PROJECT_ID = '00000000-0000-4000-8000-000000000101'
 const ATTEMPT_ID = '00000000-0000-4000-8000-000000000201'
 
 describe('deriveProjectExecutionSnapshot', () => {
+  it.each(['script', 'audio'] as const)(
+    'keeps an unfinished %s DAG recoverable after the latest node attempt succeeded',
+    (workflowKind) => {
+      const snapshot = deriveProjectExecutionSnapshot(facts({
+        project: {
+          id: PROJECT_ID,
+          workflowKind,
+          autopilot: true,
+        },
+        attempt: attempt('succeeded'),
+        nodes: [
+          node('entry', 'succeeded'),
+          node('next', 'idle'),
+        ],
+      }))
+
+      expect(snapshot.state).toBe('recovering')
+      expect(snapshot.active).toBe(true)
+      expect(snapshot.canStop).toBe(true)
+    },
+  )
+
+  it.each(['script', 'audio'] as const)(
+    'reports a %s DAG succeeded only when every node reached an accepted terminal state',
+    (workflowKind) => {
+      const snapshot = deriveProjectExecutionSnapshot(facts({
+        project: {
+          id: PROJECT_ID,
+          workflowKind,
+          autopilot: true,
+        },
+        attempt: attempt('succeeded'),
+        nodes: [
+          node('entry', 'succeeded'),
+          node('optional', 'skipped'),
+        ],
+      }))
+
+      expect(snapshot.state).toBe('succeeded')
+      expect(snapshot.active).toBe(false)
+    },
+  )
+
   it('reports succeeded only when attempt, stages, verification, and approved artifact agree', () => {
     const snapshot = deriveProjectExecutionSnapshot(facts({
       attempt: attempt('succeeded'),
@@ -102,6 +145,16 @@ function attempt(status: 'running' | 'succeeded' | 'failed') {
     cancelRequestedAt: null,
     updatedAt: '2026-07-30T00:00:30.000Z',
     failure: null,
+  }
+}
+
+function node(id: string, status: string) {
+  return {
+    id,
+    logicalKey: id,
+    status,
+    updatedAt: '2026-07-30T00:00:30.000Z',
+    data: { schemaVersion: 1, payload: {} },
   }
 }
 
