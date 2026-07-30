@@ -46,7 +46,7 @@ export function PATCH(
       patch: parsed.data,
     })
     return mutationResponse(result)
-  })
+  }, { routeGroup: 'PATCH /api/admin/users/:id' })
 }
 
 export function DELETE(
@@ -57,7 +57,7 @@ export function DELETE(
     const { id } = await params
     const result = await deleteAdminUser({ userId: id, actorUserId: session.userId })
     return mutationResponse(result)
-  })
+  }, { routeGroup: 'DELETE /api/admin/users/:id' })
 }
 
 function mutationResponse(result: AdminUserMutationResult): Response {

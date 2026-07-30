@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { withAdminSession } from '@/features/auth/api-session'
-import { getOpsSnapshot } from '@/features/admin/ops'
+import { getSecuritySnapshot } from '@/features/admin/security'
 
 export const dynamic = 'force-dynamic'
 
-/** 系统运维快照：DB/worker 健康、队列深度、供应商 RPM/TPM 占用。 */
+/** 安全监控快照：接口访问统计 + 限流/攻击信号。 */
 export function GET(): Promise<Response> {
   return withAdminSession(async () => {
-    const snapshot = await getOpsSnapshot()
+    const snapshot = await getSecuritySnapshot()
     return NextResponse.json({ ok: true, ...snapshot })
-  }, { routeGroup: 'GET /api/admin/ops' })
+  }, { routeGroup: 'GET /api/admin/security' })
 }

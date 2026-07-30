@@ -12,7 +12,7 @@ const TABLES = [
   'auth_throttle', 'managed_model_catalog', 'rate_cards', 'rate_card_units',
   'workspace_entitlements', 'usage_periods', 'redemption_batches',
   'redemption_codes', 'redemption_audits', 'telemetry_cutovers',
-  'project_sources', 'render_jobs',
+  'project_sources', 'render_jobs', 'api_access_counters',
 ] as const
 const WORKSPACE_TABLES = [
   'projects', 'canvas_nodes', 'canvas_edges', 'pipeline_runs', 'task_attempts',
@@ -69,6 +69,7 @@ const ENUM_CHECKS = {
   workspace_members_role_check: ['owner', 'member'],
   render_jobs_status_check: ['queued', 'running', 'done', 'failed'],
   render_jobs_kind_check: ['url', 'capture'],
+  api_access_counters_outcome_check: ['2xx', '4xx', '401', '404', '5xx'],
   email_verification_codes_purpose_check: ['signup', 'password_reset'],
 } as const
 const NUMERIC_CHECKS = [
@@ -86,6 +87,7 @@ const NUMERIC_CHECKS = [
   'provider_pool_states_current_concurrency_check',
   'provider_pool_states_max_concurrency_check',
   'email_verification_codes_attempt_check', 'auth_throttle_count_check',
+  'api_access_counters_count_check',
 ] as const
 const REQUIRED_UNIQUES = [
   'workspaces:slug',
@@ -255,6 +257,7 @@ it('creates the complete schema with scoped primary keys', async () => {
     'auth_throttle:key',
     'telemetry_cutovers:key',
     'render_jobs:id',
+    'api_access_counters:bucket_started_at,route_group,outcome',
   ].sort()
   expect(signatures).toEqual(expected)
 })
@@ -332,7 +335,8 @@ it('uses UUID identities, bigint revisions, and timestamptz suffixes', async () 
   `
   // 0005 迁移给 task_attempts 增加 lease_expires_at / visible_at 两列。
   // 0019 新增 render_jobs（created_at / updated_at 两列）。
-  expect(times).toHaveLength(86)
+  // 0020 新增 api_access_counters（bucket_started_at 一列）。
+  expect(times).toHaveLength(87)
   expect(new Set(times.map((row) => row.table_name))).toEqual(
     new Set(TABLES.filter((table) => table !== 'rate_card_units')),
   )

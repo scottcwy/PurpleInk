@@ -1,4 +1,4 @@
-import { createHash, createHmac } from 'node:crypto'
+import { createHash, createHmac, randomInt } from 'node:crypto'
 import { and, eq, gt, isNull, sql } from 'drizzle-orm'
 import { currentUserId, currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb } from '@/lib/db/client'
@@ -51,6 +51,108 @@ function requestFingerprint(codeHash: string): string {
     .update('purpleink:redemption-request:v1\0')
     .update(codeHash)
     .digest('hex')
+}
+
+/** 可发放的套餐（free 无兑换意义，兑换目标只能是付费档）。 */
+export const REDEEMABLE_PLAN_KEYS = ['plus', 'pro', 'max'] as const
+export type RedeemablePlanKey = (typeof REDEEMABLE_PLAN_KEYS)[number]
+
+/** 单批次最多生成的码数（防误操作刷爆表）。 */
+export const REDEMPTION_BATCH_MAX = 1000
+
+/** 明文码字母表：去掉 I/L/O 与 0/1 等易混字符，只留大写字母与 2-9。 */
+const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+const CODE_SEGMENTS = 2
+const CODE_SEGMENT_LEN = 4
+
+export interface CreateRedemptionBatchInput {
+  planKey: string
+  count: number
+  label: string
+  durationDays?: number
+  expiresAt?: Date | null
+  createdByUserId?: string | null
+}
+
+export type CreateRedemptionBatchResult =
+  | {
+      ok: true
+      batchId: string
+      planKey: RedeemablePlanKey
+      label: string
+      /** 明文码仅本次返回，落库只存哈希，永不可回溯。 */
+      codes: string[]
+    }
+  | { ok: false; code: 'invalid_plan' | 'invalid_count' | 'invalid_label' | 'invalid_duration' }
+
+/** 生成 `PINK-XXXX-XXXX` 形态的明文码；randomInt 做无偏采样。 */
+function generatePlaintextCode(): string {
+  const segments: string[] = []
+  for (let s = 0; s < CODE_SEGMENTS; s += 1) {
+    let seg = ''
+    for (let i = 0; i < CODE_SEGMENT_LEN; i += 1) {
+      seg += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]
+    }
+    segments.push(seg)
+  }
+  return `PINK-${segments.join('-')}`
+}
+
+/**
+ * 生成一个兑换码批次：单事务插入 `redemption_batches` + N 条 `redemption_codes`
+ * （只存哈希）。明文码仅在返回值里出现一次，调用方负责一次性展示后即丢弃。
+ */
+export async function createRedemptionBatch(
+  input: CreateRedemptionBatchInput,
+): Promise<CreateRedemptionBatchResult> {
+  const planKey = input.planKey as RedeemablePlanKey
+  if (!REDEEMABLE_PLAN_KEYS.includes(planKey)) return { ok: false, code: 'invalid_plan' }
+  if (
+    !Number.isInteger(input.count)
+    || input.count < 1
+    || input.count > REDEMPTION_BATCH_MAX
+  ) {
+    return { ok: false, code: 'invalid_count' }
+  }
+  const label = input.label?.trim()
+  if (!label) return { ok: false, code: 'invalid_label' }
+  const durationDays = input.durationDays ?? 30
+  if (durationDays !== 30) return { ok: false, code: 'invalid_duration' }
+
+  // 批内去重生成明文码；跨批极小概率碰撞由 code_hash 唯一约束兜底。
+  const plaintext = new Set<string>()
+  while (plaintext.size < input.count) plaintext.add(generatePlaintextCode())
+  const codes = [...plaintext]
+
+  const database = await getDb()
+  const batchId = await database.transaction(async (tx) => {
+    const [batch] = await tx
+      .insert(redemptionBatches)
+      .values({
+        planKey,
+        durationDays,
+        label,
+        expiresAt: input.expiresAt ?? null,
+        createdByUserId: input.createdByUserId ?? null,
+      })
+      .returning({ id: redemptionBatches.id })
+    await tx.insert(redemptionCodes).values(
+      codes.map((code) => ({ batchId: batch.id, codeHash: hashRedemptionCode(code) })),
+    )
+    return batch.id
+  })
+  return { ok: true, batchId, planKey, label, codes }
+}
+
+/** 按批次撤销：整批码随即不可兑换（redeem 查询已带 `isNull(revokedAt)` 过滤）。 */
+export async function revokeRedemptionBatch(batchId: string): Promise<{ ok: boolean }> {
+  const database = await getDb()
+  const rows = await database
+    .update(redemptionBatches)
+    .set({ revokedAt: new Date() })
+    .where(eq(redemptionBatches.id, batchId))
+    .returning({ id: redemptionBatches.id })
+  return { ok: rows.length > 0 }
 }
 
 export async function redeemBillingCode(

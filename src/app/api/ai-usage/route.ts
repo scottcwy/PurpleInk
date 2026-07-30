@@ -9,7 +9,9 @@ import {
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
-  return withApiSession((session) => handleGet(request, session.userId))
+  return withApiSession((session) => handleGet(request, session.userId), {
+    routeGroup: 'GET /api/ai-usage',
+  })
 }
 
 async function handleGet(request: Request, userId: string): Promise<Response> {

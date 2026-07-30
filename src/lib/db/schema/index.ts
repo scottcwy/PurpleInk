@@ -62,6 +62,10 @@ export {
 } from './ai'
 export { telemetryCutovers } from './telemetry'
 export {
+  API_ACCESS_OUTCOMES,
+  apiAccessCounters,
+} from './observability'
+export {
   PROVIDER_DISPATCH_STATUSES,
   providerDispatchCooldowns,
   providerDispatches,

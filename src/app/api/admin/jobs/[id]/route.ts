@@ -20,5 +20,5 @@ export function GET(
       return NextResponse.json({ ok: false, error: '任务不存在' }, { status: 404 })
     }
     return NextResponse.json({ ok: true, job })
-  })
+  }, { routeGroup: 'GET /api/admin/jobs/:id' })
 }

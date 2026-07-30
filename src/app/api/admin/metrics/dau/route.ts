@@ -11,5 +11,5 @@ export function GET(request: Request): Promise<Response> {
     const days = Number.isSafeInteger(raw) && raw > 0 ? raw : 30
     const metrics = await getDauMetrics(days)
     return NextResponse.json({ ok: true, ...metrics })
-  })
+  }, { routeGroup: 'GET /api/admin/metrics/dau' })
 }

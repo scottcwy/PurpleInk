@@ -21,7 +21,7 @@ export function POST(
   _request: Request,
   context: RouteContext,
 ): Promise<Response> {
-  return withApiSession(() => handlePost(context))
+  return withApiSession(() => handlePost(context), { routeGroup: 'POST /api/projects/:id/start' })
 }
 
 async function handlePost(context: RouteContext): Promise<Response> {

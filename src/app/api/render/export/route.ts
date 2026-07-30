@@ -28,7 +28,7 @@ const requestSchema = z
   )
 
 export function GET(request: Request): Promise<Response> {
-  return withApiSession(() => handleGet(request))
+  return withApiSession(() => handleGet(request), { routeGroup: 'GET /api/render/export' })
 }
 
 async function handleGet(request: Request) {
@@ -65,7 +65,7 @@ async function handleGet(request: Request) {
 }
 
 export function POST(request: Request): Promise<Response> {
-  return withApiSession(() => handlePost(request))
+  return withApiSession(() => handlePost(request), { routeGroup: 'POST /api/render/export' })
 }
 
 async function handlePost(request: Request) {

@@ -20,7 +20,7 @@ export function GET(request: Request): Promise<Response> {
       pageSize: readInt(url.searchParams.get('pageSize'), 20),
     })
     return NextResponse.json({ ok: true, ...result })
-  })
+  }, { routeGroup: 'GET /api/admin/users' })
 }
 
 const createUserSchema = z.object({
@@ -49,7 +49,7 @@ export function POST(request: Request): Promise<Response> {
       )
     }
     return NextResponse.json({ ok: true, userId: result.userId })
-  })
+  }, { routeGroup: 'POST /api/admin/users' })
 }
 
 function readInt(value: string | null, fallback: number): number {

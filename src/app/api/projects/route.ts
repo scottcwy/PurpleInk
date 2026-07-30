@@ -27,7 +27,7 @@ export function GET(request: Request): Promise<Response> {
       )
     }
     return NextResponse.json(await listProjectCardPage(query))
-  })
+  }, { routeGroup: 'GET /api/projects' })
 }
 
 /** 只做参数解析与钳位；投影与 SQL 全部在 feature 层。 */
@@ -55,7 +55,7 @@ function parseBoundedInt(
 }
 
 export function POST(request: Request): Promise<Response> {
-  return withApiSession(() => handlePost(request))
+  return withApiSession(() => handlePost(request), { routeGroup: 'POST /api/projects' })
 }
 
 async function handlePost(request: Request) {

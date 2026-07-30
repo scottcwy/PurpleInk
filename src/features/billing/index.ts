@@ -27,8 +27,15 @@ export {
   provisionFreeEntitlement,
 } from './period-service'
 export {
+  createRedemptionBatch,
   hashRedemptionCode,
   redeemBillingCode,
+  revokeRedemptionBatch,
+  REDEEMABLE_PLAN_KEYS,
+  REDEMPTION_BATCH_MAX,
+  type CreateRedemptionBatchInput,
+  type CreateRedemptionBatchResult,
+  type RedeemablePlanKey,
   type RedeemBillingCodeInput,
   type RedemptionResult,
 } from './redemption'

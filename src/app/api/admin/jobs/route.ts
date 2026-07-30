@@ -24,7 +24,7 @@ export function GET(request: Request): Promise<Response> {
       pageSize: readInt(url.searchParams.get('pageSize'), 20),
     })
     return NextResponse.json({ ok: true, ...result })
-  })
+  }, { routeGroup: 'GET /api/admin/jobs' })
 }
 
 function readInt(value: string | null, fallback: number): number {

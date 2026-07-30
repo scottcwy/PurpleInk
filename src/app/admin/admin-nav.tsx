@@ -7,15 +7,21 @@ import {
   LayoutDashboard,
   Settings,
   ShieldCheck,
+  Sparkles,
+  TriangleAlert,
+  Wallet,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-/** 侧栏项与 §9 守卫矩阵的 /admin 四页一一对应；激活态由路径推导。 */
+/** 侧栏项与 §9 守卫矩阵的 /admin 页一一对应；激活态由路径推导。 */
 const NAV_ITEMS = [
   { href: '/admin', label: '概览', icon: LayoutDashboard, exact: true },
   { href: '/admin/users', label: '用户管理', icon: ShieldCheck, exact: false },
   { href: '/admin/jobs', label: '任务监控', icon: Film, exact: false },
   { href: '/admin/ops', label: '系统运维', icon: Settings, exact: false },
+  { href: '/admin/security', label: '安全监控', icon: TriangleAlert, exact: false },
+  { href: '/admin/billing', label: '订阅计费', icon: Wallet, exact: false },
+  { href: '/admin/ai', label: 'AI 审计', icon: Sparkles, exact: false },
 ] as const
 
 export function AdminNav() {

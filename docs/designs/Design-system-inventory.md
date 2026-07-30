@@ -321,13 +321,15 @@ Canonical 状态集合：`loading / empty / ready / running / succeeded / failed
 
 ## 9. 图标白名单
 
-**应用壳与导航**：`clapperboard`、`layout-dashboard`、`folder`、`waypoints`、`film`、`download`、`settings`
+**应用壳与导航**：`clapperboard`、`layout-dashboard`、`folder`、`waypoints`、`film`、`download`、`settings`、`wallet`（仅 /admin 订阅计费导航）
 
 **操作**：`plus`、`save`、`settings-2`、`ellipsis`、`x`、`upload`、`refresh-cw`、`arrow-left`、`chevron-right`、`skip-forward`、`zoom-in`、`zoom-out`、`maximize-2`
 
 **执行与内容**：`list-tree`、`sparkles`、`combine`、`file-code`、`audio-lines`、`globe`、`play`、`loader-circle`
 
 **状态**：`circle-check`、`triangle-alert`、`circle-x`、`shield-check`、`info`、`circle-slash`
+
+> `/admin` 后台导航复用上表：安全监控 `triangle-alert`、AI 审计 `sparkles`、订阅计费 `wallet`。
 
 尺寸：13–14 用于紧凑元数据，16 用于控件/导航，20–28 用于品牌和卡片预览，44 仅用于播放器中心操作。
 

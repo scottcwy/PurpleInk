@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic'
 const requestSchema = z.object({ projectId: z.string().min(1) }).strict()
 
 export function POST(request: Request): Promise<Response> {
-  return withApiSession(() => handlePost(request))
+  return withApiSession(() => handlePost(request), { routeGroup: 'POST /api/director/pipeline' })
 }
 
 async function handlePost(request: Request) {
@@ -51,7 +51,7 @@ async function handlePost(request: Request) {
 }
 
 export function DELETE(request: Request): Promise<Response> {
-  return withApiSession(() => handleDelete(request))
+  return withApiSession(() => handleDelete(request), { routeGroup: 'DELETE /api/director/pipeline' })
 }
 
 async function handleDelete(request: Request) {
