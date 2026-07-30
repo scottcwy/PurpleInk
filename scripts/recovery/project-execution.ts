@@ -2,13 +2,13 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, rename, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { loadEnvConfig } from '@next/env'
-import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
-import * as schema from '../../src/lib/db/schema/index'
+import { applyProjectExecutionRecovery } from './project-execution-sql'
 
 interface Arguments {
   apply: boolean
   cancelProjectIds: string[]
+  preserveProjectIds: string[]
   outputPath: string
 }
 
@@ -31,22 +31,27 @@ async function main(): Promise<void> {
   if (!databaseUrl) throw new Error('DATABASE_URL_REQUIRED')
   const client = postgres(databaseUrl, { max: 1 })
   try {
-    const projects = await client<Array<{ id: string; workspaceId: string }>>`
-      select id::text, workspace_id::text as "workspaceId"
+    const inspectedProjectIds = [
+      ...args.cancelProjectIds,
+      ...args.preserveProjectIds,
+    ]
+    const projects = await client<Array<{ id: string }>>`
+      select id::text
       from projects
-      where id = any(${args.cancelProjectIds}::uuid[])
+      where id = any(${inspectedProjectIds}::uuid[])
       order by id
     `
-    if (projects.length !== args.cancelProjectIds.length) {
+    if (projects.length !== inspectedProjectIds.length) {
       throw new Error('RECOVERY_PROJECT_NOT_FOUND')
     }
 
-    const before = await collectSafeSnapshot(client, args.cancelProjectIds)
+    const before = await collectSafeSnapshot(client, inspectedProjectIds)
     await writeJson(args.outputPath, {
       schemaVersion: 1,
       mode: args.apply ? 'apply-before' : 'dry-run',
       generatedAt: new Date().toISOString(),
       targetProjectIds: args.cancelProjectIds,
+      preservedProjectIds: args.preserveProjectIds,
       records: before,
     })
     if (!args.apply) {
@@ -58,44 +63,24 @@ async function main(): Promise<void> {
       return
     }
 
-    const [
-      { runInAuthContext, SYSTEM_USER_ID },
-      { stopProjectExecution },
-      { sweepExpiredLeases },
-      { reconcileStaleExecutionEpochs },
-    ] = await Promise.all([
-      import('../../src/lib/auth/workspace-context'),
-      import('../../src/features/projects/project-execution-stop'),
-      import('../../src/lib/queue/lease'),
-      import('../../src/lib/queue/execution-reconciliation'),
-    ])
-    const database = drizzle(client, { schema })
-    const stopResults = []
-    for (const project of projects) {
-      const result = await runInAuthContext(
-        { workspaceId: project.workspaceId, userId: SYSTEM_USER_ID },
-        () => stopProjectExecution(project.id, { database }),
-      )
-      stopResults.push({ projectId: project.id, ...result })
-    }
-    const interruptedAttemptIds = await sweepExpiredLeases(database)
-    const staleAttemptIds = await reconcileStaleExecutionEpochs(database)
-    const after = await collectSafeSnapshot(client, args.cancelProjectIds)
+    const recovery = await applyProjectExecutionRecovery(
+      client,
+      args.cancelProjectIds,
+    )
+    const after = await collectSafeSnapshot(client, inspectedProjectIds)
     const resultPath = resultOutputPath(args.outputPath)
     await writeJson(resultPath, {
       schemaVersion: 1,
       mode: 'apply-result',
       generatedAt: new Date().toISOString(),
-      stopResults,
-      interruptedAttemptIds,
-      staleAttemptIds,
+      recovery,
       records: after,
     })
     console.log(JSON.stringify({
       status: 'applied',
-      stoppedProjects: stopResults.length,
-      interruptedAttempts: interruptedAttemptIds.length,
-      staleAttempts: staleAttemptIds.length,
+      stoppedProjects: args.cancelProjectIds.length,
+      interruptedAttempts: recovery.interruptedAttemptIds.length,
+      staleAttempts: recovery.staleAttemptIds.length,
       backup: args.outputPath,
       result: resultPath,
     }))
@@ -106,13 +91,13 @@ async function main(): Promise<void> {
 
 function parseArguments(values: string[]): Arguments {
   const apply = values.includes('--apply')
-  const cancelProjectIds = values
-    .filter((value) => value.startsWith('--cancel-project='))
-    .map((value) => value.slice('--cancel-project='.length))
+  const cancelProjectIds = readProjectIds(values, '--cancel-project=')
+  const preserveProjectIds = readProjectIds(values, '--preserve-project=')
+  const inspectedProjectIds = [...cancelProjectIds, ...preserveProjectIds]
   if (
     cancelProjectIds.length === 0
-    || new Set(cancelProjectIds).size !== cancelProjectIds.length
-    || cancelProjectIds.some((id) => !UUID.test(id))
+    || new Set(inspectedProjectIds).size !== inspectedProjectIds.length
+    || inspectedProjectIds.some((id) => !UUID.test(id))
   ) {
     throw new Error('RECOVERY_PROJECT_IDS_REQUIRED')
   }
@@ -121,11 +106,18 @@ function parseArguments(values: string[]): Arguments {
   return {
     apply,
     cancelProjectIds,
+    preserveProjectIds,
     outputPath: path.resolve(
       outputFlag?.slice('--out='.length)
         || `.data/recovery/project-execution-${stamp}.json`,
     ),
   }
+}
+
+function readProjectIds(values: string[], prefix: string): string[] {
+  return values
+    .filter((value) => value.startsWith(prefix))
+    .map((value) => value.slice(prefix.length))
 }
 
 async function collectSafeSnapshot(
@@ -197,20 +189,29 @@ async function collectSafeSnapshot(
       and a.started_at < now() - interval '20 minutes'
     order by 1, 2
   `
-  return rows.map((row) => {
-    const safe = {
-      table: row.tableName,
-      id: row.id,
-      projectId: row.projectId,
-      status: row.status,
-      createdAt: toIso(row.createdAt),
-      updatedAt: toIso(row.updatedAt),
-    }
-    return {
-      ...safe,
-      rowHash: createHash('sha256').update(JSON.stringify(safe)).digest('hex'),
-    }
-  })
+  return rows.map(toSafeRecord)
+}
+
+function toSafeRecord(row: {
+  tableName: string
+  id: string
+  projectId: string | null
+  status: string
+  createdAt: Date | string | null
+  updatedAt: Date | string | null
+}): SafeRecord {
+  const safe = {
+    table: row.tableName,
+    id: row.id,
+    projectId: row.projectId,
+    status: row.status,
+    createdAt: toIso(row.createdAt),
+    updatedAt: toIso(row.updatedAt),
+  }
+  return {
+    ...safe,
+    rowHash: createHash('sha256').update(JSON.stringify(safe)).digest('hex'),
+  }
 }
 
 function toIso(value: Date | string | null): string | null {
