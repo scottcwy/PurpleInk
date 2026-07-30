@@ -70,3 +70,9 @@ export {
   type ProjectWorkflowStartDescriptor,
   type ProjectWorkflowStartResult,
 } from './project-workflow-start'
+export {
+  stopProjectExecution,
+  ProjectExecutionStopError,
+  type ProjectExecutionStopDependencies,
+  type ProjectExecutionStopResult,
+} from './project-execution-stop'

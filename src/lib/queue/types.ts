@@ -10,6 +10,8 @@ export interface QueueJob {
   status: JobStatus
   payload: Record<string, unknown>
   attempts: number
+  /** 项目停止或执行超时的协作取消信号；领域 handler 应传给外部 I/O。 */
+  signal?: AbortSignal
   error?: string | null
 }
 

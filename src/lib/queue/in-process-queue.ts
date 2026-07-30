@@ -33,6 +33,10 @@ import {
 import type { JobHandler, LaneQuotas, QueueAdapter, QueueJob } from './types'
 import type { ClaimFilter } from './queue-claim'
 import { defaultQueueLaneQuotas } from './queue-defaults'
+import {
+  registerAttemptController,
+  unregisterAttemptController,
+} from './execution-cancellation'
 
 /** 未在 `start(lanes)` 中显式配额的 kind 落入此通道，固定配额 1。 */
 const FALLBACK_LANE = '__fallback__'
@@ -254,16 +258,20 @@ export class InProcessQueue implements QueueAdapter {
       return
     }
     const startedAt = Date.now()
+    const controller = registerAttemptController(job.id)
+    const cancellableJob = { ...job, signal: controller.signal }
     try {
+      controller.signal.throwIfAborted()
       await withExecutionTimeout(job.kind, () =>
         runInAuthContext(
           {
             workspaceId: job.workspaceId,
             userId: job.requestedByUserId ?? SYSTEM_USER_ID,
           },
-          () => handler(job)
+          () => handler(cancellableJob)
         )
       )
+      controller.signal.throwIfAborted()
       await completeAttempt(database, job.workspaceId, job.id, 'succeeded')
     } catch (err) {
       if (err instanceof ProviderQueueDeferral) {
@@ -307,6 +315,7 @@ export class InProcessQueue implements QueueAdapter {
         err
       )
     } finally {
+      unregisterAttemptController(job.id, controller)
       await releaseTerminalSlot(database, job)
     }
   }
