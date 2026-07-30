@@ -4,11 +4,12 @@ import { withApiSession } from '@/features/auth/api-session'
 import { classifyWorkflowError } from '@/features/canvas'
 import {
   startProjectPipeline,
-  stopProjectPipeline,
 } from '@/features/director/advance'
 import {
   loadProjectWorkflowStartDescriptor,
+  ProjectExecutionStopError,
   ProjectWorkflowStartError,
+  stopProjectExecution,
 } from '@/features/projects'
 import { initQueue } from '@/lib/queue/init'
 
@@ -58,27 +59,25 @@ async function handleDelete(request: Request) {
   const parsed = await parseRequest(request)
   if (!parsed.success) return parsed.response
   try {
-    const descriptor = await loadProjectWorkflowStartDescriptor(parsed.projectId)
-    if (descriptor.kind !== 'script') {
-      return scriptWorkflowRequiredResponse()
-    }
     return NextResponse.json({
       ok: true,
-      ...(await stopProjectPipeline(parsed.projectId)),
+      ...(await stopProjectExecution(parsed.projectId)),
     })
   } catch (error) {
-    if (error instanceof ProjectWorkflowStartError) {
+    if (error instanceof ProjectExecutionStopError) {
       return NextResponse.json(
         { ok: false, code: error.code, error: error.message },
         { status: error.statusCode },
       )
     }
+    const projected = classifyWorkflowError(error, { stage: 'QUEUE' })
     return NextResponse.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : '工作流停止失败',
+        code: projected.code,
+        error: projected.message,
       },
-      { status: 404 }
+      { status: 409 }
     )
   }
 }

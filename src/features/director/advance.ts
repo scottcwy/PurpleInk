@@ -244,16 +244,6 @@ export async function startProjectPipeline(
   }
 }
 
-/** 关闭后续自动推进；已经入队的作业不会被伪装为已取消。 */
-export async function stopProjectPipeline(
-  projectId: string
-): Promise<{ autopilot: false }> {
-  await assertProjectWorkflowSupported(projectId)
-  const database = await getDb()
-  await new AdvanceRepositoryImpl(database).setAutopilot(projectId, false)
-  return { autopilot: false }
-}
-
 async function createDefaultDependencies(): Promise<AdvanceDependencies> {
   const [
     { enqueueDirectorStage },

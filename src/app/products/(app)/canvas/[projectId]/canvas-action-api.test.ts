@@ -227,28 +227,37 @@ describe('pipeline controls', () => {
       blockedNodes: [],
     })
     expect(fetcher).toHaveBeenCalledWith(
-      '/api/director/pipeline',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ projectId: 'project-1' }),
-      })
+      '/api/projects/project-1/start',
+      { method: 'POST' },
     )
   })
 
-  it('stops project autopilot without pretending queued jobs were cancelled', async () => {
+  it('stops the project through the unified route and preserves stop counters', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-      response({ ok: true, autopilot: false })
+      response({
+        ok: true,
+        autopilot: false,
+        status: 'stopping',
+        cancelledAttempts: 3,
+        cancelledRuns: 2,
+        cancelledTickets: 1,
+        cancelledLeases: 2,
+        remainingRunning: 1,
+      })
     )
 
     await expect(stopPipeline('project-1', fetcher)).resolves.toEqual({
       autopilot: false,
+      status: 'stopping',
+      cancelledAttempts: 3,
+      cancelledRuns: 2,
+      cancelledTickets: 1,
+      cancelledLeases: 2,
+      remainingRunning: 1,
     })
     expect(fetcher).toHaveBeenCalledWith(
-      '/api/director/pipeline',
-      expect.objectContaining({
-        method: 'DELETE',
-        body: JSON.stringify({ projectId: 'project-1' }),
-      })
+      '/api/projects/project-1/start',
+      { method: 'DELETE' },
     )
   })
 })

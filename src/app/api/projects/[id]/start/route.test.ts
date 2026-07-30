@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { POST } from './route'
+import { DELETE, POST } from './route'
 
 const mocks = vi.hoisted(() => {
   class QuotaExhaustedError extends Error {
@@ -16,11 +16,21 @@ const mocks = vi.hoisted(() => {
       super(message)
     }
   }
+  class ProjectExecutionStopError extends Error {
+    readonly code = 'PROJECT_NOT_FOUND'
+    readonly statusCode = 404
+
+    constructor(message = '项目不存在') {
+      super(message)
+    }
+  }
   return {
     QuotaExhaustedError,
+    ProjectExecutionStopError,
     ProjectWorkflowStartError,
     initQueue: vi.fn(),
     startProjectWorkflow: vi.fn(),
+    stopProjectExecution: vi.fn(),
     classifyWorkflowError: vi.fn(),
   }
 })
@@ -36,8 +46,10 @@ vi.mock('@/features/canvas', () => ({
   classifyWorkflowError: mocks.classifyWorkflowError,
 }))
 vi.mock('@/features/projects', () => ({
+  ProjectExecutionStopError: mocks.ProjectExecutionStopError,
   ProjectWorkflowStartError: mocks.ProjectWorkflowStartError,
   startProjectWorkflow: mocks.startProjectWorkflow,
+  stopProjectExecution: mocks.stopProjectExecution,
 }))
 vi.mock('@/lib/queue/init', () => ({ initQueue: mocks.initQueue }))
 
@@ -58,6 +70,15 @@ describe('POST /api/projects/[id]/start', () => {
       repairRootNodeIds: [],
       failedNodeIds: [],
       blockedNodes: [],
+    })
+    mocks.stopProjectExecution.mockResolvedValue({
+      autopilot: false,
+      status: 'stopping',
+      cancelledAttempts: 3,
+      cancelledRuns: 2,
+      cancelledTickets: 1,
+      cancelledLeases: 2,
+      remainingRunning: 1,
     })
     mocks.classifyWorkflowError.mockReturnValue({
       code: 'QUEUE_FAILED',
@@ -119,6 +140,48 @@ describe('POST /api/projects/[id]/start', () => {
       ok: false,
       code: 'QUEUE_FAILED',
       error: '工作流暂时无法启动',
+    })
+  })
+
+  it('stops every workflow kind through the unified project route', async () => {
+    const response = await DELETE(
+      new Request('http://localhost', { method: 'DELETE' }),
+      context(PROJECT_ID),
+    )
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      autopilot: false,
+      status: 'stopping',
+      cancelledAttempts: 3,
+      cancelledRuns: 2,
+      cancelledTickets: 1,
+      cancelledLeases: 2,
+      remainingRunning: 1,
+    })
+    expect(mocks.stopProjectExecution).toHaveBeenCalledWith(PROJECT_ID)
+    expect(mocks.initQueue).not.toHaveBeenCalled()
+  })
+
+  it('validates stop ids and preserves a safe missing-project response', async () => {
+    const invalid = await DELETE(
+      new Request('http://localhost', { method: 'DELETE' }),
+      context('../bad'),
+    )
+    expect(invalid.status).toBe(400)
+    expect(mocks.stopProjectExecution).not.toHaveBeenCalled()
+
+    mocks.stopProjectExecution.mockRejectedValue(
+      new mocks.ProjectExecutionStopError('项目不存在'),
+    )
+    const missing = await DELETE(
+      new Request('http://localhost', { method: 'DELETE' }),
+      context(PROJECT_ID),
+    )
+    expect(missing.status).toBe(404)
+    await expect(missing.json()).resolves.toMatchObject({
+      ok: false,
+      code: 'PROJECT_NOT_FOUND',
     })
   })
 })

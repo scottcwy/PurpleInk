@@ -105,11 +105,16 @@ export interface NodeActionResult {
 
 export interface PipelineControlResult {
   autopilot: boolean
-  status?: 'started' | 'blocked' | 'complete'
+  status?: 'started' | 'blocked' | 'complete' | 'stopping' | 'stopped'
   enqueuedNodeIds?: string[]
   repairRootNodeIds?: string[]
   failedNodeIds?: string[]
   blockedNodes?: Array<{ nodeId: string; code: string; message: string }>
+  cancelledAttempts?: number
+  cancelledRuns?: number
+  cancelledTickets?: number
+  cancelledLeases?: number
+  remainingRunning?: number
 }
 
 export async function startPipeline(
@@ -131,10 +136,10 @@ async function controlPipeline(
   projectId: string,
   fetcher: typeof fetch
 ): Promise<PipelineControlResult> {
-  const response = await fetcher('/api/director/pipeline', {
-    ...jsonRequest({ projectId }),
-    method,
-  })
+  const response = await fetcher(
+    `/api/projects/${encodeURIComponent(projectId)}/start`,
+    { method },
+  )
   throwIfUnauthenticated(response)
   const body: unknown = await response.json()
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -159,6 +164,11 @@ async function controlPipeline(
       ? { failedNodeIds: result.failedNodeIds.filter(isString) }
       : {}),
     ...(isPipelineStatus(result.status) ? { status: result.status } : {}),
+    ...optionalCount('cancelledAttempts', result),
+    ...optionalCount('cancelledRuns', result),
+    ...optionalCount('cancelledTickets', result),
+    ...optionalCount('cancelledLeases', result),
+    ...optionalCount('remainingRunning', result),
     ...(Array.isArray(result.repairRootNodeIds)
       ? { repairRootNodeIds: result.repairRootNodeIds.filter(isString) }
       : {}),
@@ -227,7 +237,24 @@ function isNodeAction(value: unknown): value is NodeActionResult['action'] {
 function isPipelineStatus(
   value: unknown
 ): value is NonNullable<PipelineControlResult['status']> {
-  return ['started', 'blocked', 'complete'].includes(String(value))
+  return ['started', 'blocked', 'complete', 'stopping', 'stopped'].includes(
+    String(value),
+  )
+}
+
+function optionalCount(
+  key:
+    | 'cancelledAttempts'
+    | 'cancelledRuns'
+    | 'cancelledTickets'
+    | 'cancelledLeases'
+    | 'remainingRunning',
+  value: Record<string, unknown>,
+): Partial<PipelineControlResult> {
+  const count = value[key]
+  return typeof count === 'number' && Number.isInteger(count) && count >= 0
+    ? { [key]: count }
+    : {}
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Download, Play } from 'lucide-react'
+import { Clock, Download, Play, Square } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
@@ -69,6 +69,7 @@ export function CanvasView({
 }: CanvasViewProps) {
   const router = useRouter()
   const [pipelineSubmitting, setPipelineSubmitting] = useState(false)
+  const [pipelineStopping, setPipelineStopping] = useState(false)
   const [pipelineFeedback, setPipelineFeedback] = useState<PipelineFeedback>()
   const [pipelineQuotaOpen, setPipelineQuotaOpen] = useState(false)
   const [collapsedLanes, setCollapsedLanes] = useState<Set<string>>(() => new Set())
@@ -148,6 +149,38 @@ export function CanvasView({
     return () => window.clearTimeout(timeout)
   }, [live.topologyTick, overlay, router])
 
+  useEffect(() => {
+    if (!pipelineStopping) return
+    let cancelled = false
+    let timeout: number | undefined
+    const poll = async (): Promise<void> => {
+      try {
+        const result = await stopPipeline(projectId)
+        if (cancelled) return
+        setPipelineFeedback(describePipelineResult(result))
+        if (result.status === 'stopped') {
+          setPipelineStopping(false)
+          router.refresh()
+          return
+        }
+        timeout = window.setTimeout(() => void poll(), 1500)
+      } catch (error) {
+        if (cancelled) return
+        setPipelineStopping(false)
+        setPipelineFeedback({
+          variant: 'error',
+          title: '停止状态确认失败',
+          body: error instanceof Error ? error.message : '停止状态确认失败',
+        })
+      }
+    }
+    timeout = window.setTimeout(() => void poll(), 1500)
+    return () => {
+      cancelled = true
+      if (timeout !== undefined) window.clearTimeout(timeout)
+    }
+  }, [pipelineStopping, projectId, router])
+
   function toggleLane(laneKey: string): void {
     setCollapsedLanes((current) => {
       const next = new Set(current)
@@ -161,9 +194,10 @@ export function CanvasView({
     setPipelineSubmitting(true)
     setPipelineFeedback(undefined)
     try {
-      const result = autopilot
+      const result = autopilot || pipelineStopping
         ? await stopPipeline(projectId)
         : await startPipeline(projectId)
+      setPipelineStopping(result.status === 'stopping')
       setPipelineFeedback(describePipelineResult(result))
       if (result.blockedNodes?.some(({ code }) =>
         code === 'quota_exhausted' || code === 'QUOTA_EXHAUSTED')) {
@@ -196,11 +230,21 @@ export function CanvasView({
               <Button
                 variant="gray"
                 size="sm"
-                icon={Play}
-                disabled={pipelineSubmitting}
+                icon={
+                  pipelineStopping
+                    ? Clock
+                    : autopilot
+                      ? Square
+                      : Play
+                }
+                disabled={pipelineSubmitting || pipelineStopping}
                 onClick={() => void togglePipeline()}
               >
-                {autopilot ? '停止自动推进' : '一键启动'}
+                {pipelineStopping
+                  ? '正在停止'
+                  : autopilot
+                    ? '停止项目'
+                    : '一键启动'}
               </Button>
               <Link href={productExportHref(projectId)}>
                 <Button size="sm" icon={Download}>导出 MP4</Button>

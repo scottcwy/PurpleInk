@@ -52,11 +52,31 @@ describe('describePipelineResult', () => {
     })
   })
 
-  it('停止自动推进时不伪装取消已入队作业', () => {
-    expect(describePipelineResult({ autopilot: false })).toEqual({
+  it('停止中明确显示剩余运行作业', () => {
+    expect(describePipelineResult({
+      autopilot: false,
+      status: 'stopping',
+      remainingRunning: 2,
+    })).toEqual({
+      variant: 'info',
+      title: '正在停止项目',
+      body: '仍有 2 个作业正在安全退出。',
+    })
+  })
+
+  it('停止完成后汇总已收敛资源', () => {
+    expect(describePipelineResult({
+      autopilot: false,
+      status: 'stopped',
+      cancelledAttempts: 3,
+      cancelledRuns: 2,
+      cancelledTickets: 1,
+      cancelledLeases: 2,
+      remainingRunning: 0,
+    })).toEqual({
       variant: 'success',
-      title: '已停止自动推进',
-      body: '已入队作业不会被伪装为已取消。',
+      title: '项目已停止',
+      body: '已收敛 8 项排队或执行资源，可以安全删除项目。',
     })
   })
 })
@@ -83,6 +103,8 @@ describe('Canvas pipeline feedback wiring', () => {
 
   it('消费真实 pipeline 返回值且不显示无来源的自动保存状态', () => {
     expect(canvasViewSource).toContain('describePipelineResult(result)')
+    expect(canvasViewSource).toContain("'停止项目'")
+    expect(canvasViewSource).toContain("'正在停止'")
     expect(canvasViewSource).not.toContain(fixedAutosaveCopy)
   })
 

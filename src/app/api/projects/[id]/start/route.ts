@@ -6,8 +6,10 @@ import {
 } from '@/features/billing'
 import { classifyWorkflowError } from '@/features/canvas'
 import {
+  ProjectExecutionStopError,
   ProjectWorkflowStartError,
   startProjectWorkflow,
+  stopProjectExecution,
 } from '@/features/projects'
 import { initQueue } from '@/lib/queue/init'
 
@@ -24,19 +26,21 @@ export function POST(
   return withApiSession(() => handlePost(context))
 }
 
+export function DELETE(
+  _request: Request,
+  context: RouteContext,
+): Promise<Response> {
+  return withApiSession(() => handleDelete(context))
+}
+
 async function handlePost(context: RouteContext): Promise<Response> {
-  const parsedId = z.string().uuid().safeParse((await context.params).id)
-  if (!parsedId.success) {
-    return NextResponse.json(
-      { ok: false, code: 'INVALID_PROJECT_ID', error: '项目 ID 无效' },
-      { status: 400 },
-    )
-  }
+  const parsedId = await parseProjectId(context)
+  if (!parsedId.success) return parsedId.response
   try {
     await initQueue()
     return NextResponse.json({
       ok: true,
-      ...(await startProjectWorkflow(parsedId.data)),
+      ...(await startProjectWorkflow(parsedId.projectId)),
     })
   } catch (error) {
     if (error instanceof QuotaExhaustedError) {
@@ -65,5 +69,45 @@ async function handlePost(context: RouteContext): Promise<Response> {
       },
       { status: 409 },
     )
+  }
+}
+
+async function handleDelete(context: RouteContext): Promise<Response> {
+  const parsedId = await parseProjectId(context)
+  if (!parsedId.success) return parsedId.response
+  try {
+    return NextResponse.json({
+      ok: true,
+      ...(await stopProjectExecution(parsedId.projectId)),
+    })
+  } catch (error) {
+    if (error instanceof ProjectExecutionStopError) {
+      return NextResponse.json(
+        { ok: false, code: error.code, error: error.message },
+        { status: error.statusCode },
+      )
+    }
+    const projected = classifyWorkflowError(error, { stage: 'QUEUE' })
+    return NextResponse.json(
+      { ok: false, code: projected.code, error: projected.message },
+      { status: 409 },
+    )
+  }
+}
+
+async function parseProjectId(context: RouteContext): Promise<
+  | { success: true; projectId: string }
+  | { success: false; response: NextResponse }
+> {
+  const parsedId = z.string().uuid().safeParse((await context.params).id)
+  if (parsedId.success) {
+    return { success: true, projectId: parsedId.data }
+  }
+  return {
+    success: false,
+    response: NextResponse.json(
+      { ok: false, code: 'INVALID_PROJECT_ID', error: '项目 ID 无效' },
+      { status: 400 },
+    ),
   }
 }

@@ -1,7 +1,7 @@
 import type { PipelineControlResult } from './canvas-action-api'
 
 export interface PipelineFeedback {
-  variant: 'success' | 'error'
+  variant: 'info' | 'success' | 'error'
   title: string
   body: string
 }
@@ -11,6 +11,27 @@ export function describePipelineResult(
 ): PipelineFeedback {
   const enqueued = result.enqueuedNodeIds?.length ?? 0
   const failed = result.failedNodeIds?.length ?? 0
+  if (result.status === 'stopping') {
+    return {
+      variant: 'info',
+      title: '正在停止项目',
+      body: `仍有 ${result.remainingRunning ?? 0} 个作业正在安全退出。`,
+    }
+  }
+  if (result.status === 'stopped') {
+    const cancelled =
+      (result.cancelledAttempts ?? 0)
+      + (result.cancelledRuns ?? 0)
+      + (result.cancelledTickets ?? 0)
+      + (result.cancelledLeases ?? 0)
+    return {
+      variant: 'success',
+      title: '项目已停止',
+      body: cancelled > 0
+        ? `已收敛 ${cancelled} 项排队或执行资源，可以安全删除项目。`
+        : '项目没有仍在执行的作业，可以安全删除项目。',
+    }
+  }
   if (result.status === 'blocked') {
     return {
       variant: 'error',
@@ -42,7 +63,7 @@ export function describePipelineResult(
       }
     : {
         variant: 'success',
-        title: '已停止自动推进',
-        body: '已入队作业不会被伪装为已取消。',
+        title: '项目已停止',
+        body: '项目没有仍在执行的作业，可以安全删除项目。',
       }
 }

@@ -11,11 +11,20 @@ const mocks = vi.hoisted(() => {
       super(message)
     }
   }
+  class ProjectExecutionStopError extends Error {
+    readonly code = 'PROJECT_NOT_FOUND'
+    readonly statusCode = 404
+
+    constructor(message = '项目不存在') {
+      super(message)
+    }
+  }
   return {
+    ProjectExecutionStopError,
     ProjectWorkflowStartError,
     loadProjectWorkflowStartDescriptor: vi.fn(),
     startProjectPipeline: vi.fn(),
-    stopProjectPipeline: vi.fn(),
+    stopProjectExecution: vi.fn(),
     initQueue: vi.fn(),
   }
 })
@@ -35,12 +44,13 @@ vi.mock('@/features/auth/api-session', () => ({
 }))
 vi.mock('@/features/director/advance', () => ({
   startProjectPipeline: mocks.startProjectPipeline,
-  stopProjectPipeline: mocks.stopProjectPipeline,
 }))
 vi.mock('@/features/projects', () => ({
   loadProjectWorkflowStartDescriptor:
     mocks.loadProjectWorkflowStartDescriptor,
+  ProjectExecutionStopError: mocks.ProjectExecutionStopError,
   ProjectWorkflowStartError: mocks.ProjectWorkflowStartError,
+  stopProjectExecution: mocks.stopProjectExecution,
 }))
 vi.mock('@/lib/queue/init', () => ({ initQueue: mocks.initQueue }))
 
@@ -60,7 +70,15 @@ describe('/api/director/pipeline', () => {
       failedNodeIds: [],
       blockedNodes: [],
     })
-    mocks.stopProjectPipeline.mockReturnValue({ autopilot: false })
+    mocks.stopProjectExecution.mockResolvedValue({
+      autopilot: false,
+      status: 'stopped',
+      cancelledAttempts: 1,
+      cancelledRuns: 1,
+      cancelledTickets: 0,
+      cancelledLeases: 1,
+      remainingRunning: 0,
+    })
   })
 
   it('validates the POST body before queue initialization', async () => {
@@ -166,22 +184,26 @@ describe('/api/director/pipeline', () => {
     })
   })
 
-  it('disables future advancement without initializing the queue', async () => {
+  it('delegates legacy DELETE to the unified project stop service', async () => {
     const response = await DELETE(request('DELETE', { projectId: 'project-1' }))
 
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual({
       ok: true,
       autopilot: false,
+      status: 'stopped',
+      cancelledAttempts: 1,
+      cancelledRuns: 1,
+      cancelledTickets: 0,
+      cancelledLeases: 1,
+      remainingRunning: 0,
     })
-    expect(mocks.stopProjectPipeline).toHaveBeenCalledWith('project-1')
-    expect(mocks.loadProjectWorkflowStartDescriptor).toHaveBeenCalledWith(
-      'project-1',
-    )
+    expect(mocks.stopProjectExecution).toHaveBeenCalledWith('project-1')
+    expect(mocks.loadProjectWorkflowStartDescriptor).not.toHaveBeenCalled()
     expect(mocks.initQueue).not.toHaveBeenCalled()
   })
 
-  it('does not claim to stop a non-script workflow through the legacy DELETE', async () => {
+  it('also stops non-script projects through the legacy compatibility route', async () => {
     mocks.loadProjectWorkflowStartDescriptor.mockResolvedValue({
       kind: 'website',
       workflowVersion: 'active-website',
@@ -190,12 +212,9 @@ describe('/api/director/pipeline', () => {
 
     const response = await DELETE(request('DELETE', { projectId: 'project-1' }))
 
-    expect(response.status).toBe(409)
-    await expect(response.json()).resolves.toMatchObject({
-      ok: false,
-      code: 'SCRIPT_WORKFLOW_REQUIRED',
-    })
-    expect(mocks.stopProjectPipeline).not.toHaveBeenCalled()
+    expect(response.status).toBe(200)
+    expect(mocks.stopProjectExecution).toHaveBeenCalledWith('project-1')
+    expect(mocks.loadProjectWorkflowStartDescriptor).not.toHaveBeenCalled()
   })
 })
 

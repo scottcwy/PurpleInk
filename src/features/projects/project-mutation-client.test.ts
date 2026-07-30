@@ -65,13 +65,13 @@ describe('deleteProjectRequest', () => {
     const fetcher = vi.fn(async () =>
       response(409, {
         ok: false,
-        error: '项目仍有执行中的作业，请先停止自动推进后再删除',
+        error: '项目仍有执行中的作业，请先停止项目并等待作业退出后再删除',
         code: 'PROJECT_DELETE_BLOCKED',
       }),
     )
 
     await expect(deleteProjectRequest('p1', fetcher)).rejects.toThrow(
-      '项目仍有执行中的作业，请先停止自动推进后再删除',
+      '项目仍有执行中的作业，请先停止项目并等待作业退出后再删除',
     )
   })
 })
