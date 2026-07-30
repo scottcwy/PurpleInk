@@ -26,8 +26,24 @@ interface AssDocumentInput {
   shots: AssShot[]
 }
 
-const MAX_LINE_GRAPHEMES = 18
-const MAX_CUE_GRAPHEMES = MAX_LINE_GRAPHEMES * 2
+/**
+ * 单行字数闸门。
+ *
+ * 字幕只排一行——换行让底框裂成两条宽度不等的板，是成片里最直接的廉价感来源。
+ * 上限来自可用宽度而不是审美偏好：PlayResX 1920 减去 MarginL/R 各 120 得 1680px，
+ * 全角字的前进宽最坏等于 Fontsize（1.0 em），于是 1680 / 52 ≈ 32。取 32 意味着
+ * 无论 libass 最终解析到哪个字体、其垂直度量把 Fontsize 折算成多大的字面，单行都
+ * 不会溢出安全区。（实测 Fontsize 52 下常见中文字体的前进宽约 39px，也就是 32 字
+ * 实际只占约 1250px，闸门留了大约 25% 余量。）
+ *
+ * 闸门不会削减内容：MAX_CUE_MS 4000ms 配合中文旁白约 5 字/秒，真实 cue 长度上限
+ * 在 20 字左右，32 只是溢出保险。
+ *
+ * libass 不能替代这道闸门——它的智能换行只在空格等断词机会处生效，连续中文没有
+ * 任何断点，超长行会直接画到画面外被裁掉（实测 50 字一行的墨迹横跨 x=0..1919）。
+ */
+const MAX_LINE_GRAPHEMES = 32
+const MAX_CUE_GRAPHEMES = MAX_LINE_GRAPHEMES
 const MAX_CUE_MS = 4_000
 const TARGET_MIN_CUE_MS = 1_200
 
@@ -107,6 +123,9 @@ export function buildAssDocument(input: AssDocumentInput): string {
   return [
     '[Script Info]',
     'ScriptType: v4.00+',
+    // WrapStyle 2 = 只在显式 \N 处换行。字数闸门已保证单行不溢出，禁止 libass
+    // 自行折行，避免拉丁词较多的 cue 在空格处被拆成两行。
+    'WrapStyle: 2',
     'PlayResX: 1920',
     'PlayResY: 1080',
     'ScaledBorderAndShadow: yes',
@@ -236,13 +255,19 @@ function aggregateReadableCues(captions: Caption[]): ReadableSubtitleCue[] {
   }))
 }
 
+/**
+ * 一条 cue 一行。上游 splitLongCaption 与 aggregateReadableCues 已把每条 cue 压到
+ * MAX_CUE_GRAPHEMES 以内，因此这里只做防御：真的超长时截断并抛错，而不是像早先的
+ * 实现那样静默丢弃 slice 之外的字（那会让成片少字且无人察觉）。
+ */
 function wrapCue(text: string): string[] {
   const items = graphemes(text)
-  if (items.length <= MAX_LINE_GRAPHEMES) return [text]
-  return [
-    items.slice(0, MAX_LINE_GRAPHEMES).join(''),
-    items.slice(MAX_LINE_GRAPHEMES, MAX_CUE_GRAPHEMES).join(''),
-  ]
+  if (items.length > MAX_CUE_GRAPHEMES) {
+    throw new Error(
+      `字幕单行超出安全宽度：${String(items.length)} 字素 > ${String(MAX_CUE_GRAPHEMES)}`
+    )
+  }
+  return [text]
 }
 
 function normalizedGraphemeCount(text: string): number {

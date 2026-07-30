@@ -106,7 +106,8 @@ describe('buildAssDocument', () => {
     expect(ass).toContain(String.raw`第二\\\{镜\}`)
   })
 
-  it('wraps long CJK text into at most two 18-grapheme lines', () => {
+  it('keeps a 30-grapheme cue on a single line instead of wrapping it', () => {
+    // 30 字：既超过旧的 18 字折行阈值，也接近 32 字闸门，必须仍是单行。
     const text = '一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十'
     const ass = buildAssDocument({
       fps: 30,
@@ -122,7 +123,47 @@ describe('buildAssDocument', () => {
       ],
     })
 
-    const dialogue = ass.split('\n').find((line) => line.startsWith('Dialogue:'))
-    expect(dialogue?.split(String.raw`\N`)).toHaveLength(2)
+    expect(ass).toContain('WrapStyle: 2')
+    const dialogues = ass
+      .split('\n')
+      .filter((line) => line.startsWith('Dialogue:'))
+    expect(dialogues.length).toBeGreaterThan(0)
+    for (const dialogue of dialogues) {
+      expect(dialogue).not.toContain(String.raw`\N`)
+    }
+    // 全文仍然完整落地，没有像旧 wrapCue 那样静默丢弃闸门之外的字。
+    const rendered = dialogues
+      .map((line) => line.split(',').slice(9).join(','))
+      .join('')
+    expect(rendered).toBe(text)
+  })
+
+  it('splits a cue longer than the single-line gate into multiple single-line cues', () => {
+    // 40 字超过 32 字闸门：必须切成多条 cue（各自单行），而不是折行或丢字。
+    const text = '甲'.repeat(40)
+    const ass = buildAssDocument({
+      fps: 30,
+      targetResolution: { width: 1920, height: 1080 },
+      shots: [
+        {
+          laneKey: 'S001',
+          durationInFrames: 120,
+          sourceText: text,
+          audioDurationMs: 4_000,
+          captions: [{ text, startMs: 0, endMs: 4_000 }],
+        },
+      ],
+    })
+
+    const dialogues = ass
+      .split('\n')
+      .filter((line) => line.startsWith('Dialogue:'))
+    expect(dialogues.length).toBe(2)
+    for (const dialogue of dialogues) {
+      expect(dialogue).not.toContain(String.raw`\N`)
+    }
+    expect(
+      dialogues.map((line) => line.split(',').slice(9).join(',')).join('')
+    ).toBe(text)
   })
 })
