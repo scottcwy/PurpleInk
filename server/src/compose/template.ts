@@ -217,7 +217,6 @@ const shotWindow: ShotDef = {
       `      tl.from("${sel} .window", { opacity: 0, y: 56, scale: 0.96, duration: ${mpEnterDur(m, 0.9)}, ease: "${enterEase(m)}" }, ${at(0.2)});`,
       `      tl.from("${sel} .shot-visual", { opacity: 0, duration: 0.6, ease: "power2.out" }, ${at(0.5)});`,
       `      tl.from("${sel} .cap", { opacity: 0, y: 20, duration: 0.7, ease: "power2.out" }, ${at(0.8)});`,
-      cam.css,
       cam.gsap,
     ]
   },
@@ -249,7 +248,6 @@ const shotTilt: ShotDef = {
       `      tl.from("${sel} .tilt-card", { opacity: 0, rotationY: -22, rotationX: 8, y: 70, transformPerspective: 1600, duration: ${mpEnterDur(m, 1.1)}, ease: "${enterEase(m)}" }, ${at(0.2)});`,
       `      tl.from("${sel} .tilt-img", { opacity: 0, duration: 0.6, ease: "power2.out" }, ${at(0.5)});`,
       `      tl.from("${sel} .cap", { opacity: 0, y: 20, duration: 0.7, ease: "power2.out" }, ${at(0.8)});`,
-      cam.css,
       cam.gsap,
     ]
   },
@@ -272,7 +270,6 @@ const shotZoom: ShotDef = {
       `      tl.from("${sel} .window", { opacity: 0, scale: 0.94, duration: ${mpEnterDur(m, 0.9)}, ease: "${enterEase(m)}" }, ${at(0.2)});`,
       `      tl.from("${sel} .shot-visual", { opacity: 0, duration: 0.6, ease: "power2.out" }, ${at(0.5)});`,
       `      tl.from("${sel} .cap", { opacity: 0, y: 20, duration: 0.7, ease: "power2.out" }, ${at(0.8)});`,
-      cam.css,
       cam.gsap,
     ]
   },

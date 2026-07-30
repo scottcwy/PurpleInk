@@ -3,7 +3,7 @@
 import { spawn } from "node:child_process"
 import { readdir, stat, readFile } from "node:fs/promises"
 import { existsSync } from "node:fs"
-import { delimiter, dirname, join } from "node:path"
+import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { logger } from "../lib/logger"
 
@@ -184,7 +184,7 @@ export async function renderProject(projectDir: string, options: RenderOptions =
 }
 
 /**
- * 渲染后金样本校验：验证生成的 index.html 结构与金样本对齐。
+ * 渲染后金样本校验：验证根页面及其实际引用的章节结构与金样本对齐。
  * 采用与 verify-golden.ts 相同的 check() 断言风格：计数 passed/failed，逐条打印。
  */
 export async function verifyGolden(projectDir: string): Promise<{ passed: boolean; details: string[]; passedCount: number; failedCount: number }> {
@@ -208,7 +208,16 @@ export async function verifyGolden(projectDir: string): Promise<{ passed: boolea
     return { passed: false, details, passedCount, failedCount }
   }
 
-  const html = await readFile(htmlPath, "utf8")
+  const rootHtml = await readFile(htmlPath, "utf8")
+  const referencedHtml: string[] = []
+  const compositionPattern = /data-composition-src=["']([^"']+\.html)["']/g
+  for (const match of rootHtml.matchAll(compositionPattern)) {
+    const compositionPath = resolve(projectDir, match[1])
+    const relativePath = relative(projectDir, compositionPath)
+    if (relativePath.startsWith("..") || isAbsolute(relativePath) || !existsSync(compositionPath)) continue
+    referencedHtml.push(await readFile(compositionPath, "utf8"))
+  }
+  const html = [rootHtml, ...referencedHtml].join("\n")
 
   // 基础结构
   check("包含 GSAP CDN", html.includes("gsap@3"))
