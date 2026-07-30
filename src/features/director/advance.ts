@@ -3,7 +3,6 @@ import { getDb } from '@/lib/db/client'
 import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 import type { CanvasNodeType, NodeStatus } from '@/features/canvas'
 import { AdvanceRepositoryImpl } from './advance-repository'
-import { withProjectFrontierLock } from './frontier-lock'
 import { PIPELINE_STAGES, type PipelineStage } from './types'
 import type {
   ExportFinalizationResult,
@@ -109,15 +108,6 @@ export async function advancePipeline(
   completedNodeId: string,
   dependencies?: AdvanceDependencies
 ): Promise<AdvanceResult> {
-  if (!dependencies) {
-    const database = await getDb()
-    return withProjectFrontierLock(database, projectId, async () =>
-      advancePipeline(
-        projectId,
-        completedNodeId,
-        await createDefaultDependencies(),
-      ))
-  }
   const resolved = dependencies ?? (await createDefaultDependencies())
   const result: AdvanceResult = { enqueuedNodeIds: [], failedNodeIds: [] }
   if (!(await resolved.repository.isAutopilotEnabled(projectId))) return result
@@ -191,15 +181,7 @@ export async function startProjectPipeline(
   projectId: string,
   dependencies?: PipelineControlDependencies
 ): Promise<PipelineStartResult> {
-  if (!dependencies) {
-    await assertProjectWorkflowSupported(projectId)
-    const database = await getDb()
-    return withProjectFrontierLock(database, projectId, async () =>
-      startProjectPipeline(
-        projectId,
-        await createDefaultControlDependencies(),
-      ))
-  }
+  if (!dependencies) await assertProjectWorkflowSupported(projectId)
   const resolved = dependencies ?? (await createDefaultControlDependencies())
   await resolved.repository.setAutopilot(projectId, true)
   const entry = await resolved.repository.getEntryNode(projectId)

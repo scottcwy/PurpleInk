@@ -6,6 +6,7 @@ import {
 } from '@/lib/auth/workspace-context'
 import type { Db } from '@/lib/db/client'
 import type { PipelineStartResult } from './advance'
+import { tryProjectFrontierLock } from './frontier-lock'
 
 export interface DirectorFrontierCandidate {
   workspaceId: string
@@ -15,11 +16,16 @@ export interface DirectorFrontierCandidate {
 interface ReconciliationDependencies {
   listCandidates?: (database: Db) => Promise<DirectorFrontierCandidate[]>
   resume?: (projectId: string) => Promise<PipelineStartResult>
+  lockProject?: (
+    projectId: string,
+    operation: () => Promise<PipelineStartResult>,
+  ) => Promise<PipelineStartResult | null>
 }
 
 export interface DirectorFrontierReconciliationResult {
   reconciledProjectIds: string[]
   failedProjectIds: string[]
+  deferredProjectIds: string[]
 }
 
 /**
@@ -33,10 +39,14 @@ export async function reconcileDirectorFrontiers(
   const listCandidates = dependencies.listCandidates
     ?? listDirectorFrontierCandidates
   const resume = dependencies.resume ?? defaultResume
+  const lockProject = dependencies.lockProject
+    ?? ((projectId, operation) =>
+      tryProjectFrontierLock(database, projectId, operation))
   const candidates = await listCandidates(database)
   const result: DirectorFrontierReconciliationResult = {
     reconciledProjectIds: [],
     failedProjectIds: [],
+    deferredProjectIds: [],
   }
 
   for (const candidate of candidates) {
@@ -46,8 +56,20 @@ export async function reconcileDirectorFrontiers(
           workspaceId: candidate.workspaceId,
           userId: SYSTEM_USER_ID,
         },
-        () => resume(candidate.projectId),
+        () => lockProject(
+          candidate.projectId,
+          () => resume(candidate.projectId),
+        ),
       )
+      if (!resumed) {
+        result.deferredProjectIds.push(candidate.projectId)
+        console.info('[director_frontier_reconcile_deferred]', {
+          workspaceId: candidate.workspaceId,
+          projectId: candidate.projectId,
+          code: 'FRONTIER_LOCK_BUSY',
+        })
+        continue
+      }
       result.reconciledProjectIds.push(candidate.projectId)
       console.info('[director_frontier_reconciled]', {
         workspaceId: candidate.workspaceId,

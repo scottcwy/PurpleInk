@@ -40,6 +40,7 @@ describe('reconcileDirectorFrontiers', () => {
     const result = await reconcileDirectorFrontiers({} as never, {
       listCandidates: vi.fn(async () => candidates),
       resume,
+      lockProject: (_projectId, operation) => operation(),
     })
 
     expect(observedContexts).toEqual(candidates.map(({ workspaceId }) => workspaceId))
@@ -49,6 +50,24 @@ describe('reconcileDirectorFrontiers', () => {
     expect(result).toEqual({
       reconciledProjectIds: candidates.map(({ projectId }) => projectId),
       failedProjectIds: [],
+      deferredProjectIds: [],
+    })
+  })
+
+  it('defers a project when another process owns its frontier lock', async () => {
+    const resume = vi.fn()
+
+    const result = await reconcileDirectorFrontiers({} as never, {
+      listCandidates: vi.fn(async () => [candidates[0]!]),
+      resume,
+      lockProject: vi.fn(async () => null),
+    })
+
+    expect(resume).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      reconciledProjectIds: [],
+      failedProjectIds: [],
+      deferredProjectIds: [candidates[0]!.projectId],
     })
   })
 
@@ -68,11 +87,13 @@ describe('reconcileDirectorFrontiers', () => {
     const result = await reconcileDirectorFrontiers({} as never, {
       listCandidates: vi.fn(async () => candidates),
       resume,
+      lockProject: (_projectId, operation) => operation(),
     })
 
     expect(result).toEqual({
       reconciledProjectIds: [candidates[1]!.projectId],
       failedProjectIds: [candidates[0]!.projectId],
+      deferredProjectIds: [],
     })
     expect(JSON.stringify(warning.mock.calls)).not.toContain('provider secret response')
     expect(warning).toHaveBeenCalledWith(
