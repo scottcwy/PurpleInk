@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Sparkles } from "lucide-react";
 import { Button, type ButtonSize } from "@/components/ui/button";
@@ -60,6 +60,7 @@ export function NewProjectDialog({
   triggerSize = "md",
 }: NewProjectDialogProps) {
   const router = useRouter();
+  const formId = `new-project-form-${useId()}`;
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<ProjectWorkflowKind>(initialKind);
   const [title, setTitle] = useState("");
@@ -165,7 +166,7 @@ export function NewProjectDialog({
               取消
             </Button>
             <Button
-              form="new-project-form"
+              form={formId}
               type="submit"
               icon={Sparkles}
               disabled={submitting}
@@ -180,7 +181,7 @@ export function NewProjectDialog({
         }
       >
         <form
-          id="new-project-form"
+          id={formId}
           className="flex flex-col gap-3.5"
           onSubmit={handleSubmit}
         >
