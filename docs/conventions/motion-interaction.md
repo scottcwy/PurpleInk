@@ -302,12 +302,12 @@ ESC 逻辑从 `app-sidebar-shell.tsx`、`canvas-inspector.tsx` 两处删除；
 
 | 项 | 判定依据 | 处理 | 状态 |
 | --- | --- | --- | --- |
-| `lib/marketing-motion.tsx` | 12 个导出仅文件内部互引；唯一外部 import 是 `providers.tsx` 取 `ReducedMotionProvider`，而读取它的 `useReducedMotion` 零外部消费者（其余均从 `motion/react` 取） | 整文件删除 | todo |
-| 同名 `fadeInUp` 冲突 | marketing 版 y:20 vs `variants.ts` y:8 | 随上一条消失 | todo |
-| reduced-motion 第三套 | 同上 | 收敛为 §5.5 两层 | todo |
+| `lib/marketing-motion.tsx` | 12 个导出仅文件内部互引；唯一外部 import 是 `providers.tsx` 取 `ReducedMotionProvider`，而读取它的 `useReducedMotion` 零外部消费者（其余均从 `motion/react` 取） | 整文件删除 | done |
+| 同名 `fadeInUp` 冲突 | marketing 版 y:20 vs `variants.ts` y:8 | 随上一条消失 | done |
+| reduced-motion 第三套 | 同上 | 收敛为 §5.5 两层 | done |
 | GSAP `^3.15.0` | 仅 `marketing/image-reveal.tsx` 一个消费者；motion 的 `useScroll` 已在 `text-reveal` / `stats` / `hero` 做同类事；且 GSAP 自带第三套 reduced-motion | 改写后删依赖 | todo |
 | Lenis | 与 `globals.css` 全局 `scroll-behavior: smooth` 重复 | 保留但限定 `(marketing)`，收窄全局规则 | todo |
-| 侧栏宽度双路径 | `sidebar.tsx` 自带 `transition-[width] duration-200` + `w-[60px]/w-[248px]`，但生产路径外层 `AnimatedAside`（220ms）传入 `w-full` 覆盖了内部宽度类 → 那条 200ms **在生产是死代码，只在 `/playbook` demo 活着** | 宽度动画唯一归 `AnimatedAside`；`sidebar.tsx` 删过渡与宽度类；demo 改用 `AnimatedAside` 包裹 | todo |
+| 侧栏宽度双路径 | `sidebar.tsx` 自带 `transition-[width] duration-200` + `w-[60px]/w-[248px]`，但生产路径外层 `AnimatedAside`（220ms）传入 `w-full` 覆盖了内部宽度类 → 那条 200ms **在生产是死代码，只在 `/playbook` demo 活着** | 宽度动画唯一归 `AnimatedAside`；`sidebar.tsx` 删过渡与宽度类；demo 改用 `AnimatedAside` 包裹 | done |
 
 ### 7.5 已合规（keep）
 

@@ -138,7 +138,7 @@ export const MOTION_INTENTS: MotionIntent[] = [
     category: 'spatial',
     params: 'SPRING_SPATIAL_DEFAULT',
     status: 'pending',
-    current: '双路径：AnimatedAside 用 tween 220ms（生产），sidebar.tsx 自带 CSS 200ms（生产路径被 w-full 覆盖，是死代码，只在 playbook demo 活着）',
+    current: '生产与 playbook demo 均由 AnimatedAside 使用 tween 220ms，已删除 sidebar.tsx 被 w-full 覆盖的 CSS 200ms 死分支；是否改为 spring 属计划外，仍待真实收益判断',
   },
   {
     id: 'drag-instant',

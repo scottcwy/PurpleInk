@@ -8,6 +8,11 @@ import {
   Waypoints,
 } from 'lucide-react'
 import { useState } from 'react'
+import { AnimatedAside } from '@/features/navigation/collapsible-panel'
+import {
+  SIDEBAR_DEFAULT_WIDTH,
+  SIDEBAR_RAIL_WIDTH,
+} from '@/lib/layout/breakpoints'
 import { PurpleInkSidebar } from './sidebar'
 
 const DEMO_ITEMS = [
@@ -24,13 +29,19 @@ export function SidebarDemo() {
 
   return (
     <div className="h-[720px] overflow-hidden rounded-lg border border-ds-border">
-      <PurpleInkSidebar
-        items={DEMO_ITEMS}
-        collapsed={collapsed}
-        onCollapsedChange={setCollapsed}
-        accountOpen={accountOpen}
-        onAccountOpenChange={setAccountOpen}
-      />
+      <AnimatedAside
+        width={collapsed ? SIDEBAR_RAIL_WIDTH : SIDEBAR_DEFAULT_WIDTH}
+        className="h-full"
+      >
+        <PurpleInkSidebar
+          items={DEMO_ITEMS}
+          collapsed={collapsed}
+          onCollapsedChange={setCollapsed}
+          accountOpen={accountOpen}
+          onAccountOpenChange={setAccountOpen}
+          className="h-full w-full"
+        />
+      </AnimatedAside>
     </div>
   )
 }

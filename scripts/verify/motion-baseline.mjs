@@ -65,7 +65,7 @@ async function prepareStablePage(page, target) {
     undefined,
     { timeout: 10_000 },
   )
-  await page.waitForTimeout(target.route === '/' ? 1_800 : 450)
+  await page.waitForTimeout(1_800)
   await page.addStyleTag({
     content: `
       html { scroll-behavior: auto !important; }
