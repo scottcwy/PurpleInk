@@ -170,6 +170,30 @@ describe('director prompt templates', () => {
     expect(directPrompt).toContain('相邻镜头必须变化拓扑、视角或信息职责')
   })
 
+  it('carries visual weight and same-weight restraint into DIRECT and FABRICATE', () => {
+    const directPrompt = buildDirectPrompt({
+      projectTitle: '测试',
+      scriptUnits,
+      audioManifest,
+      audioAllocation,
+    })
+    expect(directPrompt).toContain('完整视觉重量')
+    expect(directPrompt).toContain('承托结构')
+    expect(directPrompt).toContain('信息组不超过 3 个')
+    expect(directPrompt).toContain('等权卡片阵列不得充当主视觉')
+    expect(directPrompt).toContain('空白都要服务构图')
+
+    const prompt = buildFabricatePrompt({ shot, audioAllocation, styleBible: '风格圣经' })
+    expect(prompt).toContain('视觉重量与克制')
+    expect(prompt).toContain('单一核心判断 > 视觉重量 > 细节与动效丰富度')
+    expect(prompt).toContain('信息组不超过 3 个')
+    expect(prompt).toContain('至少 3 层明暗或景深层次')
+    expect(prompt).toContain('stroke-width 相对 1920 母版不小于 2px')
+    expect(prompt).toContain('禁止孤立短线、散点和无锚定的细框')
+    // 静态视觉规则必须留在 style bible 之前，保住 prompt cache 前缀
+    expect(prompt.indexOf('视觉重量与克制')).toBeLessThan(prompt.indexOf('style bible：'))
+  })
+
   it('forbids describing degraded FINALIZE input as complete quality approval', () => {
     const prompt = buildExportFinalizePrompt({
       shotPlan,
@@ -346,6 +370,7 @@ describe('director prompt templates', () => {
     expect(fabricateRetry).toContain('重新输出完整 HTML')
     expect(fabricateRetry).toContain('不得为通过门禁而删减视觉细节、动效或设计质量')
     expect(fabricateRetry).toContain('保持同等或更高的视觉丰富度')
+    expect(fabricateRetry).toContain('不得把主视觉退化为空、薄、小、散')
 
     const shotSpecRetry = buildShotSpecRetryPrompt({
       retry: 2,
@@ -357,6 +382,7 @@ describe('director prompt templates', () => {
     expect(shotSpecRetry).toContain('完整 JSON')
     expect(shotSpecRetry).toContain('不得为通过门禁而删减视觉细节、动效或设计质量')
     expect(shotSpecRetry).toContain('镜头合同与视觉法则仍然全部有效')
+    expect(shotSpecRetry).toContain('不得靠增加等权卡片补足画面')
   })
 })
 
