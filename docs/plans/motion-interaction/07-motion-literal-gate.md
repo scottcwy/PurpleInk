@@ -45,6 +45,10 @@ cap 一并重置为当前实际值**。如果期间某个类别的债增长过�
 与旧 baseline 的 cap 逐一对比。若有增长，**先修增长再生成 baseline**，
 并在提交信息里列出四个类别的 before / after 数字。不允许无声重置。
 
+**执行记录（2026-07-31）**：旧 cap 为 `1 / 15 / 0`，重建前实际为
+`0 / 14 / 0`，三个既有类别均下降、没有增长；新增扫描得到 `motionLiterals = 23`。
+重建后四类 cap 为 `0 / 14 / 0 / 23`。
+
 ## 4. 检测规则
 
 新增类别名建议 `motionLiterals`，规则 id `MOTION_LITERAL`。检测目标（规范 §5.1）：
@@ -116,10 +120,10 @@ cap 一并重置为当前实际值**。如果期间某个类别的债增长过�
 
 ## 8. 完成判据
 
-- [ ] `motionLiterals` 类别已加入 `DEBT_CATEGORIES`，规则 id 为 `MOTION_LITERAL`；
-- [ ] `docs/**`、`*.test.*`、`*.demo.*`、渲染 fixture 已豁免；
-- [ ] baseline 已按 §3.1 流程重建，四类 before / after 已记录在提交信息；
-- [ ] 反向验证通过（人为字面量能让 `verify:v3` 变红）；
-- [ ] 规则 3 已实现，或已记录为待补并说明理由；
-- [ ] `motion-interaction.md` §5.1 / §7.1 已回写；
-- [ ] 单个 Conventional Commit（规则 + 测试 + baseline 同批）。
+- [x] `motionLiterals` 类别已加入 `DEBT_CATEGORIES`，规则 id 为 `MOTION_LITERAL`；
+- [x] `docs/**`、`*.test.*`、`*.demo.*`、渲染 fixture 已豁免；
+- [x] baseline 已按 §3.1 流程重建，四类 before / after 已记录在提交信息；
+- [x] 反向验证通过（人为字面量使 cap 23 → actual 24，`verify:v3` 变红）；
+- [x] 规则 3 已用 JSX `className` AST 上下文实现；
+- [x] `motion-interaction.md` §5.1 / §7.1 已回写；
+- [x] 单个 Conventional Commit（规则 + 测试 + baseline 同批）。

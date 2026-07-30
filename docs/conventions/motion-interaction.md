@@ -190,7 +190,9 @@ top layer 天然位于所有 stacking context 之上，不需要 z-index。
 - 禁止 `transition-all`；显式列出过渡属性（`transition-[width]` 等），
   否则会连带过渡 layout 属性，造成不必要的重排。
 
-存量由 `verify:v3` 的 `MOTION_LITERAL` 类别冻结，只允许持平或下降，新增即失败。
+存量由 `verify:v3` 的 `motionLiterals` 债务类别冻结，只允许持平或下降，新增即失败；
+每条命中的 rule id 为 `MOTION_LITERAL`。规则 3 以 JSX `className` AST 上下文判断，
+不会用逐行正则猜测跨行或条件拼接。
 
 ### 5.2 效果堆叠
 
@@ -264,6 +266,7 @@ top layer 天然位于所有 stacking context 之上，不需要 z-index。
 | `design-system.css` `[data-glow]` | 硬编码 `0.36s cubic-bezier(0.4,0,0.2,1)` | `var(--duration-slow) var(--ease-standard)` | done |
 | `fast` token 校准 | 120ms 与全站事实标准 150ms 分叉 | 按 D1 统一为 150ms | done |
 | `/playbook/foundations` | 无动效段 | 补 token 对照 | done |
+| `verify:v3` 动效字面量门禁 | 无，规范只能靠人工遵守 | `motionLiterals` baseline 冻结；`MOTION_LITERAL` 新增即失败 | done |
 | `/playbook/motion` | 不存在 | §3 意图对照台 | done |
 
 ### 7.2 覆盖层（8 套 → 2 模式）

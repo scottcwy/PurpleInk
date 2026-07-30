@@ -208,6 +208,60 @@ describe('dependency direction', () => {
   })
 })
 
+describe('motion literal debt', () => {
+  it('命中四类显式字面量与缺少 duration 的属性过渡', () => {
+    writeFixture(
+      'src/components/card.tsx',
+      [
+        `export const Card = () => <div className="duration-250 transition-all ease-[linear]"`,
+        `  style={{ transitionTimingFunction: 'cubic-bezier(0.1, 0.2, 0.3, 1)' }} />`,
+      ].join('\n')
+    )
+    writeFixture(
+      'src/components/fade.tsx',
+      `export const Fade = () => <div className="transition-opacity hover:opacity-100" />`
+    )
+
+    const report = scanFixture()
+
+    expect(report.motionLiterals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ruleId: 'MOTION_LITERAL', specifier: 'duration-250' }),
+        expect.objectContaining({ ruleId: 'MOTION_LITERAL', specifier: 'transition-all' }),
+        expect.objectContaining({ ruleId: 'MOTION_LITERAL', specifier: 'ease-[' }),
+        expect.objectContaining({ ruleId: 'MOTION_LITERAL', specifier: 'cubic-bezier(' }),
+        expect.objectContaining({ ruleId: 'MOTION_LITERAL', specifier: 'transition-opacity' }),
+      ])
+    )
+    expect(report.motionLiterals).toHaveLength(5)
+  })
+
+  it('豁免文档、测试、demo 与渲染 fixture', () => {
+    const literal = `export const value = 'duration-250 transition-all ease-[linear] cubic-bezier('`
+    writeFixture('docs/motion.md', literal)
+    writeFixture('src/components/card.test.ts', literal)
+    writeFixture('src/components/card.demo.tsx', literal)
+    writeFixture('src/features/render/__fixtures__/chapter.ts', literal)
+
+    expect(scanFixture().motionLiterals).toEqual([])
+  })
+
+  it('新增字面量超过 baseline 时触发 DEBT_CAP_EXCEEDED', () => {
+    const baseline = createV3ArchitectureBaseline(scanFixture())
+    writeFixture(
+      'src/components/new-card.tsx',
+      `export const NewCard = () => <div className="duration-250" />`
+    )
+
+    expect(checkV3Architecture(scanFixture(), baseline)).toContainEqual({
+      ruleId: 'DEBT_CAP_EXCEEDED',
+      category: 'motionLiterals',
+      cap: 0,
+      actual: 1,
+    })
+  })
+})
+
 describe('file length debt', () => {
   it('按 page、一般生产文件、schema/repository 三档硬上限拒绝新超限文件', () => {
     writeLines('src/app/example/page.tsx', 301)
