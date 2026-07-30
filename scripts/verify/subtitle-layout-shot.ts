@@ -3,42 +3,72 @@
  *
  * 为什么需要它：字幕的宽度预算依赖「Fontsize → 实际字面前进宽」这一比值，而该比值
  * 由 libass 最终解析到的字体的垂直度量决定，换字体就会变。任何改动 Fontsize、
- * Fontname、Margin 或单行字数闸门的任务，都必须用本脚本重新取证，不能靠推算。
+ * Fontname、Margin、单行字数闸门或明暗样式的任务，都必须用本脚本重新取证。
  *
  * 用法：npx tsx scripts/verify/subtitle-layout-shot.ts
  *
+ * 测量方法：同一背景分别渲染「无字幕」与「有字幕」两帧再做差。变化的像素就是字幕
+ * 的墨迹，因此对白字压深底与黑字压浅底两套样式都成立，不需要假设墨色比背景更亮。
+ *
  * 判定标准：
- * - renderedLineBands 必须为 1（单行契约）；
- * - withinSafeArea 必须为 true（墨迹落在 MarginL..1920-MarginR 之间，未被裁切）。
+ * - lineBands 必须为 1（单行契约）；
+ * - withinSafeArea 必须为 true（墨迹落在 MarginL..PlayResX-MarginR 之间，未被裁切）。
+ *
+ * 本脚本只回答几何问题。明暗两套样式该不该翻转是对比度问题，用 WCAG 对比度解析计算
+ * 更准（见 features/audio/subtitle-style.ts 的注释），不要在这里编造像素指标：墨迹
+ * 差值在两套样式下统计的是不同部位（一边只剩描边、一边只剩字身），不可跨样式比较。
  */
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import ffmpegPath from 'ffmpeg-static'
-import { buildAssDocument } from '../../src/features/audio/subtitle-ass.ts'
+import { buildAssDocument } from '../../src/features/audio/subtitle-ass'
+import {
+  SUBTITLE_MARGIN_X,
+  SUBTITLE_PLAY_RES_X,
+  SUBTITLE_PLAY_RES_Y,
+  subtitleStyleLines,
+  type SubtitleContrast,
+} from '../../src/features/audio/subtitle-style'
 
-const WIDTH = 1920
-const HEIGHT = 1080
-/** 与 subtitle-ass.ts 的 Style 行保持一致；改那里必须同步改这里。 */
-const MARGIN_X = 120
-const INK_THRESHOLD = 128
+const WIDTH = SUBTITLE_PLAY_RES_X
+const HEIGHT = SUBTITLE_PLAY_RES_Y
+/** 差值超过该阈值视为字幕墨迹，滤掉编码噪声。 */
+const DELTA_THRESHOLD = 24
 
-interface LayoutMeasurement {
+const DARK_BG = '0x101014'
+const LIGHT_BG = '0xf4f4f6'
+
+interface Measurement {
   cues: number
-  renderedLineBands: number
+  lineBands: number
   inkLeft: number
   inkRight: number
   withinSafeArea: boolean
 }
 
-const CASES: Array<{ name: string; text: string }> = [
-  { name: 'cjk-30', text: '一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十' },
-  { name: 'cjk-gate-max', text: '甲'.repeat(32) },
-  { name: 'mixed-latin-cjk', text: 'PurpleInk 把产品事实与真实演示证据做成可发布的视频' },
+interface Case {
+  name: string
+  text: string
+  contrast: SubtitleContrast
+  background: string
+}
+
+const LONG_CJK = '一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十'
+const GATE_MAX_CJK = '甲'.repeat(32)
+const MIXED = 'PurpleInk 把产品事实与真实演示证据做成可发布的视频'
+
+const CASES: Case[] = [
+  { name: 'dark-bg/on-dark/cjk-30', text: LONG_CJK, contrast: 'on-dark', background: DARK_BG },
+  { name: 'dark-bg/on-dark/gate-max', text: GATE_MAX_CJK, contrast: 'on-dark', background: DARK_BG },
+  { name: 'dark-bg/on-dark/mixed', text: MIXED, contrast: 'on-dark', background: DARK_BG },
+  { name: 'light-bg/on-light/cjk-30', text: LONG_CJK, contrast: 'on-light', background: LIGHT_BG },
+  { name: 'light-bg/on-light/gate-max', text: GATE_MAX_CJK, contrast: 'on-light', background: LIGHT_BG },
+  { name: 'light-bg/on-light/mixed', text: MIXED, contrast: 'on-light', background: LIGHT_BG },
 ]
 
-function buildAss(text: string): string {
+function buildAss(text: string, contrast: SubtitleContrast): string {
   return buildAssDocument({
     fps: 30,
     targetResolution: { width: WIDTH, height: HEIGHT },
@@ -49,31 +79,37 @@ function buildAss(text: string): string {
         sourceText: text,
         audioDurationMs: 4_000,
         captions: [{ text, startMs: 0, endMs: 4_000 }],
+        contrast,
       },
     ],
   })
 }
 
-function renderGrayFrame(assPath: string, outputPath: string): void {
+function renderGray(
+  background: string,
+  assPath: string | null,
+  outputPath: string
+): void {
   if (!ffmpegPath) throw new Error('ffmpeg-static 未提供当前平台二进制')
-  const escaped = assPath.replaceAll('\\', '/').replace(':', String.raw`\:`)
-  const result = spawnSync(
-    ffmpegPath,
-    [
-      '-hide_banner', '-loglevel', 'error', '-y',
-      '-f', 'lavfi', '-i', `color=c=black:s=${String(WIDTH)}x${String(HEIGHT)}:d=1`,
-      '-vf', `ass=filename='${escaped}'`,
-      '-frames:v', '1', '-pix_fmt', 'gray', '-f', 'rawvideo', outputPath,
-    ],
-    { windowsHide: true }
-  )
+  const args = [
+    '-hide_banner', '-loglevel', 'error', '-y',
+    '-f', 'lavfi',
+    '-i', `color=c=${background}:s=${String(WIDTH)}x${String(HEIGHT)}:d=1`,
+  ]
+  if (assPath) {
+    const escaped = assPath.replaceAll('\\', '/').replace(':', String.raw`\:`)
+    args.push('-vf', `ass=filename='${escaped}'`)
+  }
+  args.push('-frames:v', '1', '-pix_fmt', 'gray', '-f', 'rawvideo', outputPath)
+  const result = spawnSync(ffmpegPath, args, { windowsHide: true })
   if (result.status !== 0) {
     throw new Error(`ffmpeg 烧录失败：${result.stderr.toString().trim()}`)
   }
 }
 
-function measure(grayPath: string, cues: number): LayoutMeasurement {
-  const bytes = readFileSync(grayPath)
+function measure(basePath: string, withAssPath: string, cues: number): Measurement {
+  const base = readFileSync(basePath)
+  const drawn = readFileSync(withAssPath)
   let bands = 0
   let inBand = false
   let inkLeft = WIDTH
@@ -81,7 +117,8 @@ function measure(grayPath: string, cues: number): LayoutMeasurement {
   for (let y = 0; y < HEIGHT; y += 1) {
     let rowHasInk = false
     for (let x = 0; x < WIDTH; x += 1) {
-      if (bytes[y * WIDTH + x]! > INK_THRESHOLD) {
+      const index = y * WIDTH + x
+      if (Math.abs(drawn[index]! - base[index]!) > DELTA_THRESHOLD) {
         rowHasInk = true
         if (x < inkLeft) inkLeft = x
         if (x > inkRight) inkRight = x
@@ -92,38 +129,42 @@ function measure(grayPath: string, cues: number): LayoutMeasurement {
   }
   return {
     cues,
-    renderedLineBands: bands,
+    lineBands: bands,
     inkLeft,
     inkRight,
-    withinSafeArea: inkLeft >= MARGIN_X && inkRight <= WIDTH - MARGIN_X - 1,
+    withinSafeArea:
+      inkLeft >= SUBTITLE_MARGIN_X && inkRight <= WIDTH - SUBTITLE_MARGIN_X - 1,
   }
+}
+
+function runCase(work: string, item: Case, index: number): boolean {
+  const ass = buildAss(item.text, item.contrast)
+  const assPath = join(work, `case-${String(index)}.ass`)
+  writeFileSync(assPath, ass, 'utf8')
+  const basePath = join(work, `case-${String(index)}-base.gray`)
+  const drawnPath = join(work, `case-${String(index)}-drawn.gray`)
+  renderGray(item.background, null, basePath)
+  renderGray(item.background, assPath, drawnPath)
+  const cues = ass.split('\n').filter((line) => line.startsWith('Dialogue:')).length
+  const result = measure(basePath, drawnPath, cues)
+  const ok = result.lineBands === 1 && result.withinSafeArea
+  console.log(
+    `${ok ? 'PASS' : 'FAIL'} ${item.name}: cues=${String(result.cues)} `
+    + `lineBands=${String(result.lineBands)} `
+    + `inkX=${String(result.inkLeft)}..${String(result.inkRight)} `
+    + `withinSafeArea=${String(result.withinSafeArea)}`
+  )
+  return ok
 }
 
 function main(): void {
   const work = mkdtempSync(join(tmpdir(), 'cvc-subtitle-layout-'))
   let failures = 0
   try {
-    for (const item of CASES) {
-      const ass = buildAss(item.text)
-      const assPath = join(work, `${item.name}.ass`)
-      writeFileSync(assPath, ass, 'utf8')
-      const grayPath = join(work, `${item.name}.gray`)
-      renderGrayFrame(assPath, grayPath)
-      const cues = ass
-        .split('\n')
-        .filter((line) => line.startsWith('Dialogue:')).length
-      const result = measure(grayPath, cues)
-      const ok = result.renderedLineBands === 1 && result.withinSafeArea
-      if (!ok) failures += 1
-      console.log(
-        `${ok ? 'PASS' : 'FAIL'} ${item.name}: cues=${String(result.cues)} `
-        + `lineBands=${String(result.renderedLineBands)} `
-        + `inkX=${String(result.inkLeft)}..${String(result.inkRight)} `
-        + `withinSafeArea=${String(result.withinSafeArea)}`
-      )
+    for (const [index, item] of CASES.entries()) {
+      if (!runCase(work, item, index)) failures += 1
     }
-    const style = buildAss('样例').split('\n').find((line) => line.startsWith('Style:'))
-    console.log(`style: ${style ?? '(missing)'}`)
+    for (const style of subtitleStyleLines()) console.log(`style: ${style}`)
   } finally {
     rmSync(work, { recursive: true, force: true })
   }

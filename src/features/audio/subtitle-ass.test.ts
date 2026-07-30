@@ -101,7 +101,9 @@ describe('buildAssDocument', () => {
 
     expect(ass).toContain('PlayResX: 1920')
     expect(ass).toContain('PlayResY: 1080')
-    expect(ass).toContain('Style: Default,sans-serif,52')
+    // 明暗两套 Style 都要落进文档；具体字段由 subtitle-style.test.ts 锁定。
+    expect(ass).toContain('Style: OnDark,')
+    expect(ass).toContain('Style: OnLight,')
     expect(ass).toContain('Dialogue: 0,0:00:01.03,0:00:02.03')
     expect(ass).toContain(String.raw`第二\\\{镜\}`)
   })

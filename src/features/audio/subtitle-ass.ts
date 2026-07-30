@@ -1,3 +1,11 @@
+import {
+  SUBTITLE_PLAY_RES_X,
+  SUBTITLE_PLAY_RES_Y,
+  SUBTITLE_STYLE_FORMAT,
+  subtitleStyleLines,
+  subtitleStyleName,
+  type SubtitleContrast,
+} from './subtitle-style'
 import type { Caption } from './types'
 
 export interface ReadableSubtitleCue {
@@ -18,6 +26,11 @@ interface AssShot extends SubtitleTrackInput {
   durationInFrames: number
   /** 降级占位镜头：直接给定 cue（如「S007 · 占位」），跳过 ASR↔原稿校验。 */
   precomputedCues?: ReadableSubtitleCue[]
+  /**
+   * 本镜字幕带的背景明暗，决定引用哪一套 Style。省略按 `on-dark` 处理——白字黑描边
+   * 在深色底上是安全默认，探针失败或占位黑场都应落到这一侧。
+   */
+  contrast?: SubtitleContrast
 }
 
 interface AssDocumentInput {
@@ -102,13 +115,14 @@ export function buildAssDocument(input: AssDocumentInput): string {
   for (const shot of input.shots) {
     const offsetMs = (priorFrames * 1_000) / input.fps
     const cues = shot.precomputedCues ?? normalizeSubtitleTrack(shot)
+    const styleName = subtitleStyleName(shot.contrast ?? 'on-dark')
     for (const cue of cues) {
       dialogue.push(
         [
           'Dialogue: 0',
           assTime(offsetMs + cue.startMs),
           assTime(offsetMs + cue.endMs),
-          'Default',
+          styleName,
           '',
           '0',
           '0',
@@ -126,13 +140,13 @@ export function buildAssDocument(input: AssDocumentInput): string {
     // WrapStyle 2 = 只在显式 \N 处换行。字数闸门已保证单行不溢出，禁止 libass
     // 自行折行，避免拉丁词较多的 cue 在空格处被拆成两行。
     'WrapStyle: 2',
-    'PlayResX: 1920',
-    'PlayResY: 1080',
+    `PlayResX: ${String(SUBTITLE_PLAY_RES_X)}`,
+    `PlayResY: ${String(SUBTITLE_PLAY_RES_Y)}`,
     'ScaledBorderAndShadow: yes',
     '',
     '[V4+ Styles]',
-    'Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding',
-    'Style: Default,sans-serif,52,&H00FFFFFF,&H00FFFFFF,&H80000000,&H80000000,0,0,0,0,100,100,0,0,3,10,0,2,120,120,72,1',
+    SUBTITLE_STYLE_FORMAT,
+    ...subtitleStyleLines(),
     '',
     '[Events]',
     'Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text',

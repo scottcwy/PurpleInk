@@ -4,8 +4,13 @@ import {
   buildAssDocument,
   normalizeSubtitleTrackWithWholeClipFallback,
 } from '@/features/audio/subtitle-ass'
+import type { SubtitleContrast } from '@/features/audio/subtitle-style'
 import type { StorageAdapter } from '@/lib/storage'
 import type { MediaAssemblyPlan } from './media-assembly'
+import {
+  probeSubtitleContrast,
+  type SubtitleContrastProbe,
+} from './subtitle-contrast'
 
 /**
  * 成片硬字幕 ASS 构建（正常与降级导出共用）。
@@ -31,11 +36,16 @@ const subtitleTrackSchema = z
 
 export async function buildSubtitleAss(
   plan: MediaAssemblyPlan,
-  storage: StorageAdapter
+  storage: StorageAdapter,
+  probeContrast: SubtitleContrastProbe = probeSubtitleContrast
 ): Promise<string> {
   const shots = await Promise.all(
     plan.shots.map(async (shot) => {
-      if (!shot.subtitle) return placeholderAssShot(shot, plan.fps)
+      // 明暗判定对占位镜头也要做：占位是黑场，探针会稳定落到 on-dark。
+      const contrast = await probeContrast(
+        storage.localPath(shot.video.storageKey)
+      )
+      if (!shot.subtitle) return placeholderAssShot(shot, plan.fps, contrast)
       let parsed: z.infer<typeof subtitleTrackSchema>
       try {
         parsed = subtitleTrackSchema.parse(
@@ -55,6 +65,7 @@ export async function buildSubtitleAss(
         sourceText: parsed.sourceText,
         audioDurationMs: shot.narration.endInUnitMs,
         captions: parsed.captions,
+        contrast,
         precomputedCues: normalizeSubtitleTrackWithWholeClipFallback({
           sourceText: parsed.sourceText,
           audioDurationMs: shot.narration.endInUnitMs,
@@ -73,7 +84,8 @@ export async function buildSubtitleAss(
 /** 占位镜头的字幕：一条贯穿整镜时长的「{lane} · 占位」提示，跳过 ASR↔原稿校验。 */
 function placeholderAssShot(
   shot: MediaAssemblyPlan['shots'][number],
-  fps: number
+  fps: number,
+  contrast: SubtitleContrast
 ) {
   const durationMs = Math.round((shot.durationInFrames / fps) * 1_000)
   const text = `${shot.laneKey} · 占位`
@@ -84,5 +96,6 @@ function placeholderAssShot(
     audioDurationMs: durationMs,
     captions: [],
     precomputedCues: [{ startMs: 0, endMs: durationMs, text, lines: [text] }],
+    contrast,
   }
 }
