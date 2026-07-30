@@ -1,156 +1,91 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { GET } from './route'
 
-const mocks = vi.hoisted(() => ({
-  getArtifactDescriptor: vi.fn(),
-  readArtifact: vi.fn(),
-  artifactContentType: vi.fn(),
-  getProjectExecutionSnapshot: vi.fn(),
-}))
+const mocks = vi.hoisted(() => ({ readArtifact: vi.fn() }))
 
-vi.mock('server-only', () => ({}))
-// 会话层单独有 pg 测试覆盖；这里只验路由业务分支，直接以假会话放行。
 vi.mock('@/features/auth/api-session', () => ({
-  withApiSession: (handler: (session: unknown) => Promise<Response>) =>
-    handler({
-      userId: 'user-1',
-      workspaceId: 'ws-1',
-      email: 'user@example.com',
-      name: '测试用户',
-      workspaceName: '测试工作区',
-      sessionId: 'session-1',
-    }),
+  withApiSession: (handler: () => Promise<Response>) => handler(),
 }))
-vi.mock('@/features/artifacts', () => mocks)
-vi.mock('@/features/projects', () => ({
-  getProjectExecutionSnapshot: mocks.getProjectExecutionSnapshot,
-}))
+// 只替换会碰数据库与存储的 readArtifact；content-type 与文件名推导都是纯函数，
+// 用真实实现，这样路由测试锁到的头就是生产环境真会发出的头。
+vi.mock('@/features/artifacts', async () => {
+  const [download, contentType] = await Promise.all([
+    import('@/features/artifacts/download'),
+    import('@/features/artifacts/content-type'),
+  ])
+  return {
+    readArtifact: mocks.readArtifact,
+    artifactContentType: contentType.artifactContentType,
+    artifactDownloadFilename: download.artifactDownloadFilename,
+    attachmentDisposition: download.attachmentDisposition,
+    wantsAttachment: download.wantsAttachment,
+  }
+})
+
+const { GET } = await import('./route')
+
+const HASH = '8d21f3a4b5c6'.padEnd(64, '0')
 
 describe('GET /api/artifacts/[id]', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    mocks.readArtifact.mockReset()
     mocks.readArtifact.mockResolvedValue({
       descriptor: {
-        id: 'a-1',
-        kind: 'render-mp4',
-        contentHash: 'a'.repeat(64),
+        id: 'artifact-1',
+        projectId: 'project-1',
+        nodeId: null,
+        kind: 'final-mp4',
+        contentHash: HASH,
       },
-      bytes: Buffer.from('video'),
+      bytes: Buffer.from('mp4-bytes'),
     })
-    mocks.getArtifactDescriptor.mockResolvedValue({
-      id: 'a-1',
-      kind: 'render-mp4',
-      contentHash: 'a'.repeat(64),
-    })
-    mocks.artifactContentType.mockReturnValue('video/mp4')
   })
 
-  it('serves only the artifact resolved inside the requested project', async () => {
+  it('serves the artifact inline by default', async () => {
     const response = await GET(
-      new Request('http://localhost/api/artifacts/a-1?projectId=p-1'),
-      { params: Promise.resolve({ id: 'a-1' }) }
+      new Request('https://app.test/api/artifacts/artifact-1?projectId=project-1'),
+      { params: Promise.resolve({ id: 'artifact-1' }) }
     )
 
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toBe('video/mp4')
-    expect(mocks.readArtifact).toHaveBeenCalledWith('p-1', 'a-1')
+    // 内联是默认：画布检查器与成片预览都靠它播放，不能被下载改造顺手破坏。
+    expect(response.headers.get('content-disposition')).toBeNull()
   })
 
-  it('does not expose a blocked or rejected website video as a formal download', async () => {
-    mocks.getArtifactDescriptor.mockResolvedValue({
-      id: 'website-artifact',
-      kind: 'website-video-mp4',
-      contentHash: 'a'.repeat(64),
-    })
-    mocks.getProjectExecutionSnapshot.mockResolvedValue({
-      state: 'blocked',
-      delivery: {
-        artifactId: 'website-artifact',
-        lifecycle: 'rejected',
-      },
-    })
-
+  it('forces a download when the flag is set, with a hash-traceable filename', async () => {
     const response = await GET(
       new Request(
-        'http://localhost/api/artifacts/website-artifact?projectId=p-1',
+        'https://app.test/api/artifacts/artifact-1?projectId=project-1&download=1'
       ),
-      { params: Promise.resolve({ id: 'website-artifact' }) },
+      { params: Promise.resolve({ id: 'artifact-1' }) }
     )
 
-    expect(response.status).toBe(404)
+    expect(response.headers.get('content-disposition')).toBe(
+      'attachment; filename="final-mp4-8d21f3a4b5c6.mp4"'
+    )
+    expect(response.headers.get('content-type')).toBe('video/mp4')
+  })
+
+  it('rejects a request without projectId and never reads storage', async () => {
+    const response = await GET(
+      new Request('https://app.test/api/artifacts/artifact-1'),
+      { params: Promise.resolve({ id: 'artifact-1' }) }
+    )
+
+    expect(response.status).toBe(400)
     expect(mocks.readArtifact).not.toHaveBeenCalled()
   })
 
-  it('serves only the current succeeded approved website delivery', async () => {
-    const bytes = Buffer.from('verified-video')
-    const { createHash } = await import('node:crypto')
-    const contentHash = createHash('sha256').update(bytes).digest('hex')
-    mocks.getArtifactDescriptor.mockResolvedValue({
-      id: 'website-artifact',
-      kind: 'website-video-mp4',
-      contentHash,
-    })
-    mocks.getProjectExecutionSnapshot.mockResolvedValue({
-      state: 'succeeded',
-      delivery: {
-        artifactId: 'website-artifact',
-        lifecycle: 'approved',
-        downloadUrl:
-          '/api/artifacts/website-artifact?projectId=p-1',
-      },
-    })
-    mocks.readArtifact.mockResolvedValue({
-      descriptor: {
-        id: 'website-artifact',
-        kind: 'website-video-mp4',
-        contentHash,
-      },
-      bytes,
-    })
+  it('maps an ownership failure to 404 without leaking internals', async () => {
+    mocks.readArtifact.mockRejectedValue(new Error('产物不存在或不属于该项目'))
 
     const response = await GET(
-      new Request(
-        'http://localhost/api/artifacts/website-artifact?projectId=p-1',
-      ),
-      { params: Promise.resolve({ id: 'website-artifact' }) },
-    )
-
-    expect(response.status).toBe(200)
-    expect(response.headers.get('content-type')).toBe('video/mp4')
-    expect(response.headers.get('x-content-sha256')).toBe(contentHash)
-  })
-
-  it('fails closed when website video bytes no longer match the registered hash', async () => {
-    mocks.getArtifactDescriptor.mockResolvedValue({
-      id: 'website-artifact',
-      kind: 'website-video-mp4',
-      contentHash: 'a'.repeat(64),
-    })
-    mocks.getProjectExecutionSnapshot.mockResolvedValue({
-      state: 'succeeded',
-      delivery: {
-        artifactId: 'website-artifact',
-        lifecycle: 'approved',
-        downloadUrl:
-          '/api/artifacts/website-artifact?projectId=p-1',
-      },
-    })
-    mocks.readArtifact.mockResolvedValue({
-      descriptor: {
-        id: 'website-artifact',
-        kind: 'website-video-mp4',
-        contentHash: 'a'.repeat(64),
-      },
-      bytes: Buffer.from('corrupt-video'),
-    })
-
-    const response = await GET(
-      new Request(
-        'http://localhost/api/artifacts/website-artifact?projectId=p-1',
-      ),
-      { params: Promise.resolve({ id: 'website-artifact' }) },
+      new Request('https://app.test/api/artifacts/other?projectId=project-1&download=1'),
+      { params: Promise.resolve({ id: 'other' }) }
     )
 
     expect(response.status).toBe(404)
+    await expect(response.text()).resolves.toBe('产物不存在')
+    expect(response.headers.get('content-disposition')).toBeNull()
   })
 })

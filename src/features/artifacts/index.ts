@@ -1,10 +1,15 @@
 export {
-  artifactContentType,
   getArtifactDescriptor,
   getLatestArtifact,
   readArtifact,
   type ArtifactDescriptor,
 } from './service'
+export { artifactContentType } from './content-type'
+export {
+  artifactDownloadFilename,
+  attachmentDisposition,
+  wantsAttachment,
+} from './download'
 export {
   artifactPreviewMode,
   type ArtifactPreviewMode,
