@@ -348,7 +348,9 @@ describe('persistUserAudioArtifacts', () => {
     expect(pointers.map(({ kind }) => kind)).toEqual([
       'user-audio-source',
       'user-audio-cut',
+      'narration-audio:U001',
       'user-audio-cut',
+      'narration-audio:U002',
       'director-ingest',
       'director-ingest-audio',
     ])
@@ -374,6 +376,19 @@ describe('persistUserAudioArtifacts', () => {
       expect(memory.get(pointer.storageKey)?.subarray(0, 4).toString('ascii')).toBe(
         'RIFF',
       )
+    }
+    for (const unit of ['U001', 'U002']) {
+      const narration = pointers.find(
+        ({ kind }) => kind === `narration-audio:${unit}`,
+      )
+      const cut = pointers.find(
+        ({ kind, storageKey }) =>
+          kind === 'user-audio-cut' && storageKey.includes(`/${unit}-`),
+      )
+      expect(narration).toMatchObject({
+        storageKey: cut?.storageKey,
+        contentHash: cut?.contentHash,
+      })
     }
   })
 })

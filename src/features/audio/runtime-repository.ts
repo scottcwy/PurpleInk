@@ -41,6 +41,7 @@ export class AudioRuntimeRepository {
         id: artifacts.id,
         storageKey: artifacts.storageKey,
         contentHash: artifacts.contentHash,
+        sizeBytes: artifacts.sizeBytes,
       })
       .from(artifacts)
       .where(
@@ -61,6 +62,9 @@ export class AudioRuntimeRepository {
       throw new Error(`找不到 ${kind} 产物：INGEST 尚未产出该单元的旁白`)
     }
     const audioBytes = await this.storage.get(artifact.storageKey)
+    if (audioBytes.byteLength !== artifact.sizeBytes) {
+      throw new Error(`旁白音频实体与索引 size 不一致：${artifact.storageKey}`)
+    }
     const actualHash = createHash('sha256').update(audioBytes).digest('hex')
     if (actualHash !== artifact.contentHash) {
       throw new Error(`旁白音频实体与索引 hash 不一致：${artifact.storageKey}`)

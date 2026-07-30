@@ -10,6 +10,7 @@ import type { AudioProjectSourcePayload } from '@/features/projects'
 import type { StorageAdapter } from '@/lib/storage'
 import type { UserAudioTimeline } from './user-audio-timeline'
 import type { UserRecordingAudioSlice } from './user-audio-slicer'
+import { narrationArtifactKind } from './narration-repository'
 import {
   buildUserAudioContracts,
   type StoredUserAudioSlice,
@@ -83,6 +84,13 @@ export async function persistUserAudioArtifacts(
       USER_AUDIO_ARTIFACT_KINDS.cut,
       slice.contentHash,
     )
+    await dependencies.writer.registerPointer({
+      projectId: input.projectId,
+      nodeId: input.nodeId,
+      kind: narrationArtifactKind(slice.unitId),
+      storageKey: cut.storageKey,
+      contentHash: cut.contentHash,
+    })
     storedSlices.push({ storageKey: cut.storageKey, slice })
     cutArtifactIds.push(cut.artifactId)
   }

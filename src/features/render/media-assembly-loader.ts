@@ -18,6 +18,7 @@ import {
   type MediaAssemblyPlan,
   type PlaceholderCandidate,
 } from './media-assembly'
+import { validateMediaAssemblyFiles } from './media-artifact-validation'
 
 interface AssemblyNode {
   nodeId: string
@@ -93,6 +94,7 @@ export async function loadMediaAssembly(
       kind: artifacts.kind,
       storageKey: artifacts.storageKey,
       contentHash: artifacts.contentHash,
+      sizeBytes: artifacts.sizeBytes,
       version: artifacts.version,
     })
     .from(artifacts)
@@ -183,7 +185,7 @@ export async function loadMediaAssembly(
   })
   const issues = mergeIssues(storageIssues, result.blockingIssues)
   if (result.plan) {
-    await validateFiles(input.storage, result.plan, issues)
+    await validateMediaAssemblyFiles(input.storage, result.plan, rows, issues)
   }
   const requiredShotCount = parsedIngest.data.audioAllocation.shots.length
   return {
@@ -275,44 +277,6 @@ function mergeIssues(
     }
   }
   return result
-}
-
-async function validateFiles(
-  storage: StorageAdapter,
-  plan: MediaAssemblyPlan,
-  issues: ExportBlockingIssue[]
-): Promise<void> {
-  for (const shot of plan.shots) {
-    await validateRef(storage, shot.laneKey, 'render', shot.video, issues)
-    await validateRef(
-      storage,
-      shot.laneKey,
-      'narration',
-      shot.narration.artifact,
-      issues
-    )
-    // subtitle=null 有两种成因（关闭字幕交付、降级占位镜头），都无需校验。
-    if (shot.subtitle) {
-      await validateRef(storage, shot.laneKey, 'subtitle', shot.subtitle, issues)
-    }
-  }
-}
-
-async function validateRef(
-  storage: StorageAdapter,
-  laneKey: string,
-  kind: ExportBlockingIssue['kind'],
-  artifact: { storageKey: string; contentHash: string },
-  issues: ExportBlockingIssue[]
-): Promise<void> {
-  if (!(await storage.exists(artifact.storageKey))) {
-    issues.push({ laneKey, kind, code: 'artifact-missing' })
-    return
-  }
-  const bytes = await storage.get(artifact.storageKey)
-  if (digest(bytes) !== artifact.contentHash) {
-    issues.push({ laneKey, kind, code: 'artifact-invalid' })
-  }
 }
 
 function digest(bytes: Buffer): string {

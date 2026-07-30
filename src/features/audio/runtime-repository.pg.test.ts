@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
 import {
@@ -91,12 +92,31 @@ describe('AudioRuntimeRepository', () => {
   })
 
   it('rejects audio bytes that do not match the indexed content hash', async () => {
-    vi.mocked(storage.get).mockImplementationOnce(async () => Buffer.from([9, 9]))
+    vi.mocked(storage.get).mockImplementationOnce(async () =>
+      Buffer.alloc(AUDIO_BYTES.byteLength, 9)
+    )
     const repository = new AudioRuntimeRepository(db, storage)
 
     await expect(repository.loadNarration(PROJECT_ID, 'U001')).rejects.toThrow(
       'hash 不一致'
     )
+  })
+
+  it('rejects audio bytes whose actual size does not match the indexed size', async () => {
+    await db
+      .update(artifacts)
+      .set({ sizeBytes: AUDIO_BYTES.byteLength + 1 })
+      .where(eq(artifacts.id, AUDIO_ID))
+    const repository = new AudioRuntimeRepository(db, storage)
+
+    await expect(repository.loadNarration(PROJECT_ID, 'U001')).rejects.toThrow(
+      'size 不一致'
+    )
+
+    await db
+      .update(artifacts)
+      .set({ sizeBytes: AUDIO_BYTES.byteLength })
+      .where(eq(artifacts.id, AUDIO_ID))
   })
 
   it('fails instead of inventing audio when INGEST produced none', async () => {
@@ -159,7 +179,7 @@ async function seedWorkspace(
     lifecycle: 'draft',
     schemaVersion: 'cvc.narration-audio/v1',
     storageKey: `${storagePrefix}${AUDIO_KEY}`,
-    sizeBytes: 3,
+    sizeBytes: AUDIO_BYTES.byteLength,
     contentHash: AUDIO_HASH,
     attemptId: ATTEMPT_ID,
   })
