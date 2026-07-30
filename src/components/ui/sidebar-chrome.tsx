@@ -10,13 +10,8 @@ import {
   SunMoon,
   UserRound,
 } from 'lucide-react'
-import { useTheme } from 'next-themes'
-import {
-  isThemeMode,
-  nextThemeMode,
-  themeModeLabel,
-  type ThemeMode,
-} from '@/lib/theme-mode'
+import { useThemeMode } from '@/lib/hooks/use-theme-mode'
+import { nextThemeMode, themeModeLabel } from '@/lib/theme-mode'
 import { cn } from '@/lib/utils'
 
 export function SidebarToggle({
@@ -149,8 +144,7 @@ export function AccountMenu({
   /** 返回 false 表示登出失败（成功时整页跳转，不会回到这里）。 */
   onLogout?: () => Promise<boolean>
 }) {
-  const { theme, setTheme } = useTheme()
-  const mode: ThemeMode = isThemeMode(theme) ? theme : 'system'
+  const { mode, setTheme } = useThemeMode()
   const appearanceLabel = `外观 · ${themeModeLabel(mode)}`
   const [logoutState, setLogoutState] = useState<'idle' | 'pending' | 'failed'>('idle')
 
@@ -194,7 +188,7 @@ export function AccountMenu({
               aria-label={`${appearanceLabel}，点击切换`}
               title={appearanceLabel}
               className="flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-xs text-ds-text transition-colors duration-fast ease-standard hover:bg-ds-surface-muted"
-              onClick={() => setTheme(nextThemeMode(theme))}
+              onClick={() => setTheme(nextThemeMode(mode))}
             >
               <Icon aria-hidden className="size-4 text-ds-text-muted" />
               {appearanceLabel}

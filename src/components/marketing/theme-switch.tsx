@@ -1,26 +1,17 @@
 "use client";
 
 import { Moon, Sun } from "lucide-react";
-import { useTheme } from "next-themes";
-import { useSyncExternalStore, type ReactNode } from "react";
-
-function useIsMounted(): boolean {
-  return useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false
-  );
-}
+import type { ReactNode } from "react";
+import { useThemeMode } from "@/lib/hooks/use-theme-mode";
 
 export function ThemeSwitch(): ReactNode {
-  const mounted = useIsMounted();
-  const { setTheme, resolvedTheme } = useTheme();
+  const { hydrated, setTheme, resolvedTheme } = useThemeMode();
 
   const toggleTheme = (): void => {
     setTheme(resolvedTheme === "dark" ? "light" : "dark");
   };
 
-  if (!mounted) {
+  if (!hydrated) {
     return (
       <div className="fixed bottom-6 right-6 z-50">
         <button

@@ -1,11 +1,8 @@
 'use client'
 
-import { useTheme } from 'next-themes'
 import { SegmentedControl } from '@/components/ui/segmented-control'
-import {
-  isThemeMode,
-  type ThemeMode,
-} from '@/lib/theme-mode'
+import { useThemeMode } from '@/lib/hooks/use-theme-mode'
+import { isThemeMode } from '@/lib/theme-mode'
 
 export type { ThemeMode } from '@/lib/theme-mode'
 export {
@@ -24,8 +21,7 @@ const OPTIONS = [
 ]
 
 export function ThemeControl() {
-  const { theme, setTheme } = useTheme()
-  const mode: ThemeMode = isThemeMode(theme) ? theme : 'system'
+  const { mode, setTheme } = useThemeMode()
 
   return (
     <SegmentedControl
