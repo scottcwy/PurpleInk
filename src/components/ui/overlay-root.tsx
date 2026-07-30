@@ -42,6 +42,7 @@ export interface ModalOverlayRootProps extends OverlayRootBaseProps {
   layoutClassName?: string
   ariaLabel?: string
   ariaLabelledBy?: string
+  ariaDescribedBy?: string
 }
 
 export interface PopoverOverlayRootProps extends OverlayRootBaseProps {
@@ -105,6 +106,7 @@ function ModalOverlaySurface({
   preset = 'dialog',
   ariaLabel,
   ariaLabelledBy,
+  ariaDescribedBy,
   phase,
   onAnimationComplete,
 }: ModalOverlayRootProps & SurfaceState) {
@@ -123,6 +125,7 @@ function ModalOverlaySurface({
       data-overlay-mode="modal"
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
+      aria-describedby={ariaDescribedBy}
       tabIndex={-1}
       className="fixed inset-0 m-0 h-dvh max-h-none w-dvw max-w-none overflow-y-auto border-0 bg-transparent p-0 text-inherit backdrop:bg-transparent"
       onCancel={(event) => {

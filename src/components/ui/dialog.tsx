@@ -1,8 +1,8 @@
 'use client'
 
-import { useSyncExternalStore, type MouseEvent, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
+import { useId, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
+import { OverlayRoot } from './overlay-root'
 
 export interface DialogProps {
   open: boolean
@@ -15,8 +15,6 @@ export interface DialogProps {
   /** 弹窗在视口中的定位；默认 'top' 保持原有 108px 顶部偏移。 */
   placement?: 'top' | 'center'
 }
-
-const subscribeToClient = () => () => undefined
 
 /**
  * 模态对话框（SSOT）。
@@ -33,42 +31,41 @@ export function Dialog({
   className,
   placement = 'top',
 }: DialogProps) {
-  const mounted = useSyncExternalStore(
-    subscribeToClient,
-    () => true,
-    () => false,
-  )
+  const titleId = useId()
+  const descriptionId = useId()
 
-  if (!open || !mounted) return null
-
-  function handleBackdropClick(e: MouseEvent<HTMLDivElement>) {
-    if (e.target === e.currentTarget) onClose()
-  }
-
-  return createPortal(
-    <div
+  return (
+    <OverlayRoot
+      mode="modal"
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose()
+      }}
+      ariaLabelledBy={title ? titleId : undefined}
+      ariaDescribedBy={description ? descriptionId : undefined}
+      layoutClassName={
+        placement === 'top' ? 'items-start py-[108px]' : 'items-center py-8'
+      }
       className={cn(
-        'fixed inset-0 z-[1000] flex justify-center overflow-y-auto bg-[color:var(--ds-scrim)] px-4 backdrop-blur-[20px]',
-        placement === 'top' ? 'items-start py-[108px]' : 'items-center py-8',
+        'flex w-[600px] max-w-full flex-col gap-[18px] rounded-[10px] border border-ds-border bg-ds-surface p-6 text-ds-text shadow-[var(--ds-shadow)] backdrop-blur-xl',
+        className,
       )}
-      onClick={handleBackdropClick}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        className={cn(
-          'flex w-[600px] max-w-full flex-col gap-[18px] rounded-[10px] border border-ds-border bg-ds-surface p-6 text-ds-text shadow-[var(--ds-shadow)] backdrop-blur-xl',
-          className,
-        )}
-      >
-        {title && <h2 className="text-[22px] font-bold">{title}</h2>}
-        {description && (
-          <p className="text-sm leading-[1.45] text-ds-text-muted">{description}</p>
-        )}
-        {children}
-        {actions && <div className="flex justify-end gap-2.5">{actions}</div>}
-      </div>
-    </div>,
-    document.body,
+      {title && (
+        <h2 id={titleId} className="text-[22px] font-bold">
+          {title}
+        </h2>
+      )}
+      {description && (
+        <p
+          id={descriptionId}
+          className="text-sm leading-[1.45] text-ds-text-muted"
+        >
+          {description}
+        </p>
+      )}
+      {children}
+      {actions && <div className="flex justify-end gap-2.5">{actions}</div>}
+    </OverlayRoot>
   )
 }
