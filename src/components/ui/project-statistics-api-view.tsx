@@ -157,7 +157,10 @@ function UsageContent({
         <Activity aria-hidden className="size-3.5" />
         <span>
           {partial
-            ? `部分完整：账号精确归属从 ${formatDateTime(projection.coverage.completeFrom)} 起`
+            ? `部分完整：账号精确归属从 ${formatDateTime(
+                projection.coverage.completeFrom,
+                projection.timeZone,
+              )} 起`
             : '当前范围账号归属完整'}
         </span>
         {loading && <span>· 正在按本地时区刷新</span>}
@@ -232,10 +235,11 @@ function format(value: number): string {
   return new Intl.NumberFormat('zh-CN').format(value)
 }
 
-function formatDateTime(value: string): string {
+function formatDateTime(value: string, timeZone: string): string {
   return new Intl.DateTimeFormat('zh-CN', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
+    timeZone,
   }).format(new Date(value))
 }

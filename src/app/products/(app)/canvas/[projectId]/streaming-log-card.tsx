@@ -9,6 +9,7 @@ import type {
   RenderNodeError,
   WorkflowExecutionNotice,
 } from '@/features/canvas'
+import { useHydrated } from '@/lib/hooks/use-hydrated'
 import { useStageStream } from '@/lib/hooks/use-stage-stream'
 import type { SkipKind } from '@/features/director/skip-policy'
 import { SkipNodeDialog } from './skip-node-dialog'
@@ -94,7 +95,8 @@ export function StreamingLogCard({
   const error = resolveVisibleStageError(status, directorError, renderError, stream.error)
   const scrollRef = useRef<HTMLPreElement>(null)
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
-  const [now, setNow] = useState(() => Date.now())
+  const [now, setNow] = useState(0)
+  const hydrated = useHydrated()
 
   // 失败态自动弹一次错误弹窗：以「派生复位」实现（不在 effect 内同步 setState）。
   // autoKey 随节点或其失败原因变化；用户关闭后 key 不变故不重复自动弹，
@@ -115,8 +117,12 @@ export function StreamingLogCard({
 
   useEffect(() => {
     if (!executionNotice) return
+    const frame = window.requestAnimationFrame(() => setNow(Date.now()))
     const timer = window.setInterval(() => setNow(Date.now()), 1_000)
-    return () => window.clearInterval(timer)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearInterval(timer)
+    }
   }, [executionNotice])
 
   if (!STREAMABLE.has(status) || (status === 'pending' && !executionNotice)) return null
@@ -177,7 +183,9 @@ export function StreamingLogCard({
                 onClick={() => setDialogOpen(true)}
                 className="shrink-0 text-[12px] font-medium text-ds-blue hover:underline"
               >
-                {formatCountdown(executionNotice.resumeAt, now)}
+                {hydrated && now > 0
+                  ? formatCountdown(executionNotice.resumeAt, now)
+                  : '等待自动恢复'}
               </button>
             </div>
           </div>

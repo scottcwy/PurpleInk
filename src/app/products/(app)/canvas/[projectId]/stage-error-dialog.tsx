@@ -11,6 +11,7 @@ import {
 } from '@/features/billing/ui/billing-display'
 import type { BillingUiProjection } from '@/features/billing/ui/projection-contract'
 import { useBillingProjection } from '@/features/billing/ui/use-billing-projection'
+import { useLocalTimeZone } from '@/lib/hooks/use-local-time-zone'
 import {
   workflowFaultDisplay,
   workflowRecoveryActions,
@@ -35,6 +36,7 @@ export interface StageErrorDialogProps extends WorkflowFaultDisplayInput {
 }
 
 export function StageErrorDialog(props: StageErrorDialogProps) {
+  const timeZone = useLocalTimeZone()
   const errorCode = props.code ?? props.errorCode
   const quotaExhausted =
     errorCode === 'quota_exhausted' || errorCode === 'QUOTA_EXHAUSTED'
@@ -67,7 +69,7 @@ export function StageErrorDialog(props: StageErrorDialogProps) {
   const technicalDetails = [
     ['供应商', props.provider?.label],
     ['HTTP 状态码', props.provider?.httpStatus],
-    ['发生时间', formatOccurredAt(props.occurredAt)],
+    ['发生时间', formatOccurredAt(props.occurredAt, timeZone)],
     ['阶段', props.stage],
     ['参考号', props.referenceId],
   ].filter((entry) => entry[1] !== undefined && entry[1] !== '')
@@ -235,8 +237,17 @@ function RecoveryAction(props: {
   ) : null
 }
 
-function formatOccurredAt(value: string | undefined): string | undefined {
+function formatOccurredAt(
+  value: string | undefined,
+  timeZone: string,
+): string | undefined {
   if (!value) return undefined
   const timestamp = Date.parse(value)
-  return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString('zh-CN') : undefined
+  return Number.isFinite(timestamp)
+    ? new Intl.DateTimeFormat('zh-CN', {
+        dateStyle: 'short',
+        timeStyle: 'medium',
+        timeZone,
+      }).format(new Date(timestamp))
+    : undefined
 }

@@ -119,6 +119,7 @@ export function BillingDashboardUsage({
   )
   const percent = clampUsagePercent(projection.usage.percent)
   const numberFormatter = new Intl.NumberFormat('en-US')
+  const timeZone = usageState.projection?.timeZone ?? 'UTC'
   const lastInvocation = projection.lastInvocationAt
     ? new Intl.DateTimeFormat('zh-CN', {
         year: 'numeric',
@@ -126,6 +127,7 @@ export function BillingDashboardUsage({
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
+        timeZone,
       }).format(new Date(projection.lastInvocationAt))
     : '暂无调用'
   return (

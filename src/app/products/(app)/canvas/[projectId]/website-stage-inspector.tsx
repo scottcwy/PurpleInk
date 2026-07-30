@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/settings-group'
 import { SettingsRow } from '@/components/ui/settings-row'
 import type { CanvasGraphNode } from '@/features/canvas'
+import { useLocalTimeZone } from '@/lib/hooks/use-local-time-zone'
 import {
   parseWebsiteExecution,
   WEBSITE_INSPECTOR_TABS,
@@ -38,6 +39,7 @@ export function WebsiteStageInspector({
   node: Pick<CanvasGraphNode, 'data'>
 }) {
   const [tab, setTab] = useState<WebsiteInspectorTab>('data')
+  const timeZone = useLocalTimeZone()
   const projection = parseWebsiteExecution(node.data)
   return (
     <section className="flex flex-col gap-3">
@@ -63,7 +65,7 @@ export function WebsiteStageInspector({
       <p className="text-[11px] leading-4 text-ds-text-muted">
         {tabDescription(tab)}
       </p>
-      {renderTab(tab, projection)}
+      {renderTab(tab, projection, timeZone)}
     </section>
   )
 }
@@ -71,6 +73,7 @@ export function WebsiteStageInspector({
 function renderTab(
   tab: WebsiteInspectorTab,
   projection: WebsiteExecutionProjection | undefined,
+  timeZone: string,
 ) {
   if (tab === 'source') {
     return (
@@ -116,7 +119,7 @@ function renderTab(
         ['工作流阶段', readLabel(PHASE_LABEL, projection?.phase)],
         ['投影状态', readLabel(STATE_LABEL, projection?.state)],
         ['引擎检查点', projection?.enginePhase ?? '等待受控 worker 回传'],
-        ['同步时间', formatTimestamp(projection?.updatedAt)],
+        ['同步时间', formatTimestamp(projection?.updatedAt, timeZone)],
         ['安全失败码', projection?.failureCode ?? '无'],
       ]}
     />
@@ -179,9 +182,13 @@ function artifactLabel(
   return `${formatBytes(value.sizeBytes)} · ${value.contentHash.slice(0, 12)}`
 }
 
-function formatTimestamp(value: string | undefined): string {
+function formatTimestamp(value: string | undefined, timeZone: string): string {
   if (!value) return '等待受控 worker 回传'
-  return new Date(value).toLocaleString('zh-CN')
+  return new Intl.DateTimeFormat('zh-CN', {
+    dateStyle: 'short',
+    timeStyle: 'medium',
+    timeZone,
+  }).format(new Date(value))
 }
 
 function formatBytes(value: number): string {
