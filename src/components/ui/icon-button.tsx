@@ -1,7 +1,9 @@
-import type { ButtonHTMLAttributes, ComponentType } from 'react'
+import type { ComponentType } from 'react'
+import type { HTMLMotionProps } from 'motion/react'
+import { ControlPressButton } from '@/components/ui/control-motion'
 import { cn } from '@/lib/utils'
 
-export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+export interface IconButtonProps extends HTMLMotionProps<'button'> {
   icon: ComponentType<{ className?: string }>
 }
 
@@ -11,7 +13,7 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
  */
 export function IconButton({ icon: Icon, className, ...props }: IconButtonProps) {
   return (
-    <button
+    <ControlPressButton
       className={cn(
         'inline-flex size-8 items-center justify-center rounded-md border border-ds-border bg-ds-surface text-ds-text-muted shadow-[0_1px_2px_#10183a14] transition-[background-color,color,box-shadow] duration-fast hover:bg-ds-surface-muted hover:text-ds-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-ring disabled:pointer-events-none disabled:opacity-50',
         className,
@@ -19,6 +21,6 @@ export function IconButton({ icon: Icon, className, ...props }: IconButtonProps)
       {...props}
     >
       <Icon className="h-4 w-4" />
-    </button>
+    </ControlPressButton>
   )
 }

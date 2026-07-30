@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils'
+import { ControlPressButton } from '@/components/ui/control-motion'
 
 export type SegmentedControlOption = {
   value: string
@@ -27,7 +28,7 @@ export function SegmentedControl({ options, value, onChange, className }: Segmen
       {options.map((option) => {
         const active = option.value === value
         return (
-          <button
+          <ControlPressButton
             key={option.value}
             type="button"
             onClick={() => onChange(option.value)}
@@ -39,7 +40,7 @@ export function SegmentedControl({ options, value, onChange, className }: Segmen
             )}
           >
             {option.label}
-          </button>
+          </ControlPressButton>
         )
       })}
     </div>

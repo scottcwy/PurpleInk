@@ -1,4 +1,6 @@
-import type { ButtonHTMLAttributes, ComponentType } from 'react'
+import type { ComponentType, ReactNode } from 'react'
+import type { HTMLMotionProps } from 'motion/react'
+import { ControlPressButton } from '@/components/ui/control-motion'
 import { cn } from '@/lib/utils'
 
 /**
@@ -11,10 +13,11 @@ import { cn } from '@/lib/utils'
 export type ButtonVariant = 'primary' | 'tinted' | 'gray' | 'destructive'
 export type ButtonSize = 'sm' | 'md' | 'lg'
 
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends Omit<HTMLMotionProps<'button'>, 'children'> {
   variant?: ButtonVariant
   size?: ButtonSize
   icon?: ComponentType<{ className?: string }>
+  children?: ReactNode
 }
 
 const VARIANTS: Record<ButtonVariant, string> = {
@@ -22,7 +25,7 @@ const VARIANTS: Record<ButtonVariant, string> = {
   tinted:
     'bg-ds-blue-soft text-ds-blue hover:bg-[color-mix(in_srgb,var(--ds-blue)_16%,transparent)] active:brightness-95',
   gray:
-    'border border-ds-border bg-ds-surface text-ds-text hover:bg-ds-surface-muted',
+    'border border-ds-border bg-ds-surface text-ds-text hover:bg-ds-surface-muted active:brightness-95',
   destructive:
     'bg-ds-red text-white hover:brightness-95 active:brightness-90',
 }
@@ -65,12 +68,12 @@ export function Button({
   ...props
 }: ButtonProps) {
   return (
-    <button
+    <ControlPressButton
       className={buttonClassName({ variant, size, className })}
       {...props}
     >
       {Icon && <Icon className="h-4 w-4 shrink-0" />}
       {children}
-    </button>
+    </ControlPressButton>
   )
 }

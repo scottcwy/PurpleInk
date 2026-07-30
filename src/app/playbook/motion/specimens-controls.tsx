@@ -3,7 +3,10 @@
 import { motion } from 'motion/react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StatusPill } from '@/components/ui/status-pill'
-import { SPRING_SPATIAL_FAST } from '@/lib/motion/tokens'
+import {
+  SPRING_SPATIAL_FAST,
+  TRANSITION_INSTANT,
+} from '@/lib/motion/tokens'
 import { PILL_CLASS, Stage, StageNote } from './specimen-stage'
 
 /**
@@ -39,7 +42,7 @@ export function ActivePress() {
       <div className="absolute inset-0 grid place-items-center">
         <motion.button
           type="button"
-          whileTap={{ y: 1 }}
+          whileTap={{ y: 1, transition: TRANSITION_INSTANT }}
           transition={SPRING_SPATIAL_FAST}
           className="ds-primary-button rounded-md px-3 py-1.5 text-xs font-medium"
         >

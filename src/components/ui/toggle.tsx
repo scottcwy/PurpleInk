@@ -1,4 +1,5 @@
 import type { InputHTMLAttributes } from 'react'
+import { ToggleMotionKnob } from '@/components/ui/control-motion'
 import { cn } from '@/lib/utils'
 
 export interface ToggleProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
@@ -29,11 +30,9 @@ export function Toggle({ checked, onCheckedChange, className, ...props }: Toggle
         onChange={(e) => onCheckedChange?.(e.target.checked)}
         {...props}
       />
-      <span
-        className={cn(
-          'size-[18px] rounded-full bg-white shadow-sm transition-transform',
-          checked ? 'translate-x-[18px]' : 'translate-x-0',
-        )}
+      <ToggleMotionKnob
+        checked={Boolean(checked)}
+        className="size-[18px] rounded-full bg-white shadow-sm"
       />
     </label>
   )

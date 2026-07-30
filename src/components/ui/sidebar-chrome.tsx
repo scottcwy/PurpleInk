@@ -162,7 +162,7 @@ export function AccountMenu({
             <Link
               key={label}
               href={settingsHref}
-              className="flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-xs text-ds-text hover:bg-ds-surface-muted"
+              className="flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-xs text-ds-text transition-colors duration-fast ease-standard hover:bg-ds-surface-muted"
             >
               <Icon aria-hidden className="size-4 text-ds-text-muted" />
               {label}
@@ -177,7 +177,7 @@ export function AccountMenu({
               type="button"
               aria-label={`${appearanceLabel}，点击切换`}
               title={appearanceLabel}
-              className="flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-xs text-ds-text hover:bg-ds-surface-muted"
+              className="flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-xs text-ds-text transition-colors duration-fast ease-standard hover:bg-ds-surface-muted"
               onClick={() => setTheme(nextThemeMode(theme))}
             >
               <Icon aria-hidden className="size-4 text-ds-text-muted" />
@@ -203,7 +203,7 @@ export function AccountMenu({
       <button
         type="button"
         disabled={!onLogout || logoutState === 'pending'}
-        className="flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-xs text-ds-red hover:bg-ds-surface-muted disabled:opacity-70 disabled:hover:bg-transparent"
+        className="flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-xs text-ds-red transition-colors duration-fast ease-standard hover:bg-ds-surface-muted disabled:opacity-70 disabled:hover:bg-transparent"
         onClick={() => {
           if (!onLogout || logoutState === 'pending') return
           setLogoutState('pending')

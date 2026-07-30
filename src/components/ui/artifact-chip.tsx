@@ -16,7 +16,7 @@ export interface ArtifactChipProps {
 export function ArtifactChip({ icon: Icon, filename, href, className }: ArtifactChipProps) {
   const classes = cn(
     'inline-flex items-center gap-[7px] rounded-md border border-ds-border bg-ds-surface-muted px-2 py-[5px] text-ds-text',
-    href && 'transition-colors hover:brightness-95',
+    href && 'transition-colors duration-fast ease-standard hover:bg-ds-surface',
     className,
   )
   const content = (

@@ -1,5 +1,6 @@
-import { createElement } from 'react'
+import { createElement, type ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { LayoutDashboard, X } from 'lucide-react'
 import { describe, expect, it } from 'vitest'
 import { ArtifactChip } from './artifact-chip'
 import { Button } from './button'
@@ -10,6 +11,8 @@ import {
 import { ProgressBar } from './progress-bar'
 import { ProjectCard } from './project-card'
 import { QueueStatusBar } from './queue-status-bar'
+import { IconButton } from './icon-button'
+import { NavItem } from './nav-item'
 import { SegmentedControl } from './segmented-control'
 import { SettingsPanel, type SettingsPanelProps } from './settings-panel'
 import { TextArea } from './text-area'
@@ -78,5 +81,38 @@ describe('Pencil canonical components', () => {
     // 状态层配方：统一 focus ring 与 active 下压。
     expect(html).toContain('focus-visible:ring-ds-ring')
     expect(html).toContain('active:translate-y-px')
+    expect(html).toContain('active:brightness-95')
+    expect(html).toContain('data-motion-press="true"')
+  })
+
+  it('uses the shared spatial press and bounded transition contracts', () => {
+    const navItemProps: ComponentProps<typeof NavItem> = {
+      icon: LayoutDashboard,
+      href: '/products/dashboard',
+      children: '工作台',
+    }
+    const html = [
+      createElement(IconButton, { icon: X, 'aria-label': '关闭' }),
+      createElement(NavItem, navItemProps),
+      createElement(SegmentedControl, {
+        options: [{ value: 'data', label: 'Data' }],
+        value: 'data',
+        onChange: () => undefined,
+      }),
+      createElement(Toggle, { checked: true }),
+      createElement(ProgressBar, { value: 50 }),
+      createElement(ArtifactChip, {
+        filename: 'shot-source.json',
+        href: '/api/artifacts/example',
+      }),
+    ]
+      .map((node) => renderToStaticMarkup(node))
+      .join('')
+
+    expect(html.match(/data-motion-press="true"/g)?.length).toBe(3)
+    expect(html).toContain('data-motion-spring="true"')
+    expect(html).toContain('transition-[width] duration-base')
+    expect(html).toContain('hover:bg-ds-surface')
+    expect(html).not.toContain('hover:brightness-95')
   })
 })

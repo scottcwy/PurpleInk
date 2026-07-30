@@ -102,9 +102,9 @@ Tailwind v4 从 `@theme` 读取的 duration 命名空间是 **`--transition-dura
 **bounce 与元素尺寸反相关**，这是刻意的：小控件弹一点有生气，大面积 overshoot 会被放大成
 "果冻感"，正是 `design-quality-pitfalls.md` §1.2 要防的廉价感。不要按"越慢越弹"直觉设置。
 
-**待验项（批次 03）**：`fast` 校准为 150ms 后，`SPRING_SPATIAL_FAST` 的 0.18s
-只余 0.03s 弹性时间。须在真实 toggle knob 与按压回弹上判断是否仍有可辨识的弹性；
-没有实物证据前不调整到 0.20–0.22s。
+**批次 03 实物结论**：`fast` 校准为 150ms 后，`SPRING_SPATIAL_FAST` 的 0.18s
+在 toggle knob 与按压回弹上仍能形成短促、可辨识且不过冲的反馈；保留 0.18s，
+不为拉开与 tween 的数值间隔而上调到 0.20–0.22s。
 
 **例外：拖拽与惯性仍用物理参数。** `visualDuration / bounce` 不吸收当前手势速度，
 不跟手。侧栏 / 面板拖拽调宽保持 `TRANSITION_INSTANT`（duration 0），1:1 跟随指针。
@@ -286,12 +286,12 @@ ESC 逻辑从 `app-sidebar-shell.tsx`、`canvas-inspector.tsx` 两处删除；
 
 | 项 | 现状 | 目标 | 状态 |
 | --- | --- | --- | --- |
-| `duration-150` × 8 | button / icon-button / toggle / text-field / segmented-control / nav-item / section-nav | `duration-fast` | todo |
-| 裸 `transition-colors` × 15+ | 吃 Tailwind 默认值 | 补 `duration-fast` | todo |
-| `sidebar-chrome.tsx` AccountMenu 行 | **漏写过渡** | 补意图 1 | todo |
-| active 按压 | 仅 `button.tsx` 有（`active:translate-y-px` + `active:brightness-95`，其中 `gray` 变体漏了 brightness）；回弹是 `duration-150` tween 而非 spring。IconButton / NavItem / SegmentedControl / Toggle 无按压态 | 补意图 2 至全部可点控件，回弹换 `SPRING_SPATIAL_FAST` | todo |
-| `toggle.tsx` knob | 裸 `transition-transform` | `SPRING_SPATIAL_FAST` | todo |
-| `progress-bar.tsx` | `transition-all` | `transition-[width]` | todo |
+| `duration-150` × 8 | button / icon-button / toggle / text-field / segmented-control / nav-item / section-nav | `duration-fast` | done |
+| 裸 `transition-colors` × 15+ | 吃 Tailwind 默认值 | 补 `duration-fast ease-standard` | done |
+| `sidebar-chrome.tsx` AccountMenu 行 | **漏写过渡** | 补意图 1 | done |
+| active 按压 | 仅 `button.tsx` 有（`active:translate-y-px` + `active:brightness-95`，其中 `gray` 变体漏了 brightness）；回弹是 `duration-150` tween 而非 spring。IconButton / NavItem / SegmentedControl 无按压态 | 可点控件按下立即位移、松开走 `SPRING_SPATIAL_FAST` | done |
+| `toggle.tsx` knob | 裸 `transition-transform` | `SPRING_SPATIAL_FAST` | done |
+| `progress-bar.tsx` | `transition-all` | `transition-[width] duration-base` | done |
 | `canvas-auto-hide-top-bar.tsx` | `duration-[var(--duration-base)]` + 手写曲线 | `duration-base ease-emphasized` | todo |
 | `marketing/faq.tsx` | 体系外曲线 `[0.25,0.46,0.45,0.94]` | `SPRING_SPATIAL_DEFAULT` | todo |
 

@@ -35,8 +35,7 @@ export const MOTION_INTENTS: MotionIntent[] = [
     title: 'hover 换底色',
     category: 'effects',
     params: 'duration-fast + ease-standard',
-    status: 'pending',
-    current: '生产有 6 种写法：8 处 duration-150、15+ 处裸 transition-colors 吃默认值，sidebar-chrome 的 AccountMenu 行漏写过渡',
+    status: 'unified',
   },
   {
     id: 'active-press',
@@ -44,8 +43,7 @@ export const MOTION_INTENTS: MotionIntent[] = [
     title: 'active 按压',
     category: 'spatial',
     params: '按下 0ms 立即下压，松开 SPRING_SPATIAL_FAST',
-    status: 'pending',
-    current: 'Button 已有 active:translate-y-px + active:brightness-95（但 gray 变体漏了 brightness，且回弹是 duration-150 tween 而非 spring）；IconButton / NavItem / SegmentedControl / Toggle 等其余控件无按压态',
+    status: 'unified',
   },
   {
     id: 'focus-ring',
@@ -53,8 +51,7 @@ export const MOTION_INTENTS: MotionIntent[] = [
     title: 'focus-visible ring',
     category: 'effects',
     params: 'duration-fast + ease-standard',
-    status: 'pending',
-    current: 'ring 样式已统一，但过渡时长未统一',
+    status: 'unified',
   },
   {
     id: 'collapse',

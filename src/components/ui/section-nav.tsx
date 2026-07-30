@@ -137,7 +137,7 @@ export function SectionNav({
               aria-current={active ? 'true' : undefined}
               onClick={handleClick(item.id)}
               className={cn(
-                'relative block py-1.5 pl-3 pr-2 text-[13px] transition-colors duration-150 ease-out',
+                'relative block py-1.5 pl-3 pr-2 text-[13px] transition-colors duration-fast ease-standard',
                 active
                   ? 'font-semibold text-ds-blue'
                   : 'font-normal text-ds-text-muted hover:text-ds-text',

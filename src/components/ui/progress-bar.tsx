@@ -20,7 +20,7 @@ export function ProgressBar({ value, label, className }: ProgressBarProps) {
       </div>
       <div className="h-1.5 w-full rounded-full bg-ds-blue-soft">
         <div
-          className="h-1.5 rounded-full bg-ds-blue transition-all"
+          className="h-1.5 rounded-full bg-ds-blue transition-[width] duration-base ease-standard"
           style={{ width: `${percent}%` }}
         />
       </div>
