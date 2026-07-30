@@ -279,25 +279,34 @@ describe('RenderRepository Postgres', () => {
     expect(artifact.lifecycle).toBe('rejected')
   })
 
-  it('registers new exports as immutable final-video/v2 artifacts', async () => {
-    const artifactId = await new RenderRepository(database.db).registerFinalArtifact({
-      projectId: fixture.projectId,
-      outputKey: 'exports/final-v2.mp4',
-      contentHash: '9'.repeat(64),
-      sizeBytes: 123,
-    })
-    const [row] = await database.db
-      .select({ schemaVersion: artifacts.schemaVersion })
-      .from(artifacts)
-      .where(
-        and(
-          eq(artifacts.workspaceId, TEST_WORKSPACE_ID),
-          eq(artifacts.id, artifactId)
+  it.each([
+    ['burn-in' as const, 'cvc.final-video/v2'],
+    ['off' as const, 'cvc.final-video/v3'],
+  ])(
+    'records the %s subtitle delivery on the immutable final artifact as %s',
+    async (subtitles, expectedSchemaVersion) => {
+      // 交付形态必须落在产物上：只靠导出时的设置，用户改一次开关，页面就会
+      // 对已存在的成片说谎。
+      const artifactId = await new RenderRepository(database.db).registerFinalArtifact({
+        projectId: fixture.projectId,
+        outputKey: `exports/final-${subtitles}.mp4`,
+        contentHash: (subtitles === 'burn-in' ? '9' : '8').repeat(64),
+        sizeBytes: 123,
+        subtitles,
+      })
+      const [row] = await database.db
+        .select({ schemaVersion: artifacts.schemaVersion })
+        .from(artifacts)
+        .where(
+          and(
+            eq(artifacts.workspaceId, TEST_WORKSPACE_ID),
+            eq(artifacts.id, artifactId)
+          )
         )
-      )
 
-    expect(row?.schemaVersion).toBe('cvc.final-video/v2')
-  })
+      expect(row?.schemaVersion).toBe(expectedSchemaVersion)
+    }
+  )
 
   it('commits Vision report and node projection in one transaction', async () => {
     const repository = new RenderRepository(database.db)

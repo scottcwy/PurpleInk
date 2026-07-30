@@ -1,7 +1,14 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
-import type { ResolutionPreset } from '@/features/canvas'
+import type {
+  ResolutionPreset,
+  SubtitleDeliveryMode,
+} from '@/features/canvas'
 import { isDegradable } from './export-degraded'
+import {
+  deliveryFromSchemaVersion,
+  type FinalVideoDelivery,
+} from './final-video-delivery'
 import {
   RenderRepository,
   type ExportPlanOptions,
@@ -17,10 +24,7 @@ import {
  * 前者只有队列 handler，后者同时服务 `GET /api/render/export` 与降级确认校验。
  */
 
-export type ExportArtifactDelivery =
-  | 'none'
-  | 'legacy-silent-v1'
-  | 'narration-hard-subtitle-v2'
+export type ExportArtifactDelivery = 'none' | FinalVideoDelivery
 
 export interface ExportReadinessResult {
   ready: boolean
@@ -30,7 +34,16 @@ export interface ExportReadinessResult {
   /** 当前被人工豁免、未经验收的分镜。 */
   waivedQaLanes: string[]
   resolutionPreset: ResolutionPreset
+  /** 当前导出设置里的字幕交付选择（下次导出会产出什么）。 */
+  subtitles: SubtitleDeliveryMode
   finalArtifactId: string | null
+  /** 最新成片的可追溯事实；无成片时为 null。 */
+  finalArtifact: {
+    artifactId: string
+    contentHash: string
+    sizeBytes: number
+    delivery: FinalVideoDelivery
+  } | null
   blockingIssues: RenderExportPlan['blockingIssues']
   media: RenderExportPlan['media']
   /** 当前缺渲染产物、可占位出片的 lane。 */
@@ -85,7 +98,16 @@ export async function getExportReadiness(
     shotQa: plan.shotQa,
     waivedQaLanes: plan.waivedQaLanes,
     resolutionPreset: plan.resolutionPreset,
+    subtitles: plan.subtitles,
     finalArtifactId: finalArtifact?.artifactId ?? null,
+    finalArtifact: finalArtifact
+      ? {
+          artifactId: finalArtifact.artifactId,
+          contentHash: finalArtifact.contentHash,
+          sizeBytes: finalArtifact.sizeBytes,
+          delivery: deliveryFromSchemaVersion(finalArtifact.schemaVersion),
+        }
+      : null,
     blockingIssues: plan.blockingIssues,
     media: plan.media,
     placeholderCandidateLanes,
@@ -114,6 +136,11 @@ function exportInputFingerprint(plan: RenderExportPlan): string {
       }))
       .sort((left, right) => left.laneKey.localeCompare(right.laneKey)),
     resolutionPreset: plan.resolutionPreset,
+    // 交付形态必须进指纹：不进的话切换字幕开关后重导出会命中同一个已完成作业、
+    // 直接返回上一版成片，开关就成了静默失效的假开关。musicKey 同理——它现在
+    // 恒为 null（配乐是只留接口的桩），但一旦接上就是同一个坑，先补掉更便宜。
+    subtitles: plan.subtitles,
+    musicKey: plan.musicKey,
     shotQa: Object.entries(plan.shotQa).sort(([left], [right]) =>
       left.localeCompare(right)
     ),
@@ -157,6 +184,7 @@ function degradedConfirmationFingerprint(input: {
     placeholderCandidateLanes: [...input.placeholderCandidateLanes].sort(),
     waivedQaLanes: [...input.plan.waivedQaLanes].sort(),
     resolutionPreset: input.plan.resolutionPreset,
+    subtitles: input.plan.subtitles,
     shotQa,
     blockingIssues,
   })
@@ -167,7 +195,5 @@ function finalDelivery(
   artifact: FinalArtifactRecord | null
 ): ExportArtifactDelivery {
   if (!artifact) return 'none'
-  return artifact.schemaVersion === 'cvc.final-video/v2'
-    ? 'narration-hard-subtitle-v2'
-    : 'legacy-silent-v1'
+  return deliveryFromSchemaVersion(artifact.schemaVersion)
 }

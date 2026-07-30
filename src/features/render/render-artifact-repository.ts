@@ -6,9 +6,11 @@ import {
   resolveCurrentAttemptId,
   resolveDerivedSourceAttemptId,
 } from '@/features/artifacts'
+import type { SubtitleDeliveryMode } from '@/features/canvas/export-settings'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { type Db } from '@/lib/db/client'
 import { artifacts } from '@/lib/db/schema/index'
+import { finalVideoSchemaVersion } from './final-video-delivery'
 import { writeNodeProjection } from './persistence'
 import { RenderShotRepository } from './render-shot-repository'
 import { FRAME_THUMBNAIL_KIND, thumbnailOutputPath } from './types'
@@ -22,6 +24,8 @@ export interface FinalArtifactInput {
   outputKey: string
   contentHash: string
   sizeBytes: number
+  /** 本次成片的字幕交付形态，决定写入的 schemaVersion。 */
+  subtitles: SubtitleDeliveryMode
 }
 
 /** 降级导出的占位/未验收清单（JSON 字节）：与 final-mp4 同一 project attempt 提交。 */
@@ -37,6 +41,7 @@ export interface FinalArtifactRecord {
   path: string
   contentHash: string
   schemaVersion: string
+  sizeBytes: number
 }
 
 export interface ThumbnailRegistration {
@@ -66,7 +71,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
       aggregateType: 'project',
       aggregateId: input.projectId,
       kind: 'final-mp4',
-      schemaVersion: 'cvc.final-video/v2',
+      schemaVersion: finalVideoSchemaVersion(input.subtitles),
       storageKey: input.outputKey,
       sizeBytes: input.sizeBytes,
       contentHash: input.contentHash,
@@ -85,6 +90,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
         storageKey: artifacts.storageKey,
         contentHash: artifacts.contentHash,
         schemaVersion: artifacts.schemaVersion,
+        sizeBytes: artifacts.sizeBytes,
       })
       .from(artifacts)
       .where(
@@ -104,6 +110,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
           path: row.storageKey,
           contentHash: row.contentHash,
           schemaVersion: row.schemaVersion,
+          sizeBytes: row.sizeBytes,
         }
       : null
   }

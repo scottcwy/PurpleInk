@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { and, desc, eq } from 'drizzle-orm'
 import { z } from 'zod'
+import type { SubtitleDeliveryMode } from '@/features/canvas/export-settings'
 import {
   audioAllocationSchema,
   audioManifestSchema,
@@ -32,6 +33,8 @@ interface LoadInput {
   nodes: AssemblyNode[]
   targetResolution: { width: number; height: number }
   musicKey: string | null
+  /** 本次交付的字幕形态；`off` 时不读也不校验字幕产物。 */
+  subtitles: SubtitleDeliveryMode
   /** 降级导出：允许缺产物的 lane 用占位顶替。 */
   degraded?: boolean
   placeholderVideos?: ReadonlyMap<string, ArtifactRef>
@@ -42,7 +45,13 @@ export interface LoadedMediaAssembly {
   plan: MediaAssemblyPlan | null
   blockingIssues: ExportBlockingIssue[]
   narrationReadyCount: number
-  subtitleReadyCount: number
+  /**
+   * 就绪字幕数；本次交付不含字幕时为 null（未测量）。
+   *
+   * 不能在关闭时回落成 requiredShotCount：那条路径根本没有 subtitle 阻塞项，
+   * 按阻塞项反推会得出「5/5 就绪」，等于在关着字幕时宣称字幕全部就绪。
+   */
+  subtitleReadyCount: number | null
   requiredShotCount: number
   /** 降级模式待占位的 lane（正常模式恒空）。 */
   placeholderCandidates: PlaceholderCandidate[]
@@ -88,14 +97,15 @@ export async function loadMediaAssembly(
     ? selectIngestAudioArtifact(rows, ingestNode.nodeId)
     : undefined
   if (!ingestArtifact) {
-    return blocked(input.nodes, 'artifact-missing')
+    return blocked(input.nodes, 'artifact-missing', input.subtitles)
   }
 
   const ingest = await readJsonArtifact(input.storage, ingestArtifact)
   if (ingest.status !== 'ok') {
     return blocked(
       input.nodes,
-      ingest.status === 'missing' ? 'artifact-missing' : 'artifact-invalid'
+      ingest.status === 'missing' ? 'artifact-missing' : 'artifact-invalid',
+      input.subtitles
     )
   }
   const parsedIngest = z
@@ -106,17 +116,20 @@ export async function loadMediaAssembly(
     .passthrough()
     .safeParse(ingest.value)
   if (!parsedIngest.success) {
-    return blocked(input.nodes, 'artifact-invalid')
+    return blocked(input.nodes, 'artifact-invalid', input.subtitles)
   }
 
+  // 字幕关闭时整段跳过：既不读字节也不记 subtitle 阻塞项，顺便省掉一轮存储 IO。
   const subtitleTracks: Record<
     string,
     z.infer<typeof subtitleLineageSchema>
   > = {}
   const storageIssues: ExportBlockingIssue[] = []
-  for (const node of input.nodes.filter(
-    (candidate) => candidate.type === 'shot-subtitle'
-  )) {
+  const subtitleNodes =
+    input.subtitles === 'burn-in'
+      ? input.nodes.filter((candidate) => candidate.type === 'shot-subtitle')
+      : []
+  for (const node of subtitleNodes) {
     const artifact = latest(rows, node.nodeId, 'subtitle-track')
     if (!artifact) continue
     const loaded = await readJsonArtifact(input.storage, artifact)
@@ -145,6 +158,7 @@ export async function loadMediaAssembly(
     audioAllocation: parsedIngest.data.audioAllocation,
     targetResolution: input.targetResolution,
     musicKey: input.musicKey,
+    subtitles: input.subtitles,
     ...(input.degraded ? { degraded: true } : {}),
     ...(input.placeholderVideos
       ? { placeholderVideos: input.placeholderVideos }
@@ -162,7 +176,10 @@ export async function loadMediaAssembly(
     plan: issues.length === 0 ? result.plan : null,
     blockingIssues: issues,
     narrationReadyCount: readyCount(requiredShotCount, issues, 'narration'),
-    subtitleReadyCount: readyCount(requiredShotCount, issues, 'subtitle'),
+    subtitleReadyCount:
+      input.subtitles === 'burn-in'
+        ? readyCount(requiredShotCount, issues, 'subtitle')
+        : null,
     requiredShotCount,
     placeholderCandidates: result.placeholderCandidates,
     placeholderLaneKeys: result.placeholderLaneKeys,
@@ -252,7 +269,7 @@ async function validateFiles(
       shot.narration.artifact,
       issues
     )
-    // 降级占位镜头无字幕（subtitle=null），无需校验。
+    // subtitle=null 有两种成因（关闭字幕交付、降级占位镜头），都无需校验。
     if (shot.subtitle) {
       await validateRef(storage, shot.laneKey, 'subtitle', shot.subtitle, issues)
     }
@@ -282,13 +299,14 @@ function digest(bytes: Buffer): string {
 
 function blocked(
   nodes: AssemblyNode[],
-  code: ExportBlockingIssue['code']
+  code: ExportBlockingIssue['code'],
+  subtitles: SubtitleDeliveryMode
 ): LoadedMediaAssembly {
   return {
     plan: null,
     blockingIssues: [{ laneKey: null, kind: 'render', code }],
     narrationReadyCount: 0,
-    subtitleReadyCount: 0,
+    subtitleReadyCount: subtitles === 'burn-in' ? 0 : null,
     requiredShotCount: nodes.filter((node) => node.type === 'shot-codegen').length,
     placeholderCandidates: [],
     placeholderLaneKeys: [],

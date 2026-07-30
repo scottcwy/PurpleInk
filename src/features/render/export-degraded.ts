@@ -155,7 +155,10 @@ export async function exportDegradedProject(
     return { ok: false, incompleteNodeIds: [], blockingIssues: degraded.blockingIssues }
   }
   const assembly = degraded.plan
-  const subtitleAss = await buildSubtitleAss(assembly, storage)
+  const subtitleAss =
+    assembly.subtitles === 'burn-in'
+      ? await buildSubtitleAss(assembly, storage)
+      : null
   const workDirectory = await storage.tempDir('cvc-export-')
   try {
     const temporaryOutput = path.join(workDirectory, 'final.mp4')
@@ -184,6 +187,7 @@ export async function exportDegradedProject(
       outputKey,
       contentHash,
       sizeBytes: bytes.byteLength,
+      subtitles: assembly.subtitles,
       placeholderLanes: degraded.placeholderLanes,
       waivedQaLanes: degraded.waivedQaLanes,
       confirmationFingerprint: dependencies.confirmationFingerprint,
@@ -225,6 +229,7 @@ async function commitDegraded(
       outputKey: input.outputKey,
       contentHash: input.contentHash,
       sizeBytes: input.sizeBytes,
+      subtitles: input.subtitles,
     })
     await repository.registerDegradedManifest({
       projectId: input.projectId,

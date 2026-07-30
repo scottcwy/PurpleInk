@@ -29,6 +29,7 @@ function plan(overrides: Partial<RenderExportPlan> = {}): RenderExportPlan {
     incompleteNodeIds: [],
     shots: [],
     musicKey: null,
+    subtitles: 'burn-in',
     targetResolution: RESOLUTION,
     resolutionPreset: '1920x1080',
     shotQa: {},
@@ -256,6 +257,7 @@ function assemblyPlan(): MediaAssemblyPlan {
     ],
     targetResolution: RESOLUTION,
     musicKey: null,
+    subtitles: 'burn-in',
   }
 }
 

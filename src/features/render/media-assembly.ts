@@ -1,3 +1,4 @@
+import type { SubtitleDeliveryMode } from '@/features/canvas/export-settings'
 import {
   addIssue,
   resolveDegradedShot,
@@ -20,7 +21,14 @@ export interface MediaAssemblyShot {
     startInUnitMs: number
     endInUnitMs: number
   }
-  /** 降级导出中被占位的分镜可为 null（跳过字幕）；正常装配始终非 null。 */
+  /**
+   * 本镜的字幕轨产物。
+   *
+   * 为 null 有两种成因，含义完全不同，不可混用：
+   * - `subtitles === 'burn-in'` 且降级导出把本镜占位——烧一条「占位」提示 cue；
+   * - `subtitles === 'off'`——整片不烧字幕，连占位 cue 都不产生。
+   * 判定该走哪条永远看 plan 级的 `subtitles`，不要从这里反推。
+   */
   subtitle: ArtifactRef | null
 }
 
@@ -30,6 +38,8 @@ export interface MediaAssemblyPlan {
   shots: MediaAssemblyShot[]
   targetResolution: { width: number; height: number }
   musicKey: string | null
+  /** 本次交付的字幕形态；`off` 时全片不含字幕，缺字幕也不阻塞装配。 */
+  subtitles: SubtitleDeliveryMode
 }
 
 export interface ExportBlockingIssue {
@@ -83,6 +93,8 @@ export interface TrustedMediaInput {
   }
   targetResolution: { width: number; height: number }
   musicKey: string | null
+  /** 本次交付的字幕形态；`off` 时不解析也不校验字幕产物。 */
+  subtitles: SubtitleDeliveryMode
   /** 降级导出：允许缺渲染/旁白/字幕的 lane 用占位顶替，而不阻塞出片。 */
   degraded?: boolean
   /** laneKey -> 占位黑场视频引用（由 export-degraded 预先生成）。 */
@@ -144,6 +156,7 @@ export function assembleTrustedMediaPlan(input: TrustedMediaInput): AssembleResu
           shots,
           targetResolution: input.targetResolution,
           musicKey: input.musicKey,
+          subtitles: input.subtitles,
         }
       : null,
     blockingIssues: issues,

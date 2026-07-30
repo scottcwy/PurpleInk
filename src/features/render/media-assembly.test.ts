@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { assembleTrustedMediaPlan } from './media-assembly'
+import {
+  assembleTrustedMediaPlan,
+  type TrustedMediaInput,
+} from './media-assembly'
 
 const HASH = 'a'.repeat(64)
 const OTHER_HASH = 'b'.repeat(64)
@@ -25,7 +28,7 @@ function artifact(
   }
 }
 
-function validInput() {
+function validInput(): TrustedMediaInput {
   return {
     nodes: [
       { nodeId: 'codegen-S001', type: 'shot-codegen', status: 'succeeded', laneKey: 'S001' },
@@ -77,6 +80,7 @@ function validInput() {
     },
     targetResolution: { width: 1920, height: 1080 },
     musicKey: null,
+    subtitles: 'burn-in',
   }
 }
 
@@ -100,6 +104,7 @@ describe('assembleTrustedMediaPlan', () => {
       totalFrames: 60,
       targetResolution: { width: 1920, height: 1080 },
       musicKey: null,
+      subtitles: 'burn-in',
       shots: [
         {
           laneKey: 'S001',
@@ -167,6 +172,54 @@ describe('assembleTrustedMediaPlan', () => {
     expect(result.plan).toBeNull()
     expect(result.blockingIssues).toEqual([
       { laneKey: 'S001', kind: 'subtitle', code: 'artifact-invalid' },
+    ])
+  })
+
+  it('drops subtitles entirely when the delivery excludes them', () => {
+    const input: TrustedMediaInput = { ...validInput(), subtitles: 'off' }
+
+    const result = assembleTrustedMediaPlan(input)
+
+    expect(result.blockingIssues).toEqual([])
+    expect(result.plan?.subtitles).toBe('off')
+    // 已经存在的字幕产物也不入片：关闭是关闭，不是「有就带上」。
+    expect(result.plan?.shots[0]?.subtitle).toBeNull()
+  })
+
+  it('does not block a subtitle-free delivery on missing or untrusted subtitles', () => {
+    // 这是「关了也导不出」的回归锁：关闭字幕后，缺产物、节点未完成、血缘不同源
+    // 三种情况都不得再产生 subtitle 阻塞项。
+    const missing: TrustedMediaInput = { ...validInput(), subtitles: 'off' }
+    missing.artifacts = missing.artifacts.filter(
+      (item) => item.kind !== 'subtitle-track'
+    )
+    expect(assembleTrustedMediaPlan(missing).blockingIssues).toEqual([])
+    expect(assembleTrustedMediaPlan(missing).plan?.shots).toHaveLength(1)
+
+    const stale: TrustedMediaInput = { ...validInput(), subtitles: 'off' }
+    stale.subtitleTracks['subtitle-track-S001']!.sourceAudioKey = 'audio/other.mp3'
+    expect(assembleTrustedMediaPlan(stale).blockingIssues).toEqual([])
+
+    const incomplete: TrustedMediaInput = { ...validInput(), subtitles: 'off' }
+    incomplete.nodes = incomplete.nodes.map((node) =>
+      node.type === 'shot-subtitle' ? { ...node, status: 'failed' } : node
+    )
+    expect(assembleTrustedMediaPlan(incomplete).blockingIssues).toEqual([])
+  })
+
+  it('still blocks a subtitle-free delivery on render and narration problems', () => {
+    // 关字幕只豁免字幕，不豁免骨架：画面和旁白缺失照旧阻塞。
+    const input: TrustedMediaInput = { ...validInput(), subtitles: 'off' }
+    input.artifacts = input.artifacts.filter(
+      (item) => item.kind !== 'render-mp4' && item.kind !== 'narration-audio:U001'
+    )
+
+    const result = assembleTrustedMediaPlan(input)
+
+    expect(result.plan).toBeNull()
+    expect(result.blockingIssues).toEqual([
+      { laneKey: 'S001', kind: 'render', code: 'artifact-missing' },
+      { laneKey: 'S001', kind: 'narration', code: 'artifact-missing' },
     ])
   })
 

@@ -9,6 +9,7 @@ const plan: MediaAssemblyPlan = {
   totalFrames: 90,
   targetResolution: { width: 1280, height: 720 },
   musicKey: null,
+  subtitles: 'burn-in',
   shots: [
     {
       laneKey: 'S001',
@@ -67,5 +68,28 @@ describe('buildMediaAssemblyArgs', () => {
     expect(filter).toContain('concat=n=2:v=0:a=1')
     expect(command).not.toContain('-an')
     expect(command).not.toContain('atempo')
+  })
+
+  it('keeps scaling but drops the ass filter for a subtitle-free delivery', () => {
+    const args = buildMediaAssemblyArgs({
+      plan: { ...plan, subtitles: 'off' },
+      concatListPath: 'C:/tmp/shots.ffconcat',
+      narrationPaths: ['C:/tmp/a1.mp3', 'C:/tmp/a2.mp3'],
+      subtitlePath: null,
+      fontsDirectory: 'C:/repo/assets/fonts',
+      musicPath: null,
+      outputPath: 'C:/tmp/final.mp4',
+    })
+    const command = args.join(' ')
+    const filter = args[args.indexOf('-filter_complex') + 1]
+
+    expect(filter).toContain('scale=1280:720:flags=lanczos')
+    expect(filter).not.toContain('ass=')
+    expect(filter).not.toContain('fontsdir')
+    // 音频链与编码参数不受字幕开关影响。
+    expect(filter).toContain('concat=n=2:v=0:a=1')
+    expect(command).toContain('libx264')
+    expect(command).toContain('-c:a aac')
+    expect(command).toContain('-map [narration]')
   })
 })

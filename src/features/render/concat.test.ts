@@ -161,6 +161,7 @@ function assemblyPlan(targetResolution: {
     totalFrames: 18,
     targetResolution,
     musicKey: null,
+    subtitles: 'burn-in',
     shots: ['S001', 'S002', 'S003'].map((laneKey, index) => ({
       laneKey,
       video: {

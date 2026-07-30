@@ -55,9 +55,11 @@ export async function exportProject(
     }
   }
   const assembly = exportPlan.mediaAssemblyPlan
-  const subtitleAss = await exportPhase('subtitle', () =>
-    buildSubtitleAss(assembly, storage)
-  )
+  // 字幕关闭时连 .ass 都不生成：降级占位镜头的「占位」提示 cue 也不该出现。
+  const subtitleAss =
+    assembly.subtitles === 'burn-in'
+      ? await exportPhase('subtitle', () => buildSubtitleAss(assembly, storage))
+      : null
   const workDirectory = await exportPhase('workspace', () =>
     storage.tempDir('cvc-export-')
   )
@@ -96,6 +98,7 @@ export async function exportProject(
           outputKey,
           contentHash,
           sizeBytes: bytes.byteLength,
+          subtitles: assembly.subtitles,
         })
       )
       return { ok: true, artifactId, outputKey, contentHash }

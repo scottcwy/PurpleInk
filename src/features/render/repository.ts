@@ -4,7 +4,12 @@ import {
   resolutionForPreset,
   resolveExportSettings,
   type ResolutionPreset,
+  type SubtitleDeliveryMode,
 } from '@/features/canvas'
+import {
+  deliveryForSubtitles,
+  type FinalVideoDelivery,
+} from './final-video-delivery'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { artifacts, canvasNodes, projects } from '@/lib/db/schema/index'
 import { withTransaction } from '@/lib/db/transaction'
@@ -46,6 +51,8 @@ export interface RenderExportPlan {
   musicKey: string | null
   targetResolution: { width: number; height: number }
   resolutionPreset: ResolutionPreset
+  /** 本次交付的字幕形态，来自项目导出设置。 */
+  subtitles: SubtitleDeliveryMode
   shotQa: Record<string, boolean | null>
   /** 人工豁免、未经验收的分镜；不等于 QA 通过。 */
   waivedQaLanes: string[]
@@ -59,9 +66,10 @@ export interface RenderExportPlan {
   fps: number | null
   media: {
     narrationReadyCount: number
-    subtitleReadyCount: number
+    /** 本次交付不含字幕时为 null（未测量），不得回落成 requiredShotCount。 */
+    subtitleReadyCount: number | null
     requiredShotCount: number
-    delivery: 'legacy-silent-v1' | 'narration-hard-subtitle-v2'
+    delivery: FinalVideoDelivery
   }
 }
 
@@ -191,6 +199,7 @@ export class RenderRepository extends RenderArtifactRepository {
       })),
       targetResolution: resolutionForPreset(settings.resolutionPreset),
       musicKey: await this.latestMusicKey(projectId),
+      subtitles: settings.subtitles,
       ...(options.degraded ? { degraded: true } : {}),
       ...(options.placeholderVideos
         ? { placeholderVideos: options.placeholderVideos }
@@ -205,6 +214,7 @@ export class RenderRepository extends RenderArtifactRepository {
       musicKey: media.plan?.musicKey ?? null,
       targetResolution: resolutionForPreset(settings.resolutionPreset),
       resolutionPreset: settings.resolutionPreset,
+      subtitles: settings.subtitles,
       shotQa,
       waivedQaLanes,
       mediaAssemblyPlan: media.plan,
@@ -212,7 +222,7 @@ export class RenderRepository extends RenderArtifactRepository {
       placeholderCandidates: media.placeholderCandidates,
       placeholderLaneKeys: media.placeholderLaneKeys,
       fps: media.fps,
-      media: mediaReadiness(media),
+      media: mediaReadiness(media, settings.subtitles),
     }
   }
 
@@ -346,12 +356,15 @@ export class RenderRepository extends RenderArtifactRepository {
   }
 }
 
-function mediaReadiness(media: LoadedMediaAssembly): RenderExportPlan['media'] {
+function mediaReadiness(
+  media: LoadedMediaAssembly,
+  subtitles: SubtitleDeliveryMode
+): RenderExportPlan['media'] {
   return {
     narrationReadyCount: media.narrationReadyCount,
     subtitleReadyCount: media.subtitleReadyCount,
     requiredShotCount: media.requiredShotCount,
-    delivery: 'narration-hard-subtitle-v2',
+    delivery: deliveryForSubtitles(subtitles),
   }
 }
 

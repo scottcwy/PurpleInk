@@ -80,17 +80,26 @@ function resolveShotArtifacts(
   return { video, narration, subtitle, narrationValid, subtitleValid }
 }
 
-/** 正常装配：保留降级前的严格校验与阻塞项顺序（回归锁）。 */
+/**
+ * 正常装配：保留降级前的严格校验与阻塞项顺序（回归锁）。
+ *
+ * 字幕关闭（`subtitles === 'off'`）时字幕完全退出这条路径：不查 shot-subtitle
+ * 节点状态、不选产物、不记任何 subtitle 阻塞项。否则「关掉字幕」会变成一个
+ * 关了也导不出的假开关。
+ */
 export function resolveStrictShot(
   input: TrustedMediaInput,
   allocation: ShotAllocation
 ): ShotResolution {
   const issues: ExportBlockingIssue[] = []
   const laneKey = allocation.id
+  const burnSubtitles = input.subtitles === 'burn-in'
   const codegenNode = findNode(input.nodes, laneKey, 'shot-codegen')
-  const subtitleNode = findNode(input.nodes, laneKey, 'shot-subtitle')
+  const subtitleNode = burnSubtitles
+    ? findNode(input.nodes, laneKey, 'shot-subtitle')
+    : undefined
   checkNode(issues, codegenNode, laneKey, 'render')
-  checkNode(issues, subtitleNode, laneKey, 'subtitle')
+  if (burnSubtitles) checkNode(issues, subtitleNode, laneKey, 'subtitle')
   const parts = resolveShotArtifacts(input, allocation, codegenNode, subtitleNode)
   if (!parts.video) addIssue(issues, laneKey, 'render', 'artifact-missing')
   if (!parts.narration) {
@@ -98,18 +107,21 @@ export function resolveStrictShot(
   } else if (!parts.narrationValid) {
     addIssue(issues, laneKey, 'narration', 'artifact-invalid')
   }
-  if (!parts.subtitle) {
-    addIssue(issues, laneKey, 'subtitle', 'artifact-missing')
-  } else if (!parts.subtitleValid) {
-    addIssue(issues, laneKey, 'subtitle', 'artifact-invalid')
+  if (burnSubtitles) {
+    if (!parts.subtitle) {
+      addIssue(issues, laneKey, 'subtitle', 'artifact-missing')
+    } else if (!parts.subtitleValid) {
+      addIssue(issues, laneKey, 'subtitle', 'artifact-invalid')
+    }
   }
+  const subtitleReady = !burnSubtitles || Boolean(parts.subtitle)
   const shot =
-    parts.video && parts.narration && parts.subtitle
+    parts.video && parts.narration && subtitleReady
       ? shotFrom(
           allocation,
           toRef(parts.video),
           narrationBinding(allocation, parts.narration),
-          toRef(parts.subtitle)
+          burnSubtitles && parts.subtitle ? toRef(parts.subtitle) : null
         )
       : undefined
   return { shot, issues }
@@ -122,7 +134,10 @@ export function resolveDegradedShot(
 ): ShotResolution {
   const laneKey = allocation.id
   const codegenNode = findNode(input.nodes, laneKey, 'shot-codegen')
-  const subtitleNode = findNode(input.nodes, laneKey, 'shot-subtitle')
+  const subtitleNode =
+    input.subtitles === 'burn-in'
+      ? findNode(input.nodes, laneKey, 'shot-subtitle')
+      : undefined
   const parts = resolveShotArtifacts(input, allocation, codegenNode, subtitleNode)
   const videoRef = parts.video
     ? toRef(parts.video)

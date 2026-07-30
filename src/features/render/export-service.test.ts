@@ -6,6 +6,7 @@ import type { StorageAdapter } from '@/lib/storage'
 import type { MediaAssemblyPlan } from './media-assembly'
 import { getExportReadiness } from './export-readiness'
 import { exportProject } from './export-service'
+import type { FinalArtifactInput } from './render-artifact-repository'
 
 vi.mock('server-only', () => ({}))
 
@@ -28,6 +29,7 @@ describe('exportProject', () => {
           incompleteNodeIds: ['node-2', 'node-1'],
           shots: [],
           musicKey: null,
+          subtitles: 'burn-in' as const,
           targetResolution: { width: 1920, height: 1080 },
           resolutionPreset: '1920x1080' as const,
           shotQa: {},
@@ -61,6 +63,7 @@ describe('exportProject', () => {
           incompleteNodeIds: [],
           shots: [],
           musicKey: null,
+          subtitles: 'burn-in' as const,
           targetResolution: { width: 1920, height: 1080 },
           resolutionPreset: '1920x1080' as const,
           shotQa: {},
@@ -96,7 +99,9 @@ describe('exportProject', () => {
     vi.mocked(storage.removeTempDir).mockImplementation((absolutePath) =>
       rm(absolutePath, { recursive: true, force: true })
     )
-    const registerFinalArtifact = vi.fn(async () => 'artifact-final')
+    const registerFinalArtifact = vi.fn(
+      async (_input: FinalArtifactInput) => 'artifact-final'
+    )
     const concat = vi.fn(async (
       _plan: MediaAssemblyPlan,
       _paths: unknown,
@@ -116,6 +121,7 @@ describe('exportProject', () => {
             { nodeId: 'node-1', laneKey: 'S001', outputKey: 'render/S001.mp4' },
           ],
           musicKey: null,
+          subtitles: 'burn-in' as const,
           targetResolution: { width: 1920, height: 1080 },
           resolutionPreset: '1920x1080' as const,
           shotQa: {},
@@ -139,9 +145,74 @@ describe('exportProject', () => {
       ],
     })
     expect(concat.mock.calls[0]?.[2]).toContain('Dialogue:')
+    expect(registerFinalArtifact.mock.calls[0]?.[0]).toMatchObject({
+      subtitles: 'burn-in',
+    })
     expect(storage.put).toHaveBeenCalledOnce()
     expect(registerFinalArtifact).toHaveBeenCalledOnce()
     expect(storage.removeTempDir).toHaveBeenCalledOnce()
+  })
+
+  it('produces no subtitle document at all for a subtitle-free delivery', async () => {
+    const tempRoot = await createTempRoot()
+    const storage = createStorage()
+    vi.mocked(storage.exists).mockResolvedValue(true)
+    vi.mocked(storage.localPath).mockImplementation((key) => path.join(tempRoot, key))
+    vi.mocked(storage.tempDir).mockImplementation((prefix) =>
+      mkdtemp(path.join(tempRoot, prefix))
+    )
+    vi.mocked(storage.readLocalFile).mockImplementation((absolutePath) =>
+      readFile(absolutePath)
+    )
+    vi.mocked(storage.removeTempDir).mockImplementation((absolutePath) =>
+      rm(absolutePath, { recursive: true, force: true })
+    )
+    const registerFinalArtifact = vi.fn(
+      async (_input: FinalArtifactInput) => 'artifact-final'
+    )
+    const concat = vi.fn(async (
+      _plan: MediaAssemblyPlan,
+      _paths: unknown,
+      _subtitleAss: string | null,
+      outputPath: string
+    ) => {
+      await writeFile(outputPath, Buffer.from('deterministic-final-mp4'))
+      return outputPath
+    })
+    const plan = completeMediaPlan()
+
+    const result = await exportProject('project-1', {
+      repository: {
+        getExportPlan: vi.fn(async () => ({
+          incompleteNodeIds: [],
+          shots: [
+            { nodeId: 'node-1', laneKey: 'S001', outputKey: 'render/S001.mp4' },
+            { nodeId: 'node-2', laneKey: 'S002', outputKey: 'render/S002.mp4' },
+          ],
+          musicKey: null,
+          subtitles: 'off' as const,
+          targetResolution: { width: 1920, height: 1080 },
+          resolutionPreset: '1920x1080' as const,
+          shotQa: {},
+          ...mediaFields({
+            ...plan,
+            subtitles: 'off' as const,
+            shots: plan.shots.map((shot) => ({ ...shot, subtitle: null })),
+          }),
+        })),
+        registerFinalArtifact,
+      },
+      storage,
+      concat,
+    })
+
+    expect(result).toMatchObject({ ok: true })
+    // null 而不是空字符串：concat 据此跳过写 .ass、跳过字体校验、去掉 ass 滤镜。
+    expect(concat.mock.calls[0]?.[2]).toBeNull()
+    // 交付形态跟着写进产物，页面才不会把无字幕成片说成硬字幕烧录。
+    expect(registerFinalArtifact.mock.calls[0]?.[0]).toMatchObject({
+      subtitles: 'off',
+    })
   })
 
   it('cleans up the temp dir even when concat throws', async () => {
@@ -166,6 +237,7 @@ describe('exportProject', () => {
             incompleteNodeIds: [],
             shots: [{ nodeId: 'node-1', laneKey: 'S001', outputKey: 'render/S001.mp4' }],
             musicKey: null,
+            subtitles: 'burn-in' as const,
             targetResolution: { width: 1920, height: 1080 },
             resolutionPreset: '1920x1080' as const,
             shotQa: {},
@@ -192,6 +264,7 @@ describe('getExportReadiness', () => {
         incompleteNodeIds: [],
         shots: [{ nodeId: 'node-1', laneKey: 'S001', outputKey: 'render/S001.mp4' }],
         musicKey: null,
+        subtitles: 'burn-in' as const,
         targetResolution: { width: 1920, height: 1080 },
         resolutionPreset: '1920x1080' as const,
         shotQa: { S001: true },
@@ -202,6 +275,7 @@ describe('getExportReadiness', () => {
         path: 'exports/project-1/final.mp4',
         contentHash: 'hash-final',
         schemaVersion: 'cvc.final-video/v2',
+        sizeBytes: 2_048,
       })),
       findDegradedExport: vi.fn(async () => null),
     })
@@ -210,7 +284,68 @@ describe('getExportReadiness', () => {
       ready: true,
       finalArtifactId: 'artifact-final',
       artifactDelivery: 'narration-hard-subtitle-v2',
+      finalArtifact: {
+        artifactId: 'artifact-final',
+        contentHash: 'hash-final',
+        sizeBytes: 2_048,
+        delivery: 'narration-hard-subtitle-v2',
+      },
     })
+  })
+
+  it('describes an existing subtitle-free export from the artifact, not the current setting', async () => {
+    // 已存在成片的形态来自它自己的 schemaVersion；此处刻意让当前设置与成片相反，
+    // 确认页面不会用「现在的开关」去描述「过去的产物」。
+    const result = await getExportReadiness('project-1', {
+      getExportPlan: vi.fn(async () => ({
+        incompleteNodeIds: [],
+        shots: [{ nodeId: 'node-1', laneKey: 'S001', outputKey: 'render/S001.mp4' }],
+        musicKey: null,
+        subtitles: 'burn-in' as const,
+        targetResolution: { width: 1920, height: 1080 },
+        resolutionPreset: '1920x1080' as const,
+        shotQa: { S001: true },
+        ...mediaFields(completeMediaPlan()),
+      })),
+      findLatestFinalArtifact: vi.fn(async () => ({
+        artifactId: 'artifact-final',
+        path: 'exports/project-1/final.mp4',
+        contentHash: 'hash-final',
+        schemaVersion: 'cvc.final-video/v3',
+        sizeBytes: 1_024,
+      })),
+      findDegradedExport: vi.fn(async () => null),
+    })
+
+    expect(result.subtitles).toBe('burn-in')
+    expect(result.artifactDelivery).toBe('narration-no-subtitle-v3')
+    expect(result.finalArtifact?.delivery).toBe('narration-no-subtitle-v3')
+  })
+
+  it('changes the idempotency fingerprint when the subtitle delivery changes', async () => {
+    // 不进指纹的话，切换开关后重导出会命中同一个已完成作业并返回旧成片。
+    const fingerprintFor = async (subtitles: 'burn-in' | 'off') =>
+      (
+        await getExportReadiness('project-1', {
+          getExportPlan: vi.fn(async () => ({
+            incompleteNodeIds: [],
+            shots: [
+              { nodeId: 'node-1', laneKey: 'S001', outputKey: 'render/S001.mp4' },
+            ],
+            musicKey: null,
+            subtitles,
+            targetResolution: { width: 1920, height: 1080 },
+            resolutionPreset: '1920x1080' as const,
+            shotQa: { S001: true },
+            ...mediaFields(completeMediaPlan()),
+          })),
+          findLatestFinalArtifact: vi.fn(async () => null),
+          findDegradedExport: vi.fn(async () => null),
+        })
+      ).inputFingerprint
+
+    expect(await fingerprintFor('burn-in')).not.toBe(await fingerprintFor('off'))
+    expect(await fingerprintFor('off')).toBe(await fingerprintFor('off'))
   })
 
   it('lists a skipped lane as a degraded placeholder candidate instead of a hard block', async () => {
@@ -221,6 +356,7 @@ describe('getExportReadiness', () => {
         incompleteNodeIds: ['codegen-S002'],
         shots: [],
         musicKey: null,
+        subtitles: 'burn-in',
         targetResolution: { width: 1920, height: 1080 },
         resolutionPreset: '1920x1080' as const,
         shotQa: {},
@@ -230,6 +366,7 @@ describe('getExportReadiness', () => {
         incompleteNodeIds: ['codegen-S002'],
         shots: [],
         musicKey: null,
+        subtitles: 'burn-in',
         targetResolution: { width: 1920, height: 1080 },
         resolutionPreset: '1920x1080' as const,
         shotQa: {},
@@ -270,6 +407,7 @@ describe('getExportReadiness', () => {
         incompleteNodeIds: ['qa-S004'],
         shots: [{ nodeId: 'codegen-S004', laneKey: 'S004', outputKey: 'render/S004.mp4' }],
         musicKey: null,
+        subtitles: 'burn-in',
         targetResolution: { width: 1920, height: 1080 },
         resolutionPreset: '1920x1080' as const,
         shotQa: { S004: false },
@@ -280,6 +418,7 @@ describe('getExportReadiness', () => {
         incompleteNodeIds: ['qa-S004'],
         shots: [{ nodeId: 'codegen-S004', laneKey: 'S004', outputKey: 'render/S004.mp4' }],
         musicKey: null,
+        subtitles: 'burn-in',
         targetResolution: { width: 1920, height: 1080 },
         resolutionPreset: '1920x1080' as const,
         shotQa: { S004: false },
@@ -363,6 +502,7 @@ function completeMediaPlan(): MediaAssemblyPlan {
     })),
     targetResolution: { width: 1920, height: 1080 },
     musicKey: null,
+    subtitles: 'burn-in',
   }
 }
 
