@@ -267,7 +267,8 @@ describe('runAudioTranscriptionJob', () => {
         providerLabel: '阶跃星辰',
       },
     ])
-    expect(deps.transition).toHaveBeenNthCalledWith(2, JOB.nodeId, 'failed')
+    expect(deps.transition).toHaveBeenCalledTimes(1)
+    expect(deps.transition).toHaveBeenCalledWith(JOB.nodeId, 'running')
     expect(deps.persistArtifacts).not.toHaveBeenCalled()
     expect(deps.updateProjectScript).not.toHaveBeenCalled()
     expect(deps.materialize).not.toHaveBeenCalled()

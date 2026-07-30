@@ -229,13 +229,6 @@ async function settleDispatchWait(
   } catch (cleanupError) {
     cleanupErrors.push(cleanupError)
   }
-  try {
-    // 现有节点状态机通过 failed -> pending 复位；这里只做队列等待的内部桥接，
-    // 不写业务失败投影，completeAttempt 会立刻附带 executionNotice 复位为 pending。
-    await dependencies.transition(nodeId, 'failed')
-  } catch (cleanupError) {
-    cleanupErrors.push(cleanupError)
-  }
   if (cleanupErrors.length > 0) {
     throw new AggregateError(
       [error, ...cleanupErrors],

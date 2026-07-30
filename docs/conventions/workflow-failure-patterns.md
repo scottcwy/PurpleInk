@@ -650,7 +650,8 @@ Stage Runner 先记为 `failed + directorError`，队列随后再改回
 `nextProviderWindow`，`provider-wait-scheduler.ts` 用数据库表达式钳制未来
 `visible_at`；Stage Runner 对 Provider 等待不再落失败，并通过 attempt 的
 `providerScopeKey` 与节点已提交 Artifact 识别字幕副作用续跑。状态迁移在写入
-`executionNotice` 时清除旧失败投影。
+`executionNotice` 时清除旧失败投影；录音 ASR 入口同样保持 `running`，由队列原子
+收敛到等待态，不再经过临时 `failed`。
 
 ---
 
