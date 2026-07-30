@@ -151,12 +151,12 @@ export function Header(): ReactNode {
               {isOpen ? "Close menu" : "Open menu"}
             </span>
             <span
-              className={`absolute h-0.5 w-5 bg-white transition-transform duration-300 ${
+              className={`absolute h-0.5 w-5 bg-white transition-transform duration-fast ease-standard ${
                 isOpen ? "rotate-45" : "rotate-0"
               }`}
             />
             <span
-              className={`absolute h-5 w-0.5 bg-white transition-transform duration-300 ${
+              className={`absolute h-5 w-0.5 bg-white transition-transform duration-fast ease-standard ${
                 isOpen ? "rotate-45" : "rotate-0"
               }`}
             />

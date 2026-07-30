@@ -71,7 +71,7 @@ Tailwind v4 从 `@theme` 读取的 duration 命名空间是 **`--transition-dura
 | `fast` | 150ms | 微交互：hover 换底、focus ring、图标色变、tooltip 淡入 |
 | `base` | 220ms | 标准 UI 变化：面板、抽屉、折叠、路由转场 |
 | `slow` | 360ms | 大面积或强调：全屏遮罩、TOC 定位发光 |
-| `narrative` | 300ms | **仅 `(marketing)` 段**的叙事进入（见 §5.4） |
+| `narrative` | 300ms | **仅 `(marketing)` 段的入场叙事**（见 §5.4） |
 
 ### 2.3 曲线
 
@@ -135,7 +135,7 @@ Tailwind v4 从 `@theme` 读取的 duration 命名空间是 **`--transition-dura
 | 14 | 拖拽跟手 | — | `TRANSITION_INSTANT`（0ms） |
 | 15 | 常驻状态指示（进行中） | — | `animate-pulse` / `animate-spin`，**必须有文本或图标语义并行** |
 | 16 | 骨架占位 | — | `animate-shimmer`，**禁止永久 Skeleton**（须有终态或错误态） |
-| 17 | 营销叙事进入 | spatial | `duration-narrative` + `ease-emphasized`，仅 `(marketing)` |
+| 17 | 营销叙事进入 | spatial | `duration-narrative` + `ease-emphasized`，仅 `(marketing)` 入场叙事 |
 
 条目 15 / 16 引自 `design-quality-pitfalls.md` §1.5「状态不可只靠颜色表达」与 §6 数据真值
 「禁止永久 Skeleton」。全局 `prefers-reduced-motion` 规则会把这两类动画压到 0.01ms，
@@ -292,8 +292,11 @@ ESC 逻辑从 `app-sidebar-shell.tsx`、`canvas-inspector.tsx` 两处删除；
 | active 按压 | 仅 `button.tsx` 有（`active:translate-y-px` + `active:brightness-95`，其中 `gray` 变体漏了 brightness）；回弹是 `duration-150` tween 而非 spring。IconButton / NavItem / SegmentedControl 无按压态 | 可点控件按下立即位移、松开走 `SPRING_SPATIAL_FAST` | done |
 | `toggle.tsx` knob | 裸 `transition-transform` | `SPRING_SPATIAL_FAST` | done |
 | `progress-bar.tsx` | `transition-all` | `transition-[width] duration-base` | done |
-| `canvas-auto-hide-top-bar.tsx` | `duration-[var(--duration-base)]` + 手写曲线 | `duration-base ease-emphasized` | todo |
-| `marketing/faq.tsx` | 体系外曲线 `[0.25,0.46,0.45,0.94]` | `SPRING_SPATIAL_DEFAULT` | todo |
+| `canvas-auto-hide-top-bar.tsx` | `duration-[var(--duration-base)]` + 手写曲线 | `duration-base ease-emphasized` | done |
+| `marketing/faq.tsx` | 体系外曲线 `[0.25,0.46,0.45,0.94]` | `SPRING_SPATIAL_DEFAULT` | done |
+| 营销 CSS `duration-300` | testimonials / tools-carousel / theme-switch 使用数字档 | `duration-narrative` | done |
+| 营销 hover / 箭头位移 | trusted-by 裸过渡；三处箭头时长分叉 | `duration-fast` | done |
+| 营销微交互数字档 | bottom-cta focus shadow 与 Header 菜单图标使用 200/300ms | `duration-fast` | done |
 
 ### 7.4 重复体系与死代码
 

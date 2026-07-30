@@ -59,8 +59,7 @@ export const MOTION_INTENTS: MotionIntent[] = [
     title: '折叠展开 / 收起',
     category: 'spatial',
     params: 'SPRING_SPATIAL_DEFAULT',
-    status: 'pending',
-    current: '3 套实现：CollapsibleCard 用 tween 0.22/0.12、marketing/faq 用体系外曲线 [0.25,0.46,0.45,0.94]、sidebar 用 CSS 200ms',
+    status: 'unified',
   },
   {
     id: 'drawer-enter',
@@ -170,9 +169,8 @@ export const MOTION_INTENTS: MotionIntent[] = [
     no: 17,
     title: '营销叙事进入',
     category: 'spatial',
-    params: 'duration-narrative（300ms）+ ease-emphasized，仅 (marketing)',
-    status: 'pending',
-    current: '营销层各组件内联手写 duration: 0.3，未走 token；narrative 档本批刚建立',
+    params: 'duration-narrative（300ms）+ ease-emphasized，仅 (marketing) 入场叙事',
+    status: 'unified',
   },
 ]
 

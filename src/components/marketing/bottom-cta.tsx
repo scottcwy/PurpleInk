@@ -20,7 +20,7 @@ export function BottomCTA(): ReactNode {
               <input
                 type="email"
                 placeholder="you@company.com"
-                className="h-12 sm:min-w-86 appearance-none rounded-xl border-0 bg-background px-6 text-foreground shadow-none placeholder:text-muted-foreground outline-none! ring-0! transition-shadow duration-200 focus:border-0 focus:shadow-[0_0_20px_rgba(0,0,0,0.08)] dark:focus:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                className="h-12 sm:min-w-86 appearance-none rounded-xl border-0 bg-background px-6 text-foreground shadow-none placeholder:text-muted-foreground outline-none! ring-0! transition-shadow duration-fast ease-standard focus:border-0 focus:shadow-[0_0_20px_rgba(0,0,0,0.08)] dark:focus:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
                 required
               />
               <button

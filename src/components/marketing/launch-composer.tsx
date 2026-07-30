@@ -3,7 +3,13 @@
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { ArrowRight, LoaderCircle, RotateCcw } from 'lucide-react'
-import { useCallback, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react'
 import {
   LoginRequiredDialog,
   useRequireLogin,
@@ -23,6 +29,8 @@ import {
   type Stage,
 } from './launch-composer-support'
 
+const subscribeToHydration = () => () => {}
+
 export function LaunchComposer(): ReactNode {
   const router = useRouter()
   const [stage, setStage] = useState<Stage>('idle')
@@ -32,6 +40,11 @@ export function LaunchComposer(): ReactNode {
   const [duration, setDuration] = useState(24)
   const [createdProjectId, setCreatedProjectId] = useState<string>()
   const prefersReducedMotion = useReducedMotion()
+  const motionReady = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  )
   const inputRef = useRef<HTMLInputElement>(null)
   const {
     loginRequired,
@@ -101,24 +114,25 @@ export function LaunchComposer(): ReactNode {
     url,
   ])
 
-  const interactive = prefersReducedMotion
+  const reduceMotionAfterHydration = motionReady && prefersReducedMotion
+  const interactive = reduceMotionAfterHydration
     ? {}
     : { whileHover: { y: -2 }, whileTap: { scale: 0.98, y: 1 } }
-  const enter = prefersReducedMotion
+  const enter = reduceMotionAfterHydration
     ? { initial: false as const, animate: { opacity: 1, y: 0 } }
     : {
         initial: { opacity: 0, y: 8 },
         animate: { opacity: 1, y: 0 },
         exit: { opacity: 0, y: -8 },
       }
-  const accessory = prefersReducedMotion
+  const accessory = reduceMotionAfterHydration
     ? { initial: false as const, animate: { opacity: 1, height: 'auto' as const } }
     : {
         initial: { opacity: 0, height: 0 },
         animate: { opacity: 1, height: 'auto' as const },
         exit: { opacity: 0, height: 0 },
       }
-  const spin = prefersReducedMotion
+  const spin = reduceMotionAfterHydration
     ? {}
     : {
         animate: { rotate: 360 },
@@ -141,7 +155,7 @@ export function LaunchComposer(): ReactNode {
               创建你的首个 Launch Video
             </span>
             <ActionCircle>
-              <ArrowRight className="h-5 w-5 transition-transform duration-200 group-hover:translate-x-0.5" />
+              <ArrowRight className="h-5 w-5 transition-transform duration-fast group-hover:translate-x-0.5" />
             </ActionCircle>
           </motion.button>
         )}
