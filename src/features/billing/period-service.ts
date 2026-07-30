@@ -191,3 +191,25 @@ export async function assertBillingAvailable(workspaceId?: string): Promise<void
     throw new QuotaExhaustedError(period.endsAt.toISOString())
   }
 }
+
+export async function assertBillingCapacity(
+  requiredCnyMicros: bigint,
+  workspaceId?: string,
+): Promise<void> {
+  if (requiredCnyMicros < BigInt(0)) {
+    throw new Error('requiredCnyMicros must not be negative')
+  }
+  const database = await getDb()
+  const now = new Date()
+  const period = await ensureCurrentPeriod({
+    database,
+    workspaceId: workspaceId ?? currentWorkspaceId(),
+    now,
+  })
+  const projected = period.usedCnyMicros
+    + period.reservedCnyMicros
+    + requiredCnyMicros
+  if (projected > period.limitCnyMicros) {
+    throw new QuotaExhaustedError(period.endsAt.toISOString())
+  }
+}

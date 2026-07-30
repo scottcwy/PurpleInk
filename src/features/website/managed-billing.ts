@@ -1,5 +1,6 @@
 import 'server-only'
 import {
+  assertBillingCapacity,
   calculateActualCost,
   estimateMaximumCost,
   getCurrentRateCard,
@@ -27,6 +28,18 @@ const WEBSITE_PROVIDER = 'purpleink-engine'
 const WEBSITE_MODEL = 'website-video-v1'
 const WEBSITE_CAPABILITY = 'workflow'
 const WEBSITE_OPERATION = 'website-video'
+
+export interface WebsiteBillingCapacityDependencies {
+  getCurrentRateCard: typeof getCurrentRateCard
+  estimateMaximumCost: typeof estimateMaximumCost
+  assertBillingCapacity: typeof assertBillingCapacity
+}
+
+const CAPACITY_DEPENDENCIES: WebsiteBillingCapacityDependencies = {
+  getCurrentRateCard,
+  estimateMaximumCost,
+  assertBillingCapacity,
+}
 
 export interface WebsiteBillingCompletion {
   durationSec: number | null
@@ -64,6 +77,26 @@ const DEFAULT_DEPENDENCIES: ManagedWebsiteBillingDependencies = {
   settleManagedInvocation,
   releaseManagedReservation,
   monotonicNow: () => performance.now(),
+}
+
+export async function assertWebsiteBillingCapacity(
+  maximumDurationSeconds: number,
+  dependencies: WebsiteBillingCapacityDependencies = CAPACITY_DEPENDENCIES,
+): Promise<void> {
+  const maximumSeconds = wholeVideoSeconds(maximumDurationSeconds)
+  if (maximumSeconds === 0) {
+    throw new Error('Website video maximum duration must be positive')
+  }
+  const rateCard = await dependencies.getCurrentRateCard({
+    provider: WEBSITE_PROVIDER,
+    model: WEBSITE_MODEL,
+    capability: WEBSITE_CAPABILITY,
+  })
+  const maximumCostCnyMicros = dependencies.estimateMaximumCost(
+    rateCard.prices,
+    { kind: 'workflow', videoSeconds: maximumSeconds },
+  )
+  await dependencies.assertBillingCapacity(maximumCostCnyMicros)
 }
 
 /**

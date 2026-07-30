@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  assertWebsiteBillingCapacity,
   runManagedWebsiteBilling,
   type ManagedWebsiteBillingDependencies,
 } from './managed-billing'
@@ -46,6 +47,18 @@ function createDependencies(): ManagedWebsiteBillingDependencies {
 }
 
 describe('website composite managed billing', () => {
+  it('checks the exact maximum website reservation before queueing', async () => {
+    const assertBillingCapacity = vi.fn(async () => undefined)
+
+    await assertWebsiteBillingCapacity(24, {
+      getCurrentRateCard: vi.fn(async () => RATE_CARD),
+      estimateMaximumCost: vi.fn(() => BigInt(3_000)),
+      assertBillingCapacity,
+    })
+
+    expect(assertBillingCapacity).toHaveBeenCalledWith(BigInt(3_000))
+  })
+
   it('reserves from the shared managed pool and settles output-derived seconds', async () => {
     const dependencies = createDependencies()
     const invoke = vi.fn(async () => ({

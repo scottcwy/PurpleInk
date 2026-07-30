@@ -21,6 +21,7 @@ export {
 } from './ledger'
 export {
   assertBillingAvailable,
+  assertBillingCapacity,
   ensureFreeEntitlement,
   getBillingProjection,
   getCurrentPlanKey,

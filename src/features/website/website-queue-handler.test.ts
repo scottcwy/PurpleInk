@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { QuotaExhaustedError } from '@/features/billing'
 import { classifyWorkflowError } from '@/features/canvas'
 import type { QueueAdapter, QueueJob } from '@/lib/queue'
 import { activeWorkflowVersionFor } from '@/lib/workflow/project-workflow-registry'
@@ -61,6 +62,16 @@ describe('website video queue handler', () => {
       expect(JSON.stringify(error)).toContain('网站介绍视频本次执行已安全终止')
       expect(JSON.stringify(error)).not.toContain('temporary worker failure')
     })
+  })
+
+  it('preserves the shared quota fault instead of relabeling it as a website failure', async () => {
+    const quota = new QuotaExhaustedError('2026-08-27T00:00:00.000Z')
+    await expect(runWebsiteVideoQueueJob(
+      job(),
+      vi.fn(async () => {
+        throw quota
+      }),
+    )).rejects.toBe(quota)
   })
 })
 

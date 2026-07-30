@@ -376,6 +376,21 @@ it('does not oversell the final quota under concurrent reservations', async () =
   expect(period.reservedCnyMicros).toBe(BigInt(700))
 })
 
+it('rejects a known reservation cost before an attempt is enqueued', async () => {
+  await provision()
+  await database.db.update(usagePeriods).set({
+    limitCnyMicros: BigInt(1_000),
+    usedCnyMicros: BigInt(400),
+    reservedCnyMicros: BigInt(100),
+  })
+  const { assertBillingCapacity } = await import('./period-service')
+
+  await expect(assertBillingCapacity(BigInt(500), WORKSPACE_ID)).resolves.toBeUndefined()
+  await expect(assertBillingCapacity(BigInt(501), WORKSPACE_ID)).rejects.toMatchObject({
+    code: 'quota_exhausted',
+  })
+})
+
 it('keeps concurrent reservation and settlement idempotent for one invocation', async () => {
   await provision()
   await seedAttempt()

@@ -1,8 +1,9 @@
 import 'server-only'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
-import { assertBillingAvailable } from '@/features/billing'
+import { QuotaExhaustedError } from '@/features/billing'
 import type { WorkflowFault } from '@/features/canvas'
+import { PostgresProjectSourceRepository } from '@/features/projects'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb, type Db } from '@/lib/db/client'
 import { taskAttempts } from '@/lib/db/schema'
@@ -18,6 +19,7 @@ import {
   runWebsiteVideo,
   type RunWebsiteVideoInput,
 } from './website-execution'
+import { assertWebsiteBillingCapacity } from './managed-billing'
 import {
   websiteFailureCode,
 } from './website-engine-execution'
@@ -80,6 +82,7 @@ export async function runWebsiteVideoQueueJob(
     })
     job.signal?.throwIfAborted()
   } catch (error) {
+    if (error instanceof QuotaExhaustedError) throw error
     throw new WebsiteVideoAttemptTerminalError(websiteFailureCode(error))
   }
 }
@@ -96,15 +99,19 @@ export function registerWebsiteVideoHandler(
 export async function enqueueWebsiteVideo(
   input: WebsiteVideoJobInput,
   targetQueue: QueueAdapter = defaultQueue,
-  preflight: () => Promise<void> = assertBillingAvailable,
+  preflight?: () => Promise<void>,
   database?: Db,
 ): Promise<QueueEnqueueReceipt> {
   const payload = websiteVideoJobSchema.parse(input)
+  const resolvedDatabase = database ?? (await getDb())
   return enqueueWebsiteVideoOnce(
     payload,
     targetQueue,
-    preflight,
-    database ?? (await getDb()),
+    preflight ?? (() => preflightWebsiteCapacity(
+      payload.projectId,
+      resolvedDatabase,
+    )),
+    resolvedDatabase,
   )
 }
 
@@ -148,4 +155,18 @@ async function enqueueWebsiteVideoOnce(
       reused: false,
     }
   })
+}
+
+async function preflightWebsiteCapacity(
+  projectId: string,
+  database: Db,
+): Promise<void> {
+  const source = await new PostgresProjectSourceRepository(
+    database,
+    currentWorkspaceId(),
+  ).get(projectId)
+  if (!source || source.sourcePayload.kind !== 'website') {
+    throw new Error('WEBSITE_PROJECT_INVALID')
+  }
+  await assertWebsiteBillingCapacity(source.sourcePayload.durationSec)
 }
