@@ -495,6 +495,8 @@ UI 投影为未知问题并连续重试；数据库没有 `export-project` attem
 - [ ] TTS 字符与 ASR 音频秒是否按各自计费原子归一化；音频探针的小数秒是否在预留和实际结算两条路径保持一致（模式 L）。
 - [ ] TTS 供应商是否可能用 HTTP 200 返回错误 JSON；写盘前是否同时验证媒体合同并拒绝错误正文（模式 T）。
 - [ ] LLM 生成的 HyperFrames HTML 是否在落盘前检查 `<style>` 内的赋值号污染；结构合法不能替代 CSS 可编译性（模式 U）。
+- [ ] 流式 Provider 是否除 SDK timeout 外还有本地墙钟硬截止；永不产出事件的流是否会安全结算并释放票据（模式 V）。
+- [ ] worker 轮询或视频下载的一次瞬断是否会复用同一 jobId 继续，而不是把已完成渲染判为失败或隐式重建（模式 W）。
 - [ ] Provider 并发、RPM、TPM 是否按共享凭据分别建模；429 是否只延后且不消耗普通重试/失败预算/熔断计数，等待上限与取消路径是否可恢复（模式 M）。
 - [ ] Provider 调度迁移的 journal 是否严格递增且目标表真实存在；租约创建、过期判断与释放是否使用同一数据库时钟（模式 M）。
 - [ ] 分镜租约身份是否同时包含 project 与 work unit；claim 是否只有一套公平顺序且会跳过暂不可准入的队首；停止是否以 execution epoch + 协作取消收敛全部旧作业（模式 R）。
@@ -778,6 +780,73 @@ content-hash 去重**：每次提交一律 `version + 1` 并生成新 `artifactI
   不在最终项目上做字符串替换，因为无法证明其余生成内容仍语义正确。
 - 合法的 `left: 0` 与非法的 `left=0` 由 `chapter-validation.test.ts` 双向锁定。
 - 真实工作流验证必须看到 `render_done code=0` 与最终 MP4；`chapters_generated` 不是成功。
+
+---
+
+## 7.16 模式 V：流式 SDK 忽略超时参数，Provider 调用永久停在 running
+
+**症状**：Director 阶段已把 Provider 硬超时设置为 4 分钟且关闭 SDK 内重试，但真实
+`shot-codegen` 调用超过 8 分钟后，`task_attempts`、`ai_invocations` 与调度票据仍分别停在
+`running`、`running/reserved` 和 `in_flight`。项目停止只能写入取消请求，无法让当前调用
+及时确认，直到队列的取消失联清扫器介入。
+
+**真实事故**：`director-billing-stream.ts` 只把 `timeoutMs` 传给 pi-ai 的
+`streamSimple`。该参数属于上游适配器合同；当适配器或底层流没有按时终止时，本地
+`for await` 会永久等待下一条事件，计费结算、票据释放和 attempt 收敛都无法执行。
+
+**规则与护栏**：
+
+- Provider SDK 的 timeout 只能作为第一层取消信号，不能作为工作流硬截止的唯一保证。
+- 出网边界必须用本地墙钟对异步迭代器的每次 `next()` 做总截止竞速；截止后产生安全的
+  `ProviderRequestError(kind=timeout)`，并进入既有结算、票据释放与重试语义。
+- 本地硬截止使用与传给 SDK 相同且已封顶的 `timeoutMs`，不得形成两个不同口径。
+- 终止悬挂流时允许尽力调用迭代器 `return()`，但不得等待一个同样可能悬挂的清理 Promise。
+- `director-billing-stream.test.ts` 必须包含“上游永不产生事件”的回归测试，并断言
+  invocation 以 `timeout` 失败结算，而不是依赖测试框架自身超时。
+
+---
+
+## 7.17 模式 W：长渲染期间一次 worker 瞬断，已完成视频被判为引擎失败
+
+**症状**：worker 的真实日志最终出现 `render_done code=0`、`narration_muxed` 与
+`job:done`，本地 MP4 可被 `ffprobe` 正常解析；但 Products 侧 attempt 却以
+`WEBSITE_ENGINE_UNAVAILABLE` 失败，项目没有登记任何视频 Artifact。
+
+**真实事故**：网站执行器每两秒轮询内存 Job，但任意一次 `getJob` 或最终
+`downloadVideo` 的短暂 `ENGINE_UNAVAILABLE` 都会直接终止整个 10 分钟以上的操作。
+该错误不代表 Job 已失败；同一 Job 随后仍可返回 `done`，视频下载也能在数毫秒内完成。
+
+**规则与护栏**：
+
+- 瞬时 `ENGINE_UNAVAILABLE` 是轮询传输故障，不是渲染终态；保持同一个 jobId，在工作流
+  总截止内继续轮询，禁止因此新建昂贵渲染。
+- 只有明确 `failed/cancelled` Job、不可重试合同错误或总截止耗尽才能终止 attempt。
+- 已完成 Job 的视频下载同样允许在总截止内重试瞬断；每次重试前继续检查项目取消信号。
+- `ENGINE_JOB_NOT_FOUND` 仍按幂等 requestId 最多重建一次，与瞬时不可用的同 Job 重试分开。
+- 回归测试必须分别覆盖轮询瞬断和下载瞬断，并断言 `start` 只调用一次。
+
+---
+
+## 7.18 模式 X：响应字段与进程内 SSE 冒充跨进程执行真值
+
+**症状**：URL 视频后端仍在推进，画布却长期停在第一个“网站自动介绍”节点；点击启动
+还会提示“工作流响应缺少 autopilot 状态”。SSE 显示 connected，但刷新页面后节点才变化。
+
+**真实事故**：统一画布把 script 专属的 `projects.autopilot` 当成三类项目的执行状态，
+website start 又没有该字段。临时在响应中硬塞 `autopilot=true` 只会制造与数据库相反的
+状态。与此同时 `status-bus` 是进程内发布订阅；浏览器与 worker 落在不同 Next 进程时，
+连接可以健康但永远收不到另一个进程发布的事件。客户端看到 connected 后还关闭了数据库
+轮询，于是后端事实与前端永久分叉。
+
+**规则与护栏**：
+
+- script 的 autopilot 与项目执行状态必须分离；audio / website 不得伪造 autopilot。
+- 三类项目的 UI 状态统一从 attempt、节点、Artifact 派生，响应只携带同一快照。
+- SSE 只做失效提示；active 项目必须持续用 Postgres 快照对账，不能以 socket open
+  代替“收到过最新状态”。
+- website 成功必须同时证明 attempt、六节点、质量校验与 approved MP4 一致；缺一项
+  投影为 blocked，禁止正式下载。
+- 回归测试必须覆盖“连接存在但无事件”的多进程场景，并断言轮询仍推进节点。
 
 ---
 
