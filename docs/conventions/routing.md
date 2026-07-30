@@ -351,7 +351,7 @@ Project（可变，L3 内部）
 
 | 层 | 位置 | 职责 | 刻意不做的事 |
 | --- | --- | --- | --- |
-| 入站 proxy | `src/proxy.ts` | 只拦 `/products/*`：无形状合法的会话 cookie → 302 `/login?next=` | **不查库**。只做 cookie 存在性与形状（43 位 base64url）判断；proxy 跑在每个请求上，连库会成为全站延迟与连接数压力。**不拦认证页**：按 cookie 形状把 `/login` 弹回 dashboard 会与页面级 302 `/login` 对残留失效 cookie 形成无限重定向循环（已踩过） |
+| 入站 proxy | `src/proxy.ts` | 拦 `/products/*` 与 `/admin/*`：无形状合法的会话 cookie → 302 `/login?next=` | **不查库**。只做 cookie 存在性与形状（43 位 base64url）判断；proxy 跑在每个请求上，连库会成为全站延迟与连接数压力。`/admin` 的角色判定也不在这层（见 §9.2 admin 行）。**不拦认证页**：按 cookie 形状把 `/login` 弹回 dashboard 会与页面级 302 `/login` 对残留失效 cookie 形成无限重定向循环（已踩过） |
 | 页面会话 | `withPageSession`（`src/features/auth/page-session.ts`），6 个 `/products/*` page 逐个包 | 查库校验会话（登出/过期/改密踢下线），建立 workspace 归属上下文后执行渲染体 | 不包在 layout 里：RSC 的 children 独立渲染，layout 的 AsyncLocalStorage 不传播到子页面 |
 | API 会话 | `withApiSession`（`src/features/auth/api-session.ts`），13 条业务 API 入口包裹 | 未登录统一 401 同一句文案；已登录则在归属上下文内执行 handler | 不靠 proxy 兜底（API 要 401/404 语义不是 302）；SSE 路由的流回调在 handler 内闭包捕获上下文 |
 
@@ -364,6 +364,7 @@ Project（可变，L3 内部）
 | 情况 | 响应 | 状态 |
 | --- | --- | --- |
 | 未登录访问 `/products/*` | 302 → `/login?next=`（proxy 形状拦截 + 页面查库兼校） | 已实现 |
+| 未登录访问 `/admin/*` | 302 → `/login?next=`（proxy 形状拦截）；非 admin 调 `/api/admin/*` → 404（`withAdminSession`，不暴露 admin 表面存在） | 已实现；页面级非 admin 重定向随 admin 前端落地 |
 | 已登录访问 `/login`、`/signup` | 302 → `/products/dashboard`（仅页面级 `redirectIfAuthenticated` 查库判定；proxy 不拦认证页，避免残留失效 cookie 的重定向循环） | 已实现 |
 | 未登录调业务 `/api/*` | 401 + 类别文案，不带用户信息、不回显 projectId | 已实现 |
 | `projectId` 不存在或不属于当前 workspace | 404（查询按会话 workspace 过滤，命中 0 即不存在） | 已实现 |

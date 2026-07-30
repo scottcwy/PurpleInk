@@ -62,9 +62,11 @@ export async function listAdminUsers(input: {
       status: users.status,
       role: users.role,
       createdAt: users.createdAt,
+      // 注意：必须手写限定名。drizzle 单表查询会把 `${users.id}` 渲染成不带表前缀
+      // 的 "id"，在子查询里会被内层作用域解析为 sessions.id，关联条件永远不成立。
       lastSeenAt: sql<Date | null>`(
-        select max(${sessions.lastSeenAt}) from ${sessions}
-        where ${sessions.userId} = ${users.id}
+        select max(s.last_seen_at) from sessions s
+        where s.user_id = users.id
       )`,
     })
     .from(users)

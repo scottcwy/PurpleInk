@@ -12,7 +12,7 @@ const TABLES = [
   'auth_throttle', 'managed_model_catalog', 'rate_cards', 'rate_card_units',
   'workspace_entitlements', 'usage_periods', 'redemption_batches',
   'redemption_codes', 'redemption_audits', 'telemetry_cutovers',
-  'project_sources',
+  'project_sources', 'render_jobs',
 ] as const
 const WORKSPACE_TABLES = [
   'projects', 'canvas_nodes', 'canvas_edges', 'pipeline_runs', 'task_attempts',
@@ -65,7 +65,10 @@ const ENUM_CHECKS = {
     'waiting', 'active', 'released', 'cancelled', 'expired',
   ],
   users_status_check: ['active', 'disabled'],
+  users_role_check: ['user', 'admin'],
   workspace_members_role_check: ['owner', 'member'],
+  render_jobs_status_check: ['queued', 'running', 'done', 'failed'],
+  render_jobs_kind_check: ['url', 'capture'],
   email_verification_codes_purpose_check: ['signup', 'password_reset'],
 } as const
 const NUMERIC_CHECKS = [
@@ -251,6 +254,7 @@ it('creates the complete schema with scoped primary keys', async () => {
     'email_verification_codes:id',
     'auth_throttle:key',
     'telemetry_cutovers:key',
+    'render_jobs:id',
   ].sort()
   expect(signatures).toEqual(expected)
 })
@@ -313,7 +317,8 @@ it('uses UUID identities, bigint revisions, and timestamptz suffixes', async () 
     SELECT table_name, data_type FROM information_schema.columns
     WHERE table_schema = 'public' AND column_name IN ('id', 'workspace_id')
   `
-  expect(identities).toHaveLength(42)
+  // render_jobs 只有 id（worker 侧生成的 uuid），无 workspace_id。
+  expect(identities).toHaveLength(43)
   expect(identities.every((row) => row.data_type === 'uuid')).toBe(true)
   const revisions = await database.sql<{ table_name: string; data_type: string }[]>`
     SELECT table_name, data_type FROM information_schema.columns
@@ -326,7 +331,8 @@ it('uses UUID identities, bigint revisions, and timestamptz suffixes', async () 
     WHERE table_schema = 'public' AND right(column_name, 3) = '_at'
   `
   // 0005 迁移给 task_attempts 增加 lease_expires_at / visible_at 两列。
-  expect(times).toHaveLength(84)
+  // 0019 新增 render_jobs（created_at / updated_at 两列）。
+  expect(times).toHaveLength(86)
   expect(new Set(times.map((row) => row.table_name))).toEqual(
     new Set(TABLES.filter((table) => table !== 'rate_card_units')),
   )

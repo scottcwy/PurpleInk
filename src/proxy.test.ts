@@ -60,6 +60,12 @@ describe('proxy guard', () => {
   })
 
   it('matches exactly the guarded surfaces declared in routing.md §9', () => {
-    expect(config.matcher).toEqual(['/products/:path*'])
+    expect(config.matcher).toEqual(['/products/:path*', '/admin/:path*'])
+  })
+
+  it('guards /admin sub-paths the same way as /products', () => {
+    // /admin 的角色判定在页面层（admin/layout 查库）；proxy 只做形状拦截。
+    expect(proxy(request('/admin')).headers.get('location')).toContain('/login')
+    expect(proxy(request('/admin/users', VALID_TOKEN)).headers.get('location')).toBeNull()
   })
 })

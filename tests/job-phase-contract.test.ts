@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 
 /** 从 worker 的 JobPhase 联合类型源码提取全部阶段（单一真源）。 */
 async function readWorkerPhases(): Promise<string[]> {
-  const source = await readFile("server/src/server/job-store.ts", "utf8");
+  // Windows 工作树可能被 core.autocrlf 转成 CRLF，归一化后再匹配。
+  const source = (await readFile("server/src/server/job-store.ts", "utf8")).replaceAll("\r\n", "\n");
   const union = /export type JobPhase =([^;]*?)\n\nexport interface/.exec(source);
   if (!union) throw new Error("无法在 job-store.ts 中定位 JobPhase 联合类型");
   const phases = [...union[1]!.matchAll(/"([a-z]+)"/g)].map((m) => m[1]!);
