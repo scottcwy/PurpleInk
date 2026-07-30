@@ -5,17 +5,23 @@ import {
   PENCIL_REUSABLE_SYMBOL_COUNT,
   UI_COMPONENT_FAMILY_COUNT,
 } from "./registry";
+import { MOTION_INTENT_COUNT } from "./motion/motion-intents";
 
 const CATEGORIES = [
   {
     id: "foundations",
     title: "Foundations",
-    desc: "设计 token：色板 / 字体 / 圆角 / 间距",
+    desc: "设计 token：色板 / 字体 / 圆角 / 动效 / 滚动条",
   },
   {
     id: "ui",
     title: "UI 组件",
     desc: `已进入应用公共边界的 ${UI_COMPONENT_FAMILY_COUNT} 个组件族`,
+  },
+  {
+    id: "motion",
+    title: "Motion",
+    desc: `${MOTION_INTENT_COUNT} 条动效意图对照台（含迁移状态）`,
   },
   { id: "icons", title: "Icons", desc: "Pencil A4 · Lucide 白名单" },
 ] as const;

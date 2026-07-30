@@ -282,7 +282,7 @@ ESC 逻辑从 `app-sidebar-shell.tsx`、`canvas-inspector.tsx` 两处删除；
 | `duration-150` × 8 | button / icon-button / toggle / text-field / segmented-control / nav-item / section-nav | `duration-fast` | todo |
 | 裸 `transition-colors` × 15+ | 吃 Tailwind 默认值 | 补 `duration-fast` | todo |
 | `sidebar-chrome.tsx` AccountMenu 行 | **漏写过渡** | 补意图 1 | todo |
-| 全站 active 按压 | **不存在** | 补意图 2（pitfalls §1.5 要求） | todo |
+| active 按压 | 仅 `button.tsx` 有（`active:translate-y-px` + `active:brightness-95`，其中 `gray` 变体漏了 brightness）；回弹是 `duration-150` tween 而非 spring。IconButton / NavItem / SegmentedControl / Toggle 无按压态 | 补意图 2 至全部可点控件，回弹换 `SPRING_SPATIAL_FAST` | todo |
 | `toggle.tsx` knob | 裸 `transition-transform` | `SPRING_SPATIAL_FAST` | todo |
 | `progress-bar.tsx` | `transition-all` | `transition-[width]` | todo |
 | `canvas-auto-hide-top-bar.tsx` | `duration-[var(...)]` + 手写曲线 | `duration-base ease-emphasized` | todo |
