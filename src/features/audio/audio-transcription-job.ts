@@ -1,12 +1,14 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
+import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
 import {
   type ShotLaneSeed,
 } from '@/features/canvas'
 import {
   classifyWorkflowError,
   type WorkflowErrorProjection,
+  type WorkflowExecutionNotice,
 } from '@/features/canvas/workflow-error'
 import { shotIdFor } from '@/features/director/audio-timing'
 import type { ScriptUnit } from '@/features/director/schemas/ingest'
@@ -50,6 +52,7 @@ export interface LoadedAudioProjectSource {
 
 export type AudioTranscriptionState =
   | { status: 'running'; startedAt: string }
+  | ({ status: 'waiting' } & WorkflowExecutionNotice)
   | {
       status: 'ready'
       ingestArtifactId: string
@@ -163,7 +166,11 @@ export async function runAudioTranscriptionJob(
     )
     await resolved.transition(payload.nodeId, 'success')
   } catch (error) {
-    await settleFailure(payload.nodeId, error, resolved)
+    if (error instanceof ProviderDispatchWaitError && error.retryAt) {
+      await settleDispatchWait(payload.nodeId, error, error.retryAt, resolved)
+    } else {
+      await settleFailure(payload.nodeId, error, resolved)
+    }
     throw error
   }
 
@@ -202,6 +209,39 @@ function shotSeeds(timeline: UserAudioTimeline): ShotLaneSeed[] {
     shotId: shotIdFor(index),
     sourceUnit: unit satisfies ScriptUnit,
   }))
+}
+
+async function settleDispatchWait(
+  nodeId: string,
+  error: ProviderDispatchWaitError,
+  retryAt: string,
+  dependencies: AudioTranscriptionDependencies,
+): Promise<void> {
+  const cleanupErrors: unknown[] = []
+  try {
+    await dependencies.recordState(nodeId, {
+      status: 'waiting',
+      code: 'PROVIDER_POOL_WAIT',
+      message: `${error.providerLabel}正在等待可用调用窗口`,
+      resumeAt: retryAt,
+      providerLabel: error.providerLabel,
+    })
+  } catch (cleanupError) {
+    cleanupErrors.push(cleanupError)
+  }
+  try {
+    // 现有节点状态机通过 failed -> pending 复位；这里只做队列等待的内部桥接，
+    // 不写业务失败投影，completeAttempt 会立刻附带 executionNotice 复位为 pending。
+    await dependencies.transition(nodeId, 'failed')
+  } catch (cleanupError) {
+    cleanupErrors.push(cleanupError)
+  }
+  if (cleanupErrors.length > 0) {
+    throw new AggregateError(
+      [error, ...cleanupErrors],
+      '录音转写等待调度且节点状态未完整收敛',
+    )
+  }
 }
 
 async function settleFailure(

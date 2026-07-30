@@ -13,7 +13,8 @@ export type ProviderDispatchWaitReason =
 
 /**
  * 平台调度器主动排队，不代表供应商真的返回了 429。
- * 队列层据此复用同一 attempt 并推迟 visibleAt，避免制造重试记录。
+ * 队列层据此终结当前 attempt 并创建延后 visibleAt 的续接 attempt；
+ * queueMeta.ordinaryAttemptNo 保持不变，因此不消耗普通重试预算。
  */
 export class ProviderDispatchWaitError extends ProviderRequestError {
   override readonly name = 'ProviderDispatchWaitError'

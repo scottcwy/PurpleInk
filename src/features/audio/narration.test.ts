@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
+import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
 import {
   narrationAudioKey,
   synthesizeNarration,
@@ -158,6 +159,128 @@ describe('synthesizeNarration', () => {
     ])
     expect(peak).toBeGreaterThan(1)
     expect(peak).toBeLessThanOrEqual(3)
+  })
+
+  it('waits for every lane to drain before surfacing an early failure', async () => {
+    const firstError = new Error('first lane failed')
+    let markSecondStarted!: () => void
+    let releaseSecond!: () => void
+    const secondStarted = new Promise<void>((resolve) => {
+      markSecondStarted = resolve
+    })
+    const secondGate = new Promise<void>((resolve) => {
+      releaseSecond = resolve
+    })
+    let secondCompleted = false
+    const target = harness({
+      synthesize: vi.fn(async (input: { text: string }) => {
+        if (input.text === '第一句') throw firstError
+        markSecondStarted()
+        await secondGate
+        secondCompleted = true
+        return {
+          audioBytes: Buffer.from(`audio:${input.text}`),
+          audioFormat: 'mp3' as const,
+          durationMs: 1,
+          model: ENGINE,
+          nativeCaptions: [],
+        }
+      }),
+    })
+
+    const pending = synthesizeNarration(
+      {
+        projectId: 'project-1',
+        nodeId: 'ingest-node',
+        units: [
+          { unitId: 'U001', text: '第一句' },
+          { unitId: 'U002', text: '第二句' },
+        ],
+        concurrency: 2,
+        staggerMs: 0,
+      },
+      target.dependencies
+    )
+    let settled = false
+    void pending.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+
+    await secondStarted
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    releaseSecond()
+    await expect(pending).rejects.toBe(firstError)
+    expect(secondCompleted).toBe(true)
+    expect(target.registerAudio).toHaveBeenCalledWith(
+      expect.objectContaining({ unitId: 'U002' })
+    )
+  })
+
+  it('prefers a Provider dispatch wait after every lane settles', async () => {
+    const ordinaryError = new Error('ordinary failure')
+    const dispatchWait = new ProviderDispatchWaitError({
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      funding: 'managed',
+      retryAt: new Date('2026-07-30T00:00:01.000Z'),
+      scopeKey: 'a'.repeat(64),
+      waitReason: 'pacing',
+    })
+    const target = harness({
+      synthesize: vi.fn(async (input: { text: string }) => {
+        throw input.text === '第一句' ? ordinaryError : dispatchWait
+      }),
+    })
+
+    await expect(
+      synthesizeNarration(
+        {
+          projectId: 'project-1',
+          nodeId: 'ingest-node',
+          units: [
+            { unitId: 'U001', text: '第一句' },
+            { unitId: 'U002', text: '第二句' },
+          ],
+          concurrency: 2,
+          staggerMs: 0,
+        },
+        target.dependencies
+      )
+    ).rejects.toBe(dispatchWait)
+    expect(target.dependencies.synthesize).toHaveBeenCalledTimes(2)
+  })
+
+  it('throws the first lane error when no dispatch wait exists', async () => {
+    const firstError = new Error('first failure')
+    const secondError = new Error('second failure')
+    const target = harness({
+      synthesize: vi.fn(async (input: { text: string }) => {
+        throw input.text === '第一句' ? firstError : secondError
+      }),
+    })
+
+    await expect(
+      synthesizeNarration(
+        {
+          projectId: 'project-1',
+          nodeId: 'ingest-node',
+          units: [
+            { unitId: 'U001', text: '第一句' },
+            { unitId: 'U002', text: '第二句' },
+          ],
+          concurrency: 2,
+          staggerMs: 0,
+        },
+        target.dependencies
+      )
+    ).rejects.toBe(firstError)
   })
 
   it('fails the whole batch when TTS is unavailable', async () => {

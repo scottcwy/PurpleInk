@@ -3,7 +3,12 @@ import { billingInvocationNo } from '@/features/billing'
 import { createHash } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { classifyWorkflowError, type WorkflowErrorProjection } from '@/features/canvas/workflow-error'
+import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
+import {
+  classifyWorkflowError,
+  type WorkflowErrorProjection,
+  type WorkflowExecutionNotice,
+} from '@/features/canvas/workflow-error'
 import { isManagedProvider } from '@/features/ai'
 import { assertBillingAvailable } from '@/features/billing'
 import { advancePipeline } from '@/features/director/advance'
@@ -47,6 +52,7 @@ interface PersistMediaResultInput extends MediaNarrationJobInput {
 
 type MediaState =
   | { status: 'running'; startedAt: string }
+  | ({ status: 'waiting' } & WorkflowExecutionNotice)
   | { status: 'ready'; artifactId: string; completedAt: string }
   | { status: 'failed'; error: WorkflowErrorProjection; completedAt: string }
 
@@ -100,15 +106,31 @@ export async function runMediaNarrationJob(
       await resolved.advance(payload.projectId, nodeId)
     }
   } catch (error) {
-    await resolved.updateMediaState(payload.nodeId, {
-      status: 'failed',
-      error: classifyWorkflowError(error, {
-        stage: 'MEDIA_NARRATION',
-        sourceNodeId: payload.nodeId,
-      }),
-      completedAt: new Date().toISOString(),
-    })
+    await resolved.updateMediaState(
+      payload.nodeId,
+      projectMediaErrorState(error, payload.nodeId)
+    )
     throw error
+  }
+}
+
+function projectMediaErrorState(error: unknown, nodeId: string): MediaState {
+  if (error instanceof ProviderDispatchWaitError && error.retryAt) {
+    return {
+      status: 'waiting',
+      code: 'PROVIDER_POOL_WAIT',
+      message: `${error.providerLabel}正在等待可用调用窗口`,
+      resumeAt: error.retryAt,
+      providerLabel: error.providerLabel,
+    }
+  }
+  return {
+    status: 'failed',
+    error: classifyWorkflowError(error, {
+      stage: 'MEDIA_NARRATION',
+      sourceNodeId: nodeId,
+    }),
+    completedAt: new Date().toISOString(),
   }
 }
 

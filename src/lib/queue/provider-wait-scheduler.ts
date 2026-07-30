@@ -75,17 +75,9 @@ export async function scheduleProviderDispatchWait(
   await transaction
     .update(taskAttempts)
     .set({
-      status: 'queued',
+      status: 'superseded',
       failure: null,
-      checkpoint: patchQueueMeta(attempt.checkpoint, {
-        ordinaryAttemptNo: ordinaryAttemptNo(attempt),
-        providerScopeKey: failure.scopeKey,
-        providerWaitReason: failure.waitReason,
-      }),
-      visibleAt: resumeAt,
-      leaseExpiresAt: null,
-      startedAt: null,
-      completedAt: null,
+      completedAt: sql`now()`,
       updatedAt: sql`now()`,
     })
     .where(and(
@@ -93,6 +85,23 @@ export async function scheduleProviderDispatchWait(
       eq(taskAttempts.id, attemptId),
       eq(taskAttempts.status, 'running'),
     ))
+  await transaction.insert(taskAttempts).values({
+    workspaceId,
+    id: randomUUID(),
+    runId: attempt.runId,
+    taskId: attempt.taskId,
+    entityType: attempt.entityType,
+    entityId: attempt.entityId,
+    attemptNo: attempt.attemptNo + 1,
+    status: 'queued',
+    fingerprint: attempt.fingerprint,
+    checkpoint: patchQueueMeta(attempt.checkpoint, {
+      ordinaryAttemptNo: ordinaryAttemptNo(attempt),
+      providerScopeKey: failure.scopeKey,
+      providerWaitReason: failure.waitReason,
+    }),
+    visibleAt: resumeAt,
+  })
   await requeueRun(transaction, workspaceId, attempt.runId)
 }
 

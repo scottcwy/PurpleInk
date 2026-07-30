@@ -422,8 +422,10 @@ Provider 失败，既消耗重试预算，又污染连续失败计数。
 - 在途上限从 8 起步、最高 50。最近至少完成 20 次且连续 5 分钟稳定才增加 1；
   真实 429 立即降 25%，503/网络/超时样本率超过 2% 同样降 25%。
 - 429 优先遵循 `Retry-After`（秒数或 HTTP 日期），缺失时按 2/4/8/16/30 秒退避并抖动。
-  调度器发送前发现的亚秒等待必须复用原 attempt，只更新 `visible_at`；只有真实外部 429
-  才使用 `superseded -> queued` 延迟恢复记录。两者都不计普通重试或熔断失败次数。
+  调度器发送前发现的亚秒等待与真实外部 429 都必须把旧 attempt 置为
+  `superseded`，再创建 `attemptNo+1` 的延迟恢复记录；新记录继承
+  `queueMeta.ordinaryAttemptNo`，因此两者都不计普通重试或熔断失败次数。发送前等待
+  已释放本轮计费预留，禁止复用同一 attempt 及其已终态的 invocation。
 - 单任务累计限流等待最多 15 分钟；超过后才终态化为 `PROVIDER_RATE_LIMITED`。
   401/402/403/429/451、平台内部错误都不得推动熔断；只有真实 5xx、网络故障与上游超时计数。
 - 等待态使用 `executionNotice` 的安全投影，不弹失败对话框、不显示红色失败状态、不建议跳过
@@ -563,7 +565,7 @@ UI 投影为 `STAGE_FAILED`（阶段兜底），且同一进程的 dev log 可�
 
 ---
 
-## 7.10 模式 P：并发旁白合成被 Provider 调度 pacing 拒绝后包装为上游失败
+## 7.10 模式 P：并发音频任务被 Provider pacing 拒绝后形成失败或重试重叠
 
 **症状**：INGEST 成功、分镜脚本全部完成，但所有 shot-codegen 永久停在 idle。
 配音任务显示 failed；`ai_invocations` 表中第一条 TTS 调用成功（≥ 5s），
@@ -582,6 +584,14 @@ UI 投影为 `STAGE_FAILED`（阶段兜底），且同一进程的 dev log 可�
 包装干掉后只能按普通失败做指数退避重试，重试时统一模式再现→
 配音终态失败→ `isMediaReady` 永远返回 false→ shot-codegen 永久阻塞。
 
+**后续复发边界**：给旁白 worker 增加 `N * 450ms` 启动错峰只能缓解首波 TTS。
+真正的调度预约之前仍有缓存、计费预留与配置读取等异步步骤，后续 unit 可能重新聚拢；
+录音转写与旁白又处于独立 queue lane，但托管 StepFun 仍共享同一个 provider scope，
+因此 ASR 与 TTS 也会交叉碰撞。若旁白用 fail-fast `Promise.all`，一个 worker 抛出等待
+错误后其他 worker 仍继续执行，队列恢复的 attempt 会和旧 worker 重叠。若发送前等待
+复用同一 attempt，本轮 `releaseBeforeCall()` 已把计费 invocation 终态化，恢复执行却会
+再次命中同一个 invocation id，可能出现 Provider 已成功而账本仍为 released/cancelled。
+
 **规则**：
 
 - `ProviderDispatchWaitError` 是调度等待而非上游失败，不得被包装为
@@ -589,11 +599,20 @@ UI 投影为 `STAGE_FAILED`（阶段兜底），且同一进程的 dev log 可�
 - 托管音频计费层捕获 `invoke()` 异常前，必须先检查是否为
   `ProviderDispatchWaitError`；若是，调用 `handle.releaseBeforeCall()` 释放
   计费预留后直接重抛。
-- 旁白并发不得超过 Provider 池的 minIntervalMs 约束，但调度拒绝
-  必须被各层正确归类为「等待恢复」而非「失败」。
+- worker 启动错峰只是削峰，不是 Provider pacing 的正确性边界；所有 TTS / ASR
+  出网仍必须经过共享凭据对应的调度 scope。
+- 一组旁白 worker 必须先用 `Promise.allSettled` 排空所有已启动 lane，再向队列抛出
+  等待或失败；存在多个错误时优先抛 `ProviderDispatchWaitError`，避免旧执行与恢复
+  attempt 重叠。
+- 发送前等待必须 supersede 当前 attempt 并创建新的 attemptNo；新 checkpoint 保留
+  `ordinaryAttemptNo`，使等待不消耗普通失败预算，同时让计费层获得新的 invocation id。
+- 调度拒绝必须被工作流投影为安全的 `waiting`，而非 `failed`；只允许展示
+  `resumeAt` 与安全 provider label，不得持久化或返回原始 Provider 报文。
 
 **已落地护栏**：`managed-audio-billing.ts` 在 catch 块开头识别
-`ProviderDispatchWaitError` 并透传，不再包装为 `managedUpstreamError`。
+`ProviderDispatchWaitError` 并透传，不再包装为 `managedUpstreamError`；
+旁白 worker 排空、dispatch-wait 新 attempt、普通重试预算继承及安全等待投影由
+对应队列与音频测试锁定。
 
 ---
 

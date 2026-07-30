@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
+import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
 import type { AudioProjectSourcePayload } from '@/features/projects'
 import type { StorageAdapter } from '@/lib/storage'
 import {
@@ -235,6 +236,38 @@ describe('runAudioTranscriptionJob', () => {
       }),
     )
     expect(JSON.stringify(failure)).not.toContain('raw provider body')
+    expect(deps.persistArtifacts).not.toHaveBeenCalled()
+    expect(deps.updateProjectScript).not.toHaveBeenCalled()
+    expect(deps.materialize).not.toHaveBeenCalled()
+    expect(deps.advance).not.toHaveBeenCalled()
+  })
+
+  it('projects Provider pacing as waiting without persisting dispatch internals', async () => {
+    const deps = dependencies()
+    const retryAt = new Date('2026-07-30T01:00:00.450Z')
+    const waitError = new ProviderDispatchWaitError({
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      funding: 'managed',
+      retryAt,
+      scopeKey: 'a'.repeat(64),
+      waitReason: 'pacing',
+    })
+    vi.mocked(deps.transcribe).mockRejectedValueOnce(waitError)
+
+    await expect(runAudioTranscriptionJob(JOB, deps)).rejects.toBe(waitError)
+
+    expect(vi.mocked(deps.recordState).mock.calls.at(-1)).toEqual([
+      JOB.nodeId,
+      {
+        status: 'waiting',
+        code: 'PROVIDER_POOL_WAIT',
+        message: '阶跃星辰正在等待可用调用窗口',
+        resumeAt: retryAt.toISOString(),
+        providerLabel: '阶跃星辰',
+      },
+    ])
+    expect(deps.transition).toHaveBeenNthCalledWith(2, JOB.nodeId, 'failed')
     expect(deps.persistArtifacts).not.toHaveBeenCalled()
     expect(deps.updateProjectScript).not.toHaveBeenCalled()
     expect(deps.materialize).not.toHaveBeenCalled()
