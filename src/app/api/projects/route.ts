@@ -60,16 +60,18 @@ export function POST(request: Request): Promise<Response> {
 
 async function handlePost(request: Request) {
   try {
-    const { project, entryNodeId } = await createProjectFromRequest(request)
+    const { project, entryNodeId, reused } =
+      await createProjectFromRequest(request)
     return NextResponse.json(
       {
         ok: true,
         project,
         entryNodeId,
+        reused,
         // 旧版文稿创建客户端仍读取该字段；统一启动入口接线后删除此兼容别名。
         ingestNodeId: entryNodeId,
       },
-      { status: 201 },
+      { status: reused ? 200 : 201 },
     )
   } catch (error) {
     if (error instanceof ProjectCreateInputError) {

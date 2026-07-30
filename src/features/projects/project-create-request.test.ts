@@ -26,6 +26,7 @@ function created(input: CreateProjectWithSourceInput) {
       updatedAt: new Date('2026-07-30T00:00:00.000Z'),
     },
     entryNodeId: '20000000-0000-4000-8000-000000000001',
+    reused: false,
   }
 }
 
@@ -77,7 +78,10 @@ describe('createProjectFromRequest JSON', () => {
     )
     const request = new Request('http://localhost/api/projects', {
       method: 'POST',
-      headers: { 'content-type': 'application/json; charset=utf-8' },
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'idempotency-key': '30000000-0000-4000-8000-000000000001',
+      },
       body: JSON.stringify({
         kind: 'website',
         url: 'HTTPS://Example.COM:443/demo?mode=public#private-panel',

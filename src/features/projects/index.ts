@@ -23,6 +23,7 @@ export {
 } from './project-source-repository'
 export {
   createProjectWithSource,
+  ProjectCreationIdempotencyError,
   type CreatedProject,
   type CreateProjectWithSourceInput,
   type ProjectCreationDependencies,

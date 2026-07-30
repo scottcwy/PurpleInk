@@ -46,8 +46,14 @@ export class ProjectStartQuotaError extends Error {
 export async function createProject(
   input: CreateProjectInput,
   fetcher: typeof fetch = fetch,
+  creationKey = input.kind === 'website'
+    ? createProjectCreationKey()
+    : undefined,
 ): Promise<string> {
-  const response = await fetcher('/api/projects', projectRequest(input))
+  const response = await fetcher(
+    '/api/projects',
+    projectRequest(input, creationKey),
+  )
   throwIfUnauthenticated(response)
   const result = await readJson(response)
   if (!response.ok) throw new Error(readError(result, '项目创建失败，请稍后重试'))
@@ -81,8 +87,17 @@ export async function createProjectAndStart(
   return { projectId }
 }
 
-function projectRequest(input: CreateProjectInput): RequestInit {
-  if (input.kind !== 'audio') return jsonRequest(input)
+export function createProjectCreationKey(): string {
+  return crypto.randomUUID()
+}
+
+function projectRequest(
+  input: CreateProjectInput,
+  creationKey?: string,
+): RequestInit {
+  if (input.kind !== 'audio') {
+    return jsonRequest(input, input.kind === 'website' ? creationKey : undefined)
+  }
 
   const form = new FormData()
   form.set('kind', input.kind)
@@ -96,10 +111,13 @@ function projectRequest(input: CreateProjectInput): RequestInit {
   return { method: 'POST', body: form }
 }
 
-function jsonRequest(body: unknown): RequestInit {
+function jsonRequest(body: unknown, creationKey?: string): RequestInit {
   return {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      ...(creationKey ? { 'idempotency-key': creationKey } : {}),
+    },
     body: JSON.stringify(body),
   }
 }

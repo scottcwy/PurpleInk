@@ -1,10 +1,19 @@
 import 'server-only'
 import { randomUUID } from 'node:crypto'
+import { and, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb, type Db } from '@/lib/db/client'
-import { canvasEdges, canvasNodes, projects } from '@/lib/db/schema/index'
-import { withTransaction } from '@/lib/db/transaction'
+import {
+  canvasEdges,
+  canvasNodes,
+  projectCreationRequests,
+  projects,
+} from '@/lib/db/schema/index'
+import {
+  withTransaction,
+  type TransactionContext,
+} from '@/lib/db/transaction'
 import { activeWorkflowVersionFor } from '@/lib/workflow/project-workflow-registry'
 import { DEFAULT_EXPORT_SETTINGS } from '@/features/canvas/export-settings'
 import type { Project } from '@/features/canvas/types'
@@ -25,6 +34,10 @@ export interface CreateProjectWithSourceInput {
   title: string
   source: ProjectSourcePayload
   sourceFingerprint: string
+  idempotency?: {
+    key: string
+    requestFingerprint: string
+  }
 }
 
 export interface ProjectCreationDependencies {
@@ -36,6 +49,16 @@ export interface ProjectCreationDependencies {
 export interface CreatedProject {
   project: Project
   entryNodeId: string
+  reused: boolean
+}
+
+export class ProjectCreationIdempotencyError extends Error {
+  readonly code = 'IDEMPOTENCY_KEY_REUSED'
+
+  constructor() {
+    super('同一创建请求标识已用于其他项目参数')
+    this.name = 'ProjectCreationIdempotencyError'
+  }
 }
 
 /**
@@ -59,8 +82,39 @@ export async function createProjectWithSource(
     ? uuidSchema.parse(input.projectId)
     : nextId()
   const topology = buildProjectTopology(source)
+  const idempotency = input.idempotency
+    ? {
+        key: uuidSchema.parse(input.idempotency.key),
+        requestFingerprint: fingerprintSchema.parse(
+          input.idempotency.requestFingerprint,
+        ),
+      }
+    : undefined
 
   return withTransaction(database, async (transaction) => {
+    if (idempotency) {
+      await transaction.execute(sql`
+        select pg_advisory_xact_lock(
+          hashtextextended(${`${workspaceId}:${idempotency.key}`}, 0)
+        )
+      `)
+      const existing = await readExistingCreation(
+        transaction,
+        workspaceId,
+        idempotency.key,
+      )
+      if (existing) {
+        if (existing.requestFingerprint !== idempotency.requestFingerprint) {
+          throw new ProjectCreationIdempotencyError()
+        }
+        return {
+          project: existing.project,
+          entryNodeId: existing.entryNodeId,
+          reused: true,
+        }
+      }
+    }
+
     const [project] = await transaction
       .insert(projects)
       .values({
@@ -116,8 +170,58 @@ export async function createProjectWithSource(
     if (edgeRows.length > 0) {
       await transaction.insert(canvasEdges).values(edgeRows)
     }
-    return { project, entryNodeId }
+    if (idempotency) {
+      await transaction.insert(projectCreationRequests).values({
+        workspaceId,
+        idempotencyKey: idempotency.key,
+        requestFingerprint: idempotency.requestFingerprint,
+        projectId,
+        entryNodeId,
+      })
+    }
+    return { project, entryNodeId, reused: false }
   })
+}
+
+async function readExistingCreation(
+  transaction: TransactionContext,
+  workspaceId: string,
+  idempotencyKey: string,
+) {
+  const [row] = await transaction
+    .select({
+      requestFingerprint: projectCreationRequests.requestFingerprint,
+      entryNodeId: projectCreationRequests.entryNodeId,
+      id: projects.id,
+      kind: projects.workflowKind,
+      title: projects.title,
+      script: projects.script,
+      createdAt: projects.createdAt,
+      updatedAt: projects.updatedAt,
+    })
+    .from(projectCreationRequests)
+    .innerJoin(projects, and(
+      eq(projects.workspaceId, projectCreationRequests.workspaceId),
+      eq(projects.id, projectCreationRequests.projectId),
+    ))
+    .where(and(
+      eq(projectCreationRequests.workspaceId, workspaceId),
+      eq(projectCreationRequests.idempotencyKey, idempotencyKey),
+    ))
+    .limit(1)
+  if (!row) return null
+  return {
+    requestFingerprint: row.requestFingerprint,
+    entryNodeId: row.entryNodeId,
+    project: {
+      id: row.id,
+      kind: row.kind,
+      title: row.title,
+      script: row.script,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    },
+  }
 }
 
 function requiredNodeId(nodes: ReadonlyMap<string, string>, logicalKey: string): string {

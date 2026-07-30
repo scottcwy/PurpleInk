@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Sparkles } from "lucide-react";
 import { Button, type ButtonSize } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
 import { productCanvasHref } from "@/features/navigation/products-routes";
 import {
   createProject,
+  createProjectCreationKey,
   startProject,
   type ProjectVisualTheme,
 } from "@/features/projects/project-create-client";
@@ -71,11 +72,14 @@ export function NewProjectDialog({
   const [createdProjectId, setCreatedProjectId] = useState<string>();
   const [error, setError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const creationKeyRef = useRef<string | undefined>(undefined);
   const { loginRequired, closeLoginDialog, handleAuthError } =
     useRequireLogin();
 
   function invalidateCreatedProject() {
     setCreatedProjectId(undefined);
+    creationKeyRef.current = undefined;
     setError(undefined);
   }
 
@@ -96,11 +100,22 @@ export function NewProjectDialog({
       setError(validationError);
       return;
     }
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setError(undefined);
     try {
+      const projectInput = buildNewProjectInput(values);
+      if (projectInput.kind === "website" && !creationKeyRef.current) {
+        creationKeyRef.current = createProjectCreationKey();
+      }
       const projectId =
-        createdProjectId ?? (await createProject(buildNewProjectInput(values)));
+        createdProjectId ??
+        (await createProject(
+          projectInput,
+          fetch,
+          creationKeyRef.current,
+        ));
       if (!createdProjectId) setCreatedProjectId(projectId);
       await startProject(projectId);
       router.push(productCanvasHref(projectId));
@@ -109,6 +124,7 @@ export function NewProjectDialog({
         setError(cause instanceof Error ? cause.message : "请稍后重试");
       }
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }

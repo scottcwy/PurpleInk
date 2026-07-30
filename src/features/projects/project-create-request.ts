@@ -6,6 +6,7 @@ import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { storage as defaultStorage, type StorageAdapter } from '@/lib/storage'
 import {
   createProjectWithSource,
+  ProjectCreationIdempotencyError,
   type CreatedProject,
   type CreateProjectWithSourceInput,
   type ProjectCreationDependencies,
@@ -68,10 +69,11 @@ export interface ProjectCreateRequestDependencies {
 }
 
 export class ProjectCreateInputError extends Error {
-  readonly code = 'INVALID_PROJECT_INPUT'
-  readonly statusCode = 400
-
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly code = 'INVALID_PROJECT_INPUT',
+    readonly statusCode = 400,
+  ) {
     super(message)
     this.name = 'ProjectCreateInputError'
   }
@@ -120,11 +122,27 @@ async function createFromJson(
         ...normalizeProjectVisualStyle(input),
       })
       if (source.kind !== 'website') throw new Error('网站来源归一化失败')
+      const title = input.title ?? titleFromWebsite(source.url)
+      const sourceFingerprint = fingerprintCanonicalSource(source)
+      const idempotencyKey = request.headers.get('idempotency-key')?.trim()
+      if (!idempotencyKey || !uuidSchema.safeParse(idempotencyKey).success) {
+        throw new ProjectCreateInputError(
+          '网站项目创建请求缺少有效的 Idempotency-Key',
+        )
+      }
       return createFromCanonicalSource(
         {
-          title: input.title ?? titleFromWebsite(source.url),
+          title,
           source,
-          sourceFingerprint: fingerprintCanonicalSource(source),
+          sourceFingerprint,
+          idempotency: {
+            key: idempotencyKey,
+            requestFingerprint: fingerprintCreationRequest({
+              title,
+              source,
+              sourceFingerprint,
+            }),
+          },
         },
         dependencies,
       )
@@ -151,11 +169,34 @@ async function createFromJson(
     )
   } catch (error) {
     if (error instanceof ProjectCreateInputError) throw error
+    if (error instanceof ProjectCreationIdempotencyError) {
+      throw new ProjectCreateInputError(
+        '同一创建请求标识已用于其他项目参数',
+        error.code,
+        409,
+      )
+    }
     if (error instanceof z.ZodError) {
       throw new ProjectCreateInputError('项目参数不符合要求')
     }
     throw error
   }
+}
+
+function fingerprintCreationRequest(
+  input: Pick<
+    CreateProjectWithSourceInput,
+    'title' | 'source' | 'sourceFingerprint'
+  >,
+): string {
+  return createHash('sha256')
+    .update(JSON.stringify([
+      input.title,
+      input.source.kind,
+      input.sourceFingerprint,
+      input.source,
+    ]))
+    .digest('hex')
 }
 
 async function createFromAudioForm(

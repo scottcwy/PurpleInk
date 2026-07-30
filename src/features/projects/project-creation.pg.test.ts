@@ -159,4 +159,84 @@ describe('createProjectWithSource', () => {
     expect(await database.db.select().from(projectSources)).toHaveLength(0)
     expect(await database.db.select().from(canvasNodes)).toHaveLength(0)
   })
+
+  it('returns one website project for concurrent retries with the same creation key', async () => {
+    const source = parseProjectSourcePayload({
+      schemaVersion: 1,
+      kind: 'website',
+      url: 'https://example.com/demo',
+      durationSec: 24,
+      quality: 'standard',
+      visualTheme: 'dark',
+    })
+    const input = {
+      title: '幂等网站项目',
+      source,
+      sourceFingerprint: FINGERPRINT,
+      idempotency: {
+        key: '10000000-0000-4000-8000-000000000001',
+        requestFingerprint: 'b'.repeat(64),
+      },
+    } as Parameters<typeof createProjectWithSource>[0] & {
+      idempotency: { key: string; requestFingerprint: string }
+    }
+
+    const [first, second] = await Promise.all([
+      createProjectWithSource(input, {
+        database: database.db,
+        workspaceId: WORKSPACE_ID,
+        createId: randomUUID,
+      }),
+      createProjectWithSource(input, {
+        database: database.db,
+        workspaceId: WORKSPACE_ID,
+        createId: randomUUID,
+      }),
+    ])
+
+    expect(first.project.id).toBe(second.project.id)
+    expect([first.reused, second.reused].sort()).toEqual([false, true])
+    expect(await database.db.select().from(projects)).toHaveLength(1)
+    expect(await database.db.select().from(projectSources)).toHaveLength(1)
+    expect(await database.db.select().from(canvasNodes)).toHaveLength(6)
+  })
+
+  it('rejects reusing a creation key for a different canonical request', async () => {
+    const source = parseProjectSourcePayload({
+      schemaVersion: 1,
+      kind: 'website',
+      url: 'https://example.com/demo',
+      durationSec: 24,
+      quality: 'standard',
+      visualTheme: 'dark',
+    })
+    const base = {
+      title: '幂等网站项目',
+      source,
+      sourceFingerprint: FINGERPRINT,
+      idempotency: {
+        key: '10000000-0000-4000-8000-000000000002',
+        requestFingerprint: 'c'.repeat(64),
+      },
+    } as Parameters<typeof createProjectWithSource>[0] & {
+      idempotency: { key: string; requestFingerprint: string }
+    }
+    await createProjectWithSource(base, {
+      database: database.db,
+      workspaceId: WORKSPACE_ID,
+    })
+
+    await expect(createProjectWithSource({
+      ...base,
+      idempotency: {
+        ...base.idempotency!,
+        requestFingerprint: 'd'.repeat(64),
+      },
+    }, {
+      database: database.db,
+      workspaceId: WORKSPACE_ID,
+    })).rejects.toMatchObject({
+      code: 'IDEMPOTENCY_KEY_REUSED',
+    })
+  })
 })

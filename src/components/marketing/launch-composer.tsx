@@ -17,6 +17,7 @@ import {
 import { productCanvasHref } from '@/features/navigation/products-routes'
 import {
   createProject,
+  createProjectCreationKey,
   startProject,
 } from '@/features/projects/project-create-client'
 import {
@@ -46,6 +47,8 @@ export function LaunchComposer(): ReactNode {
     () => false,
   )
   const inputRef = useRef<HTMLInputElement>(null)
+  const submittingRef = useRef(false)
+  const creationKeyRef = useRef<string | undefined>(undefined)
   const {
     loginRequired,
     closeLoginDialog,
@@ -58,6 +61,7 @@ export function LaunchComposer(): ReactNode {
     setUrl('')
     setMessage('')
     setCreatedProjectId(undefined)
+    creationKeyRef.current = undefined
   }, [])
 
   const openInput = useCallback(() => {
@@ -67,10 +71,12 @@ export function LaunchComposer(): ReactNode {
 
   const invalidateCreatedProject = useCallback(() => {
     setCreatedProjectId(undefined)
+    creationKeyRef.current = undefined
     setMessage('')
   }, [])
 
   const run = useCallback(async () => {
+    if (submittingRef.current) return
     const target = normalizedHttpUrl(url)
     if (!target) {
       setMessage('请输入以 http(s):// 开头的网址')
@@ -79,18 +85,20 @@ export function LaunchComposer(): ReactNode {
     }
     if (!(await ensureLoggedIn())) return
 
+    submittingRef.current = true
     setStage('creating')
     setMessage('')
     let projectId = createdProjectId
     try {
       if (!projectId) {
+        creationKeyRef.current ??= createProjectCreationKey()
         projectId = await createProject({
           kind: 'website',
           url: target,
           durationSec: duration,
           quality,
           visualTheme: 'dark',
-        })
+        }, fetch, creationKeyRef.current)
         setCreatedProjectId(projectId)
       }
       await startProject(projectId)
@@ -103,6 +111,8 @@ export function LaunchComposer(): ReactNode {
       }
       setMessage(friendlyError(cause))
       setStage('error')
+    } finally {
+      submittingRef.current = false
     }
   }, [
     createdProjectId,

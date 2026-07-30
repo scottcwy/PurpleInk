@@ -155,6 +155,13 @@
       "when": 1785390000000,
       "tag": "0021_project_execution_fencing",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1785422302490,
+      "tag": "0022_project_creation_idempotency",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,7 @@ export {
 export type { VersionedPayload } from './core'
 
 export { projectSources } from './project-sources'
+export { projectCreationRequests } from './project-creation'
 
 export {
   USER_STATUSES,

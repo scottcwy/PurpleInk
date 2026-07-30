@@ -38,6 +38,27 @@ describe('POST /api/projects', () => {
     mocks.createProjectFromRequest.mockResolvedValue({
       project: { id: 'project-1', title: '项目', script: '稿件' },
       entryNodeId: 'entry-1',
+      reused: false,
+    })
+  })
+
+  it('returns the original project with 200 when a website creation key is reused', async () => {
+    mocks.createProjectFromRequest.mockResolvedValue({
+      project: { id: 'project-1', title: '网站项目', script: '' },
+      entryNodeId: 'entry-1',
+      reused: true,
+    })
+
+    const response = await POST(request({
+      kind: 'website',
+      url: 'https://example.com',
+    }))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      reused: true,
+      project: { id: 'project-1' },
     })
   })
 
