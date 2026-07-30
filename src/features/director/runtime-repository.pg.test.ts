@@ -40,8 +40,10 @@ const SPLIT_ID = '13000000-0000-4000-8000-000000000002'
 const SCORE_ID = '13000000-0000-4000-8000-000000000003'
 const SHOT_SCRIPT_ID = '13000000-0000-4000-8000-000000000004'
 const CODEGEN_ID = '13000000-0000-4000-8000-000000000005'
+const SUBTITLE_ID = '13000000-0000-4000-8000-000000000006'
 const ATTEMPTS = new Map<string, string>()
 const HASH = 'a'.repeat(64)
+const OTHER_HASH = 'b'.repeat(64)
 
 function createStorage(files: Map<string, Buffer>): StorageAdapter {
   return {
@@ -317,7 +319,82 @@ describe('DirectorRuntimeRepository Postgres', () => {
       repository.loadStageContext(PROJECT_ID, SCORE_ID, 'ASSEMBLE')
     ).rejects.toThrow('找不到 render-mp4 产物：S001')
   })
+
+  it('resumes a committed subtitle effect even when the attempt carries no provider scope key', async () => {
+    // 429 路径（scheduleProviderRateLimitWait）新建 attempt，checkpoint 里没有
+    // providerScopeKey。只要 Director 文本产物已由本 run 提交且哈希一致，就必须
+    // 判定为续跑副作用，而不是回去重跑一次文本模型。
+    const artifactId = await seedArtifact(
+      db,
+      SUBTITLE_ID,
+      'director-assemble',
+      'input/subtitle.json'
+    )
+    await setSubtitleProjection(db, artifactId, HASH)
+
+    await expect(
+      repository.shouldResumeCommittedEffect(
+        ATTEMPTS.get(SUBTITLE_ID)!,
+        SUBTITLE_ID
+      )
+    ).resolves.toBe(true)
+  })
+
+  it('refuses to resume when the node projection disagrees with the committed artifact', async () => {
+    const [committed] = await db
+      .select({ id: artifacts.id })
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.aggregateId, SUBTITLE_ID),
+          eq(artifacts.kind, 'director-assemble')
+        )
+      )
+      .limit(1)
+    await setSubtitleProjection(db, committed!.id, OTHER_HASH)
+
+    await expect(
+      repository.shouldResumeCommittedEffect(
+        ATTEMPTS.get(SUBTITLE_ID)!,
+        SUBTITLE_ID
+      )
+    ).resolves.toBe(false)
+
+    await setSubtitleProjection(db, undefined, HASH)
+    await expect(
+      repository.shouldResumeCommittedEffect(
+        ATTEMPTS.get(SUBTITLE_ID)!,
+        SUBTITLE_ID
+      )
+    ).resolves.toBe(false)
+  })
 })
+
+/** 把字幕节点投影改成指向某个已提交产物与内容哈希；artifactId 省略表示尚未提交。 */
+async function setSubtitleProjection(
+  db: Db,
+  artifactId: string | undefined,
+  outputContentHash: string
+): Promise<void> {
+  await db
+    .update(canvasNodes)
+    .set({
+      data: {
+        schemaVersion: 1,
+        payload: {
+          laneKey: 'S001',
+          outputContentHash,
+          ...(artifactId ? { directorArtifactId: artifactId } : {}),
+        },
+      },
+    })
+    .where(
+      and(
+        eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(canvasNodes.id, SUBTITLE_ID)
+      )
+    )
+}
 
 async function seedGraph(db: Db): Promise<void> {
   await db.insert(workspaces).values({
@@ -343,6 +420,9 @@ async function seedGraph(db: Db): Promise<void> {
       laneKey: 'S001',
     }),
     node(CODEGEN_ID, 'shot-codegen', 'FABRICATE', 'succeeded', {
+      laneKey: 'S001',
+    }),
+    node(SUBTITLE_ID, 'shot-subtitle', 'ASSEMBLE', 'queued', {
       laneKey: 'S001',
     }),
   ]
@@ -384,7 +464,13 @@ async function seedGraph(db: Db): Promise<void> {
 
 function node(
   id: string,
-  type: 'script-import' | 'shot-split' | 'score' | 'shot-script' | 'shot-codegen',
+  type:
+    | 'script-import'
+    | 'shot-split'
+    | 'score'
+    | 'shot-script'
+    | 'shot-codegen'
+    | 'shot-subtitle',
   stage: 'INGEST' | 'DIRECT' | 'ASSEMBLE' | 'SHOT_SPEC' | 'FABRICATE',
   status: 'queued' | 'succeeded' | 'failed' | 'skipped',
   payload: Record<string, unknown> = {}
@@ -408,10 +494,11 @@ async function seedArtifact(
   nodeId: string,
   kind: string,
   storageKey: string
-): Promise<void> {
+): Promise<string> {
+  const id = randomUUID()
   await db.insert(artifacts).values({
     workspaceId: LOCAL_WORKSPACE_ID,
-    id: randomUUID(),
+    id,
     projectId: PROJECT_ID,
     aggregateType: 'node',
     aggregateId: nodeId,
@@ -424,6 +511,7 @@ async function seedArtifact(
     contentHash: HASH,
     attemptId: ATTEMPTS.get(nodeId)!,
   })
+  return id
 }
 
 const SCRIPT_UNITS = [{ unitId: 'U001', text: '第一句。' }]

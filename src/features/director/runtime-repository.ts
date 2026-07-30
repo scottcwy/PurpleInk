@@ -179,13 +179,23 @@ export class DirectorRuntimeRepository {
     return this.writer.persistStreamLog(projectId, nodeId, stage, text)
   }
 
+  /**
+   * 复合阶段（当前只有 shot-subtitle）的续跑判定：文本产物已在本 run 提交、
+   * 媒体副作用未完成时，恢复的 attempt 只重跑副作用，不再调用文本模型。
+   *
+   * 判定只依据「节点 payload 指向的 Director 产物确实由本 run 的某个 attempt
+   * 提交，且内容哈希一致」。曾经额外要求 checkpoint 里存在 providerScopeKey，
+   * 但票据重构后只有 deferProviderAttempt（原地延迟、复用同一 attemptId）会写
+   * 该字段；scheduleProviderRateLimitWait（provider 真返回 429）新建 attempt 时
+   * 只是继承旧 queueMeta。于是「是否重复调用文本模型」取决于此前是否恰好发生过
+   * 一次无关的调度延迟。该字段不提供任何额外安全性，去掉后 429 路径同样受保护。
+   */
   async shouldResumeCommittedEffect(
     attemptId: string,
     nodeId: string,
   ): Promise<boolean> {
     const [row] = await this.db
       .select({
-        checkpoint: taskAttempts.checkpoint,
         runId: taskAttempts.runId,
         nodeData: canvasNodes.data,
       })
@@ -207,17 +217,9 @@ export class DirectorRuntimeRepository {
       )
       .limit(1)
     if (!row) return false
-    const checkpoint = row.checkpoint as Record<string, unknown>
-    const queueMeta =
-      checkpoint.queueMeta
-      && typeof checkpoint.queueMeta === 'object'
-      && !Array.isArray(checkpoint.queueMeta)
-        ? checkpoint.queueMeta as Record<string, unknown>
-        : {}
     const payload = readNodePayload(row.nodeData)
     if (
-      typeof queueMeta.providerScopeKey !== 'string'
-      || typeof payload.directorArtifactId !== 'string'
+      typeof payload.directorArtifactId !== 'string'
       || typeof payload.outputContentHash !== 'string'
     ) {
       return false
