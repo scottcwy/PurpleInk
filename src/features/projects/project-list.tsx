@@ -1,129 +1,166 @@
 'use client'
 
-import Link from 'next/link'
-import { useMemo, useState, type ReactNode } from 'react'
-import { ProjectCard } from '@/components/ui/project-card'
-import { SearchField } from '@/components/ui/search-field'
+import type { ReactNode } from 'react'
+import { Button } from '@/components/ui/button'
+import { SegmentedControl } from '@/components/ui/segmented-control'
+import { TopBar } from '@/components/ui/top-bar'
 import type { ProjectWorkflowKind } from '@/lib/workflow/project-workflow-registry'
+import {
+  projectKindMeta,
+  type ProjectCardItem,
+  type ProjectKindCounts,
+} from './project-cards-client'
+import { ProjectKindRow } from './project-kind-row'
+import { ProjectSearchFlyout } from './project-search-flyout'
+import { ProjectTable } from './project-table'
+import {
+  useProjectCardsState,
+  type SearchState,
+} from './use-project-cards-state'
 
-export interface ProjectSummary {
-  id: string
-  kind: ProjectWorkflowKind
-  title: string
-  href: string
-  meta: string
-  status: 'pending' | 'generating' | 'rendered' | 'cached' | 'failed'
-}
-
-export function filterProjectSummaries(
-  projects: readonly ProjectSummary[],
-  query: string,
-): ProjectSummary[] {
-  const normalized = query.trim().toLocaleLowerCase()
-  if (!normalized) return [...projects]
-  return projects.filter((project) =>
-    project.title.toLocaleLowerCase().includes(normalized),
-  )
-}
-
-export function groupProjectSummaries(projects: readonly ProjectSummary[]) {
-  return {
-    authored: projects.filter((project) => project.kind !== 'website'),
-    websites: projects.filter((project) => project.kind === 'website'),
-  }
+export interface ProjectListProps {
+  /** 三板块合计项目数，顶栏展示。 */
+  total: number
+  initialPages: Record<ProjectWorkflowKind, ProjectCardItem[]>
+  initialCounts: ProjectKindCounts
+  /** 追加加载的每页条数，与首屏每板块条数一致。 */
+  pageSize: number
+  /** 顶栏右侧新建入口（由页面注入，保持 server 组合）。 */
+  newProjectAction?: ReactNode
+  /** 按来源提供空板块创建入口；搜索无命中时不展示。 */
+  emptyActions?: Partial<Record<ProjectWorkflowKind, ReactNode>>
 }
 
 export function ProjectList({
-  projects,
-  authoredEmptyAction,
-  websiteEmptyAction,
-}: {
-  projects: readonly ProjectSummary[]
-  authoredEmptyAction?: ReactNode
-  websiteEmptyAction?: ReactNode
-}) {
-  const [query, setQuery] = useState('')
-  const visibleProjects = useMemo(
-    () => filterProjectSummaries(projects, query),
-    [projects, query],
-  )
-  const groups = groupProjectSummaries(visibleProjects)
-  const hasQuery = query.trim().length > 0
+  total,
+  initialPages,
+  initialCounts,
+  pageSize,
+  newProjectAction,
+  emptyActions,
+}: ProjectListProps) {
+  const state = useProjectCardsState({ initialPages, initialCounts, pageSize })
+  const {
+    layout,
+    changeLayout,
+    query,
+    setQuery,
+    counts,
+    kindStates,
+    search,
+    searching,
+    searchGroups,
+    searchHasMore,
+    rowOrder,
+    activeKind,
+    setActiveKind,
+    loadMoreKind,
+    loadMoreSearch,
+  } = state
 
   return (
-    <div className="flex flex-col gap-5">
-      <SearchField
-        aria-label="搜索项目"
-        placeholder="搜索全部项目"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
+    <>
+      <TopBar
+        title="项目"
+        meta={
+          <span className="inline-flex items-center gap-1.5">
+            共 {total} 个真实项目
+            <ProjectSearchFlyout query={query} onQueryChange={setQuery} />
+          </span>
+        }
+        actions={
+          <>
+            {/* 高度与右侧 sm 新建按钮（h-8）对齐。 */}
+            <SegmentedControl
+              options={[
+                { value: 'grid', label: '网格' },
+                { value: 'list', label: '列表' },
+              ]}
+              value={layout}
+              onChange={changeLayout}
+              className="h-8 [&>button]:py-0.5"
+            />
+            {newProjectAction}
+          </>
+        }
       />
-      <div className="grid min-w-0 gap-5 lg:grid-cols-2">
-        <ProjectSection
-          title="文稿与录音转视频"
-          description="沿用主工作流；录音项目使用原声时间轴，不重复配音。"
-          projects={groups.authored}
-          emptyLabel={
-            hasQuery
-              ? `没有匹配“${query.trim()}”的文稿或录音项目`
-              : '还没有文稿或录音项目'
-          }
-          emptyAction={hasQuery ? undefined : authoredEmptyAction}
-        />
-        <ProjectSection
-          title="网站介绍视频"
-          description="Playwright 采集与成熟生视频引擎，统一挂载到项目画布。"
-          projects={groups.websites}
-          emptyLabel={
-            hasQuery
-              ? `没有匹配“${query.trim()}”的网站项目`
-              : '还没有网站介绍项目'
-          }
-          emptyAction={hasQuery ? undefined : websiteEmptyAction}
-        />
+      <div className="flex w-full min-w-0 flex-col gap-6 px-4 py-5 sm:px-7 sm:py-6">
+        {layout === 'grid' ? (
+          <div className="flex min-w-0 flex-col gap-6">
+            {rowOrder.map((kind) => {
+              const meta = projectKindMeta(kind)
+              const kindState = kindStates[kind]
+              return (
+                <ProjectKindRow
+                  key={kind}
+                  kind={kind}
+                  items={searchGroups ? searchGroups[kind] : kindState.items}
+                  totalCount={search ? search.counts[kind] : counts[kind]}
+                  loading={search ? search.loading : kindState.loading}
+                  error={search ? null : kindState.error}
+                  onLoadMore={searching ? undefined : () => loadMoreKind(kind)}
+                  emptyLabel={
+                    search
+                      ? `没有匹配“${search.q}”的${meta.shortLabel}项目`
+                      : `还没有${meta.shortLabel}项目`
+                  }
+                  emptyAction={searching ? undefined : emptyActions?.[kind]}
+                />
+              )
+            })}
+            {searching && (search?.error || searchHasMore) && (
+              <SearchLoadMore search={search} onLoadMore={loadMoreSearch} />
+            )}
+          </div>
+        ) : (
+          <ProjectTable
+            kinds={rowOrder}
+            counts={counts}
+            activeKind={activeKind}
+            onKindChange={setActiveKind}
+            items={search ? search.items : kindStates[activeKind].items}
+            searchMode={searching}
+            searchTotal={search?.total ?? 0}
+            hasMore={
+              search
+                ? searchHasMore
+                : kindStates[activeKind].items.length < counts[activeKind]
+            }
+            loading={search ? search.loading : kindStates[activeKind].loading}
+            error={search ? search.error : kindStates[activeKind].error}
+            onLoadMore={search ? loadMoreSearch : () => loadMoreKind(activeKind)}
+            emptyLabel={
+              search
+                ? `没有匹配“${search.q}”的项目`
+                : `还没有${projectKindMeta(activeKind).shortLabel}项目`
+            }
+            emptyAction={searching ? undefined : emptyActions?.[activeKind]}
+          />
+        )}
       </div>
-    </div>
+    </>
   )
 }
 
-function ProjectSection({
-  title,
-  description,
-  projects,
-  emptyLabel,
-  emptyAction,
+function SearchLoadMore({
+  search,
+  onLoadMore,
 }: {
-  title: string
-  description: string
-  projects: readonly ProjectSummary[]
-  emptyLabel: string
-  emptyAction?: ReactNode
+  search: SearchState | null
+  onLoadMore: () => void
 }) {
+  if (!search) return null
   return (
-    <section className="min-w-0 rounded-xl border border-ds-border bg-ds-surface p-4 sm:p-5">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-[17px] font-semibold text-ds-text">{title}</h2>
-          <p className="mt-1 text-xs leading-5 text-ds-text-muted">{description}</p>
-        </div>
-        <span className="shrink-0 font-mono text-xs text-ds-text-muted">
-          {projects.length}
-        </span>
-      </div>
-      {projects.length > 0 ? (
-        <div className="grid gap-4">
-          {projects.map((project) => (
-            <Link key={project.id} href={project.href} className="block min-w-0">
-              <ProjectCard {...project} className="w-full" />
-            </Link>
-          ))}
-        </div>
-      ) : (
-        <div className="ds-dot-grid flex min-h-56 flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-ds-border px-5 text-center">
-          <p className="text-sm text-ds-text-muted">{emptyLabel}</p>
-          {emptyAction}
-        </div>
-      )}
-    </section>
+    <div className="flex flex-col items-center gap-2">
+      {search.error && <p className="text-xs text-ds-red">{search.error}</p>}
+      <Button
+        variant="gray"
+        size="sm"
+        disabled={search.loading}
+        onClick={onLoadMore}
+      >
+        {search.loading ? '加载中…' : search.error ? '重试' : '加载更多命中'}
+      </Button>
+    </div>
   )
 }
