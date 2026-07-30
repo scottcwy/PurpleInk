@@ -51,10 +51,43 @@ it('selects only an unattended ready DAG with no active attempt', async () => {
   ])
 })
 
+it('does not recover a ready project outside the recent crash window', async () => {
+  const [clock] = await database.sql<{ now: string | Date }[]>`select now() as now`
+  const now = new Date(clock!.now)
+  await seedProject({
+    autopilot: true,
+    downstreamStatus: 'idle',
+    updatedAt: new Date(now.getTime() - 16 * 60 * 1_000),
+  })
+
+  await expect(listDirectorFrontierCandidates(database.db)).resolves.toEqual([])
+})
+
+it('selects only the most recently updated project when several are recoverable', async () => {
+  const [clock] = await database.sql<{ now: string | Date }[]>`select now() as now`
+  const now = new Date(clock!.now)
+  const olderProjectId = await seedProject({
+    autopilot: true,
+    downstreamStatus: 'idle',
+    updatedAt: new Date(now.getTime() - 2 * 60 * 1_000),
+  })
+  const latestProjectId = await seedProject({
+    autopilot: true,
+    downstreamStatus: 'idle',
+    updatedAt: new Date(now.getTime() - 60 * 1_000),
+  })
+
+  expect(olderProjectId).not.toBe(latestProjectId)
+  await expect(listDirectorFrontierCandidates(database.db)).resolves.toEqual([
+    { workspaceId: WORKSPACE_ID, projectId: latestProjectId },
+  ])
+})
+
 async function seedProject(input: {
   autopilot: boolean
   downstreamStatus: 'idle' | 'succeeded'
   activeAttempt?: boolean
+  updatedAt?: Date
 }): Promise<string> {
   const projectId = randomUUID()
   const entryId = randomUUID()
@@ -68,6 +101,7 @@ async function seedProject(input: {
     workflowKind: 'script',
     autopilot: input.autopilot,
     exportSettings: { schemaVersion: 1 },
+    ...(input.updatedAt ? { updatedAt: input.updatedAt } : {}),
   })
   await database.db.insert(canvasNodes).values([
     {

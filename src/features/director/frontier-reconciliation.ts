@@ -13,6 +13,11 @@ export interface DirectorFrontierCandidate {
   projectId: string
 }
 
+/** 只自动恢复近期进程中断；更早的历史项目必须由用户显式重新启动。 */
+export const DIRECTOR_FRONTIER_RECOVERY_WINDOW_MS = 15 * 60 * 1_000
+/** 每轮只恢复最新项目，避免一次启动唤醒一批历史工作流。 */
+export const DIRECTOR_FRONTIER_RECOVERY_LIMIT = 1
+
 interface ReconciliationDependencies {
   listCandidates?: (database: Db) => Promise<DirectorFrontierCandidate[]>
   resume?: (projectId: string) => Promise<PipelineStartResult>
@@ -102,6 +107,8 @@ export async function listDirectorFrontierCandidates(
     from projects project
     where project.autopilot = true
       and project.workflow_kind in ('script', 'audio')
+      and project.updated_at >=
+        now() - (${DIRECTOR_FRONTIER_RECOVERY_WINDOW_MS} * interval '1 millisecond')
       and exists (
         select 1
         from canvas_nodes candidate
@@ -132,8 +139,8 @@ export async function listDirectorFrontierCandidates(
           and run.execution_epoch = project.execution_epoch
           and attempt.status in ('queued', 'running')
       )
-    order by project.updated_at asc, project.id asc
-    limit 25
+    order by project.updated_at desc, project.id desc
+    limit ${DIRECTOR_FRONTIER_RECOVERY_LIMIT}
   `)
   return Array.from(rows, (row) => ({
     workspaceId: String(row.workspaceId),

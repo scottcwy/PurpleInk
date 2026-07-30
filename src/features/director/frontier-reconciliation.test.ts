@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import {
+  DIRECTOR_FRONTIER_RECOVERY_LIMIT,
+  DIRECTOR_FRONTIER_RECOVERY_WINDOW_MS,
   reconcileDirectorFrontiers,
   type DirectorFrontierCandidate,
 } from './frontier-reconciliation'
@@ -21,6 +23,11 @@ const candidates: DirectorFrontierCandidate[] = [
 describe('reconcileDirectorFrontiers', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+  })
+
+  it('publishes the bounded recent-crash recovery policy', () => {
+    expect(DIRECTOR_FRONTIER_RECOVERY_WINDOW_MS).toBe(15 * 60 * 1_000)
+    expect(DIRECTOR_FRONTIER_RECOVERY_LIMIT).toBe(1)
   })
 
   it('resumes every persisted ready frontier inside its owning workspace', async () => {
