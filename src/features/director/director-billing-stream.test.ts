@@ -171,6 +171,35 @@ describe('Director per-provider-call billing stream', () => {
     expect(begin).toHaveBeenCalledOnce()
   })
 
+  it('enforces the provider deadline when the SDK stream never settles', async () => {
+    const order: string[] = []
+    const billingHandle = handle(order)
+    const streamSimple = vi.fn(() => createAssistantMessageEventStream())
+    const events = await consume(createDirectorBillingStream({
+      model,
+      context,
+      options: { timeoutMs: 15 },
+      runtime: {
+        providerId: 'stepfun',
+        providerLabel: '阶跃星辰',
+        funding: 'managed',
+        apiKey: 'test-key',
+        modelId: model.id,
+        maxOutputTokens: 4_096,
+        deductsManagedPool: true,
+      },
+      invocationIndex: 1,
+      attemptId: '00000000-0000-4000-8000-000000000001',
+      gateway: {
+        begin: vi.fn(async () => billingHandle),
+      } as unknown as ManagedAiGateway,
+      streamSimple,
+    }))
+
+    expect(events.at(-1)?.type).toBe('error')
+    expect(billingHandle.settleUnavailable).toHaveBeenCalledWith(true, 'timeout')
+  })
+
   it('does not start the next provider call when reservation is rejected', async () => {
     const billingHandle = handle([])
     const begin = vi.fn<ManagedAiGateway['begin']>()

@@ -90,12 +90,17 @@ async function* billedEvents(
   try {
     await handle.markProviderStarted?.()
     providerStarted = true
+    const options = providerOptions(input.options)
     const upstream = input.streamSimple(
       input.model,
       input.context,
-      providerOptions(input.options),
+      options,
     )
-    for await (const event of upstream) {
+    for await (const event of eventsBeforeDeadline(
+      upstream,
+      options.timeoutMs ?? DIRECTOR_PROVIDER_TIMEOUT_MS,
+      input.runtime,
+    )) {
       if (event.type === 'done' || event.type === 'error') {
         await settleTerminal(handle, event)
         settled = true
@@ -117,6 +122,57 @@ async function* billedEvents(
     throw error
   } finally {
     await dispatch?.release(dispatchOutcome)
+  }
+}
+
+async function* eventsBeforeDeadline(
+  upstream: AssistantMessageEventStream,
+  timeoutMs: number,
+  runtime: DirectorBillingRuntime,
+): AsyncGenerator<AssistantMessageEvent> {
+  const iterator = upstream[Symbol.asyncIterator]()
+  const deadline = Date.now() + timeoutMs
+  try {
+    while (true) {
+      const next = await nextBeforeDeadline(
+        iterator,
+        Math.max(0, deadline - Date.now()),
+        runtime,
+      )
+      if (next.done) return
+      yield next.value
+    }
+  } finally {
+    try {
+      const returned = iterator.return?.()
+      if (returned) void Promise.resolve(returned).catch(() => undefined)
+    } catch {
+      // The provider deadline remains the authoritative terminal result.
+    }
+  }
+}
+
+async function nextBeforeDeadline(
+  iterator: AsyncIterator<AssistantMessageEvent>,
+  remainingMs: number,
+  runtime: DirectorBillingRuntime,
+): Promise<IteratorResult<AssistantMessageEvent>> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new ProviderRequestError({
+        providerId: runtime.providerId,
+        providerLabel: runtime.providerLabel,
+        operation: 'Director',
+        funding: runtime.funding,
+        kind: 'timeout',
+      }))
+    }, remainingMs)
+  })
+  try {
+    return await Promise.race([iterator.next(), timeout])
+  } finally {
+    clearTimeout(timer)
   }
 }
 
