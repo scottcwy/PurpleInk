@@ -53,7 +53,7 @@ export function CanvasAutoHideTopBar({
       />
       <div
         className={cn(
-          'absolute inset-x-0 top-0 z-40 transition-transform duration-[var(--duration-base)] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+          'absolute inset-x-0 top-0 z-40 transition-transform duration-base ease-emphasized motion-reduce:transition-none',
           visible
             ? 'pointer-events-auto translate-y-0'
             : 'pointer-events-none -translate-y-full',
