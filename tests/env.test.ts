@@ -33,6 +33,7 @@ describe("global environment isolation", () => {
       "CVC_MANAGED_MIMO_API_KEY",
       "CVC_MANAGED_GEMINI_API_KEY",
       "BACKEND_ORIGIN",
+      "PURPLEINK_ENGINE_INTERNAL_KEY",
       // PLAN-002 §1.5：认证验证码的出站 SMTP 通道，src/features/auth/mailer.ts 消费。
       "CVC_MAIL_SMTP_HOST",
       "CVC_MAIL_SMTP_PORT",
