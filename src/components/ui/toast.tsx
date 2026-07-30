@@ -51,7 +51,7 @@ export function Toast({ variant = 'info', title, body, onClose, className }: Toa
         <button
           type="button"
           onClick={onClose}
-          className="shrink-0 text-ds-text-muted transition-colors hover:text-ds-text"
+          className="shrink-0 text-ds-text-muted transition-colors duration-fast ease-standard hover:text-ds-text"
         >
           <X className="h-4 w-4" />
         </button>

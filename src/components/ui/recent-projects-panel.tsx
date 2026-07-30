@@ -46,7 +46,7 @@ export function RecentProjectsPanel({
             <Link
               key={project.id}
               href={project.href}
-              className="min-w-0 overflow-hidden rounded-lg border border-ds-border bg-ds-surface transition-colors hover:border-ds-primary/40"
+              className="min-w-0 overflow-hidden rounded-lg border border-ds-border bg-ds-surface transition-colors duration-fast ease-standard hover:border-ds-primary/40"
             >
               <article>
                 <div className="flex aspect-video items-center justify-center bg-ds-surface-muted">

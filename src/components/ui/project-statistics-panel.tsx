@@ -138,7 +138,7 @@ function StatsTab({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        'flex h-[34px] w-full items-center gap-2 rounded-md px-2.5 text-left text-xs transition-colors',
+        'flex h-[34px] w-full items-center gap-2 rounded-md px-2.5 text-left text-xs transition-colors duration-fast ease-standard',
         active
           ? 'bg-ds-blue-soft font-semibold text-ds-text'
           : 'text-ds-text-muted hover:bg-ds-surface hover:text-ds-text',

@@ -32,7 +32,7 @@ export function SegmentedControl({ options, value, onChange, className }: Segmen
             type="button"
             onClick={() => onChange(option.value)}
             className={cn(
-              'rounded-md px-3 py-1.5 text-[13px] font-medium transition-[background-color,color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-ring',
+              'rounded-md px-3 py-1.5 text-[13px] font-medium transition-[background-color,color,box-shadow] duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-ring',
               active
                 ? 'bg-ds-surface text-ds-text shadow-[0_1px_2px_#10183a1a]'
                 : 'text-ds-text-muted hover:text-ds-text',

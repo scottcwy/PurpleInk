@@ -115,7 +115,7 @@ function SidebarNavigationItem({
   collapsed: boolean
 }) {
   const classes = cn(
-    'flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors',
+    'flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors duration-fast ease-standard',
     collapsed && 'justify-center px-0',
     item.active
       ? 'bg-ds-surface-muted font-semibold text-ds-text'

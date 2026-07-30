@@ -65,7 +65,7 @@ export function CollapsibleCard({
         type="button"
         onClick={toggle}
         aria-expanded={isOpen}
-        className="flex min-h-14 w-full items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-ds-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ds-ring"
+        className="flex min-h-14 w-full items-center gap-3 px-5 py-3.5 text-left transition-colors duration-fast ease-standard hover:bg-ds-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ds-ring"
       >
         {Icon && (
           <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-ds-blue-soft">

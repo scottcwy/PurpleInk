@@ -159,7 +159,7 @@ export function StreamingLogCard({
             <button
               type="button"
               onClick={() => setDialogOpen(true)}
-              className="shrink-0 text-[12px] font-medium text-ds-red transition-colors hover:opacity-80"
+              className="shrink-0 text-[12px] font-medium text-ds-red transition-colors duration-fast ease-standard hover:opacity-80"
             >
               查看错误详情
             </button>

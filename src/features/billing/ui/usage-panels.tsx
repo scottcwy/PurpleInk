@@ -60,7 +60,7 @@ export function BillingSidebarMeter({
         href={PRODUCTS_ROUTES.billing}
         aria-label={label}
         title={label}
-        className="relative flex size-9 items-center justify-center rounded-full text-ds-blue transition-colors hover:bg-ds-surface-muted"
+        className="relative flex size-9 items-center justify-center rounded-full text-ds-blue transition-colors duration-fast ease-standard hover:bg-ds-surface-muted"
       >
         <UsageRing percent={percent} />
         <span className="absolute text-[9px] font-semibold">{planName.slice(0, 1)}</span>
@@ -72,7 +72,7 @@ export function BillingSidebarMeter({
     <Link
       href={PRODUCTS_ROUTES.billing}
       aria-label={label}
-      className="block rounded-md border border-ds-border bg-ds-surface p-2.5 transition-colors hover:bg-ds-surface-muted"
+      className="block rounded-md border border-ds-border bg-ds-surface p-2.5 transition-colors duration-fast ease-standard hover:bg-ds-surface-muted"
     >
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <span className="text-xs font-semibold">{planName}</span>

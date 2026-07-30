@@ -28,7 +28,7 @@ export function SidebarToggle({
     <button
       type="button"
       className={cn(
-        'flex size-8 shrink-0 items-center justify-center rounded-sm border border-ds-border text-ds-text transition-colors hover:bg-ds-surface-muted',
+        'flex size-8 shrink-0 items-center justify-center rounded-sm border border-ds-border text-ds-text transition-colors duration-fast ease-standard hover:bg-ds-surface-muted',
         className,
       )}
       aria-label={collapsed ? '展开侧栏' : '收起侧栏'}
@@ -108,7 +108,7 @@ export function SidebarAccount({
       </div>
       <button
         type="button"
-        className="flex size-[34px] shrink-0 items-center justify-center rounded text-ds-text transition-colors hover:bg-ds-surface-muted"
+        className="flex size-[34px] shrink-0 items-center justify-center rounded text-ds-text transition-colors duration-fast ease-standard hover:bg-ds-surface-muted"
         aria-label="打开账户菜单"
         onClick={onSettings}
       >

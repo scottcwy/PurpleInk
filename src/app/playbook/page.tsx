@@ -51,7 +51,7 @@ export default function PlaybookIndexPage() {
             <Link
               key={category.id}
               href={`/playbook/${category.id}`}
-              className="border-ds-border bg-ds-surface hover:bg-ds-surface-muted rounded-lg border p-5 backdrop-blur-xl transition-colors"
+              className="border-ds-border bg-ds-surface hover:bg-ds-surface-muted rounded-lg border p-5 backdrop-blur-xl transition-colors duration-fast ease-standard"
             >
               <div className="font-semibold">{category.title}</div>
               <div className="text-ds-text-muted mt-2 text-sm leading-5">

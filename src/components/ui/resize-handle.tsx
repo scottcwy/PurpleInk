@@ -53,7 +53,7 @@ export function ResizeHandle({
     >
       <div
         className={cn(
-          'absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 rounded-pill bg-transparent transition-colors',
+          'absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 rounded-pill bg-transparent transition-colors duration-fast ease-standard',
           'group-hover:bg-accent group-focus-visible:bg-accent',
           isDragging && 'bg-accent',
         )}

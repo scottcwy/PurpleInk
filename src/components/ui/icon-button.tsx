@@ -13,7 +13,7 @@ export function IconButton({ icon: Icon, className, ...props }: IconButtonProps)
   return (
     <button
       className={cn(
-        'inline-flex size-8 items-center justify-center rounded-md border border-ds-border bg-ds-surface text-ds-text-muted shadow-[0_1px_2px_#10183a14] transition-[background-color,color,box-shadow] duration-150 hover:bg-ds-surface-muted hover:text-ds-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-ring disabled:pointer-events-none disabled:opacity-50',
+        'inline-flex size-8 items-center justify-center rounded-md border border-ds-border bg-ds-surface text-ds-text-muted shadow-[0_1px_2px_#10183a14] transition-[background-color,color,box-shadow] duration-fast hover:bg-ds-surface-muted hover:text-ds-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-ring disabled:pointer-events-none disabled:opacity-50',
         className,
       )}
       {...props}

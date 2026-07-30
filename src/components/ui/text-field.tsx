@@ -25,8 +25,8 @@ export function TextField({ label, className, variant = 'default', ...props }: T
         className={cn(
           'h-10 w-full rounded-md px-3 py-[9px] text-sm text-ds-text placeholder:text-ds-text-muted focus:outline-none',
           variant === 'default'
-            ? 'border border-ds-border bg-ds-surface transition-[border-color,box-shadow] duration-150 hover:border-ds-blue/40 focus:border-ds-blue focus:ring-[3px] focus:ring-ds-blue/20'
-            : 'border border-transparent bg-ds-surface-muted transition-[border-color,box-shadow] duration-150 hover:border-ds-border focus:border-ds-blue focus:bg-ds-surface focus:ring-[3px] focus:ring-ds-blue/20',
+            ? 'border border-ds-border bg-ds-surface transition-[border-color,box-shadow] duration-fast hover:border-ds-blue/40 focus:border-ds-blue focus:ring-[3px] focus:ring-ds-blue/20'
+            : 'border border-transparent bg-ds-surface-muted transition-[border-color,box-shadow] duration-fast hover:border-ds-border focus:border-ds-blue focus:bg-ds-surface focus:ring-[3px] focus:ring-ds-blue/20',
         )}
         {...props}
       />

@@ -133,7 +133,7 @@ function TableRow({
       onContextMenu={(event) =>
         onProjectContextMenu?.(event, { id: item.id, title: item.title })
       }
-      className="grid grid-cols-[minmax(0,1.6fr)_120px_minmax(0,2fr)_170px] items-center gap-3 border-b border-ds-border px-4 py-3 transition-colors last:border-b-0 hover:bg-ds-surface-muted"
+      className="grid grid-cols-[minmax(0,1.6fr)_120px_minmax(0,2fr)_170px] items-center gap-3 border-b border-ds-border px-4 py-3 transition-colors duration-fast ease-standard last:border-b-0 hover:bg-ds-surface-muted"
     >
       <span className="flex min-w-0 items-center gap-2">
         <span className="truncate text-sm font-medium text-ds-text">

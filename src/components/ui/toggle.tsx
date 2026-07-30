@@ -15,7 +15,7 @@ export function Toggle({ checked, onCheckedChange, className, ...props }: Toggle
   return (
     <label
       className={cn(
-        'relative inline-flex h-[22px] w-10 cursor-pointer items-center rounded-full border p-0.5 transition-[background-color,border-color,box-shadow] duration-150 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ds-ring',
+        'relative inline-flex h-[22px] w-10 cursor-pointer items-center rounded-full border p-0.5 transition-[background-color,border-color,box-shadow] duration-fast has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ds-ring',
         checked
           ? 'border-transparent bg-ds-primary'
           : 'border-ds-border bg-ds-surface-muted',

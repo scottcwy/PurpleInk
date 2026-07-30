@@ -85,7 +85,7 @@ export function ProviderRegistryPanel({
             >
               <Card
                 className={cn(
-                  'h-full transition-colors',
+                  'h-full transition-colors duration-fast ease-standard',
                   selected === provider
                     ? 'border-ds-blue bg-ds-blue-soft'
                     : 'hover:border-ds-blue/50'
