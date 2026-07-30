@@ -15,6 +15,7 @@ export function inspectFabricateSource(source: string): FabricateSourceInspectio
   const violations: FabricateSourceViolation[] = [...checkSource(source)]
   inspectViewport(source, violations)
   inspectCompositionRoot(source, violations)
+  inspectEmbeddedFonts(source, violations)
   return violations.length === 0
     ? { ok: true, violations: [] }
     : { ok: false, violations }
@@ -69,6 +70,102 @@ function inspectCompositionRoot(
         snippet: root,
       })
     }
+  }
+}
+
+const FONT_SIGNATURES: Record<string, readonly string[]> = {
+  'font/woff2': ['d09GMg'],
+  'font/woff': ['d09GRg'],
+  'font/ttf': ['AAEAAA', 'dHJ1ZQ'],
+  'font/otf': ['T1RUTw'],
+  'application/font-woff': ['d09GRg'],
+  'application/font-sfnt': ['AAEAAA', 'dHJ1ZQ', 'T1RUTw'],
+  'application/x-font-ttf': ['AAEAAA', 'dHJ1ZQ'],
+  'application/x-font-opentype': ['T1RUTw'],
+}
+
+function inspectEmbeddedFonts(
+  source: string,
+  violations: FabricateSourceViolation[],
+): void {
+  for (const face of source.matchAll(/@font-face\s*\{[\s\S]*?\}/giu)) {
+    const block = face[0]
+    if (!block.includes('data:')) continue
+    const dataUrls = [
+      ...block.matchAll(/url\(\s*(['"]?)data:([^,]+),([\s\S]*?)\1\s*\)/giu),
+    ]
+    const line = lineOf(source, face.index ?? 0)
+    if (dataUrls.length === 0) {
+      violations.push(fontViolation(
+        'font-data-url',
+        line,
+        '内联字体 data URL 结构无效',
+        block,
+      ))
+      continue
+    }
+    for (const dataUrl of dataUrls) {
+      const [mime = '', ...parameters] = dataUrl[2]!
+        .split(';')
+        .map((part) => part.trim().toLowerCase())
+      const signatures = FONT_SIGNATURES[mime]
+      if (!signatures) {
+        violations.push(fontViolation(
+          'font-data-mime',
+          line,
+          `不支持的内联字体 MIME：${mime || 'missing'}`,
+          block,
+        ))
+        continue
+      }
+      if (!parameters.includes('base64')) {
+        violations.push(fontViolation(
+          'font-data-base64',
+          line,
+          '内联字体必须使用合法 Base64 编码',
+          block,
+        ))
+        continue
+      }
+      const payload = dataUrl[3]!.replace(/\s+/gu, '')
+      if (!isStrictBase64(payload)) {
+        violations.push(fontViolation(
+          'font-data-base64',
+          line,
+          '内联字体必须使用合法 Base64 编码',
+          block,
+        ))
+        continue
+      }
+      if (!signatures.some((signature) => payload.startsWith(signature))) {
+        violations.push(fontViolation(
+          'font-data-signature',
+          line,
+          '内联字体 MIME 与文件签名不匹配',
+          block,
+        ))
+      }
+    }
+  }
+}
+
+function isStrictBase64(value: string): boolean {
+  return value.length >= 8
+    && value.length % 4 === 0
+    && /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value)
+}
+
+function fontViolation(
+  ruleId: string,
+  line: number,
+  message: string,
+  block: string,
+): FabricateSourceViolation {
+  return {
+    ruleId,
+    line,
+    message,
+    snippet: block.trim().slice(0, 120),
   }
 }
 
