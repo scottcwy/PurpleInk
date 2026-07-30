@@ -63,6 +63,29 @@ describe("worker internal integration boundary", () => {
     );
   });
 
+  it("revalidates proxy fake-IP DNS answers without weakening private-address rejection", async () => {
+    const fakeIpResolver: PublicDnsResolver = async () => [{ address: "198.18.0.84" }];
+    const publicDohResolver: PublicDnsResolver = async () => [
+      { address: "64.29.17.65" },
+      { address: "216.198.79.65" },
+    ];
+
+    await expect(
+      validatePublicUrl(
+        "https://beta.flovvas.app/demo",
+        fakeIpResolver,
+        publicDohResolver,
+      ),
+    ).resolves.toBe("https://beta.flovvas.app/demo");
+    await expect(
+      validatePublicUrl(
+        "https://10.20.30.40/demo",
+        fakeIpResolver,
+        publicDohResolver,
+      ),
+    ).rejects.toMatchObject(policyError("URL_ADDRESS_NOT_PUBLIC"));
+  });
+
   it("normalizes internal URL-only requests and rejects capture or credential overrides", async () => {
     await expect(
       normalizeInternalRenderRequest(

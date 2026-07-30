@@ -22,6 +22,13 @@ export type PublicDnsResolver = (
 
 const defaultResolver: PublicDnsResolver = async (hostname) =>
   lookup(hostname, { all: true, verbatim: true })
+const dohCache = new Map<
+  string,
+  { expiresAt: number; addresses: Promise<ReadonlyArray<{ address: string }>> }
+>()
+const DOH_CACHE_MS = 60_000
+const DOH_TIMEOUT_MS = 10_000
+const defaultProxyResolver: PublicDnsResolver = resolveGooglePublicDns
 
 const FORBIDDEN_HOSTS = new Set([
   "localhost",
@@ -39,7 +46,8 @@ const FORBIDDEN_HOSTS = new Set([
  */
 export async function validatePublicUrl(
   raw: string,
-  resolveDns: PublicDnsResolver = defaultResolver
+  resolveDns: PublicDnsResolver = defaultResolver,
+  resolveProxyDns: PublicDnsResolver = defaultProxyResolver
 ): Promise<string> {
   let parsed: URL
   try {
@@ -68,6 +76,13 @@ export async function validatePublicUrl(
       addresses = await resolveDns(hostname)
     } catch {
       throw new PublicUrlPolicyError("URL_HOST_UNRESOLVED")
+    }
+    if (addresses.length > 0 && addresses.every(({ address }) => isProxyFakeIp(address))) {
+      try {
+        addresses = await resolveProxyDns(hostname)
+      } catch {
+        throw new PublicUrlPolicyError("URL_HOST_UNRESOLVED")
+      }
     }
     if (addresses.length === 0) {
       throw new PublicUrlPolicyError("URL_HOST_UNRESOLVED")
@@ -125,6 +140,61 @@ function isPublicIpv4(address: string): boolean {
   if (a === 198 && b === 51 && c === 100) return false
   if (a === 203 && b === 0 && c === 113) return false
   return a > 0 && a < 224
+}
+
+function isProxyFakeIp(address: string): boolean {
+  if (isIP(address) !== 4) return false
+  const [a, b] = address.split(".").map(Number) as [number, number]
+  return a === 198 && (b === 18 || b === 19)
+}
+
+async function resolveGooglePublicDns(
+  hostname: string
+): Promise<ReadonlyArray<{ address: string }>> {
+  const now = Date.now()
+  const cached = dohCache.get(hostname)
+  if (cached && cached.expiresAt > now) return cached.addresses
+
+  const addresses = Promise.all([
+    resolveGoogleRecordType(hostname, "A"),
+    resolveGoogleRecordType(hostname, "AAAA"),
+  ]).then((answers) => answers.flat())
+  dohCache.set(hostname, { expiresAt: now + DOH_CACHE_MS, addresses })
+  try {
+    return await addresses
+  } catch (error) {
+    dohCache.delete(hostname)
+    throw error
+  }
+}
+
+async function resolveGoogleRecordType(
+  hostname: string,
+  type: "A" | "AAAA"
+): Promise<ReadonlyArray<{ address: string }>> {
+  const endpoint = new URL("https://dns.google/resolve")
+  endpoint.searchParams.set("name", hostname)
+  endpoint.searchParams.set("type", type)
+  endpoint.searchParams.set("edns_client_subnet", "0.0.0.0/0")
+  const response = await fetch(endpoint, {
+    headers: { accept: "application/json" },
+    redirect: "error",
+    signal: AbortSignal.timeout(DOH_TIMEOUT_MS),
+  })
+  if (!response.ok) throw new Error("PUBLIC_DNS_UNAVAILABLE")
+  const body: unknown = await response.json()
+  if (!isRecord(body) || body.Status !== 0) return []
+  if (!Array.isArray(body.Answer)) return []
+  return body.Answer.flatMap((answer) => {
+    if (!isRecord(answer) || (answer.type !== 1 && answer.type !== 28)) return []
+    return typeof answer.data === "string" && isIP(answer.data)
+      ? [{ address: answer.data }]
+      : []
+  })
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
 function isPublicIpv6(address: string): boolean {
