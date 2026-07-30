@@ -129,6 +129,47 @@ describe('assembleTrustedMediaPlan', () => {
     })
   })
 
+  it('keeps subtitles valid when narration is re-run into a new artifact version with identical bytes', () => {
+    // 旁白重跑：artifacts 无 content-hash 去重，同字节也会得到新版本与新 artifactId。
+    // 字幕血缘只记录旧 artifactId，但存储键是内容寻址的，因此仍然同源，不得阻塞导出。
+    const input = validInput()
+    input.artifacts.unshift(
+      artifact({
+        artifactId: 'narration-U001-rerun',
+        aggregateId: 'ingest-node',
+        kind: 'narration-audio:U001',
+        storageKey: 'audio/U001.mp3',
+        version: 2,
+      })
+    )
+
+    const result = assembleTrustedMediaPlan(input)
+
+    expect(result.blockingIssues).toEqual([])
+    expect(result.plan?.shots[0]?.narration.artifact.artifactId).toBe(
+      'narration-U001-rerun'
+    )
+    expect(result.plan?.shots[0]?.subtitle).toEqual({
+      artifactId: 'subtitle-track-S001',
+      storageKey: 'audio/S001/subtitle.json',
+      contentHash: HASH,
+    })
+  })
+
+  it('rejects subtitles whose narration source key no longer matches the trusted narration', () => {
+    // 反向保护：text / voice / model 任一改变都会改变内容寻址键，此时必须阻塞。
+    const input = validInput()
+    input.subtitleTracks['subtitle-track-S001']!.sourceAudioKey =
+      'audio/U001-old-voice.mp3'
+
+    const result = assembleTrustedMediaPlan(input)
+
+    expect(result.plan).toBeNull()
+    expect(result.blockingIssues).toEqual([
+      { laneKey: 'S001', kind: 'subtitle', code: 'artifact-invalid' },
+    ])
+  })
+
   it('rejects cross-lane subtitles and narration hashes that disagree with the ingest manifest', () => {
     const input = validInput()
     input.subtitleTracks['subtitle-track-S001']!.shotId = 'S002'

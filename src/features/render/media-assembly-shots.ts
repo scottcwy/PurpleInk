@@ -60,12 +60,21 @@ function resolveShotArtifacts(
   const lineage = subtitle
     ? input.subtitleTracks[subtitle.artifactId]
     : undefined
+  // 字幕血缘按「旁白存储键」而不是「旁白 artifactId」判定同源。
+  //
+  // narrationAudioKey 是 (engine, voice, text) 的 SHA-256 内容寻址键，且
+  // reuseNarrationAudio 命中已有键时直接复用字节、不再合成——所以同一个 key
+  // 必然是同一份字节、同一个 contentHash，键相等已经是内容等价的证明。
+  // 反之 artifacts 提交没有 content-hash 去重（见 features/artifacts/commit.ts），
+  // 每次旁白重跑都会插入一个新版本、新 artifactId，即使字节完全一致。用
+  // artifactId 比对只会在「旁白重跑过」时把完全正确的字幕判成 artifact-invalid，
+  // 永久卡住导出且不会自愈（staleness 只看画布上游节点的 outputContentHash，
+  // 不看旁白产物）。lineage 仍然保留 sourceAudioArtifactId 供追溯，只是不再当门禁。
   const subtitleValid = Boolean(
     subtitle &&
       lineage &&
       lineage.shotId === allocation.id &&
       narration &&
-      lineage.sourceAudioArtifactId === narration.artifactId &&
       lineage.sourceAudioKey === narration.storageKey
   )
   return { video, narration, subtitle, narrationValid, subtitleValid }
