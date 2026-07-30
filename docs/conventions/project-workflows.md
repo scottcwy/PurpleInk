@@ -159,3 +159,28 @@ v1 费率为每个向上取整的视频秒 `120000 CNY micros`（¥0.12）；
 项目标题没有唯一约束，重名合法：`projects` 上只有 `(workspace_id, id)` 与
 `(workspace_id, id, workflow_kind)` 两个唯一索引，重命名与删除均按 `id` 定位，
 同名项目不会互相影响。
+
+## 10. 项目执行停止合同
+
+三类项目统一通过 `DELETE /api/projects/[id]/start` 停止，旧
+`DELETE /api/director/pipeline` 只做代理兼容。停止目标是单个项目的执行，不终止
+共享 Web、队列或渲染 worker：
+
+1. 事务锁定项目，关闭 autopilot；只有当前代次仍有 queued 作业、尚未收到取消请求的
+   running 作业或 autopilot 仍开启时才递增 `execution_epoch`。重复查询停止状态不得
+   再次递增代次。
+2. 旧代次 queued attempt/run 立即进入 `cancelled`；running attempt 写
+   `cancel_requested_at`，由持有者心跳触发 `AbortSignal` 后确认退出。
+3. waiting 租约与 scheduled Provider ticket 立即取消。Provider 尚未出网的计费预留
+   全额释放；已经出网但用量未知的调用继续使用保守结算，禁止猜测零用量。
+4. Provider、Director、音频、渲染和网站链路在出网前、Artifact 登记前与节点成功写回
+   前检查执行代次和取消信号。旧代次迟到结果不得注册产物或覆盖节点。
+5. 仍有 running 作业时 API 返回 `stopping + remainingRunning`；全部确认退出才返回
+   `stopped`。删除守卫在 `stopping` 期间继续返回 409，完成后 queued attempt 与
+   waiting/active 租约必须为零，项目方可删除。
+
+分镜并发租约的身份是 `(workspace_id, project_id, work_unit_key)`；同工作区不同项目
+都叫 `S001` 时仍是两条独立租约。准入公平顺序以真实可执行 attempt 为唯一真值：
+已持 active 租约的后续阶段优先，其次项目级任务，再次是到期 waiting 分镜；暂不可
+准入的候选不得阻断扫描窗口内的后续可执行候选。500ms 只控制首批启动节奏，active 为
+0 时必须立即放行首个分镜，不能循环重置倒计时。

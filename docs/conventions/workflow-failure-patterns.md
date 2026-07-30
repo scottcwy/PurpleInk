@@ -495,6 +495,7 @@ UI 投影为未知问题并连续重试；数据库没有 `export-project` attem
 - [ ] TTS 字符与 ASR 音频秒是否按各自计费原子归一化；音频探针的小数秒是否在预留和实际结算两条路径保持一致（模式 L）。
 - [ ] Provider 并发、RPM、TPM 是否按共享凭据分别建模；429 是否只延后且不消耗普通重试/失败预算/熔断计数，等待上限与取消路径是否可恢复（模式 M）。
 - [ ] Provider 调度迁移的 journal 是否严格递增且目标表真实存在；租约创建、过期判断与释放是否使用同一数据库时钟（模式 M）。
+- [ ] 分镜租约身份是否同时包含 project 与 work unit；claim 是否只有一套公平顺序且会跳过暂不可准入的队首；停止是否以 execution epoch + 协作取消收敛全部旧作业（模式 R）。
 - [ ] 自动推进、节点恢复和显式降级导出是否共用唯一终结协调器；等待确认是否为 `blocked` 且零 Director attempt，终片登记后是否只续接一次最终审阅（模式 N）。
 - [ ] 每次真实 Provider 出网是否恰好对应一条 `ai_invocations`；出网前失败是否 release 且不进入调用量，fallback/重试是否各自独立记录。
 - [ ] `pipeline_runs.requested_by_user_id` 是否由用户入口固化，并在后台领取、重试、续接中保持不变；是否存在被 `SYSTEM_USER_ID` 覆盖的路径。
@@ -647,6 +648,43 @@ Stage Runner 先记为 `failed + directorError`，队列随后再改回
 `providerScopeKey` 与节点已提交 Artifact 识别字幕副作用续跑。状态迁移在写入
 `executionNotice` 时清除旧失败投影；录音 ASR 入口同样保持 `running`，由队列原子
 收敛到等待态，不再经过临时 `failed`。
+
+---
+
+## 7.12 模式 R：分镜租约身份碰撞与双重 FIFO 形成永久队首阻塞
+
+**症状**：23 分镜项目在套餐上限 20 或 50 时都显示“0 个执行、全部排队”，倒计时结束
+后又从头计时；停止自动推进后旧项目仍占用队列，新项目无法执行，项目删除也持续返回
+“仍有执行中作业”。偶尔手动重启节点或等待很久后又会莫名推进。
+
+**真实事故**：
+
+- `workflow_concurrency_leases` 只以 `(workspace_id, work_unit_key)` 标识租约，不同项目
+  都使用 `S001` 时会互相覆盖；
+- attempt claim 按 attempt FIFO，租约准入又按另一套 lease FIFO 裁决。两个顺序相反时，
+  队首候选永远无法通过，claim 又不扫描后续候选，形成饥饿；
+- 旧“停止自动推进”只关闭未来协调，不取消已经 queued/running 的执行；
+- 进程退出后历史 `running + lease_expires_at IS NULL` 没有回收条件，永久占用删除守卫
+  与运行投影。
+
+**规则**：
+
+- 分镜租约的最小身份必须包含 workspace、project 与 work unit；登记、续租、释放、
+  清扫和投影查询都不得只凭 `S001` 修改。
+- 公平顺序只有 attempt 一套真值。active lane 后续阶段优先，项目级任务不占分镜槽，
+  到期 waiting lane 再按 attempt 创建时间领取；暂不可准入候选不得阻断有界扫描窗口。
+- 容量为零占用时首个可执行分镜必须立即准入；启动间隔只能延后第二个及以后分镜。
+- 项目停止必须以 `execution_epoch` 栅栏旧作业，并对 running attempt 使用协作取消；
+  “关闭 autopilot”不等于“停止项目”。
+- 清扫器必须覆盖过期租约、取消后失联、失效代次 queued 作业，以及超过 20 分钟的历史
+  null lease 僵尸；正常仍有心跳的新 running 作业不得误收。
+
+**已落地护栏**：migration 0021 将租约主键升级为三列并回填 attempt
+`work_unit_key`；队列领取在 workspace advisory lock 与 `FOR UPDATE SKIP LOCKED`
+下按单一优先级扫描；统一项目停止服务原子关闭 autopilot、递增执行代次并收敛
+attempt/run/ticket/lease；worker 通过 `AbortSignal` 协作取消，Artifact 与节点写回
+使用代次栅栏；清扫器补齐 null lease 与失效代次回收。PostgreSQL 回归测试锁定跨项目
+`S001`、23/20 与 23/50 首批准入、反序 FIFO、释放后续推、重复停止及迟到完成竞争。
 
 ---
 
