@@ -102,6 +102,57 @@ describe('createProjectFromRequest JSON', () => {
     })
   })
 
+  it('persists custom visual style as a prompt-only source preference', async () => {
+    const createProject = vi.fn(
+      async (
+        input: CreateProjectWithSourceInput,
+        _dependencies?: ProjectCreationDependencies,
+      ) => created(input),
+    )
+    const request = new Request('http://localhost/api/projects', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({
+        kind: 'script',
+        title: '风格化项目',
+        script: '保持原始产品事实。',
+        visualTheme: 'dark',
+        visualStyle: 'custom',
+        customVisualStyle: '  使用杂志拼贴与粗线条插画  ',
+      }),
+    })
+
+    await createProjectFromRequest(request, {
+      createProject,
+      getWorkspaceId: () => WORKSPACE_ID,
+      createId: () => PROJECT_ID,
+    })
+
+    expect(createProject.mock.calls[0]![0].source).toMatchObject({
+      kind: 'script',
+      script: '保持原始产品事实。',
+      visualStyle: 'custom',
+      customVisualStyle: '使用杂志拼贴与粗线条插画',
+    })
+  })
+
+  it('rejects custom style without instructions before project creation', async () => {
+    const request = new Request('http://localhost/api/projects', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        kind: 'script',
+        title: '风格化项目',
+        script: '保持原始产品事实。',
+        visualStyle: 'custom',
+      }),
+    })
+
+    await expect(createProjectFromRequest(request)).rejects.toThrow(
+      '项目参数不符合要求',
+    )
+  })
+
   it('rejects JSON audio and undeclared server-owned fields as safe input errors', async () => {
     for (const body of [
       { kind: 'audio', title: '绕过上传', storageKey: 'client/value.wav' },

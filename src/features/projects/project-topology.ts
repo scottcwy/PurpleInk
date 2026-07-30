@@ -1,6 +1,7 @@
 import type { CanvasNodeType } from '@/features/canvas'
 import type { PipelineStage } from '@/features/director'
 import type { ProjectSourcePayload } from './project-source'
+import type { ProjectVisualStyle } from './project-visual-style'
 
 export interface ProjectTopologyNode {
   type: CanvasNodeType
@@ -60,21 +61,21 @@ export function buildProjectTopology(
 ): ProjectTopology {
   switch (source.kind) {
     case 'script':
-      return scriptTopology(source.script, source.visualTheme)
+      return scriptTopology(source)
     case 'audio':
-      return audioTopology(source.visualTheme)
+      return audioTopology(source)
     case 'website':
-      return websiteTopology(source.visualTheme)
+      return websiteTopology(source)
   }
 }
 
 function scriptTopology(
-  script: string,
-  visualTheme: 'dark' | 'light',
+  source: Extract<ProjectSourcePayload, { kind: 'script' }>,
 ): ProjectTopology {
   const entry = node('script-import', 'INGEST', projectWorkflowEntryLogicalKey('script'), {
-    directorInput: { rawScript: script },
-    visualTheme,
+    directorInput: { rawScript: source.script },
+    visualTheme: source.visualTheme,
+    ...visualStylePayload(source),
   })
   return {
     entryLogicalKey: entry.logicalKey,
@@ -83,14 +84,17 @@ function scriptTopology(
   }
 }
 
-function audioTopology(visualTheme: 'dark' | 'light'): ProjectTopology {
+function audioTopology(
+  source: Extract<ProjectSourcePayload, { kind: 'audio' }>,
+): ProjectTopology {
   const entry = node(
     'audio-transcribe',
     'INGEST',
     projectWorkflowEntryLogicalKey('audio'),
     {
       workflowKind: 'audio',
-      visualTheme,
+      visualTheme: source.visualTheme,
+      ...visualStylePayload(source),
     },
   )
   return {
@@ -100,7 +104,9 @@ function audioTopology(visualTheme: 'dark' | 'light'): ProjectTopology {
   }
 }
 
-function websiteTopology(visualTheme: 'dark' | 'light'): ProjectTopology {
+function websiteTopology(
+  source: Extract<ProjectSourcePayload, { kind: 'website' }>,
+): ProjectTopology {
   const entryLogicalKey = projectWorkflowEntryLogicalKey('website')
   const phases = [
     ['capture', 'INGEST'],
@@ -115,13 +121,28 @@ function websiteTopology(visualTheme: 'dark' | 'light'): ProjectTopology {
     node('website-stage', stage, `website:${phase}`, {
       workflowKind: 'website',
       phase,
-      visualTheme,
+      visualTheme: source.visualTheme,
+      ...visualStylePayload(source),
     }),
   )
   const edges = nodes.slice(0, -1).map((current, index) =>
     edge(current.logicalKey, nodes[index + 1]!.logicalKey),
   )
   return { entryLogicalKey, nodes, edges }
+}
+
+function visualStylePayload(source: {
+  visualStyle?: ProjectVisualStyle
+  customVisualStyle?: string
+}): Record<string, string> {
+  if (!source.visualStyle || source.visualStyle === 'default') return {}
+  if (source.visualStyle === 'custom' && source.customVisualStyle) {
+    return {
+      visualStyle: source.visualStyle,
+      customVisualStyle: source.customVisualStyle,
+    }
+  }
+  return { visualStyle: source.visualStyle }
 }
 
 function node(

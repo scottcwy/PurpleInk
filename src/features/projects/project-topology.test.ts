@@ -10,6 +10,7 @@ describe('buildProjectTopology', () => {
         kind: 'script',
         script: '一段产品事实文稿',
         visualTheme: 'light',
+        visualStyle: 'flat',
       }),
     )
 
@@ -26,6 +27,7 @@ describe('buildProjectTopology', () => {
               payload: {
                 directorInput: { rawScript: '一段产品事实文稿' },
                 visualTheme: 'light',
+                visualStyle: 'flat',
               },
             },
           },

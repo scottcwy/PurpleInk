@@ -54,6 +54,14 @@ describe('buildStagePrompt', () => {
         directorInput: { rawScript: '原稿', visualTheme: 'dark' },
       })
     ).toThrow()
+    expect(() =>
+      buildStagePrompt('INGEST', {
+        projectTitle: '演示项目',
+        projectScript: '原稿',
+        nodeType: 'script-import',
+        directorInput: { rawScript: '原稿', visualStyle: 'flat' },
+      })
+    ).toThrow()
   })
 
   it('rejects missing typed input for downstream stages', () => {

@@ -15,6 +15,12 @@ import {
   PROJECT_SOURCE_SCHEMA_VERSION,
   type ProjectSourcePayload,
 } from './project-source'
+import {
+  normalizeProjectVisualStyle,
+  PROJECT_VISUAL_STYLE_FORM_FIELDS,
+  projectVisualStyleRequestShape,
+  readProjectVisualStyleFormData,
+} from './project-visual-style'
 
 export const MAX_PROJECT_AUDIO_BYTES = 100 * 1024 * 1024
 export const MAX_PROJECT_AUDIO_DURATION_MS = 30 * 60 * 1000
@@ -28,6 +34,7 @@ const jsonScriptSchema = z
     title: titleSchema,
     script: z.string().trim().min(1).max(200_000),
     visualTheme: visualThemeSchema,
+    ...projectVisualStyleRequestShape,
   })
   .strict()
 const legacyScriptSchema = jsonScriptSchema
@@ -41,6 +48,7 @@ const jsonWebsiteSchema = z
     durationSec: z.number().int().min(5).max(120).default(24),
     quality: z.enum(['draft', 'standard', 'high']).default('standard'),
     visualTheme: visualThemeSchema,
+    ...projectVisualStyleRequestShape,
   })
   .strict()
 const uuidSchema = z.string().uuid()
@@ -109,6 +117,7 @@ async function createFromJson(
         durationSec: input.durationSec,
         quality: input.quality,
         visualTheme: input.visualTheme,
+        ...normalizeProjectVisualStyle(input),
       })
       if (source.kind !== 'website') throw new Error('网站来源归一化失败')
       return createFromCanonicalSource(
@@ -130,6 +139,7 @@ async function createFromJson(
       kind: 'script',
       script: input.script,
       visualTheme: input.visualTheme,
+      ...normalizeProjectVisualStyle(input),
     })
     return createFromCanonicalSource(
       {
@@ -200,6 +210,10 @@ async function createFromAudioForm(
     sampleRate: measured.sampleRateHz,
     sampleCount: measured.sampleCount,
     visualTheme: readAudioVisualTheme(form),
+    ...readProjectVisualStyleFormData(
+      form,
+      () => new ProjectCreateInputError('视觉风格无效'),
+    ),
   })
   const title = readAudioTitle(form) ?? titleFromAudioFile(fileName)
   const storage = dependencies.storage ?? defaultStorage
@@ -235,7 +249,13 @@ async function createFromCanonicalSource(
 }
 
 function assertAudioFormShape(form: FormData): void {
-  const allowed = new Set(['kind', 'file', 'title', 'visualTheme'])
+  const allowed = new Set([
+    'kind',
+    'file',
+    'title',
+    'visualTheme',
+    ...PROJECT_VISUAL_STYLE_FORM_FIELDS,
+  ])
   for (const key of form.keys()) {
     if (!allowed.has(key) || form.getAll(key).length !== 1) {
       throw new ProjectCreateInputError('录音上传表单包含未支持的字段')

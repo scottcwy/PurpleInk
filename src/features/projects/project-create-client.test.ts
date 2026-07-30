@@ -16,6 +16,8 @@ describe('createProjectAndStart', () => {
           title: 'RAG 十分钟入门',
           script: '稿件',
           visualTheme: 'light',
+          visualStyle: 'custom',
+          customVisualStyle: '使用杂志拼贴与粗线条插画',
         },
         fetcher,
       ),
@@ -31,6 +33,8 @@ describe('createProjectAndStart', () => {
           title: 'RAG 十分钟入门',
           script: '稿件',
           visualTheme: 'light',
+          visualStyle: 'custom',
+          customVisualStyle: '使用杂志拼贴与粗线条插画',
         }),
       }),
     )

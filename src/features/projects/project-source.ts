@@ -1,5 +1,9 @@
 import { z } from 'zod'
 import type { ProjectWorkflowKind } from '@/lib/workflow/project-workflow-registry'
+import {
+  addProjectVisualStyleIssues,
+  projectVisualStyleSourceShape,
+} from './project-visual-style'
 
 export const PROJECT_SOURCE_SCHEMA_VERSION = 1 as const
 export const PROJECT_SOURCE_VISUAL_THEMES = ['dark', 'light'] as const
@@ -33,6 +37,7 @@ const scriptSourceSchema = z
     kind: z.literal('script'),
     script: z.string().trim().min(1).max(200_000),
     visualTheme: visualThemeSchema,
+    ...projectVisualStyleSourceShape,
   })
   .strict()
 
@@ -49,6 +54,7 @@ const audioSourceSchema = z
     sampleRate: z.number().int().min(8_000).max(192_000),
     sampleCount: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
     visualTheme: visualThemeSchema,
+    ...projectVisualStyleSourceShape,
   })
   .strict()
 
@@ -60,6 +66,7 @@ const websiteSourceSchema = z
     durationSec: z.number().int().min(5).max(120),
     quality: z.enum(WEBSITE_VIDEO_QUALITIES),
     visualTheme: visualThemeSchema,
+    ...projectVisualStyleSourceShape,
   })
   .strict()
 
@@ -69,6 +76,7 @@ export const projectSourcePayloadSchema = z
     audioSourceSchema,
     websiteSourceSchema,
   ])
+  .superRefine(addProjectVisualStyleIssues)
   .transform((source, context) => {
     if (source.kind !== 'website') return source
     let parsed: URL

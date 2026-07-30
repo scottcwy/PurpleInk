@@ -77,4 +77,40 @@ describe('parseProjectSourcePayload', () => {
     expect(source.kind).toBe('audio')
     expect(Object.keys(source)).not.toContain('audioBytes')
   })
+
+  it('accepts controlled visual styles and requires bounded custom instructions', () => {
+    expect(
+      parseProjectSourcePayload({
+        schemaVersion: 1,
+        kind: 'script',
+        script: '产品事实文稿',
+        visualTheme: 'dark',
+        visualStyle: 'custom',
+        customVisualStyle: '  使用杂志拼贴与粗线条插画  ',
+      }),
+    ).toMatchObject({
+      visualStyle: 'custom',
+      customVisualStyle: '使用杂志拼贴与粗线条插画',
+    })
+
+    expect(() =>
+      parseProjectSourcePayload({
+        schemaVersion: 1,
+        kind: 'script',
+        script: '产品事实文稿',
+        visualTheme: 'dark',
+        visualStyle: 'custom',
+      }),
+    ).toThrow()
+    expect(() =>
+      parseProjectSourcePayload({
+        schemaVersion: 1,
+        kind: 'script',
+        script: '产品事实文稿',
+        visualTheme: 'dark',
+        visualStyle: 'flat',
+        customVisualStyle: '不应跟随非自定义模式',
+      }),
+    ).toThrow()
+  })
 })

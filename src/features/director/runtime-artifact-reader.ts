@@ -34,14 +34,14 @@ export class DirectorArtifactReader {
       return payload.directorInput ?? { rawScript: row.projectScript }
     }
     if (stage === 'DIRECT') {
-      const [ingest, visualTheme] = await Promise.all([
+      const [ingest, visualPreferences] = await Promise.all([
         this.source.loadIngestArtifact(row.nodeProjectId),
-        this.source.loadVisualTheme(row.nodeProjectId),
+        this.source.loadVisualPreferences(row.nodeProjectId),
       ])
       return {
         projectTitle: row.projectTitle,
         scriptUnits: ingest.scriptUnits,
-        visualTheme,
+        ...visualPreferences,
       }
     }
     if (stage === 'SHOT_SPEC') return this.resolveShotSpecInput(row)
@@ -92,17 +92,17 @@ export class DirectorArtifactReader {
 
   private async resolveFabricateInput(row: StageContextRow): Promise<unknown> {
     if (!row.laneKey) throw new Error('FABRICATE 节点缺少 laneKey')
-    const [ingestAudio, direct, shot, visualTheme] = await Promise.all([
+    const [ingestAudio, direct, shot, visualPreferences] = await Promise.all([
       this.source.loadIngestAudioArtifact(row.nodeProjectId),
       this.source.loadDirectArtifact(row.nodeProjectId),
       this.loadShot(row.nodeProjectId, row.laneKey),
-      this.source.loadVisualTheme(row.nodeProjectId),
+      this.source.loadVisualPreferences(row.nodeProjectId),
     ])
     return {
       shot,
       audioAllocation: ingestAudio.audioAllocation,
       styleBible: direct.styleBible,
-      visualTheme,
+      ...visualPreferences,
     }
   }
 

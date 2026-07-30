@@ -18,6 +18,7 @@ import {
 } from './shot-spec'
 import {
   resolveVisualTheme,
+  visualStyleConstraint,
   visualThemeConstraint,
 } from './visual-theme'
 
@@ -334,6 +335,45 @@ describe('director prompt templates', () => {
     expect(resolveVisualTheme(undefined)).toBe('dark')
     expect(resolveVisualTheme('light')).toBe('light')
     expect(resolveVisualTheme('neon')).toBe('dark')
+  })
+
+  it('adds visual style only when the project requests it', () => {
+    const base = {
+      projectTitle: '测试',
+      scriptUnits,
+      audioManifest,
+      audioAllocation,
+      visualTheme: 'dark' as const,
+    }
+    const defaultPrompt = buildDirectPrompt({
+      ...base,
+      visualStyle: 'default',
+    })
+    const legacyDefaultPrompt = buildDirectPrompt(base)
+    const flatPrompt = buildDirectPrompt({
+      ...base,
+      visualStyle: 'flat',
+    })
+    const dimensionalPrompt = buildFabricatePrompt({
+      shot,
+      audioAllocation,
+      styleBible: '风格圣经',
+      visualTheme: 'dark',
+      visualStyle: 'dimensional',
+    })
+    const customPrompt = buildDirectPrompt({
+      ...base,
+      visualStyle: 'custom',
+      customVisualStyle: '使用杂志拼贴与粗线条插画',
+    })
+
+    expect(defaultPrompt).not.toContain('视觉风格偏好')
+    expect(defaultPrompt).toBe(legacyDefaultPrompt)
+    expect(flatPrompt).toContain('不要有立体效果')
+    expect(dimensionalPrompt).toContain('尽量多结合立体效果')
+    expect(customPrompt).toContain('使用杂志拼贴与粗线条插画')
+    expect(customPrompt).toContain('不得改写产品事实')
+    expect(visualStyleConstraint('default')).toBe('')
   })
 
   it('places per-shot dynamic context after project-shared context for prompt caching', () => {

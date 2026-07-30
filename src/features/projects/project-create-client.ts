@@ -1,20 +1,26 @@
 import { throwIfUnauthenticated } from '@/features/auth/unauthenticated-error'
+import type { ProjectVisualStyle } from './project-visual-style'
 
 export type ProjectVisualTheme = 'dark' | 'light'
 export type WebsiteVideoQuality = 'draft' | 'standard' | 'high'
 
-export type CreateProjectInput =
+type ProjectVisualPreferencesInput = {
+  visualTheme: ProjectVisualTheme
+  visualStyle?: ProjectVisualStyle
+  customVisualStyle?: string
+}
+
+export type CreateProjectInput = ProjectVisualPreferencesInput &
+  (
   | {
       kind: 'script'
       title: string
       script: string
-      visualTheme: ProjectVisualTheme
     }
   | {
       kind: 'audio'
       title?: string
       file: File
-      visualTheme: ProjectVisualTheme
     }
   | {
       kind: 'website'
@@ -22,8 +28,8 @@ export type CreateProjectInput =
       url: string
       durationSec: number
       quality: WebsiteVideoQuality
-      visualTheme: ProjectVisualTheme
     }
+  )
 
 export class ProjectStartQuotaError extends Error {
   readonly code = 'QUOTA_EXHAUSTED'
@@ -82,6 +88,10 @@ function projectRequest(input: CreateProjectInput): RequestInit {
   form.set('kind', input.kind)
   form.set('file', input.file)
   form.set('visualTheme', input.visualTheme)
+  form.set('visualStyle', input.visualStyle ?? 'default')
+  if (input.customVisualStyle) {
+    form.set('customVisualStyle', input.customVisualStyle)
+  }
   if (input.title?.trim()) form.set('title', input.title.trim())
   return { method: 'POST', body: form }
 }

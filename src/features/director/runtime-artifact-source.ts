@@ -24,8 +24,8 @@ import {
   type DirectorShotPlan,
 } from './schemas/director-shot-plan'
 import {
-  resolveVisualTheme,
-  type VisualTheme,
+  resolveVisualPreferences,
+  type VisualPreferences,
 } from './prompts/visual-theme'
 
 const directArtifactSchema = z
@@ -100,8 +100,8 @@ export class DirectorArtifactSource {
     )
   }
 
-  /** 从文稿/录音来源节点读取色调；缺失或非法回落 dark。 */
-  async loadVisualTheme(projectId: string): Promise<VisualTheme> {
+  /** 从来源节点读取提示词视觉偏好；旧项目或非法字段保持默认原样。 */
+  async loadVisualPreferences(projectId: string): Promise<VisualPreferences> {
     const [row] = await this.db
       .select({ data: canvasNodes.data })
       .from(canvasNodes)
@@ -113,15 +113,15 @@ export class DirectorArtifactSource {
         )
       )
       .limit(1)
-    if (!row) return resolveVisualTheme(undefined)
+    if (!row) return resolveVisualPreferences({})
     const payload = z
       .object({
         schemaVersion: z.number(),
         payload: z.record(z.string(), z.unknown()),
       })
       .safeParse(row.data)
-    if (!payload.success) return resolveVisualTheme(undefined)
-    return resolveVisualTheme(payload.data.payload.visualTheme)
+    if (!payload.success) return resolveVisualPreferences({})
+    return resolveVisualPreferences(payload.data.payload)
   }
 
   async loadShotSpecArtifact(

@@ -6,6 +6,9 @@ import {
 } from '../schemas/ingest'
 import {
   DEFAULT_VISUAL_THEME,
+  DEFAULT_VISUAL_STYLE,
+  visualStyleConstraint,
+  visualStyleSchema,
   visualThemeConstraint,
   visualThemeSchema,
 } from './visual-theme'
@@ -17,6 +20,8 @@ export const directPromptInputSchema = z
     audioManifest: audioManifestSchema.optional(),
     audioAllocation: audioAllocationSchema.optional(),
     visualTheme: visualThemeSchema.default(DEFAULT_VISUAL_THEME),
+    visualStyle: visualStyleSchema.default(DEFAULT_VISUAL_STYLE),
+    customVisualStyle: z.string().trim().min(1).max(500).optional(),
   })
   .strict()
 
@@ -27,6 +32,10 @@ export function buildDirectPrompt(
   input: z.input<typeof directPromptInputSchema>
 ): string {
   const parsed = directPromptInputSchema.parse(input)
+  const styleConstraint = visualStyleConstraint(
+    parsed.visualStyle,
+    parsed.customVisualStyle,
+  )
   return `你正在执行 CodeVideoCanvas 的 DIRECT 阶段，为「${parsed.projectTitle}」建立导演总纲。
 
 必须产出 master plan 与完整 style bible：
@@ -39,7 +48,7 @@ export function buildDirectPrompt(
 - 同一帧内同层级、同尺寸、同样式的信息组不超过 3 个；等权卡片阵列不得充当主视觉，
   画面不足时用尺度与层级打破等权，不靠堆叠卡片填充。
 - ${visualThemeConstraint(parsed.visualTheme)}
-  style bible 的色彩职责必须服从上述色调硬约束。
+${styleConstraint ? `- ${styleConstraint}\n` : ''}  style bible 的色彩职责必须服从上述色调硬约束。
 
 正向视觉法则 1：一镜只承担一个核心判断，同时保持低语义负载与高感知完成度。
 正向视觉法则 2：少而清楚不能变成空、薄、小、散；主视觉即使元素很少，也必须靠足够尺度、明暗层次、清晰轮廓或块面、材质细节和承托结构（基座、地平线、网格或投影锚点）形成完整视觉重量。

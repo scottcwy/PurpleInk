@@ -3,6 +3,9 @@ import { audioAllocationSchema } from '../schemas/ingest'
 import { directorShotSchema } from '../schemas/director-shot-plan'
 import {
   DEFAULT_VISUAL_THEME,
+  DEFAULT_VISUAL_STYLE,
+  visualStyleConstraint,
+  visualStyleSchema,
   visualThemeConstraint,
   visualThemeSchema,
 } from './visual-theme'
@@ -13,6 +16,8 @@ export const fabricatePromptInputSchema = z
     audioAllocation: audioAllocationSchema,
     styleBible: z.string().min(1),
     visualTheme: visualThemeSchema.default(DEFAULT_VISUAL_THEME),
+    visualStyle: visualStyleSchema.default(DEFAULT_VISUAL_STYLE),
+    customVisualStyle: z.string().trim().min(1).max(500).optional(),
   })
   .strict()
 
@@ -31,6 +36,10 @@ export function buildFabricatePrompt(
   input: z.input<typeof fabricatePromptInputSchema>
 ): string {
   const parsed = fabricatePromptInputSchema.parse(input)
+  const styleConstraint = visualStyleConstraint(
+    parsed.visualStyle,
+    parsed.customVisualStyle,
+  )
   return `你正在执行 CodeVideoCanvas 的 FABRICATE 阶段，只实现当前分镜。
 
 优先保证视觉效果：用最能把本镜头叙述内容可视化、最有价值的前端设计来呈现；
@@ -108,7 +117,7 @@ transform-origin 精准控制、贝塞尔缓动、错峰入场、多相位编排
 - 完整 HTML 必须控制在 64000 个字符以内；避免无意义重复节点与超长 Base64 素材，
   禁止为凑长度堆无意义代码。必须在预算内完整闭合文档并调用工具，
   不能因追求细节输出半截 HTML。
-- ${visualThemeConstraint(parsed.visualTheme)}
+- ${visualThemeConstraint(parsed.visualTheme)}${styleConstraint ? `\n- ${styleConstraint}` : ''}
 
 style bible：
 ${parsed.styleBible}
