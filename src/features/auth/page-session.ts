@@ -28,6 +28,18 @@ export async function redirectIfAuthenticated(nextPath?: string | null): Promise
   }
 }
 
+/**
+ * `/admin/*` 页面入口：先走 requireSession（未登录 302 /login），
+ * 非 admin 角色静默弹回产品首页——不给 403 页，不暴露 admin 表面存在
+ * （与 withAdminSession 的 404 口径同一思路）。layout 与各 admin server
+ * page 都要包：RSC children 独立渲染，layout 的守卫不保护子页数据。
+ */
+export async function requireAdminSession(currentPath: string): Promise<SessionOwner> {
+  const session = await requireSession(currentPath)
+  if (session.role !== 'admin') redirect(DEFAULT_POST_LOGIN_PATH)
+  return session
+}
+
 export async function optionalSession(): Promise<SessionOwner | null> {
   return resolveSession(await readSessionToken())
 }
