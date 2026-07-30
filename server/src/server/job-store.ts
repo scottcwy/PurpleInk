@@ -1,6 +1,7 @@
 // 内存任务表：本地开发够用（不引队列/DB）。
 // 每个 render 请求起一个后台 Job，前端/curl 轮询 GET /jobs/:id 拿进度与产物。
 import { randomUUID } from "node:crypto"
+import type { WebsiteProceduralSfxResult } from "../compose/procedural-sfx"
 
 export type JobStatus = "queued" | "running" | "done" | "failed" | "cancelled"
 /** 阶段：与 run-pipeline 的 onPhase 对齐 */
@@ -43,6 +44,7 @@ export interface Job {
   durationSec?: number
   goldenVerified?: boolean
   goldenDetails?: string[]
+  soundEffects?: WebsiteProceduralSfxResult
   error?: string
   /** 最近若干条阶段日志（含时间戳），便于前端展示 */
   logs: { at: number; msg: string }[]
@@ -162,6 +164,7 @@ export function toIntegratedJobView(job: Job) {
     checkPassed: job.checkPassed ?? null,
     goldenVerified: job.goldenVerified ?? null,
     goldenCheckCount: job.goldenDetails?.length ?? 0,
+    soundEffects: job.soundEffects ?? null,
     hasVideo: Boolean(job.videoPath),
     videoUrl: job.videoPath ? `/internal/jobs/${encodeURIComponent(job.id)}/video` : null,
     failure: job.status === "failed" ? { code: "ENGINE_JOB_FAILED" } : null,

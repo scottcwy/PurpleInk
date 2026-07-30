@@ -1,5 +1,6 @@
 import 'server-only'
 import { z } from 'zod'
+import type { ProceduralSfxMode } from '@purpleink/procedural-sfx'
 import {
   WebsiteEngineError,
   type StartWebsiteEngineInput,
@@ -24,6 +25,7 @@ export interface WebsiteEngineExecutionInput {
   name: string
   durationSec: number
   quality: 'draft' | 'standard' | 'high'
+  soundEffects: ProceduralSfxMode
 }
 
 export interface WebsiteEngineExecutionResult {
@@ -71,6 +73,7 @@ export async function executeWebsiteEngine(
     name: input.name,
     durationSec: input.durationSec,
     quality: input.quality,
+    soundEffects: input.soundEffects,
   }
   const timeoutMs = Math.min(
     Math.max(1, dependencies.timeoutMs),
@@ -227,6 +230,7 @@ function assertCompletedJob(job: WebsiteEngineJob): void {
     || job.durationSec === null
     || job.checkPassed === null
     || job.goldenVerified === null
+    || job.soundEffects === null
   ) {
     throw new WebsiteExecutionError('WEBSITE_ENGINE_RESPONSE_INVALID')
   }

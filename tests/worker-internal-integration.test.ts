@@ -9,7 +9,10 @@ import {
   toIntegratedJobView,
   updateJob,
 } from "../server/src/server/job-store";
-import { normalizeInternalRenderRequest } from "../server/src/server/internal-render-request";
+import {
+  fingerprintInternalRenderRequest,
+  normalizeInternalRenderRequest,
+} from "../server/src/server/internal-render-request";
 import {
   PublicUrlPolicyError,
   validatePublicUrl,
@@ -94,6 +97,7 @@ describe("worker internal integration boundary", () => {
           url: "https://Example.com/demo?q=1#section",
           duration: 24,
           quality: "standard",
+          soundEffects: "procedural",
         },
         publicResolver,
       ),
@@ -102,6 +106,7 @@ describe("worker internal integration boundary", () => {
       url: "https://example.com/demo?q=1",
       duration: 24,
       quality: "standard",
+      soundEffects: "procedural",
       capture: { credentialMode: "none", publicOnly: true },
     });
 
@@ -121,6 +126,29 @@ describe("worker internal integration boundary", () => {
         publicResolver,
       ),
     ).rejects.toMatchObject({ code: "INTERNAL_FIELD_FORBIDDEN" });
+  });
+
+  it("includes the code sound-effect mode in the integrated render fingerprint", async () => {
+    const off = await normalizeInternalRenderRequest(
+      {
+        requestId: "project:018f:off",
+        url: "https://example.com",
+        soundEffects: "off",
+      },
+      publicResolver,
+    );
+    const procedural = await normalizeInternalRenderRequest(
+      {
+        requestId: "project:018f:procedural",
+        url: "https://example.com",
+        soundEffects: "procedural",
+      },
+      publicResolver,
+    );
+
+    expect(fingerprintInternalRenderRequest(off)).not.toBe(
+      fingerprintInternalRenderRequest(procedural),
+    );
   });
 
   it("reuses the same integrated job for an identical request and rejects conflicts", () => {

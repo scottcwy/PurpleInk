@@ -133,7 +133,7 @@ export function proceduralSfxManifestStorageKey(input: {
 }
 
 export async function storeProceduralSfxManifest(
-  storage: StorageAdapter,
+  storage: Pick<StorageAdapter, 'put'>,
   input: {
     projectId: string
     attemptId: string
@@ -148,6 +148,33 @@ export async function storeProceduralSfxManifest(
     storageKey,
     contentHash: createHash('sha256').update(bytes).digest('hex'),
     sizeBytes: bytes.byteLength,
+  }
+}
+
+export async function readBoundProceduralSfxManifest(
+  storage: Pick<StorageAdapter, 'get'>,
+  artifact: {
+    schemaVersion: string
+    storageKey: string
+    contentHash: string
+    sizeBytes: number
+  },
+  expected: { attemptId: string; finalContentHash: string }
+): Promise<ProceduralSfxManifest | null> {
+  if (artifact.schemaVersion !== PROCEDURAL_SFX_MANIFEST_SCHEMA_VERSION) {
+    return null
+  }
+  try {
+    const bytes = await storage.get(artifact.storageKey)
+    if (
+      bytes.byteLength !== artifact.sizeBytes ||
+      createHash('sha256').update(bytes).digest('hex') !== artifact.contentHash
+    ) {
+      return null
+    }
+    return parseProceduralSfxManifestForFinal(bytes, expected)
+  } catch {
+    return null
   }
 }
 

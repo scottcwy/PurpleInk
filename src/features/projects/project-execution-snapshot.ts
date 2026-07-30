@@ -1,5 +1,11 @@
 import 'server-only'
 import { and, desc, eq } from 'drizzle-orm'
+import {
+  readBoundProceduralSfxManifest,
+} from '@/features/render/procedural-sfx-manifest'
+import {
+  resolvePersistedExportSettings,
+} from '@/features/canvas/export-settings'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb, type Db } from '@/lib/db/client'
 import {
@@ -9,6 +15,7 @@ import {
   projects,
   taskAttempts,
 } from '@/lib/db/schema'
+import { storage, type StorageAdapter } from '@/lib/storage'
 import {
   ProjectExecutionSnapshotError,
   type ProjectExecutionFacts,
@@ -34,6 +41,7 @@ export async function getProjectExecutionSnapshot(
     database?: Db
     workspaceId?: string
     now?: Date
+    storage?: Pick<StorageAdapter, 'get'>
   } = {},
 ): Promise<ProjectExecutionSnapshot> {
   const database = dependencies.database ?? (await getDb())
@@ -43,6 +51,7 @@ export async function getProjectExecutionSnapshot(
       id: projects.id,
       workflowKind: projects.workflowKind,
       autopilot: projects.autopilot,
+      exportSettings: projects.exportSettings,
     })
     .from(projects)
     .where(and(
@@ -93,9 +102,16 @@ export async function getProjectExecutionSnapshot(
     workspaceId,
     projectId,
     attempt?.id,
+    dependencies.storage ?? storage,
   )
   const facts: ProjectExecutionFacts = {
-    project,
+    project: {
+      id: project.id,
+      workflowKind: project.workflowKind,
+      autopilot: project.autopilot,
+      soundEffects:
+        resolvePersistedExportSettings(project.exportSettings).soundEffects,
+    },
     attempt: attempt
       ? {
           ...attempt,
@@ -119,6 +135,7 @@ async function findAttemptArtifact(
   workspaceId: string,
   projectId: string,
   attemptId?: string,
+  targetStorage: Pick<StorageAdapter, 'get'> = storage,
 ): Promise<ProjectExecutionFacts['artifact']> {
   if (!attemptId) return null
   const [artifact] = await database
@@ -139,5 +156,85 @@ async function findAttemptArtifact(
     ))
     .orderBy(desc(artifacts.version))
     .limit(1)
-  return artifact ?? null
+  if (!artifact) return null
+  const [manifestArtifact] = await database
+    .select({
+      id: artifacts.id,
+      attemptId: artifacts.attemptId,
+      lifecycle: artifacts.lifecycle,
+      schemaVersion: artifacts.schemaVersion,
+      storageKey: artifacts.storageKey,
+      contentHash: artifacts.contentHash,
+      sizeBytes: artifacts.sizeBytes,
+    })
+    .from(artifacts)
+    .where(and(
+      eq(artifacts.workspaceId, workspaceId),
+      eq(artifacts.projectId, projectId),
+      eq(artifacts.attemptId, attemptId),
+      eq(artifacts.kind, 'procedural-sfx-manifest'),
+    ))
+    .orderBy(desc(artifacts.version))
+    .limit(1)
+  const soundEffects = manifestArtifact
+    ? await readBoundSoundEffects(
+        targetStorage,
+        manifestArtifact,
+        {
+          attemptId,
+          finalContentHash: artifact.contentHash,
+        },
+      )
+    : null
+  return { ...artifact, soundEffects }
+}
+
+async function readBoundSoundEffects(
+  targetStorage: Pick<StorageAdapter, 'get'>,
+  artifact: {
+    id: string
+    lifecycle: string
+    schemaVersion: string
+    storageKey: string
+    contentHash: string
+    sizeBytes: number
+  },
+  expected: { attemptId: string; finalContentHash: string },
+): Promise<NonNullable<ProjectExecutionFacts['artifact']>['soundEffects']> {
+  if (
+    artifact.schemaVersion !== 'cvc.procedural-sfx-manifest/v1'
+    || !isManifestLifecycle(artifact.lifecycle)
+  ) {
+    return null
+  }
+  try {
+    const manifest = await readBoundProceduralSfxManifest(
+      targetStorage,
+      artifact,
+      expected,
+    )
+    if (!manifest) return null
+    return {
+      artifactId: artifact.id,
+      lifecycle: artifact.lifecycle,
+      mode: manifest.mode,
+      status: manifest.status,
+      generatorVersion: manifest.generatorVersion,
+      cueCount: manifest.cueCount,
+      timingHash: manifest.timingHash,
+      cuePlanHash: manifest.cuePlanHash,
+      waveformHashes: manifest.waveformHashes,
+      ...(manifest.failureCode ? { failureCode: manifest.failureCode } : {}),
+    }
+  } catch {
+    return null
+  }
+}
+
+function isManifestLifecycle(
+  value: string,
+): value is NonNullable<
+  NonNullable<ProjectExecutionFacts['artifact']>['soundEffects']
+>['lifecycle'] {
+  return ['draft', 'approved', 'released', 'rejected'].includes(value)
 }

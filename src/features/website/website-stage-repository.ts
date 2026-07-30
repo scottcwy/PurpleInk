@@ -149,10 +149,13 @@ export class PostgresWebsiteStageProjector implements WebsiteStageProjector {
         },
       ]),
     )
-    await this.commit(projectId, mutations, {
-      artifactId: output.artifactId,
-      lifecycle: 'rejected',
-    })
+    await this.commit(projectId, mutations, [
+      { artifactId: output.artifactId, lifecycle: 'rejected' },
+      {
+        artifactId: output.soundEffectsManifestArtifactId,
+        lifecycle: 'rejected',
+      },
+    ])
   }
 
   async complete(
@@ -188,10 +191,13 @@ export class PostgresWebsiteStageProjector implements WebsiteStageProjector {
       },
       ]),
     )
-    await this.commit(projectId, mutations, {
-      artifactId: output.artifactId,
-      lifecycle: 'approved',
-    })
+    await this.commit(projectId, mutations, [
+      { artifactId: output.artifactId, lifecycle: 'approved' },
+      {
+        artifactId: output.soundEffectsManifestArtifactId,
+        lifecycle: 'approved',
+      },
+    ])
   }
 
   async fail(
@@ -227,10 +233,10 @@ export class PostgresWebsiteStageProjector implements WebsiteStageProjector {
   private async commit(
     projectId: string,
     mutations: ReadonlyMap<string, WebsiteStageMutation>,
-    artifactTransition?: {
+    artifactTransitions?: ReadonlyArray<{
       artifactId: string
       lifecycle: 'approved' | 'rejected'
-    },
+    }>,
   ): Promise<void> {
     const events = await this.database.transaction(async (transaction) => {
       const rows = await transaction
@@ -274,7 +280,7 @@ export class PostgresWebsiteStageProjector implements WebsiteStageProjector {
           statusEvents.push({ nodeId: row.id, status: resolved.status })
         }
       }
-      if (artifactTransition) {
+      for (const artifactTransition of artifactTransitions ?? []) {
         const [updated] = await transaction
           .update(artifacts)
           .set({
@@ -289,7 +295,7 @@ export class PostgresWebsiteStageProjector implements WebsiteStageProjector {
           ))
           .returning({ id: artifacts.id })
         if (!updated) {
-          throw new Error('网站视频 Artifact 终态不一致')
+          throw new Error('网站视频及音效清单 Artifact 终态不一致')
         }
       }
       return statusEvents

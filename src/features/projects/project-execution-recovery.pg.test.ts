@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { eq } from 'drizzle-orm'
 import {
@@ -14,6 +14,7 @@ import {
   type PgTestDatabase,
 } from '@/lib/db/test/pg-test-database'
 import { WEBSITE_WORKFLOW_PHASES } from '@/features/website/website-stage-contract'
+import { buildProceduralSfxManifestBytes } from '@/features/render/procedural-sfx-manifest'
 import { recoverWebsiteDelivery } from './project-execution-recovery'
 
 vi.mock('server-only', () => ({}))
@@ -21,7 +22,10 @@ vi.mock('server-only', () => ({}))
 const WORKSPACE_ID = '00000000-0000-4000-8000-000000000001'
 const PROJECT_ID = '00000000-0000-4000-8000-000000000101'
 const ARTIFACT_ID = '00000000-0000-4000-8000-000000000301'
+const MANIFEST_ARTIFACT_ID = '00000000-0000-4000-8000-000000000302'
 let database: PgTestDatabase
+let manifestBytes: ReturnType<typeof buildProceduralSfxManifestBytes> =
+  Buffer.alloc(0)
 
 beforeAll(async () => {
   database = await createPgTestDatabase()
@@ -56,9 +60,11 @@ describe('recoverWebsiteDelivery', () => {
     await expect(recoverWebsiteDelivery(PROJECT_ID, {
       database: database.db,
       workspaceId: WORKSPACE_ID,
+      storage: { get: async () => manifestBytes },
     })).resolves.toBe(true)
 
-    expect(await lifecycle()).toBe('approved')
+    expect(await lifecycle(ARTIFACT_ID)).toBe('approved')
+    expect(await lifecycle(MANIFEST_ARTIFACT_ID)).toBe('approved')
     expect(await attemptCount()).toBe(1)
     expect(await latestAttemptId()).toBe(attemptId)
   })
@@ -69,10 +75,38 @@ describe('recoverWebsiteDelivery', () => {
     await expect(recoverWebsiteDelivery(PROJECT_ID, {
       database: database.db,
       workspaceId: WORKSPACE_ID,
+      storage: { get: async () => manifestBytes },
     })).resolves.toBe(false)
 
-    expect(await lifecycle()).toBe('draft')
+    expect(await lifecycle(ARTIFACT_ID)).toBe('draft')
+    expect(await lifecycle(MANIFEST_ARTIFACT_ID)).toBe('draft')
     expect(await attemptCount()).toBe(1)
+  })
+
+  it('does not approve an off delivery after settings switch to procedural', async () => {
+    await seedTerminalDelivery(true)
+    await database.db
+      .update(projects)
+      .set({
+        exportSettings: {
+          schemaVersion: 1,
+          settings: {
+            resolutionPreset: '1920x1080',
+            subtitles: 'burn-in',
+            soundEffects: 'procedural',
+          },
+        },
+      })
+      .where(eq(projects.id, PROJECT_ID))
+
+    await expect(recoverWebsiteDelivery(PROJECT_ID, {
+      database: database.db,
+      workspaceId: WORKSPACE_ID,
+      storage: { get: async () => manifestBytes },
+    })).resolves.toBe(false)
+
+    expect(await lifecycle(ARTIFACT_ID)).toBe('draft')
+    expect(await lifecycle(MANIFEST_ARTIFACT_ID)).toBe('draft')
   })
 })
 
@@ -151,14 +185,42 @@ async function seedTerminalDelivery(passed: boolean): Promise<string> {
     contentHash: 'a'.repeat(64),
     attemptId,
   })
+  manifestBytes = buildProceduralSfxManifestBytes({
+    attemptId,
+    finalContentHash: 'a'.repeat(64),
+    soundEffects: {
+      mode: 'off',
+      status: 'omitted-off',
+      generatorVersion: 'procedural-sfx/1.0.0',
+      cueCount: 0,
+      timingHash: null,
+      cuePlanHash: null,
+      waveformHashes: [],
+    },
+  })
+  await database.db.insert(artifacts).values({
+    workspaceId: WORKSPACE_ID,
+    id: MANIFEST_ARTIFACT_ID,
+    projectId: PROJECT_ID,
+    aggregateType: 'project',
+    aggregateId: PROJECT_ID,
+    kind: 'procedural-sfx-manifest',
+    version: 1,
+    lifecycle: 'draft',
+    schemaVersion: 'cvc.procedural-sfx-manifest/v1',
+    storageKey: `website/${PROJECT_ID}/${attemptId}/sfx.json`,
+    sizeBytes: manifestBytes.byteLength,
+    contentHash: createHash('sha256').update(manifestBytes).digest('hex'),
+    attemptId,
+  })
   return attemptId
 }
 
-async function lifecycle(): Promise<string | undefined> {
+async function lifecycle(artifactId: string): Promise<string | undefined> {
   const [row] = await database.db
     .select({ lifecycle: artifacts.lifecycle })
     .from(artifacts)
-    .where(eq(artifacts.id, ARTIFACT_ID))
+    .where(eq(artifacts.id, artifactId))
   return row?.lifecycle
 }
 

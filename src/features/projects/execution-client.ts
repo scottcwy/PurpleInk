@@ -46,6 +46,24 @@ const artifactProjectionSchema = z.object({
   contentHash: z.string().regex(/^[0-9a-f]{64}$/u),
   sizeBytes: z.number().int().nonnegative(),
 }).strict()
+const soundEffectsProjectionSchema = z.object({
+  artifactId: z.string().min(1).max(128),
+  lifecycle: z.enum(['draft', 'approved', 'released', 'rejected']),
+  mode: z.enum(['off', 'procedural']),
+  status: z.enum([
+    'applied',
+    'omitted-off',
+    'omitted-no-cues',
+    'omitted-unsupported',
+    'omitted-error',
+  ]),
+  generatorVersion: z.literal('procedural-sfx/1.0.0'),
+  cueCount: z.number().int().nonnegative(),
+  timingHash: z.string().regex(/^[0-9a-f]{64}$/u).nullable(),
+  cuePlanHash: z.string().regex(/^[0-9a-f]{64}$/u).nullable(),
+  waveformHashes: z.array(z.string().regex(/^[0-9a-f]{64}$/u)),
+  failureCode: z.literal('PROCEDURAL_SFX_MIX_FAILED').optional(),
+}).strict()
 const stageSchema = z.object({
   nodeId: z.string().min(1).max(128),
   phase: phaseSchema,
@@ -103,6 +121,7 @@ const snapshotSchema = z.object({
     contentHash: z.string().regex(/^[0-9a-f]{64}$/u),
     sizeBytes: z.number().int().nonnegative(),
     version: z.number().int().positive(),
+    soundEffects: soundEffectsProjectionSchema.optional(),
     verification: verificationSchema.optional(),
     downloadUrl: z.string().startsWith('/api/artifacts/').optional(),
   }).strict().nullable(),

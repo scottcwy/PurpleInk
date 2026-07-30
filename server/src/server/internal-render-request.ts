@@ -37,6 +37,7 @@ const ALLOWED_FIELDS = new Set([
   "refresh",
   "fps",
   "generation",
+  "soundEffects",
 ])
 
 export async function normalizeInternalRenderRequest(
@@ -62,6 +63,7 @@ export async function normalizeInternalRenderRequest(
   const quality = optionalEnum(input.quality, ["draft", "standard", "high"] as const)
   const generation = optionalEnum(input.generation, ["llm", "template", "auto"] as const)
   const refresh = optionalBoolean(input.refresh)
+  const soundEffects = optionalEnum(input.soundEffects, ["off", "procedural"] as const)
 
   return {
     requestId,
@@ -72,6 +74,7 @@ export async function normalizeInternalRenderRequest(
     ...(quality !== undefined ? { quality } : {}),
     ...(generation !== undefined ? { generation } : {}),
     ...(refresh !== undefined ? { refresh } : {}),
+    soundEffects: soundEffects ?? "off",
     capture: { credentialMode: "none", publicOnly: true },
   }
 }
@@ -87,6 +90,7 @@ export function fingerprintInternalRenderRequest(
     quality: request.quality ?? null,
     generation: request.generation ?? null,
     refresh: request.refresh ?? null,
+    soundEffects: request.soundEffects ?? "off",
     credentialMode: "none",
     publicOnly: true,
   }

@@ -1,7 +1,11 @@
 import 'server-only'
+import { createHash } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { commitArtifactRecord } from '@/features/artifacts'
+import { commitArtifactRecords } from '@/features/artifacts'
+import {
+  resolvePersistedExportSettings,
+} from '@/features/canvas/export-settings'
 import {
   PostgresProjectSourceRepository,
   type WebsiteProjectSourcePayload,
@@ -40,6 +44,7 @@ export interface WebsiteProjectExecutionInput {
   title: string
   source: WebsiteProjectSourcePayload
   sourceFingerprint: string
+  soundEffects: ReturnType<typeof resolvePersistedExportSettings>['soundEffects']
 }
 
 export interface RunWebsiteVideoInput {
@@ -124,7 +129,7 @@ async function runBilledWebsiteProject(
       workspaceId: input.workspaceId,
       attemptId: input.attemptId,
       invocationNo: input.invocationNo,
-      requestIdentity: project.sourceFingerprint,
+      requestIdentity: websiteRequestIdentity(project),
       maximumDurationSeconds: project.source.durationSec,
       invoke: () => produceWebsiteOutput(input, project, dependencies, cursor),
       completion: (result) => ({
@@ -144,6 +149,15 @@ async function runBilledWebsiteProject(
   }
 }
 
+function websiteRequestIdentity(project: WebsiteProjectExecutionInput): string {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      sourceFingerprint: project.sourceFingerprint,
+      soundEffects: project.soundEffects,
+    }))
+    .digest('hex')
+}
+
 async function produceWebsiteOutput(
   input: RunWebsiteVideoInput,
   project: WebsiteProjectExecutionInput,
@@ -157,6 +171,7 @@ async function produceWebsiteOutput(
     name: project.title,
     durationSec: project.source.durationSec,
     quality: project.source.quality,
+    soundEffects: project.soundEffects,
   }, {
     engine: dependencies.engine,
     onProgress: async (progress: WebsiteStageProgress) => {
@@ -208,6 +223,7 @@ async function createDefaultDependencies(
         title: project.title,
         source: source.sourcePayload,
         sourceFingerprint: source.sourceFingerprint,
+        soundEffects: project.soundEffects,
       }
     },
     engine: new WebsiteEngineClient(),
@@ -215,7 +231,7 @@ async function createDefaultDependencies(
     bill: runManagedWebsiteBilling,
     persistOutput: (output) => persistWebsiteVideoOutput(output, {
       storage,
-      commitArtifact: (artifact) => commitArtifactRecord(database, artifact),
+      commitArtifacts: (artifacts) => commitArtifactRecords(database, artifacts),
     }),
     nowMs: Date.now,
     sleep: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
@@ -228,9 +244,16 @@ async function loadWebsiteProject(
   database: Awaited<ReturnType<typeof getDb>>,
   workspaceId: string,
   projectId: string,
-): Promise<{ title: string }> {
+): Promise<{
+  title: string
+  soundEffects: ReturnType<typeof resolvePersistedExportSettings>['soundEffects']
+}> {
   const [project] = await database
-    .select({ title: projects.title, kind: projects.workflowKind })
+    .select({
+      title: projects.title,
+      kind: projects.workflowKind,
+      exportSettings: projects.exportSettings,
+    })
     .from(projects)
     .where(and(
       eq(projects.workspaceId, workspaceId),
@@ -240,7 +263,11 @@ async function loadWebsiteProject(
   if (!project || project.kind !== 'website') {
     throw new WebsiteExecutionError('WEBSITE_PROJECT_INVALID')
   }
-  return { title: project.title }
+  return {
+    title: project.title,
+    soundEffects:
+      resolvePersistedExportSettings(project.exportSettings).soundEffects,
+  }
 }
 
 function parseRunInput(input: RunWebsiteVideoInput): RunWebsiteVideoInput {

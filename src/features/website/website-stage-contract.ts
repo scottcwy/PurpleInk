@@ -41,6 +41,7 @@ export interface WebsiteStageProgress {
 
 export interface WebsiteOutputProjection {
   artifactId: string
+  soundEffectsManifestArtifactId: string
   contentHash: string
   sizeBytes: number
   durationSec: number | null

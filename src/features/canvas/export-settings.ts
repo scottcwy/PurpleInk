@@ -98,6 +98,14 @@ export function resolveExportSettings(raw: unknown): ExportSettings {
   return parsed.success ? parsed.data : DEFAULT_EXPORT_SETTINGS
 }
 
+/** 从 projects.export_settings 的版本包装中读取设置；无效存量值安全回退默认。 */
+export function resolvePersistedExportSettings(raw: unknown): ExportSettings {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return DEFAULT_EXPORT_SETTINGS
+  }
+  return resolveExportSettings((raw as Record<string, unknown>).settings)
+}
+
 /** 把补丁并入已有设置；未出现的字段保持原值。 */
 export function mergeExportSettings(
   current: ExportSettings,

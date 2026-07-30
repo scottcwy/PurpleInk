@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import type { WebsiteEngineJob } from './engine-client'
+import { parseProceduralSfxManifestForFinal } from '@/features/render/procedural-sfx-manifest'
 import {
   assertMp4Bytes,
   persistWebsiteVideoOutput,
@@ -15,14 +16,18 @@ const ATTEMPT_ID = '00000000-0000-4000-8000-000000000201'
 describe('website video output persistence', () => {
   it('stores real bytes and commits their actual hash and size', async () => {
     const bytes = mp4Fixture()
+    const stored = new Map<string, Buffer>()
     const put = vi.fn(async (
       key: string,
-      _data: Buffer | Uint8Array | string,
-    ) => key)
-    const commitArtifact = vi.fn(async () => ({
-      artifactId: 'artifact-1',
-      version: 1,
-    }))
+      data: Buffer | Uint8Array | string,
+    ) => {
+      stored.set(key, Buffer.from(data))
+      return key
+    })
+    const commitArtifacts = vi.fn(async () => [
+      { artifactId: 'artifact-1', version: 1 },
+      { artifactId: 'manifest-1', version: 1 },
+    ])
 
     const output = await persistWebsiteVideoOutput({
       workspaceId: WORKSPACE_ID,
@@ -32,12 +37,13 @@ describe('website video output persistence', () => {
       videoBytes: bytes,
     }, {
       storage: { put, delete: vi.fn(async () => undefined) },
-      commitArtifact,
+      commitArtifacts,
     })
 
     const expectedHash = createHash('sha256').update(bytes).digest('hex')
     expect(output).toMatchObject({
       artifactId: 'artifact-1',
+      soundEffectsManifestArtifactId: 'manifest-1',
       contentHash: expectedHash,
       sizeBytes: bytes.byteLength,
       durationSec: 27.25,
@@ -50,20 +56,38 @@ describe('website video output persistence', () => {
         outcome: 'passed',
       },
     })
-    expect(commitArtifact).toHaveBeenCalledWith(expect.objectContaining({
-      aggregateType: 'project',
-      aggregateId: PROJECT_ID,
-      kind: 'website-video-mp4',
-      contentHash: expectedHash,
-      sizeBytes: bytes.byteLength,
-      attemptId: ATTEMPT_ID,
-    }))
+    expect(commitArtifacts).toHaveBeenCalledWith([
+      expect.objectContaining({
+        aggregateType: 'project',
+        aggregateId: PROJECT_ID,
+        kind: 'website-video-mp4',
+        contentHash: expectedHash,
+        sizeBytes: bytes.byteLength,
+        attemptId: ATTEMPT_ID,
+      }),
+      expect.objectContaining({
+        aggregateType: 'project',
+        aggregateId: PROJECT_ID,
+        kind: 'procedural-sfx-manifest',
+        attemptId: ATTEMPT_ID,
+      }),
+    ])
     expect(put.mock.calls[0]?.[1]).toEqual(bytes)
+    const manifest = [...stored.entries()].find(([key]) => key.endsWith('.json'))
+    expect(manifest).toBeDefined()
+    expect(parseProceduralSfxManifestForFinal(manifest![1], {
+      attemptId: ATTEMPT_ID,
+      finalContentHash: expectedHash,
+    })).toMatchObject({
+      mode: 'procedural',
+      status: 'applied',
+      cueCount: 2,
+    })
   })
 
   it('rejects non-MP4 bytes before storage or artifact registration', async () => {
     const put = vi.fn()
-    const commitArtifact = vi.fn()
+    const commitArtifacts = vi.fn()
     await expect(persistWebsiteVideoOutput({
       workspaceId: WORKSPACE_ID,
       projectId: PROJECT_ID,
@@ -72,10 +96,10 @@ describe('website video output persistence', () => {
       videoBytes: Buffer.from('not an mp4 file'),
     }, {
       storage: { put, delete: vi.fn() },
-      commitArtifact,
+      commitArtifacts,
     })).rejects.toMatchObject({ code: 'WEBSITE_VIDEO_INVALID' })
     expect(put).not.toHaveBeenCalled()
-    expect(commitArtifact).not.toHaveBeenCalled()
+    expect(commitArtifacts).not.toHaveBeenCalled()
   })
 
   it('removes the exact uncommitted object when artifact commit fails', async () => {
@@ -90,12 +114,17 @@ describe('website video output persistence', () => {
       videoBytes: bytes,
     }, {
       storage: { put: async (key) => key, delete: remove },
-      commitArtifact: vi.fn(async () => {
+      commitArtifacts: vi.fn(async () => {
         throw failure
       }),
     })).rejects.toBe(failure)
-    expect(remove).toHaveBeenCalledOnce()
-    expect(remove.mock.calls[0]?.[0]).toContain(ATTEMPT_ID)
+    expect(remove).toHaveBeenCalledTimes(2)
+    expect(remove.mock.calls.map(([key]) => key)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(ATTEMPT_ID),
+        expect.stringContaining('procedural-sfx'),
+      ]),
+    )
   })
 
   it('accepts bounded ISO BMFF bytes with ftyp, moov, and mdat boxes', () => {
@@ -160,5 +189,14 @@ function completedJob(): WebsiteEngineJob {
     hasVideo: true,
     videoUrl: '/video',
     failure: null,
+    soundEffects: {
+      mode: 'procedural',
+      status: 'applied',
+      generatorVersion: 'procedural-sfx/1.0.0',
+      cueCount: 2,
+      timingHash: 'c'.repeat(64),
+      cuePlanHash: 'd'.repeat(64),
+      waveformHashes: ['e'.repeat(64), 'f'.repeat(64)],
+    },
   }
 }

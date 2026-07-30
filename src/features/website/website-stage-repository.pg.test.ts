@@ -24,6 +24,7 @@ const WORKSPACE_ID = '00000000-0000-4000-8000-000000000001'
 const PROJECT_ID = '00000000-0000-4000-8000-000000000101'
 const RUN_ID = '00000000-0000-4000-8000-000000000201'
 const ATTEMPT_ID = '00000000-0000-4000-8000-000000000301'
+const MANIFEST_ARTIFACT_ID = '00000000-0000-4000-8000-000000000902'
 let database: PgTestDatabase
 
 beforeAll(async () => {
@@ -57,6 +58,7 @@ describe('PostgresWebsiteStageProjector', () => {
   it('approves the same-attempt artifact only after every verification passes', async () => {
     const output: WebsiteOutputProjection = {
       artifactId: '00000000-0000-4000-8000-000000000901',
+      soundEffectsManifestArtifactId: MANIFEST_ARTIFACT_ID,
       contentHash: 'a'.repeat(64),
       sizeBytes: 2048,
       durationSec: 30,
@@ -69,7 +71,7 @@ describe('PostgresWebsiteStageProjector', () => {
         outcome: 'passed',
       },
     }
-    await seedArtifact(output.artifactId)
+    await seedArtifacts(output)
 
     await projector().complete(PROJECT_ID, output)
 
@@ -83,11 +85,13 @@ describe('PostgresWebsiteStageProjector', () => {
       verification: { outcome: 'passed' },
     })
     expect(await artifactLifecycle(output.artifactId)).toBe('approved')
+    expect(await artifactLifecycle(output.soundEffectsManifestArtifactId)).toBe('approved')
   })
 
   it('blocks export and rejects the artifact when verification is degraded', async () => {
     const output: WebsiteOutputProjection = {
       artifactId: '00000000-0000-4000-8000-000000000901',
+      soundEffectsManifestArtifactId: MANIFEST_ARTIFACT_ID,
       contentHash: 'a'.repeat(64),
       sizeBytes: 2048,
       durationSec: 30,
@@ -100,7 +104,7 @@ describe('PostgresWebsiteStageProjector', () => {
         outcome: 'degraded',
       },
     }
-    await seedArtifact(output.artifactId)
+    await seedArtifacts(output)
     await projector().block(PROJECT_ID, output)
 
     const nodes = await readNodes()
@@ -125,6 +129,7 @@ describe('PostgresWebsiteStageProjector', () => {
       failure: { code: 'WEBSITE_VERIFICATION_FAILED' },
     })
     expect(await artifactLifecycle(output.artifactId)).toBe('rejected')
+    expect(await artifactLifecycle(output.soundEffectsManifestArtifactId)).toBe('rejected')
   })
 
   it('uses failed plus cancelled terminals without a confirmation workflowBlock', async () => {
@@ -145,6 +150,7 @@ describe('PostgresWebsiteStageProjector', () => {
   it('clears stale terminal projections when a new attempt restarts at capture', async () => {
     const output: WebsiteOutputProjection = {
       artifactId: '00000000-0000-4000-8000-000000000901',
+      soundEffectsManifestArtifactId: MANIFEST_ARTIFACT_ID,
       contentHash: 'a'.repeat(64),
       sizeBytes: 2048,
       durationSec: 30,
@@ -157,7 +163,7 @@ describe('PostgresWebsiteStageProjector', () => {
         outcome: 'degraded',
       },
     }
-    await seedArtifact(output.artifactId)
+    await seedArtifacts(output)
     await projector().block(PROJECT_ID, output)
 
     await projector().progress(PROJECT_ID, {
@@ -233,7 +239,7 @@ async function readNodes() {
     order.get(left.logicalKey)! - order.get(right.logicalKey)!)
 }
 
-async function seedArtifact(artifactId: string): Promise<void> {
+async function seedArtifacts(output: WebsiteOutputProjection): Promise<void> {
   await database.db.insert(pipelineRuns).values({
     workspaceId: WORKSPACE_ID,
     id: RUN_ID,
@@ -254,21 +260,38 @@ async function seedArtifact(artifactId: string): Promise<void> {
     fingerprint: 'c'.repeat(64),
     checkpoint: { schemaVersion: 1 },
   })
-  await database.db.insert(artifacts).values({
-    workspaceId: WORKSPACE_ID,
-    id: artifactId,
-    projectId: PROJECT_ID,
-    aggregateType: 'project',
-    aggregateId: PROJECT_ID,
-    kind: 'website-video-mp4',
-    version: 1,
-    lifecycle: 'draft',
-    schemaVersion: '1',
-    storageKey: `website/${PROJECT_ID}/${ATTEMPT_ID}/video.mp4`,
-    sizeBytes: 2048,
-    contentHash: 'a'.repeat(64),
-    attemptId: ATTEMPT_ID,
-  })
+  await database.db.insert(artifacts).values([
+    {
+      workspaceId: WORKSPACE_ID,
+      id: output.artifactId,
+      projectId: PROJECT_ID,
+      aggregateType: 'project',
+      aggregateId: PROJECT_ID,
+      kind: 'website-video-mp4',
+      version: 1,
+      lifecycle: 'draft',
+      schemaVersion: '1',
+      storageKey: `website/${PROJECT_ID}/${ATTEMPT_ID}/video.mp4`,
+      sizeBytes: output.sizeBytes,
+      contentHash: output.contentHash,
+      attemptId: ATTEMPT_ID,
+    },
+    {
+      workspaceId: WORKSPACE_ID,
+      id: output.soundEffectsManifestArtifactId,
+      projectId: PROJECT_ID,
+      aggregateType: 'project',
+      aggregateId: PROJECT_ID,
+      kind: 'procedural-sfx-manifest',
+      version: 1,
+      lifecycle: 'draft',
+      schemaVersion: 'cvc.procedural-sfx-manifest/v1',
+      storageKey: `website/${PROJECT_ID}/${ATTEMPT_ID}/sfx.json`,
+      sizeBytes: 512,
+      contentHash: 'd'.repeat(64),
+      attemptId: ATTEMPT_ID,
+    },
+  ])
 }
 
 async function artifactLifecycle(artifactId: string): Promise<string | undefined> {

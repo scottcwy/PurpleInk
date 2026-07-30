@@ -18,6 +18,7 @@ describe('deriveProjectExecutionSnapshot', () => {
           id: PROJECT_ID,
           workflowKind,
           autopilot: true,
+          soundEffects: 'off',
         },
         attempt: attempt('succeeded'),
         nodes: [
@@ -40,6 +41,7 @@ describe('deriveProjectExecutionSnapshot', () => {
           id: PROJECT_ID,
           workflowKind,
           autopilot: true,
+          soundEffects: 'off',
         },
         attempt: attempt('succeeded'),
         nodes: [
@@ -78,6 +80,25 @@ describe('deriveProjectExecutionSnapshot', () => {
 
     expect(snapshot.state).toBe('blocked')
     expect(snapshot.attempt?.failureCode).toBe('WEBSITE_STATE_INCONSISTENT')
+    expect(snapshot.delivery?.downloadUrl).toBeUndefined()
+  })
+
+  it('does not reuse an off delivery after the project requests procedural sound effects', () => {
+    const snapshot = deriveProjectExecutionSnapshot(facts({
+      project: {
+        id: PROJECT_ID,
+        workflowKind: 'website',
+        autopilot: false,
+        soundEffects: 'procedural',
+      },
+      attempt: attempt('succeeded'),
+      nodes: websiteNodes('succeeded', passedExecution()),
+      artifact: artifact('approved'),
+    }))
+
+    expect(snapshot.state).toBe('blocked')
+    expect(snapshot.canStart).toBe(true)
+    expect(snapshot.delivery?.soundEffects?.mode).toBe('off')
     expect(snapshot.delivery?.downloadUrl).toBeUndefined()
   })
 
@@ -128,6 +149,7 @@ function facts(
       id: PROJECT_ID,
       workflowKind: 'website',
       autopilot: false,
+      soundEffects: 'off',
     },
     attempt: null,
     nodes: websiteNodes('idle'),
@@ -215,5 +237,16 @@ function artifact(lifecycle: 'draft' | 'approved' | 'rejected') {
     contentHash: 'a'.repeat(64),
     sizeBytes: 2048,
     version: 1,
+    soundEffects: {
+      artifactId: '00000000-0000-4000-8000-000000000302',
+      lifecycle,
+      mode: 'off' as const,
+      status: 'omitted-off' as const,
+      generatorVersion: 'procedural-sfx/1.0.0' as const,
+      cueCount: 0,
+      timingHash: null,
+      cuePlanHash: null,
+      waveformHashes: [],
+    },
   }
 }

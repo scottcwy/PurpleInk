@@ -22,6 +22,7 @@ export {
   exportSettingsPatchSchema,
   mergeExportSettings,
   resolveExportSettings,
+  resolvePersistedExportSettings,
   resolutionForPreset,
   type ExportSettings,
   type ExportSettingsPatch,

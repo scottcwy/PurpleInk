@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import type { CommitArtifactInput } from '@/features/artifacts'
 import type { StorageAdapter } from '@/lib/storage'
 import type { WebsiteEngineJob } from './engine-client'
+import { storeProceduralSfxManifest } from '@/features/render/procedural-sfx-manifest'
 import { WebsiteExecutionError } from './website-engine-execution'
 import {
   websiteVerificationProjection,
@@ -21,13 +22,14 @@ export interface WebsiteOutputInput {
 
 export interface PersistedWebsiteOutput extends WebsiteOutputProjection {
   storageKey: string
+  soundEffectsManifestArtifactId: string
 }
 
 export interface WebsiteOutputDependencies {
   storage: Pick<StorageAdapter, 'put' | 'delete'>
-  commitArtifact(
-    input: CommitArtifactInput,
-  ): Promise<{ artifactId: string; version: number }>
+  commitArtifacts(
+    inputs: readonly CommitArtifactInput[],
+  ): Promise<Array<{ artifactId: string; version: number }>>
 }
 
 export async function persistWebsiteVideoOutput(
@@ -36,6 +38,7 @@ export async function persistWebsiteVideoOutput(
 ): Promise<PersistedWebsiteOutput> {
   assertMp4Bytes(input.videoBytes)
   const verification = requireVerification(input.job)
+  const soundEffects = requireSoundEffects(input.job)
   const contentHash = createHash('sha256').update(input.videoBytes).digest('hex')
   const requestedKey = [
     'website',
@@ -43,24 +46,54 @@ export async function persistWebsiteVideoOutput(
     input.attemptId,
     `${contentHash}.mp4`,
   ].join('/')
-  const storageKey = await dependencies.storage.put(requestedKey, input.videoBytes)
-
+  let storageKey: string | null = null
+  let soundEffectsManifest: Awaited<
+    ReturnType<typeof storeProceduralSfxManifest>
+  > | null = null
   try {
-    const committed = await dependencies.commitArtifact({
-      workspaceId: input.workspaceId,
-      projectId: input.projectId,
-      aggregateType: 'project',
-      aggregateId: input.projectId,
-      kind: 'website-video-mp4',
-      schemaVersion: '1',
-      storageKey,
-      sizeBytes: input.videoBytes.byteLength,
-      contentHash,
-      attemptId: input.attemptId,
-    })
+    storageKey = await dependencies.storage.put(requestedKey, input.videoBytes)
+    soundEffectsManifest = await storeProceduralSfxManifest(
+      dependencies.storage,
+      {
+        projectId: input.projectId,
+        attemptId: input.attemptId,
+        finalContentHash: contentHash,
+        soundEffects,
+      },
+    )
+    const committed = await dependencies.commitArtifacts([
+      {
+        workspaceId: input.workspaceId,
+        projectId: input.projectId,
+        aggregateType: 'project',
+        aggregateId: input.projectId,
+        kind: 'website-video-mp4',
+        schemaVersion: '1',
+        storageKey,
+        sizeBytes: input.videoBytes.byteLength,
+        contentHash,
+        attemptId: input.attemptId,
+      },
+      {
+        workspaceId: input.workspaceId,
+        projectId: input.projectId,
+        aggregateType: 'project',
+        aggregateId: input.projectId,
+        kind: 'procedural-sfx-manifest',
+        schemaVersion: 'cvc.procedural-sfx-manifest/v1',
+        ...soundEffectsManifest,
+        attemptId: input.attemptId,
+      },
+    ])
+    const videoArtifact = committed[0]
+    const soundEffectsArtifact = committed[1]
+    if (!videoArtifact || !soundEffectsArtifact) {
+      throw new Error('网站终片 Artifact 批量提交不完整')
+    }
     return {
-      artifactId: committed.artifactId,
+      artifactId: videoArtifact.artifactId,
       storageKey,
+      soundEffectsManifestArtifactId: soundEffectsArtifact.artifactId,
       contentHash,
       sizeBytes: input.videoBytes.byteLength,
       durationSec: input.job.durationSec,
@@ -69,7 +102,14 @@ export async function persistWebsiteVideoOutput(
       verification,
     }
   } catch (error) {
-    await removeUncommittedOutput(storageKey, error, dependencies.storage)
+    await removeUncommittedOutputs(
+      [
+        storageKey,
+        soundEffectsManifest?.storageKey ?? null,
+      ],
+      error,
+      dependencies.storage,
+    )
     throw error
   }
 }
@@ -82,6 +122,15 @@ function requireVerification(
     throw new WebsiteExecutionError('WEBSITE_ENGINE_RESPONSE_INVALID')
   }
   return verification
+}
+
+function requireSoundEffects(
+  job: WebsiteEngineJob,
+): NonNullable<WebsiteEngineJob['soundEffects']> {
+  if (!job.soundEffects) {
+    throw new WebsiteExecutionError('WEBSITE_ENGINE_RESPONSE_INVALID')
+  }
+  return job.soundEffects
 }
 
 export function assertMp4Bytes(bytes: Buffer): void {
@@ -145,16 +194,23 @@ function readBoxSize(bytes: Buffer, offset: number, size32: number): number {
   return Number(extended)
 }
 
-async function removeUncommittedOutput(
-  storageKey: string,
+async function removeUncommittedOutputs(
+  storageKeys: readonly (string | null)[],
   originalError: unknown,
   target: Pick<StorageAdapter, 'delete'>,
 ): Promise<void> {
-  try {
-    await target.delete(storageKey)
-  } catch (cleanupError) {
+  const cleanupErrors: unknown[] = []
+  for (const storageKey of storageKeys) {
+    if (!storageKey) continue
+    try {
+      await target.delete(storageKey)
+    } catch (cleanupError) {
+      cleanupErrors.push(cleanupError)
+    }
+  }
+  if (cleanupErrors.length > 0) {
     throw new AggregateError(
-      [originalError, cleanupError],
+      [originalError, ...cleanupErrors],
       '网站视频 Artifact 提交失败且临时输出清理失败',
     )
   }

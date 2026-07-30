@@ -110,6 +110,8 @@ function executionState(
     && delivery?.verification?.outcome === 'passed'
     && delivery.lifecycle === 'approved'
     && delivery.attemptId === attempt.id
+    && delivery.soundEffects?.lifecycle === 'approved'
+    && delivery.soundEffects.mode === facts.project.soundEffects
   return passed ? 'succeeded' : 'blocked'
 }
 
@@ -152,6 +154,8 @@ function websiteDelivery(
   const downloadable = facts.attempt?.status === 'succeeded'
     && artifact.lifecycle === 'approved'
     && exportStage?.verification?.outcome === 'passed'
+    && artifact.soundEffects?.lifecycle === 'approved'
+    && artifact.soundEffects.mode === facts.project.soundEffects
   return {
     artifactId: artifact.id,
     attemptId: artifact.attemptId,
@@ -159,6 +163,9 @@ function websiteDelivery(
     contentHash: artifact.contentHash,
     sizeBytes: artifact.sizeBytes,
     version: artifact.version,
+    ...(artifact.soundEffects
+      ? { soundEffects: artifact.soundEffects }
+      : {}),
     ...(exportStage?.verification
       ? { verification: exportStage.verification }
       : {}),

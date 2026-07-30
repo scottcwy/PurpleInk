@@ -103,6 +103,7 @@ function job(overrides: Partial<WebsiteEngineJob> = {}): WebsiteEngineJob {
     checkPassed: null,
     goldenVerified: null,
     goldenCheckCount: 0,
+    soundEffects: null,
     hasVideo: false,
     videoUrl: null,
     failure: null,

@@ -4,6 +4,7 @@
 import { basename, dirname, extname, join } from "node:path"
 import { createHash } from "node:crypto"
 import { access, readdir, rm } from "node:fs/promises"
+import type { ProceduralSfxMode } from "@purpleink/procedural-sfx"
 import { buildVideoModel } from "./model"
 import { writeProject, writeProjectDirect } from "./project"
 import { renderProject, verifyGolden, type RenderOptions } from "./render"
@@ -21,6 +22,11 @@ import {
   runProcess,
   type ProcessRunner,
 } from "../tts/media"
+import {
+  applyWebsiteProceduralSfx,
+  websiteProceduralSfxNotRun,
+  type WebsiteProceduralSfxResult,
+} from "./procedural-sfx"
 
 export interface PipelineResult {
   captureDir: string
@@ -30,6 +36,7 @@ export interface PipelineResult {
   durationSec: number
   goldenVerified: boolean
   goldenDetails: string[]
+  soundEffects: WebsiteProceduralSfxResult
 }
 
 export interface RenderFromCaptureOptions extends RenderOptions {
@@ -43,6 +50,8 @@ export interface RenderFromCaptureOptions extends RenderOptions {
   onPhase?: (phase: string) => void
   /** 生成模式: llm / template / auto（默认 auto） */
   generation?: "llm" | "template" | "auto"
+  /** 代码生成的边界提示音；默认关闭，不增加新的工作流阶段。 */
+  soundEffects?: ProceduralSfxMode
 }
 
 /** 从一个 capture/ 目录生成 video.mp4 */
@@ -154,6 +163,8 @@ export async function renderFromCapture(
   }
 
   let videoPath = rendered.videoPath
+  const soundEffectsMode = options.soundEffects ?? "off"
+  let soundEffects = websiteProceduralSfxNotRun(soundEffectsMode)
   if (videoPath) {
     options.onPhase?.("muxing")
     const extension = extname(videoPath) || ".mp4"
@@ -164,6 +175,26 @@ export async function renderFromCapture(
     await muxNarration(videoPath, narration.narrationPath, narratedPath, mediaRunner)
     videoPath = narratedPath
     logger.info("pipeline:narration_muxed", { videoPath })
+    const fps = options.fps ?? 30
+    const mixed = await applyWebsiteProceduralSfx(
+      {
+        mode: soundEffectsMode,
+        fps,
+        totalFrames: Math.max(1, Math.round(visualModel.durationSec * fps)),
+        boundaries: visualModel.scenes.map((scene) => Math.round(scene.start * fps)),
+        narratedVideoPath: narratedPath,
+        workDirectory: written.projectDir,
+      },
+      mediaRunner,
+    )
+    videoPath = mixed.videoPath
+    soundEffects = mixed.soundEffects
+    logger.info("pipeline:procedural_sfx", {
+      mode: soundEffects.mode,
+      status: soundEffects.status,
+      cueCount: soundEffects.cueCount,
+      generatorVersion: soundEffects.generatorVersion,
+    })
   }
 
   return {
@@ -174,6 +205,7 @@ export async function renderFromCapture(
     durationSec: visualModel.durationSec,
     goldenVerified: golden.passed,
     goldenDetails: golden.details,
+    soundEffects,
   }
 }
 

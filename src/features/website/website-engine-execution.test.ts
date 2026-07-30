@@ -27,6 +27,7 @@ function job(overrides: Partial<WebsiteEngineJob> = {}): WebsiteEngineJob {
     checkPassed: null,
     goldenVerified: null,
     goldenCheckCount: 0,
+    soundEffects: null,
     hasVideo: false,
     videoUrl: null,
     failure: null,
@@ -60,6 +61,7 @@ describe('executeWebsiteEngine', () => {
         goldenCheckCount: 2,
         hasVideo: true,
         videoUrl: '/internal/video',
+        soundEffects: completedSoundEffects(),
       }))
     const progress = vi.fn(async () => undefined)
 
@@ -115,6 +117,7 @@ describe('executeWebsiteEngine', () => {
         goldenCheckCount: 15,
         hasVideo: true,
         videoUrl: '/internal/video',
+        soundEffects: completedSoundEffects(),
       }))
     const start = vi.fn(async () => ({ reused: false, job: job() }))
 
@@ -150,6 +153,7 @@ describe('executeWebsiteEngine', () => {
         goldenCheckCount: 15,
         hasVideo: true,
         videoUrl: '/internal/video',
+        soundEffects: completedSoundEffects(),
       }),
     }))
     const downloadVideo = vi
@@ -227,6 +231,7 @@ describe('executeWebsiteEngine', () => {
               durationSource: 'output',
               checkPassed: true,
               goldenVerified: true,
+              soundEffects: completedSoundEffects(),
             }),
           })),
           getJob: vi.fn(),
@@ -273,6 +278,19 @@ function input() {
     name: '网站介绍',
     durationSec: 30,
     quality: 'standard' as const,
+    soundEffects: 'procedural' as const,
+  }
+}
+
+function completedSoundEffects(): NonNullable<WebsiteEngineJob['soundEffects']> {
+  return {
+    mode: 'procedural',
+    status: 'applied',
+    generatorVersion: 'procedural-sfx/1.0.0',
+    cueCount: 2,
+    timingHash: 'a'.repeat(64),
+    cuePlanHash: 'b'.repeat(64),
+    waveformHashes: ['c'.repeat(64), 'd'.repeat(64)],
   }
 }
 

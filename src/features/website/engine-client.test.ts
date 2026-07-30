@@ -20,6 +20,7 @@ const JOB: WebsiteEngineJob = {
   checkPassed: null,
   goldenVerified: null,
   goldenCheckCount: 0,
+  soundEffects: null,
   hasVideo: false,
   videoUrl: null,
   failure: null,
@@ -45,6 +46,7 @@ describe('WebsiteEngineClient', () => {
         name: '产品介绍',
         durationSec: 24,
         quality: 'standard',
+        soundEffects: 'procedural',
       }),
     ).resolves.toEqual({ reused: false, job: JOB })
 
@@ -61,6 +63,7 @@ describe('WebsiteEngineClient', () => {
       duration: 24,
       quality: 'standard',
       generation: 'auto',
+      soundEffects: 'procedural',
     })
   })
 

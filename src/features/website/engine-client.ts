@@ -1,7 +1,27 @@
 import 'server-only'
 import { z } from 'zod'
+import type { ProceduralSfxMode } from '@purpleink/procedural-sfx'
 
 const MAX_WEBSITE_VIDEO_BYTES = 1_073_741_824
+
+const proceduralSfxResultSchema = z
+  .object({
+    mode: z.enum(['off', 'procedural']),
+    status: z.enum([
+      'applied',
+      'omitted-off',
+      'omitted-no-cues',
+      'omitted-unsupported',
+      'omitted-error',
+    ]),
+    generatorVersion: z.literal('procedural-sfx/1.0.0'),
+    cueCount: z.number().int().nonnegative(),
+    timingHash: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
+    cuePlanHash: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
+    waveformHashes: z.array(z.string().regex(/^[a-f0-9]{64}$/)),
+    failureCode: z.literal('PROCEDURAL_SFX_MIX_FAILED').optional(),
+  })
+  .strict()
 
 const enginePhaseSchema = z.enum([
   'queued',
@@ -31,6 +51,7 @@ const engineJobSchema = z
     checkPassed: z.boolean().nullable(),
     goldenVerified: z.boolean().nullable(),
     goldenCheckCount: z.number().int().nonnegative(),
+    soundEffects: proceduralSfxResultSchema.nullable(),
     hasVideo: z.boolean(),
     videoUrl: z.string().nullable(),
     failure: z
@@ -56,6 +77,7 @@ export interface StartWebsiteEngineInput {
   name: string
   durationSec: number
   quality: 'draft' | 'standard' | 'high'
+  soundEffects: ProceduralSfxMode
 }
 
 export class WebsiteEngineError extends Error {
@@ -110,6 +132,7 @@ export class WebsiteEngineClient {
         duration: input.durationSec,
         quality: input.quality,
         generation: 'auto',
+        soundEffects: input.soundEffects,
       }),
     })
     return parseJson(response, startResponseSchema)

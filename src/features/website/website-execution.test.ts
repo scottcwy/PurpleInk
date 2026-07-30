@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import type { ManagedWebsiteBillingInput } from './managed-billing'
 import {
@@ -21,6 +22,7 @@ describe('runWebsiteVideo', () => {
     const start = vi.fn(async () => ({ reused: false, job: completed }))
     const output = {
       artifactId: 'artifact-1',
+      soundEffectsManifestArtifactId: 'manifest-1',
       storageKey: `website/${PROJECT_ID}/${ATTEMPT_ID}/video.mp4`,
       contentHash: 'b'.repeat(64),
       sizeBytes: 24,
@@ -60,12 +62,16 @@ describe('runWebsiteVideo', () => {
       workspaceId: WORKSPACE_ID,
       attemptId: ATTEMPT_ID,
       invocationNo: 1,
-      requestIdentity: SOURCE_HASH,
+      requestIdentity: createHash('sha256').update(JSON.stringify({
+        sourceFingerprint: SOURCE_HASH,
+        soundEffects: 'procedural',
+      })).digest('hex'),
       maximumDurationSeconds: 30,
     })
     expect(start).toHaveBeenCalledWith(expect.objectContaining({
       url: 'https://example.com/product?campaign=private',
       name: '产品主页',
+      soundEffects: 'procedural',
     }))
     expect(stages.complete).toHaveBeenCalledWith(PROJECT_ID, output)
     expect(stages.fail).not.toHaveBeenCalled()
@@ -212,6 +218,7 @@ function dependencies(
         visualTheme: 'dark',
       },
       sourceFingerprint: SOURCE_HASH,
+      soundEffects: 'procedural',
     }),
     engine: {
       start: vi.fn(async () => ({ reused: false, job: completedJob() })),
@@ -222,6 +229,7 @@ function dependencies(
     bill: async <T>(input: ManagedWebsiteBillingInput<T>) => input.invoke(),
     persistOutput: vi.fn(async () => ({
       artifactId: 'artifact-1',
+      soundEffectsManifestArtifactId: 'manifest-1',
       storageKey: 'website/output.mp4',
       contentHash: 'b'.repeat(64),
       sizeBytes: 24,
@@ -265,6 +273,15 @@ function completedJob(overrides: Partial<WebsiteEngineJob> = {}): WebsiteEngineJ
     checkPassed: true,
     goldenVerified: true,
     goldenCheckCount: 2,
+    soundEffects: {
+      mode: 'procedural',
+      status: 'applied',
+      generatorVersion: 'procedural-sfx/1.0.0',
+      cueCount: 2,
+      timingHash: 'c'.repeat(64),
+      cuePlanHash: 'd'.repeat(64),
+      waveformHashes: ['e'.repeat(64), 'f'.repeat(64)],
+    },
     hasVideo: true,
     videoUrl: '/video',
     failure: null,

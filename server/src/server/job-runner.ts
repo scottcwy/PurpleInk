@@ -3,6 +3,7 @@
 import { isAbsolute, resolve } from "node:path"
 import { renderFromCapture, urlToVideo } from "../compose/run-pipeline"
 import type { UrlToVideoOptions } from "../compose/run-pipeline"
+import type { ProceduralSfxMode } from "@purpleink/procedural-sfx"
 import { getJob, updateJob, type Job, type JobPhase } from "./job-store"
 import { logger } from "../lib/logger"
 import { errorMessage } from "../lib/error-message"
@@ -26,6 +27,7 @@ export interface RenderRequest {
   fps?: number
   /** 生成模式：llm / template / auto */
   generation?: "llm" | "template" | "auto"
+  soundEffects?: ProceduralSfxMode
 }
 
 /** 在后台跑一个 Job（fire-and-forget），异常吞进任务表不外抛。 */
@@ -52,6 +54,7 @@ export function runJob(job: Job, req: RenderRequest): void {
     ...(capture != null ? { capture } : {}),
     ...(req.fps != null ? { fps: req.fps } : {}),
     ...(req.generation != null ? { generation: req.generation } : {}),
+    ...(req.soundEffects != null ? { soundEffects: req.soundEffects } : {}),
     ...(job.integrated && job.requestId
       ? { integratedRequestId: job.requestId }
       : {}),
@@ -77,6 +80,7 @@ export function runJob(job: Job, req: RenderRequest): void {
         durationSec: result.durationSec,
         goldenVerified: result.goldenVerified,
         goldenDetails: result.goldenDetails,
+        soundEffects: result.soundEffects,
         elapsedSec: Number(((Date.now() - startedAt) / 1000).toFixed(1)),
       })
       logger.info("job:done", { id: job.id, videoPath: result.videoPath, checkPassed: result.checkPassed })

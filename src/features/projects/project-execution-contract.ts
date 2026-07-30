@@ -1,4 +1,5 @@
 import type { WebsiteEnginePhase } from '@/features/website/engine-client'
+import type { ProceduralSfxManifest } from '@/features/render/procedural-sfx-manifest'
 import type {
   WebsiteExecutionFailureCode,
   WebsiteVerificationProjection,
@@ -56,6 +57,18 @@ export interface WebsiteDeliverySnapshot {
   contentHash: string
   sizeBytes: number
   version: number
+  soundEffects?: {
+    artifactId: string
+    lifecycle: 'draft' | 'approved' | 'released' | 'rejected'
+    mode: ProceduralSfxManifest['mode']
+    status: ProceduralSfxManifest['status']
+    generatorVersion: ProceduralSfxManifest['generatorVersion']
+    cueCount: number
+    timingHash: string | null
+    cuePlanHash: string | null
+    waveformHashes: string[]
+    failureCode?: ProceduralSfxManifest['failureCode']
+  }
   verification?: WebsiteVerificationProjection
   downloadUrl?: string
 }
@@ -88,6 +101,7 @@ export interface ProjectExecutionFacts {
     id: string
     workflowKind: ProjectWorkflowKind
     autopilot: boolean
+    soundEffects: 'off' | 'procedural'
   }
   attempt: {
     id: string
@@ -111,6 +125,7 @@ export interface ProjectExecutionFacts {
     contentHash: string
     sizeBytes: number
     version: number
+    soundEffects: WebsiteDeliverySnapshot['soundEffects'] | null
   } | null
   now: string
 }

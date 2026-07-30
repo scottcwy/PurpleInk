@@ -9,6 +9,7 @@ import {
   buildProceduralSfxManifestBytes,
   parseProceduralSfxManifestForFinal,
   proceduralSfxPlanFingerprintFacts,
+  readBoundProceduralSfxManifest,
   storeProceduralSfxManifest,
 } from './procedural-sfx-manifest'
 
@@ -128,11 +129,35 @@ describe('procedural SFX manifest', () => {
         stored.contentHash
       )
       expect(
-        parseProceduralSfxManifestForFinal(bytes, {
-          attemptId: ATTEMPT_ID,
-          finalContentHash: FINAL_HASH,
-        })
+        await readBoundProceduralSfxManifest(
+          storage,
+          {
+            schemaVersion: 'cvc.procedural-sfx-manifest/v1',
+            storageKey: stored.storageKey,
+            contentHash: stored.contentHash,
+            sizeBytes: stored.sizeBytes,
+          },
+          {
+            attemptId: ATTEMPT_ID,
+            finalContentHash: FINAL_HASH,
+          }
+        )
       ).toMatchObject({ status: 'omitted-off' })
+      expect(
+        await readBoundProceduralSfxManifest(
+          storage,
+          {
+            schemaVersion: 'cvc.procedural-sfx-manifest/v1',
+            storageKey: stored.storageKey,
+            contentHash: 'f'.repeat(64),
+            sizeBytes: stored.sizeBytes,
+          },
+          {
+            attemptId: ATTEMPT_ID,
+            finalContentHash: FINAL_HASH,
+          }
+        )
+      ).toBeNull()
     } finally {
       await rm(root, { recursive: true, force: true })
     }
