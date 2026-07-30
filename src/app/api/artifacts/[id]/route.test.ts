@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { GET } from './route'
 
 const mocks = vi.hoisted(() => ({
+  getArtifactDescriptor: vi.fn(),
   readArtifact: vi.fn(),
   artifactContentType: vi.fn(),
+  getProjectExecutionSnapshot: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
@@ -20,13 +22,25 @@ vi.mock('@/features/auth/api-session', () => ({
     }),
 }))
 vi.mock('@/features/artifacts', () => mocks)
+vi.mock('@/features/projects', () => ({
+  getProjectExecutionSnapshot: mocks.getProjectExecutionSnapshot,
+}))
 
 describe('GET /api/artifacts/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.readArtifact.mockResolvedValue({
-      descriptor: { kind: 'render-mp4' },
+      descriptor: {
+        id: 'a-1',
+        kind: 'render-mp4',
+        contentHash: 'a'.repeat(64),
+      },
       bytes: Buffer.from('video'),
+    })
+    mocks.getArtifactDescriptor.mockResolvedValue({
+      id: 'a-1',
+      kind: 'render-mp4',
+      contentHash: 'a'.repeat(64),
     })
     mocks.artifactContentType.mockReturnValue('video/mp4')
   })
@@ -40,5 +54,103 @@ describe('GET /api/artifacts/[id]', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toBe('video/mp4')
     expect(mocks.readArtifact).toHaveBeenCalledWith('p-1', 'a-1')
+  })
+
+  it('does not expose a blocked or rejected website video as a formal download', async () => {
+    mocks.getArtifactDescriptor.mockResolvedValue({
+      id: 'website-artifact',
+      kind: 'website-video-mp4',
+      contentHash: 'a'.repeat(64),
+    })
+    mocks.getProjectExecutionSnapshot.mockResolvedValue({
+      state: 'blocked',
+      delivery: {
+        artifactId: 'website-artifact',
+        lifecycle: 'rejected',
+      },
+    })
+
+    const response = await GET(
+      new Request(
+        'http://localhost/api/artifacts/website-artifact?projectId=p-1',
+      ),
+      { params: Promise.resolve({ id: 'website-artifact' }) },
+    )
+
+    expect(response.status).toBe(404)
+    expect(mocks.readArtifact).not.toHaveBeenCalled()
+  })
+
+  it('serves only the current succeeded approved website delivery', async () => {
+    const bytes = Buffer.from('verified-video')
+    const { createHash } = await import('node:crypto')
+    const contentHash = createHash('sha256').update(bytes).digest('hex')
+    mocks.getArtifactDescriptor.mockResolvedValue({
+      id: 'website-artifact',
+      kind: 'website-video-mp4',
+      contentHash,
+    })
+    mocks.getProjectExecutionSnapshot.mockResolvedValue({
+      state: 'succeeded',
+      delivery: {
+        artifactId: 'website-artifact',
+        lifecycle: 'approved',
+        downloadUrl:
+          '/api/artifacts/website-artifact?projectId=p-1',
+      },
+    })
+    mocks.readArtifact.mockResolvedValue({
+      descriptor: {
+        id: 'website-artifact',
+        kind: 'website-video-mp4',
+        contentHash,
+      },
+      bytes,
+    })
+
+    const response = await GET(
+      new Request(
+        'http://localhost/api/artifacts/website-artifact?projectId=p-1',
+      ),
+      { params: Promise.resolve({ id: 'website-artifact' }) },
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe('video/mp4')
+    expect(response.headers.get('x-content-sha256')).toBe(contentHash)
+  })
+
+  it('fails closed when website video bytes no longer match the registered hash', async () => {
+    mocks.getArtifactDescriptor.mockResolvedValue({
+      id: 'website-artifact',
+      kind: 'website-video-mp4',
+      contentHash: 'a'.repeat(64),
+    })
+    mocks.getProjectExecutionSnapshot.mockResolvedValue({
+      state: 'succeeded',
+      delivery: {
+        artifactId: 'website-artifact',
+        lifecycle: 'approved',
+        downloadUrl:
+          '/api/artifacts/website-artifact?projectId=p-1',
+      },
+    })
+    mocks.readArtifact.mockResolvedValue({
+      descriptor: {
+        id: 'website-artifact',
+        kind: 'website-video-mp4',
+        contentHash: 'a'.repeat(64),
+      },
+      bytes: Buffer.from('corrupt-video'),
+    })
+
+    const response = await GET(
+      new Request(
+        'http://localhost/api/artifacts/website-artifact?projectId=p-1',
+      ),
+      { params: Promise.resolve({ id: 'website-artifact' }) },
+    )
+
+    expect(response.status).toBe(404)
   })
 })

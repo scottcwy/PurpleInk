@@ -35,7 +35,7 @@ import { getNodeStatusLabel, getNodeStatusPresentation } from './flow-elements'
 import { isNodeActionBlocked, nodeActionLabel } from './node-action-presentation'
 import { StreamingLogCard } from './streaming-log-card'
 import { WebsiteStageInspector } from './website-stage-inspector'
-import { websiteStagePresentation } from './website-execution-presentation'
+import { websiteStagePresentation } from '@/features/projects/website-execution-presentation'
 import { skipKindForNodeType } from '@/features/director/skip-policy'
 
 export function CanvasInspector({

@@ -1,5 +1,6 @@
 export {
   artifactContentType,
+  getArtifactDescriptor,
   getLatestArtifact,
   readArtifact,
   type ArtifactDescriptor,

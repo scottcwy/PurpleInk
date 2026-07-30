@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   ProjectExecutionSnapshot,
   WebsiteStageSnapshot,
-} from '@/features/projects'
+} from './project-execution-contract'
 import {
   executionActionPresentation,
   websiteStagePresentation,

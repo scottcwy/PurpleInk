@@ -265,7 +265,7 @@ C 只负责稳定布局与业务组合，不定义新颜色。任何可复用的
 | S2 | `/workbench` New Project state | 创建 durable project | Start planning |
 | S3 | `/canvas/[projectId]` | 操作执行 DAG | Run ready nodes |
 | S4 | `/shots/[shotId]` | 审查单镜合同与媒体 | Render shot |
-| S5 | `/export/[projectId]` | 验证并交付输出 | Compose project |
+| S5 | `/export/[projectId]` | script/audio 验证镜头时间线；website 验证六阶段执行与 approved MP4 | Compose project / 下载 MP4 |
 | S6 | `/settings` | 验证 workspace providers/defaults | Save settings |
 
 ### 7.1 认证页（L2）的视觉归属

@@ -74,7 +74,7 @@
 | `/products/projects` | `src/app/products/(app)/projects/page.tsx` | `wired` | 无 | 代码（文稿）/录音/URL 介绍三板块真实投影，支持网格（横向行式，按数量降序）与列表双布局，首屏每板块分页投影、滚动经 `/api/projects?view=cards` 追加；空分组各保留对应来源创建入口 |
 | `/products/canvas/[projectId]` | `src/app/products/(app)/canvas/[projectId]/page.tsx` | `wired` | `projectId` path | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明 |
 | `/products/shots/[shotId]` | `src/app/products/(app)/shots/[shotId]/page.tsx` | `wired` | `shotId` path + `projectId` query（必填） | 缺失项目/镜头 `notFound()`；旧 workflow 显示保留数据说明 |
-| `/products/export/[projectId]` | `src/app/products/(app)/export/[projectId]/page.tsx` | `wired` | `projectId` path | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明 |
+| `/products/export/[projectId]` | `src/app/products/(app)/export/[projectId]/page.tsx` | `wired` | `projectId` path + 持久化 `workflowKind` | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明；script/audio 进入镜头时间线导出，website 进入六阶段执行快照与 approved MP4 交付工作区 |
 | `/products/settings` | `src/app/products/(app)/settings/page.tsx` | `wired` | `projectId` query（可选） | 无项目参数渲染账号级设置；旧 workflow 显示保留数据说明 |
 | `/products/billing` | `src/app/products/(app)/billing/page.tsx` | `wired` | 当前 workspace 会话 | 展示当前会员、额度比例与兑换入口；不回显内部人民币成本 |
 

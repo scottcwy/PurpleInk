@@ -1,5 +1,11 @@
-import { artifactContentType, readArtifact } from '@/features/artifacts'
+import { createHash } from 'node:crypto'
+import {
+  artifactContentType,
+  getArtifactDescriptor,
+  readArtifact,
+} from '@/features/artifacts'
 import { withApiSession } from '@/features/auth/api-session'
+import { getProjectExecutionSnapshot } from '@/features/projects'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,12 +20,37 @@ async function handleGet(request: Request, params: Promise<{ id: string }>) {
   const projectId = new URL(request.url).searchParams.get('projectId')
   if (!projectId) return new Response('缺少 projectId', { status: 400 })
   try {
-    const { descriptor, bytes } = await readArtifact(projectId, (await params).id)
+    const artifactId = (await params).id
+    const candidate = await getArtifactDescriptor(projectId, artifactId)
+    if (!candidate) throw new Error('artifact missing')
+    if (candidate.kind === 'website-video-mp4') {
+      const execution = await getProjectExecutionSnapshot(projectId)
+      const delivery = execution.delivery
+      if (
+        execution.state !== 'succeeded'
+        || delivery?.artifactId !== artifactId
+        || delivery.lifecycle !== 'approved'
+        || !delivery.downloadUrl
+      ) {
+        throw new Error('website delivery unavailable')
+      }
+    }
+    const { descriptor, bytes } = await readArtifact(projectId, artifactId)
+    if (
+      descriptor.kind === 'website-video-mp4'
+      && createHash('sha256').update(bytes).digest('hex')
+        !== descriptor.contentHash
+    ) {
+      throw new Error('website delivery hash mismatch')
+    }
     return new Response(new Uint8Array(bytes), {
       headers: {
         'content-type': artifactContentType(descriptor.kind),
         'content-length': String(bytes.length),
         'cache-control': 'private, no-store',
+        ...(descriptor.kind === 'website-video-mp4'
+          ? { 'x-content-sha256': descriptor.contentHash ?? '' }
+          : {}),
       },
     })
   } catch {

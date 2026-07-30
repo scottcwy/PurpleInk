@@ -1,7 +1,7 @@
 import type {
   ProjectExecutionSnapshot,
   WebsiteStageSnapshot,
-} from '@/features/projects'
+} from './project-execution-contract'
 
 const PHASE_TITLE: Record<WebsiteStageSnapshot['phase'], string> = {
   capture: '网站采集',

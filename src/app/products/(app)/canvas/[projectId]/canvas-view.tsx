@@ -29,13 +29,13 @@ import {
 } from './canvas-action-api'
 import { applyStatusOverlay } from './live-status'
 import { applyExecutionSnapshotToNodes } from './project-execution-sync'
-import { useProjectExecution } from './use-project-execution'
+import { useProjectExecution } from '@/features/projects/use-project-execution'
 import {
   executionActionPresentation,
   projectExecutionLabel,
   websitePhaseBorderClass,
   websiteStagePresentation,
-} from './website-execution-presentation'
+} from '@/features/projects/website-execution-presentation'
 import {
   describePipelineResult,
   type PipelineFeedback,

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   getProjectExecution,
   parseProjectExecutionSnapshot,
-} from './project-execution-client'
+} from './execution-client'
 
 describe('project execution client', () => {
   it('accepts the declared safe snapshot and ignores no hidden provider fields', () => {

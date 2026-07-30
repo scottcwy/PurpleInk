@@ -43,6 +43,39 @@ export async function getLatestArtifact(
   return row ? { ...row, nodeId } : null
 }
 
+export async function getArtifactDescriptor(
+  projectId: string,
+  artifactId: string,
+): Promise<ArtifactDescriptor | null> {
+  const database = await getDb()
+  const [row] = await database
+    .select({
+      id: artifacts.id,
+      projectId: artifacts.projectId,
+      aggregateType: artifacts.aggregateType,
+      aggregateId: artifacts.aggregateId,
+      kind: artifacts.kind,
+      contentHash: artifacts.contentHash,
+    })
+    .from(artifacts)
+    .where(
+      and(
+        eq(artifacts.workspaceId, currentWorkspaceId()),
+        eq(artifacts.id, artifactId),
+        eq(artifacts.projectId, projectId),
+      ),
+    )
+    .limit(1)
+  if (!row) return null
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    nodeId: row.aggregateType === 'node' ? row.aggregateId : null,
+    kind: row.kind,
+    contentHash: row.contentHash,
+  }
+}
+
 export async function readArtifact(
   projectId: string,
   artifactId: string

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { ProjectExecutionSnapshot } from '@/features/projects'
+import type { ProjectExecutionSnapshot } from './project-execution-contract'
 import { throwIfUnauthenticated } from '@/features/auth/unauthenticated-error'
 
 const phaseSchema = z.enum([

@@ -16,7 +16,7 @@ import {
   type WebsiteExecutionProjection,
   type WebsiteInspectorTab,
 } from './website-stage-inspector-data'
-import { projectExecutionLabel } from './website-execution-presentation'
+import { projectExecutionLabel } from '@/features/projects/website-execution-presentation'
 
 const PHASE_LABEL: Record<string, string> = {
   capture: '网站采集',

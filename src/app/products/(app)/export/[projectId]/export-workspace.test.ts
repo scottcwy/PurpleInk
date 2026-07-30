@@ -17,6 +17,18 @@ const contract = readFileSync(
   'src/app/products/(app)/export/[projectId]/export-readiness-contract.ts',
   'utf8',
 )
+const page = readFileSync(
+  'src/app/products/(app)/export/[projectId]/page.tsx',
+  'utf8',
+)
+const websiteWorkspace = readFileSync(
+  'src/app/products/(app)/export/[projectId]/website-export-workspace.tsx',
+  'utf8',
+)
+const websitePreview = readFileSync(
+  'src/app/products/(app)/export/[projectId]/website-delivery-preview.tsx',
+  'utf8',
+)
 
 describe('Export workspace composition', () => {
   it('opens export settings from a TopBar toggle instead of a permanent side panel', () => {
@@ -78,5 +90,27 @@ describe('Export workspace composition', () => {
     expect(contract).toContain('缺旁白')
     expect(contract).toContain('缺字幕')
     expect(contract).toContain('产物无效')
+  })
+
+  it('dispatches website projects before loading the shot timeline workspace', () => {
+    const websiteBranch = page.indexOf("project.kind === 'website'")
+    const graphRead = page.indexOf('getCanvasGraph(projectId)')
+    expect(websiteBranch).toBeGreaterThan(-1)
+    expect(graphRead).toBeGreaterThan(websiteBranch)
+    expect(page).toContain('getProjectExecutionSnapshot(projectId)')
+    expect(page).toContain('<WebsiteExportWorkspace')
+  })
+
+  it('keeps website delivery on the execution snapshot instead of timeline export controls', () => {
+    expect(websiteWorkspace).toContain('useProjectExecution')
+    expect(websiteWorkspace).toContain('WebsiteExportStageList')
+    expect(websiteWorkspace).toContain('websiteDeliveryForDownload')
+    expect(websiteWorkspace).not.toContain('TimelineTrack')
+    expect(websiteWorkspace).not.toContain('startProjectExport')
+    expect(websiteWorkspace).not.toContain('BGM')
+    expect(websiteWorkspace).not.toContain('SFX')
+    expect(websitePreview).toContain('<video')
+    expect(websitePreview).toContain('内容哈希')
+    expect(websitePreview).toContain('Golden 校验')
   })
 })

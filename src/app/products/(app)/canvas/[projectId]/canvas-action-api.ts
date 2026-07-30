@@ -1,7 +1,12 @@
 import type { CanvasGraphNode } from '@/features/canvas'
-import type { ProjectExecutionSnapshot } from '@/features/projects'
 import { throwIfUnauthenticated } from '@/features/auth/unauthenticated-error'
-import { parseProjectExecutionSnapshot } from './project-execution-client'
+import { throwIfQuotaExhausted } from '@/features/projects/execution-control-client'
+export {
+  BillingQuotaExhaustedError,
+  startPipeline,
+  stopPipeline,
+  type PipelineControlResult,
+} from '@/features/projects/execution-control-client'
 
 const DIRECTOR_STAGES = new Set([
   'INGEST',
@@ -105,121 +110,6 @@ export interface NodeActionResult {
   message: string
 }
 
-export interface PipelineControlResult {
-  autopilot?: boolean
-  execution: ProjectExecutionSnapshot
-  status?:
-    | 'started'
-    | 'reused'
-    | 'blocked'
-    | 'complete'
-    | 'stopping'
-    | 'stopped'
-  enqueuedNodeIds?: string[]
-  repairRootNodeIds?: string[]
-  failedNodeIds?: string[]
-  blockedNodes?: Array<{ nodeId: string; code: string; message: string }>
-  cancelledAttempts?: number
-  cancelledRuns?: number
-  cancelledTickets?: number
-  cancelledLeases?: number
-  remainingRunning?: number
-}
-
-export async function startPipeline(
-  projectId: string,
-  fetcher: typeof fetch = fetch
-): Promise<PipelineControlResult> {
-  return controlPipeline('POST', projectId, fetcher)
-}
-
-export async function stopPipeline(
-  projectId: string,
-  fetcher: typeof fetch = fetch
-): Promise<PipelineControlResult> {
-  return controlPipeline('DELETE', projectId, fetcher)
-}
-
-async function controlPipeline(
-  method: 'POST' | 'DELETE',
-  projectId: string,
-  fetcher: typeof fetch
-): Promise<PipelineControlResult> {
-  const response = await fetcher(
-    `/api/projects/${encodeURIComponent(projectId)}/start`,
-    { method },
-  )
-  throwIfUnauthenticated(response)
-  const body: unknown = await response.json()
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    throw new Error('工作流响应无效')
-  }
-  const result = body as Record<string, unknown>
-  throwIfQuotaExhausted(result)
-  if (!response.ok) {
-    throw new Error(
-      typeof result.error === 'string' ? result.error : '工作流操作失败'
-    )
-  }
-  const execution = parseProjectExecutionSnapshot(result.execution)
-  return {
-    execution,
-    ...(typeof result.autopilot === 'boolean'
-      ? { autopilot: result.autopilot }
-      : {}),
-    ...(Array.isArray(result.enqueuedNodeIds)
-      ? { enqueuedNodeIds: result.enqueuedNodeIds.filter(isString) }
-      : {}),
-    ...(Array.isArray(result.failedNodeIds)
-      ? { failedNodeIds: result.failedNodeIds.filter(isString) }
-      : {}),
-    ...(isPipelineStatus(result.status) ? { status: result.status } : {}),
-    ...optionalCount('cancelledAttempts', result),
-    ...optionalCount('cancelledRuns', result),
-    ...optionalCount('cancelledTickets', result),
-    ...optionalCount('cancelledLeases', result),
-    ...optionalCount('remainingRunning', result),
-    ...(Array.isArray(result.repairRootNodeIds)
-      ? { repairRootNodeIds: result.repairRootNodeIds.filter(isString) }
-      : {}),
-    ...(Array.isArray(result.blockedNodes)
-      ? {
-          blockedNodes: result.blockedNodes
-            .filter(isRecord)
-            .flatMap((item) =>
-              typeof item.nodeId === 'string' &&
-              typeof item.code === 'string' &&
-              typeof item.message === 'string'
-                ? [{ nodeId: item.nodeId, code: item.code, message: item.message }]
-                : []
-            ),
-        }
-      : {}),
-  }
-}
-
-export class BillingQuotaExhaustedError extends Error {
-  readonly code = 'quota_exhausted'
-
-  constructor(
-    readonly resetAt: string,
-    readonly billingUrl: '/products/billing',
-  ) {
-    super('本周期 AI 额度已用完')
-    this.name = 'BillingQuotaExhaustedError'
-  }
-}
-
-function throwIfQuotaExhausted(result: Record<string, unknown>): void {
-  if (
-    result.code === 'quota_exhausted'
-    && typeof result.resetAt === 'string'
-    && result.billingUrl === '/products/billing'
-  ) {
-    throw new BillingQuotaExhaustedError(result.resetAt, result.billingUrl)
-  }
-}
-
 function resolveIntent(
   node: CanvasGraphNode
 ): 'execute' | 'repair' | 'regenerate' | 'rerender' {
@@ -244,36 +134,6 @@ function isNodeAction(value: unknown): value is NodeActionResult['action'] {
   )
 }
 
-function isPipelineStatus(
-  value: unknown
-): value is NonNullable<PipelineControlResult['status']> {
-  return ['started', 'reused', 'blocked', 'complete', 'stopping', 'stopped'].includes(
-    String(value),
-  )
-}
-
-function optionalCount(
-  key:
-    | 'cancelledAttempts'
-    | 'cancelledRuns'
-    | 'cancelledTickets'
-    | 'cancelledLeases'
-    | 'remainingRunning',
-  value: Record<string, unknown>,
-): Partial<PipelineControlResult> {
-  const count = value[key]
-  return typeof count === 'number' && Number.isInteger(count) && count >= 0
-    ? { [key]: count }
-    : {}
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
-
-function isString(value: unknown): value is string {
-  return typeof value === 'string'
-}
 
 function jsonRequest(body: unknown): RequestInit {
   return {

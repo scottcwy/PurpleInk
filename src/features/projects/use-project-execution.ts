@@ -1,13 +1,13 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ProjectExecutionSnapshot } from '@/features/projects'
-import { getProjectExecution } from './project-execution-client'
+import type { ProjectExecutionSnapshot } from './project-execution-contract'
+import { getProjectExecution } from './execution-client'
 import {
   ExecutionSnapshotRevisionGate,
   executionPollDelay,
   SingleFlightExecutionReader,
-} from './project-execution-sync'
+} from './execution-sync'
 
 interface LocalExecutionState {
   projectId: string
