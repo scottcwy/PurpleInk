@@ -1,5 +1,11 @@
-@import "tailwindcss";
+/* source(none) 关闭自动扫描，改为只扫 src/ 下的源码。
+   文档里出现的类名字面量不得影响生成的样式表：docs 的动效迁移总账里曾写过一处
+   duration-[var(...)]，被 Tailwind 扫成候选类后生成 `transition-duration: var(...)`，
+   非法值使整份样式表解析失败、页面 500。限定扫描范围可从根上避免这类污染。 */
+@import "tailwindcss" source(none);
 @import "./design-system.css";
+
+@source "../**/*.{ts,tsx}";
 
 @custom-variant dark (&:where(.dark, .dark *));
 

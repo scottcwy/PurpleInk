@@ -285,7 +285,7 @@ ESC 逻辑从 `app-sidebar-shell.tsx`、`canvas-inspector.tsx` 两处删除；
 | active 按压 | 仅 `button.tsx` 有（`active:translate-y-px` + `active:brightness-95`，其中 `gray` 变体漏了 brightness）；回弹是 `duration-150` tween 而非 spring。IconButton / NavItem / SegmentedControl / Toggle 无按压态 | 补意图 2 至全部可点控件，回弹换 `SPRING_SPATIAL_FAST` | todo |
 | `toggle.tsx` knob | 裸 `transition-transform` | `SPRING_SPATIAL_FAST` | todo |
 | `progress-bar.tsx` | `transition-all` | `transition-[width]` | todo |
-| `canvas-auto-hide-top-bar.tsx` | `duration-[var(...)]` + 手写曲线 | `duration-base ease-emphasized` | todo |
+| `canvas-auto-hide-top-bar.tsx` | `duration-[var(--duration-base)]` + 手写曲线 | `duration-base ease-emphasized` | todo |
 | `marketing/faq.tsx` | 体系外曲线 `[0.25,0.46,0.45,0.94]` | `SPRING_SPATIAL_DEFAULT` | todo |
 
 ### 7.4 重复体系与死代码
