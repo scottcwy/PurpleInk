@@ -205,12 +205,12 @@ describe('pipeline controls', () => {
     )
   })
 
-  it('starts project autopilot through the pipeline endpoint', async () => {
+  it('starts a website project from the execution snapshot without requiring autopilot', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       response({
         ok: true,
-        autopilot: true,
         status: 'started',
+        execution: execution('queued'),
         enqueuedNodeIds: ['node-1'],
         repairRootNodeIds: ['node-1'],
         failedNodeIds: ['node-2'],
@@ -219,8 +219,8 @@ describe('pipeline controls', () => {
     )
 
     await expect(startPipeline('project-1', fetcher)).resolves.toEqual({
-      autopilot: true,
       status: 'started',
+      execution: execution('queued'),
       enqueuedNodeIds: ['node-1'],
       repairRootNodeIds: ['node-1'],
       failedNodeIds: ['node-2'],
@@ -238,6 +238,7 @@ describe('pipeline controls', () => {
         ok: true,
         autopilot: false,
         status: 'stopping',
+        execution: execution('stopping'),
         cancelledAttempts: 3,
         cancelledRuns: 2,
         cancelledTickets: 1,
@@ -249,6 +250,7 @@ describe('pipeline controls', () => {
     await expect(stopPipeline('project-1', fetcher)).resolves.toEqual({
       autopilot: false,
       status: 'stopping',
+      execution: execution('stopping'),
       cancelledAttempts: 3,
       cancelledRuns: 2,
       cancelledTickets: 1,
@@ -282,6 +284,25 @@ function response(body: unknown): Response {
     status: 200,
     headers: { 'content-type': 'application/json' },
   })
+}
+
+function execution(state: 'queued' | 'stopping') {
+  return {
+    workflowKind: 'website',
+    state,
+    active: true,
+    canStart: false,
+    canStop: true,
+    attempt: {
+      id: 'attempt-1',
+      status: state === 'queued' ? 'queued' : 'running',
+      updatedAt: '2026-07-30T00:00:00.000Z',
+    },
+    currentStage: null,
+    stages: [],
+    delivery: null,
+    revision: state === 'queued' ? 'a'.repeat(64) : 'b'.repeat(64),
+  }
 }
 
 function actionResult(

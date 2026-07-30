@@ -69,7 +69,7 @@ async function handlePost(context: RouteContext): Promise<Response> {
       ok: true,
       ...started,
       status: started.kind === 'website'
-        ? websiteStartStatus(execution.state)
+        ? websiteStartStatus(execution.state, started.reused)
         : started.status,
       execution,
     })
@@ -130,10 +130,11 @@ async function handleDelete(context: RouteContext): Promise<Response> {
 
 function websiteStartStatus(
   state: Awaited<ReturnType<typeof getProjectExecutionSnapshot>>['state'],
-): 'started' | 'complete' | 'blocked' {
+  reused: boolean,
+): 'started' | 'reused' | 'complete' | 'blocked' {
   if (state === 'succeeded') return 'complete'
   if (state === 'blocked') return 'blocked'
-  return 'started'
+  return reused ? 'reused' : 'started'
 }
 
 async function parseProjectId(context: RouteContext): Promise<

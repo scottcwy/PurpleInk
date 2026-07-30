@@ -1,5 +1,7 @@
 import type { CanvasGraphNode } from '@/features/canvas'
+import type { ProjectExecutionSnapshot } from '@/features/projects'
 import { throwIfUnauthenticated } from '@/features/auth/unauthenticated-error'
+import { parseProjectExecutionSnapshot } from './project-execution-client'
 
 const DIRECTOR_STAGES = new Set([
   'INGEST',
@@ -104,8 +106,15 @@ export interface NodeActionResult {
 }
 
 export interface PipelineControlResult {
-  autopilot: boolean
-  status?: 'started' | 'blocked' | 'complete' | 'stopping' | 'stopped'
+  autopilot?: boolean
+  execution: ProjectExecutionSnapshot
+  status?:
+    | 'started'
+    | 'reused'
+    | 'blocked'
+    | 'complete'
+    | 'stopping'
+    | 'stopped'
   enqueuedNodeIds?: string[]
   repairRootNodeIds?: string[]
   failedNodeIds?: string[]
@@ -152,11 +161,12 @@ async function controlPipeline(
       typeof result.error === 'string' ? result.error : '工作流操作失败'
     )
   }
-  if (typeof result.autopilot !== 'boolean') {
-    throw new Error('工作流响应缺少 autopilot 状态')
-  }
+  const execution = parseProjectExecutionSnapshot(result.execution)
   return {
-    autopilot: result.autopilot,
+    execution,
+    ...(typeof result.autopilot === 'boolean'
+      ? { autopilot: result.autopilot }
+      : {}),
     ...(Array.isArray(result.enqueuedNodeIds)
       ? { enqueuedNodeIds: result.enqueuedNodeIds.filter(isString) }
       : {}),
@@ -237,7 +247,7 @@ function isNodeAction(value: unknown): value is NodeActionResult['action'] {
 function isPipelineStatus(
   value: unknown
 ): value is NonNullable<PipelineControlResult['status']> {
-  return ['started', 'blocked', 'complete', 'stopping', 'stopped'].includes(
+  return ['started', 'reused', 'blocked', 'complete', 'stopping', 'stopped'].includes(
     String(value),
   )
 }

@@ -8,10 +8,12 @@ import type { BillingUiProjection } from '@/features/billing/ui/projection-contr
 import {
   computeLayout,
   getCanvasGraph,
-  getProjectAutopilot,
   listProjects,
   type PositionedCanvasNode,
 } from '@/features/canvas'
+import {
+  getProjectExecutionSnapshot,
+} from '@/features/projects'
 import { getProjectRouteState } from '@/features/projects/project-compatibility'
 import { PublishNavContext } from '@/features/navigation/nav-context'
 import { CanvasLoader } from './canvas-loader'
@@ -38,10 +40,11 @@ async function renderCanvas(projectId: string) {
   const project = projects.find((candidate) => candidate.id === projectId)
   if (!project) notFound()
 
-  const [graph, billing, concurrency] = await Promise.all([
+  const [graph, billing, concurrency, execution] = await Promise.all([
     getCanvasGraph(projectId),
     getBillingProjection(),
     getWorkspaceConcurrencyProjection(),
+    getProjectExecutionSnapshot(projectId),
   ])
   const billingProjection: BillingUiProjection = billing
   if (graph.nodes.length === 0) {
@@ -59,7 +62,7 @@ async function renderCanvas(projectId: string) {
     <CanvasLoader
       projectId={projectId}
       projectTitle={project.title}
-      autopilot={await getProjectAutopilot(projectId)}
+      initialExecution={execution}
       billing={billingProjection}
       concurrency={concurrency}
       nodes={nodes}

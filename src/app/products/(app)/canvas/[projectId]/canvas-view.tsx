@@ -1,29 +1,20 @@
 'use client'
 
-import Link from 'next/link'
-import { Clock, Download, Play, Square } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  Background,
-  ReactFlow,
-} from '@xyflow/react'
+import { Background, ReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Button } from '@/components/ui/button'
 import { QueueStatusBar } from '@/components/ui/queue-status-bar'
 import { Toast } from '@/components/ui/toast'
-import { BillingCanvasUsage } from '@/features/billing/ui/usage-panels'
 import type { BillingUiProjection } from '@/features/billing/ui/projection-contract'
 import type { WorkspaceConcurrencyProjection } from '@/features/ai/workspace-concurrency-projection'
 import type { CanvasGraphEdge, PositionedCanvasNode } from '@/features/canvas'
+import type { ProjectExecutionSnapshot } from '@/features/projects'
 import { useProjectStatusStream } from '@/lib/hooks/use-project-status-stream'
 import { usePublishNavContext } from '@/features/navigation/nav-context'
-import { productExportHref } from '@/features/navigation/products-routes'
 import { CanvasAutoHideTopBar } from './canvas-auto-hide-top-bar'
-import {
-  CanvasContextMenu,
-  type CanvasMenuTarget,
-} from './canvas-context-menu'
+import { CanvasExecutionActions } from './canvas-execution-actions'
+import { CanvasContextMenu, type CanvasMenuTarget } from './canvas-context-menu'
 import { CanvasFlowNode } from './canvas-flow-node'
 import { CanvasInspector } from './canvas-inspector'
 import { CanvasLanePanel } from './canvas-lane-panel'
@@ -31,27 +22,32 @@ import { CanvasMiniMap } from './canvas-minimap'
 import { CanvasViewportToolbar } from './canvas-viewport-toolbar'
 import { StageErrorDialog } from './stage-error-dialog'
 
-const canvasNodeTypes = { pipeline: CanvasFlowNode }
 import {
   BillingQuotaExhaustedError,
   startPipeline,
   stopPipeline,
 } from './canvas-action-api'
 import { applyStatusOverlay } from './live-status'
+import { applyExecutionSnapshotToNodes } from './project-execution-sync'
+import { useProjectExecution } from './use-project-execution'
+import {
+  executionActionPresentation,
+  projectExecutionLabel,
+  websitePhaseBorderClass,
+  websiteStagePresentation,
+} from './website-execution-presentation'
 import {
   describePipelineResult,
   type PipelineFeedback,
 } from './pipeline-feedback'
-import {
-  buildLaneSummaries,
-  toFlowEdge,
-  toFlowNode,
-} from './flow-elements'
+import { buildLaneSummaries, toFlowEdge, toFlowNode } from './flow-elements'
+
+const canvasNodeTypes = { pipeline: CanvasFlowNode }
 
 export interface CanvasViewProps {
   projectId: string
   projectTitle: string
-  autopilot: boolean
+  initialExecution: ProjectExecutionSnapshot
   billing: BillingUiProjection
   concurrency: WorkspaceConcurrencyProjection
   nodes: PositionedCanvasNode[]
@@ -61,7 +57,7 @@ export interface CanvasViewProps {
 export function CanvasView({
   projectId,
   projectTitle,
-  autopilot,
+  initialExecution,
   billing,
   concurrency,
   nodes,
@@ -69,21 +65,32 @@ export function CanvasView({
 }: CanvasViewProps) {
   const router = useRouter()
   const [pipelineSubmitting, setPipelineSubmitting] = useState(false)
-  const [pipelineStopping, setPipelineStopping] = useState(false)
   const [pipelineFeedback, setPipelineFeedback] = useState<PipelineFeedback>()
   const [pipelineQuotaOpen, setPipelineQuotaOpen] = useState(false)
   const [collapsedLanes, setCollapsedLanes] = useState<Set<string>>(() => new Set())
   const [selectedNodeId, setSelectedNodeId] = useState(nodes[0]?.id)
   const [menuTarget, setMenuTarget] = useState<CanvasMenuTarget | null>(null)
   const canvasRootRef = useRef<HTMLDivElement>(null)
-  // SSE 状态覆盖层：props 是全量真值基线，覆盖层只做逐节点 status 替换。
-  const hasActiveBaseline = nodes.some(
-    ({ status }) => status === 'pending' || status === 'running'
+  const pipelineInFlightRef = useRef(false)
+  const terminalRefreshRef = useRef<string | undefined>(undefined)
+  const executionRuntime = useProjectExecution(projectId, initialExecution)
+  const {
+    execution,
+    syncInterrupted,
+    refresh: refreshExecution,
+    adopt: adoptExecution,
+  } = executionRuntime
+  const databaseNodes = useMemo(
+    () => applyExecutionSnapshotToNodes(nodes, execution),
+    [execution, nodes],
   )
-  const live = useProjectStatusStream(projectId, hasActiveBaseline || autopilot)
+  const live = useProjectStatusStream(projectId, execution.active)
   const overlay = useMemo(
-    () => applyStatusOverlay(nodes, live.statuses),
-    [live.statuses, nodes]
+    () => applyStatusOverlay(
+      databaseNodes,
+      execution.workflowKind === 'website' ? new Map() : live.statuses,
+    ),
+    [databaseNodes, execution.workflowKind, live.statuses],
   )
   const liveNodes = overlay.nodes
   const topologyHandled = useRef(0)
@@ -104,10 +111,25 @@ export function CanvasView({
   )
   const flowNodes = useMemo(
     () =>
-      liveNodes.map((node) =>
-        toFlowNode(node, hiddenNodeIds, collapsedLanes, node.id === selectedNodeId)
-      ),
-    [collapsedLanes, hiddenNodeIds, liveNodes, selectedNodeId]
+      liveNodes.map((node) => {
+        const stageIndex = execution.stages.findIndex(
+          (stage) => stage.nodeId === node.id,
+        )
+        const stage = stageIndex >= 0 ? execution.stages[stageIndex] : undefined
+        return toFlowNode(
+          node,
+          hiddenNodeIds,
+          collapsedLanes,
+          node.id === selectedNodeId,
+          stage
+            ? {
+                ...websiteStagePresentation(execution, stage, stageIndex),
+                borderClass: websitePhaseBorderClass(stage.phase),
+              }
+            : undefined,
+        )
+      }),
+    [collapsedLanes, execution, hiddenNodeIds, liveNodes, selectedNodeId],
   )
   const flowEdges = useMemo(
     () => edges.map((edge) => toFlowEdge(edge, hiddenNodeIds)),
@@ -124,20 +146,38 @@ export function CanvasView({
   ).length
   const failed = liveNodes.filter(({ status }) => status === 'failed').length
   const rendererNodeId = liveNodes.find(({ type }) => type === 'shot-codegen')?.id
+  const websiteProject = execution.workflowKind === 'website'
+  const action = websiteProject
+    ? executionActionPresentation(execution)
+    : execution.active
+      ? { mode: 'stop' as const, label: '停止项目' }
+      : { mode: 'start' as const, label: '一键启动' }
+  const visibleFeedback = pipelineFeedback ?? (syncInterrupted
+    ? {
+        variant: 'info' as const,
+        title: '状态同步暂时中断',
+        body: '后台任务不受影响，页面会继续自动重试。',
+      }
+    : undefined)
 
   usePublishNavContext({ projectId, rendererNodeId })
 
-  // 兜底轮询：仅在 SSE 不健康时接管（二者硬互斥），行为与修复前一致。
+  // SSE 只提示“可能有变化”；真实状态始终重新读取数据库快照。
   useEffect(() => {
-    if (live.connected) return
-    if (!liveNodes.some(({ status }) => status === 'pending' || status === 'running')) return
-    const timeout = window.setTimeout(() => router.refresh(), 1500)
-    return () => window.clearTimeout(timeout)
-  }, [live.connected, liveNodes, router])
+    if (!execution.active) return
+    if (live.statuses.size === 0 && live.topologyTick === 0) return
+    void refreshExecution()
+  }, [
+    execution.active,
+    refreshExecution,
+    live.statuses,
+    live.topologyTick,
+  ])
 
   // refresh 收敛：拓扑变化 / 覆盖层出现未知节点 / 节点进入 props 尚未见到的终态
   // 时才重拉全图（同步新泳道与 artifacts）；短防抖合并密集事件。
   useEffect(() => {
+    if (websiteProject) return
     const topologyChanged = live.topologyTick > topologyHandled.current
     if (!topologyChanged && overlay.unknownNodeIds.length === 0 && !overlay.terminalDrift) {
       return
@@ -147,63 +187,30 @@ export function CanvasView({
       router.refresh()
     }, 400)
     return () => window.clearTimeout(timeout)
-  }, [live.topologyTick, overlay, router])
+  }, [live.topologyTick, overlay, router, websiteProject])
 
   useEffect(() => {
-    if (!pipelineStopping) return
-    let cancelled = false
-    let timeout: number | undefined
-    const poll = async (): Promise<void> => {
-      try {
-        const result = await stopPipeline(projectId)
-        if (cancelled) return
-        setPipelineFeedback(describePipelineResult(result))
-        if (result.status === 'stopped') {
-          setPipelineStopping(false)
-          router.refresh()
-          return
-        }
-        timeout = window.setTimeout(() => void poll(), 1500)
-      } catch (error) {
-        if (cancelled) return
-        setPipelineStopping(false)
-        setPipelineFeedback({
-          variant: 'error',
-          title: '停止状态确认失败',
-          body: error instanceof Error ? error.message : '停止状态确认失败',
-        })
-      }
-    }
-    timeout = window.setTimeout(() => void poll(), 1500)
-    return () => {
-      cancelled = true
-      if (timeout !== undefined) window.clearTimeout(timeout)
-    }
-  }, [pipelineStopping, projectId, router])
-
-  function toggleLane(laneKey: string): void {
-    setCollapsedLanes((current) => {
-      const next = new Set(current)
-      if (next.has(laneKey)) next.delete(laneKey)
-      else next.add(laneKey)
-      return next
-    })
-  }
+    if (execution.active || execution.state === 'idle') return
+    if (terminalRefreshRef.current === execution.revision) return
+    terminalRefreshRef.current = execution.revision
+    router.refresh()
+  }, [execution.active, execution.revision, execution.state, router])
 
   async function togglePipeline(): Promise<void> {
+    if (pipelineInFlightRef.current || action.mode === 'busy') return
+    pipelineInFlightRef.current = true
     setPipelineSubmitting(true)
     setPipelineFeedback(undefined)
     try {
-      const result = autopilot || pipelineStopping
+      const result = action.mode === 'stop'
         ? await stopPipeline(projectId)
         : await startPipeline(projectId)
-      setPipelineStopping(result.status === 'stopping')
+      adoptExecution(result.execution)
       setPipelineFeedback(describePipelineResult(result))
       if (result.blockedNodes?.some(({ code }) =>
         code === 'quota_exhausted' || code === 'QUOTA_EXHAUSTED')) {
         setPipelineQuotaOpen(true)
       }
-      router.refresh()
     } catch (error) {
       if (error instanceof BillingQuotaExhaustedError) {
         setPipelineQuotaOpen(true)
@@ -214,8 +221,18 @@ export function CanvasView({
         body: error instanceof Error ? error.message : '工作流操作失败',
       })
     } finally {
+      pipelineInFlightRef.current = false
       setPipelineSubmitting(false)
     }
+  }
+
+  function toggleLane(laneKey: string): void {
+    setCollapsedLanes((current) => {
+      const next = new Set(current)
+      if (next.has(laneKey)) next.delete(laneKey)
+      else next.add(laneKey)
+      return next
+    })
   }
 
   return (
@@ -223,44 +240,27 @@ export function CanvasView({
       <section className="relative flex min-w-0 flex-1 flex-col">
         <CanvasAutoHideTopBar
           title={projectTitle}
-          meta={`${liveNodes.length} 节点`}
+          meta={`${liveNodes.length} 节点 · ${projectExecutionLabel(execution.state)}`}
           actions={
-            <>
-              <BillingCanvasUsage projection={billing} />
-              <Button
-                variant="gray"
-                size="sm"
-                icon={
-                  pipelineStopping
-                    ? Clock
-                    : autopilot
-                      ? Square
-                      : Play
-                }
-                disabled={pipelineSubmitting || pipelineStopping}
-                onClick={() => void togglePipeline()}
-              >
-                {pipelineStopping
-                  ? '正在停止'
-                  : autopilot
-                    ? '停止项目'
-                    : '一键启动'}
-              </Button>
-              <Link href={productExportHref(projectId)}>
-                <Button size="sm" icon={Download}>导出 MP4</Button>
-              </Link>
-            </>
+            <CanvasExecutionActions
+              action={action}
+              billing={billing}
+              projectId={projectId}
+              submitting={pipelineSubmitting}
+              websiteProject={websiteProject}
+              onToggle={() => void togglePipeline()}
+            />
           }
         />
-        {pipelineFeedback && (
+        {visibleFeedback && (
           <div
             data-slot="pipeline-feedback"
             className="pointer-events-none absolute right-3 top-14 z-20 max-w-[calc(100%-1.5rem)] sm:right-4 sm:max-w-[calc(100%-2rem)]"
           >
             <Toast
-              variant={pipelineFeedback.variant}
-              title={pipelineFeedback.title}
-              body={pipelineFeedback.body}
+              variant={visibleFeedback.variant}
+              title={visibleFeedback.title}
+              body={visibleFeedback.body}
               className="w-full max-w-[360px]"
             />
           </div>
@@ -322,12 +322,15 @@ export function CanvasView({
           waiting={waiting}
           failed={failed}
           total={liveNodes.length}
-          label={`套餐并发 ${concurrency.active}/${concurrency.limit} · ${concurrency.waiting} 个分镜排队`}
+          label={websiteProject
+            ? `已完成 ${execution.stages.filter((stage) => stage.state === 'succeeded').length}/6 阶段`
+            : `套餐并发 ${concurrency.active}/${concurrency.limit} · ${concurrency.waiting} 个分镜排队`}
         />
       </section>
       <CanvasInspector
         projectId={projectId}
         node={selectedNode}
+        execution={execution}
         onQueued={() => router.refresh()}
         onQuotaExhausted={() => setPipelineQuotaOpen(true)}
       />

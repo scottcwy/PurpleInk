@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/settings-group'
 import { SettingsRow } from '@/components/ui/settings-row'
 import type { CanvasGraphNode } from '@/features/canvas'
+import type { ProjectExecutionSnapshot } from '@/features/projects'
 import { useLocalTimeZone } from '@/lib/hooks/use-local-time-zone'
 import {
   parseWebsiteExecution,
@@ -15,28 +16,33 @@ import {
   type WebsiteExecutionProjection,
   type WebsiteInspectorTab,
 } from './website-stage-inspector-data'
+import { projectExecutionLabel } from './website-execution-presentation'
 
 const PHASE_LABEL: Record<string, string> = {
   capture: '网站采集',
   script: '介绍脚本',
-  narration: '旁白合成',
-  compose: '画面编排',
-  render: '成片渲染',
-  export: '验证与入库',
+  narration: '旁白生成',
+  compose: '画面合成',
+  render: '视频渲染',
+  export: '成片验收与导出',
 }
 
 const STATE_LABEL: Record<string, string> = {
   queued: '已排队',
   running: '执行中',
   succeeded: '已完成',
+  blocked: '质量验收阻塞',
   failed: '失败',
   cancelled: '已取消',
+  idle: '未启动',
 }
 
 export function WebsiteStageInspector({
   node,
+  execution,
 }: {
   node: Pick<CanvasGraphNode, 'data'>
+  execution: ProjectExecutionSnapshot
 }) {
   const [tab, setTab] = useState<WebsiteInspectorTab>('data')
   const timeZone = useLocalTimeZone()
@@ -65,7 +71,7 @@ export function WebsiteStageInspector({
       <p className="text-[11px] leading-4 text-ds-text-muted">
         {tabDescription(tab)}
       </p>
-      {renderTab(tab, projection, timeZone)}
+      {renderTab(tab, projection, execution, timeZone)}
     </section>
   )
 }
@@ -73,6 +79,7 @@ export function WebsiteStageInspector({
 function renderTab(
   tab: WebsiteInspectorTab,
   projection: WebsiteExecutionProjection | undefined,
+  execution: ProjectExecutionSnapshot,
   timeZone: string,
 ) {
   if (tab === 'source') {
@@ -108,7 +115,10 @@ function renderTab(
           ['引擎截止', '45 分钟'],
           ['队列保护', '50 分钟 · 30 秒心跳'],
           ['验证结果', verificationLabel(projection?.verification)],
+          ['容器校验', checkLabel(projection?.verification?.checkPassed)],
+          ['金样本校验', checkLabel(projection?.verification?.goldenVerified)],
           ['最终产物', artifactLabel(projection?.artifact)],
+          ['Artifact 状态', deliveryLabel(execution)],
         ]}
       />
     )
@@ -116,9 +126,10 @@ function renderTab(
   return (
     <FactGroup
       facts={[
+        ['项目执行状态', projectExecutionLabel(execution.state)],
         ['工作流阶段', readLabel(PHASE_LABEL, projection?.phase)],
         ['投影状态', readLabel(STATE_LABEL, projection?.state)],
-        ['引擎检查点', projection?.enginePhase ?? '等待受控 worker 回传'],
+        ['引擎检查点', enginePhaseLabel(projection?.enginePhase)],
         ['同步时间', formatTimestamp(projection?.updatedAt, timeZone)],
         ['安全失败码', projection?.failureCode ?? '无'],
       ]}
@@ -173,6 +184,35 @@ function verificationLabel(
   const checks =
     value.goldenCheckCount === undefined ? '' : ` · ${value.goldenCheckCount} 项金样本`
   return `${outcome}${checks}`
+}
+
+function checkLabel(value: boolean | undefined): string {
+  if (value === undefined) return '等待校验'
+  return value ? '通过' : '未通过'
+}
+
+function deliveryLabel(execution: ProjectExecutionSnapshot): string {
+  const delivery = execution.delivery
+  if (!delivery) return '等待真实 MP4 Artifact'
+  return `${delivery.lifecycle} · v${delivery.version}`
+}
+
+function enginePhaseLabel(value: string | undefined): string {
+  if (!value) return '等待受控 worker 回传'
+  return {
+    queued: '等待执行器',
+    capturing: '正在采集网站',
+    scripting: '正在生成介绍脚本',
+    synthesizing: '正在生成旁白',
+    timing: '正在对齐旁白时序',
+    composing: '正在合成画面',
+    rendering: '正在渲染视频',
+    verifying: '正在执行成片校验',
+    muxing: '正在封装 MP4',
+    done: '已完成',
+    failed: '执行失败',
+    cancelled: '已取消',
+  }[value] ?? value
 }
 
 function artifactLabel(

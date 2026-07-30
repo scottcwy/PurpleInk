@@ -11,6 +11,7 @@ import { SettingsRow } from '@/components/ui/settings-row'
 import { StatusPill } from '@/components/ui/status-pill'
 import { Toast } from '@/components/ui/toast'
 import type { CanvasGraphNode } from '@/features/canvas'
+import type { ProjectExecutionSnapshot } from '@/features/projects'
 import { ArtifactHoverChip } from '@/features/canvas/artifact-hover-chip'
 import { AnimatedAside, DrawerOverlay } from '@/features/navigation/collapsible-panel'
 import {
@@ -34,16 +35,19 @@ import { getNodeStatusLabel, getNodeStatusPresentation } from './flow-elements'
 import { isNodeActionBlocked, nodeActionLabel } from './node-action-presentation'
 import { StreamingLogCard } from './streaming-log-card'
 import { WebsiteStageInspector } from './website-stage-inspector'
+import { websiteStagePresentation } from './website-execution-presentation'
 import { skipKindForNodeType } from '@/features/director/skip-policy'
 
 export function CanvasInspector({
   projectId,
   node,
+  execution,
   onQueued,
   onQuotaExhausted,
 }: {
   projectId: string
   node?: CanvasGraphNode
+  execution: ProjectExecutionSnapshot
   onQueued: (jobId: string) => void
   onQuotaExhausted: () => void
 }) {
@@ -101,6 +105,7 @@ export function CanvasInspector({
     <InspectorBody
       node={node}
       projectId={projectId}
+      execution={execution}
       submitting={submitting}
       error={error?.nodeId === node.id ? error.message : undefined}
       queuedFeedback={queuedFeedback}
@@ -204,6 +209,7 @@ function EmptyInspector({
 function InspectorBody({
   node,
   projectId,
+  execution,
   submitting,
   error,
   queuedFeedback,
@@ -215,6 +221,7 @@ function InspectorBody({
 }: {
   node: CanvasGraphNode
   projectId: string
+  execution: ProjectExecutionSnapshot
   submitting: boolean
   error?: string
   queuedFeedback?: { jobId: string; message: string }
@@ -225,14 +232,27 @@ function InspectorBody({
   showCollapse: boolean
 }) {
   const status = getNodeStatusPresentation(node.status)
+  const websiteStageIndex = execution.stages.findIndex(
+    (stage) => stage.nodeId === node.id,
+  )
+  const websiteStage = websiteStageIndex >= 0
+    ? execution.stages[websiteStageIndex]
+    : undefined
+  const websitePresentation = websiteStage
+    ? websiteStagePresentation(execution, websiteStage, websiteStageIndex)
+    : undefined
   return (
     <div className={cn('flex h-full flex-col gap-4 overflow-auto p-4')}>
       <div className="flex items-center justify-between gap-2">
         <h2 className="min-w-0 truncate text-[17px] font-semibold">
-          {node.laneKey ?? NODE_LABEL[node.type]}
+          {websitePresentation?.title ?? node.laneKey ?? NODE_LABEL[node.type]}
         </h2>
         <div className="flex shrink-0 items-center gap-1">
-          <StatusPill variant={status.variant} label={getNodeStatusLabel(node.type, node.status)} />
+          <StatusPill
+            variant={status.variant}
+            label={websitePresentation?.status
+              ?? getNodeStatusLabel(node.type, node.status)}
+          />
           {showCollapse && (
             <IconButton
               icon={ChevronRight}
@@ -243,7 +263,7 @@ function InspectorBody({
         </div>
       </div>
       {node.type === 'website-stage' ? (
-        <WebsiteStageInspector node={node} />
+        <WebsiteStageInspector node={node} execution={execution} />
       ) : (
         <div className="flex h-40 items-center justify-center rounded-md bg-ds-surface-muted">
           <FileCode className="size-10 text-ds-text-muted" />

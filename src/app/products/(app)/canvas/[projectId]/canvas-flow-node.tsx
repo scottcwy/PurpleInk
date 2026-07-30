@@ -31,6 +31,9 @@ export type CanvasFlowNodeData = {
   status: NodeStatus
   laneKey: string | null
   collapsed: boolean
+  title?: string
+  statusLabel?: string
+  borderClass?: string
 }
 
 export type CanvasFlowNode = Node<CanvasFlowNodeData, 'pipeline'>
@@ -50,10 +53,11 @@ const NODE_ICON: Record<CanvasNodeType, LucideIcon> = {
 }
 
 export function CanvasFlowNode({ data, selected }: NodeProps<CanvasFlowNode>) {
-  const statusLabel =
+  const statusLabel = data.statusLabel ?? (
     data.collapsed && data.nodeType === 'shot-script'
       ? '已折叠 · 5 节点'
       : getNodeStatusLabel(data.nodeType, data.status)
+  )
 
   return (
     <div className="relative">
@@ -63,13 +67,14 @@ export function CanvasFlowNode({ data, selected }: NodeProps<CanvasFlowNode>) {
         className="!h-2 !w-2 !border-ds-border !bg-ds-surface"
       />
       <PipelineNode
-        title={PIPELINE_NODE_TITLE[data.nodeType]}
+        title={data.title ?? PIPELINE_NODE_TITLE[data.nodeType]}
         meta={data.laneKey ?? undefined}
         nodeType={data.nodeType}
         status={data.status}
         statusLabel={statusLabel}
         selected={selected}
         icon={NODE_ICON[data.nodeType]}
+        className={data.borderClass}
       />
       <Handle
         type="source"

@@ -104,7 +104,7 @@ describe('Canvas pipeline feedback wiring', () => {
   it('消费真实 pipeline 返回值且不显示无来源的自动保存状态', () => {
     expect(canvasViewSource).toContain('describePipelineResult(result)')
     expect(canvasViewSource).toContain("'停止项目'")
-    expect(canvasViewSource).toContain("'正在停止'")
+    expect(canvasViewSource).toContain('executionActionPresentation(execution)')
     expect(canvasViewSource).not.toContain(fixedAutosaveCopy)
   })
 

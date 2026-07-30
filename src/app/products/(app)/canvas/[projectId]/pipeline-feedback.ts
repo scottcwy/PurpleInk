@@ -6,8 +6,12 @@ export interface PipelineFeedback {
   body: string
 }
 
+type PipelineFeedbackResult = Omit<PipelineControlResult, 'execution'> & {
+  execution?: PipelineControlResult['execution']
+}
+
 export function describePipelineResult(
-  result: PipelineControlResult
+  result: PipelineFeedbackResult
 ): PipelineFeedback {
   const enqueued = result.enqueuedNodeIds?.length ?? 0
   const failed = result.failedNodeIds?.length ?? 0
@@ -48,6 +52,13 @@ export function describePipelineResult(
       body: '全部节点已有有效产物。',
     }
   }
+  if (result.status === 'reused') {
+    return {
+      variant: 'info',
+      title: '已恢复现有任务',
+      body: '没有创建重复任务，页面正在同步真实执行进度。',
+    }
+  }
   if (failed > 0) {
     return {
       variant: 'error',
@@ -55,15 +66,11 @@ export function describePipelineResult(
       body: `已入队 ${enqueued} 个节点，失败 ${failed} 个节点。`,
     }
   }
-  return result.autopilot
-    ? {
-        variant: 'success',
-        title: '工作流已启动',
-        body: `已入队 ${enqueued} 个节点。`,
-      }
-    : {
-        variant: 'success',
-        title: '项目已停止',
-        body: '项目没有仍在执行的作业，可以安全删除项目。',
-      }
+  return {
+    variant: 'success',
+    title: result.execution?.state === 'queued' ? '工作流已排队' : '工作流已启动',
+    body: enqueued > 0
+      ? `已入队 ${enqueued} 个节点。`
+      : '后台任务已接收，页面正在同步真实执行状态。',
+  }
 }

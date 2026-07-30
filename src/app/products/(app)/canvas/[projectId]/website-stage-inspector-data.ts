@@ -17,9 +17,11 @@ const PHASES = [
   'export',
 ] as const
 const STATES = [
+  'idle',
   'queued',
   'running',
   'succeeded',
+  'blocked',
   'failed',
   'cancelled',
 ] as const
@@ -35,6 +37,7 @@ const ENGINE_PHASES = [
   'muxing',
   'done',
   'failed',
+  'cancelled',
 ] as const
 const FAILURE_CODES = [
   'WEBSITE_ENGINE_TIMEOUT',
@@ -44,6 +47,8 @@ const FAILURE_CODES = [
   'WEBSITE_VIDEO_INVALID',
   'WEBSITE_PROJECT_INVALID',
   'WEBSITE_EXECUTION_FAILED',
+  'WEBSITE_VERIFICATION_FAILED',
+  'WEBSITE_STATE_INCONSISTENT',
 ] as const
 
 export interface WebsiteExecutionProjection {

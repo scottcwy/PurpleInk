@@ -223,8 +223,8 @@ JS 镜像在 `src/lib/motion/tokens.ts`，由 `tokens.test.ts` 的同步测试�
 | `ArtifactChip/Canonical` | `OJzNk` | Artifact 标识/链接外观 | muted surface + mono |
 | `InspectorTabs/Canonical` | `N4FZZS` | 固定四页签 | Data / Source / Gates / Execution |
 | `ProjectCard/Canonical` | `S1xDL` | 项目摘要 | surface / muted preview |
-| `PipelineNode/Canonical` | `Qsovp` | DAG 任务与 checkpoint | surface + semantic status；生产挂载 `/products/canvas/[projectId]`；状态枚举为领域 `NodeStatus`；实例 override 含 `selected` |
-| `QueueBar/Canonical` | `XL8t8` | Trigger/队列摘要 | surface + border；可用 label 安全投影当前账号的套餐并发与排队数 |
+| `PipelineNode/Canonical` | `Qsovp` | DAG 任务与 checkpoint | surface + semantic status；生产挂载 `/products/canvas/[projectId]`；状态枚举为领域 `NodeStatus`；实例 override 含 `selected`；website 六阶段由数据库执行快照覆盖真实标题、动作文案与既有 stage 色 |
+| `QueueBar/Canonical` | `XL8t8` | Trigger/队列摘要 | surface + border；script/audio 可投影套餐并发与排队数，website 只显示数据库确认的“已完成 N/6 阶段” |
 
 规则：
 

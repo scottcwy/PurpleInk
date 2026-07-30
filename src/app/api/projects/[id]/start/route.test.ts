@@ -164,6 +164,41 @@ describe('POST /api/projects/[id]/start', () => {
     expect(mocks.startProjectWorkflow).not.toHaveBeenCalled()
   })
 
+  it('distinguishes a reused website attempt from a newly queued attempt', async () => {
+    mocks.getProjectExecutionSnapshot
+      .mockResolvedValueOnce({
+        ...execution(),
+        workflowKind: 'website',
+        state: 'idle',
+        active: false,
+        canStart: true,
+        canStop: false,
+      })
+      .mockResolvedValueOnce({
+        ...execution(),
+        workflowKind: 'website',
+        state: 'queued',
+      })
+    mocks.startProjectWorkflow.mockResolvedValue({
+      kind: 'website',
+      status: 'started',
+      entryNodeId: 'entry-1',
+      jobId: 'attempt-1',
+      attemptStatus: 'queued',
+      reused: true,
+      enqueuedNodeIds: ['entry-1'],
+    })
+
+    const response = await POST(new Request('http://localhost'), context(PROJECT_ID))
+
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      kind: 'website',
+      status: 'reused',
+      execution: { state: 'queued' },
+    })
+  })
+
   it('rejects an invalid path before touching billing or queue state', async () => {
     const response = await POST(new Request('http://localhost'), context('../bad'))
     expect(response.status).toBe(400)

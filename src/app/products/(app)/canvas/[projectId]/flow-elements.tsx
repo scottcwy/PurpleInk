@@ -112,7 +112,8 @@ export function toFlowNode(
   node: PositionedCanvasNode,
   hiddenNodeIds: Set<string>,
   collapsedLanes: Set<string>,
-  selected = false
+  selected = false,
+  presentation?: { title: string; status: string; borderClass?: string },
 ): ViewNode {
   const collapsed = Boolean(node.laneKey && collapsedLanes.has(node.laneKey))
   return {
@@ -130,6 +131,15 @@ export function toFlowNode(
       status: node.status,
       laneKey: node.laneKey,
       collapsed,
+      ...(presentation
+        ? {
+            title: presentation.title,
+            statusLabel: presentation.status,
+            ...(presentation.borderClass
+              ? { borderClass: presentation.borderClass }
+              : {}),
+          }
+        : {}),
     },
   }
 }
