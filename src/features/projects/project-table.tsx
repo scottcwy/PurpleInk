@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import type { ReactNode } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { StatusPill } from '@/components/ui/status-pill'
@@ -29,6 +29,11 @@ export interface ProjectTableProps {
   onLoadMore: () => void
   emptyLabel: string
   emptyAction?: ReactNode
+  /** 右键唤出项目菜单；与网格卡片共用同一个菜单实例。 */
+  onProjectContextMenu?: (
+    event: MouseEvent,
+    project: { id: string; title: string },
+  ) => void
 }
 
 /** 列表布局：顶部板块 tab + 名称/状态/来源/更新时间四列，触底按钮式追加。 */
@@ -46,6 +51,7 @@ export function ProjectTable({
   onLoadMore,
   emptyLabel,
   emptyAction,
+  onProjectContextMenu,
 }: ProjectTableProps) {
   return (
     <div className="flex min-w-0 flex-col gap-4">
@@ -75,7 +81,12 @@ export function ProjectTable({
               <span>更新时间</span>
             </div>
             {items.map((item) => (
-              <TableRow key={item.id} item={item} showKind={searchMode} />
+              <TableRow
+                key={item.id}
+                item={item}
+                showKind={searchMode}
+                onProjectContextMenu={onProjectContextMenu}
+              />
             ))}
           </div>
         </div>
@@ -103,11 +114,25 @@ export function ProjectTable({
   )
 }
 
-function TableRow({ item, showKind }: { item: ProjectCardItem; showKind: boolean }) {
+function TableRow({
+  item,
+  showKind,
+  onProjectContextMenu,
+}: {
+  item: ProjectCardItem
+  showKind: boolean
+  onProjectContextMenu?: (
+    event: MouseEvent,
+    project: { id: string; title: string },
+  ) => void
+}) {
   const meta = projectKindMeta(item.kind)
   return (
     <Link
       href={productCanvasHref(item.id)}
+      onContextMenu={(event) =>
+        onProjectContextMenu?.(event, { id: item.id, title: item.title })
+      }
       className="grid grid-cols-[minmax(0,1.6fr)_120px_minmax(0,2fr)_170px] items-center gap-3 border-b border-ds-border px-4 py-3 transition-colors last:border-b-0 hover:bg-ds-surface-muted"
     >
       <span className="flex min-w-0 items-center gap-2">

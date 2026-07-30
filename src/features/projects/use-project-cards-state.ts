@@ -9,6 +9,7 @@ import {
   useSyncExternalStore,
 } from 'react'
 import type { ProjectWorkflowKind } from '@/lib/workflow/project-workflow-registry'
+import { PROJECT_WORKFLOW_KINDS } from '@/lib/workflow/project-workflow-registry'
 import {
   appendUniqueItems,
   fetchProjectCards,
@@ -239,6 +240,45 @@ export function useProjectCardsState({
       .finally(() => setSearchLoadingMore(false))
   }, [])
 
+  // 单项变更后的本地收敛：只改受影响的那一条，不整表重拉（数据窗口口径不变）。
+  const renameItem = useCallback((projectId: string, title: string) => {
+    const rename = (items: ProjectCardItem[]) =>
+      items.map((item) => (item.id === projectId ? { ...item, title } : item))
+    setKindStates((current) => mapKindItems(current, rename))
+    setSearchResult((current) =>
+      current ? { ...current, items: rename(current.items) } : current,
+    )
+  }, [])
+
+  const removeItem = useCallback((projectId: string) => {
+    const drop = (items: ProjectCardItem[]) =>
+      items.filter((item) => item.id !== projectId)
+    let removedKind: ProjectWorkflowKind | null = null
+    for (const kind of PROJECT_WORKFLOW_KINDS) {
+      if (kindStatesRef.current[kind].items.some((item) => item.id === projectId)) {
+        removedKind = kind
+        break
+      }
+    }
+    setKindStates((current) => mapKindItems(current, drop))
+    setSearchResult((current) =>
+      current
+        ? {
+            ...current,
+            items: drop(current.items),
+            total: Math.max(0, current.total - 1),
+          }
+        : current,
+    )
+    if (removedKind) {
+      const kind = removedKind
+      setCounts((current) => ({
+        ...current,
+        [kind]: Math.max(0, current[kind] - 1),
+      }))
+    }
+  }, [])
+
   const rowOrder = useMemo(
     () => sortKindsByCount(search ? search.counts : counts),
     [search, counts],
@@ -265,5 +305,18 @@ export function useProjectCardsState({
     setActiveKind,
     loadMoreKind,
     loadMoreSearch,
+    renameItem,
+    removeItem,
+  }
+}
+
+function mapKindItems(
+  current: Record<ProjectWorkflowKind, KindState>,
+  update: (items: ProjectCardItem[]) => ProjectCardItem[],
+): Record<ProjectWorkflowKind, KindState> {
+  return {
+    script: { ...current.script, items: update(current.script.items) },
+    audio: { ...current.audio, items: update(current.audio.items) },
+    website: { ...current.website, items: update(current.website.items) },
   }
 }

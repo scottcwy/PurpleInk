@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'motion/react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { ProjectCard } from '@/components/ui/project-card'
 import { productCanvasHref } from '@/features/navigation/products-routes'
@@ -24,6 +24,11 @@ export interface ProjectKindRowProps {
   onLoadMore?: () => void
   emptyLabel: string
   emptyAction?: ReactNode
+  /** 右键唤出项目菜单；由 ProjectList 持有唯一菜单实例。 */
+  onProjectContextMenu?: (
+    event: MouseEvent,
+    project: { id: string; title: string },
+  ) => void
 }
 
 /**
@@ -39,6 +44,7 @@ export function ProjectKindRow({
   onLoadMore,
   emptyLabel,
   emptyAction,
+  onProjectContextMenu,
 }: ProjectKindRowProps) {
   const meta = projectKindMeta(kind)
   const Icon = meta.icon
@@ -80,6 +86,7 @@ export function ProjectKindRow({
             loading={loading}
             error={error}
             onLoadMore={onLoadMore}
+            onProjectContextMenu={onProjectContextMenu}
           />
         ) : (
           <div className="ds-dot-grid flex min-h-44 flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-ds-border px-5 text-center">
@@ -138,12 +145,17 @@ function CardTrack({
   loading,
   error,
   onLoadMore,
+  onProjectContextMenu,
 }: {
   items: readonly ProjectCardItem[]
   hasMore: boolean
   loading: boolean
   error: string | null
   onLoadMore?: () => void
+  onProjectContextMenu?: (
+    event: MouseEvent,
+    project: { id: string; title: string },
+  ) => void
 }) {
   const trackRef = useRef<HTMLDivElement>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -169,6 +181,9 @@ function CardTrack({
           key={item.id}
           href={productCanvasHref(item.id)}
           className="block w-[300px] shrink-0"
+          onContextMenu={(event) =>
+            onProjectContextMenu?.(event, { id: item.id, title: item.title })
+          }
         >
           <ProjectCard
             title={item.title}

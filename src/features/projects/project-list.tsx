@@ -11,6 +11,7 @@ import {
   type ProjectKindCounts,
 } from './project-cards-client'
 import { ProjectKindRow } from './project-kind-row'
+import { useProjectContextMenu } from './project-context-menu'
 import { ProjectSearchFlyout } from './project-search-flyout'
 import { ProjectTable } from './project-table'
 import {
@@ -56,7 +57,15 @@ export function ProjectList({
     setActiveKind,
     loadMoreKind,
     loadMoreSearch,
+    renameItem,
+    removeItem,
   } = state
+
+  // 整页只持有一个菜单实例，网格卡片与列表行共用同一批 handler。
+  const projectMenu = useProjectContextMenu({
+    onRenamed: renameItem,
+    onDeleted: removeItem,
+  })
 
   return (
     <>
@@ -105,6 +114,7 @@ export function ProjectList({
                       : `还没有${meta.shortLabel}项目`
                   }
                   emptyAction={searching ? undefined : emptyActions?.[kind]}
+                  onProjectContextMenu={projectMenu.openMenu}
                 />
               )
             })}
@@ -135,9 +145,11 @@ export function ProjectList({
                 : `还没有${projectKindMeta(activeKind).shortLabel}项目`
             }
             emptyAction={searching ? undefined : emptyActions?.[activeKind]}
+            onProjectContextMenu={projectMenu.openMenu}
           />
         )}
       </div>
+      {projectMenu.overlay}
     </>
   )
 }
