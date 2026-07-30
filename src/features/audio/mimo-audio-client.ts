@@ -1,7 +1,6 @@
 import 'server-only'
 import { z } from 'zod'
 import { getMimoConfig, type MimoConfig } from '@/features/ai/mimo-config'
-import { withProviderDispatch } from '@/features/ai/provider-dispatch'
 import {
   providerErrorFromResponse,
   providerNetworkError,
@@ -48,7 +47,6 @@ const asrResponseSchema = z
 export interface MimoAudioDependencies {
   fetcher: typeof fetch
   getConfig: () => Promise<MimoConfig>
-  dispatch?: typeof withProviderDispatch
 }
 
 const DEFAULT_VOICE = 'mimo_default'
@@ -60,13 +58,6 @@ export async function synthesizeMimoSpeech(
 ): Promise<SynthesizedSpeech> {
   const parsed = speechInputSchema.parse(input)
   const config = requireKey(await dependencies.getConfig())
-  return (dependencies.dispatch ?? withProviderDispatch)({
-    providerId: 'mimo',
-    providerLabel: '小米 MiMo',
-    funding: 'managed',
-    apiKey: config.apiKey,
-    tokenEstimate: Array.from(parsed.text).length,
-  }, async () => {
   const response = await request(dependencies.fetcher, config, {
     model: config.ttsModel,
     messages: [
@@ -95,7 +86,6 @@ export async function synthesizeMimoSpeech(
     model: config.ttsModel,
     nativeCaptions: [],
   }
-  })
 }
 
 export async function transcribeMimoSpeech(
@@ -104,12 +94,6 @@ export async function transcribeMimoSpeech(
 ): Promise<TranscribedSpeech> {
   const parsed = transcriptionInputSchema.parse(input)
   const config = requireKey(await dependencies.getConfig())
-  return (dependencies.dispatch ?? withProviderDispatch)({
-    providerId: 'mimo',
-    providerLabel: '小米 MiMo',
-    funding: 'managed',
-    apiKey: config.apiKey,
-  }, async () => {
   const mime = parsed.audioFormat === 'wav' ? 'audio/wav' : 'audio/mpeg'
   const response = await request(dependencies.fetcher, config, {
     model: config.asrModel,
@@ -130,7 +114,6 @@ export async function transcribeMimoSpeech(
     model: config.asrModel,
     captions: [],
   }
-  })
 }
 
 async function request(

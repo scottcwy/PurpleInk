@@ -1,7 +1,7 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
+import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
 import {
   type ShotLaneSeed,
 } from '@/features/canvas'
@@ -166,7 +166,7 @@ export async function runAudioTranscriptionJob(
     )
     await resolved.transition(payload.nodeId, 'success')
   } catch (error) {
-    if (error instanceof ProviderDispatchWaitError && error.retryAt) {
+    if (error instanceof ProviderQueueDeferral && error.retryAt) {
       await settleDispatchWait(payload.nodeId, error, error.retryAt, resolved)
     } else {
       await settleFailure(payload.nodeId, error, resolved)
@@ -213,7 +213,7 @@ function shotSeeds(timeline: UserAudioTimeline): ShotLaneSeed[] {
 
 async function settleDispatchWait(
   nodeId: string,
-  error: ProviderDispatchWaitError,
+  error: ProviderQueueDeferral,
   retryAt: string,
   dependencies: AudioTranscriptionDependencies,
 ): Promise<void> {

@@ -34,7 +34,6 @@ describe('MiMo audio client', () => {
       {
         fetcher,
         getConfig: async () => config,
-        dispatch: async (_input, invoke) => invoke(),
       }
     )
 
@@ -67,7 +66,6 @@ describe('MiMo audio client', () => {
       {
         fetcher,
         getConfig: async () => config,
-        dispatch: async (_input, invoke) => invoke(),
       }
     )
 

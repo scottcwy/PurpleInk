@@ -11,6 +11,7 @@ import { withProviderDispatch } from './provider-dispatch'
 import {
   providerErrorFromResponse,
   providerNetworkError,
+  ProviderRequestError,
   type ProviderFunding,
 } from './provider-request-error'
 
@@ -47,7 +48,7 @@ type VisionMessage =
 
 export interface ManagedVisionExecutorDependencies {
   resolveTarget: () => Promise<DirectorModelTarget>
-  gateway: Pick<ManagedAiGateway, 'begin'>
+  gateway: Pick<ManagedAiGateway, 'prepare'>
   complete(input: {
     apiKey: string
     baseUrl: string
@@ -68,7 +69,7 @@ export async function executeManagedVisionQa(
   const dependencies = { ...defaultDependencies(), ...deps }
   const target = await dependencies.resolveTarget()
   const messages = buildMessages(input)
-  const handle = await dependencies.gateway.begin({
+  const prepared = await dependencies.gateway.prepare({
     attemptId: input.attemptId,
     invocationNo: billingInvocationNo('vision-qa', input.invocationIndex),
     provider: target.provider,
@@ -77,24 +78,25 @@ export async function executeManagedVisionQa(
     rawInput: JSON.stringify(messages),
     maxOutputTokens: VISION_QA_MAX_OUTPUT_TOKENS,
   })
-  const apiKey = handle.credential ?? target.apiKey
+  const apiKey = prepared.credential ?? target.apiKey
   if (!apiKey) {
-    await handle.releaseBeforeCall()
     throw new Error(
       `${PROVIDER_REGISTRY[target.provider].label} API Key 未配置，无法执行 Vision QA`,
     )
   }
+  return dependencies.dispatch({
+    providerId: target.provider,
+    providerLabel: PROVIDER_REGISTRY[target.provider].label,
+    funding: prepared.dispatchFunding,
+    apiKey,
+    attemptId: input.attemptId,
+  }, async () => {
+  const handle = await prepared.begin()
   try {
     await handle.markProviderStarted?.()
     const providerLabel = PROVIDER_REGISTRY[target.provider].label
     const funding = target.funding ?? 'managed'
-    const completion = await dependencies.dispatch({
-      providerId: target.provider,
-      providerLabel,
-      funding,
-      apiKey,
-      attemptId: input.attemptId,
-    }, () => dependencies.complete({
+    const completion = await dependencies.complete({
       apiKey,
       baseUrl: target.baseUrl,
       model: target.modelId,
@@ -103,7 +105,7 @@ export async function executeManagedVisionQa(
       providerId: target.provider,
       providerLabel,
       funding,
-    }))
+    })
     if (!completion.content) {
       await settleVision(handle, completion, true)
       throw new Error('Vision 模型未返回报告')
@@ -115,9 +117,26 @@ export async function executeManagedVisionQa(
       content: completion.content,
     }
   } catch (error) {
-    await handle.settleUnavailable(true, 'unknown')
+    if (error instanceof ProviderRequestError && isRejectedWithoutUsage(error)) {
+      if (handle.settleRejected) await handle.settleRejected(error.kind)
+      else await handle.releaseBeforeCall()
+    } else {
+      await handle.settleUnavailable(true, 'unknown')
+    }
     throw error
   }
+  })
+}
+
+function isRejectedWithoutUsage(error: ProviderRequestError): boolean {
+  return [
+    'auth',
+    'balance',
+    'permission',
+    'rate_limit',
+    'request',
+    'safety',
+  ].includes(error.kind)
 }
 
 function defaultDependencies(): ManagedVisionExecutorDependencies {

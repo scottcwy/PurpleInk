@@ -3,7 +3,7 @@ import { billingInvocationNo } from '@/features/billing'
 import { createHash } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
+import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
 import {
   classifyWorkflowError,
   type WorkflowErrorProjection,
@@ -115,7 +115,7 @@ export async function runMediaNarrationJob(
 }
 
 function projectMediaErrorState(error: unknown, nodeId: string): MediaState {
-  if (error instanceof ProviderDispatchWaitError && error.retryAt) {
+  if (error instanceof ProviderQueueDeferral && error.retryAt) {
     return {
       status: 'waiting',
       code: 'PROVIDER_POOL_WAIT',

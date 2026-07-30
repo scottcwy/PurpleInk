@@ -422,10 +422,9 @@ Provider 失败，既消耗重试预算，又污染连续失败计数。
 - 在途上限从 8 起步、最高 50。最近至少完成 20 次且连续 5 分钟稳定才增加 1；
   真实 429 立即降 25%，503/网络/超时样本率超过 2% 同样降 25%。
 - 429 优先遵循 `Retry-After`（秒数或 HTTP 日期），缺失时按 2/4/8/16/30 秒退避并抖动。
-  调度器发送前发现的亚秒等待与真实外部 429 都必须把旧 attempt 置为
-  `superseded`，再创建 `attemptNo+1` 的延迟恢复记录；新记录继承
-  `queueMeta.ordinaryAttemptNo`，因此两者都不计普通重试或熔断失败次数。发送前等待
-  已释放本轮计费预留，禁止复用同一 attempt 及其已终态的 invocation。
+  发送前等待不建立计费 invocation：2 秒内由数据库票据分配唯一时间槽并在当前 worker
+  等待，更长等待把同一 attempt 原子改回 `queued` 并推迟 `visible_at`。只有真实出网后的
+  429 才终结本轮 invocation、supersede 当前 attempt 并创建 `attemptNo+1` 的恢复记录。
 - 单任务累计限流等待最多 15 分钟；超过后才终态化为 `PROVIDER_RATE_LIMITED`。
   401/402/403/429/451、平台内部错误都不得推动熔断；只有真实 5xx、网络故障与上游超时计数。
 - 等待态使用 `executionNotice` 的安全投影，不弹失败对话框、不显示红色失败状态、不建议跳过
@@ -594,25 +593,21 @@ UI 投影为 `STAGE_FAILED`（阶段兜底），且同一进程的 dev log 可�
 
 **规则**：
 
-- `ProviderDispatchWaitError` 是调度等待而非上游失败，不得被包装为
-  `managedUpstreamError`。必须透传让队列层用内置的 dispatch-wait 调度。
-- 托管音频计费层捕获 `invoke()` 异常前，必须先检查是否为
-  `ProviderDispatchWaitError`；若是，调用 `handle.releaseBeforeCall()` 释放
-  计费预留后直接重抛。
-- worker 启动错峰只是削峰，不是 Provider pacing 的正确性边界；所有 TTS / ASR
-  出网仍必须经过共享凭据对应的调度 scope。
-- 一组旁白 worker 必须先用 `Promise.allSettled` 排空所有已启动 lane，再向队列抛出
-  等待或失败；存在多个错误时优先抛 `ProviderDispatchWaitError`，避免旧执行与恢复
-  attempt 重叠。
-- 发送前等待必须 supersede 当前 attempt 并创建新的 attemptNo；新 checkpoint 保留
-  `ordinaryAttemptNo`，使等待不消耗普通失败预算，同时让计费层获得新的 invocation id。
+- `ProviderQueueDeferral` 是队列控制信号而非上游失败，不得经过错误分类、
+  `managedUpstreamError`、普通重试或熔断。
+- 调度许可必须早于计费 invocation；发送前等待期间不得存在计费预留。
+- 禁止用 worker 固定错峰承担 pacing 正确性；所有 TTS / ASR 出网由数据库票据分配
+  唯一时间槽。
+- 一组旁白 worker 必须先用 `Promise.allSettled` 排空所有已启动 lane；存在多个结果时，
+  明确业务错误优先于真实 Provider 故障，调度等待最后投影，避免等待掩盖鉴权等终态问题。
+- 发送前长等待复用同一 attempt id 与 attemptNo，只增加安全的 `providerResumeCount`；
+  已完成 unit 通过内容寻址 Artifact 复用。
 - 调度拒绝必须被工作流投影为安全的 `waiting`，而非 `failed`；只允许展示
   `resumeAt` 与安全 provider label，不得持久化或返回原始 Provider 报文。
 
-**已落地护栏**：`managed-audio-billing.ts` 在 catch 块开头识别
-`ProviderDispatchWaitError` 并透传，不再包装为 `managedUpstreamError`；
-旁白 worker 排空、dispatch-wait 新 attempt、普通重试预算继承及安全等待投影由
-对应队列与音频测试锁定。
+**已落地护栏**：Provider admission 先于计费预留；`provider_dispatches` 使用
+`scheduled → in_flight → released/cancelled` 票据生命周期。旁白 worker 排空、同 attempt
+原地延迟、部分产物复用和安全等待投影由对应 PostgreSQL 与音频测试锁定。
 
 ---
 
@@ -640,7 +635,7 @@ Stage Runner 先记为 `failed + directorError`，队列随后再改回
   cooldown、并发租约和队列可见时间禁止混入应用墙钟。
 - Provider 等待写入 `visible_at` 时必须由数据库保证它严格晚于当前数据库时间，
   防止时钟漂移、过期 `Retry-After` 或事务耗时制造立即重领空转。
-- `ProviderDispatchWaitError` 不得经过阶段失败投影。节点应从 `running` 原子转为
+- `ProviderQueueDeferral` 不得经过阶段失败投影。节点应从 `running` 原子转为
   `pending + executionNotice`，同时清理旧 `directorError` / `renderError`。
 - 复合阶段在文本产物已提交、媒体副作用未完成时必须留下可恢复检查点。恢复只重试
   未完成副作用，不得再次调用已经成功并提交的文本模型。

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { and, eq, sql } from 'drizzle-orm'
-import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
+import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
 import type { WorkflowFault } from '@/features/canvas/workflow-fault'
 import type { Db } from '@/lib/db/client'
 import {
@@ -60,25 +60,34 @@ export async function scheduleProviderRateLimitWait(
       ordinaryAttemptNo: ordinaryAttemptNo(attempt),
       providerWaitStartedAt: providerWaitStartedAt(attempt.checkpoint, now).toISOString(),
     }),
-    visibleAt: sql`greatest(${resumeAt}, now() + interval '50 milliseconds')`,
+    visibleAt: sql`greatest(${resumeAt.toISOString()}::timestamptz, now() + interval '50 milliseconds')`,
   })
   await requeueRun(transaction, workspaceId, attempt.runId)
 }
 
-export async function scheduleProviderDispatchWait(
+export async function deferProviderAttempt(
   transaction: Transaction,
   workspaceId: string,
   attemptId: string,
   attempt: ProviderWaitAttempt,
-  failure: ProviderDispatchWaitError,
+  deferral: ProviderQueueDeferral,
   resumeAt: Date,
 ): Promise<void> {
   await transaction
     .update(taskAttempts)
     .set({
-      status: 'superseded',
+      status: 'queued',
       failure: null,
-      completedAt: sql`now()`,
+      leaseExpiresAt: null,
+      completedAt: null,
+      visibleAt: sql`greatest(${resumeAt.toISOString()}::timestamptz, now() + interval '50 milliseconds')`,
+      checkpoint: patchQueueMeta(attempt.checkpoint, {
+        ordinaryAttemptNo: ordinaryAttemptNo(attempt),
+        providerScopeKey: deferral.scopeKey,
+        providerWaitReason: deferral.waitReason,
+        providerResumeAt: resumeAt.toISOString(),
+        providerResumeCount: providerResumeCount(attempt.checkpoint) + 1,
+      }),
       updatedAt: sql`now()`,
     })
     .where(and(
@@ -86,23 +95,6 @@ export async function scheduleProviderDispatchWait(
       eq(taskAttempts.id, attemptId),
       eq(taskAttempts.status, 'running'),
     ))
-  await transaction.insert(taskAttempts).values({
-    workspaceId,
-    id: randomUUID(),
-    runId: attempt.runId,
-    taskId: attempt.taskId,
-    entityType: attempt.entityType,
-    entityId: attempt.entityId,
-    attemptNo: attempt.attemptNo + 1,
-    status: 'queued',
-    fingerprint: attempt.fingerprint,
-    checkpoint: patchQueueMeta(attempt.checkpoint, {
-      ordinaryAttemptNo: ordinaryAttemptNo(attempt),
-      providerScopeKey: failure.scopeKey,
-      providerWaitReason: failure.waitReason,
-    }),
-    visibleAt: sql`greatest(${resumeAt}, now() + interval '50 milliseconds')`,
-  })
   await requeueRun(transaction, workspaceId, attempt.runId)
 }
 
@@ -164,6 +156,13 @@ function queueMeta(checkpoint: VersionedPayload): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {}
+}
+
+function providerResumeCount(checkpoint: VersionedPayload): number {
+  const value = queueMeta(checkpoint).providerResumeCount
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : 0
 }
 
 async function requeueRun(

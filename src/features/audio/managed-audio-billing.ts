@@ -7,7 +7,10 @@ import {
   type ManagedAiHandle,
   type AiProviderId,
 } from '@/features/ai'
-import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
+import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
+import { withProviderDispatch } from '@/features/ai/provider-dispatch'
+import { ProviderRequestError } from '@/features/ai/provider-request-error'
+import { PROVIDER_REGISTRY } from '@/features/ai/provider-registry'
 import type { MaximumUsageEstimate } from '@/features/billing'
 
 export interface AudioBillingContext {
@@ -32,11 +35,13 @@ export interface ManagedAudioBillingInput<T> {
 }
 
 export interface ManagedAudioBillingDependencies {
-  gateway: Pick<ManagedAiGateway, 'begin'>
+  gateway: Pick<ManagedAiGateway, 'prepare'>
+  dispatch: typeof withProviderDispatch
 }
 
 const DEFAULT_DEPENDENCIES: ManagedAudioBillingDependencies = {
   gateway: new ManagedAiGateway(),
+  dispatch: withProviderDispatch,
 }
 
 /**
@@ -48,7 +53,18 @@ export async function runManagedAudioBilling<T>(
   dependencies: ManagedAudioBillingDependencies = DEFAULT_DEPENDENCIES,
 ): Promise<T> {
   const context = requireBillingContext(input.billingContext)
-  const handle = await dependencies.gateway.begin(gatewayInput(input, context))
+  const prepared = await dependencies.gateway.prepare(gatewayInput(input, context))
+  return dependencies.dispatch({
+    providerId: input.provider,
+    providerLabel: PROVIDER_REGISTRY[input.provider].label,
+    funding: prepared.dispatchFunding,
+    apiKey: prepared.credential,
+    attemptId: context.attemptId,
+    tokenEstimate: input.estimate.kind === 'tts'
+      ? input.estimate.characters
+      : undefined,
+  }, async () => {
+  const handle = await prepared.begin()
 
   try {
     await input.prepare?.()
@@ -64,8 +80,10 @@ export async function runManagedAudioBilling<T>(
   } catch (error) {
     // Provider 调度等待不是上游失败：透传让队列用内置的 dispatch-wait 调度恢复，
     // 不得包装为 managedUpstreamError（会丢掉 retryAt 并消耗普通重试预算）。
-    if (error instanceof ProviderDispatchWaitError) {
-      await handle.releaseBeforeCall()
+    if (error instanceof ProviderQueueDeferral) throw error
+    if (error instanceof ProviderRequestError && isRejectedWithoutUsage(error)) {
+      if (handle.settleRejected) await handle.settleRejected(error.kind)
+      else await handle.releaseBeforeCall()
       throw error
     }
     await handle.settleUnavailable(true, 'unknown')
@@ -78,6 +96,18 @@ export async function runManagedAudioBilling<T>(
   if (usage) await handle.settle(usage, outputHash)
   else await handle.settleUnavailable()
   return result
+  })
+}
+
+function isRejectedWithoutUsage(error: ProviderRequestError): boolean {
+  return [
+    'auth',
+    'balance',
+    'permission',
+    'rate_limit',
+    'request',
+    'safety',
+  ].includes(error.kind)
 }
 
 function gatewayInput<T>(

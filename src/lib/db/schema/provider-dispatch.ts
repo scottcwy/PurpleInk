@@ -10,7 +10,12 @@ import {
 } from 'drizzle-orm/pg-core'
 import { workspaces } from './core'
 
-export const PROVIDER_DISPATCH_STATUSES = ['reserved', 'released'] as const
+export const PROVIDER_DISPATCH_STATUSES = [
+  'scheduled',
+  'in_flight',
+  'released',
+  'cancelled',
+] as const
 
 /**
  * Provider 出网预留事实。released 行继续保留用于滚动 RPM/TPM 统计；并发只统计
@@ -27,21 +32,29 @@ export const providerDispatches = pgTable(
     attemptId: uuid('attempt_id'),
     provider: text('provider').notNull(),
     funding: text('funding').notNull(),
-    status: text('status').default('reserved').notNull(),
+    status: text('status').default('scheduled').notNull(),
     tokenEstimate: integer('token_estimate').default(0).notNull(),
     reservedAt: timestamp('reserved_at', { withTimezone: true }).defaultNow().notNull(),
+    notBefore: timestamp('not_before', { withTimezone: true }).defaultNow().notNull(),
+    startedAt: timestamp('started_at', { withTimezone: true }),
     leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }).notNull(),
     releasedAt: timestamp('released_at', { withTimezone: true }),
+    waitReason: text('wait_reason'),
+    actorUserId: uuid('actor_user_id'),
   },
   (table) => [
     index('provider_dispatches_scope_reserved_idx').on(
       table.scopeKey,
-      table.reservedAt,
+      table.notBefore,
     ),
     index('provider_dispatches_scope_lease_idx').on(
       table.scopeKey,
       table.status,
       table.leaseExpiresAt,
+    ),
+    index('provider_dispatches_scope_started_idx').on(
+      table.scopeKey,
+      table.startedAt,
     ),
     check('provider_dispatches_scope_key_check', sql`length(${table.scopeKey}) = 64`),
     check(
@@ -50,7 +63,7 @@ export const providerDispatches = pgTable(
     ),
     check(
       'provider_dispatches_status_check',
-      sql`${table.status} in ('reserved', 'released')`,
+      sql`${table.status} in ('scheduled', 'in_flight', 'released', 'cancelled')`,
     ),
     check('provider_dispatches_token_estimate_check', sql`${table.tokenEstimate} >= 0`),
   ],
@@ -85,6 +98,7 @@ export const providerPoolStates = pgTable(
     currentConcurrency: integer('current_concurrency').default(8).notNull(),
     maxConcurrency: integer('max_concurrency').default(50).notNull(),
     lastActorUserId: uuid('last_actor_user_id'),
+    nextDispatchAt: timestamp('next_dispatch_at', { withTimezone: true }).defaultNow().notNull(),
     cleanSince: timestamp('clean_since', { withTimezone: true }).defaultNow().notNull(),
     completedSinceAdjustment: integer('completed_since_adjustment').default(0).notNull(),
     failureCount: integer('failure_count').default(0).notNull(),

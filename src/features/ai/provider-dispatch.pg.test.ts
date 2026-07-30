@@ -14,6 +14,7 @@ import { runInAuthContext } from '@/lib/auth/workspace-context'
 import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
 import {
   providerDispatches,
+  providerDispatchCooldowns,
   providerPoolStates,
   pipelineRuns,
   projects,
@@ -35,6 +36,7 @@ beforeAll(async () => {
 })
 
 beforeEach(async () => {
+  vi.stubEnv('AI_PROVIDER_POOL_MODE', 'enforce')
   await database.reset()
   await database.db.insert(workspaces).values({
     id: LOCAL_WORKSPACE_ID,
@@ -62,30 +64,19 @@ describe('provider dispatch Postgres arbitration', () => {
           database: database.db,
         })
         await first.release()
-        let waitError: unknown
-        try {
-          await reserveProviderDispatch({
-            providerId: 'stepfun',
-            providerLabel: '阶跃星辰',
-            funding: 'managed',
-            apiKey: 'managed-key-b',
-            database: database.db,
-          })
-        } catch (error) {
-          waitError = error
-        }
-        expect(waitError).toMatchObject({
-          name: 'ProviderDispatchWaitError',
-          kind: 'rate_limit',
-          waitReason: 'pacing',
+        const second = await reserveProviderDispatch({
+          providerId: 'stepfun',
+          providerLabel: '阶跃星辰',
+          funding: 'managed',
+          apiKey: 'managed-key-b',
+          database: database.db,
         })
-        const [latest] = await database.db.select().from(providerDispatches)
-          .orderBy(asc(providerDispatches.reservedAt))
-        const retryAt = Date.parse(
-          (waitError as { retryAt: string }).retryAt,
-        )
-        expect(retryAt - latest.reservedAt.getTime()).toBeGreaterThanOrEqual(400)
-        expect(retryAt - latest.reservedAt.getTime()).toBeLessThanOrEqual(440)
+        await second.release()
+        const rows = await database.db.select().from(providerDispatches)
+          .orderBy(asc(providerDispatches.startedAt))
+        const interval = rows[1]!.startedAt!.getTime() - rows[0]!.startedAt!.getTime()
+        expect(interval).toBeGreaterThanOrEqual(400)
+        expect(interval).toBeLessThanOrEqual(480)
       },
     )
   })
@@ -140,9 +131,8 @@ describe('provider dispatch Postgres arbitration', () => {
     for (const result of deferred) {
       if (result.status !== 'rejected') continue
       expect(result.reason).toMatchObject({
-        name: 'ProviderDispatchWaitError',
-        kind: 'rate_limit',
-        httpStatus: 429,
+        name: 'ProviderQueueDeferral',
+        waitReason: 'rpm',
       })
     }
     await Promise.all(admitted.map((result) =>
@@ -181,6 +171,10 @@ describe('provider dispatch Postgres arbitration', () => {
         const retryAt = new Date(Date.now() + 30_000)
         await first.defer(retryAt)
         await first.release()
+        const [cooldown] = await database.db
+          .select()
+          .from(providerDispatchCooldowns)
+        expect(cooldown?.blockedUntil.getTime()).toBeGreaterThan(Date.now())
         await expect(reserveProviderDispatch({
           providerId: 'stepfun',
           providerLabel: '阶跃星辰',
@@ -189,9 +183,8 @@ describe('provider dispatch Postgres arbitration', () => {
           limits: { concurrency: 99, rpm: 99 },
           database: database.db,
         })).rejects.toMatchObject({
-          name: 'ProviderDispatchWaitError',
-          kind: 'rate_limit',
-          retryAt: retryAt.toISOString(),
+          name: 'ProviderQueueDeferral',
+          retryAt: cooldown!.blockedUntil.toISOString(),
         })
       }
     )
@@ -298,7 +291,7 @@ describe('provider dispatch Postgres arbitration', () => {
           apiKey: 'managed-key',
           database: database.db,
         })).rejects.toMatchObject({
-          name: 'ProviderDispatchWaitError',
+          name: 'ProviderQueueDeferral',
           waitReason: 'fairness',
         })
       },

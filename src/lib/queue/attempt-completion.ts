@@ -5,7 +5,7 @@ import type { Db } from '@/lib/db/client'
 import { pipelineRuns, taskAttempts, type VersionedPayload } from '@/lib/db/schema/index'
 import { backoffMs, shouldAutoRetry } from './retry-policy'
 import { classifyWorkflowError } from '@/features/canvas/workflow-error'
-import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
+import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
 import { databaseNow } from '@/features/ai/workspace-concurrency-context'
 import type { WorkflowExecutionNotice, WorkflowFault } from '@/features/canvas/workflow-fault'
 import {
@@ -14,7 +14,7 @@ import {
   ordinaryAttemptNo,
   patchQueueMeta,
   providerWaitRemaining,
-  scheduleProviderDispatchWait,
+  deferProviderAttempt,
   scheduleProviderRateLimitWait,
   type ProviderWaitAttempt,
 } from './provider-wait-scheduler'
@@ -80,11 +80,11 @@ export async function completeAttempt(
     const stage = retryStage(attempt.checkpoint)
     if (
       status === 'failed'
-      && failure instanceof ProviderDispatchWaitError
+      && failure instanceof ProviderQueueDeferral
       && (options?.allowAutoRetry ?? true)
     ) {
       const resumeAt = new Date(failure.retryAt!)
-      await scheduleProviderDispatchWait(
+      await deferProviderAttempt(
         transaction,
         workspaceId,
         attemptId,
@@ -97,7 +97,7 @@ export async function completeAttempt(
             nodeId: attempt.entityId,
             notice: {
               code: 'PROVIDER_POOL_WAIT' as const,
-              message: `${failure.providerLabel}正在等待可用调用窗口`,
+              message: failure.message,
               resumeAt: resumeAt.toISOString(),
               providerLabel: failure.providerLabel,
             },

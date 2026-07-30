@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
-import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
+import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
 import type { AudioProjectSourcePayload } from '@/features/projects'
 import type { StorageAdapter } from '@/lib/storage'
 import {
@@ -245,10 +245,9 @@ describe('runAudioTranscriptionJob', () => {
   it('projects Provider pacing as waiting without persisting dispatch internals', async () => {
     const deps = dependencies()
     const retryAt = new Date('2026-07-30T01:00:00.450Z')
-    const waitError = new ProviderDispatchWaitError({
+    const waitError = new ProviderQueueDeferral({
       providerId: 'stepfun',
       providerLabel: '阶跃星辰',
-      funding: 'managed',
       retryAt,
       scopeKey: 'a'.repeat(64),
       waitReason: 'pacing',

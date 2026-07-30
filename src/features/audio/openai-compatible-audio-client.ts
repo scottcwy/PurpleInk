@@ -8,7 +8,6 @@ import {
   providerErrorFromResponse,
   providerNetworkError,
 } from '@/features/ai/provider-request-error'
-import { withProviderDispatch } from '@/features/ai/provider-dispatch'
 import type { Caption } from './types'
 import type { SynthesizedSpeech, TranscribedSpeech } from './stepfun-audio-client'
 
@@ -68,14 +67,12 @@ export interface OpenAiCompatibleTtsDependencies {
   fetcher: typeof fetch
   getProfile: () => Promise<OpenAiCompatibleTtsProfile | null>
   getApiKey: () => Promise<string | null>
-  dispatch?: typeof withProviderDispatch
 }
 
 export interface OpenAiCompatibleAsrDependencies {
   fetcher: typeof fetch
   getProfile: () => Promise<OpenAiCompatibleAsrProfile | null>
   getApiKey: () => Promise<string | null>
-  dispatch?: typeof withProviderDispatch
 }
 
 export interface OpenAiCompatibleTranscription extends TranscribedSpeech {
@@ -91,13 +88,6 @@ export async function synthesizeOpenAiCompatibleSpeech(
 ): Promise<SynthesizedSpeech> {
   const parsed = speechInputSchema.parse(input)
   const { profile, apiKey } = await resolveTts(dependencies)
-  return (dependencies.dispatch ?? withProviderDispatch)({
-    providerId: 'openai-compatible-tts',
-    providerLabel: '自定义兼容 TTS',
-    funding: 'byok',
-    apiKey,
-    tokenEstimate: Array.from(parsed.text).length,
-  }, async () => {
   const response = await request(
     dependencies.fetcher,
     endpoint(profile.baseUrl, 'audio/speech'),
@@ -138,7 +128,6 @@ export async function synthesizeOpenAiCompatibleSpeech(
     model: profile.model,
     nativeCaptions: [],
   }
-  })
 }
 
 export async function transcribeOpenAiCompatibleSpeech(
@@ -147,12 +136,6 @@ export async function transcribeOpenAiCompatibleSpeech(
 ): Promise<OpenAiCompatibleTranscription> {
   const parsed = transcriptionInputSchema.parse(input)
   const { profile, apiKey } = await resolveAsr(dependencies)
-  return (dependencies.dispatch ?? withProviderDispatch)({
-    providerId: 'openai-compatible-asr',
-    providerLabel: '自定义兼容 ASR',
-    funding: 'byok',
-    apiKey,
-  }, async () => {
   const response = await request(
     dependencies.fetcher,
     endpoint(profile.baseUrl, 'audio/transcriptions'),
@@ -188,7 +171,6 @@ export async function transcribeOpenAiCompatibleSpeech(
     captions,
     timestampMode: profile.timestampMode,
   }
-  })
 }
 
 /**

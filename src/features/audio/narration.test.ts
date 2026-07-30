@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
-import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
+import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
 import {
   narrationAudioKey,
   synthesizeNarration,
@@ -144,7 +144,6 @@ describe('synthesizeNarration', () => {
           text: `第 ${index + 1} 句`,
         })),
         concurrency: 3,
-        staggerMs: 0,
       },
       target.dependencies
     )
@@ -197,7 +196,6 @@ describe('synthesizeNarration', () => {
           { unitId: 'U002', text: '第二句' },
         ],
         concurrency: 2,
-        staggerMs: 0,
       },
       target.dependencies
     )
@@ -223,12 +221,11 @@ describe('synthesizeNarration', () => {
     )
   })
 
-  it('prefers a Provider dispatch wait after every lane settles', async () => {
+  it('does not let a Provider deferral hide a concrete lane failure', async () => {
     const ordinaryError = new Error('ordinary failure')
-    const dispatchWait = new ProviderDispatchWaitError({
+    const dispatchWait = new ProviderQueueDeferral({
       providerId: 'stepfun',
       providerLabel: '阶跃星辰',
-      funding: 'managed',
       retryAt: new Date('2026-07-30T00:00:01.000Z'),
       scopeKey: 'a'.repeat(64),
       waitReason: 'pacing',
@@ -249,11 +246,10 @@ describe('synthesizeNarration', () => {
             { unitId: 'U002', text: '第二句' },
           ],
           concurrency: 2,
-          staggerMs: 0,
         },
         target.dependencies
       )
-    ).rejects.toBe(dispatchWait)
+    ).rejects.toBe(ordinaryError)
     expect(target.dependencies.synthesize).toHaveBeenCalledTimes(2)
   })
 
@@ -276,7 +272,6 @@ describe('synthesizeNarration', () => {
             { unitId: 'U002', text: '第二句' },
           ],
           concurrency: 2,
-          staggerMs: 0,
         },
         target.dependencies
       )

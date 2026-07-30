@@ -17,13 +17,19 @@ function createDependencies(overrides: Partial<ManagedAiHandle> = {}) {
     credential: 'managed-secret',
     settle: vi.fn(async () => undefined),
     settleUnavailable: vi.fn(async () => undefined),
+    settleRejected: vi.fn(async () => undefined),
     releaseBeforeCall: vi.fn(async () => undefined),
     ...overrides,
   }
   const dependencies: ManagedAudioBillingDependencies = {
     gateway: {
-      begin: vi.fn(async () => handle),
+      prepare: vi.fn(async () => ({
+        credential: 'managed-secret',
+        dispatchFunding: 'managed' as const,
+        begin: vi.fn(async () => handle),
+      })),
     },
+    dispatch: async (_input, invoke) => invoke(),
   }
   return { dependencies, handle }
 }
@@ -37,7 +43,7 @@ describe('managed audio billing adapter', () => {
   it('does not call the provider when gateway reservation rejects the request', async () => {
     const invoke = vi.fn(async () => Buffer.from('audio'))
     const { dependencies, handle } = createDependencies()
-    vi.mocked(dependencies.gateway.begin).mockRejectedValue(
+    vi.mocked(dependencies.gateway.prepare).mockRejectedValue(
       new QuotaExhaustedError('2026-08-28T00:00:00.000Z'),
     )
 
@@ -76,7 +82,7 @@ describe('managed audio billing adapter', () => {
       }),
     }, dependencies)).resolves.toEqual(Buffer.from('audio'))
 
-    expect(dependencies.gateway.begin).toHaveBeenCalledWith({
+    expect(dependencies.gateway.prepare).toHaveBeenCalledWith({
       attemptId: CONTEXT.attemptId,
       invocationNo: 2,
       provider: 'mimo',
@@ -162,7 +168,7 @@ describe('managed audio billing adapter', () => {
       }),
     }, dependencies)
 
-    expect(dependencies.gateway.begin).toHaveBeenCalledWith({
+    expect(dependencies.gateway.prepare).toHaveBeenCalledWith({
       attemptId: CONTEXT.attemptId,
       invocationNo: 100,
       provider: 'mimo',

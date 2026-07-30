@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
+import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
 import type { QueueAdapter } from '@/lib/queue'
 import {
   enqueueMediaNarration,
@@ -92,10 +92,9 @@ describe('media narration queue', () => {
   it('projects dispatch pacing as waiting and returns to running on retry', async () => {
     const deps = dependencies()
     const retryAt = new Date('2026-07-30T00:00:00.450Z')
-    const waitError = new ProviderDispatchWaitError({
+    const waitError = new ProviderQueueDeferral({
       providerId: 'stepfun',
       providerLabel: '阶跃星辰',
-      funding: 'managed',
       retryAt,
       scopeKey: 'a'.repeat(64),
       waitReason: 'pacing',

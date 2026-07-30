@@ -106,6 +106,12 @@ export type ManagedAiBeginInput = BeginBase & (
 
 export type { ManagedAiHandle } from './invocation-handles'
 
+export interface PreparedManagedAiInvocation {
+  credential: string
+  dispatchFunding: 'managed' | 'byok'
+  begin(): Promise<ManagedAiHandle>
+}
+
 export class ManagedAiGateway {
   constructor(
     private readonly dependencies: ManagedAiGatewayDependencies =
@@ -113,6 +119,10 @@ export class ManagedAiGateway {
   ) {}
 
   async begin(input: ManagedAiBeginInput): Promise<ManagedAiHandle> {
+    return (await this.prepare(input)).begin()
+  }
+
+  async prepare(input: ManagedAiBeginInput): Promise<PreparedManagedAiInvocation> {
     const plan = await this.dependencies.getCurrentPlanKey()
     const funding = await this.dependencies.fundingForProvider(input.provider)
     const authorization = await this.dependencies.authorizeManagedRoute({
@@ -129,33 +139,39 @@ export class ManagedAiGateway {
       }
       const invocationId = invocationUuid(input)
       const ledgerFunding = isManagedProvider(input.provider) ? 'byok' : 'custom'
-      await (this.dependencies.createUnbilledInvocation ?? createUnbilledInvocation)({
-        invocationId,
-        attemptId: input.attemptId,
-        invocationNo: input.invocationNo,
-        repairNo: input.repairNo,
-        provider: input.provider,
-        model: input.model,
-        funding: ledgerFunding,
-        capability: input.capability,
-        operation: input.operation ?? 'workflow',
-        source: input.source,
-        inputHash: sha256(input.rawInput),
-      })
-      return createUnbilledHandle({
-        invocationId,
-        funding: ledgerFunding,
-        capability: input.capability,
+      return {
         credential,
-        lifecycle: {
-          markStarted: this.dependencies.markProviderInvocationStarted
-            ?? markProviderInvocationStarted,
-          settle: this.dependencies.settleUnbilledInvocation
-            ?? settleUnbilledInvocation,
-          release: this.dependencies.releaseUnbilledInvocation
-            ?? releaseUnbilledInvocation,
+        dispatchFunding: 'byok',
+        begin: async () => {
+          await (this.dependencies.createUnbilledInvocation ?? createUnbilledInvocation)({
+            invocationId,
+            attemptId: input.attemptId,
+            invocationNo: input.invocationNo,
+            repairNo: input.repairNo,
+            provider: input.provider,
+            model: input.model,
+            funding: ledgerFunding,
+            capability: input.capability,
+            operation: input.operation ?? 'workflow',
+            source: input.source,
+            inputHash: sha256(input.rawInput),
+          })
+          return createUnbilledHandle({
+            invocationId,
+            funding: ledgerFunding,
+            capability: input.capability,
+            credential,
+            lifecycle: {
+              markStarted: this.dependencies.markProviderInvocationStarted
+                ?? markProviderInvocationStarted,
+              settle: this.dependencies.settleUnbilledInvocation
+                ?? settleUnbilledInvocation,
+              release: this.dependencies.releaseUnbilledInvocation
+                ?? releaseUnbilledInvocation,
+            },
+          })
         },
-      })
+      }
     }
 
     const provider = requireManagedProvider(input.provider)
@@ -172,43 +188,49 @@ export class ManagedAiGateway {
     )
     const inputHash = sha256(input.rawInput)
     const invocationId = invocationUuid(input)
-    await this.dependencies.reserveManagedInvocation({
-      invocationId,
-      idempotencyKey: sha256([
-        'managed-ai/v1',
-        invocationId,
-        provider,
-        input.model,
-        inputHash,
-      ].join(':')),
-      rateCardId: rateCard.id,
-      maximumCostCnyMicros,
-      create: {
-        attemptId: input.attemptId,
-        invocationNo: input.invocationNo,
-        repairNo: input.repairNo,
-        provider,
-        model: input.model,
-        inputHash,
-        capability: input.capability,
-        operation: input.operation ?? 'workflow',
-        source: input.source,
-      },
-    })
-    return createManagedHandle({
-      invocationId,
+    return {
       credential,
-      capability: input.capability,
-      prices: rateCard.prices,
-      maximumCostCnyMicros,
-      lifecycle: {
-        markStarted: this.dependencies.markProviderInvocationStarted
-          ?? markProviderInvocationStarted,
-        calculateCost: this.dependencies.calculateActualCost,
-        settle: this.dependencies.settleManagedInvocation,
-        release: this.dependencies.releaseManagedReservation,
+      dispatchFunding: 'managed',
+      begin: async () => {
+        await this.dependencies.reserveManagedInvocation({
+          invocationId,
+          idempotencyKey: sha256([
+            'managed-ai/v1',
+            invocationId,
+            provider,
+            input.model,
+            inputHash,
+          ].join(':')),
+          rateCardId: rateCard.id,
+          maximumCostCnyMicros,
+          create: {
+            attemptId: input.attemptId,
+            invocationNo: input.invocationNo,
+            repairNo: input.repairNo,
+            provider,
+            model: input.model,
+            inputHash,
+            capability: input.capability,
+            operation: input.operation ?? 'workflow',
+            source: input.source,
+          },
+        })
+        return createManagedHandle({
+          invocationId,
+          credential,
+          capability: input.capability,
+          prices: rateCard.prices,
+          maximumCostCnyMicros,
+          lifecycle: {
+            markStarted: this.dependencies.markProviderInvocationStarted
+              ?? markProviderInvocationStarted,
+            calculateCost: this.dependencies.calculateActualCost,
+            settle: this.dependencies.settleManagedInvocation,
+            release: this.dependencies.releaseManagedReservation,
+          },
+        })
       },
-    })
+    }
   }
 }
 

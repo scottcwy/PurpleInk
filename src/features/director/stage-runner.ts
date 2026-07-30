@@ -20,7 +20,7 @@ import {
 import type { PipelineStage } from './types'
 import { classifyWorkflowError } from '@/features/canvas/workflow-error'
 import { advancePipeline } from './advance'
-import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
+import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
 
 export { MAX_GATE_RETRIES } from './stage-artifact-gate'
 
@@ -229,7 +229,7 @@ export function createStageRunner(
           cleanupErrors.push(cleanupError)
         }
       }
-      if (error instanceof ProviderDispatchWaitError) {
+      if (error instanceof ProviderQueueDeferral) {
         try {
           await dependencies.repository.persistStreamLog(
             projectId,

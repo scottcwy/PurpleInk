@@ -204,7 +204,6 @@ function harnessTts(fetcher: unknown): OpenAiCompatibleTtsDependencies {
     fetcher: fetcher as typeof fetch,
     getProfile: async () => TTS_PROFILE,
     getApiKey: async () => 'secret',
-    dispatch: async (_input, invoke) => invoke(),
   }
 }
 
@@ -216,6 +215,5 @@ function harnessAsr(
     fetcher: fetcher as typeof fetch,
     getProfile: async () => profile,
     getApiKey: async () => 'secret',
-    dispatch: async (_input, invoke) => invoke(),
   }
 }

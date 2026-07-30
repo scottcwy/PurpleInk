@@ -19,7 +19,7 @@ const target = {
 describe('executeManagedVisionQa', () => {
   it('blocks an unauthorized managed route before creating transport', async () => {
     const complete = vi.fn()
-    const begin = vi.fn(async () => {
+    const prepare = vi.fn(async () => {
       throw new ManagedAiError({
         code: 'MANAGED_GEMINI_FORBIDDEN_FOR_FREE',
         status: 403,
@@ -35,8 +35,11 @@ describe('executeManagedVisionQa', () => {
       images: [],
     }, {
       resolveTarget: async () => target,
-      gateway: { begin },
+      gateway: {
+        prepare,
+      },
       complete,
+      dispatch: async (_input, invoke) => invoke(),
     })).rejects.toMatchObject({
       code: 'MANAGED_GEMINI_FORBIDDEN_FOR_FREE',
       status: 403,
@@ -60,6 +63,11 @@ describe('executeManagedVisionQa', () => {
       usage: { inputTokens: 30, cachedInputTokens: 4, outputTokens: 8 },
     }))
     const dispatch = vi.fn(async (_input, invoke) => invoke())
+    const prepare = vi.fn(async () => ({
+      credential: 'secret',
+      dispatchFunding: 'managed' as const,
+      begin,
+    }))
 
     await executeManagedVisionQa({
       attemptId: '00000000-0000-4000-8000-000000000001',
@@ -68,24 +76,25 @@ describe('executeManagedVisionQa', () => {
       images: [{ label: '25%', bytes: Buffer.from([1, 2, 3]) }],
     }, {
       resolveTarget: async () => target,
-      gateway: { begin },
+      gateway: { prepare },
       complete,
       dispatch,
     })
 
-    expect(begin).toHaveBeenCalledWith(expect.objectContaining({
+    expect(prepare).toHaveBeenCalledWith(expect.objectContaining({
       invocationNo: 30_000,
       maxOutputTokens: VISION_QA_MAX_OUTPUT_TOKENS,
       rawInput: expect.stringContaining('data:image/png;base64,AQID'),
     }))
+    expect(begin).toHaveBeenCalledWith()
     expect(complete).toHaveBeenCalledWith(expect.objectContaining({
-      apiKey: 'managed-key',
+      apiKey: 'secret',
       maxOutputTokens: VISION_QA_MAX_OUTPUT_TOKENS,
     }))
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
       providerId: 'gemini',
       funding: 'managed',
-      apiKey: 'managed-key',
+      apiKey: 'secret',
       attemptId: '00000000-0000-4000-8000-000000000001',
     }), expect.any(Function))
     expect(settle).toHaveBeenCalledWith(

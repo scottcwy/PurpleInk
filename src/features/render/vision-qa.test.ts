@@ -198,14 +198,18 @@ describe('routed Vision client and report storage', () => {
       {
         resolveTarget: async () => target,
         gateway: {
-          begin: vi.fn(async () => ({
-            invocationId: 'vision',
-            funding: 'managed' as const,
-            deductsManagedPool: true,
+          prepare: vi.fn(async () => ({
             credential: 'managed-key',
-            settle,
-            settleUnavailable: vi.fn(async () => undefined),
-            releaseBeforeCall: vi.fn(async () => undefined),
+            dispatchFunding: 'managed' as const,
+            begin: vi.fn(async () => ({
+              invocationId: 'vision',
+              funding: 'managed' as const,
+              deductsManagedPool: true,
+              credential: 'managed-key',
+              settle,
+              settleUnavailable: vi.fn(async () => undefined),
+              releaseBeforeCall: vi.fn(async () => undefined),
+            })),
           })),
         },
         dispatch: async (_input, invoke) => invoke(),
@@ -249,22 +253,16 @@ describe('routed Vision client and report storage', () => {
         {
           resolveTarget: async () => ({ ...target, apiKey: null }),
           gateway: {
-            begin: vi.fn(async () => ({
-              invocationId: null,
-              funding: 'byok' as const,
-              deductsManagedPool: false,
-              credential: null,
-              settle: vi.fn(async () => undefined),
-              settleUnavailable: vi.fn(async () => undefined),
-              releaseBeforeCall,
-            })),
+            prepare: vi.fn(async () => {
+              throw new Error('StepFun API Key 未配置')
+            }),
           },
           complete,
         }
       )
     ).rejects.toThrow('API Key 未配置')
     expect(complete).not.toHaveBeenCalled()
-    expect(releaseBeforeCall).toHaveBeenCalledOnce()
+    expect(releaseBeforeCall).not.toHaveBeenCalled()
   })
 
   it('deletes report bytes when artifact registration fails', async () => {

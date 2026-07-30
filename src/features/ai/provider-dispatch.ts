@@ -1,6 +1,6 @@
 import 'server-only'
 import { createHash, randomUUID } from 'node:crypto'
-import { and, eq, gt, gte, max, min, sql, sum } from 'drizzle-orm'
+import { and, eq, gt, gte, max, min, ne, sql, sum } from 'drizzle-orm'
 import { currentUserId, currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb, type Db } from '@/lib/db/client'
 import {
@@ -25,9 +25,9 @@ import {
   recordProviderRateLimit,
 } from './provider-pool-control'
 import {
-  ProviderDispatchWaitError,
+  ProviderQueueDeferral,
   type ProviderDispatchWaitReason,
-} from './provider-dispatch-wait-error'
+} from './provider-queue-deferral'
 import { hasWaitingProviderPeer } from './provider-fairness'
 import {
   nextProviderWindow,
@@ -38,6 +38,7 @@ import { providerPoolMode } from './concurrency-rollout'
 import { databaseNow } from './workspace-concurrency-context'
 
 const DEFAULT_LEASE_MS = 5 * 60_000
+const MAX_INLINE_WAIT_MS = 2_000
 
 export interface ProviderDispatchInput {
   providerId: string
@@ -93,6 +94,7 @@ export async function reserveProviderDispatch(
   const id = randomUUID()
   const mode = providerPoolMode()
   let shadowWaitReason: ProviderDispatchWaitReason | undefined
+  let notBefore = new Date()
   await database.transaction(async (transaction) => {
     await transaction.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${scopeKey}, 0))`
@@ -110,7 +112,7 @@ export async function reserveProviderDispatch(
       && await hasWaitingProviderPeer(transaction, scopeKey, actorUserId)
     ) {
       if (mode === 'enforce') {
-        throw dispatchWaitError(
+        throw queueDeferral(
           input,
           scopeKey,
           new Date(now.getTime() + 100 + Math.round(Math.random() * 100)),
@@ -126,30 +128,31 @@ export async function reserveProviderDispatch(
       .limit(1)
     if (cooldown && cooldown.blockedUntil.getTime() > now.getTime()) {
       if (mode === 'enforce') {
-        throw dispatchWaitError(input, scopeKey, cooldown.blockedUntil, 'cooldown')
+        throw queueDeferral(input, scopeKey, cooldown.blockedUntil, 'cooldown')
       }
       shadowWaitReason ??= 'cooldown'
     }
     await transaction
       .update(providerDispatches)
-      .set({ status: 'released', releasedAt: sql`now()` })
+      .set({ status: 'cancelled', releasedAt: sql`now()` })
       .where(and(
         eq(providerDispatches.scopeKey, scopeKey),
-        eq(providerDispatches.status, 'reserved'),
+        sql`${providerDispatches.status} in ('scheduled', 'in_flight')`,
         sql`${providerDispatches.leaseExpiresAt} <= now()`,
       ))
     const [usage] = await transaction
       .select({
         rpm: sql<number>`count(*)::int`,
-        oldest: min(providerDispatches.reservedAt),
-        newest: max(providerDispatches.reservedAt),
+        oldest: min(providerDispatches.notBefore),
+        newest: max(providerDispatches.notBefore),
         tokens: sql<number>`coalesce(${sum(providerDispatches.tokenEstimate)}, 0)::int`,
       })
       .from(providerDispatches)
       .where(and(
         eq(providerDispatches.scopeKey, scopeKey),
+        ne(providerDispatches.status, 'cancelled'),
         gte(
-          providerDispatches.reservedAt,
+          providerDispatches.notBefore,
           sql`now() - make_interval(secs => ${PROVIDER_RATE_WINDOW_MS / 1_000})`,
         ),
       ))
@@ -161,7 +164,7 @@ export async function reserveProviderDispatch(
       .from(providerDispatches)
       .where(and(
         eq(providerDispatches.scopeKey, scopeKey),
-        eq(providerDispatches.status, 'reserved'),
+        eq(providerDispatches.status, 'in_flight'),
         gt(providerDispatches.leaseExpiresAt, sql`now()`),
       ))
     const wait = nextProviderWindow({
@@ -170,17 +173,31 @@ export async function reserveProviderDispatch(
       tokens: usage?.tokens ?? 0,
       tokenEstimate: input.tokenEstimate ?? 0,
       oldest: usage?.oldest ?? null,
-      newest: usage?.newest ?? null,
+      newest: null,
       active: active?.count ?? 0,
       nextLease: active?.nextLease ?? null,
       now,
     })
     if (wait) {
       if (mode === 'enforce') {
-        throw dispatchWaitError(input, scopeKey, wait.retryAt, wait.reason)
+        throw queueDeferral(input, scopeKey, wait.retryAt, wait.reason)
       }
       shadowWaitReason ??= wait.reason
     }
+    const scheduledAt = poolState.nextDispatchAt.getTime() > now.getTime()
+      ? poolState.nextDispatchAt
+      : now
+    const inlineWaitMs = scheduledAt.getTime() - now.getTime()
+    if (inlineWaitMs > MAX_INLINE_WAIT_MS && mode === 'enforce') {
+      throw queueDeferral(input, scopeKey, scheduledAt, 'pacing')
+    }
+    notBefore = mode === 'enforce' ? scheduledAt : now
+    if (inlineWaitMs > 0) shadowWaitReason ??= 'pacing'
+    const nextDispatchAt = new Date(
+      notBefore.getTime()
+      + (limits.minIntervalMs ?? 0)
+      + Math.round(Math.random() * (limits.jitterMs ?? 0)),
+    )
     await transaction.insert(providerDispatches).values({
       id,
       scopeKey,
@@ -189,13 +206,34 @@ export async function reserveProviderDispatch(
       provider: input.providerId,
       funding: input.funding,
       tokenEstimate: input.tokenEstimate ?? 0,
-      leaseExpiresAt: sql`now() + make_interval(secs => ${DEFAULT_LEASE_MS / 1_000})`,
+      status: 'scheduled',
+      notBefore,
+      waitReason: inlineWaitMs > 0 ? 'pacing' : null,
+      actorUserId,
+      leaseExpiresAt: sql`${notBefore.toISOString()}::timestamptz + make_interval(secs => ${DEFAULT_LEASE_MS / 1_000})`,
     })
+    await transaction
+      .update(providerPoolStates)
+      .set({ nextDispatchAt, updatedAt: sql`now()` })
+      .where(eq(providerPoolStates.scopeKey, scopeKey))
     await recordProviderGrant(
       transaction,
       scopeKey,
       actorUserId,
     )
+  })
+  console.info('[provider_ticket_scheduled]', {
+    provider: input.providerId,
+    attemptId: input.attemptId ?? null,
+    ticketId: id,
+    notBefore: notBefore.toISOString(),
+    waitReason: shadowWaitReason ?? null,
+  })
+  await activateProviderTicket(database, {
+    id,
+    input,
+    scopeKey,
+    notBefore,
   })
   let released = false
   let deferred = false
@@ -212,6 +250,7 @@ export async function reserveProviderDispatch(
         .where(and(
           eq(providerDispatches.id, id),
           eq(providerDispatches.scopeKey, scopeKey),
+          eq(providerDispatches.status, 'in_flight'),
         ))
       await recordProviderOutcome({
         database,
@@ -220,12 +259,35 @@ export async function reserveProviderDispatch(
         limits,
         outcome,
       })
+      console.info('[provider_ticket_released]', {
+        provider: input.providerId,
+        attemptId: input.attemptId ?? null,
+        ticketId: id,
+        outcome,
+      })
     },
     defer: async (retryAt) => {
       deferred = true
       await deferProviderScope(input, retryAt)
     },
   }
+}
+
+export async function reconcileExpiredProviderTickets(
+  database: Db = await getDb(),
+): Promise<number> {
+  const rows = await database
+    .update(providerDispatches)
+    .set({ status: 'cancelled', releasedAt: sql`now()` })
+    .where(and(
+      sql`${providerDispatches.status} in ('scheduled', 'in_flight')`,
+      sql`${providerDispatches.leaseExpiresAt} <= now()`,
+    ))
+    .returning({ id: providerDispatches.id })
+  if (rows.length > 0) {
+    console.info('[provider_ticket_reconciled]', { count: rows.length })
+  }
+  return rows.length
 }
 
 export async function deferProviderScope(
@@ -240,28 +302,36 @@ export async function deferProviderScope(
     workspaceId: currentWorkspaceId(),
     apiKey: input.apiKey,
   })
-  const [state] = await database
-    .select({ failureCount: providerPoolStates.failureCount })
-    .from(providerPoolStates)
-    .where(eq(providerPoolStates.scopeKey, scopeKey))
-    .limit(1)
-  const fallback = new Date(
-    Date.now() + providerRateLimitBackoffMs(state?.failureCount ?? 0),
-  )
-  const blockedUntil = retryAt && retryAt.getTime() > Date.now() ? retryAt : fallback
-  await database
-    .insert(providerDispatchCooldowns)
-    .values({ scopeKey, provider: input.providerId, blockedUntil })
-    .onConflictDoUpdate({
-      target: providerDispatchCooldowns.scopeKey,
-      set: {
-        blockedUntil: sql`greatest(
-          ${providerDispatchCooldowns.blockedUntil},
-          ${blockedUntil.toISOString()}::timestamptz
-        )`,
-        updatedAt: new Date(),
-      },
-    })
+  await database.transaction(async (transaction) => {
+    await transaction.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${scopeKey}, 0))`,
+    )
+    const now = await databaseNow(transaction)
+    const [state] = await transaction
+      .select({ failureCount: providerPoolStates.failureCount })
+      .from(providerPoolStates)
+      .where(eq(providerPoolStates.scopeKey, scopeKey))
+      .limit(1)
+    const fallback = new Date(
+      now.getTime() + providerRateLimitBackoffMs(state?.failureCount ?? 0),
+    )
+    const blockedUntil = retryAt && retryAt.getTime() > now.getTime()
+      ? retryAt
+      : fallback
+    await transaction
+      .insert(providerDispatchCooldowns)
+      .values({ scopeKey, provider: input.providerId, blockedUntil })
+      .onConflictDoUpdate({
+        target: providerDispatchCooldowns.scopeKey,
+        set: {
+          blockedUntil: sql`greatest(
+            ${providerDispatchCooldowns.blockedUntil},
+            ${blockedUntil.toISOString()}::timestamptz
+          )`,
+          updatedAt: sql`now()`,
+        },
+      })
+  })
   await recordProviderRateLimit({
     database,
     scopeKey,
@@ -290,20 +360,103 @@ function dispatchLimits(input: ProviderDispatchInput): ProviderLimits {
     : byokProviderLimits()
 }
 
-function dispatchWaitError(
+function queueDeferral(
   input: ProviderDispatchInput,
   scopeKey: string,
   retryAt: Date,
   waitReason: ProviderDispatchWaitReason,
-): ProviderDispatchWaitError {
-  return new ProviderDispatchWaitError({
+): ProviderQueueDeferral {
+  return new ProviderQueueDeferral({
     providerId: input.providerId,
     providerLabel: input.providerLabel,
-    funding: input.funding,
     retryAt,
     scopeKey,
     waitReason,
   })
+}
+
+async function activateProviderTicket(
+  database: Db,
+  context: {
+    id: string
+    input: ProviderDispatchInput
+    scopeKey: string
+    notBefore: Date
+  },
+): Promise<void> {
+  for (;;) {
+    const remainingMs = await database.transaction(async (transaction) => {
+      await transaction.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${context.scopeKey}, 0))`,
+      )
+      const now = await databaseNow(transaction)
+      const [ticket] = await transaction
+        .select({
+          status: providerDispatches.status,
+          notBefore: providerDispatches.notBefore,
+        })
+        .from(providerDispatches)
+        .where(and(
+          eq(providerDispatches.id, context.id),
+          eq(providerDispatches.scopeKey, context.scopeKey),
+        ))
+        .limit(1)
+        .for('update')
+      if (!ticket || ticket.status !== 'scheduled') {
+        throw new Error('Provider 调度票据在激活前已失效')
+      }
+      const [cooldown] = await transaction
+        .select({ blockedUntil: providerDispatchCooldowns.blockedUntil })
+        .from(providerDispatchCooldowns)
+        .where(eq(providerDispatchCooldowns.scopeKey, context.scopeKey))
+        .limit(1)
+      if (cooldown && cooldown.blockedUntil.getTime() > now.getTime()) {
+        await transaction
+          .update(providerDispatches)
+          .set({ status: 'cancelled', releasedAt: sql`now()` })
+          .where(eq(providerDispatches.id, context.id))
+        console.info('[provider_ticket_cancelled]', {
+          provider: context.input.providerId,
+          attemptId: context.input.attemptId ?? null,
+          ticketId: context.id,
+          reason: 'cooldown',
+        })
+        throw queueDeferral(
+          context.input,
+          context.scopeKey,
+          cooldown.blockedUntil,
+          'cooldown',
+        )
+      }
+      const waitMs = ticket.notBefore.getTime() - now.getTime()
+      if (waitMs > 0) return waitMs
+      await transaction
+        .update(providerDispatches)
+        .set({
+          status: 'in_flight',
+          startedAt: sql`now()`,
+          leaseExpiresAt: sql`now() + make_interval(secs => ${DEFAULT_LEASE_MS / 1_000})`,
+        })
+        .where(and(
+          eq(providerDispatches.id, context.id),
+          eq(providerDispatches.status, 'scheduled'),
+        ))
+      return 0
+    })
+    if (remainingMs <= 0) {
+      console.info('[provider_ticket_activated]', {
+        provider: context.input.providerId,
+        attemptId: context.input.attemptId ?? null,
+        ticketId: context.id,
+      })
+      return
+    }
+    await sleep(Math.min(remainingMs, MAX_INLINE_WAIT_MS))
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(1, ms)))
 }
 
 function safeActorUserId(value: string): string | null {

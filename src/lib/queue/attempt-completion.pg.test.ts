@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { and, asc, eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runInAuthContext } from '@/lib/auth/workspace-context'
-import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
+import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
 import { ProviderRequestError } from '@/features/ai/provider-request-error'
 import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
 import {
@@ -268,7 +268,7 @@ describe('completeAttempt 自动重试', () => {
     expect((await readRun(seeded.runId)).status).toBe('cancelled')
   })
 
-  it('调度器亚秒等待创建续接 attempt，但不消耗普通重试预算', async () => {
+  it('调度器等待原地延迟同一 attempt，且不消耗普通重试预算', async () => {
     const { completeAttempt } = await import('./attempt-completion')
     const projectId = await seedProject()
     const seeded = await seedRunningNodeAttempt(projectId, { nodeStatus: 'failed' })
@@ -279,10 +279,9 @@ describe('completeAttempt 自动重试', () => {
       LOCAL_WORKSPACE_ID,
       seeded.attemptId,
       'failed',
-      new ProviderDispatchWaitError({
+      new ProviderQueueDeferral({
         providerId: 'mimo',
         providerLabel: 'MiMo',
-        funding: 'managed',
         retryAt,
         scopeKey: 'a'.repeat(64),
         waitReason: 'pacing',
@@ -290,16 +289,10 @@ describe('completeAttempt 自动重试', () => {
     )
 
     const attempts = await readRunAttempts(seeded.runId)
-    expect(attempts).toHaveLength(2)
+    expect(attempts).toHaveLength(1)
     expect(attempts[0]).toMatchObject({
       id: seeded.attemptId,
       attemptNo: 1,
-      status: 'superseded',
-      failure: null,
-    })
-    expect(attempts[0]!.completedAt).not.toBeNull()
-    expect(attempts[1]).toMatchObject({
-      attemptNo: 2,
       status: 'queued',
       failure: null,
       checkpoint: {
@@ -307,11 +300,12 @@ describe('completeAttempt 自动重试', () => {
           ordinaryAttemptNo: 1,
           providerScopeKey: 'a'.repeat(64),
           providerWaitReason: 'pacing',
+          providerResumeCount: 1,
         },
       },
     })
-    expect(attempts[1]!.id).not.toBe(seeded.attemptId)
-    expect(attempts[1]!.visibleAt.getTime()).toBeGreaterThanOrEqual(
+    expect(attempts[0]!.completedAt).toBeNull()
+    expect(attempts[0]!.visibleAt.getTime()).toBeGreaterThanOrEqual(
       retryAt.getTime() - 1_000,
     )
     expect((await readRun(seeded.runId)).status).toBe('queued')
@@ -325,7 +319,7 @@ describe('completeAttempt 自动重试', () => {
     })
   })
 
-  it('连续调度等待每次生成新 attempt，ordinaryAttemptNo 始终不变', async () => {
+  it('连续调度等待复用同一 attempt 并累计恢复次数', async () => {
     const { completeAttempt } = await import('./attempt-completion')
     const projectId = await seedProject()
     const seeded = await seedRunningNodeAttempt(projectId, { nodeStatus: 'failed' })
@@ -335,22 +329,19 @@ describe('completeAttempt 自动重试', () => {
       LOCAL_WORKSPACE_ID,
       seeded.attemptId,
       'failed',
-      new ProviderDispatchWaitError({
+      new ProviderQueueDeferral({
         providerId: 'stepfun',
         providerLabel: '阶跃星辰',
-        funding: 'managed',
         retryAt: new Date(Date.now() + 400),
         scopeKey: 'a'.repeat(64),
         waitReason: 'pacing',
       }),
     )
 
-    const firstWaitAttempts = await readRunAttempts(seeded.runId)
-    const firstContinuation = firstWaitAttempts[1]!
     await database.db
       .update(taskAttempts)
       .set({ status: 'running' })
-      .where(eq(taskAttempts.id, firstContinuation.id))
+      .where(eq(taskAttempts.id, seeded.attemptId))
     await database.db
       .update(pipelineRuns)
       .set({ status: 'running' })
@@ -363,12 +354,11 @@ describe('completeAttempt 自动重试', () => {
     await completeAttempt(
       database.db,
       LOCAL_WORKSPACE_ID,
-      firstContinuation.id,
+      seeded.attemptId,
       'failed',
-      new ProviderDispatchWaitError({
+      new ProviderQueueDeferral({
         providerId: 'stepfun',
         providerLabel: '阶跃星辰',
-        funding: 'managed',
         retryAt: new Date(Date.now() + 400),
         scopeKey: 'b'.repeat(64),
         waitReason: 'concurrency',
@@ -377,23 +367,15 @@ describe('completeAttempt 自动重试', () => {
 
     const attempts = await readRunAttempts(seeded.runId)
     expect(attempts.map(({ attemptNo, status }) => ({ attemptNo, status }))).toEqual([
-      { attemptNo: 1, status: 'superseded' },
-      { attemptNo: 2, status: 'superseded' },
-      { attemptNo: 3, status: 'queued' },
+      { attemptNo: 1, status: 'queued' },
     ])
-    expect(new Set(attempts.map(({ id }) => id)).size).toBe(3)
-    expect(attempts[1]!.checkpoint).toMatchObject({
-      queueMeta: {
-        ordinaryAttemptNo: 1,
-        providerScopeKey: 'a'.repeat(64),
-        providerWaitReason: 'pacing',
-      },
-    })
-    expect(attempts[2]!.checkpoint).toMatchObject({
+    expect(attempts[0]!.id).toBe(seeded.attemptId)
+    expect(attempts[0]!.checkpoint).toMatchObject({
       queueMeta: {
         ordinaryAttemptNo: 1,
         providerScopeKey: 'b'.repeat(64),
         providerWaitReason: 'concurrency',
+        providerResumeCount: 2,
       },
     })
     expect((await readRun(seeded.runId)).status).toBe('queued')

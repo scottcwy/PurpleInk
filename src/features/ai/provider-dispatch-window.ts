@@ -1,4 +1,4 @@
-import type { ProviderDispatchWaitReason } from './provider-dispatch-wait-error'
+import type { ProviderDispatchWaitReason } from './provider-queue-deferral'
 import type { ProviderLimits } from './provider-pool-policy'
 
 export const PROVIDER_RATE_WINDOW_MS = 60_000

@@ -20,6 +20,7 @@ export interface ManagedAiHandle {
     failed?: boolean,
   ) => Promise<void>
   settleUnavailable: (failed?: boolean, failureKind?: string) => Promise<void>
+  settleRejected?: (failureKind: string) => Promise<void>
   releaseBeforeCall: () => Promise<void>
 }
 
@@ -87,6 +88,21 @@ export function createManagedHandle(input: {
         providerDurationMs: durationSince(startedAt),
         failureKind,
       })),
+    settleRejected: (failureKind) => state.once(() =>
+      input.lifecycle.settle({
+        invocationId: input.invocationId,
+        actualCostCnyMicros: BigInt(0),
+        usageStatus: 'reported',
+        invocationStatus: 'failed',
+        billingStatus: 'released',
+        usage: {
+          schemaVersion: 2,
+          capability: input.capability,
+          rejected: true,
+        },
+        providerDurationMs: durationSince(startedAt),
+        failureKind,
+      })),
     releaseBeforeCall: () => state.once(() =>
       input.lifecycle.release({ invocationId: input.invocationId })),
   }
@@ -142,6 +158,18 @@ export function createUnbilledHandle(input: {
         status: failed ? 'failed' : 'succeeded',
         usageStatus: 'unavailable',
         usage: usagePayload(),
+        providerDurationMs: durationSince(startedAt),
+        failureKind,
+      })),
+    settleRejected: (failureKind) => state.once(() =>
+      input.lifecycle.settle({
+        invocationId: input.invocationId,
+        status: 'failed',
+        usageStatus: 'reported',
+        usage: {
+          ...usagePayload(),
+          rejected: true,
+        },
         providerDurationMs: durationSince(startedAt),
         failureKind,
       })),

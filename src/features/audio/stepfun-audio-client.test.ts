@@ -21,7 +21,6 @@ function dependencies(fetcher: typeof fetch): StepfunAudioDependencies {
   return {
     fetcher,
     getConfig: async () => config,
-    dispatch: async (_input, invoke) => invoke(),
   }
 }
 

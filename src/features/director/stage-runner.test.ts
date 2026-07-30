@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createStageRunner } from './stage-runner'
 import type { DirectorRunResult } from './pi-session'
 import type { DirectorStageContext } from './runtime-repository'
-import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
+import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
 import {
   ArtifactValidationError,
   type ArtifactCommitResult,
@@ -355,10 +355,9 @@ describe('createStageRunner', () => {
 
   it('projects provider pacing as a queue wait instead of a failed Director stage', async () => {
     const harness = createHarness()
-    const wait = new ProviderDispatchWaitError({
+    const wait = new ProviderQueueDeferral({
       providerId: 'stepfun',
       providerLabel: '阶跃星辰',
-      funding: 'managed',
       retryAt: new Date('2026-07-30T05:02:41.400Z'),
       scopeKey: 'managed:stepfun',
       waitReason: 'pacing',

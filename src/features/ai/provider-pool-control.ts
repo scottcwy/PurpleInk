@@ -23,6 +23,7 @@ export async function ensureProviderPoolState(
   failureCount: number
   lastAdjustedAt: Date
   lastActorUserId: string | null
+  nextDispatchAt: Date
 }> {
   const maxConcurrency = input.limits.maxConcurrency ?? input.limits.concurrency
   await transaction
@@ -41,6 +42,7 @@ export async function ensureProviderPoolState(
       failureCount: providerPoolStates.failureCount,
       lastAdjustedAt: providerPoolStates.lastAdjustedAt,
       lastActorUserId: providerPoolStates.lastActorUserId,
+      nextDispatchAt: providerPoolStates.nextDispatchAt,
     })
     .from(providerPoolStates)
     .where(eq(providerPoolStates.scopeKey, input.scopeKey))

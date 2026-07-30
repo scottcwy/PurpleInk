@@ -8,6 +8,7 @@ import {
 import { getDb } from '@/lib/db/client'
 import { pipelineRuns, taskAttempts } from '@/lib/db/schema/index'
 import { classifyWorkflowError } from '@/features/canvas/workflow-error'
+import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
 import { releaseTerminalWorkflowSlotForNode } from '@/features/ai/workspace-concurrency-release'
 import {
   ACTIVE_WORKFLOW_VERSION,
@@ -164,7 +165,12 @@ export class InProcessQueue implements QueueAdapter {
 
   private async sweep(): Promise<void> {
     try {
-      await sweepExpiredLeases(await getDb())
+      const database = await getDb()
+      await sweepExpiredLeases(database)
+      const { reconcileExpiredProviderTickets } = await import(
+        '@/features/ai/provider-dispatch'
+      )
+      await reconcileExpiredProviderTickets(database)
     } catch (error) {
       console.error('[queue] 僵尸 attempt 回收失败', error)
     }
@@ -237,6 +243,23 @@ export class InProcessQueue implements QueueAdapter {
       )
       await completeAttempt(database, job.workspaceId, job.id, 'succeeded')
     } catch (err) {
+      if (err instanceof ProviderQueueDeferral) {
+        console.info('[provider_queue_deferred]', {
+          provider: err.providerId,
+          attemptId: job.id,
+          kind: job.kind,
+          waitReason: err.waitReason,
+          retryAt: err.retryAt,
+        })
+        await completeAttempt(
+          database,
+          job.workspaceId,
+          job.id,
+          'failed',
+          err,
+        )
+        return
+      }
       const fault = classifyWorkflowError(err, { stage: 'QUEUE' })
       console.error('[workflow-attempt]', JSON.stringify({
         referenceId: fault.referenceId,
