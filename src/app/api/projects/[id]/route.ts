@@ -72,7 +72,10 @@ async function handleDelete(params: Promise<{ id: string }>) {
   }
 }
 
-/** 领域错误 → HTTP；未知错误只给类别文案，不回显底层信息。 */
+/**
+ * 领域错误 → HTTP；未知错误只给类别文案。
+ * 未知错误必须落服务端日志：否则 UI 只能看到脱敏文案，无法取到失败真值。
+ */
 function mapProjectMutationError(error: unknown, fallback: string) {
   if (
     error instanceof ProjectTitleError ||
@@ -84,6 +87,11 @@ function mapProjectMutationError(error: unknown, fallback: string) {
       { status: error.statusCode }
     )
   }
+  console.error(
+    `[projects/[id]] ${fallback}：${
+      error instanceof Error ? (error.stack ?? error.message) : String(error)
+    }`
+  )
   return NextResponse.json({ ok: false, error: fallback }, { status: 500 })
 }
 

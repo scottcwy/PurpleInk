@@ -1,5 +1,6 @@
 import 'server-only'
-import { and, eq, inArray, sql } from 'drizzle-orm'
+import { and, eq, inArray, notExists, sql } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/pg-core'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb, type Db } from '@/lib/db/client'
 import {
@@ -21,9 +22,6 @@ import {
 /** 在途执行状态：命中任一即拒绝删除。 */
 const IN_FLIGHT_ATTEMPT_STATUSES = ['queued', 'running'] as const
 const IN_FLIGHT_LEASE_STATUSES = ['waiting', 'active'] as const
-
-/** 谱系分层删除的轮数上限；正常链路远小于此值，超出即视为数据异常。 */
-const MAX_LINEAGE_PASSES = 64
 
 export interface ProjectDeletionResult {
   projectId: string
@@ -54,6 +52,7 @@ export interface ProjectDeletionDependencies {
  *    invocation 存活。工作区级用量周期与计费账本不属于项目级联，不受影响；
  * 3. `artifacts.supersedes_artifact_id → artifacts` 自引用 RESTRICT：不能延迟到语句末，
  *    故按谱系分层删除，每轮只删当前无人引用的产物，而不是原地断链；
+ *    轮数不设硬上限（真实项目已出现 96 层版本链），按每轮是否有进展终止；
  * 4. `artifacts.attempt_id → task_attempts` RESTRICT：产物必须早于 attempt 删除，
  *    而 attempt 是 `projects → pipeline_runs → task_attempts` 级联的末端。
  *
@@ -136,38 +135,53 @@ async function deleteWithinTransaction(
  *
  * 自引用外键是 RESTRICT，无法延迟到语句末，所以不能一条 DELETE 清空父子行；
  * 也不用原地把 supersedes 置空——那会构成对已审批产物的就地改写。
+ *
+ * 终止条件按「本轮是否有进展」而不是写死轮数：真实项目的版本链可以很长
+ * （已观测到 96 层的旁白音频链），写死上限会把正常项目误判为异常；
+ * 反之“仍有剩余但一行都删不掉”才是真正的环，那时才报错。
  */
 async function deleteArtifactsByLineage(
   transaction: TransactionContext,
   workspaceId: string,
   projectId: string,
 ): Promise<void> {
-  for (let pass = 0; pass < MAX_LINEAGE_PASSES; pass += 1) {
-    const [remaining] = await transaction
-      .select({ id: artifacts.id })
-      .from(artifacts)
+  const successor = alias(artifacts, 'successor')
+  const scope = and(
+    eq(artifacts.workspaceId, workspaceId),
+    eq(artifacts.projectId, projectId),
+  )
+
+  for (;;) {
+    const deleted = await transaction
+      .delete(artifacts)
       .where(
         and(
-          eq(artifacts.workspaceId, workspaceId),
-          eq(artifacts.projectId, projectId),
+          scope,
+          notExists(
+            transaction
+              .select({ one: sql`1` })
+              .from(successor)
+              .where(
+                and(
+                  eq(successor.workspaceId, workspaceId),
+                  eq(successor.projectId, projectId),
+                  eq(successor.supersedesArtifactId, artifacts.id),
+                ),
+              ),
+          ),
         ),
       )
+      .returning({ id: artifacts.id })
+    if (deleted.length > 0) continue
+
+    const [stuck] = await transaction
+      .select({ id: artifacts.id })
+      .from(artifacts)
+      .where(scope)
       .limit(1)
-    if (!remaining) return
-    await transaction.execute(sql`
-      delete from ${artifacts} as leaf
-      where leaf.workspace_id = ${workspaceId}
-        and leaf.project_id = ${projectId}
-        and not exists (
-          select 1
-          from ${artifacts} as successor
-          where successor.workspace_id = leaf.workspace_id
-            and successor.project_id = leaf.project_id
-            and successor.supersedes_artifact_id = leaf.id
-        )
-    `)
+    if (!stuck) return
+    throw new Error('产物 supersedes 谱系存在环引用，删除无法收敛')
   }
-  throw new Error('产物谱系层数异常，删除未收敛')
 }
 
 /** 在途 attempt 或未释放的并发租约都视为「项目正在跑」。 */

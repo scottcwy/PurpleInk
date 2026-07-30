@@ -77,6 +77,21 @@ describe('deleteProject', () => {
     expect(await database.db.select().from(taskAttempts)).toHaveLength(0)
   })
 
+  it('removes a project whose supersedes chain is deeper than any fixed pass limit', async () => {
+    // 真实项目已观测到 96 层的 narration-audio 版本链；写死轮数上限会把它误判为异常。
+    const seeded = await seedProject(database.db, { extraChainLength: 96 })
+
+    const result = await deleteProject(seeded.projectId, {
+      database: database.db,
+      workspaceId: WORKSPACE_ID,
+      storage: { delete: async () => undefined },
+    })
+
+    expect(result.deletedArtifacts).toBe(98)
+    expect(await database.db.select().from(artifacts)).toHaveLength(0)
+    expect(await database.db.select().from(projects)).toHaveLength(0)
+  })
+
   it('clears artifact references on surviving AI invocations instead of deleting them', async () => {
     const seeded = await seedProject(database.db)
 
@@ -210,7 +225,7 @@ describe('deleteProject', () => {
  */
 async function seedProject(
   db: Db,
-  options: { attemptStatus?: string } = {},
+  options: { attemptStatus?: string; extraChainLength?: number } = {},
 ): Promise<Seeded> {
   const projectId = randomUUID()
   const nodeId = randomUUID()
@@ -294,6 +309,29 @@ async function seedProject(
     attemptId,
     supersedesArtifactId: firstArtifactId,
   })
+
+  // 可选：在 v2 之上继续堆长链，每一级 supersedes 前一级，模拟反复重渲的版本史。
+  let chainTip = secondArtifactId
+  for (let index = 0; index < (options.extraChainLength ?? 0); index += 1) {
+    const nextId = randomUUID()
+    await db.insert(artifacts).values({
+      workspaceId: WORKSPACE_ID,
+      id: nextId,
+      projectId,
+      aggregateType: 'node',
+      aggregateId: nodeId,
+      kind: 'director-fabricate',
+      version: index + 3,
+      lifecycle: index % 2 === 0 ? 'released' : 'draft',
+      schemaVersion: 'cvc.delete-test/v1',
+      storageKey: `artifacts/shot-v${index + 3}.html`,
+      sizeBytes: 12,
+      contentHash: contentHashFor(index),
+      attemptId,
+      supersedesArtifactId: chainTip,
+    })
+    chainTip = nextId
+  }
   // ai_invocations_trace_artifact_fk 是 RESTRICT。两行分别覆盖两种归属：
   // 挂 run 的会随既有 CASCADE 消失，未挂 run 的必须存活并被置空引用。
   await db.insert(aiInvocations).values([
@@ -337,4 +375,9 @@ async function seedProject(
     runScopedInvocationId,
     detachedInvocationId,
   }
+}
+
+/** 长链每级需要不同的 64 位 hash（受 artifacts_content_hash_check 约束）。 */
+function contentHashFor(index: number): string {
+  return index.toString(16).padStart(64, '0')
 }

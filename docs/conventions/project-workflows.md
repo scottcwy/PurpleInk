@@ -142,6 +142,10 @@ v1 费率为每个向上取整的视频秒 `120000 CNY micros`（¥0.12）；
 4. **按谱系分层删除产物**：`artifacts.supersedes_artifact_id` 是 RESTRICT 自引用，
    不能延迟到语句末，一条 DELETE 清不掉父子行；每轮只删当前无人 supersedes 引用
    的产物，直到清空。不用「把 supersedes 置空再批量删」，那等于就地改写谱系。
+   **终止条件按「本轮是否有进展」，禁止写死轮数上限。** 真实项目的版本链可以很长
+   （已在开发库观测到一个项目有 520 个产物、`narration-audio` 版本链深 96 层，
+   需要 96 轮才清空）；写死上限会把正常项目误判为数据异常，并在 UI 上表现为
+   无法解释的「项目删除失败」。“仍有剩余但一行都删不掉”才是真环，那时才报错。
 5. **删除 projects 行**：其余表由 CASCADE 收走（产物已先删，
    `artifacts.attempt_id → task_attempts` 的 RESTRICT 不再阻塞）。
 6. **提交后清理字节**：按收集到的 `storage_key` 逐个调 `StorageAdapter.delete`。
@@ -149,5 +153,9 @@ v1 费率为每个向上取整的视频秒 `120000 CNY micros`（¥0.12）；
    删除翻回失败。
 
 回归护栏在 `src/features/projects/project-deletion.pg.test.ts`：含 supersedes 谱系
-可删、存活 invocation 只被置空、存储字节被清、在途 attempt 与未释放租约各自 409
-且一行不删、同工作区其他项目完全不受影响、未知项目 404。
+可删、比任何固定轮数上限都深的 96 层链可删、存活 invocation 只被置空、存储字节被清、
+在途 attempt 与未释放租约各自 409 且一行不删、同工作区其他项目完全不受影响、未知项目 404。
+
+项目标题没有唯一约束，重名合法：`projects` 上只有 `(workspace_id, id)` 与
+`(workspace_id, id, workflow_kind)` 两个唯一索引，重命名与删除均按 `id` 定位，
+同名项目不会互相影响。
