@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ProviderRequestError } from '@/features/ai/provider-request-error'
+import { classifyWorkflowError } from '@/features/canvas/workflow-error'
 import { createDirectorSession, type DirectorTool } from './pi-session'
 import { PIPELINE_STAGES } from './types'
 
@@ -20,6 +22,14 @@ const mocks = vi.hoisted(() => {
   const gatewayRelease = vi.fn()
   const agentInstances: MockAgent[] = []
   const promptMessages: unknown[][] = []
+  const billingProviderFailures: unknown[] = []
+  const createDirectorBillingStream = vi.fn((input: {
+    onProviderFailure?: (error: unknown) => void
+  }) => {
+    const failure = billingProviderFailures.shift()
+    if (failure !== undefined) input.onProviderFailure?.(failure)
+    return {}
+  })
 
   class MockAgent {
     readonly listeners: Array<(event: unknown) => Promise<void> | void> = []
@@ -31,6 +41,7 @@ const mocks = vi.hoisted(() => {
       errorMessage?: string
     }
     readonly onResponse?: (response: { status: number }, model: unknown) => Promise<void> | void
+    readonly streamFn?: (...args: unknown[]) => unknown
 
     constructor(options: {
       initialState?: {
@@ -40,6 +51,7 @@ const mocks = vi.hoisted(() => {
         messages?: unknown[]
       }
       onResponse?: (response: { status: number }, model: unknown) => Promise<void> | void
+      streamFn?: (...args: unknown[]) => unknown
     }) {
       this.state = {
         systemPrompt: options.initialState?.systemPrompt ?? '',
@@ -48,6 +60,7 @@ const mocks = vi.hoisted(() => {
         messages: options.initialState?.messages ?? [],
       }
       this.onResponse = options.onResponse
+      this.streamFn = options.streamFn
       agentInstances.push(this)
     }
 
@@ -57,6 +70,10 @@ const mocks = vi.hoisted(() => {
     }
 
     async prompt(prompt: string) {
+      if (billingProviderFailures.length > 0) {
+        this.streamFn?.({}, {}, {})
+        this.state.errorMessage = 'Provider request failed'
+      }
       const messages = promptMessages.shift() ?? [
         { role: 'user', content: [{ type: 'text', text: prompt }], timestamp: 2 },
         {
@@ -104,6 +121,8 @@ const mocks = vi.hoisted(() => {
     gatewayRelease,
     agentInstances,
     promptMessages,
+    billingProviderFailures,
+    createDirectorBillingStream,
     MockAgent,
   }
 })
@@ -119,6 +138,9 @@ vi.mock('@/features/ai/provider-dispatch', () => ({
 }))
 vi.mock('@/lib/stream/stream-bus', () => ({ streamBus: { publish: mocks.publish } }))
 vi.mock('@earendil-works/pi-agent-core', () => ({ Agent: mocks.MockAgent }))
+vi.mock('./director-billing-stream', () => ({
+  createDirectorBillingStream: mocks.createDirectorBillingStream,
+}))
 vi.mock('@earendil-works/pi-ai', () => ({
   createModels: () => ({ setProvider: vi.fn(), streamSimple: vi.fn() }),
   createProvider: mocks.createProvider,
@@ -165,6 +187,7 @@ describe('createDirectorSession', () => {
     vi.clearAllMocks()
     mocks.agentInstances.length = 0
     mocks.promptMessages.length = 0
+    mocks.billingProviderFailures.length = 0
     mocks.resolveDirectorModelTarget.mockReturnValue({
       provider: 'stepfun',
       baseUrl: 'https://api.stepfun.test/v1',
@@ -543,6 +566,38 @@ describe('createDirectorSession', () => {
       session.run({ prompt: '执行阶段', output: assistantOutput })
     ).rejects.toMatchObject({ name: 'ProviderRequestError', kind: 'unavailable' })
     expect(mocks.recordProviderFailure).toHaveBeenCalledWith('stepfun')
+  })
+
+  it('preserves a typed provider timeout through the workflow fault projection', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const timeout = new ProviderRequestError({
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      operation: 'Director',
+      funding: 'managed',
+      kind: 'timeout',
+    })
+    mocks.billingProviderFailures.push(timeout)
+    const session = await createDirectorSession({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      stage: 'INGEST',
+    })
+
+    const failure = await session
+      .run({ prompt: '执行阶段', output: assistantOutput })
+      .then(() => null, (error: unknown) => error)
+
+    expect(failure).toBe(timeout)
+    expect(mocks.recordProviderFailure).toHaveBeenCalledWith('stepfun')
+    expect(classifyWorkflowError(failure, { stage: 'INGEST' })).toMatchObject({
+      code: 'PROVIDER_TIMEOUT',
+      retryable: true,
+      provider: {
+        id: 'stepfun',
+        label: '阶跃星辰',
+      },
+    })
   })
 
   it('keeps a pi-formatted 4xx status while discarding the provider body', async () => {

@@ -55,6 +55,8 @@ export function createDirectorBillingStream(input: {
   gateway: ManagedAiGateway
   /** 出网前的审计、配额或路由前置失败；调用方据此保留原始类型，不得误计 Provider 熔断。 */
   onPreflightFailure?: (error: unknown) => void
+  /** 出网后的类型化 Provider 失败；pi 会把流异常降格成 error event，调用方须保留原始类型。 */
+  onProviderFailure?: (error: ProviderRequestError) => void
   streamSimple: (
     model: Model<Api>,
     context: Context,
@@ -110,8 +112,11 @@ async function* billedEvents(
     }
   } catch (error) {
     dispatchOutcome = error instanceof ProviderRequestError ? error.kind : 'unknown'
-    if (error instanceof ProviderRequestError && error.kind === 'rate_limit') {
-      await dispatch?.defer(error.retryAt ? new Date(error.retryAt) : undefined)
+    if (error instanceof ProviderRequestError) {
+      input.onProviderFailure?.(error)
+      if (error.kind === 'rate_limit') {
+        await dispatch?.defer(error.retryAt ? new Date(error.retryAt) : undefined)
+      }
     }
     if (handle && !settled) {
       if (providerStarted) {

@@ -175,6 +175,7 @@ describe('Director per-provider-call billing stream', () => {
     const order: string[] = []
     const billingHandle = handle(order)
     const streamSimple = vi.fn(() => createAssistantMessageEventStream())
+    const onProviderFailure = vi.fn()
     const events = await consume(createDirectorBillingStream({
       model,
       context,
@@ -193,11 +194,18 @@ describe('Director per-provider-call billing stream', () => {
       gateway: {
         begin: vi.fn(async () => billingHandle),
       } as unknown as ManagedAiGateway,
+      onProviderFailure,
       streamSimple,
     }))
 
     expect(events.at(-1)?.type).toBe('error')
     expect(billingHandle.settleUnavailable).toHaveBeenCalledWith(true, 'timeout')
+    expect(onProviderFailure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'ProviderRequestError',
+        kind: 'timeout',
+      }),
+    )
   })
 
   it('does not start the next provider call when reservation is rejected', async () => {

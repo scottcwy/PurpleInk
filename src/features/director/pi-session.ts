@@ -95,6 +95,7 @@ export async function createDirectorSession(
     const gateway = new ManagedAiGateway()
     let invocationIndex = 0
     let preflightFailure: unknown
+    let providerFailure: ProviderRequestError | undefined
     const agent = new Agent({
       initialState: {
         systemPrompt: buildDirectorSystemPrompt(input.stage),
@@ -103,7 +104,6 @@ export async function createDirectorSession(
         tools: [],
       },
       streamFn: (model, context, options) => {
-        preflightFailure = undefined
         return createDirectorBillingStream({
           model,
           context,
@@ -114,6 +114,9 @@ export async function createDirectorSession(
           gateway,
           onPreflightFailure: (error) => {
             preflightFailure = error
+          },
+          onProviderFailure: (error) => {
+            providerFailure = error
           },
           streamSimple: (nextModel, nextContext, nextOptions) =>
             runtime.models.streamSimple(nextModel, nextContext, nextOptions),
@@ -133,12 +136,29 @@ export async function createDirectorSession(
       storageKey: stored.storageKey,
       run: async (runInput) => {
         const startedAt = Date.now()
+        preflightFailure = undefined
+        providerFailure = undefined
+        let providerFailureHandled = false
         bridge.beginRun()
         agent.state.tools = adaptDirectorTools(runInput.tools)
         try {
           await agent.prompt(runInput.prompt)
           await agent.waitForIdle()
           if (preflightFailure !== undefined) throw preflightFailure
+          if (providerFailure !== undefined) {
+            providerFailureHandled = true
+            await throwDirectorRunFailure(
+              agent,
+              runtime,
+              upstreamFailureResponse,
+              {
+                stage: input.stage,
+                attemptId: input.attemptId,
+                durationMs: Date.now() - startedAt,
+              },
+              providerFailure,
+            )
+          }
           await assertRunSucceeded(agent, runtime, upstreamFailureResponse, {
             stage: input.stage,
             attemptId: input.attemptId,
@@ -147,6 +167,20 @@ export async function createDirectorSession(
           return extractDirectorOutput(bridge.runMessages(), runInput.output)
         } catch (error) {
           if (preflightFailure !== undefined) throw preflightFailure
+          if (providerFailure !== undefined && !providerFailureHandled) {
+            providerFailureHandled = true
+            await throwDirectorRunFailure(
+              agent,
+              runtime,
+              upstreamFailureResponse,
+              {
+                stage: input.stage,
+                attemptId: input.attemptId,
+                durationMs: Date.now() - startedAt,
+              },
+              providerFailure,
+            )
+          }
           // pi 在部分流式失败中会从 prompt() 直接 reject，而不会走到下方
           // assertRunSucceeded。只要本次请求已观察到 HTTP 状态或 Agent 已投影
           // 为 provider error，仍必须收敛成稳定的 DirectorRunError，避免让 4xx
@@ -218,13 +252,17 @@ async function throwDirectorRunFailure(
   },
   response: ObservedProviderResponse | null,
   execution: { stage: string; attemptId?: string; durationMs: number },
+  observedFailure?: ProviderRequestError,
 ): Promise<never> {
-  const status = response?.status ?? upstreamHttpStatus(agent.state.errorMessage ?? '') ?? undefined
-  const kind = providerFailureKind(status)
+  const status = observedFailure?.httpStatus
+    ?? response?.status
+    ?? upstreamHttpStatus(agent.state.errorMessage ?? '')
+    ?? undefined
+  const kind = observedFailure?.kind ?? providerFailureKind(status)
   if (kind === 'timeout' || kind === 'unavailable' || kind === 'network') {
     recordProviderFailure(runtime.providerId)
   }
-  const requestError = response
+  const requestError = observedFailure ?? (response
     ? providerErrorFromResponse({
       response,
       providerId: runtime.providerId,
@@ -239,7 +277,7 @@ async function throwDirectorRunFailure(
         funding: runtime.funding ?? 'managed',
         httpStatus: status,
         kind,
-      })
+      }))
   if (requestError.kind === 'rate_limit' && runtime.apiKey) {
     await deferProviderScope({
       providerId: runtime.providerId,
