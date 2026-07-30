@@ -35,6 +35,7 @@ import {
   providerRateLimitBackoffMs,
 } from './provider-dispatch-window'
 import { providerPoolMode } from './concurrency-rollout'
+import { databaseNow } from './workspace-concurrency-context'
 
 const DEFAULT_LEASE_MS = 5 * 60_000
 
@@ -96,6 +97,7 @@ export async function reserveProviderDispatch(
     await transaction.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${scopeKey}, 0))`
     )
+    const now = await databaseNow(transaction)
     const poolState = await ensureProviderPoolState(transaction, {
       scopeKey,
       provider: input.providerId,
@@ -111,7 +113,7 @@ export async function reserveProviderDispatch(
         throw dispatchWaitError(
           input,
           scopeKey,
-          new Date(Date.now() + 100 + Math.round(Math.random() * 100)),
+          new Date(now.getTime() + 100 + Math.round(Math.random() * 100)),
           'fairness',
         )
       }
@@ -122,7 +124,7 @@ export async function reserveProviderDispatch(
       .from(providerDispatchCooldowns)
       .where(eq(providerDispatchCooldowns.scopeKey, scopeKey))
       .limit(1)
-    if (cooldown && cooldown.blockedUntil.getTime() > Date.now()) {
+    if (cooldown && cooldown.blockedUntil.getTime() > now.getTime()) {
       if (mode === 'enforce') {
         throw dispatchWaitError(input, scopeKey, cooldown.blockedUntil, 'cooldown')
       }
@@ -171,6 +173,7 @@ export async function reserveProviderDispatch(
       newest: usage?.newest ?? null,
       active: active?.count ?? 0,
       nextLease: active?.nextLease ?? null,
+      now,
     })
     if (wait) {
       if (mode === 'enforce') {

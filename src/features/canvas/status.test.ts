@@ -210,6 +210,41 @@ describe('blocked 状态转移', () => {
     expect(updateSets[0]?.data).toEqual({ payload: { keep: 'x' } })
   })
 
+  it('允许运行节点原子转为 Provider 等待并清理旧失败投影', async () => {
+    const executionNotice = {
+      code: 'PROVIDER_POOL_WAIT' as const,
+      message: '阶跃星辰正在等待可用调用窗口',
+      resumeAt: '2026-07-30T05:02:41.400Z',
+      providerLabel: '阶跃星辰',
+    }
+    nodeRows = [{
+      id: 'n1',
+      projectId: 'p1',
+      status: 'running',
+      data: {
+        payload: {
+          directorError: { message: '不应残留的失败' },
+          renderError: { message: '旧渲染失败' },
+          keep: 'x',
+        },
+      },
+    }]
+
+    await transitionNodeStatus('n1', 'pending', { executionNotice })
+
+    expect(updateSets[0]).toMatchObject({
+      status: 'queued',
+      data: {
+        payload: {
+          keep: 'x',
+          executionNotice,
+        },
+      },
+    })
+    expect(updateSets[0]?.data).not.toHaveProperty('payload.directorError')
+    expect(updateSets[0]?.data).not.toHaveProperty('payload.renderError')
+  })
+
   it.each(['idle', 'running', 'success', 'failed', 'cancelled', 'stale', 'skipped', 'blocked'] as const)(
     'blocked -> %s 除 pending 外全部拒绝',
     async (next) => {

@@ -2,7 +2,12 @@ import 'server-only'
 import { and, eq } from 'drizzle-orm'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { type Db } from '@/lib/db/client'
-import { canvasNodes, projects } from '@/lib/db/schema/index'
+import {
+  artifacts,
+  canvasNodes,
+  projects,
+  taskAttempts,
+} from '@/lib/db/schema/index'
 import { withTransaction } from '@/lib/db/transaction'
 import type { StorageAdapter } from '@/lib/storage'
 import {
@@ -172,6 +177,77 @@ export class DirectorRuntimeRepository {
     text: string
   ): Promise<void> {
     return this.writer.persistStreamLog(projectId, nodeId, stage, text)
+  }
+
+  async shouldResumeCommittedEffect(
+    attemptId: string,
+    nodeId: string,
+  ): Promise<boolean> {
+    const [row] = await this.db
+      .select({
+        checkpoint: taskAttempts.checkpoint,
+        runId: taskAttempts.runId,
+        nodeData: canvasNodes.data,
+      })
+      .from(taskAttempts)
+      .innerJoin(
+        canvasNodes,
+        and(
+          eq(canvasNodes.workspaceId, taskAttempts.workspaceId),
+          eq(canvasNodes.id, taskAttempts.entityId),
+        ),
+      )
+      .where(
+        and(
+          eq(taskAttempts.workspaceId, currentWorkspaceId()),
+          eq(taskAttempts.id, attemptId),
+          eq(taskAttempts.entityType, 'node'),
+          eq(taskAttempts.entityId, nodeId),
+        ),
+      )
+      .limit(1)
+    if (!row) return false
+    const checkpoint = row.checkpoint as Record<string, unknown>
+    const queueMeta =
+      checkpoint.queueMeta
+      && typeof checkpoint.queueMeta === 'object'
+      && !Array.isArray(checkpoint.queueMeta)
+        ? checkpoint.queueMeta as Record<string, unknown>
+        : {}
+    const payload = readNodePayload(row.nodeData)
+    if (
+      typeof queueMeta.providerScopeKey !== 'string'
+      || typeof payload.directorArtifactId !== 'string'
+      || typeof payload.outputContentHash !== 'string'
+    ) {
+      return false
+    }
+    const [committed] = await this.db
+      .select({
+        contentHash: artifacts.contentHash,
+        runId: taskAttempts.runId,
+      })
+      .from(artifacts)
+      .innerJoin(
+        taskAttempts,
+        and(
+          eq(taskAttempts.workspaceId, artifacts.workspaceId),
+          eq(taskAttempts.id, artifacts.attemptId),
+        ),
+      )
+      .where(
+        and(
+          eq(artifacts.workspaceId, currentWorkspaceId()),
+          eq(artifacts.id, payload.directorArtifactId),
+          eq(artifacts.aggregateType, 'node'),
+          eq(artifacts.aggregateId, nodeId),
+        ),
+      )
+      .limit(1)
+    return (
+      committed?.runId === row.runId
+      && committed.contentHash === payload.outputContentHash
+    )
   }
 
   async recordStageError(

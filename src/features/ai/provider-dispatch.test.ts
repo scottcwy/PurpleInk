@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { providerScopeKey } from './provider-dispatch'
+import { nextProviderWindow } from './provider-dispatch-window'
 import { providerPoolPolicy } from './provider-pool-policy'
 
 vi.mock('server-only', () => ({}))
@@ -67,5 +68,35 @@ describe('provider dispatch configuration', () => {
       minIntervalMs: 800,
       jitterMs: 80,
     })
+  })
+})
+
+describe('provider dispatch clock boundary', () => {
+  it('uses the database clock when deciding whether a pacing window is still pending', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-30T05:01:37.000Z'))
+    const databaseNow = new Date('2026-07-30T05:02:41.000Z')
+    const newest = new Date(databaseNow.getTime() - 1_000)
+
+    try {
+      expect(nextProviderWindow({
+        limits: {
+          concurrency: 8,
+          rpm: 180,
+          minIntervalMs: 400,
+          jitterMs: 0,
+        },
+        rpm: 1,
+        tokens: 0,
+        tokenEstimate: 0,
+        oldest: newest,
+        newest,
+        active: 0,
+        nextLease: null,
+        now: databaseNow,
+      })).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

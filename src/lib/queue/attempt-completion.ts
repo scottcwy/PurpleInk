@@ -6,6 +6,7 @@ import { pipelineRuns, taskAttempts, type VersionedPayload } from '@/lib/db/sche
 import { backoffMs, shouldAutoRetry } from './retry-policy'
 import { classifyWorkflowError } from '@/features/canvas/workflow-error'
 import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
+import { databaseNow } from '@/features/ai/workspace-concurrency-context'
 import type { WorkflowExecutionNotice, WorkflowFault } from '@/features/canvas/workflow-fault'
 import {
   boundedProviderResumeAt,
@@ -75,6 +76,7 @@ export async function completeAttempt(
     // 不得覆盖 TASK_INTERRUPTED 投影，也不得重置节点或追加新的 retry attempt。
     if (attempt.status !== 'running') return null
 
+    const now = await databaseNow(transaction)
     const stage = retryStage(attempt.checkpoint)
     if (
       status === 'failed'
@@ -107,9 +109,9 @@ export async function completeAttempt(
       status === 'failed'
       && fault?.code === 'PROVIDER_RATE_LIMITED'
       && (options?.allowAutoRetry ?? true)
-      && providerWaitRemaining(attempt.checkpoint)
+      && providerWaitRemaining(attempt.checkpoint, now)
     ) {
-      const resumeAt = boundedProviderResumeAt(fault, attempt.checkpoint)
+      const resumeAt = boundedProviderResumeAt(fault, attempt.checkpoint, now)
       await scheduleProviderRateLimitWait(
         transaction,
         workspaceId,
@@ -117,6 +119,7 @@ export async function completeAttempt(
         attempt,
         fault,
         resumeAt,
+        now,
       )
       return attempt.entityType === 'node'
         ? {

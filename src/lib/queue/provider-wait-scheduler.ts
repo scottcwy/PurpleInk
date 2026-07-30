@@ -31,6 +31,7 @@ export async function scheduleProviderRateLimitWait(
   attempt: ProviderWaitAttempt,
   fault: WorkflowFault,
   resumeAt: Date,
+  now: Date,
 ): Promise<void> {
   await transaction
     .update(taskAttempts)
@@ -57,9 +58,9 @@ export async function scheduleProviderRateLimitWait(
     fingerprint: attempt.fingerprint,
     checkpoint: patchQueueMeta(attempt.checkpoint, {
       ordinaryAttemptNo: ordinaryAttemptNo(attempt),
-      providerWaitStartedAt: providerWaitStartedAt(attempt.checkpoint).toISOString(),
+      providerWaitStartedAt: providerWaitStartedAt(attempt.checkpoint, now).toISOString(),
     }),
-    visibleAt: resumeAt,
+    visibleAt: sql`greatest(${resumeAt}, now() + interval '50 milliseconds')`,
   })
   await requeueRun(transaction, workspaceId, attempt.runId)
 }
@@ -100,7 +101,7 @@ export async function scheduleProviderDispatchWait(
       providerScopeKey: failure.scopeKey,
       providerWaitReason: failure.waitReason,
     }),
-    visibleAt: resumeAt,
+    visibleAt: sql`greatest(${resumeAt}, now() + interval '50 milliseconds')`,
   })
   await requeueRun(transaction, workspaceId, attempt.runId)
 }
@@ -115,24 +116,28 @@ export function ordinaryAttemptNo(attempt: {
     : attempt.attemptNo
 }
 
-export function providerWaitRemaining(checkpoint: VersionedPayload): boolean {
-  return Date.now() - providerWaitStartedAt(checkpoint).getTime() <
+export function providerWaitRemaining(
+  checkpoint: VersionedPayload,
+  now: Date = new Date(),
+): boolean {
+  return now.getTime() - providerWaitStartedAt(checkpoint, now).getTime() <
     MAX_PROVIDER_WAIT_MS
 }
 
 export function boundedProviderResumeAt(
   fault: WorkflowFault,
   checkpoint: VersionedPayload,
+  now: Date = new Date(),
 ): Date {
-  const startedAt = providerWaitStartedAt(checkpoint)
+  const startedAt = providerWaitStartedAt(checkpoint, now)
   const deadline = startedAt.getTime() + MAX_PROVIDER_WAIT_MS
   const projected = fault.provider?.retryAt
     ? Date.parse(fault.provider.retryAt)
-    : Date.now() + FALLBACK_PROVIDER_WAIT_MS
+    : now.getTime() + FALLBACK_PROVIDER_WAIT_MS
   const valid = Number.isFinite(projected)
     ? projected
-    : Date.now() + FALLBACK_PROVIDER_WAIT_MS
-  return new Date(Math.min(Math.max(valid, Date.now()), deadline))
+    : now.getTime() + FALLBACK_PROVIDER_WAIT_MS
+  return new Date(Math.min(Math.max(valid, now.getTime()), deadline))
 }
 
 export function patchQueueMeta(
@@ -142,13 +147,16 @@ export function patchQueueMeta(
   return { ...checkpoint, queueMeta: { ...queueMeta(checkpoint), ...patch } }
 }
 
-function providerWaitStartedAt(checkpoint: VersionedPayload): Date {
+function providerWaitStartedAt(
+  checkpoint: VersionedPayload,
+  now: Date = new Date(),
+): Date {
   const value = queueMeta(checkpoint).providerWaitStartedAt
   if (typeof value === 'string') {
     const timestamp = Date.parse(value)
     if (Number.isFinite(timestamp)) return new Date(timestamp)
   }
-  return new Date()
+  return now
 }
 
 function queueMeta(checkpoint: VersionedPayload): Record<string, unknown> {

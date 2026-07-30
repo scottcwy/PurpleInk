@@ -20,6 +20,7 @@ import {
 import type { PipelineStage } from './types'
 import { classifyWorkflowError } from '@/features/canvas/workflow-error'
 import { advancePipeline } from './advance'
+import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
 
 export { MAX_GATE_RETRIES } from './stage-artifact-gate'
 
@@ -51,6 +52,10 @@ interface StageRepository {
     stage: PipelineStage,
     text: string
   ): Promise<void>
+  shouldResumeCommittedEffect?(
+    attemptId: string,
+    nodeId: string,
+  ): Promise<boolean>
 }
 
 interface StageRunnerDependencies {
@@ -68,11 +73,7 @@ interface StageRunnerDependencies {
     result: PreparedStageResult,
     artifact: ArtifactCommitResult
   ) => Promise<void>
-  runStageEffect: (
-    context: DirectorStageContext,
-    result: PreparedStageResult,
-    artifact: ArtifactCommitResult
-  ) => Promise<void>
+  runStageEffect: (context: DirectorStageContext) => Promise<void>
   advancePipeline: (
     projectId: string,
     completedNodeId: string
@@ -148,6 +149,23 @@ export function createStageRunner(
       const executionContext: DirectorStageContext = attemptId
         ? { ...context, attemptId }
         : context
+      if (
+        context.nodeType === 'shot-subtitle'
+        && attemptId
+        && await dependencies.repository.shouldResumeCommittedEffect?.(
+          attemptId,
+          nodeId,
+        )
+      ) {
+        await dependencies.runStageEffect(executionContext)
+        await dependencies.transitionNodeStatus(nodeId, 'success')
+        await advanceWithoutMasking(
+          dependencies.advancePipeline,
+          projectId,
+          nodeId,
+        )
+        return
+      }
       const prompt = dependencies.buildPrompt(stage, context)
       session = await dependencies.createSession({
         projectId,
@@ -166,7 +184,7 @@ export function createStageRunner(
         writeArtifact: dependencies.writeArtifact,
       })
       await dependencies.commitResult(context, prepared, artifact)
-      await dependencies.runStageEffect(executionContext, prepared, artifact)
+      await dependencies.runStageEffect(executionContext)
       await dependencies.repository.persistStreamLog(
         projectId,
         nodeId,
@@ -210,6 +228,26 @@ export function createStageRunner(
         } catch (cleanupError) {
           cleanupErrors.push(cleanupError)
         }
+      }
+      if (error instanceof ProviderDispatchWaitError) {
+        try {
+          await dependencies.repository.persistStreamLog(
+            projectId,
+            nodeId,
+            stage,
+            streamBus.getSnapshot(streamKey).text,
+          )
+        } catch (cleanupError) {
+          cleanupErrors.push(cleanupError)
+        }
+        streamBus.markDone(streamKey)
+        if (cleanupErrors.length > 0) {
+          throw new AggregateError(
+            [error, ...cleanupErrors],
+            `Provider 等待已排队但阶段清理不完整：${stage}`,
+          )
+        }
+        throw error
       }
       try {
         await dependencies.transitionNodeStatus(nodeId, 'failed')

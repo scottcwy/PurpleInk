@@ -616,6 +616,44 @@ UI 投影为 `STAGE_FAILED`（阶段兜底），且同一进程的 dev log 可�
 
 ---
 
+## 7.11 模式 Q：数据库与应用时钟混用，让亚秒 pacing 变成分钟级重试风暴
+
+**症状**：分镜脚本已全部成功，但代码生成在数分钟后才创建；旁白或字幕产生几十到
+上百个 `superseded` attempt，最后又会自行成功。字幕节点每次都有一次成功的文本
+模型调用，随后 ASR 立即取消或释放，UI 在等待与失败之间反复闪动。工作区并发条仍可能
+显示“未排队”，因为它不投影 Provider 调度窗口。
+
+**真实事故**：PostgreSQL 时钟比 Node 进程快约 60 秒。Provider 调度器用数据库
+`reserved_at` 计算 `retryAt`，却用应用 `Date.now()` 判断该窗口是否仍在未来。
+已经相对数据库过期的 pacing 时间因此仍被当成等待写入 `visible_at`；队列领取又使用
+PostgreSQL `now()`，所以新 attempt 立即被重新领取并再次撞到同一等待。一次四镜项目
+实际产生 96 个旁白 attempt（95 个 superseded）以及 74 次成功字幕文本调用。
+
+字幕还有第二层放大器：Director 文本产物已经提交后才执行 ASR 副作用。ASR 等待被
+Stage Runner 先记为 `failed + directorError`，队列随后再改回
+`pending + executionNotice`；恢复 attempt 没有识别已提交的 Director 产物，于是从头
+重复文本模型调用。
+
+**规则**：
+
+- 来自数据库的时间戳只能与同一事务读取的数据库 `now()` 比较；pacing、RPM、TPM、
+  cooldown、并发租约和队列可见时间禁止混入应用墙钟。
+- Provider 等待写入 `visible_at` 时必须由数据库保证它严格晚于当前数据库时间，
+  防止时钟漂移、过期 `Retry-After` 或事务耗时制造立即重领空转。
+- `ProviderDispatchWaitError` 不得经过阶段失败投影。节点应从 `running` 原子转为
+  `pending + executionNotice`，同时清理旧 `directorError` / `renderError`。
+- 复合阶段在文本产物已提交、媒体副作用未完成时必须留下可恢复检查点。恢复只重试
+  未完成副作用，不得再次调用已经成功并提交的文本模型。
+- 校准主机时钟只是运维缓解，不能替代代码的单时钟正确性。
+
+**已落地护栏**：`provider-dispatch.ts` 把事务内数据库时间传给
+`nextProviderWindow`，`provider-wait-scheduler.ts` 用数据库表达式钳制未来
+`visible_at`；Stage Runner 对 Provider 等待不再落失败，并通过 attempt 的
+`providerScopeKey` 与节点已提交 Artifact 识别字幕副作用续跑。状态迁移在写入
+`executionNotice` 时清除旧失败投影。
+
+---
+
 ## 9. 已知未修项
 
 当前无已确认而未修的代码/文档项。
@@ -628,7 +666,8 @@ UI 投影为 `STAGE_FAILED`（阶段兜底），且同一进程的 dev log 可�
 、静态门禁放过语法错误并重复复用坏 HTML（模式 K）、ASR 小数秒导致字幕结算失败
 （模式 L）、RPM 限流被普通重试与熔断放大（模式 M）、databaseNow 非 Date 返回
 导致 post-commit TypeError（模式 O）、并发旁白调度等待被包装为上游失败导致
-配音永久失败（模式 P）——见各节「已落地护栏」。
+配音永久失败（模式 P）、数据库与应用时钟混用导致 Provider 等待风暴和字幕文本重复
+调用（模式 Q）——见各节「已落地护栏」。
 
 ---
 

@@ -82,7 +82,15 @@ export async function transitionNodeStatus(
       .for('update')
     if (!node) throw new Error(`节点不存在：${nodeId}`)
     const current = fromPersistedStatus(node.status)
-    if (!isNodeStatusTransitionAllowed(current, next)) {
+    const providerWaitTransition =
+      current === 'running'
+      && next === 'pending'
+      && options?.executionNotice !== undefined
+      && options.executionNotice !== null
+    if (
+      !isNodeStatusTransitionAllowed(current, next)
+      && !providerWaitTransition
+    ) {
       throw new Error(`非法节点状态转换：${current} -> ${next}`)
     }
     if (next === 'stale' && !(await isStaleInTransaction(tx, node))) {

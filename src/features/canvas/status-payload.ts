@@ -34,7 +34,10 @@ export function resolveTransitionData(
     return patchPayload(cleared, { [WORKFLOW_BLOCK_PAYLOAD_KEY]: workflowBlock })
   }
   if (executionNotice) {
-    return patchPayload(data, { [EXECUTION_NOTICE_PAYLOAD_KEY]: executionNotice })
+    const cleared = withoutStageErrors(data) ?? data
+    return patchPayload(cleared, {
+      [EXECUTION_NOTICE_PAYLOAD_KEY]: executionNotice,
+    })
   }
   if (executionNotice === null || next === 'running') {
     return withoutPayloadKeys(data, [EXECUTION_NOTICE_PAYLOAD_KEY])

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createStageRunner } from './stage-runner'
 import type { DirectorRunResult } from './pi-session'
 import type { DirectorStageContext } from './runtime-repository'
+import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
 import {
   ArtifactValidationError,
   type ArtifactCommitResult,
@@ -180,11 +181,7 @@ describe('createStageRunner', () => {
       output: { kind: 'assistant-text' },
     })
     expect(harness.repository.persistStreamLog).toHaveBeenCalledTimes(1)
-    expect(harness.runStageEffect).toHaveBeenCalledWith(
-      context,
-      { content: '业务产物' },
-      artifactResult()
-    )
+    expect(harness.runStageEffect).toHaveBeenCalledWith(context)
     expect(harness.repository.persistStreamLog).toHaveBeenCalledWith(
       'project-1',
       'node-1',
@@ -354,6 +351,52 @@ describe('createStageRunner', () => {
     ])
     expect(harness.transitionNodeStatus).not.toHaveBeenCalledWith('node-1', 'success')
     expect(harness.advancePipeline).not.toHaveBeenCalled()
+  })
+
+  it('projects provider pacing as a queue wait instead of a failed Director stage', async () => {
+    const harness = createHarness()
+    const wait = new ProviderDispatchWaitError({
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      funding: 'managed',
+      retryAt: new Date('2026-07-30T05:02:41.400Z'),
+      scopeKey: 'managed:stepfun',
+      waitReason: 'pacing',
+    })
+    harness.runStageEffect.mockRejectedValueOnce(wait)
+
+    await expect(
+      harness.runner('project-1', 'node-1', 'ASSEMBLE', 'attempt-1')
+    ).rejects.toBe(wait)
+
+    expect(harness.transitionNodeStatus.mock.calls.map((call) => call[1])).toEqual([
+      'running',
+    ])
+    expect(harness.repository.recordStageError).not.toHaveBeenCalled()
+  })
+
+  it('resumes only the committed subtitle side effect after a provider wait', async () => {
+    const harness = createHarness()
+    harness.repository.loadStageContext.mockResolvedValue({
+      ...context,
+      nodeType: 'shot-subtitle',
+      stage: 'ASSEMBLE',
+    })
+    Object.assign(harness.repository, {
+      shouldResumeCommittedEffect: vi.fn(async () => true),
+    })
+
+    await harness.runner('project-1', 'node-1', 'ASSEMBLE', 'attempt-2')
+
+    expect(harness.createSession).not.toHaveBeenCalled()
+    expect(harness.writeArtifact).not.toHaveBeenCalled()
+    expect(harness.commitResult).not.toHaveBeenCalled()
+    expect(harness.runStageEffect).toHaveBeenCalledOnce()
+    expect(harness.transitionNodeStatus.mock.calls.map((call) => call[1])).toEqual([
+      'running',
+      'success',
+    ])
+    expect(harness.advancePipeline).toHaveBeenCalledWith('project-1', 'node-1')
   })
 
   it('reuses the same FABRICATE session for at most two gate-feedback retries', async () => {

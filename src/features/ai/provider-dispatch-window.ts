@@ -12,6 +12,7 @@ export function nextProviderWindow(input: {
   newest: Date | null
   active: number
   nextLease: Date | null
+  now: Date
 }): { retryAt: Date; reason: ProviderDispatchWaitReason } | undefined {
   const candidates: Array<{
     retryAt: Date
@@ -22,7 +23,7 @@ export function nextProviderWindow(input: {
     const retryAt = new Date(
       input.newest.getTime() + (input.limits.minIntervalMs ?? 0) + jitter(),
     )
-    if (retryAt.getTime() > Date.now()) {
+    if (retryAt.getTime() > input.now.getTime()) {
       candidates.push({ retryAt, reason: 'pacing' })
     }
   }
@@ -52,8 +53,11 @@ export function nextProviderWindow(input: {
       reason: 'concurrency',
     })
   }
-  if (candidates.length === 0) return undefined
-  return candidates.reduce((latest, candidate) =>
+  const pending = candidates.filter(
+    ({ retryAt }) => retryAt.getTime() > input.now.getTime(),
+  )
+  if (pending.length === 0) return undefined
+  return pending.reduce((latest, candidate) =>
     candidate.retryAt.getTime() > latest.retryAt.getTime() ? candidate : latest
   )
 }
