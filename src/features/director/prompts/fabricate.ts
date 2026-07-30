@@ -93,7 +93,9 @@ transform-origin 精准控制、贝塞尔缓动、错峰入场、多相位编排
 - 尽量避免 WebGL；确需使用时必须 preserveDrawingBuffer: true，否则截图为空。
 - 图片一律内联 data URL 并显式 loading="eager"；禁止外链图片。
 - 禁止依赖 :hover/:focus 等交互态呈现内容；需要该状态时用 GSAP 直接设定。
-- 字体必须在 head 内静态声明（内联 data URL @font-face）；禁止运行时动态加载字体。
+- 禁止生成、补写或伪造 Base64 字体；只有输入明确提供真实字体字节时才允许内联
+  data URL @font-face。没有提供字体素材时使用 system-ui、sans-serif 等系统字体，
+  不写 @font-face；始终禁止运行时动态加载字体。
 - 避免 backdrop-filter（跨平台渲染差异），改用 filter 或半透明叠层替代。
 - 保持 overflow: hidden，杜绝滚动条参与布局。
 

@@ -287,6 +287,8 @@ describe('director prompt templates', () => {
     expect(prompt).toContain('loading="eager"')
     expect(prompt).toContain(':hover/:focus')
     expect(prompt).toContain('backdrop-filter')
+    expect(prompt).toContain('禁止生成、补写或伪造 Base64 字体')
+    expect(prompt).toContain('没有提供字体素材时')
     // 新增段落全部位于静态规则区，不得侵入动态数据区破坏缓存前缀
     const styleBibleAt = prompt.indexOf('style bible：')
     expect(prompt.indexOf('确定性动效库白名单')).toBeLessThan(styleBibleAt)
