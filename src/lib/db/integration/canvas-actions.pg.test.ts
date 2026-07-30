@@ -68,9 +68,10 @@ describe('export settings', () => {
     projectId = (await createScriptProject('设置项目')).id
   })
 
-  it('defaults to the master preset when never set', async () => {
+  it('defaults to the master preset and burned-in subtitles when never set', async () => {
     await expect(getExportSettings(projectId)).resolves.toEqual({
       resolutionPreset: '1920x1080',
+      subtitles: 'burn-in',
     })
   })
 
@@ -78,22 +79,44 @@ describe('export settings', () => {
     await updateExportSettings(projectId, { resolutionPreset: '1280x720' })
     await expect(getExportSettings(projectId)).resolves.toEqual({
       resolutionPreset: '1280x720',
+      subtitles: 'burn-in',
     })
     const [row] = await database.db
       .select({ exportSettings: projects.exportSettings })
       .from(projects)
     expect(row?.exportSettings).toEqual({
       schemaVersion: 1,
-      settings: { resolutionPreset: '1280x720' },
+      settings: { resolutionPreset: '1280x720', subtitles: 'burn-in' },
     })
   })
 
-  it('rejects an invalid preset without writing', async () => {
+  it('applies a single-field patch without resetting the other fields', async () => {
+    // 这一列是整体覆盖写入的 jsonb：如果「只改分辨率」按完整对象写回，
+    // 用户已选的字幕交付会被顺手抹回默认，反之亦然。
+    await updateExportSettings(projectId, { subtitles: 'off' })
+    await updateExportSettings(projectId, { resolutionPreset: '960x540' })
+    await expect(getExportSettings(projectId)).resolves.toEqual({
+      resolutionPreset: '960x540',
+      subtitles: 'off',
+    })
+    await updateExportSettings(projectId, { subtitles: 'burn-in' })
+    await expect(getExportSettings(projectId)).resolves.toEqual({
+      resolutionPreset: '960x540',
+      subtitles: 'burn-in',
+    })
+  })
+
+  it('rejects an invalid preset, an unknown mode and an empty patch without writing', async () => {
     await expect(
       updateExportSettings(projectId, { resolutionPreset: '9999x9999' })
     ).rejects.toThrow()
+    await expect(
+      updateExportSettings(projectId, { subtitles: 'srt' })
+    ).rejects.toThrow()
+    await expect(updateExportSettings(projectId, {})).rejects.toThrow()
     await expect(getExportSettings(projectId)).resolves.toEqual({
       resolutionPreset: '1920x1080',
+      subtitles: 'burn-in',
     })
   })
 
@@ -113,7 +136,7 @@ describe('export settings', () => {
     const [row] = await database.db.select().from(projects)
     expect(row?.exportSettings).toEqual({
       schemaVersion: 1,
-      settings: { resolutionPreset: '1920x1080' },
+      settings: { resolutionPreset: '1920x1080', subtitles: 'burn-in' },
     })
   })
 })

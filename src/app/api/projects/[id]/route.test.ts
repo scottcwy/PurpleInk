@@ -34,7 +34,10 @@ vi.mock('@/features/canvas', async () => {
   const { z } = await import('zod')
   return {
     updateExportSettings: mocks.updateExportSettings,
-    exportSettingsSchema: z.object({ resolution: z.enum(['1080p', '720p']) }),
+    exportSettingsPatchSchema: z
+      .object({ resolution: z.enum(['1080p', '720p']).optional() })
+      .strict()
+      .refine((input) => Object.keys(input).length > 0),
   }
 })
 vi.mock('@/features/projects', () => ({

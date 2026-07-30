@@ -17,11 +17,16 @@ export {
   MASTER_ASPECT_RATIO,
   MASTER_WIDTH,
   MASTER_HEIGHT,
+  SUBTITLE_DELIVERY_MODES,
   exportSettingsSchema,
+  exportSettingsPatchSchema,
+  mergeExportSettings,
   resolveExportSettings,
   resolutionForPreset,
   type ExportSettings,
+  type ExportSettingsPatch,
   type ResolutionPreset,
+  type SubtitleDeliveryMode,
 } from './export-settings'
 export {
   getCanvasGraph,

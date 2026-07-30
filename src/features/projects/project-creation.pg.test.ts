@@ -115,7 +115,7 @@ describe('createProjectWithSource', () => {
       script: expectedScript,
       exportSettings: {
         schemaVersion: 1,
-        settings: { resolutionPreset: '1920x1080' },
+        settings: { resolutionPreset: '1920x1080', subtitles: 'burn-in' },
       },
     })
     expect(persistedSource).toMatchObject({

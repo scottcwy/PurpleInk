@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { withApiSession } from '@/features/auth/api-session'
-import { exportSettingsSchema, updateExportSettings } from '@/features/canvas'
+import { exportSettingsPatchSchema, updateExportSettings } from '@/features/canvas'
 import {
   deleteProject,
   ProjectDeleteBlockedError,
@@ -47,7 +47,7 @@ async function patchTitle(id: string, title: unknown) {
 }
 
 async function patchExportSettings(id: string, input: unknown) {
-  const parsed = exportSettingsSchema.safeParse(input)
+  const parsed = exportSettingsPatchSchema.safeParse(input)
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: 'exportSettings 无效' }, { status: 400 })
   }

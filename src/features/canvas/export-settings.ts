@@ -16,8 +16,21 @@ export const EXPORT_RESOLUTION_PRESETS = {
 
 export type ResolutionPreset = keyof typeof EXPORT_RESOLUTION_PRESETS
 
+/**
+ * 字幕交付模式。
+ *
+ * `burn-in`：把字幕硬烧进画面（当前唯一的字幕交付形态）。
+ * `off`：本次成片不含字幕；缺字幕产物也不再阻塞导出。
+ *
+ * 用可辨识字符串而不是布尔，是为了以后新增旁挂 .srt 之类的形态时不需要改字段类型。
+ */
+export const SUBTITLE_DELIVERY_MODES = ['burn-in', 'off'] as const
+
+export type SubtitleDeliveryMode = (typeof SUBTITLE_DELIVERY_MODES)[number]
+
 export interface ExportSettings {
   resolutionPreset: ResolutionPreset
+  subtitles: SubtitleDeliveryMode
 }
 
 /** 母版画幅预设：与 features/director/stage-result.ts 的 FABRICATE 画幅一致，不可经导出设置更改。 */
@@ -30,6 +43,7 @@ export const MASTER_ASPECT_RATIO = MASTER_WIDTH / MASTER_HEIGHT
 /** 项目从未设置导出参数时（DB 列为 null）的回退默认。 */
 export const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   resolutionPreset: MASTER_RESOLUTION_PRESET,
+  subtitles: 'burn-in',
 }
 
 const RESOLUTION_PRESET_KEYS = Object.keys(EXPORT_RESOLUTION_PRESETS) as [
@@ -37,16 +51,51 @@ const RESOLUTION_PRESET_KEYS = Object.keys(EXPORT_RESOLUTION_PRESETS) as [
   ...ResolutionPreset[],
 ]
 
+/**
+ * 已持久化设置的完整形状。
+ *
+ * `subtitles` 必须带 `.default()`：schema 是 `.strict()`，而 `resolveExportSettings`
+ * 在解析失败时静默回退到 `DEFAULT_EXPORT_SETTINGS`。若新字段声明为必填，所有存量
+ * 项目库里只存着 `{resolutionPreset}` 的行都会解析失败，用户已选的分辨率会被悄悄
+ * 重置成母版预设——这是一次静默的数据回归，只能靠默认值避免。
+ */
 export const exportSettingsSchema = z
   .object({
     resolutionPreset: z.enum(RESOLUTION_PRESET_KEYS),
+    subtitles: z.enum(SUBTITLE_DELIVERY_MODES).default('burn-in'),
   })
   .strict()
+
+/**
+ * 局部更新的请求形状。
+ *
+ * PATCH 语义要求只改送来的字段：整体覆盖会让「只改分辨率」把字幕选择顺手抹回默认。
+ * 空对象拒绝，避免一次什么都不改的写库。
+ */
+export const exportSettingsPatchSchema = z
+  .object({
+    resolutionPreset: z.enum(RESOLUTION_PRESET_KEYS).optional(),
+    subtitles: z.enum(SUBTITLE_DELIVERY_MODES).optional(),
+  })
+  .strict()
+  .refine((input) => Object.keys(input).length > 0, {
+    message: '导出设置补丁至少需要一个字段',
+  })
+
+export type ExportSettingsPatch = z.infer<typeof exportSettingsPatchSchema>
 
 /** 把未知来源（DB JSON 列 / 请求体）归一化为合法 ExportSettings；非法或 null 回退默认。 */
 export function resolveExportSettings(raw: unknown): ExportSettings {
   const parsed = exportSettingsSchema.safeParse(raw)
   return parsed.success ? parsed.data : DEFAULT_EXPORT_SETTINGS
+}
+
+/** 把补丁并入已有设置；未出现的字段保持原值。 */
+export function mergeExportSettings(
+  current: ExportSettings,
+  patch: ExportSettingsPatch
+): ExportSettings {
+  return { ...current, ...patch }
 }
 
 /** 预设 → 目标物理像素尺寸。 */
