@@ -17,13 +17,14 @@ export type JobPhase =
   | "verifying"
   | "muxing"
   | "done"
-  | "failed";
+  | "failed"
+  | "cancelled";
 
 export interface JobView {
   id: string;
   kind: "url" | "capture";
   input: string;
-  status: "queued" | "running" | "done" | "failed";
+  status: "queued" | "running" | "done" | "failed" | "cancelled";
   phase: JobPhase;
   checkPassed?: boolean;
   durationSec?: number;
