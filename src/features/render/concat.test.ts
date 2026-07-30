@@ -115,6 +115,43 @@ describe('concatExport', () => {
     ).toBe(createHash('sha256').update(await readFile(second)).digest('hex'))
   }, 30_000)
 
+  it('mixes deterministic procedural SFX into a real AAC output', async () => {
+    const basePlan = assemblyPlan({ width: 960, height: 540 })
+    const offOutput = path.join(directory, 'sfx-off.mp4')
+    const proceduralOutput = path.join(directory, 'sfx-procedural.mp4')
+    const paths = { videoPaths: clips, narrationPaths, musicPath: null }
+
+    const off = await concatExport(
+      { ...basePlan, soundEffects: 'off' },
+      paths,
+      subtitleAss(basePlan),
+      offOutput,
+    )
+    const procedural = await concatExport(
+      { ...basePlan, soundEffects: 'procedural' },
+      paths,
+      subtitleAss(basePlan),
+      proceduralOutput,
+    )
+
+    expect(off.soundEffects.status).toBe('omitted-off')
+    expect(procedural.soundEffects).toMatchObject({
+      status: 'applied',
+      cueCount: 1,
+      generatorVersion: 'procedural-sfx/1.0.0',
+    })
+    expect(procedural.soundEffects.waveformHashes[0]).toMatch(/^[0-9a-f]{64}$/u)
+    expect(
+      createHash('sha256').update(await readFile(proceduralOutput)).digest('hex'),
+    ).not.toBe(
+      createHash('sha256').update(await readFile(offOutput)).digest('hex'),
+    )
+    expect(await probeCodecs(proceduralOutput)).toEqual({
+      video: 'h264',
+      audio: 'aac',
+    })
+  }, 30_000)
+
   it.each([
     { width: 1280, height: 720 },
     { width: 960, height: 540 },

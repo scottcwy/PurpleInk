@@ -3,6 +3,7 @@ import path from 'node:path'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { StorageAdapter } from '@/lib/storage'
+import type { ConcatExportResult } from './concat'
 import type { MediaAssemblyPlan } from './media-assembly'
 import { getExportReadiness } from './export-readiness'
 import { exportProject } from './export-service'
@@ -109,7 +110,7 @@ describe('exportProject', () => {
       outputPath: string
     ) => {
       await writeFile(outputPath, Buffer.from('deterministic-final-mp4'))
-      return outputPath
+      return successfulConcat(outputPath)
     })
 
     const result = await exportProject('project-1', {
@@ -177,7 +178,7 @@ describe('exportProject', () => {
       outputPath: string
     ) => {
       await writeFile(outputPath, Buffer.from('deterministic-final-mp4'))
-      return outputPath
+      return successfulConcat(outputPath)
     })
     const plan = completeMediaPlan()
 
@@ -470,6 +471,21 @@ async function createTempRoot(): Promise<string> {
   directories.push(directory)
   await mkdir(directory, { recursive: true })
   return directory
+}
+
+function successfulConcat(outputPath: string): ConcatExportResult {
+  return {
+    outputPath,
+    soundEffects: {
+      mode: 'off',
+      status: 'omitted-off',
+      generatorVersion: 'procedural-sfx/1.0.0',
+      cueCount: 0,
+      timingHash: null,
+      cuePlanHash: null,
+      waveformHashes: [],
+    },
+  }
 }
 
 function completeMediaPlan(): MediaAssemblyPlan {

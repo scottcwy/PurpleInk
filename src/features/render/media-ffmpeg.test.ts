@@ -39,16 +39,18 @@ const plan: MediaAssemblyPlan = {
 }
 
 describe('buildMediaAssemblyArgs', () => {
+  const baseInput = {
+    plan,
+    concatListPath: 'C:/tmp/shots.ffconcat',
+    narrationPaths: ['C:/tmp/a1.mp3', 'C:/tmp/a2.mp3'],
+    subtitlePath: 'C:/tmp/final.ass',
+    fontsDirectory: 'C:/repo/assets/fonts',
+    musicPath: null,
+    outputPath: 'C:/tmp/final.mp4',
+  } as const
+
   it('builds one deterministic H.264/AAC hard-subtitle assembly without speed changes', () => {
-    const args = buildMediaAssemblyArgs({
-      plan,
-      concatListPath: 'C:/tmp/shots.ffconcat',
-      narrationPaths: ['C:/tmp/a1.mp3', 'C:/tmp/a2.mp3'],
-      subtitlePath: 'C:/tmp/final.ass',
-      fontsDirectory: 'C:/repo/assets/fonts',
-      musicPath: null,
-      outputPath: 'C:/tmp/final.mp4',
-    })
+    const args = buildMediaAssemblyArgs(baseInput)
     const command = args.join(' ')
     const filter = args[args.indexOf('-filter_complex') + 1]
 
@@ -68,6 +70,35 @@ describe('buildMediaAssemblyArgs', () => {
     expect(filter).toContain('concat=n=2:v=0:a=1')
     expect(command).not.toContain('-an')
     expect(command).not.toContain('atempo')
+  })
+
+  it('keeps the off path exactly identical when the SFX input list is empty', () => {
+    expect(
+      buildMediaAssemblyArgs({ ...baseInput, soundEffectInputs: [] }),
+    ).toEqual(buildMediaAssemblyArgs(baseInput))
+  })
+
+  it('delays, mixes and limits only the supplied procedural one-shots', () => {
+    const args = buildMediaAssemblyArgs({
+      ...baseInput,
+      soundEffectInputs: [
+        { path: 'C:/tmp/ping.wav', atFrame: 9, gainDb: -24 },
+        { path: 'C:/tmp/whoosh.wav', atFrame: 60, gainDb: -24 },
+      ],
+    })
+    const command = args.join(' ')
+    const filter = args[args.indexOf('-filter_complex') + 1]
+
+    expect(command).toContain('-i C:/tmp/ping.wav')
+    expect(command).toContain('-i C:/tmp/whoosh.wav')
+    expect(filter).toContain('volume=-24dB,adelay=300|300[sfx0]')
+    expect(filter).toContain('volume=-24dB,adelay=2000|2000[sfx1]')
+    expect(filter).toContain('amix=inputs=2:duration=longest:normalize=0[sfxbus]')
+    expect(filter).toContain(
+      'amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.891251[audio]',
+    )
+    expect(command).toContain('-map [audio]')
+    expect(command).not.toContain('stream_loop')
   })
 
   it('keeps scaling but drops the ass filter for a subtitle-free delivery', () => {

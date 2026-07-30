@@ -9,11 +9,15 @@ import {
   SUBTITLE_FONTS_DIRECTORY,
 } from '@/features/audio/subtitle-style'
 import {
-  buildMediaAssemblyArgs,
   subtitleFontFile,
   subtitleFontsDirectory,
 } from './media-ffmpeg-args'
 import type { MediaAssemblyPlan } from './media-assembly'
+import {
+  prepareProceduralSfx,
+  runMediaAssemblyWithSfxFallback,
+  type ProceduralSfxMixResult,
+} from './procedural-sfx-mix'
 
 export { subtitleFontsDirectory }
 
@@ -21,6 +25,11 @@ export interface LocalMediaPaths {
   videoPaths: string[]
   narrationPaths: string[]
   musicPath: string | null
+}
+
+export interface ConcatExportResult {
+  outputPath: string
+  soundEffects: ProceduralSfxMixResult
 }
 
 async function assertSubtitleFont(directory: string): Promise<void> {
@@ -45,7 +54,7 @@ export async function concatExport(
   paths: LocalMediaPaths,
   subtitleAss: string | null,
   outputPath: string
-): Promise<string> {
+): Promise<ConcatExportResult> {
   if (!ffmpegPath) throw new Error('ffmpeg-static 未提供当前平台二进制')
   assertPathCounts(plan, paths)
   await assertInputs(paths)
@@ -75,8 +84,9 @@ export async function concatExport(
         ? []
         : [writeFile(subtitlePath, subtitleAss ?? '', 'utf8')]),
     ])
-    await runFfmpeg(
-      buildMediaAssemblyArgs({
+    const preparedSoundEffects = await prepareProceduralSfx(plan, workDirectory)
+    const soundEffects = await runMediaAssemblyWithSfxFallback({
+      baseInput: {
         plan,
         concatListPath: listPath,
         narrationPaths: paths.narrationPaths,
@@ -84,10 +94,12 @@ export async function concatExport(
         fontsDirectory,
         musicPath: paths.musicPath,
         outputPath: temporaryPath,
-      })
-    )
+      },
+      prepared: preparedSoundEffects,
+      runner: runFfmpeg,
+    })
     await rename(temporaryPath, outputPath)
-    return outputPath
+    return { outputPath, soundEffects }
   } catch (error) {
     await rm(temporaryPath, { force: true })
     throw error

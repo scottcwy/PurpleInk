@@ -1,4 +1,5 @@
 import type { SubtitleDeliveryMode } from '@/features/canvas/export-settings'
+import type { ProceduralSfxMode } from '@purpleink/procedural-sfx'
 import {
   addIssue,
   resolveDegradedShot,
@@ -40,6 +41,11 @@ export interface MediaAssemblyPlan {
   musicKey: string | null
   /** 本次交付的字幕形态；`off` 时全片不含字幕，缺字幕也不阻塞装配。 */
   subtitles: SubtitleDeliveryMode
+  /**
+   * 代码音效装配模式。未设置视为 `off`，保证这个字段进入持久化设置前，
+   * 所有存量计划与旧测试继续走逐参数相同的旁白基线。
+   */
+  soundEffects?: ProceduralSfxMode
 }
 
 export interface ExportBlockingIssue {

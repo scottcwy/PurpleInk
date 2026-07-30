@@ -16,12 +16,20 @@ import type { MediaAssemblyPlan } from './media-assembly'
 export interface MediaAssemblyArgsInput {
   plan: MediaAssemblyPlan
   concatListPath: string
-  narrationPaths: string[]
+  narrationPaths: readonly string[]
   /** null 表示本次交付不烧字幕；此时视频滤镜只做缩放。 */
   subtitlePath: string | null
   fontsDirectory: string
   musicPath: string | null
+  /** 短 WAV 输入；空数组必须保持原有 ffmpeg 参数逐项不变。 */
+  soundEffectInputs?: readonly SoundEffectInput[]
   outputPath: string
+}
+
+export interface SoundEffectInput {
+  path: string
+  atFrame: number
+  gainDb: number
 }
 
 /**
@@ -44,6 +52,7 @@ export function buildMediaAssemblyArgs(
   input: MediaAssemblyArgsInput
 ): string[] {
   const { plan } = input
+  const soundEffectInputs = input.soundEffectInputs ?? []
   if (plan.shots.length === 0) {
     throw new Error('媒体装配至少需要一个分镜')
   }
@@ -67,6 +76,9 @@ export function buildMediaAssemblyArgs(
     args.push('-i', narrationPath)
   }
   if (input.musicPath) args.push('-stream_loop', '-1', '-i', input.musicPath)
+  for (const soundEffect of soundEffectInputs) {
+    args.push('-i', soundEffect.path)
+  }
 
   const filters = plan.shots.map((shot, index) => {
     const shotSeconds = shot.durationInFrames / plan.fps
@@ -88,11 +100,13 @@ export function buildMediaAssemblyArgs(
   )
   const musicIndex = plan.shots.length + 1
   if (input.musicPath) {
+    const outputLabel = soundEffectInputs.length > 0 ? 'baseaudio' : 'audio'
     filters.push(
       `[${musicIndex}:a:0]aresample=48000,aformat=sample_rates=48000:channel_layouts=stereo,volume=-18dB,atrim=duration=${number(totalSeconds)}[music]`,
-      `[narration][music]amix=inputs=2:duration=first:normalize=0[audio]`
+      `[narration][music]amix=inputs=2:duration=first:normalize=0[${outputLabel}]`
     )
   }
+  appendSoundEffectFilters(filters, input, soundEffectInputs)
   filters.push(`[0:v:0]${videoFilterChain(input)}[video]`)
 
   args.push(
@@ -101,7 +115,7 @@ export function buildMediaAssemblyArgs(
     '-map',
     '[video]',
     '-map',
-    input.musicPath ? '[audio]' : '[narration]',
+    input.musicPath || soundEffectInputs.length > 0 ? '[audio]' : '[narration]',
     '-c:v',
     'libx264',
     '-preset',
@@ -136,6 +150,45 @@ export function buildMediaAssemblyArgs(
     input.outputPath
   )
   return args
+}
+
+function appendSoundEffectFilters(
+  filters: string[],
+  input: MediaAssemblyArgsInput,
+  soundEffects: readonly SoundEffectInput[]
+): void {
+  if (soundEffects.length === 0) return
+  const firstInputIndex =
+    input.plan.shots.length + 1 + (input.musicPath ? 1 : 0)
+  for (const [index, soundEffect] of soundEffects.entries()) {
+    if (
+      !Number.isInteger(soundEffect.atFrame) ||
+      soundEffect.atFrame < 0 ||
+      !Number.isFinite(soundEffect.gainDb)
+    ) {
+      throw new Error('代码音效输入参数无效')
+    }
+    const delayMs = Math.round(
+      (soundEffect.atFrame / input.plan.fps) * 1_000
+    )
+    filters.push(
+      `[${firstInputIndex + index}:a:0]aresample=48000,` +
+        'aformat=sample_rates=48000:channel_layouts=stereo,' +
+        `volume=${number(soundEffect.gainDb)}dB,` +
+        `adelay=${delayMs}|${delayMs}[sfx${index}]`
+    )
+  }
+  const labels = soundEffects.map((_, index) => `[sfx${index}]`).join('')
+  filters.push(
+    soundEffects.length === 1
+      ? `${labels}anull[sfxbus]`
+      : `${labels}amix=inputs=${soundEffects.length}:duration=longest:normalize=0[sfxbus]`
+  )
+  const baseLabel = input.musicPath ? 'baseaudio' : 'narration'
+  filters.push(
+    `[${baseLabel}][sfxbus]amix=inputs=2:duration=first:normalize=0,` +
+      'alimiter=limit=0.891251[audio]'
+  )
 }
 
 /**
