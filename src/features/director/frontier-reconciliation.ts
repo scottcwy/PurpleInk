@@ -82,6 +82,17 @@ export async function reconcileDirectorFrontiers(
         })
         continue
       }
+      if (!madePersistedProgress(resumed)) {
+        result.deferredProjectIds.push(candidate.projectId)
+        console.info('[director_frontier_reconcile_deferred]', {
+          workspaceId: candidate.workspaceId,
+          projectId: candidate.projectId,
+          code: 'FRONTIER_NO_PROGRESS',
+          status: resumed.status,
+          blockedNodeCount: resumed.blockedNodes.length,
+        })
+        continue
+      }
       result.reconciledProjectIds.push(candidate.projectId)
       console.info('[director_frontier_reconciled]', {
         workspaceId: candidate.workspaceId,
@@ -102,6 +113,16 @@ export async function reconcileDirectorFrontiers(
     }
   }
   return result
+}
+
+/**
+ * status/blockedNodes 只是本次扫描的诊断投影，不能证明持久化前沿已经前移。
+ * 只有真实入队、上游修复或节点失败落库才消耗本轮恢复配额。
+ */
+function madePersistedProgress(result: PipelineStartResult): boolean {
+  return result.enqueuedNodeIds.length > 0
+    || result.repairRootNodeIds.length > 0
+    || result.failedNodeIds.length > 0
 }
 
 export async function listDirectorFrontierCandidates(

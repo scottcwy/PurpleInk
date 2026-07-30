@@ -93,6 +93,63 @@ describe('reconcileDirectorFrontiers', () => {
     })
   })
 
+  it('continues past consecutive blocked candidates with no persisted progress', async () => {
+    const thirdCandidate: DirectorFrontierCandidate = {
+      workspaceId: '00000000-0000-4000-8000-000000000103',
+      projectId: '00000000-0000-4000-8000-000000000203',
+    }
+    const resume = vi.fn()
+      .mockResolvedValueOnce({
+        autopilot: true,
+        status: 'blocked',
+        enqueuedNodeIds: [],
+        repairRootNodeIds: [],
+        failedNodeIds: [],
+        blockedNodes: [{
+          nodeId: 'media-1',
+          code: 'MEDIA_NOT_READY',
+          message: '媒体尚未就绪',
+        }],
+      })
+      .mockResolvedValueOnce({
+        autopilot: true,
+        status: 'blocked',
+        enqueuedNodeIds: [],
+        repairRootNodeIds: [],
+        failedNodeIds: [],
+        blockedNodes: [{
+          nodeId: 'media-2',
+          code: 'MEDIA_NOT_READY',
+          message: '媒体尚未就绪',
+        }],
+      })
+      .mockResolvedValueOnce({
+        autopilot: true,
+        status: 'started',
+        enqueuedNodeIds: ['next'],
+        repairRootNodeIds: [],
+        failedNodeIds: [],
+        blockedNodes: [],
+      })
+
+    const result = await reconcileDirectorFrontiers({} as never, {
+      listCandidates: vi.fn(async () => [...candidates, thirdCandidate]),
+      resume,
+      lockProject: (_projectId, operation) => operation(),
+    })
+
+    expect(resume.mock.calls).toEqual([
+      [candidates[0]!.projectId],
+      [candidates[1]!.projectId],
+      [thirdCandidate.projectId],
+    ])
+    expect(result).toEqual({
+      reconciledProjectIds: [thirdCandidate.projectId],
+      failedProjectIds: [],
+      deferredProjectIds: candidates.map(({ projectId }) => projectId),
+    })
+  })
+
   it('defers a project when another process owns its frontier lock', async () => {
     const resume = vi.fn()
 
