@@ -1,9 +1,12 @@
 'use client'
 
+import { useEffect, useRef, type KeyboardEvent } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { PurpleInkLogo } from './purple-ink-logo'
+import { focusFirstMenuItem, moveMenuFocus } from './menu-focus'
+import { Popover } from './popover'
 import {
   AccountMenu,
   SidebarAccount,
@@ -47,6 +50,20 @@ export function PurpleInkSidebar({
   settingsHref,
   className,
 }: PurpleInkSidebarProps) {
+  const accountMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!accountOpen || collapsed) return
+    const frame = requestAnimationFrame(() => focusFirstMenuItem(accountMenuRef.current))
+    return () => cancelAnimationFrame(frame)
+  }, [accountOpen, collapsed])
+
+  function handleAccountMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    event.preventDefault()
+    moveMenuFocus(accountMenuRef.current, event.key === 'ArrowDown' ? 1 : -1)
+  }
+
   return (
     <aside
       className={cn(
@@ -91,18 +108,28 @@ export function PurpleInkSidebar({
         ))}
       </nav>
 
-      <div className="relative">
-        {accountOpen && !collapsed ? (
-          <div className="absolute bottom-[66px] left-0 z-40">
-            <AccountMenu settingsHref={settingsHref} account={account} onLogout={onLogout} />
-          </div>
-        ) : null}
-        <SidebarAccount
-          compact={collapsed}
-          account={account}
-          onSettings={() => onAccountOpenChange(!accountOpen)}
-        />
-      </div>
+      <Popover
+        open={accountOpen && !collapsed}
+        onOpenChange={onAccountOpenChange}
+        align="start"
+        side="top"
+        role="menu"
+        ariaLabel="账户菜单"
+        className="w-full"
+        contentRef={accountMenuRef}
+        onContentKeyDown={handleAccountMenuKeyDown}
+        contentClassName="w-auto max-w-none border-0 bg-transparent p-0 shadow-none backdrop-blur-none"
+        trigger={
+          <SidebarAccount
+            className="w-full"
+            compact={collapsed}
+            account={account}
+            onSettings={() => onAccountOpenChange(!accountOpen)}
+          />
+        }
+      >
+        <AccountMenu settingsHref={settingsHref} account={account} onLogout={onLogout} />
+      </Popover>
     </aside>
   )
 }

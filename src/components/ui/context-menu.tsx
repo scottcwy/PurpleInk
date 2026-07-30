@@ -1,25 +1,23 @@
 'use client'
 
-import { AnimatePresence, motion } from 'motion/react'
 import {
   useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
-  useSyncExternalStore,
   type ComponentType,
   type KeyboardEvent,
   type RefObject,
 } from 'react'
-import { createPortal } from 'react-dom'
-import { DURATION, EASE, SPRING_SPATIAL_FAST, TRANSITION_EXIT } from '@/lib/motion/tokens'
 import { cn } from '@/lib/utils'
 import {
   resolveContextMenuPlacement,
   type ContextMenuPlacement,
   type ContextMenuPosition,
 } from './context-menu-placement'
+import { focusFirstMenuItem, moveMenuFocus } from './menu-focus'
+import { OverlayRoot } from './overlay-root'
 
 export type { ContextMenuPosition } from './context-menu-placement'
 
@@ -53,14 +51,11 @@ export interface ContextMenuProps {
   className?: string
 }
 
-const subscribeToClient = () => () => undefined
-const ITEM_SELECTOR = 'button[data-menu-item]:not([disabled])'
-
 /**
  * 指针锚定的上下文菜单（SSOT：全应用右键菜单统一从此处 import）。
  *
  * 与 `Popover` 的区别是锚定模型：Popover 锚在 trigger 元素的 bounding rect，
- * 本组件锚在指针坐标，因此不能互相替代。内容 portal 到 document.body。
+ * 本组件锚在指针坐标，因此不能互相替代。原生 Popover 负责 top layer 与 dismiss。
  *
  * 动效按 motion-interaction.md §3 意图 8：scale spring + opacity tween；
  * 退出走 `TRANSITION_EXIT`（§5.3 退出不弹）。
@@ -73,89 +68,78 @@ export function ContextMenu({
   ariaLabel,
   className,
 }: ContextMenuProps) {
-  const mounted = useSyncExternalStore(
-    subscribeToClient,
-    () => true,
-    () => false,
-  )
   const menuRef = useRef<HTMLDivElement>(null)
+  const restoreFocusRef = useRef<HTMLElement | null>(null)
+  const restoreOnCloseRef = useRef(false)
   const [placement, setPlacement] = useState<ContextMenuPlacement | null>(null)
 
   useMenuPlacement({ open, position, menuRef, itemCount: items.length, setPlacement })
-  useMenuDismiss(open, onClose, menuRef)
-  useInitialItemFocus(open, menuRef)
+  useInitialItemFocus(open, menuRef, restoreFocusRef, restoreOnCloseRef)
 
   const moveFocus = useCallback((offset: number) => {
-    const buttons = [
-      ...(menuRef.current?.querySelectorAll<HTMLButtonElement>(ITEM_SELECTOR) ?? []),
-    ]
-    if (buttons.length === 0) return
-    const current = buttons.findIndex((button) => button === document.activeElement)
-    const next = (current + offset + buttons.length) % buttons.length
-    buttons[next]?.focus()
+    moveMenuFocus(menuRef.current, offset)
   }, [])
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Escape') {
+      restoreOnCloseRef.current = true
+      return
+    }
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
     event.preventDefault()
     moveFocus(event.key === 'ArrowDown' ? 1 : -1)
   }
 
-  if (!mounted || !position) return null
-
-  return createPortal(
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          key="context-menu"
-          ref={menuRef}
-          role="menu"
-          aria-label={ariaLabel}
-          data-slot="context-menu"
-          tabIndex={-1}
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 1, transition: TRANSITION_EXIT }}
-          transition={{
-            scale: SPRING_SPATIAL_FAST,
-            opacity: { duration: DURATION.fast, ease: EASE.standard },
-          }}
-          style={{
-            top: placement?.top ?? position.y,
-            left: placement?.left ?? position.x,
-            transformOrigin: `${placement?.originY ?? 'top'} ${placement?.originX ?? 'left'}`,
-          }}
-          className={cn(
-            'fixed z-[1001] min-w-[184px] max-w-[calc(100vw-1rem)] rounded-[10px] border border-ds-border bg-ds-surface p-1 text-ds-text shadow-[var(--ds-shadow)] backdrop-blur-xl',
-            className,
-          )}
-          onKeyDown={handleKeyDown}
-          onContextMenu={(event) => event.preventDefault()}
-        >
-          {items.map((item) =>
-            item.type === 'separator' ? (
-              <div
-                key={item.id}
-                role="separator"
-                className="my-1 h-px bg-ds-border"
-              />
-            ) : (
-              <ContextMenuButton key={item.id} item={item} onClose={onClose} />
-            ),
-          )}
-        </motion.div>
+  return (
+    <OverlayRoot
+      mode="popover"
+      dismissal="auto"
+      open={open && position !== null}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose()
+      }}
+      surfaceRef={menuRef}
+      role="menu"
+      ariaLabel={ariaLabel}
+      tabIndex={-1}
+      style={{
+        top: placement?.top ?? position?.y ?? 0,
+        left: placement?.left ?? position?.x ?? 0,
+        transformOrigin: `${placement?.originY ?? 'top'} ${placement?.originX ?? 'left'}`,
+      }}
+      className={cn(
+        'fixed min-w-[184px] max-w-[calc(100vw-1rem)] rounded-[10px] border border-ds-border bg-ds-surface p-1 text-ds-text shadow-[var(--ds-shadow)] backdrop-blur-xl',
+        className,
       )}
-    </AnimatePresence>,
-    document.body,
+      onKeyDown={handleKeyDown}
+      onContextMenu={(event) => event.preventDefault()}
+    >
+      {items.map((item) =>
+        item.type === 'separator' ? (
+          <div key={item.id} role="separator" className="my-1 h-px bg-ds-border" />
+        ) : (
+          <ContextMenuButton
+            key={item.id}
+            item={item}
+            onClose={onClose}
+            restoreFocus={() => {
+              restoreOnCloseRef.current = true
+            }}
+          />
+        ),
+      )}
+    </OverlayRoot>
   )
 }
 
 function ContextMenuButton({
   item,
   onClose,
+  restoreFocus,
 }: {
   item: ContextMenuAction
   onClose: () => void
+  restoreFocus: () => void
 }) {
   const Icon = item.icon
   return (
@@ -170,6 +154,7 @@ function ContextMenuButton({
         item.danger ? 'text-ds-red' : 'text-ds-text',
       )}
       onClick={() => {
+        restoreFocus()
         onClose()
         item.onSelect()
       }}
@@ -201,64 +186,39 @@ function useMenuPlacement({
 }) {
   useLayoutEffect(() => {
     if (!open || !position) return
-    const menu = menuRef.current
-    if (!menu) return
-    const rect = menu.getBoundingClientRect()
-    setPlacement(
-      resolveContextMenuPlacement(
-        position,
-        { width: rect.width, height: rect.height },
-        { width: window.innerWidth, height: window.innerHeight },
-      ),
-    )
+    const frame = requestAnimationFrame(() => {
+      const rect = menuRef.current?.getBoundingClientRect()
+      if (!rect) return
+      setPlacement(
+        resolveContextMenuPlacement(
+          position,
+          { width: rect.width, height: rect.height },
+          { width: window.innerWidth, height: window.innerHeight },
+        ),
+      )
+    })
     // itemCount 进入依赖：菜单项增减会改变高度，须重新落位。
+    return () => cancelAnimationFrame(frame)
   }, [open, position, itemCount, menuRef, setPlacement])
-}
-
-/** light dismiss：外部指针、Escape、Tab、滚动、resize 与窗口失焦都关闭。 */
-function useMenuDismiss(
-  open: boolean,
-  onClose: () => void,
-  menuRef: RefObject<HTMLDivElement | null>,
-) {
-  useEffect(() => {
-    if (!open) return
-    function onKeyDown(event: globalThis.KeyboardEvent) {
-      if (event.key !== 'Escape' && event.key !== 'Tab') return
-      event.preventDefault()
-      onClose()
-    }
-    function onPointerDown(event: PointerEvent) {
-      const target = event.target
-      if (target instanceof Node && menuRef.current?.contains(target)) return
-      onClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('pointerdown', onPointerDown, true)
-    window.addEventListener('resize', onClose)
-    window.addEventListener('blur', onClose)
-    window.addEventListener('scroll', onClose, true)
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('pointerdown', onPointerDown, true)
-      window.removeEventListener('resize', onClose)
-      window.removeEventListener('blur', onClose)
-      window.removeEventListener('scroll', onClose, true)
-    }
-  }, [open, onClose, menuRef])
 }
 
 /** 打开时把焦点移到首个可用项，让键盘用户无需再按方向键定位。 */
 function useInitialItemFocus(
   open: boolean,
   menuRef: RefObject<HTMLDivElement | null>,
+  restoreFocusRef: RefObject<HTMLElement | null>,
+  restoreOnCloseRef: RefObject<boolean>,
 ) {
   useEffect(() => {
     if (!open) return
-    const restore = document.activeElement
-    menuRef.current?.querySelector<HTMLButtonElement>(ITEM_SELECTOR)?.focus()
+    const active = document.activeElement
+    restoreFocusRef.current = active instanceof HTMLElement ? active : null
+    const frame = requestAnimationFrame(() => focusFirstMenuItem(menuRef.current))
     return () => {
-      if (restore instanceof HTMLElement) restore.focus()
+      cancelAnimationFrame(frame)
+      if (restoreOnCloseRef.current) restoreFocusRef.current?.focus()
+      restoreOnCloseRef.current = false
+      restoreFocusRef.current = null
     }
-  }, [open, menuRef])
+  }, [menuRef, open, restoreFocusRef, restoreOnCloseRef])
 }

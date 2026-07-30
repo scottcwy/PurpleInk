@@ -4,6 +4,11 @@ import {
   useCallback,
   useRef,
   useState,
+  type CSSProperties,
+  type KeyboardEventHandler,
+  type MouseEventHandler,
+  type PointerEventHandler,
+  type RefObject,
   type ReactNode,
 } from 'react'
 import { motion } from 'motion/react'
@@ -50,6 +55,15 @@ export interface PopoverOverlayRootProps extends OverlayRootBaseProps {
   dismissal?: 'auto' | 'manual'
   role?: string
   ariaLabel?: string
+  ariaDescribedBy?: string
+  id?: string
+  style?: CSSProperties
+  surfaceRef?: RefObject<HTMLDivElement | null>
+  tabIndex?: number
+  onKeyDown?: KeyboardEventHandler<HTMLDivElement>
+  onContextMenu?: MouseEventHandler<HTMLDivElement>
+  onPointerEnter?: PointerEventHandler<HTMLDivElement>
+  onPointerLeave?: PointerEventHandler<HTMLDivElement>
 }
 
 export type OverlayRootProps = ModalOverlayRootProps | PopoverOverlayRootProps
@@ -175,10 +189,20 @@ function PopoverOverlaySurface({
   dismissal = 'auto',
   role,
   ariaLabel,
+  ariaDescribedBy,
+  id,
+  style,
+  surfaceRef,
+  tabIndex,
+  onKeyDown,
+  onContextMenu,
+  onPointerEnter,
+  onPointerLeave,
   phase,
   onAnimationComplete,
 }: PopoverOverlayRootProps & SurfaceState) {
-  const popoverRef = useRef<HTMLDivElement>(null)
+  const internalPopoverRef = useRef<HTMLDivElement>(null)
+  const popoverRef = surfaceRef ?? internalPopoverRef
   const target = overlayAnimationTarget(phase)
   const handlePlatformClose = useCallback(() => onOpenChange(false), [onOpenChange])
 
@@ -192,6 +216,14 @@ function PopoverOverlaySurface({
       data-overlay-mode="popover"
       role={role}
       aria-label={ariaLabel}
+      aria-describedby={ariaDescribedBy}
+      id={id}
+      style={style}
+      tabIndex={tabIndex}
+      onKeyDown={onKeyDown}
+      onContextMenu={onContextMenu}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
       className={cn('m-0 border-0 bg-transparent p-0 text-inherit', className)}
       variants={overlayContentVariants(preset)}
       initial="hidden"

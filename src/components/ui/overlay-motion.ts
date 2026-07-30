@@ -6,7 +6,7 @@ import {
   TRANSITION_EXIT,
 } from '@/lib/motion/tokens'
 
-export type OverlayMotionPreset = 'dialog' | 'popover' | 'tooltip'
+export type OverlayMotionPreset = 'dialog' | 'popover' | 'fade' | 'tooltip'
 
 const ENTER_EFFECT = { duration: DURATION.fast, ease: EASE.standard }
 
@@ -33,5 +33,5 @@ const TOOLTIP_CONTENT: Variants = {
 }
 
 export function overlayContentVariants(preset: OverlayMotionPreset): Variants {
-  return preset === 'tooltip' ? TOOLTIP_CONTENT : SCALE_CONTENT
+  return preset === 'tooltip' || preset === 'fade' ? TOOLTIP_CONTENT : SCALE_CONTENT
 }

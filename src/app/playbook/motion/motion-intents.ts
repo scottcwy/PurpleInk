@@ -93,8 +93,7 @@ export const MOTION_INTENTS: MotionIntent[] = [
     title: 'Popover / 菜单进',
     category: 'mixed',
     params: 'scale .96→1 SPRING_SPATIAL_FAST + opacity fast',
-    status: 'pending',
-    current: 'Popover / AccountMenu / 营销移动菜单三者均无进出场动画，直接闪现',
+    status: 'unified',
   },
   {
     id: 'tooltip',
@@ -102,8 +101,7 @@ export const MOTION_INTENTS: MotionIntent[] = [
     title: 'Tooltip',
     category: 'effects',
     params: '延迟 300ms 进 / 0ms 出，淡入 fast',
-    status: 'pending',
-    current: 'ui/tooltip.tsx 是裸 transition-opacity，无 duration 无延迟：鼠标扫过即闪',
+    status: 'unified',
   },
   {
     id: 'toast',

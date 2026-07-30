@@ -1,17 +1,30 @@
-import { readFileSync } from 'node:fs'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { Popover } from './popover'
 
-describe('Popover', () => {
-  it('portals above page media stacking contexts like Dialog', () => {
-    const source = readFileSync('src/components/ui/popover.tsx', 'utf8')
+function renderPopover(dismissible: boolean) {
+  return renderToStaticMarkup(
+    createElement(Popover, {
+      open: false,
+      onOpenChange: () => undefined,
+      dismissible,
+      trigger: createElement('button', null, '打开'),
+    }, createElement('p', null, '弹出内容')),
+  )
+}
 
-    expect(source).toContain('role="dialog"')
-    expect(source).toContain('createPortal')
-    expect(source).toContain('document.body')
-    expect(source).toContain('z-[1000]')
-    expect(source).toContain('z-[1001]')
-    expect(source).toContain('onOpenChange')
-    expect(source).toContain('dismissible')
-    expect(source).toContain('getBoundingClientRect')
+describe('Popover platform contract', () => {
+  it('keeps an auto top-layer surface mounted beside its trigger', () => {
+    const markup = renderPopover(true)
+
+    expect(markup).toContain('data-overlay-mode="popover"')
+    expect(markup).toContain('popover="auto"')
+    expect(markup).toContain('打开')
+    expect(markup).toContain('弹出内容')
+  })
+
+  it('uses a manual platform surface while dismissal is disabled', () => {
+    expect(renderPopover(false)).toContain('popover="manual"')
   })
 })

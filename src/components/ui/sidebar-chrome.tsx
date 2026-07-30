@@ -78,23 +78,35 @@ export interface SidebarAccountInfo {
 
 export function SidebarAccount({
   compact = false,
+  className,
   onSettings,
   account,
 }: {
   compact?: boolean
+  className?: string
   onSettings?: () => void
   account?: SidebarAccountInfo | null
 }) {
   if (compact) {
     return (
-      <div className="flex items-center justify-center border-t border-ds-border pt-2.5">
+      <div
+        className={cn(
+          'flex items-center justify-center border-t border-ds-border pt-2.5',
+          className,
+        )}
+      >
         <DefaultAvatar />
       </div>
     )
   }
 
   return (
-    <div className="flex h-14 items-center justify-between gap-2 border-t border-ds-border pt-2.5">
+    <div
+      className={cn(
+        'flex h-14 items-center justify-between gap-2 border-t border-ds-border pt-2.5',
+        className,
+      )}
+    >
       <div className="flex min-w-0 flex-1 items-center gap-2.5">
         <DefaultAvatar />
         <span className="min-w-0 flex-1">
@@ -162,6 +174,8 @@ export function AccountMenu({
             <Link
               key={label}
               href={settingsHref}
+              role="menuitem"
+              data-menu-item
               className="flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-xs text-ds-text transition-colors duration-fast ease-standard hover:bg-ds-surface-muted"
             >
               <Icon aria-hidden className="size-4 text-ds-text-muted" />
@@ -175,6 +189,8 @@ export function AccountMenu({
             <button
               key={label}
               type="button"
+              role="menuitem"
+              data-menu-item
               aria-label={`${appearanceLabel}，点击切换`}
               title={appearanceLabel}
               className="flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-xs text-ds-text transition-colors duration-fast ease-standard hover:bg-ds-surface-muted"
@@ -190,6 +206,8 @@ export function AccountMenu({
           <button
             key={label}
             type="button"
+            role="menuitem"
+            data-menu-item
             disabled
             title="该操作将在 Stage B 接线"
             className="flex h-9 w-full items-center gap-2.5 px-2.5 text-left text-xs text-ds-text opacity-70"
@@ -202,6 +220,8 @@ export function AccountMenu({
       <div className="my-0.5 h-px bg-ds-border" />
       <button
         type="button"
+        role="menuitem"
+        data-menu-item
         disabled={!onLogout || logoutState === 'pending'}
         className="flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-xs text-ds-red transition-colors duration-fast ease-standard hover:bg-ds-surface-muted disabled:opacity-70 disabled:hover:bg-transparent"
         onClick={() => {

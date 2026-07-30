@@ -6,13 +6,12 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  useSyncExternalStore,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react'
-import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { isLeavingTowardPanel } from './hover-preview-geometry'
+import { OverlayRoot } from './overlay-root'
 
 export interface HoverPreviewProps {
   trigger: ReactNode
@@ -23,16 +22,12 @@ export interface HoverPreviewProps {
   contentClassName?: string
   openDelayMs?: number
   closeDelayMs?: number
-  fadeMs?: number
 }
 
 const OPEN_DELAY_MS = 80
 const CLOSE_DELAY_MS = 150
-const FADE_MS = 120
 const BRIDGE_PX = 8
 const VIEWPORT_PAD = 16
-
-const subscribeToClient = () => () => undefined
 
 type Coords = { top: number; left: number; placement: 'below' | 'above' }
 
@@ -48,32 +43,21 @@ export function HoverPreview({
   contentClassName,
   openDelayMs = OPEN_DELAY_MS,
   closeDelayMs = CLOSE_DELAY_MS,
-  fadeMs = FADE_MS,
 }: HoverPreviewProps) {
   const triggerRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const openTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pointerRef = useRef({ x: 0, y: 0, vx: 0, vy: 0, t: 0 })
 
-  const [mounted, setMounted] = useState(false)
   const [visible, setVisible] = useState(false)
   const [coords, setCoords] = useState<Coords | null>(null)
-
-  const clientMounted = useSyncExternalStore(
-    subscribeToClient,
-    () => true,
-    () => false,
-  )
 
   const clearTimers = useCallback(() => {
     if (openTimerRef.current) clearTimeout(openTimerRef.current)
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
-    if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current)
     openTimerRef.current = null
     closeTimerRef.current = null
-    fadeTimerRef.current = null
   }, [])
 
   const updatePosition = useCallback(() => {
@@ -108,10 +92,10 @@ export function HoverPreview({
 
   const open = useCallback(() => {
     clearTimers()
-    setMounted(true)
+    updatePosition()
+    setVisible(true)
     requestAnimationFrame(() => {
       updatePosition()
-      setVisible(true)
     })
   }, [clearTimers, updatePosition])
 
@@ -123,11 +107,7 @@ export function HoverPreview({
   const closeNow = useCallback(() => {
     clearTimers()
     setVisible(false)
-    fadeTimerRef.current = setTimeout(() => {
-      setMounted(false)
-      setCoords(null)
-    }, fadeMs)
-  }, [clearTimers, fadeMs])
+  }, [clearTimers])
 
   const scheduleClose = useCallback(() => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
@@ -137,13 +117,11 @@ export function HoverPreview({
   const cancelClose = useCallback(() => {
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
     closeTimerRef.current = null
-    if (fadeTimerRef.current) clearTimeout(fadeTimerRef.current)
-    fadeTimerRef.current = null
-    if (mounted) setVisible(true)
-  }, [mounted])
+    if (visible) setVisible(true)
+  }, [visible])
 
   useLayoutEffect(() => {
-    if (!mounted) return
+    if (!visible) return
     updatePosition()
     window.addEventListener('resize', updatePosition)
     window.addEventListener('scroll', updatePosition, true)
@@ -151,7 +129,7 @@ export function HoverPreview({
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
     }
-  }, [mounted, updatePosition, children])
+  }, [visible, updatePosition, children])
 
   useEffect(() => () => clearTimers(), [clearTimers])
 
@@ -206,34 +184,31 @@ export function HoverPreview({
       onPointerLeave={handleTriggerLeave}
     >
       {trigger}
-      {mounted && clientMounted
-        ? createPortal(
-            <div
-              ref={panelRef}
-              role="dialog"
-              aria-label={label}
-              aria-modal="false"
-              onPointerEnter={cancelClose}
-              onPointerLeave={scheduleClose}
-              className={cn(
-                'fixed z-[1001] w-[min(100%,420px)] max-w-[calc(100vw-2rem)] rounded-[10px] border border-ds-border bg-ds-surface p-3 text-ds-text shadow-[var(--ds-shadow)] backdrop-blur-xl transition-opacity',
-                visible ? 'opacity-100' : 'opacity-0',
-                contentClassName,
-              )}
-              style={{
-                top: coords?.top ?? -9999,
-                left: coords?.left ?? -9999,
-                transitionDuration: `${fadeMs}ms`,
-                pointerEvents: visible ? 'auto' : 'none',
-              }}
-            >
-              <div className="max-h-[min(320px,calc(100vh-4rem))] overflow-y-auto">
-                {children}
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
+      <OverlayRoot
+        mode="popover"
+        dismissal="manual"
+        open={visible && coords !== null}
+        onOpenChange={setVisible}
+        role="dialog"
+        ariaLabel={label}
+        surfaceRef={panelRef}
+        onPointerEnter={cancelClose}
+        onPointerLeave={scheduleClose}
+        className={cn(
+          'fixed w-[min(100%,420px)] max-w-[calc(100vw-2rem)] rounded-[10px] border border-ds-border bg-ds-surface p-3 text-ds-text shadow-[var(--ds-shadow)] backdrop-blur-xl',
+          contentClassName,
+        )}
+        style={{
+          top: coords?.top ?? 0,
+          left: coords?.left ?? 0,
+          pointerEvents: visible ? 'auto' : 'none',
+          transformOrigin: coords?.placement === 'above' ? 'bottom left' : 'top left',
+        }}
+      >
+        <div className="max-h-[min(320px,calc(100vh-4rem))] overflow-y-auto">
+          {children}
+        </div>
+      </OverlayRoot>
     </div>
   )
 }

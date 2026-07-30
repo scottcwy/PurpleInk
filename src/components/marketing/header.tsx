@@ -2,13 +2,13 @@
 
 import {
   motion,
-  AnimatePresence,
   useScroll,
   useMotionValueEvent,
 } from "motion/react";
 import Image from "next/image";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
+import { OverlayRoot } from "@/components/ui/overlay-root";
 import { PRODUCTS_ROUTES } from "@/features/navigation/products-routes";
 
 const navLinks = [{ href: "#community", label: "Community" }];
@@ -164,20 +164,21 @@ export function Header(): ReactNode {
         </div>
       </motion.header>
 
-      <AnimatePresence mode="sync">
-        {isOpen && (
-          <motion.div
-            key="mobile-menu"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40 bg-black/95 backdrop-blur-xl lg:hidden"
-          >
-            <nav
-              className="mx-auto flex h-full max-w-7xl flex-col items-start gap-4 px-4 pt-32 sm:px-6"
-              aria-label="Mobile navigation"
-            >
+      <OverlayRoot
+        mode="popover"
+        dismissal="auto"
+        preset="fade"
+        open={isOpen}
+        onOpenChange={setIsOpen}
+        role="dialog"
+        ariaLabel="Mobile navigation"
+        className="pointer-events-none fixed inset-0 h-dvh max-h-none w-dvw max-w-none lg:hidden"
+      >
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 top-24 bg-black/95 backdrop-blur-xl" />
+        <nav
+          className="pointer-events-none mx-auto flex h-full max-w-7xl flex-col items-start gap-4 px-4 pt-32 sm:px-6"
+          aria-label="Mobile navigation"
+        >
               {navLinks.map((link, index) => (
                 <motion.div
                   key={link.href}
@@ -192,7 +193,7 @@ export function Header(): ReactNode {
                   <Link
                     href={link.href}
                     onClick={closeMenu}
-                    className="focus-ring block text-6xl text-white transition-colors hover:text-white sm:text-6xl"
+                    className="focus-ring pointer-events-auto block text-6xl text-white transition-colors hover:text-white sm:text-6xl"
                   >
                     {link.label}
                   </Link>
@@ -221,16 +222,14 @@ export function Header(): ReactNode {
                   <Link
                     href={link.href}
                     onClick={closeMenu}
-                    className="focus-ring block text-6xl text-white transition-colors hover:text-white sm:text-6xl"
+                    className="focus-ring pointer-events-auto block text-6xl text-white transition-colors hover:text-white sm:text-6xl"
                   >
                     {link.label}
                   </Link>
                 </motion.div>
               ))}
-            </nav>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        </nav>
+      </OverlayRoot>
     </>
   );
 }
