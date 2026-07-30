@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { ChevronRight, FileCode, RefreshCw } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
 import { ResizeHandle } from '@/components/ui/resize-handle'
@@ -67,15 +67,6 @@ export function CanvasInspector({
 
   const collapsed = autoCollapse || manualCollapsed
   const overlayOpen = collapsed && overlayRequested
-
-  useEffect(() => {
-    if (!overlayOpen) return
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOverlayRequested(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [overlayOpen])
 
   async function run(task: (target: CanvasGraphNode) => Promise<NodeActionResult>) {
     if (!node) return

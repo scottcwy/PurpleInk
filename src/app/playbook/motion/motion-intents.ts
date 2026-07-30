@@ -67,8 +67,7 @@ export const MOTION_INTENTS: MotionIntent[] = [
     title: '抽屉进',
     category: 'spatial',
     params: 'SPRING_SPATIAL_DEFAULT',
-    status: 'pending',
-    current: 'DrawerOverlay 用 TRANSITION_ENTER（tween base+emphasized）。是唯一做对进出场编排的实现，只需换参数',
+    status: 'unified',
   },
   {
     id: 'drawer-exit',
@@ -76,8 +75,7 @@ export const MOTION_INTENTS: MotionIntent[] = [
     title: '抽屉出',
     category: 'effects',
     params: 'duration-base + ease-exit（退出不弹）',
-    status: 'pending',
-    current: 'DrawerOverlay 用 TRANSITION_EXIT（fast+exit），比目标略快',
+    status: 'unified',
   },
   {
     id: 'scrim',

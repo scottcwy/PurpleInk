@@ -47,7 +47,9 @@ const EXPECTED_PENCIL_FAMILIES = [
 
 const EXPECTED_UI_FAMILIES = [
   ...EXPECTED_PENCIL_FAMILIES,
+  "animated-aside",
   "context-menu",
+  "drawer-overlay",
   "hover-preview",
   "human-check-field",
   "media-viewport",
@@ -66,7 +68,7 @@ describe("Track P playbook registry", () => {
   it("tracks the latest Pencil inventory and every translated application family", () => {
     expect(PENCIL_REUSABLE_SYMBOL_COUNT).toBe(113);
     expect(PENCIL_COMPONENT_FAMILY_COUNT).toBe(35);
-    expect(UI_COMPONENT_FAMILY_COUNT).toBe(48);
+    expect(UI_COMPONENT_FAMILY_COUNT).toBe(50);
     expect(
       entriesByCategory("ui")
         .map(({ id }) => id)

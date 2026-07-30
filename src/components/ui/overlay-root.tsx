@@ -45,6 +45,7 @@ interface OverlayRootBaseProps {
 export interface ModalOverlayRootProps extends OverlayRootBaseProps {
   mode: 'modal'
   layoutClassName?: string
+  style?: CSSProperties
   ariaLabel?: string
   ariaLabelledBy?: string
   ariaDescribedBy?: string
@@ -85,10 +86,10 @@ export function OverlayRoot(props: OverlayRootProps) {
   }
 
   const completeAnimation = useCallback((target: OverlayAnimationTarget) => {
-    setState((current) => ({
-      ...current,
-      phase: completeOverlayPhase(current.phase, target),
-    }))
+    setState((current) => {
+      const nextPhase = completeOverlayPhase(current.phase, target)
+      return nextPhase === current.phase ? current : { ...current, phase: nextPhase }
+    })
   }, [])
 
   return props.mode === 'modal' ? (
@@ -117,6 +118,7 @@ function ModalOverlaySurface({
   children,
   className,
   layoutClassName,
+  style,
   preset = 'dialog',
   ariaLabel,
   ariaLabelledBy,
@@ -164,6 +166,7 @@ function ModalOverlaySurface({
         <motion.div
           data-slot="overlay-content"
           className={className}
+          style={style}
           variants={overlayContentVariants(preset)}
           initial="hidden"
           animate={target}

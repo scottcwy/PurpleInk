@@ -1,8 +1,8 @@
 'use client'
 
 import type { CSSProperties, ReactNode } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
-import { scrimFade, slideInLeft, slideInRight } from '@/lib/motion/variants'
+import { motion } from 'motion/react'
+import { OverlayRoot } from '@/components/ui/overlay-root'
 import { TRANSITION_BASE, TRANSITION_INSTANT } from '@/lib/motion/tokens'
 import { cn } from '@/lib/utils'
 
@@ -53,8 +53,8 @@ export interface DrawerOverlayProps {
 }
 
 /**
- * 抽屉遮罩：scrim 淡入淡出 + 面板从边缘滑入/滑出（AnimatePresence 管理进出场）。
- * 窄屏 / 自动收起态复用它，保证全站抽屉动效一致。
+ * 抽屉遮罩：由 OverlayRoot 接管 top layer、Escape、焦点约束与滚动锁，
+ * 面板按统一抽屉预设从边缘进出。
  */
 export function DrawerOverlay({
   open,
@@ -66,37 +66,23 @@ export function DrawerOverlay({
   children,
 }: DrawerOverlayProps) {
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.button
-          key="scrim"
-          type="button"
-          aria-label={scrimLabel}
-          className="fixed inset-0 z-40 bg-scrim"
-          variants={scrimFade}
-          initial="hidden"
-          animate="visible"
-          exit="exit"
-          onClick={onDismiss}
-        />
+    <OverlayRoot
+      mode="modal"
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onDismiss()
+      }}
+      ariaLabel={scrimLabel}
+      layoutClassName="relative block p-0"
+      preset={side === 'left' ? 'drawer-left' : 'drawer-right'}
+      className={cn(
+        'fixed inset-y-0 shadow-float',
+        side === 'left' ? 'left-0' : 'right-0',
+        className,
       )}
-      {open && (
-        <motion.div
-          key="panel"
-          className={cn(
-            'fixed inset-y-0 z-50 shadow-float',
-            side === 'left' ? 'left-0' : 'right-0',
-            className,
-          )}
-          style={style}
-          variants={side === 'left' ? slideInLeft : slideInRight}
-          initial="hidden"
-          animate="visible"
-          exit="exit"
-        >
-          {children}
-        </motion.div>
-      )}
-    </AnimatePresence>
+      style={style}
+    >
+      {children}
+    </OverlayRoot>
   )
 }

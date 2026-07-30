@@ -1,7 +1,7 @@
 'use client'
 
 import { LayoutDashboard } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { IconButton } from '@/components/ui/icon-button'
 import { useMediaQuery } from '@/lib/hooks/use-media-query'
@@ -41,15 +41,6 @@ export function AppSidebarShell({
   const [drawerRequested, setDrawerRequested] = useState(false)
   const mode = resolveSidebarMode(isHidden, isNarrow, manualCollapsed)
   const drawerOpen = mode === 'hidden' && drawerRequested
-
-  useEffect(() => {
-    if (!drawerOpen) return
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') setDrawerRequested(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [drawerOpen])
 
   if (mode === 'hidden') {
     return (

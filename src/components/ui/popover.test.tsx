@@ -1,16 +1,17 @@
-import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { Popover } from './popover'
 
 function renderPopover(dismissible: boolean) {
   return renderToStaticMarkup(
-    createElement(Popover, {
-      open: false,
-      onOpenChange: () => undefined,
-      dismissible,
-      trigger: createElement('button', null, '打开'),
-    }, createElement('p', null, '弹出内容')),
+    <Popover
+      open={false}
+      onOpenChange={() => undefined}
+      dismissible={dismissible}
+      trigger={<button type="button">打开</button>}
+    >
+      <p>弹出内容</p>
+    </Popover>,
   )
 }
 
