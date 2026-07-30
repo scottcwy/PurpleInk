@@ -25,6 +25,8 @@ vi.mock('@/features/auth/api-session', () => ({
 }))
 vi.mock('@/features/render/export-service', () => ({
   ensureShotQaChecked: mocks.ensureShotQaChecked,
+}))
+vi.mock('@/features/render/export-readiness', () => ({
   getExportReadiness: mocks.getExportReadiness,
 }))
 vi.mock('@/features/director/export-finalization', () => ({
