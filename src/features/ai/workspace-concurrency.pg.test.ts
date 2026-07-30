@@ -133,6 +133,32 @@ describe('workspace shot concurrency', () => {
     expect(await database.db.select().from(workflowConcurrencyLeases)).toHaveLength(1)
   })
 
+  it('isolates the same shot key across two projects', async () => {
+    const { tryAcquireWorkflowSlot } = await import('./workspace-concurrency')
+    const base = {
+      workspaceId: WORKSPACE_ID,
+      actorUserId: USER_ID,
+      workUnitKey: 'S001',
+      now: START,
+      database: database.db,
+    }
+    await expect(tryAcquireWorkflowSlot({
+      ...base,
+      projectId: PROJECT_A,
+    })).resolves.toMatchObject({ status: 'active' })
+    await expect(tryAcquireWorkflowSlot({
+      ...base,
+      projectId: PROJECT_B,
+      now: new Date(START.getTime() + 500),
+    })).resolves.toMatchObject({ status: 'active' })
+
+    const leases = await database.db.select().from(workflowConcurrencyLeases)
+    expect(leases).toHaveLength(2)
+    expect(new Set(leases.map((lease) => lease.projectId))).toEqual(
+      new Set([PROJECT_A, PROJECT_B]),
+    )
+  })
+
   it('releases a terminal shot and admits the oldest waiting shot after the stagger', async () => {
     const { tryAcquireWorkflowSlot } = await import('./workspace-concurrency')
     const { releaseWorkflowSlot } = await import('./workspace-concurrency-release')

@@ -376,6 +376,59 @@ describe('legacy in-process queue PG compatibility', () => {
     }
   })
 
+  it('admits a runnable lane behind attempts whose lease order is inverted', async () => {
+    const { InProcessQueue } = await import('./in-process-queue')
+    const projectId = await seedProject()
+    const nodeIds = Array.from({ length: 7 }, () => randomUUID())
+    const started: string[] = []
+    await database.db.insert(canvasNodes).values(nodeIds.map((id, index) => ({
+      workspaceId: LOCAL_WORKSPACE_ID,
+      id,
+      projectId,
+      logicalKey: `shot:inverted-${index}:shot-script`,
+      type: 'shot-script',
+      stage: 'SHOT_SPEC',
+      status: 'queued',
+      data: {
+        schemaVersion: 1,
+        payload: { laneKey: `inverted-${index}`, laneRole: 'shot-script' },
+      },
+    })))
+    const now = new Date()
+    await database.db.insert(workflowConcurrencyLeases).values(
+      nodeIds.map((_, index) => ({
+        workspaceId: LOCAL_WORKSPACE_ID,
+        projectId,
+        workUnitKey: `inverted-${index}`,
+        actorUserId: TEST_USER_ID,
+        planKey: 'free',
+        requestedAt: new Date(now.getTime() + (index === 6 ? -10_000 : index)),
+        notBefore: new Date(now.getTime() - 1_000),
+      })),
+    )
+    const queue = new InProcessQueue()
+    queue.register('director-stage', async (job) => {
+      started.push(String(job.payload.nodeId))
+    })
+    await Promise.all(nodeIds.map((nodeId) => inLocalWs(() =>
+      queue.enqueue(
+        'director-stage',
+        { projectId, nodeId, stage: 'SHOT_SPEC' },
+        { projectId, nodeId },
+      )
+    )))
+
+    queue.start({ 'director-stage': 1 })
+    try {
+      for (let attempt = 0; attempt < 50 && started.length === 0; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+      expect(started[0]).toBe(nodeIds[6])
+    } finally {
+      queue.stop()
+    }
+  })
+
   it('does not let a render-shot job at the queue head block director-stage behind it (head-of-line regression)', async () => {
     const [{ InProcessQueue }, { getJobSnapshot }] = await Promise.all([
       import('./in-process-queue'),
