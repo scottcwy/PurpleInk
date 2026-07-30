@@ -36,7 +36,16 @@ function recordPageProblems(page, target) {
         && text.includes('Reduced Motion enabled on your device')
       const expectedDevThemeBootstrapNotice =
         text.includes('Encountered a script tag while rendering React component')
-      if (expectedReducedMotionNotice || expectedDevThemeBootstrapNotice) {
+      const expectedMarketingWebGlReadbackNotice =
+        target.route === '/'
+        && message.type() === 'warning'
+        && text.includes('GL Driver Message')
+        && text.includes('ReadPixels')
+      if (
+        expectedReducedMotionNotice
+        || expectedDevThemeBootstrapNotice
+        || expectedMarketingWebGlReadbackNotice
+      ) {
         notes.push(`${target.id} expected framework diagnostic: ${text}`)
         return
       }
@@ -50,7 +59,7 @@ function recordPageProblems(page, target) {
   })
 }
 
-async function prepareStablePage(page) {
+async function prepareStablePage(page, target) {
   await page.waitForFunction(
     () => document.fonts.status === 'loaded',
     undefined,
@@ -68,6 +77,9 @@ async function prepareStablePage(page) {
         transition-duration: 0s !important;
       }
       nextjs-portal { display: none !important; }
+      ${target.route === '/'
+    ? 'canvas.pointer-events-none.mix-blend-multiply { visibility: hidden !important; }'
+    : ''}
     `,
   })
 }
@@ -91,7 +103,7 @@ async function captureTarget(browser, target) {
   if (response?.status() !== 200) {
     problems.push(`${target.id} status=${response?.status() ?? 'none'}`)
   }
-  await prepareStablePage(page)
+  await prepareStablePage(page, target)
 
   const outputPath = path.join(MOTION_ACTUAL_DIRECTORY, `${target.id}.png`)
   await page.screenshot({ path: outputPath, fullPage: true })

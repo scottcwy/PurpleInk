@@ -6,6 +6,7 @@ export const MOTION_VIEWPORT = { width: 1440, height: 900 }
 export const MOTION_PIXEL_DIFF_LIMIT = 0.001
 
 const ROUTES = [
+  ['marketing', '/'],
   ['foundations', '/playbook/foundations'],
   ['motion', '/playbook/motion'],
   ['ui', '/playbook/ui'],
