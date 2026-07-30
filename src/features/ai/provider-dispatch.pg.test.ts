@@ -155,6 +155,38 @@ describe('provider dispatch Postgres arbitration', () => {
     ).toBeLessThan(60_000)
   })
 
+  it('allocates 50 concurrent requests without duplicate time slots or zombie tickets', async () => {
+    const { reserveProviderDispatch } = await import('./provider-dispatch')
+    const leases = await runInAuthContext(
+      { workspaceId: LOCAL_WORKSPACE_ID, userId: 'test-user' },
+      () => Promise.all(Array.from({ length: 50 }, () =>
+        reserveProviderDispatch({
+          providerId: 'stress-provider',
+          providerLabel: '调度压力测试',
+          funding: 'managed',
+          apiKey: 'shared-stress-key',
+          limits: {
+            concurrency: 100,
+            rpm: 100,
+            minIntervalMs: 2,
+            jitterMs: 0,
+          },
+          database: database.db,
+        })
+      )),
+    )
+    await Promise.all(leases.map((lease) => lease.release()))
+
+    const rows = await database.db
+      .select()
+      .from(providerDispatches)
+      .where(eq(providerDispatches.provider, 'stress-provider'))
+      .orderBy(asc(providerDispatches.notBefore))
+    expect(rows).toHaveLength(50)
+    expect(new Set(rows.map((row) => row.notBefore.getTime())).size).toBe(50)
+    expect(rows.every((row) => row.status === 'released')).toBe(true)
+  })
+
   it('shares a learned 429 cooldown before another process goes outbound', async () => {
     const { reserveProviderDispatch } = await import('./provider-dispatch')
     await runInAuthContext(

@@ -168,7 +168,7 @@ export class InProcessQueue implements QueueAdapter {
       const database = await getDb()
       await sweepExpiredLeases(database)
       const { reconcileExpiredProviderTickets } = await import(
-        '@/features/ai/provider-dispatch'
+        '@/features/ai/provider-dispatch-ticket'
       )
       await reconcileExpiredProviderTickets(database)
     } catch (error) {
