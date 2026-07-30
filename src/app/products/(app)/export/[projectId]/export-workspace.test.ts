@@ -77,9 +77,16 @@ describe('Export workspace composition', () => {
     expect(workspace).toContain('readiness={runtime.readiness}')
     expect(workspace).toContain('旁白就绪')
     expect(workspace).toContain('字幕就绪')
-    expect(workspace).toContain('BGM（未接线）')
-    expect(workspace).toContain('SFX（未接线）')
-    expect(workspace).not.toContain("fullTrackClip('配乐'")
+    // 音乐与音效是纯接口预留（generateScore / generateSfx 是桩，无写入方，
+    // concat 的配乐分支永不执行）。文案必须说清是「未实现」而不是含糊的「未接线」，
+    // 且不得给出可点击却没有行为的开关。
+    expect(workspace).toContain('接口预留 · 未实现')
+    expect(workspace).not.toContain('未接线')
+    // 关闭字幕交付时显示「本次不入片」，不得把未测量塌成 0/5。
+    expect(workspace).toContain('本次不入片')
+    // 硬编码刻度尺与常量宽 clip 都已移除：位置与宽度只能来自真实通道次序。
+    expect(workspace).not.toContain("'00:20'")
+    expect(workspace).not.toContain('fullTrackClip')
     expect(settings).toContain('硬字幕烧录')
     expect(settings).toContain('旧版静音成片')
     expect(settings).not.toContain('暂不支持（P1）')

@@ -242,6 +242,18 @@ JS 镜像在 `src/lib/motion/tokens.ts`，由 `tokens.test.ts` 的同步测试�
 `ContextMenu`（2026-07-30 新增；全应用右键菜单的唯一原语。按指针坐标锚定，
 区别于 `Popover` 的 trigger rect 锚定，二者不可互代；菜单项为声明式数据，
 禁用项必须同时给出文本原因，danger 项图标与颜色双重语义）。
+`TimelineTrack`（2026-07-31 补登记；S5 导出页轨道的唯一原语。此前只在
+`/playbook` registry 里，本表缺失，属既有 SSOT 缺口）。合同要点：clip 的
+`start / width` 是占轨道宽度的比例，**宽度即时长**，禁止退回常量宽；未就绪的
+lane 必须留空位而不是让后续 clip 前移，否则 UI 会暗示错误的时间位置；轨道头
+固定 124px，只放 ≤2 字轨道名 + 等宽短计数（`meta`），整句状态走 `title`；
+`action` 槽承载开关或徽章；`muted` 态必须同时给 `emptyLabel` 之类的文本语义。
+全族只用 `ds-blue` 一个色相（浅色 4.89:1 / 暗色 6.78:1，计算值），字号统一
+`text-xs`（12px）。
+
+`ArtifactChip` 增补：新增 `download` 开关，置位时渲染 `download` 属性并去掉
+`target="_blank"`（二者互斥，同时给会先开空白新标签页再下载）。配套的
+`/api/artifacts/[id]?download=1` 返回 `Content-Disposition: attachment`。
 
 ---
 

@@ -35,6 +35,7 @@ describe('export API client', () => {
       shotCount: 1,
       shotQa: { S001: null, S002: true },
       resolutionPreset: '1280x720',
+      subtitles: 'burn-in',
       blockingIssues: [
         { laneKey: 'S001', kind: 'subtitle', code: 'artifact-missing' },
       ],
@@ -64,6 +65,7 @@ describe('export API client', () => {
       shotCount: 0,
       shotQa: {},
       resolutionPreset: '1920x1080',
+      subtitles: 'burn-in',
       blockingIssues: [],
       media: {
         narrationReadyCount: 0,
@@ -78,6 +80,32 @@ describe('export API client', () => {
       degradedExport: null,
       artifactDelivery: 'none',
     })
+  })
+
+  it('keeps an unmeasured subtitle count as null instead of collapsing it to zero', async () => {
+    // 服务端在「本次交付不含字幕」时投影 null。塌成 0 会让页面显示「字幕 0/5」，
+    // 被读成「字幕一个都没好」。
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      json({
+        ok: true,
+        ready: true,
+        incompleteNodeIds: [],
+        shotCount: 2,
+        subtitles: 'off',
+        media: {
+          narrationReadyCount: 2,
+          subtitleReadyCount: null,
+          requiredShotCount: 2,
+          delivery: 'narration-no-subtitle-v3',
+        },
+      })
+    )
+
+    const readiness = await loadExportReadiness('project-1', fetcher)
+
+    expect(readiness.subtitles).toBe('off')
+    expect(readiness.media.subtitleReadyCount).toBeNull()
+    expect(readiness.media.delivery).toBe('narration-no-subtitle-v3')
   })
 
   it('polls the export job until it yields the controlled final artifact URL', async () => {

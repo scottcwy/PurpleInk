@@ -1,7 +1,9 @@
 import {
   DEFAULT_EXPORT_SETTINGS,
   EXPORT_RESOLUTION_PRESETS,
+  SUBTITLE_DELIVERY_MODES,
   type ResolutionPreset,
+  type SubtitleDeliveryMode,
 } from '@/features/canvas/export-settings'
 
 /**
@@ -19,6 +21,8 @@ export interface ExportReadiness {
   /** laneKey → QA 是否通过；null/缺失表示尚未检测（不得当作通过）。 */
   shotQa: Record<string, boolean | null>
   resolutionPreset: ResolutionPreset
+  /** 当前导出设置里的字幕交付选择（下次导出会产出什么）。 */
+  subtitles: SubtitleDeliveryMode
   artifactUrl?: string
   blockingIssues: ExportBlockingIssue[]
   media: ExportMediaReadiness
@@ -45,9 +49,17 @@ export interface ExportBlockingIssue {
 
 export interface ExportMediaReadiness {
   narrationReadyCount: number
-  subtitleReadyCount: number
+  /**
+   * 就绪字幕数；本次交付不含字幕时为 null（服务端未测量）。
+   *
+   * 不能塌成 0：关着字幕时显示「字幕 0/5」会被读成「字幕一个都没好」。
+   */
+  subtitleReadyCount: number | null
   requiredShotCount: number
-  delivery: 'legacy-silent-v1' | 'narration-hard-subtitle-v2'
+  delivery:
+    | 'legacy-silent-v1'
+    | 'narration-hard-subtitle-v2'
+    | 'narration-no-subtitle-v3'
 }
 
 /** 把未受信响应体收窄成 ExportReadiness；结构不合法直接抛错而不是编造默认值。 */
@@ -70,6 +82,9 @@ export function parseExportReadiness(
     resolutionPreset: isResolutionPreset(body.resolutionPreset)
       ? body.resolutionPreset
       : DEFAULT_EXPORT_SETTINGS.resolutionPreset,
+    subtitles: isSubtitleMode(body.subtitles)
+      ? body.subtitles
+      : DEFAULT_EXPORT_SETTINGS.subtitles,
     blockingIssues: toBlockingIssues(body.blockingIssues),
     media: toMediaReadiness(body.media, body.shotCount),
     placeholderCandidateLanes: toStringArray(body.placeholderCandidateLanes),
@@ -100,6 +115,10 @@ function toShotQa(value: unknown): Record<string, boolean | null> {
 
 function isResolutionPreset(value: unknown): value is ResolutionPreset {
   return typeof value === 'string' && value in EXPORT_RESOLUTION_PRESETS
+}
+
+function isSubtitleMode(value: unknown): value is SubtitleDeliveryMode {
+  return SUBTITLE_DELIVERY_MODES.includes(value as SubtitleDeliveryMode)
 }
 
 export function toBlockingIssues(value: unknown): ExportBlockingIssue[] {
@@ -146,13 +165,23 @@ function toMediaReadiness(
   const raw = value as Record<string, unknown>
   return {
     narrationReadyCount: countOf(raw.narrationReadyCount),
-    subtitleReadyCount: countOf(raw.subtitleReadyCount),
+    subtitleReadyCount:
+      raw.subtitleReadyCount === null ? null : countOf(raw.subtitleReadyCount),
     requiredShotCount: countOf(raw.requiredShotCount, fallbackCount),
-    delivery:
-      raw.delivery === 'legacy-silent-v1'
-        ? 'legacy-silent-v1'
-        : 'narration-hard-subtitle-v2',
+    delivery: isMediaDelivery(raw.delivery)
+      ? raw.delivery
+      : 'narration-hard-subtitle-v2',
   }
+}
+
+function isMediaDelivery(
+  value: unknown
+): value is ExportMediaReadiness['delivery'] {
+  return (
+    value === 'legacy-silent-v1' ||
+    value === 'narration-hard-subtitle-v2' ||
+    value === 'narration-no-subtitle-v3'
+  )
 }
 
 function countOf(value: unknown, fallback = 0): number {

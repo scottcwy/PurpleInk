@@ -2,16 +2,7 @@ import {
   EXPORT_RESOLUTION_PRESETS,
   type ResolutionPreset,
 } from '@/features/canvas/export-settings'
-
-export interface TimelineClip {
-  start: number
-  width: number
-  label: string
-}
-
-const CLIP_WIDTH = 92
-const CLIP_GAP = 8
-const TRACK_INSET = 4
+import type { TimelineClipSpan } from '@/components/ui/timeline-track'
 
 const RESOLUTION_TIER_LABEL: Record<ResolutionPreset, string> = {
   '1920x1080': '高清',
@@ -26,25 +17,27 @@ export function buildResolutionOptions() {
   }))
 }
 
-/** 将真实分镜通道投影为 Pencil S5 的时间线片段。 */
-export function buildShotClips(laneKeys: readonly string[]): TimelineClip[] {
-  return [...laneKeys]
-    .sort((left, right) => left.localeCompare(right))
-    .map((laneKey, index) => ({
-      start: TRACK_INSET + index * (CLIP_WIDTH + CLIP_GAP),
-      width: CLIP_WIDTH,
-      label: laneKey,
-    }))
-}
-
-export function fullTrackClip(
-  label: string,
-  shotCount: number
-): TimelineClip[] {
-  if (shotCount === 0) return []
-  return [{
-    start: TRACK_INSET,
-    width: shotCount * CLIP_WIDTH + Math.max(0, shotCount - 1) * CLIP_GAP,
-    label,
-  }]
+/**
+ * 把分镜通道摆到轨道上，位置按它在**全部通道**里的次序。
+ *
+ * `present` 用来表达「这条轨道上只有部分通道有产物」。关键是缺失的通道要留出
+ * 空位，而不是让后面的 clip 前移：S001 与 S003 就绪、S002 缺失时，S003 必须画在
+ * 第三格。否则轨道会暗示错误的时间位置，且与分镜轨对不齐。
+ *
+ * 宽度目前按通道数均分。真实时长（`ExportReadiness.timeline`）的接线随导出页
+ * 布局重做一起落地。
+ */
+export function buildLaneSpans(
+  allLaneKeys: readonly string[],
+  present: readonly string[] = allLaneKeys
+): TimelineClipSpan[] {
+  const ordered = [...allLaneKeys].sort((left, right) => left.localeCompare(right))
+  if (ordered.length === 0) return []
+  const slot = 1 / ordered.length
+  const visible = new Set(present)
+  return ordered.flatMap((laneKey, index) =>
+    visible.has(laneKey)
+      ? [{ start: index * slot, width: slot, label: laneKey }]
+      : []
+  )
 }

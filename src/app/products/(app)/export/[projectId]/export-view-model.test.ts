@@ -1,24 +1,36 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildResolutionOptions,
-  buildShotClips,
-  fullTrackClip,
-} from './export-view-model'
+import { buildLaneSpans, buildResolutionOptions } from './export-view-model'
 
 describe('export view model', () => {
-  it('projects the real lane count instead of a six-shot demo constant', () => {
-    expect(buildShotClips(['S003', 'S001', 'S002'])).toEqual([
-      { start: 4, width: 92, label: 'S001' },
-      { start: 104, width: 92, label: 'S002' },
-      { start: 204, width: 92, label: 'S003' },
+  it('lays lanes out in sorted order across the full track width', () => {
+    expect(buildLaneSpans(['S003', 'S001', 'S002'])).toEqual([
+      { start: 0, width: 1 / 3, label: 'S001' },
+      { start: 1 / 3, width: 1 / 3, label: 'S002' },
+      { start: 2 / 3, width: 1 / 3, label: 'S003' },
     ])
   })
 
-  it('sizes full-length audio tracks from the actual shot count', () => {
-    expect(fullTrackClip('配音', 3)).toEqual([
-      { start: 4, width: 292, label: '配音' },
+  it('leaves a gap for a missing lane instead of shifting later lanes forward', () => {
+    // 回归锁：S002 缺产物时 S003 必须留在第三格。旧实现按过滤后的数组重新编号，
+    // 把 S003 画到第二格，暗示错误的时间位置且与分镜轨对不齐。
+    expect(buildLaneSpans(['S001', 'S002', 'S003'], ['S001', 'S003'])).toEqual([
+      { start: 0, width: 1 / 3, label: 'S001' },
+      { start: 2 / 3, width: 1 / 3, label: 'S003' },
     ])
-    expect(fullTrackClip('配音', 0)).toEqual([])
+  })
+
+  it('spans the whole width for a single lane and stays empty without lanes', () => {
+    expect(buildLaneSpans(['S001'])).toEqual([
+      { start: 0, width: 1, label: 'S001' },
+    ])
+    expect(buildLaneSpans([])).toEqual([])
+    expect(buildLaneSpans([], ['S001'])).toEqual([])
+  })
+
+  it('ignores lanes that are present but not part of the project', () => {
+    expect(buildLaneSpans(['S001'], ['S001', 'S404'])).toEqual([
+      { start: 0, width: 1, label: 'S001' },
+    ])
   })
 
   it('projects every supported resolution preset to its existing tier label', () => {

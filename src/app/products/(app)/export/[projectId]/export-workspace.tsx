@@ -11,7 +11,7 @@ import { TopBar } from '@/components/ui/top-bar'
 import { usePublishNavContext } from '@/features/navigation/nav-context'
 import { ExportQa } from './export-qa'
 import { ExportSettings } from './export-settings'
-import { buildShotClips } from './export-view-model'
+import { buildLaneSpans } from './export-view-model'
 import type { ExportReadiness } from './export-readiness-contract'
 import { useExportRuntime } from './use-export-runtime'
 
@@ -28,7 +28,7 @@ export function ExportWorkspace({
 }) {
   const runtime = useExportRuntime(projectId)
   const disabled = !runtime.readiness?.ready || runtime.exporting
-  const shotClips = buildShotClips(laneKeys)
+  const shotClips = buildLaneSpans(laneKeys)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   usePublishNavContext({ projectId, rendererNodeId })
@@ -124,38 +124,60 @@ function ExportTimeline({
   readiness,
 }: {
   laneKeys: string[]
-  shotClips: ReturnType<typeof buildShotClips>
+  shotClips: ReturnType<typeof buildLaneSpans>
   readiness?: ExportReadiness
 }) {
-  const subtitleLanes = readyMediaLanes(laneKeys, readiness, 'subtitle')
   const narrationLanes = readyMediaLanes(laneKeys, readiness, 'narration')
+  // 关闭字幕交付时服务端不再测量就绪数（投影为 null）。此处必须显示「本次不入片」
+  // 而不是把它塌成 0 —— 「字幕 0/5」会被读成「字幕一个都没好」。
+  const subtitlesOff = readiness?.subtitles === 'off'
+  const subtitleLanes = subtitlesOff
+    ? []
+    : readyMediaLanes(laneKeys, readiness, 'subtitle')
   return (
     <section className="flex flex-col gap-1 px-4 sm:px-6">
-      <div className="flex h-5 justify-between border-b border-ds-border text-[11px] font-mono text-ds-text-muted">
-        {['00:00', '00:20', '00:40', '01:00', '01:20'].map((time) => (
-          <span key={time}>{time}</span>
-        ))}
-      </div>
-      <TimelineTrack icon={Film} label="分镜" clips={shotClips} />
+      <TimelineTrack
+        icon={Film}
+        label="分镜"
+        meta={`${laneKeys.length}`}
+        clips={shotClips}
+      />
       <TimelineTrack
         icon={Captions}
-        label={`字幕（字幕就绪 ${subtitleLanes.length}/${laneKeys.length}）`}
-        clips={buildShotClips(subtitleLanes)}
-        color="bg-stage-direct"
+        label="字幕"
+        {...(subtitlesOff
+          ? {
+              muted: true,
+              emptyLabel: '本次不入片',
+              title: '导出设置已选择不烧录字幕',
+            }
+          : {
+              meta: `${subtitleLanes.length}/${laneKeys.length}`,
+              title: `字幕就绪 ${subtitleLanes.length} / ${laneKeys.length}`,
+            })}
+        clips={buildLaneSpans(laneKeys, subtitleLanes)}
       />
       <TimelineTrack
         icon={AudioLines}
-        label={`配音（旁白就绪 ${narrationLanes.length}/${laneKeys.length}）`}
-        clips={buildShotClips(narrationLanes)}
-        color="bg-stage-audio"
+        label="配音"
+        meta={`${narrationLanes.length}/${laneKeys.length}`}
+        title={`旁白就绪 ${narrationLanes.length} / ${laneKeys.length}`}
+        clips={buildLaneSpans(laneKeys, narrationLanes)}
       />
       <TimelineTrack
         icon={Music}
-        label="BGM（未接线）"
+        label="音乐"
+        muted
+        emptyLabel="接口预留 · 未实现"
         clips={[]}
-        color="bg-stage-assemble"
       />
-      <TimelineTrack icon={Volume2} label="SFX（未接线）" clips={[]} />
+      <TimelineTrack
+        icon={Volume2}
+        label="音效"
+        muted
+        emptyLabel="接口预留 · 未实现"
+        clips={[]}
+      />
     </section>
   )
 }
@@ -175,6 +197,8 @@ function readyMediaLanes(
     kind === 'narration'
       ? readiness.media.narrationReadyCount
       : readiness.media.subtitleReadyCount
+  // count 为 null 表示服务端未测量（本次交付不含字幕），调用方已单独处理。
+  if (count === null) return []
   return [...laneKeys]
     .sort((left, right) => left.localeCompare(right))
     .filter((laneKey) => !blocked.has(laneKey))
