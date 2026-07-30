@@ -322,8 +322,11 @@ C 只负责稳定布局与业务组合，不定义新颜色。任何可复用的
 - 唯一应用壳为 `AppSidebar/Canonical`；页面不得复制 Sidebar 或 TopNav。
 - S2 是 S1 上的模态状态，不是独立路由。
 - Inspector 固定为 `Data / Source / Gates / Execution`。
-- S4 主预览、8 帧条、S5 成片预览与 Final QA 单元统一使用 16:9；固定
+- S4 主预览、8 帧条与 S5 成片预览统一使用 16:9；固定
   `1920×1080` FABRICATE iframe 只能由父媒体框等比缩放，不修改 Artifact HTML。
+- S5 底部“交付检查”只消费真实 `ExportReadiness`：展示镜头、旁白、字幕、
+  QA 计数和阻塞原因；不得用百分比灰块冒充抽帧缩略图，不得把 nodeId 或状态
+  文案渲染为 `ArtifactChip`。QA 豁免始终标记为未验收。
 - 可见字段必须追溯到 Snapshot、Realtime、artifact/API DTO 或明确的本地 optimistic command state。
 - Artifact 外观可点击时必须有真实下载 URL；控件必须有 handler，能力不可用时明确 disabled/empty。
 - 不显示 raw assistant delta、Tool 参数值、prompt、credential、provider raw error 或 hidden reasoning。

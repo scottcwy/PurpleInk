@@ -9,7 +9,7 @@ import { Popover } from '@/components/ui/popover'
 import { TimelineTrack } from '@/components/ui/timeline-track'
 import { TopBar } from '@/components/ui/top-bar'
 import { usePublishNavContext } from '@/features/navigation/nav-context'
-import { ExportQa } from './export-qa'
+import { ExportDeliveryCheck } from './export-delivery-check'
 import { ExportSettings } from './export-settings'
 import { buildLaneSpans } from './export-view-model'
 import type { ExportReadiness } from './export-readiness-contract'
@@ -85,7 +85,8 @@ export function ExportWorkspace({
         shotClips={shotClips}
         readiness={runtime.readiness}
       />
-      <ExportQa
+      <ExportDeliveryCheck
+        projectId={projectId}
         laneKeys={laneKeys}
         readiness={runtime.readiness}
         error={runtime.error}

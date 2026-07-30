@@ -9,8 +9,12 @@ const settings = readFileSync(
   'src/app/products/(app)/export/[projectId]/export-settings.tsx',
   'utf8',
 )
-const qa = readFileSync(
-  'src/app/products/(app)/export/[projectId]/export-qa.tsx',
+const deliveryCheck = readFileSync(
+  'src/app/products/(app)/export/[projectId]/export-delivery-check.tsx',
+  'utf8',
+)
+const viewModel = readFileSync(
+  'src/app/products/(app)/export/[projectId]/export-view-model.ts',
   'utf8',
 )
 const contract = readFileSync(
@@ -36,21 +40,27 @@ describe('Export workspace composition', () => {
     expect(workspace).toMatch(/>\s*导出\s*</)
     expect(workspace).not.toContain('导出 MP4')
     expect(workspace).toContain('ExportSettings')
-    expect(workspace).toContain('ExportQa')
+    expect(workspace).toContain('ExportDeliveryCheck')
     expect(workspace).not.toContain('ExportReview')
     expect(workspace).not.toContain('DrawerOverlay')
     expect(workspace).not.toContain('useResizablePanel')
     expect(workspace).not.toContain('variant="tinted"')
   })
 
-  it('keeps Final QA as a full-width section under the pipeline timeline', () => {
+  it('keeps the delivery check as a full-width section under the pipeline timeline', () => {
     const previewIdx = workspace.indexOf('ExportPreview')
     const timelineIdx = workspace.indexOf('ExportTimeline')
-    const qaIdx = workspace.indexOf('<ExportQa')
+    const qaIdx = workspace.indexOf('<ExportDeliveryCheck')
     expect(previewIdx).toBeGreaterThan(-1)
     expect(timelineIdx).toBeGreaterThan(previewIdx)
     expect(qaIdx).toBeGreaterThan(timelineIdx)
-    expect(qa).toContain('Final QA · 抽帧审查')
+    expect(workspace).toContain('projectId={projectId}')
+    expect(deliveryCheck).toContain('交付检查')
+    expect(deliveryCheck).toContain('buildExportDeliveryCheck')
+    expect(deliveryCheck).toContain('返回画布处理')
+    expect(deliveryCheck).not.toContain('ContactSheetThumb')
+    expect(deliveryCheck).not.toContain('25% / 60% / 95%')
+    expect(deliveryCheck).not.toContain('ArtifactChip')
   })
 
   it('auto-closes the settings popover after a successful export and surfaces the download near preview', () => {
@@ -93,7 +103,7 @@ describe('Export workspace composition', () => {
   })
 
   it('shows lane-scoped media blockers with human-readable labels', () => {
-    expect(qa).toContain('blockingIssueLabel')
+    expect(viewModel).toContain('blockingIssueLabel')
     expect(contract).toContain('缺旁白')
     expect(contract).toContain('缺字幕')
     expect(contract).toContain('产物无效')
