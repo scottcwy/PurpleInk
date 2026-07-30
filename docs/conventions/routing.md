@@ -92,11 +92,14 @@
 | 路由 | 文件 | 状态 |
 | --- | --- | --- |
 | `/playbook` | `src/app/playbook/page.tsx` | `wired` |
-| `/playbook/ui` | `src/app/playbook/ui/page.tsx` | `wired`（41 组件族，与 `UI_COMPONENT_FAMILY_COUNT` 同步） |
+| `/playbook/ui` | `src/app/playbook/ui/page.tsx` | `wired`（`UI_COMPONENT_FAMILY_COUNT` 个组件族，页面从常量读取，不在文档硬写数字） |
 | `/playbook/icons` | `src/app/playbook/icons/page.tsx` | `wired`（Pencil A4 图标白名单） |
 | `/playbook/foundations` | `src/app/playbook/foundations/page.tsx` | `wired`，但无 registry 分类 |
+| `/playbook/motion` | `src/app/playbook/motion/page.tsx` | `wired`，但无 registry 分类；动效意图对照台，见 `docs/conventions/motion-interaction.md` |
 
-`/playbook/foundations` 是手写 token 展示页，`PlaybookCategory` 只有 `ui | icons`。这是已知不一致：foundations 要么补进 registry，要么在索引页标注它不是组件登记页。
+`/playbook/foundations` 与 `/playbook/motion` 是手写 token / 动效展示页，`PlaybookCategory` 只有 `ui | icons`。这是已知不一致：两者要么补进 registry，要么在索引页标注它们不是组件登记页（当前采取后者）。
+
+`/playbook/motion` 是动效的唯一对照真值面：`docs/conventions/motion-interaction.md` 的 L1 意图表逐条在此有可交互标本。新增 L1 意图必须同批在该页登记，禁止只改文档不落标本。该页的标本必须复用生产组件与 `src/lib/motion/tokens.ts` 的同一份参数，禁止为展示复刻一套近似实现。
 
 `/playbook/patterns` 与 `patterns` 分类已于 2026-07-25（ISSUE-007）整体删除：唯一登记项 `WorkflowCanvas` 是脚手架期硬编码 fixture（`STAGE_B_WORKFLOW_NODES`），未被 `docs/designs/Design-system-inventory.md` 登记为必需组合，且其内联的两个 disabled 按钮与「`ProductFlowVersion`/`FlowNode`」文案引用了 §12 已作废的 Release 六步模型实体。删除后不留空分类占位，见 §2.5。
 

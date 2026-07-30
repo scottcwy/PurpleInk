@@ -185,6 +185,24 @@ Primary 按钮为**扁平实心**（Vercel/Linear 式）：零渐变、零投影
 
 常用字号：Display 36、H1 30、H2 22、Body 14、Label 12；正文行高建议 1.45–1.55。圆角：控件 8（`--radius-md`）、卡片/面板/Dialog 12（`--radius-lg`）、pill 999。设置行节奏：导航/只读行 48px（`SettingsRow`，px-5），表单行 `SettingsField`（min-h 56、px-5 py-3.5，label+hint 在左、多控件区在右，窄屏纵向堆叠）——禁止再用行高覆写把多控件塞进 44px 行。
 
+### 4.7 动效（索引）
+
+动效**不从 Pencil 推导**——`canvas.pen` 是静态像素真值，不含时间维度。动效的唯一文字真值是
+`docs/conventions/motion-interaction.md`，本节只保留索引，不重复参数。
+
+| 维度 | 值 | 详见 |
+| --- | --- | --- |
+| 时长 | `fast` 120 / `base` 220 / `slow` 360 / `narrative` 300（仅营销层） | 该文 §2.2 |
+| 曲线 | `standard` / `emphasized` / `exit` | 该文 §2.3 |
+| 弹性 | spatial 三档（`visualDuration` + `bounce`）；effects 类属性禁用 | 该文 §2.4 |
+| 意图表 | 17 条交互意图 → 参数映射 | 该文 §3 |
+| 覆盖层 | `OverlayRoot` 双模式（`<dialog>` / `popover="auto"`） | 该文 §4 |
+
+token 在 `src/app/globals.css` 分两层落地：`:root` 存语义值，`@theme inline` 用
+Tailwind v4 的 `--transition-duration-*` 命名空间导出为 class。
+JS 镜像在 `src/lib/motion/tokens.ts`，由 `tokens.test.ts` 的同步测试锁定三处一致。
+可交互对照台：`/playbook/motion`（意图标本）与 `/playbook/foundations`（token 对照）。
+
 ---
 
 ## 5. Canonical Reusable Symbols（B0）
