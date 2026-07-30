@@ -142,6 +142,47 @@ describe('PostgresWebsiteStageProjector', () => {
     expect(nodes.every((node) => !('workflowBlock' in payload(node)))).toBe(true)
   })
 
+  it('clears stale terminal projections when a new attempt restarts at capture', async () => {
+    const output: WebsiteOutputProjection = {
+      artifactId: '00000000-0000-4000-8000-000000000901',
+      contentHash: 'a'.repeat(64),
+      sizeBytes: 2048,
+      durationSec: 30,
+      durationSource: 'output',
+      elapsedSec: 42,
+      verification: {
+        checkPassed: false,
+        goldenVerified: true,
+        goldenCheckCount: 5,
+        outcome: 'degraded',
+      },
+    }
+    await seedArtifact(output.artifactId)
+    await projector().block(PROJECT_ID, output)
+
+    await projector().progress(PROJECT_ID, {
+      phase: 'capture',
+      enginePhase: 'capturing',
+      state: 'running',
+      durationSec: 30,
+      durationSource: 'request',
+      elapsedSec: 1,
+      verification: null,
+    })
+
+    const nodes = await readNodes()
+    expect(nodes.map((node) => execution(node))).toEqual([
+      expect.objectContaining({ phase: 'capture', state: 'running' }),
+      { schemaVersion: 1, phase: 'script', state: 'idle', updatedAt: expect.any(String) },
+      { schemaVersion: 1, phase: 'narration', state: 'idle', updatedAt: expect.any(String) },
+      { schemaVersion: 1, phase: 'compose', state: 'idle', updatedAt: expect.any(String) },
+      { schemaVersion: 1, phase: 'render', state: 'idle', updatedAt: expect.any(String) },
+      { schemaVersion: 1, phase: 'export', state: 'idle', updatedAt: expect.any(String) },
+    ])
+    expect(JSON.stringify(nodes)).not.toContain(output.artifactId)
+    expect(JSON.stringify(nodes)).not.toContain('WEBSITE_VERIFICATION_FAILED')
+  })
+
   it('rolls back earlier status writes when any projection in the batch is invalid', async () => {
     const script = (await readNodes()).find(
       (node) => node.logicalKey === 'website:script',
@@ -241,8 +282,19 @@ async function artifactLifecycle(artifactId: string): Promise<string | undefined
 function execution(
   nodes: Awaited<ReturnType<typeof readNodes>>,
   logicalKey: string,
+): Record<string, unknown>
+function execution(
+  node: Awaited<ReturnType<typeof readNodes>>[number],
+): Record<string, unknown>
+function execution(
+  nodesOrNode:
+    | Awaited<ReturnType<typeof readNodes>>
+    | Awaited<ReturnType<typeof readNodes>>[number],
+  logicalKey?: string,
 ): Record<string, unknown> {
-  const node = nodes.find((candidate) => candidate.logicalKey === logicalKey)!
+  const node = Array.isArray(nodesOrNode)
+    ? nodesOrNode.find((candidate) => candidate.logicalKey === logicalKey)!
+    : nodesOrNode
   return payload(node).websiteExecution as Record<string, unknown>
 }
 

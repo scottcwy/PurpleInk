@@ -61,6 +61,7 @@ export interface WebsiteStageProjector {
 }
 
 export type WebsiteStageTarget =
+  | 'reset'
   | 'pending'
   | 'running'
   | 'success'
@@ -122,11 +123,16 @@ export function websiteNodeTransitionPlan(
   current: PersistedWebsiteNodeStatus,
   target: WebsiteStageTarget,
 ): NodeStatus[] {
+  if (target === 'reset') {
+    return current === 'succeeded' ? ['stale'] : []
+  }
   if (target === 'pending') {
-    return ['queued', 'running', 'succeeded'].includes(current) ? [] : ['pending']
+    if (current === 'succeeded') return ['stale', 'pending']
+    return ['queued', 'running'].includes(current) ? [] : ['pending']
   }
   if (target === 'running') {
-    if (current === 'running' || current === 'succeeded') return []
+    if (current === 'succeeded') return ['stale', 'pending', 'running']
+    if (current === 'running') return []
     if (current === 'queued') return ['running']
     return ['pending', 'running']
   }

@@ -47,7 +47,7 @@ interface WebsiteStageMutation {
 interface StageExecutionProjection {
   schemaVersion: 1
   phase: WebsiteWorkflowPhase
-  state: 'queued' | 'running' | 'succeeded' | 'blocked' | 'failed' | 'cancelled'
+  state: 'idle' | 'queued' | 'running' | 'succeeded' | 'blocked' | 'failed' | 'cancelled'
   updatedAt: string
   enginePhase?: WebsiteStageProgress['enginePhase']
   durationSec?: number | null
@@ -76,13 +76,15 @@ export class PostgresWebsiteStageProjector implements WebsiteStageProjector {
     const updatedAt = new Date().toISOString()
     const mutations = new Map<string, WebsiteStageMutation>()
     for (const [index, phase] of WEBSITE_WORKFLOW_PHASES.entries()) {
-      if (index > activeIndex) continue
-      mutations.set(`website:${phase}`, index < activeIndex
-        ? {
+      mutations.set(
+        `website:${phase}`,
+        index < activeIndex
+          ? {
             target: 'success',
             projection: succeededProjection(phase, updatedAt),
           }
-        : {
+          : index === activeIndex
+            ? {
             target: progress.state === 'queued' ? 'pending' : 'running',
             projection: {
               schemaVersion: 1,
@@ -95,7 +97,17 @@ export class PostgresWebsiteStageProjector implements WebsiteStageProjector {
               verification: progress.verification,
               updatedAt,
             },
-          })
+          }
+            : {
+                target: 'reset',
+                projection: {
+                  schemaVersion: 1,
+                  phase,
+                  state: 'idle',
+                  updatedAt,
+                },
+              },
+      )
     }
     await this.commit(projectId, mutations)
   }
@@ -320,9 +332,8 @@ function resolveNodeMutation(
     ) ?? data)
     status = next
   }
-  const existing = recordOrEmpty(data.payload.websiteExecution)
   data = versionedNodeDataSchema.parse(patchPayload(data, {
-    websiteExecution: { ...existing, ...mutation.projection },
+    websiteExecution: mutation.projection,
   }))
   return { status, data, changed: transitions.length > 0 }
 }
@@ -339,10 +350,4 @@ function isPersistedStatus(value: string): value is PersistedWebsiteNodeStatus {
     'idle', 'queued', 'running', 'succeeded', 'failed',
     'cancelled', 'stale', 'skipped', 'blocked',
   ].includes(value)
-}
-
-function recordOrEmpty(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
 }

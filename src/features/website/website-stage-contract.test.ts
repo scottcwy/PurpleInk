@@ -78,6 +78,16 @@ describe('website workflow stage contract', () => {
     ])
     expect(websiteNodeTransitionPlan('succeeded', 'failed')).toEqual([])
   })
+
+  it('restarts a succeeded stage through stale and leaves later stages resettable', () => {
+    expect(websiteNodeTransitionPlan('succeeded', 'running')).toEqual([
+      'stale',
+      'pending',
+      'running',
+    ])
+    expect(websiteNodeTransitionPlan('succeeded', 'reset')).toEqual(['stale'])
+    expect(websiteNodeTransitionPlan('failed', 'reset')).toEqual([])
+  })
 })
 
 function job(overrides: Partial<WebsiteEngineJob> = {}): WebsiteEngineJob {

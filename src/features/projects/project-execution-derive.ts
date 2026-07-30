@@ -182,7 +182,8 @@ function publicAttemptStatus(
 
 function websiteStageState(value: unknown, persisted: string): WebsiteStageState {
   if (
-    value === 'queued'
+    value === 'idle'
+    || value === 'queued'
     || value === 'running'
     || value === 'succeeded'
     || value === 'blocked'
