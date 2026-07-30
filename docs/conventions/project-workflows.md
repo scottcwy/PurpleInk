@@ -87,6 +87,8 @@ v1 费率为每个向上取整的视频秒 `120000 CNY micros`（¥0.12）；
   必须指向同一真实 storage key、SHA-256、大小与 attempt。音频 manifest 必须明确
   `source=user` 和原录音采样 offset，不得把用户原声伪装成 TTS。消费端除了解析
   ingest JSON，还必须逐 unit 核验 narration Artifact 的实际字节 hash 与大小。
+  ASR 没有可用时间戳时只允许生成覆盖整段录音的单 unit，并把该 unit 投影为
+  `confidence=0` / `lowConfidenceUnitIds`；不得伪造逐句高置信时间边界。
 - audio 在外部 ASR 出网前先登记 attempt-scoped `user-audio-source`；Provider 失败
   仍保留这份已校验的源证据。同一 attempt 重放只复用完全相同的记录，新 attempt
   追加新版本，禁止原地改写既有 Artifact。

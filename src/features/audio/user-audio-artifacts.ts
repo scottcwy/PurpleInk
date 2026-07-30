@@ -123,6 +123,7 @@ export async function persistUserAudioArtifacts(
     scriptUnits,
     sourceStorageKey: source.storageKey,
     sourceContentHash: source.contentHash,
+    alignmentMode: input.timeline.alignmentMode,
     slices: storedSlices,
   })
   const ingest = await writeJsonPointer(

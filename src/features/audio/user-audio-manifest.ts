@@ -20,6 +20,7 @@ export interface UserAudioContractsInput {
   scriptUnits: readonly ScriptUnit[]
   sourceStorageKey: string
   sourceContentHash: string
+  alignmentMode: 'caption-timestamps' | 'whole-recording'
   slices: readonly StoredUserAudioSlice[]
 }
 
@@ -38,6 +39,7 @@ export function buildUserAudioContracts(
   input: UserAudioContractsInput,
 ): UserAudioContracts {
   const scriptUnits = scriptUnitsSchema.parse(input.scriptUnits)
+  const timestampAligned = input.alignmentMode === 'caption-timestamps'
   if (input.slices.length !== scriptUnits.length) {
     throw new Error('用户录音切片与 script units 数量不一致')
   }
@@ -59,7 +61,7 @@ export function buildUserAudioContracts(
       alignment: {
         mode: 'unit-file' as const,
         coverage: 1,
-        confidence: 1,
+        confidence: timestampAligned ? 1 : 0,
         sourceStartSample: stored.slice.startSample,
         sourceEndSample: stored.slice.endSample,
       },
@@ -79,7 +81,9 @@ export function buildUserAudioContracts(
       policy: 'unit-files',
       scriptCoverage: 1,
       continuousCoverage: true,
-      lowConfidenceUnitIds: [],
+      lowConfidenceUnitIds: timestampAligned
+        ? []
+        : units.map((unit) => unit.unitId),
     },
   })
 
