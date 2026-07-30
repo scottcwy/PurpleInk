@@ -325,7 +325,7 @@ Canonical 状态集合：`loading / empty / ready / running / succeeded / failed
 
 **操作**：`plus`、`save`、`settings-2`、`ellipsis`、`x`、`upload`、`refresh-cw`、`arrow-left`、`chevron-right`、`skip-forward`、`zoom-in`、`zoom-out`、`maximize-2`
 
-**执行与内容**：`list-tree`、`sparkles`、`combine`、`file-code`、`play`、`loader-circle`
+**执行与内容**：`list-tree`、`sparkles`、`combine`、`file-code`、`audio-lines`、`globe`、`play`、`loader-circle`
 
 **状态**：`circle-check`、`triangle-alert`、`circle-x`、`shield-check`、`info`、`circle-slash`
 

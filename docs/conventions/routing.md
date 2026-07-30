@@ -71,7 +71,7 @@
 | --- | --- | --- | --- | --- |
 | `/products` | `src/app/products/page.tsx` | `redirect` → `/products/dashboard` | 无 | — |
 | `/products/dashboard` | `src/app/products/(app)/dashboard/page.tsx` | `wired` | 无 | 空状态引导新建项目 |
-| `/products/projects` | `src/app/products/(app)/projects/page.tsx` | `wired` | 无 | 文稿/录音与网站介绍双栏真实投影；空分组保留对应创建入口 |
+| `/products/projects` | `src/app/products/(app)/projects/page.tsx` | `wired` | 无 | 代码（文稿）/录音/URL 介绍三板块真实投影，支持网格（横向行式，按数量降序）与列表双布局，首屏每板块分页投影、滚动经 `/api/projects?view=cards` 追加；空分组各保留对应来源创建入口 |
 | `/products/canvas/[projectId]` | `src/app/products/(app)/canvas/[projectId]/page.tsx` | `wired` | `projectId` path | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明 |
 | `/products/shots/[shotId]` | `src/app/products/(app)/shots/[shotId]/page.tsx` | `wired` | `shotId` path + `projectId` query（必填） | 缺失项目/镜头 `notFound()`；旧 workflow 显示保留数据说明 |
 | `/products/export/[projectId]` | `src/app/products/(app)/export/[projectId]/page.tsx` | `wired` | `projectId` path | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明 |
@@ -152,7 +152,7 @@
 | 路由 | 方法 | 上下文参数 | 委托 | 状态 |
 | --- | --- | --- | --- | --- |
 | `/api/ping` | GET | — | 无 | `wired` |
-| `/api/projects` | GET, POST | — | GET：`@/features/canvas`；POST：`@/features/projects` | `wired`；POST 接受判别联合 `kind=script|audio|website`，兼容旧文稿 JSON；audio 仅接受 MP3/WAV multipart，最大 100 MiB / 30 分钟 |
+| `/api/projects` | GET, POST | GET 可选 `view=cards` + `kind`、`q`、`offset`、`limit` | GET：无参数时 `@/features/canvas` `listProjects`；`view=cards` 时 `@/features/projects` 卡片投影；POST：`@/features/projects` | `wired`；`view=cards` 返回分页项目卡片投影 `{items,total,kindCounts}`（镜头数与状态为聚合 SQL，来源摘要为 URL/录音文件名/文稿前 80 字，不下发完整文稿）；`kind` 缺省跨三类混合，`limit` 钳位 1–50；无参数 GET 保持既有全量形状不变；POST 接受判别联合 `kind=script|audio|website`，兼容旧文稿 JSON；audio 仅接受 MP3/WAV multipart，最大 100 MiB / 30 分钟 |
 | `/api/projects/[id]/start` | POST | `id` path | `@/features/projects` 按已持久化 `workflowKind` 分派 script Director、audio ASR、website video 队列 | `wired`；精确校验 kind + active workflowVersion，再由真实来源入口按资金来源预检（managed 进入统一会员额度，BYOK 不检查会员额度）；返回真实 kind、工作流状态、入口节点、attempt/job id、attempt 状态与是否复用；succeeded audio 续推下游，succeeded website 返回 `complete` |
 | `/api/projects/[id]` | PATCH | `id` path | `@/features/canvas` `updateExportSettings` | `wired` |
 | `/api/artifacts/[id]` | GET | `id` path + `projectId` query（必填） | `@/features/artifacts` | `wired` |
@@ -253,7 +253,7 @@
 | `AppSection` | URL 段 | 中文标签 | Pencil 屏 |
 | --- | --- | --- | --- |
 | `workbench` | `dashboard` | 工作台 | S1 / S2 |
-| `projects` | `projects` | 项目 | Projects Light / Dark 双栏屏 |
+| `projects` | `projects` | 项目 | Projects Light / Dark 三栏屏 |
 | `canvas` | `canvas` | 画布 | S3 |
 | `renderer` | `shots` | 镜头 | S4 |
 | `export` | `export` | 导出 | S5 |
