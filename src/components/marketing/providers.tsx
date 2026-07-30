@@ -1,7 +1,6 @@
 "use client";
 
 import { SmoothScroll } from "@/components/marketing/smooth-scroll";
-import { ReducedMotionProvider } from "@/lib/marketing-motion";
 import type { ReactNode } from "react";
 
 export function MarketingProviders({
@@ -9,9 +8,5 @@ export function MarketingProviders({
 }: {
   children: ReactNode;
 }): ReactNode {
-  return (
-    <ReducedMotionProvider>
-      <SmoothScroll>{children}</SmoothScroll>
-    </ReducedMotionProvider>
-  );
+  return <SmoothScroll>{children}</SmoothScroll>;
 }

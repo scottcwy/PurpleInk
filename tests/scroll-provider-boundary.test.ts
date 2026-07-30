@@ -5,6 +5,7 @@ const ROOT_LAYOUT = 'src/app/layout.tsx'
 const ROOT_PROVIDERS = 'src/app/providers.tsx'
 const MARKETING_LAYOUT = 'src/app/(marketing)/layout.tsx'
 const MARKETING_PROVIDERS = 'src/components/marketing/providers.tsx'
+const LEGACY_MARKETING_MOTION = 'src/lib/marketing-motion.tsx'
 const PRODUCTS_LAYOUT = 'src/app/products/(app)/layout.tsx'
 
 describe('滚动 Provider 路由边界', () => {
@@ -13,6 +14,7 @@ describe('滚动 Provider 路由边界', () => {
 
     expect(source).toMatch(/from ["']@\/app\/providers["']/)
     expect(source).toContain('<RootProviders>')
+    expect(source).toContain('<AppMotionConfig>')
     expect(source).not.toContain('@/components/marketing/providers')
   })
 
@@ -26,7 +28,7 @@ describe('滚动 Provider 路由边界', () => {
     expect(source).not.toContain('ReducedMotionProvider')
   })
 
-  it('营销 layout 独占 SmoothScroll 与营销减弱动态效果上下文', () => {
+  it('营销 layout 只独占 SmoothScroll，减弱动态效果由根 MotionConfig 负责', () => {
     expect(existsSync(MARKETING_LAYOUT)).toBe(true)
     if (!existsSync(MARKETING_LAYOUT)) return
 
@@ -35,8 +37,9 @@ describe('滚动 Provider 路由边界', () => {
     expect(layoutSource).toContain('@/components/marketing/providers')
     expect(layoutSource).toContain('<MarketingProviders>')
     expect(providerSource).toContain('<SmoothScroll>')
-    expect(providerSource).toContain('<ReducedMotionProvider>')
+    expect(providerSource).not.toContain('ReducedMotionProvider')
     expect(providerSource).not.toContain('ThemeProvider')
+    expect(existsSync(LEGACY_MARKETING_MOTION)).toBe(false)
   })
 
   it('制作应用壳不引用 Lenis 或营销 Provider', () => {

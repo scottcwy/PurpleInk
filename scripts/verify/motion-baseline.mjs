@@ -65,7 +65,7 @@ async function prepareStablePage(page, target) {
     undefined,
     { timeout: 10_000 },
   )
-  await page.waitForTimeout(450)
+  await page.waitForTimeout(target.route === '/' ? 1_800 : 450)
   await page.addStyleTag({
     content: `
       html { scroll-behavior: auto !important; }
@@ -98,7 +98,7 @@ async function captureTarget(browser, target) {
   const page = await context.newPage()
   recordPageProblems(page, target)
   const response = await page.goto(new URL(target.route, MOTION_BASE_URL).href, {
-    waitUntil: 'networkidle',
+    waitUntil: 'domcontentloaded',
   })
   if (response?.status() !== 200) {
     problems.push(`${target.id} status=${response?.status() ?? 'none'}`)
@@ -151,7 +151,7 @@ async function assertBrowserContracts(browser) {
 
   await page.goto(
     new URL('/playbook/foundations', MOTION_BASE_URL).href,
-    { waitUntil: 'networkidle' },
+    { waitUntil: 'domcontentloaded' },
   )
   const durations = await readComputedStyles(
     page,
@@ -167,7 +167,7 @@ async function assertBrowserContracts(browser) {
   assertStyleMap(easings, EXPECTED_EASING_STYLES, 'easing')
 
   await page.goto(new URL('/playbook/motion', MOTION_BASE_URL).href, {
-    waitUntil: 'networkidle',
+    waitUntil: 'domcontentloaded',
   })
   const cardCount = await page.locator('article').count()
   if (cardCount !== MOTION_INTENT_COUNT) {
@@ -192,7 +192,7 @@ async function assertBrowserContracts(browser) {
   const reducedPage = await reducedContext.newPage()
   await reducedPage.goto(
     new URL('/playbook/foundations', MOTION_BASE_URL).href,
-    { waitUntil: 'networkidle' },
+    { waitUntil: 'domcontentloaded' },
   )
   const reduced = await reducedPage.evaluate(() => {
     const element = document.querySelector('.duration-base')

@@ -36,4 +36,17 @@ describe('marketing motion contracts', () => {
     expect(bottomCta).toContain('transition-shadow duration-fast ease-standard')
     expect(header).not.toContain(['duration', '300'].join('-'))
   })
+
+  it('flattens scroll-linked and in-view motion for reduced-motion users', () => {
+    const hero = readMarketingSource('hero.tsx')
+    const toolsCarousel = readMarketingSource('tools-carousel.tsx')
+
+    expect(hero).toContain('useReducedMotion')
+    expect(hero).toContain('prefersReducedMotion ? 0')
+    expect(hero).toContain('prefersReducedMotion ? 1')
+    expect(hero).toContain('motion-reduce:transform-none!')
+    expect(hero).toContain('motion-reduce:opacity-100!')
+    expect(toolsCarousel).toContain('motion-reduce:transform-none!')
+    expect(toolsCarousel).toContain('motion-reduce:opacity-100!')
+  })
 })

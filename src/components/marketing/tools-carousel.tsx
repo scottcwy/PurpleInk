@@ -130,7 +130,7 @@ export function ToolsCarousel(): ReactNode {
           {tools.map((tool, index) => (
             <motion.div
               key={tool.title}
-              className="group bg-muted/50 hover:bg-foreground flex w-80 shrink-0 flex-col rounded-xl px-6 pt-6 transition-colors duration-narrative sm:w-96 md:w-105"
+              className="group bg-muted/50 hover:bg-foreground flex w-80 shrink-0 flex-col rounded-xl px-6 pt-6 transition-colors duration-narrative motion-reduce:transform-none! motion-reduce:opacity-100! sm:w-96 md:w-105"
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: index * 0.1 }}
