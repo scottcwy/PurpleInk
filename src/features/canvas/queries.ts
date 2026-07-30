@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, or } from 'drizzle-orm'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb } from '@/lib/db/client'
 import {
@@ -12,10 +12,7 @@ import type { NodePosition } from './layout'
 import { canvasNodeTypeSchema } from './schemas'
 import { resolveExportSettings, type ExportSettings } from './export-settings'
 import type { CanvasNodeType, NodeStatus, Project } from './types'
-import {
-  ACTIVE_WORKFLOW_VERSION,
-  serializeWorkflowVersion,
-} from '@/lib/workflow/version'
+import { activeWorkflowVersionFor } from '@/lib/workflow/project-workflow-registry'
 import {
   parseDirectorError,
   parseExecutionNotice,
@@ -68,6 +65,7 @@ export async function listProjects(): Promise<Project[]> {
   return database
     .select({
       id: projects.id,
+      kind: projects.workflowKind,
       title: projects.title,
       script: projects.script,
       createdAt: projects.createdAt,
@@ -77,9 +75,19 @@ export async function listProjects(): Promise<Project[]> {
     .where(
       and(
         eq(projects.workspaceId, currentWorkspaceId()),
-        eq(
-          projects.workflowVersion,
-          serializeWorkflowVersion(ACTIVE_WORKFLOW_VERSION)
+        or(
+          and(
+            eq(projects.workflowKind, 'script'),
+            eq(projects.workflowVersion, activeWorkflowVersionFor('script'))
+          ),
+          and(
+            eq(projects.workflowKind, 'audio'),
+            eq(projects.workflowVersion, activeWorkflowVersionFor('audio'))
+          ),
+          and(
+            eq(projects.workflowKind, 'website'),
+            eq(projects.workflowVersion, activeWorkflowVersionFor('website'))
+          )
         )
       )
     )

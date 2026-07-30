@@ -26,4 +26,6 @@ export const NODE_LABEL: Record<CanvasGraphNode['type'], string> = {
   'shot-sfx': 'Audio 配音字幕',
   'shot-subtitle': 'Audio 配音字幕',
   'shot-qa': 'Finalize 验收',
+  'audio-transcribe': 'Ingest 录音转稿',
+  'website-stage': 'Website 受控执行',
 }

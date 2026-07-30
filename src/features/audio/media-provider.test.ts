@@ -199,7 +199,7 @@ describe('media provider dispatcher', () => {
       _input: ManagedAudioBillingInput<T>,
     ): Promise<T> => {
       billingCalls += 1
-      throw new Error('custom calls must not enter the managed ledger')
+      return _input.invoke()
     }
     const ttsDeps = {
       ...routedDependencies(CUSTOM_TTS_PROVIDER),
@@ -219,7 +219,7 @@ describe('media provider dispatcher', () => {
     }, asrDeps)
     expect(asrDeps.transcribeCustom).toHaveBeenCalledOnce()
     expect(result.alignmentSource).toBe('openai-compatible-asr-segment')
-    expect(billingCalls).toBe(0)
+    expect(billingCalls).toBe(2)
   })
 
   it('marks whole-clip alignment when the endpoint returns no timestamps', async () => {

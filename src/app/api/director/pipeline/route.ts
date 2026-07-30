@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { withApiSession } from '@/features/auth/api-session'
-import {
-  assertBillingAvailable,
-  QuotaExhaustedError,
-} from '@/features/billing'
 import { classifyWorkflowError } from '@/features/canvas'
 import {
   startProjectPipeline,
   stopProjectPipeline,
 } from '@/features/director/advance'
+import {
+  loadProjectWorkflowStartDescriptor,
+  ProjectWorkflowStartError,
+} from '@/features/projects'
 import { initQueue } from '@/lib/queue/init'
 
 export const dynamic = 'force-dynamic'
@@ -24,19 +24,18 @@ async function handlePost(request: Request) {
   const parsed = await parseRequest(request)
   if (!parsed.success) return parsed.response
   try {
-    await assertBillingAvailable()
+    const descriptor = await loadProjectWorkflowStartDescriptor(parsed.projectId)
+    if (descriptor.kind !== 'script') {
+      return scriptWorkflowRequiredResponse()
+    }
     await initQueue()
     const result = await startProjectPipeline(parsed.projectId)
     return NextResponse.json({ ok: true, ...result })
   } catch (error) {
-    if (error instanceof QuotaExhaustedError) {
+    if (error instanceof ProjectWorkflowStartError) {
       return NextResponse.json(
-        {
-          code: error.code,
-          resetAt: error.resetAt,
-          billingUrl: error.billingUrl,
-        },
-        { status: 402 },
+        { ok: false, code: error.code, error: error.message },
+        { status: error.statusCode },
       )
     }
     const projected = classifyWorkflowError(error, { stage: 'QUEUE' })
@@ -59,11 +58,21 @@ async function handleDelete(request: Request) {
   const parsed = await parseRequest(request)
   if (!parsed.success) return parsed.response
   try {
+    const descriptor = await loadProjectWorkflowStartDescriptor(parsed.projectId)
+    if (descriptor.kind !== 'script') {
+      return scriptWorkflowRequiredResponse()
+    }
     return NextResponse.json({
       ok: true,
       ...(await stopProjectPipeline(parsed.projectId)),
     })
   } catch (error) {
+    if (error instanceof ProjectWorkflowStartError) {
+      return NextResponse.json(
+        { ok: false, code: error.code, error: error.message },
+        { status: error.statusCode },
+      )
+    }
     return NextResponse.json(
       {
         ok: false,
@@ -72,6 +81,17 @@ async function handleDelete(request: Request) {
       { status: 404 }
     )
   }
+}
+
+function scriptWorkflowRequiredResponse(): NextResponse {
+  return NextResponse.json(
+    {
+      ok: false,
+      code: 'SCRIPT_WORKFLOW_REQUIRED',
+      error: '此旧入口仅支持文稿项目，请使用项目统一启动入口',
+    },
+    { status: 409 },
+  )
 }
 
 async function parseRequest(

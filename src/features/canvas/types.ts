@@ -1,10 +1,15 @@
+import type { ProjectWorkflowKind } from '@/lib/workflow/project-workflow-registry'
+
 export interface Project {
   id: string
+  kind: ProjectWorkflowKind
   title: string
   script: string
   createdAt: Date
   updatedAt: Date
 }
+
+export type { ProjectWorkflowKind }
 
 export type GlobalCanvasNodeType = 'script-import' | 'shot-split' | 'score' | 'export'
 
@@ -15,7 +20,12 @@ export type ShotLaneNodeType =
   | 'shot-subtitle'
   | 'shot-qa'
 
-export type CanvasNodeType = GlobalCanvasNodeType | ShotLaneNodeType
+/** 只有这些节点进入 Director 的模型路由；来源节点由各自工作流适配器执行。 */
+export type DirectorCanvasNodeType = GlobalCanvasNodeType | ShotLaneNodeType
+
+export type WorkflowSourceNodeType = 'audio-transcribe' | 'website-stage'
+
+export type CanvasNodeType = DirectorCanvasNodeType | WorkflowSourceNodeType
 
 export type NodeStatus =
   | 'idle'

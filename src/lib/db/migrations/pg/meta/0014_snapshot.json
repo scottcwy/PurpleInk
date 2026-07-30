@@ -1,5 +1,5 @@
 {
-  "id": "c5c9a7c9-85bf-4806-a7fe-b57f2c884f67",
+  "id": "05ab7d9b-5f02-4e51-9829-eff8bfda20c2",
   "prevId": "f9a40e9b-a971-4513-9f8c-a3c4c39279db",
   "version": "7",
   "dialect": "postgresql",
@@ -2148,6 +2148,99 @@
       },
       "isRLSEnabled": false
     },
+    "public.provider_pool_states": {
+      "name": "provider_pool_states",
+      "schema": "",
+      "columns": {
+        "scope_key": {
+          "name": "scope_key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "current_concurrency": {
+          "name": "current_concurrency",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 8
+        },
+        "max_concurrency": {
+          "name": "max_concurrency",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 50
+        },
+        "last_actor_user_id": {
+          "name": "last_actor_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "clean_since": {
+          "name": "clean_since",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_since_adjustment": {
+          "name": "completed_since_adjustment",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "failure_count": {
+          "name": "failure_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "last_adjusted_at": {
+          "name": "last_adjusted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "provider_pool_states_scope_key_check": {
+          "name": "provider_pool_states_scope_key_check",
+          "value": "length(\"provider_pool_states\".\"scope_key\") = 64"
+        },
+        "provider_pool_states_current_concurrency_check": {
+          "name": "provider_pool_states_current_concurrency_check",
+          "value": "\"provider_pool_states\".\"current_concurrency\" >= 1"
+        },
+        "provider_pool_states_max_concurrency_check": {
+          "name": "provider_pool_states_max_concurrency_check",
+          "value": "\"provider_pool_states\".\"max_concurrency\" >= \"provider_pool_states\".\"current_concurrency\""
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.rate_card_units": {
       "name": "rate_card_units",
       "schema": "",
@@ -2652,142 +2745,6 @@
         "redemption_codes_consumption_check": {
           "name": "redemption_codes_consumption_check",
           "value": "(\"redemption_codes\".\"consumed_by_workspace_id\" is null) = (\"redemption_codes\".\"consumed_at\" is null)"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.render_jobs": {
-      "name": "render_jobs",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "input": {
-          "name": "input",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'queued'"
-        },
-        "phase": {
-          "name": "phase",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'queued'"
-        },
-        "error": {
-          "name": "error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "elapsed_sec": {
-          "name": "elapsed_sec",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "duration_sec": {
-          "name": "duration_sec",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "check_passed": {
-          "name": "check_passed",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "golden_verified": {
-          "name": "golden_verified",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "logs": {
-          "name": "logs",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "render_jobs_created_idx": {
-          "name": "render_jobs_created_idx",
-          "columns": [
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": false,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "render_jobs_status_idx": {
-          "name": "render_jobs_status_idx",
-          "columns": [
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "render_jobs_status_check": {
-          "name": "render_jobs_status_check",
-          "value": "\"render_jobs\".\"status\" in ('queued', 'running', 'done', 'failed')"
-        },
-        "render_jobs_kind_check": {
-          "name": "render_jobs_kind_check",
-          "value": "\"render_jobs\".\"kind\" in ('url', 'capture')"
         }
       },
       "isRLSEnabled": false
@@ -3339,13 +3296,6 @@
           "notNull": true,
           "default": "'active'"
         },
-        "role": {
-          "name": "role",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'user'"
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -3387,13 +3337,185 @@
           "name": "users_status_check",
           "value": "\"users\".\"status\" in ('active', 'disabled')"
         },
-        "users_role_check": {
-          "name": "users_role_check",
-          "value": "\"users\".\"role\" in ('user', 'admin')"
-        },
         "users_email_shape_check": {
           "name": "users_email_shape_check",
           "value": "position('@' in \"users\".\"email\") > 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.workflow_concurrency_leases": {
+      "name": "workflow_concurrency_leases",
+      "schema": "",
+      "columns": {
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "work_unit_key": {
+          "name": "work_unit_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "plan_key": {
+          "name": "plan_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'waiting'"
+        },
+        "requested_at": {
+          "name": "requested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "not_before": {
+          "name": "not_before",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "activated_at": {
+          "name": "activated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_expires_at": {
+          "name": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "released_at": {
+          "name": "released_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "workflow_concurrency_leases_workspace_status_idx": {
+          "name": "workflow_concurrency_leases_workspace_status_idx",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "requested_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "workflow_concurrency_leases_workspace_id_workspaces_id_fk": {
+          "name": "workflow_concurrency_leases_workspace_id_workspaces_id_fk",
+          "tableFrom": "workflow_concurrency_leases",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "workflow_concurrency_leases_actor_user_id_users_id_fk": {
+          "name": "workflow_concurrency_leases_actor_user_id_users_id_fk",
+          "tableFrom": "workflow_concurrency_leases",
+          "tableTo": "users",
+          "columnsFrom": [
+            "actor_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "workflow_concurrency_leases_project_fk": {
+          "name": "workflow_concurrency_leases_project_fk",
+          "tableFrom": "workflow_concurrency_leases",
+          "tableTo": "projects",
+          "columnsFrom": [
+            "workspace_id",
+            "project_id"
+          ],
+          "columnsTo": [
+            "workspace_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "workflow_concurrency_leases_pkey": {
+          "name": "workflow_concurrency_leases_pkey",
+          "columns": [
+            "workspace_id",
+            "work_unit_key"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "workflow_concurrency_leases_status_check": {
+          "name": "workflow_concurrency_leases_status_check",
+          "value": "\"workflow_concurrency_leases\".\"status\" in ('waiting', 'active', 'released', 'cancelled', 'expired')"
+        },
+        "workflow_concurrency_leases_plan_check": {
+          "name": "workflow_concurrency_leases_plan_check",
+          "value": "\"workflow_concurrency_leases\".\"plan_key\" in ('free', 'plus', 'pro', 'max')"
         }
       },
       "isRLSEnabled": false

@@ -19,6 +19,7 @@ import { validateGeminiKey } from './gemini-adapter'
 import { validateMimoKey } from './mimo-adapter'
 import { validateKey as validateStepfunKey } from './stepfun-adapter'
 import type { ManagedProviderId } from './managed-service'
+import { createAuditedValidationFetcher } from './validation-fetch'
 
 /**
  * 先验证后保存的全部闸门（AGENTS §7）。返回 `ok: true` 才允许调用
@@ -58,12 +59,24 @@ export async function validateProviderSettings(
   }
 
   if (input.customOpenAi) {
-    const validated = await validateOpenAiCompatibleProfile(input.customOpenAi)
+    const validated = await validateOpenAiCompatibleProfile(
+      input.customOpenAi,
+      createAuditedValidationFetcher({
+        provider: 'openai-compatible',
+        funding: 'custom',
+      }),
+    )
     if (!validated.ok) return customOpenAiValidationError(validated)
   }
 
   if (input.customOpenAiTts) {
-    const validated = await validateTtsProfile(input.customOpenAiTts)
+    const validated = await validateTtsProfile(
+      input.customOpenAiTts,
+      createAuditedValidationFetcher({
+        provider: 'openai-compatible-tts',
+        funding: 'custom',
+      }),
+    )
     if (!validated.ok) {
       return reject(
         422,
@@ -74,7 +87,13 @@ export async function validateProviderSettings(
   }
 
   if (input.customOpenAiAsr) {
-    const validated = await validateAsrProfile(input.customOpenAiAsr)
+    const validated = await validateAsrProfile(
+      input.customOpenAiAsr,
+      createAuditedValidationFetcher({
+        provider: 'openai-compatible-asr',
+        funding: 'custom',
+      }),
+    )
     if (!validated.ok) return asrValidationError(validated)
     return {
       ok: true,
@@ -124,9 +143,13 @@ async function validateByok(
   provider: ManagedProviderId,
   apiKey: string,
 ): Promise<boolean> {
-  if (provider === 'stepfun') return validateStepfunKey(apiKey)
-  if (provider === 'gemini') return validateGeminiKey(apiKey)
-  return (await validateMimoKey(apiKey)).ok
+  const fetcher = createAuditedValidationFetcher({
+    provider,
+    funding: 'byok',
+  })
+  if (provider === 'stepfun') return validateStepfunKey(apiKey, fetcher)
+  if (provider === 'gemini') return validateGeminiKey(apiKey, {}, fetcher)
+  return (await validateMimoKey(apiKey, {}, fetcher)).ok
 }
 
 function providerLabel(provider: ManagedProviderId): string {

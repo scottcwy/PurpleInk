@@ -242,6 +242,47 @@ describe('director prompt templates', () => {
     expect(prompt).toContain('禁止为凑长度堆无意义代码')
   })
 
+  it('embeds motion density and the deterministic library whitelist in FABRICATE', () => {
+    const prompt = buildFabricatePrompt({ shot, audioAllocation, styleBible: '风格圣经' })
+    expect(prompt).toContain('可感知的运动')
+    expect(prompt).toContain('叠加多种动画效果')
+    expect(prompt).toContain('确定性动效库白名单')
+    expect(prompt).toContain('只能使用下列固定版本 CDN')
+    expect(prompt).toContain('SplitText')
+    expect(prompt).toContain('https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js')
+    expect(prompt).toContain('animation:false')
+    expect(prompt).toContain('禁止 Typed.js')
+    expect(prompt).toContain('three.js、p5.js、pixi.js、Babylon.js')
+    expect(prompt).toContain('只能被 seek(frame, fps) 单向驱动')
+    expect(prompt).toContain('除上述白名单 CDN 库外')
+    // 截帧兼容性 checklist
+    expect(prompt).toContain('截帧兼容性')
+    expect(prompt).toContain('禁止 video/audio 元素')
+    expect(prompt).toContain('preserveDrawingBuffer: true')
+    expect(prompt).toContain('loading="eager"')
+    expect(prompt).toContain(':hover/:focus')
+    expect(prompt).toContain('backdrop-filter')
+    // 新增段落全部位于静态规则区，不得侵入动态数据区破坏缓存前缀
+    const styleBibleAt = prompt.indexOf('style bible：')
+    expect(prompt.indexOf('确定性动效库白名单')).toBeLessThan(styleBibleAt)
+    expect(prompt.indexOf('截帧兼容性')).toBeLessThan(styleBibleAt)
+  })
+
+  it('plans motion density and capability categories in SHOT_SPEC', () => {
+    const prompt = buildShotSpecPrompt({
+      target: shotSpecTarget,
+      scriptUnits,
+      audioAllocation,
+      masterPlan: '导演总纲',
+      styleBible: '风格圣经',
+    })
+    expect(prompt).toContain('运动密度：')
+    expect(prompt).toContain('覆盖镜头全时长')
+    expect(prompt).toContain('能力规划：')
+    expect(prompt).toContain('在 capabilities 中声明能力类别')
+    expect(prompt).toContain('不得规划依赖 video、hover 或联网资源的效果')
+  })
+
   it('injects dark/light visual theme hard constraints into DIRECT and FABRICATE', () => {
     const darkDirect = buildDirectPrompt({
       projectTitle: '测试',

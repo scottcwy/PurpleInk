@@ -5,7 +5,12 @@ import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { ProgressBar } from '@/components/ui/progress-bar'
 import { StatusPill } from '@/components/ui/status-pill'
+import { UsageTrendChart } from '@/components/ui/usage-trend-chart'
 import { PRODUCTS_ROUTES } from '@/features/navigation/products-routes'
+import {
+  type AiUsageProjectionV1,
+  useAiUsageProjection,
+} from '@/features/usage/client'
 import { cn } from '@/lib/utils'
 import {
   clampUsagePercent,
@@ -102,9 +107,16 @@ export function BillingCanvasUsage({
 
 export function BillingDashboardUsage({
   projection,
+  usageProjection,
 }: {
   projection: BillingUiProjection
+  usageProjection: AiUsageProjectionV1 | null
 }) {
+  const usageState = useAiUsageProjection(
+    usageProjection,
+    'managed-cycle',
+    'cycle',
+  )
   const percent = clampUsagePercent(projection.usage.percent)
   const numberFormatter = new Intl.NumberFormat('en-US')
   const lastInvocation = projection.lastInvocationAt
@@ -117,8 +129,8 @@ export function BillingDashboardUsage({
       }).format(new Date(projection.lastInvocationAt))
     : '暂无调用'
   return (
-    <Card className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.7fr)]">
-      <div>
+    <Card className="grid min-w-0 gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.7fr)]">
+      <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-base font-semibold">本周期用量</h2>
           <StatusPill
@@ -135,6 +147,36 @@ export function BillingDashboardUsage({
           label={`已用 ${percent}%`}
           className="mt-5 w-full"
         />
+        <div className="mt-6 border-t border-ds-border pt-4">
+          <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold">周期累计额度</h3>
+              <p className="text-xs text-ds-text-muted">
+                仅按已结算平台托管成本换算百分比，不包含自己的 API。
+              </p>
+            </div>
+            <span className="text-xs text-ds-text-muted">
+              {usageState.status === 'loading' ? '按本地时区刷新中' : '0–100%'}
+            </span>
+          </div>
+          {usageState.projection ? (
+            <UsageTrendChart
+              variant="cumulative-line"
+              series={usageState.projection.series}
+            />
+          ) : (
+            <div className="flex min-h-32 items-center justify-center rounded-md border border-dashed border-ds-border px-4 text-center text-xs text-ds-text-muted">
+              {usageState.status === 'error'
+                ? '真实额度趋势暂不可用；未使用演示数据回退。'
+                : '正在读取真实额度趋势'}
+            </div>
+          )}
+          {usageState.projection && (
+            <p className="mt-2 text-xs text-ds-text-muted">
+              托管历史已包含；BYOK 历史缺失不影响本图。
+            </p>
+          )}
+        </div>
       </div>
       <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-ds-border bg-ds-border">
         <UsageDatum label="剩余额度" value={`${projection.usage.remainingPercent}%`} />

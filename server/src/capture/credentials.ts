@@ -23,6 +23,8 @@ export interface AgentCredentials {
   fetchEmailCode: () => Promise<{ code?: string; link?: string } | null>
 }
 
+export type CredentialMode = "legacy" | "public" | "none"
+
 const FIRST_NAMES = ["Alex", "Jordan", "Taylor", "Morgan", "Casey", "Riley", "Sam", "Jamie"]
 const LAST_NAMES = ["Lee", "Chen", "Kim", "Park", "Wang", "Smith", "Brown", "Davis"]
 
@@ -45,9 +47,16 @@ function strongPassword(): string {
  * 3. 以上都没有 → 返回 null，agent 不做登录/注册，仅采集公开内容。
  */
 export async function resolveCredentials(project: {
+  /** omit/legacy 保持原行为；public/none 明确禁用登录、注册与 IMAP。 */
+  credentialMode?: CredentialMode
   testEmail?: string | null
   testPassword?: string | null
 }): Promise<AgentCredentials | null> {
+  if (project.credentialMode === "public" || project.credentialMode === "none") {
+    logger.info("credentials:none", { reason: "public capture mode" })
+    return null
+  }
+
   // 注册/登录提交发生在采集中后段，验证邮件那时才到；以本凭据创建时间为下界，
   // 只读此后到达的邮件，避免拿到历史旧码。
   const startedAt = Date.now()

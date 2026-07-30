@@ -7,7 +7,12 @@ import {
   type DirectorModelTarget,
 } from './model-routing'
 import { PROVIDER_REGISTRY } from './provider-registry'
-import { managedUpstreamError } from './managed-service'
+import { withProviderDispatch } from './provider-dispatch'
+import {
+  providerErrorFromResponse,
+  providerNetworkError,
+  type ProviderFunding,
+} from './provider-request-error'
 
 export const VISION_QA_MAX_OUTPUT_TOKENS = 4_096
 
@@ -49,7 +54,11 @@ export interface ManagedVisionExecutorDependencies {
     model: string
     messages: VisionMessage[]
     maxOutputTokens: number
+    providerId: DirectorModelTarget['provider']
+    providerLabel: string
+    funding: ProviderFunding
   }): Promise<VisionCompletion>
+  dispatch: typeof withProviderDispatch
 }
 
 export async function executeManagedVisionQa(
@@ -76,13 +85,25 @@ export async function executeManagedVisionQa(
     )
   }
   try {
-    const completion = await dependencies.complete({
+    await handle.markProviderStarted?.()
+    const providerLabel = PROVIDER_REGISTRY[target.provider].label
+    const funding = target.funding ?? 'managed'
+    const completion = await dependencies.dispatch({
+      providerId: target.provider,
+      providerLabel,
+      funding,
+      apiKey,
+      attemptId: input.attemptId,
+    }, () => dependencies.complete({
       apiKey,
       baseUrl: target.baseUrl,
       model: target.modelId,
       messages,
       maxOutputTokens: VISION_QA_MAX_OUTPUT_TOKENS,
-    })
+      providerId: target.provider,
+      providerLabel,
+      funding,
+    }))
     if (!completion.content) {
       await settleVision(handle, completion, true)
       throw new Error('Vision 模型未返回报告')
@@ -94,7 +115,7 @@ export async function executeManagedVisionQa(
       content: completion.content,
     }
   } catch (error) {
-    await handle.settleUnavailable(true)
+    await handle.settleUnavailable(true, 'unknown')
     throw error
   }
 }
@@ -103,23 +124,43 @@ function defaultDependencies(): ManagedVisionExecutorDependencies {
   return {
     resolveTarget: () => resolveDirectorModelTarget('shot-qa', 'vision'),
     gateway: new ManagedAiGateway(),
+    dispatch: withProviderDispatch,
     complete: async (input) => {
-      const response = await fetch(
-        `${input.baseUrl.replace(/\/+$/, '')}/chat/completions`,
-        {
-          method: 'POST',
-          headers: {
-            authorization: `Bearer ${input.apiKey}`,
-            'content-type': 'application/json',
+      let response: Response
+      try {
+        response = await fetch(
+          `${input.baseUrl.replace(/\/+$/, '')}/chat/completions`,
+          {
+            method: 'POST',
+            headers: {
+              authorization: `Bearer ${input.apiKey}`,
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: input.model,
+              messages: input.messages,
+              max_tokens: input.maxOutputTokens,
+            }),
           },
-          body: JSON.stringify({
-            model: input.model,
-            messages: input.messages,
-            max_tokens: input.maxOutputTokens,
-          }),
-        },
-      )
-      if (!response.ok) throw managedUpstreamError(response.status)
+        )
+      } catch (cause) {
+        throw providerNetworkError({
+          providerId: input.providerId,
+          providerLabel: input.providerLabel,
+          operation: '视觉分析',
+          funding: input.funding,
+          cause,
+        })
+      }
+      if (!response.ok) {
+        throw providerErrorFromResponse({
+          response,
+          providerId: input.providerId,
+          providerLabel: input.providerLabel,
+          operation: '视觉分析',
+          funding: input.funding,
+        })
+      }
       const completion: unknown = await response.json()
       const parsed = parseCompletion(completion)
       return {

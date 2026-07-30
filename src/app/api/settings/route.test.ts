@@ -300,7 +300,10 @@ describe('POST /api/settings', () => {
     const response = await POST(request({ customOpenAiTts: input }))
 
     expect(response.status).toBe(200)
-    expect(mocks.validateTtsProfile).toHaveBeenCalledWith(input)
+    expect(mocks.validateTtsProfile).toHaveBeenCalledWith(
+      input,
+      expect.any(Function),
+    )
     expect(mocks.saveTtsProfile).toHaveBeenCalledWith(input, expect.anything())
     // media_routes.model 是设置页「当前模型」与执行侧的共同真值，必须跟着 profile 走。
     expect(mocks.saveMediaRoute).toHaveBeenCalledWith(expect.objectContaining({
@@ -438,7 +441,10 @@ describe('POST /api/settings', () => {
     const body = await response.json()
 
     expect(response.status).toBe(200)
-    expect(mocks.validateOpenAiCompatibleProfile).toHaveBeenCalledWith(input)
+    expect(mocks.validateOpenAiCompatibleProfile).toHaveBeenCalledWith(
+      input,
+      expect.any(Function),
+    )
     expect(mocks.saveOpenAiCompatibleProfile).toHaveBeenCalledWith(input, expect.anything())
     expect(body).not.toContain('candidate-secret')
   })
@@ -616,12 +622,12 @@ describe('POST /api/settings lane quotas (ISSUE-011)', () => {
 
   it('persists valid lane quotas and signals requiresRestart=true', async () => {
     const response = await POST(request({
-      laneQuotas: { directorStageConcurrency: 4, renderShotConcurrency: 2 },
+      laneQuotas: { renderShotConcurrency: 2 },
     }))
 
     expect(response.status).toBe(200)
     expect(mocks.saveLaneQuotas).toHaveBeenCalledWith({
-      directorStage: 4,
+      directorStage: 12,
       renderShot: 2,
     })
     const body = await response.json()
@@ -653,7 +659,7 @@ describe('POST /api/settings lane quotas (ISSUE-011)', () => {
 
   it('rejects renderShotConcurrency=-1 with 400', async () => {
     const response = await POST(request({
-      laneQuotas: { directorStageConcurrency: 4, renderShotConcurrency: -1 },
+      laneQuotas: { renderShotConcurrency: -1 },
     }))
 
     expect(response.status).toBe(400)
@@ -680,7 +686,7 @@ describe('POST /api/settings lane quotas (ISSUE-011)', () => {
 
   it('rejects renderShotConcurrency=5 (over runtime CPU count=4) with 400', async () => {
     const response = await POST(request({
-      laneQuotas: { directorStageConcurrency: 4, renderShotConcurrency: 5 },
+      laneQuotas: { renderShotConcurrency: 5 },
     }))
 
     expect(response.status).toBe(400)
@@ -694,7 +700,7 @@ describe('POST /api/settings lane quotas (ISSUE-011)', () => {
     mocks.validateKey.mockResolvedValue(false)
     const response = await POST(request({
       apiKey: 'sk-invalid',
-      laneQuotas: { directorStageConcurrency: 4, renderShotConcurrency: 2 },
+      laneQuotas: { renderShotConcurrency: 2 },
     }))
 
     expect(response.status).toBe(422)
@@ -706,7 +712,7 @@ describe('POST /api/settings lane quotas (ISSUE-011)', () => {
     mocks.validateKey.mockResolvedValue(true)
     const response = await POST(request({
       apiKey: 'sk-valid',
-      laneQuotas: { directorStageConcurrency: 4, renderShotConcurrency: 2 },
+      laneQuotas: { renderShotConcurrency: 2 },
     }))
 
     expect(response.status).toBe(422)

@@ -1,6 +1,9 @@
 import 'server-only'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
-import { saveLaneQuotas } from '@/lib/queue/runtime-config'
+import {
+  describeLaneQuotas,
+  saveLaneQuotas,
+} from '@/lib/queue/runtime-config'
 import { getAiConfigDependencies, resolveProviderFunding } from './config'
 import { ManagedAiError } from './managed-service'
 import { saveDirectorRoutes } from './model-routing'
@@ -111,8 +114,9 @@ export async function applyProviderSettings(
     await resyncMediaRoute('asr', CUSTOM_ASR_PROVIDER, customOpenAiAsr.model)
   }
   if (laneQuotas) {
+    const current = await describeLaneQuotas()
     await saveLaneQuotas({
-      directorStage: laneQuotas.directorStageConcurrency,
+      directorStage: current.directorStage.value,
       renderShot: laneQuotas.renderShotConcurrency,
     })
   }

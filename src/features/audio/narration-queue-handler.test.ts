@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
 import type { QueueAdapter } from '@/lib/queue'
 import {
   enqueueMediaNarration,
@@ -86,6 +87,55 @@ describe('media narration queue', () => {
       })
     )
     expect(deps.advance).not.toHaveBeenCalled()
+  })
+
+  it('projects dispatch pacing as waiting and returns to running on retry', async () => {
+    const deps = dependencies()
+    const retryAt = new Date('2026-07-30T00:00:00.450Z')
+    const waitError = new ProviderDispatchWaitError({
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      funding: 'managed',
+      retryAt,
+      scopeKey: 'a'.repeat(64),
+      waitReason: 'pacing',
+    })
+    vi.mocked(deps.synthesize).mockRejectedValueOnce(waitError)
+
+    await expect(
+      runMediaNarrationJob({ projectId: 'project-1', nodeId: 'ingest-1' }, deps)
+    ).rejects.toBe(waitError)
+
+    expect(vi.mocked(deps.updateMediaState).mock.calls[0]).toEqual([
+      'ingest-1',
+      expect.objectContaining({ status: 'running' }),
+    ])
+    expect(vi.mocked(deps.updateMediaState).mock.calls[1]).toEqual([
+      'ingest-1',
+      {
+        status: 'waiting',
+        code: 'PROVIDER_POOL_WAIT',
+        message: '阶跃星辰正在等待可用调用窗口',
+        resumeAt: retryAt.toISOString(),
+        providerLabel: '阶跃星辰',
+      },
+    ])
+    expect(deps.persistResult).not.toHaveBeenCalled()
+    expect(deps.advance).not.toHaveBeenCalled()
+
+    await runMediaNarrationJob(
+      { projectId: 'project-1', nodeId: 'ingest-1' },
+      deps
+    )
+
+    expect(vi.mocked(deps.updateMediaState).mock.calls[2]).toEqual([
+      'ingest-1',
+      expect.objectContaining({ status: 'running' }),
+    ])
+    expect(vi.mocked(deps.updateMediaState).mock.calls[3]).toEqual([
+      'ingest-1',
+      expect.objectContaining({ status: 'ready', artifactId: 'media-artifact-1' }),
+    ])
   })
 
   it('registers and enqueues a dedicated queue kind on the INGEST aggregate', async () => {

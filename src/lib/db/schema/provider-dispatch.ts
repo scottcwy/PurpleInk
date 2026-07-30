@@ -72,3 +72,37 @@ export const providerDispatchCooldowns = pgTable(
     ),
   ],
 )
+
+/**
+ * 每个 Provider scope 的自适应在途并发状态。RPM 事实仍来自 provider_dispatches；
+ * 此表只保存控制器状态与上一轮公平调度的发起人。
+ */
+export const providerPoolStates = pgTable(
+  'provider_pool_states',
+  {
+    scopeKey: text('scope_key').primaryKey(),
+    provider: text('provider').notNull(),
+    currentConcurrency: integer('current_concurrency').default(8).notNull(),
+    maxConcurrency: integer('max_concurrency').default(50).notNull(),
+    lastActorUserId: uuid('last_actor_user_id'),
+    cleanSince: timestamp('clean_since', { withTimezone: true }).defaultNow().notNull(),
+    completedSinceAdjustment: integer('completed_since_adjustment').default(0).notNull(),
+    failureCount: integer('failure_count').default(0).notNull(),
+    lastAdjustedAt: timestamp('last_adjusted_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    check(
+      'provider_pool_states_scope_key_check',
+      sql`length(${table.scopeKey}) = 64`,
+    ),
+    check(
+      'provider_pool_states_current_concurrency_check',
+      sql`${table.currentConcurrency} >= 1`,
+    ),
+    check(
+      'provider_pool_states_max_concurrency_check',
+      sql`${table.maxConcurrency} >= ${table.currentConcurrency}`,
+    ),
+  ],
+)

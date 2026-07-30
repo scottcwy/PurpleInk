@@ -13,6 +13,7 @@ import {
   type NarrationEngine,
   type SynthesizedSpeech,
 } from './media-provider'
+import { ProviderDispatchWaitError } from '@/features/ai/provider-dispatch-wait-error'
 import type { Caption } from './types'
 import type { AudioBillingContext } from './managed-audio-billing'
 
@@ -37,6 +38,7 @@ const inputSchema = z
     units: z.array(unitSchema).min(1),
     voiceId: z.string().trim().min(1).optional(),
     concurrency: z.number().int().min(1).optional(),
+    staggerMs: z.number().int().min(0).optional(),
     billingContext: z.object({
       attemptId: z.string().min(1),
       invocationNo: z.number().int().min(1),
@@ -138,7 +140,16 @@ export async function synthesizeNarration(
     parsed.concurrency ?? NARRATION_CONCURRENCY,
     requests.length
   )
-  await Promise.all(Array.from({ length: lanes }, worker))
+  // 错开 worker 启动以削减首波 Provider pacing 碰撞；共享调度器仍是正确性边界。
+  // StepFun 的相邻请求窗口约 400ms；首个 worker 立即启动，后续每隔 450ms。
+  // TTS 单次约 5-7s，错开 1-2s 不影响总体并发效率。
+  const stagger = parsed.staggerMs ?? WORKER_STAGGER_MS
+  const laneResults = await Promise.allSettled(
+    Array.from({ length: lanes }, (_, index) =>
+      (index > 0 && stagger > 0 ? sleep(index * stagger) : Promise.resolve()).then(worker)
+    )
+  )
+  throwLaneFailure(laneResults)
   return { engine: engine.model, voice, units: units.map(requireUnit) }
 }
 
@@ -238,6 +249,25 @@ function assertUniqueUnitIds(units: readonly { unitId: string }[]): void {
   }
 }
 
+function throwLaneFailure(results: readonly PromiseSettledResult<void>[]): void {
+  const failures: unknown[] = []
+  for (const result of results) {
+    if (result.status === 'rejected') failures.push(result.reason)
+  }
+  const dispatchWait = failures.find(
+    (failure): failure is ProviderDispatchWaitError =>
+      failure instanceof ProviderDispatchWaitError
+  )
+  if (dispatchWait) throw dispatchWait
+  if (failures.length > 0) throw failures[0]
+}
+
+/**
+ * Worker 启动错开间隔。略大于 StepFun 的 minIntervalMs (400ms)，
+ * 只负责削减首波碰撞；预约前异步工作和跨 lane 请求仍由共享调度器排队。
+ */
+const WORKER_STAGGER_MS = 450
+
 function defaultDependencies(): NarrationDependencies {
   return {
     resolveEngine: resolveNarrationEngine,
@@ -246,4 +276,8 @@ function defaultDependencies(): NarrationDependencies {
     reuseAudio: reuseNarrationAudio,
     registerAudio: registerNarrationAudio,
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }

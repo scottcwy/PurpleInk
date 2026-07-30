@@ -405,8 +405,8 @@ runtime 失败补偿和 rejected 版本不再命中。
 普通自动重试又在同一速率窗口内继续出网，最终把一次可恢复的流量整形问题放大成批量失败，
 甚至推动 Provider 熔断。切换到额度更高的模型后链路正常，容易被误判成模型兼容性问题。
 
-**真实事故**：工作流的 `director-stage=12` 只限制本机 CPU 作业并发，不代表供应商 API 额度。
-StepFun 当前账户的约束是 `5 RPM`；并发、RPM、TPM 是三个独立维度。Autopilot 一次发现多个
+**真实事故**：工作流的 `director-stage` 只限制本机作业并发，不代表供应商 API 额度。
+并发、RPM、TPM 是三个独立维度。Autopilot 一次发现多个
 可执行节点后，旧实现会让它们直接同时出网，没有按共享凭据预留速率槽位。429 随后被当成普通
 Provider 失败，既消耗重试预算，又污染连续失败计数。
 
@@ -415,11 +415,17 @@ Provider 失败，既消耗重试预算，又污染连续失败计数。
 - 出网前必须按真实共享凭据进入 Provider 调度器。BYOK 的键为
   `workspace + provider + credential fingerprint`；平台托管凭据按 provider 跨 workspace
   共享预算。不得把本机 lane 并发数当成外部 RPM。
-- 并发、RPM、TPM 分开配置和记账。未知 BYOK 额度使用保守默认，并从真实 429 学习冷却窗口；
-  不得把“5 RPM”写成“并发 5”。
-- 429 优先遵循 `Retry-After`（秒数或 HTTP 日期），缺失时按滚动窗口计算下一可用时间并加入
-  小幅抖动。等待 attempt 必须是 `superseded -> queued`，节点保持 pending/queued，
-  不计普通重试预算、30 分钟失败预算或熔断失败次数。
+- Gemini、StepFun、MiMo 分别使用 `managed:gemini`、`managed:stepfun`、`managed:mimo`
+  独立池；Key 轮换不能产生新池。一家降速不得阻塞另一家。
+- 托管池硬滚动 60 秒保护线分别为 900 / 180 / 90，请求发送最小间隔分别为
+  80–88ms / 400–440ms / 800–880ms。RPM 与真实在途数分开记账。
+- 在途上限从 8 起步、最高 50。最近至少完成 20 次且连续 5 分钟稳定才增加 1；
+  真实 429 立即降 25%，503/网络/超时样本率超过 2% 同样降 25%。
+- 429 优先遵循 `Retry-After`（秒数或 HTTP 日期），缺失时按 2/4/8/16/30 秒退避并抖动。
+  调度器发送前发现的亚秒等待与真实外部 429 都必须把旧 attempt 置为
+  `superseded`，再创建 `attemptNo+1` 的延迟恢复记录；新记录继承
+  `queueMeta.ordinaryAttemptNo`，因此两者都不计普通重试或熔断失败次数。发送前等待
+  已释放本轮计费预留，禁止复用同一 attempt 及其已终态的 invocation。
 - 单任务累计限流等待最多 15 分钟；超过后才终态化为 `PROVIDER_RATE_LIMITED`。
   401/402/403/429/451、平台内部错误都不得推动熔断；只有真实 5xx、网络故障与上游超时计数。
 - 等待态使用 `executionNotice` 的安全投影，不弹失败对话框、不显示红色失败状态、不建议跳过
@@ -429,9 +435,10 @@ Provider 失败，既消耗重试预算，又污染连续失败计数。
   status、stage、attemptId、duration 与 retryAt。
 
 **已落地护栏**：`provider-dispatch.ts` 使用 PostgreSQL advisory lock 原子预留共享预算，
-`attempt-completion.ts` 将 429 延后为新 queued attempt，`provider-breaker.ts` 只统计真实外部
+`provider-pool-control.ts` 持久化自适应在途状态，`attempt-completion.ts` 区分发送前等待与真实
+429，`provider-breaker.ts` 只统计真实外部
 故障；`workflow-fault.ts`、`workflow-fault-display.ts` 与阶段对话框共同提供 v2 安全投影。
-PostgreSQL 测试锁定滚动 60 秒最多 5 次、共享托管预算、`Retry-After` 两种格式、重启后续跑、
+PostgreSQL 测试锁定三池隔离、硬滚动保护、共享托管预算、Key 轮换、公平轮转、重启后续跑、
 15 分钟终态上限和取消等待。迁移 journal 还必须保持 idx 与时间戳严格递增，并在迁移后核对
 目标表真实存在；否则 Drizzle 可能报告成功却因 journal 顺序跳过新 SQL。调度租约的创建、
 过期判断与释放时间统一使用 PostgreSQL 时钟，禁止混用应用时钟与数据库时钟导致租约提前过期。
@@ -495,6 +502,7 @@ UI 投影为未知问题并连续重试；数据库没有 `export-project` attem
 - [ ] Provider 耗时是否由进程单调时钟计算并写入 `provider_duration_ms`；是否错误使用应用与数据库墙钟差值。
 - [ ] 账本与公共投影是否都未持久化或返回 Prompt、消息正文、Tool 参数、凭据、原始 Provider 错误、隐藏推理、成本、哈希或内部调用 ID。
 - [ ] 真实产物证据：`artifacts.content_hash` 与磁盘字节 SHA-256 逐条核对一致。
+- [ ] `databaseNow` 等数据库时钟取值是否不依赖业务表有行；返回值是否经过 `instanceof Date` + `getTime()` 有效性双重验证；传入 Drizzle 算子前是否保证可序列化（模式 O）。
 
 真实证据的取法示例：
 
@@ -512,6 +520,102 @@ docker exec purpleink-dev-postgres-1 psql -U cvc -d cvc -A -t -F "|" -c `
 
 ---
 
+## 7.9 模式 O：databaseNow 返回非 Date 对象导致全阶段 TypeError
+
+**症状**：INGEST 模型调用成功、`director-ingest` 产物正常写入，但节点仍然报
+「执行遇到未知问题」。三次自动重试全部以同一个 TypeError 在数秒内失败，
+`errorName` 为 `TypeError`，attempt 耗时 5–11 秒（模型耗时约 5 秒后的
+剩余时间全在 post-commit 链路），AI 调用表中对应行状态为 `succeeded`。
+UI 投影为 `STAGE_FAILED`（阶段兜底），且同一进程的 dev log 可见
+`TypeError: value.toISOString is not a function` 以及重复的
+`Failed query: ... workflow_concurrency_leases` 错误。
+
+**真实事故**：`workspace-concurrency-context.ts` 的 `databaseNow` 通过
+`sql<Date | string>\`now()\`` 从 `workspace_entitlements` 表获取数据库时钟。
+当 ORM 结果映射返回的 `row.now` 既不满足 `instanceof Date`（跨 realm 或
+驱动映射异常），又不是可解析的 ISO 字符串时，`new Date(row.now)` 创建出
+`Invalid Date` 或非 Date 对象。随后该值被传入 `activePlan` 的
+`lte(startsAt, now)` / `gt(expiresAt, now)`——Drizzle 在序列化参数时调用
+`value.toISOString()` 失败抛出 TypeError。
+
+该 TypeError 发生在 `commitStageResult` → `materializeShotLanes` →
+`registerWorkflowSlotsInTransaction` → `activePlan` 路径，即模型产物
+已写入但分镜通道物化尚未提交的事务窗口内。由于外部事务回滚，泳道节点不入
+库，节点状态落到 `failed`；自动重试仍走同一条路径，每次都复现。
+
+**规则**：
+
+- 获取数据库时钟使用 `SELECT now()` 无表查询（`transaction.execute`），
+  不依赖任何业务表有行。
+- `databaseNow` 的返回值必须经过三层防御：`instanceof Date` + `getTime()`
+  有效性 → 字符串 `new Date(str)` 有效性 → 兜底 `new Date()`。
+- 任何 Date 值在传入 Drizzle `lte` / `gt` 等比较算子前，保证
+  `!Number.isNaN(date.getTime())`；否则应提前抛出明确业务错误，
+  不应落到阶段兜底的 `STAGE_FAILED`。
+- `workspace-concurrency-projection.ts` 内 `sql` 模板中嵌入
+  `gt(timestampColumn, dateValue)` 的用法改为显式 `.toISOString()` 字面量，
+  避免 ORM/Driver 序列化层的不确定性。
+- `in-process-queue.ts` 的 `[workflow-attempt]` 日志必须同时输出
+  `errorMessage`（截断 300 字符），确保 TypeError 等非 Provider 错误的
+  原始信息可追溯，不再只有 `errorName`。
+
+**已落地护栏**：`workspace-concurrency-context.ts` 的 `databaseNow` 使用
+无表 `SELECT now()` 与三层解析防御；`workspace-concurrency-projection.ts`
+改为显式 ISO 字符串参数；`in-process-queue.ts` 补齐 `errorMessage` 日志字段。
+
+---
+
+## 7.10 模式 P：并发音频任务被 Provider pacing 拒绝后形成失败或重试重叠
+
+**症状**：INGEST 成功、分镜脚本全部完成，但所有 shot-codegen 永久停在 idle。
+配音任务显示 failed；`ai_invocations` 表中第一条 TTS 调用成功（≥ 5s），
+同批其余调用全部在 22–50ms 内失败（`failure_kind: 'unknown'`）。
+重试三次后终态。`errorName` 为 `ManagedAiError`。
+
+**真实事故**：StepFun TTS 的托管池配置 `minIntervalMs: 400ms`（相邻请求间隔
+至少 400ms）。`NARRATION_CONCURRENCY = 4` 个 worker 同时发起 TTS，第一个获取
+调度租约成功，其余 3 个被 `nextProviderWindow` 的 pacing 规则拒绝，
+抛出 `ProviderDispatchWaitError`。
+
+`managed-audio-billing.ts` 的 `invoke()` catch 块把所有异常——包括
+`ProviderDispatchWaitError`——都包装为 `managedUpstreamError`，丢弃了原始的
+`retryAt` 与等待原因。队列层本有专门处理 `ProviderDispatchWaitError` 的
+调度逻辑（`scheduleProviderDispatchWait`，暂停后按 retryAt 恢复），但被
+包装干掉后只能按普通失败做指数退避重试，重试时统一模式再现→
+配音终态失败→ `isMediaReady` 永远返回 false→ shot-codegen 永久阻塞。
+
+**后续复发边界**：给旁白 worker 增加 `N * 450ms` 启动错峰只能缓解首波 TTS。
+真正的调度预约之前仍有缓存、计费预留与配置读取等异步步骤，后续 unit 可能重新聚拢；
+录音转写与旁白又处于独立 queue lane，但托管 StepFun 仍共享同一个 provider scope，
+因此 ASR 与 TTS 也会交叉碰撞。若旁白用 fail-fast `Promise.all`，一个 worker 抛出等待
+错误后其他 worker 仍继续执行，队列恢复的 attempt 会和旧 worker 重叠。若发送前等待
+复用同一 attempt，本轮 `releaseBeforeCall()` 已把计费 invocation 终态化，恢复执行却会
+再次命中同一个 invocation id，可能出现 Provider 已成功而账本仍为 released/cancelled。
+
+**规则**：
+
+- `ProviderDispatchWaitError` 是调度等待而非上游失败，不得被包装为
+  `managedUpstreamError`。必须透传让队列层用内置的 dispatch-wait 调度。
+- 托管音频计费层捕获 `invoke()` 异常前，必须先检查是否为
+  `ProviderDispatchWaitError`；若是，调用 `handle.releaseBeforeCall()` 释放
+  计费预留后直接重抛。
+- worker 启动错峰只是削峰，不是 Provider pacing 的正确性边界；所有 TTS / ASR
+  出网仍必须经过共享凭据对应的调度 scope。
+- 一组旁白 worker 必须先用 `Promise.allSettled` 排空所有已启动 lane，再向队列抛出
+  等待或失败；存在多个错误时优先抛 `ProviderDispatchWaitError`，避免旧执行与恢复
+  attempt 重叠。
+- 发送前等待必须 supersede 当前 attempt 并创建新的 attemptNo；新 checkpoint 保留
+  `ordinaryAttemptNo`，使等待不消耗普通失败预算，同时让计费层获得新的 invocation id。
+- 调度拒绝必须被工作流投影为安全的 `waiting`，而非 `failed`；只允许展示
+  `resumeAt` 与安全 provider label，不得持久化或返回原始 Provider 报文。
+
+**已落地护栏**：`managed-audio-billing.ts` 在 catch 块开头识别
+`ProviderDispatchWaitError` 并透传，不再包装为 `managedUpstreamError`；
+旁白 worker 排空、dispatch-wait 新 attempt、普通重试预算继承及安全等待投影由
+对应队列与音频测试锁定。
+
+---
+
 ## 9. 已知未修项
 
 当前无已确认而未修的代码/文档项。
@@ -522,7 +626,9 @@ docker exec purpleink-dev-postgres-1 psql -U cvc -d cvc -A -t -F "|" -c `
 读取错误（模式 D）、Pi 会话哈希失真（模式 G）、复合渲染队列丢失 attempt id 并
 污染 Provider 熔断（模式 I）、长模型调用被短租约误回收且遗留计费预留（模式 J）
 、静态门禁放过语法错误并重复复用坏 HTML（模式 K）、ASR 小数秒导致字幕结算失败
-（模式 L）、RPM 限流被普通重试与熔断放大（模式 M）——见各节「已落地护栏」。
+（模式 L）、RPM 限流被普通重试与熔断放大（模式 M）、databaseNow 非 Date 返回
+导致 post-commit TypeError（模式 O）、并发旁白调度等待被包装为上游失败导致
+配音永久失败（模式 P）——见各节「已落地护栏」。
 
 ---
 

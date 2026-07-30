@@ -89,6 +89,7 @@ describe('buildProductsDashboardView', () => {
 function project(id: string, title: string, updatedAt: string): Project {
   return {
     id,
+    kind: 'script',
     title,
     script: '',
     createdAt: new Date(updatedAt),

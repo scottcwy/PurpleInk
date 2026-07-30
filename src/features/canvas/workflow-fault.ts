@@ -77,10 +77,13 @@ export interface WorkflowBlock {
 }
 
 export interface WorkflowExecutionNotice {
-  code: 'PROVIDER_RATE_LIMITED'
+  code: 'PROVIDER_RATE_LIMITED' | 'PROVIDER_POOL_WAIT' | 'PLAN_CONCURRENCY_WAIT'
   message: string
   resumeAt: string
-  providerLabel: string
+  providerLabel?: string
+  active?: number
+  limit?: number
+  waiting?: number
 }
 
 interface ProviderErrorShape extends Error {

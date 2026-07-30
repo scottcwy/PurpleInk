@@ -3,15 +3,10 @@ import { and, eq } from 'drizzle-orm'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb } from '@/lib/db/client'
 import { projects } from '@/lib/db/schema/index'
-import {
-  ACTIVE_WORKFLOW_VERSION,
-  serializeWorkflowVersion,
-} from '@/lib/workflow/version'
+import { isActiveProjectWorkflow } from '@/lib/workflow/project-workflow-registry'
 
 export type ProjectCompatibility = 'supported' | 'legacy'
 export type ProjectRouteState = ProjectCompatibility | 'missing'
-
-const SUPPORTED_WORKFLOW_VERSION = serializeWorkflowVersion(ACTIVE_WORKFLOW_VERSION)
 
 export class UnsupportedProjectWorkflowError extends Error {
   readonly code = 'UNSUPPORTED_PROJECT_WORKFLOW'
@@ -27,7 +22,10 @@ export async function getProjectRouteState(
 ): Promise<ProjectRouteState> {
   const database = await getDb()
   const [row] = await database
-    .select({ workflowVersion: projects.workflowVersion })
+    .select({
+      kind: projects.workflowKind,
+      workflowVersion: projects.workflowVersion,
+    })
     .from(projects)
     .where(
       and(
@@ -36,7 +34,9 @@ export async function getProjectRouteState(
       )
     )
   if (!row) return 'missing'
-  return row.workflowVersion === SUPPORTED_WORKFLOW_VERSION ? 'supported' : 'legacy'
+  return isActiveProjectWorkflow(row.kind, row.workflowVersion)
+    ? 'supported'
+    : 'legacy'
 }
 
 export async function assertProjectWorkflowSupported(

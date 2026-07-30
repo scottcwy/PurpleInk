@@ -11,8 +11,13 @@ import {
   unique,
   uuid,
 } from 'drizzle-orm/pg-core'
+import {
+  PROJECT_WORKFLOW_KINDS,
+  type ProjectWorkflowKind,
+} from '@/lib/workflow/project-workflow-registry'
 
 export const PROJECT_STATUSES = ['active', 'archived'] as const
+export { PROJECT_WORKFLOW_KINDS }
 
 export interface VersionedPayload {
   schemaVersion: number
@@ -72,6 +77,10 @@ export const projects = pgTable(
     title: text('title').notNull(),
     script: text('script').notNull(),
     status: text('status').default('active').notNull(),
+    workflowKind: text('workflow_kind')
+      .$type<ProjectWorkflowKind>()
+      .default('script')
+      .notNull(),
     workflowVersion: text('workflow_version').notNull(),
     revision: bigint('revision', { mode: 'number' }).default(0).notNull(),
     exportSettings: jsonb('export_settings').$type<VersionedPayload>().notNull(),
@@ -88,6 +97,15 @@ export const projects = pgTable(
       'projects_status_check',
       sql`${table.status} in ('active', 'archived')`,
     ),
+    check(
+      'projects_workflow_kind_check',
+      sql`${table.workflowKind} in ('script', 'audio', 'website')`,
+    ),
     check('projects_revision_check', sql`${table.revision} >= 0`),
+    unique('projects_workspace_id_id_workflow_kind_unique').on(
+      table.workspaceId,
+      table.id,
+      table.workflowKind,
+    ),
   ],
 )

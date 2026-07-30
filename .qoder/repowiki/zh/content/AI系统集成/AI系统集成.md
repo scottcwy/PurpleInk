@@ -29,15 +29,26 @@
 - [src/features/audio/openai-compatible-audio-client.ts](file://src/features/audio/openai-compatible-audio-client.ts)
 - [src/features/audio/stepfun-audio-client.ts](file://src/features/audio/stepfun-audio-client.ts)
 - [src/features/audio/mimo-audio-client.ts](file://src/features/audio/mimo-audio-client.ts)
+- [src/features/director/runtime-artifact-reader.ts](file://src/features/director/runtime-artifact-reader.ts)
+- [src/features/ai/workspace-concurrency-context.ts](file://src/features/ai/workspace-concurrency-context.ts)
+- [src/features/ai/workspace-concurrency-projection.ts](file://src/features/ai/workspace-concurrency-projection.ts)
+- [src/features/ai/workspace-concurrency-release.ts](file://src/features/ai/workspace-concurrency-release.ts)
+- [src/features/ai/workspace-concurrency.ts](file://src/features/ai/workspace-concurrency.ts)
+- [src/features/ai/provider-dispatch-wait-error.ts](file://src/features/ai/provider-dispatch-wait-error.ts)
+- [src/features/ai/provider-dispatch-window.ts](file://src/features/ai/provider-dispatch-window.ts)
+- [src/features/ai/provider-dispatch.ts](file://src/features/ai/provider-dispatch.ts)
+- [src/features/ai/concurrency-rollout.ts](file://src/features/ai/concurrency-rollout.ts)
+- [src/features/ai/provider-pool-control.ts](file://src/features/ai/provider-pool-control.ts)
+- [src/features/ai/provider-pool-policy.ts](file://src/features/ai/provider-pool-policy.ts)
 </cite>
 
 ## 更新摘要
 **所做更改**   
-- 新增了熔断器机制章节，详细说明提供商故障检测与自动熔断策略
-- 更新了回退提供商系统，包含自动故障转移和降级路径配置
-- 增强了错误处理章节，新增熔断状态监控和恢复机制
-- 更新了架构图表，展示熔断器和回退机制的集成流程
-- 扩展了性能考虑部分，包含熔断对系统稳定性的影响分析
+- 新增并发控制系统，支持工作区级别的并发限制和资源隔离
+- 增强提供商调度机制，实现智能请求分发和负载均衡
+- 引入工作区并发投影系统，确保跨工作区的状态同步
+- 优化提供商池控制策略，提升资源利用率和响应性能
+- 改进并发回滚机制，支持渐进式并发能力部署
 
 ## 目录
 1. [简介](#简介)
@@ -45,17 +56,20 @@
 3. [核心组件](#核心组件)
 4. [架构总览](#架构总览)
 5. [详细组件分析](#详细组件分析)
-6. [熔断器与回退机制](#熔断器与回退机制)
-7. [依赖关系分析](#依赖关系分析)
-8. [性能考虑](#性能考虑)
-9. [故障排查指南](#故障排查指南)
-10. [结论](#结论)
-11. [附录](#附录)
+6. [并发控制系统](#并发控制系统)
+7. [提供商调度优化](#提供商调度优化)
+8. [工作区并发投影系统](#工作区并发投影系统)
+9. [熔断器与回退机制](#熔断器与回退机制)
+10. [依赖关系分析](#依赖关系分析)
+11. [性能考虑](#性能考虑)
+12. [故障排查指南](#故障排查指南)
+13. [结论](#结论)
+14. [附录](#附录)
 
 ## 简介
 本文件面向PurpleInk的AI集成子系统，系统性阐述Provider模式的设计与实现，包括统一的AI服务接口抽象、动态插件式注册机制、适配器设计以及配置管理。文档覆盖Gemini、Mimo、Stepfun与OpenAI兼容API等提供商的具体实现要点，解释凭据与路由策略的配置方式，说明错误处理与重试、超时、降级与熔断策略，并给出性能优化建议（缓存、批量、连接池）与扩展新提供商的开发指南。
 
-**最新更新**：系统已集成全面的熔断器和回退提供商系统，提供健壮的容错机制和自动故障转移能力，确保在高负载或外部服务异常时系统的稳定性和可用性。
+**最新更新**：系统已集成全面的熔断器和回退提供商系统，提供健壮的容错机制和自动故障转移能力，确保在高负载或外部服务异常时系统的稳定性和可用性。新增的工作区并发控制系统和提供商调度优化进一步提升了系统的并发处理能力和资源利用率。工作区并发投影系统确保了多租户环境下的状态同步和数据一致性。
 
 ## 项目结构
 AI能力集中在src/features/ai目录下，围绕"统一接口 + 注册表 + 路由 + 适配器"的组织方式展开；音频相关能力在src/features/audio中，提供各提供商的音频客户端实现。配置与设置应用逻辑分布在provider-settings-*系列文件中，确保配置的校验、投影与应用流程清晰可控。新增的独立配置文件模块（gemini-config.ts、mimo-config.ts、stepfun-adapter.ts）提供了更细粒度的配置管理能力。
@@ -80,10 +94,29 @@ OAI_AUD_PROF["OpenAI音频画像存储<br/>openai-compatible-audio-profile-store
 GEM_CFG["Gemini配置<br/>gemini-config.ts"]
 MIMO_CFG["Mimo配置<br/>mimo-config.ts"]
 end
+subgraph "并发控制系统"
+WCC["工作区并发上下文<br/>workspace-concurrency-context.ts"]
+WCP["工作区并发投影<br/>workspace-concurrency-projection.ts"]
+WCR["工作区并发释放<br/>workspace-concurrency-release.ts"]
+WC["工作区并发控制<br/>workspace-concurrency.ts"]
+PDC["提供商池控制<br/>provider-pool-control.ts"]
+PPC["提供商池策略<br/>provider-pool-policy.ts"]
+CR["并发回滚<br/>concurrency-rollout.ts"]
+end
+subgraph "提供商调度系统"
+PD["提供商调度<br/>provider-dispatch.ts"]
+PDW["调度等待错误<br/>provider-dispatch-wait-error.ts"]
+PDWIN["调度窗口<br/>provider-dispatch-window.ts"]
+end
 subgraph "音频特性层"
 OAI_AUDIO["OpenAI音频客户端<br/>openai-compatible-audio-client.ts"]
 STEP_AUDIO["Stepfun音频客户端<br/>stepfun-audio-client.ts"]
 MIMO_AUDIO["Mimo音频客户端<br/>mimo-audio-client.ts"]
+end
+subgraph "导演系统层"
+ART_READER["运行时工件读取器<br/>runtime-artifact-reader.ts"]
+RETRY["重试机制<br/>quality preservation"]
+STYLE_INJ["风格注入<br/>styleBibleToneExcerpt"]
 end
 REG --> AD_GEM
 REG --> AD_MIMO
@@ -99,6 +132,15 @@ OAI_AUD_CFG --> OAI_AUD_PROF
 OAI_CFG --> OAI_PROF
 GEM_CFG --> AD_GEM
 MIMO_CFG --> AD_MIMO
+WCC --> WCP
+WCP --> WCR
+WCR --> WC
+PDC --> PPC
+CR --> PDC
+PD --> PDW
+PD --> PDWIN
+ART_READER --> RETRY
+ART_READER --> STYLE_INJ
 ```
 
 图表来源
@@ -120,6 +162,17 @@ MIMO_CFG --> AD_MIMO
 - [src/features/audio/openai-compatible-audio-client.ts](file://src/features/audio/openai-compatible-audio-client.ts)
 - [src/features/audio/stepfun-audio-client.ts](file://src/features/audio/stepfun-audio-client.ts)
 - [src/features/audio/mimo-audio-client.ts](file://src/features/audio/mimo-audio-client.ts)
+- [src/features/director/runtime-artifact-reader.ts](file://src/features/director/runtime-artifact-reader.ts)
+- [src/features/ai/workspace-concurrency-context.ts](file://src/features/ai/workspace-concurrency-context.ts)
+- [src/features/ai/workspace-concurrency-projection.ts](file://src/features/ai/workspace-concurrency-projection.ts)
+- [src/features/ai/workspace-concurrency-release.ts](file://src/features/ai/workspace-concurrency-release.ts)
+- [src/features/ai/workspace-concurrency.ts](file://src/features/ai/workspace-concurrency.ts)
+- [src/features/ai/provider-dispatch-wait-error.ts](file://src/features/ai/provider-dispatch-wait-error.ts)
+- [src/features/ai/provider-dispatch-window.ts](file://src/features/ai/provider-dispatch-window.ts)
+- [src/features/ai/provider-dispatch.ts](file://src/features/ai/provider-dispatch.ts)
+- [src/features/ai/concurrency-rollout.ts](file://src/features/ai/concurrency-rollout.ts)
+- [src/features/ai/provider-pool-control.ts](file://src/features/ai/provider-pool-control.ts)
+- [src/features/ai/provider-pool-policy.ts](file://src/features/ai/provider-pool-policy.ts)
 
 章节来源
 - [src/features/ai/index.ts](file://src/features/ai/index.ts)
@@ -136,8 +189,13 @@ MIMO_CFG --> AD_MIMO
 - 音频客户端：为文本转语音等场景提供各提供商的专用客户端实现。
 - **熔断器**：监控提供商健康状态，在连续失败时自动熔断，防止级联故障。
 - **回退机制**：在主提供商不可用时自动切换到备用提供商，确保服务连续性。
+- **增强重试机制**：改进的导演系统重试机制，包含质量保留指令，确保输出质量的一致性。
+- **风格注入系统**：运行时工件读取器中的styleBibleToneExcerpt注入，提升内容风格一致性。
+- **并发控制系统**：工作区级别的并发限制和资源隔离，确保多租户环境下的资源公平分配。
+- **提供商调度系统**：智能请求分发和负载均衡，优化资源利用率和响应性能。
+- **工作区并发投影系统**：跨工作区的状态同步和数据一致性保证。
 
-**更新**：配置系统现在支持工作区级别的配置隔离，允许不同工作区使用不同的提供商配置和凭据。新增的熔断器和回退机制为系统提供了强大的容错能力。
+**更新**：配置系统现在支持工作区级别的配置隔离，允许不同工作区使用不同的提供商配置和凭据。新增的熔断器和回退机制为系统提供了强大的容错能力。导演系统的重试机制和质量保留指令进一步增强了系统的可靠性。**新增的并发控制系统和工作区并发投影系统显著提升了系统的并发处理能力和多租户支持能力。**
 
 章节来源
 - [src/features/ai/provider-registry.ts](file://src/features/ai/provider-registry.ts)
@@ -150,9 +208,13 @@ MIMO_CFG --> AD_MIMO
 - [src/features/ai/provider-settings-apply.ts](file://src/features/ai/provider-settings-apply.ts)
 - [src/features/ai/provider-breaker.ts](file://src/features/ai/provider-breaker.ts)
 - [src/features/ai/fallback-provider-store.ts](file://src/features/ai/fallback-provider-store.ts)
+- [src/features/director/runtime-artifact-reader.ts](file://src/features/director/runtime-artifact-reader.ts)
+- [src/features/ai/workspace-concurrency-context.ts](file://src/features/ai/workspace-concurrency-context.ts)
+- [src/features/ai/workspace-concurrency-projection.ts](file://src/features/ai/workspace-concurrency-projection.ts)
+- [src/features/ai/provider-dispatch.ts](file://src/features/ai/provider-dispatch.ts)
 
 ## 架构总览
-下图展示了从请求进入路由到最终调用具体提供商适配器的完整流程，以及配置与凭据的装配过程。新增的工作区上下文机制确保了多租户环境下的配置隔离，熔断器和回退机制提供了健壮的容错保障。
+下图展示了从请求进入路由到最终调用具体提供商适配器的完整流程，以及配置与凭据的装配过程。新增的工作区上下文机制确保了多租户环境下的配置隔离，熔断器和回退机制提供了健壮的容错保障。导演系统的重试机制和质量保留指令贯穿整个调用链。**新增的并发控制系统和提供商调度系统进一步优化了资源管理和请求分发效率。**
 
 ```mermaid
 sequenceDiagram
@@ -164,7 +226,14 @@ participant Registry as "提供者注册表<br/>provider-registry.ts"
 participant Target as "路由目标<br/>route-target.ts"
 participant Adapter as "适配器<br/>gemini/mimo/stepfun/openai"
 participant Config as "工作区配置<br/>config.ts"
+participant Retry as "重试机制<br/>quality preservation"
+participant ArtReader as "工件读取器<br/>runtime-artifact-reader.ts"
 participant Store as "配置/凭据存储"
+participant Concurrency as "并发控制<br/>workspace-concurrency.ts"
+participant Dispatch as "提供商调度<br/>provider-dispatch.ts"
+participant Projection as "并发投影<br/>workspace-concurrency-projection.ts"
+Caller->>Concurrency : "检查并发限制"
+Concurrency-->>Caller : "返回并发许可"
 Caller->>Router : "发起AI请求(含模型/任务类型)"
 Router->>Breaker : "检查熔断状态"
 Breaker-->>Router : "返回熔断决策"
@@ -177,11 +246,21 @@ Router->>Config : "获取工作区上下文配置"
 Config-->>Router : "返回工作区特定配置"
 Router->>Store : "读取凭据与依赖"
 Store-->>Router : "返回有效凭据"
+Router->>Dispatch : "执行提供商调度"
+Dispatch-->>Router : "返回调度结果"
+Router->>Retry : "应用质量保留指令"
+Retry-->>Router : "返回重试策略"
 Router->>Adapter : "调用统一接口(参数标准化)"
+Adapter-->>ArtReader : "处理运行时工件"
+ArtReader-->>Adapter : "注入风格信息"
+Adapter-->>Projection : "更新并发投影"
+Projection-->>Adapter : "返回投影状态"
 Adapter-->>Caller : "返回结果/流式片段"
 else 主提供商熔断
 Router->>Fallback : "获取回退提供商"
 Fallback-->>Router : "返回备用提供商"
+Router->>Retry : "应用降级重试策略"
+Retry-->>Router : "返回降级策略"
 Router->>Adapter : "调用备用适配器"
 Adapter-->>Caller : "返回降级结果"
 end
@@ -194,6 +273,10 @@ end
 - [src/features/ai/provider-registry.ts](file://src/features/ai/provider-registry.ts)
 - [src/features/ai/route-target.ts](file://src/features/ai/route-target.ts)
 - [src/features/ai/config.ts](file://src/features/ai/config.ts)
+- [src/features/director/runtime-artifact-reader.ts](file://src/features/director/runtime-artifact-reader.ts)
+- [src/features/ai/workspace-concurrency.ts](file://src/features/ai/workspace-concurrency.ts)
+- [src/features/ai/provider-dispatch.ts](file://src/features/ai/provider-dispatch.ts)
+- [src/features/ai/workspace-concurrency-projection.ts](file://src/features/ai/workspace-concurrency-projection.ts)
 
 ## 详细组件分析
 
@@ -205,6 +288,7 @@ end
   - 暴露健康检查与统计钩子，供路由与健康监控使用。
   - **新增**：支持工作区级别的适配器隔离，不同工作区可使用不同的适配器实例。
   - **增强**：集成熔断器状态监控，实时反映提供商健康度。
+  - **优化**：集成并发控制，避免资源竞争和过度消耗。
 - 扩展点：新增提供商只需实现统一接口并按约定注册即可。
 
 章节来源
@@ -218,6 +302,7 @@ end
   - 回退策略：主备切换与降级路径。
   - **新增**：工作区感知的路由策略，支持不同工作区的差异化路由规则。
   - **增强**：熔断器集成，自动跳过熔断中的提供商。
+  - **优化**：提供商调度集成，实现智能负载均衡。
 - 目标解析：将高层路由决策落地为具体适配器实例与调用参数。
 
 章节来源
@@ -289,6 +374,232 @@ end
 - [src/features/ai/openai-compatible-profile-store.ts](file://src/features/ai/openai-compatible-profile-store.ts)
 - [src/features/ai/openai-compatible-audio-profile-store.ts](file://src/features/ai/openai-compatible-audio-profile-store.ts)
 - [src/features/ai/openai-compatible-config.ts](file://src/features/ai/openai-compatible-config.ts)
+
+### 运行时工件读取器与风格注入
+- **增强功能**：runtime-artifact-reader.ts现在支持styleBibleToneExcerpt注入到评分和音效分支。
+- **质量保留**：通过改进的重试机制确保输出质量的一致性。
+- **风格一致性**：自动注入风格信息，提升内容生成的风格统一性。
+- **智能分支处理**：根据不同分支类型（评分、音效）应用相应的风格注入策略。
+
+**更新**：运行时工件读取器现在能够智能识别和处理不同类型的分支，自动注入相应的风格信息，确保内容生成的一致性和高质量。
+
+章节来源
+- [src/features/director/runtime-artifact-reader.ts](file://src/features/director/runtime-artifact-reader.ts)
+
+## 并发控制系统
+
+### 工作区并发上下文管理
+工作区并发上下文是并发控制系统的核心组件，负责管理每个工作区的并发限制和资源分配。
+
+- **并发限制**：
+  - 基于工作区ID的并发计数
+  - 可配置的并发上限和阈值
+  - 动态调整并发限制以适应负载变化
+- **资源隔离**：
+  - 工作区级别的资源隔离
+  - 防止资源竞争和相互干扰
+  - 公平的资源共享机制
+- **状态同步**：
+  - 实时并发状态监控
+  - 跨工作区的状态同步
+  - 并发状态的持久化和恢复
+
+### 提供商池控制策略
+提供商池控制负责管理提供商实例的生命周期和资源分配。
+
+- **池化管理**：
+  - 提供商实例的创建、销毁和复用
+  - 连接池和线程池的统一管理
+  - 资源使用的监控和优化
+- **负载均衡**：
+  - 智能的请求分发策略
+  - 基于性能的动态权重调整
+  - 故障检测和自动切换
+- **容量规划**：
+  - 基于历史数据的容量预测
+  - 弹性扩缩容支持
+  - 资源使用率的优化
+
+```mermaid
+stateDiagram-v2
+[*] --> 空闲状态 : 初始状态
+空闲状态 --> 活跃状态 : 接收请求
+活跃状态 --> 繁忙状态 : 达到并发上限
+繁忙状态 --> 排队状态 : 超过最大队列长度
+排队状态 --> 活跃状态 : 获得并发许可
+排队状态 --> 拒绝状态 : 队列超时
+活跃状态 --> 空闲状态 : 请求完成
+繁忙状态 --> 活跃状态 : 并发数下降
+拒绝状态 --> 空闲状态 : 清理资源
+note right of 空闲状态 : 无活动请求<br/>资源闲置
+note right of 活跃状态 : 处理中请求<br/>正常响应
+note right of 繁忙状态 : 高负载状态<br/>需要限流
+note right of 排队状态 : 请求排队<br/>等待资源
+note right of 拒绝状态 : 资源不足<br/>快速失败
+```
+
+图表来源
+- [src/features/ai/workspace-concurrency-context.ts](file://src/features/ai/workspace-concurrency-context.ts)
+- [src/features/ai/provider-pool-control.ts](file://src/features/ai/provider-pool-control.ts)
+- [src/features/ai/provider-pool-policy.ts](file://src/features/ai/provider-pool-policy.ts)
+
+### 并发回滚机制
+并发回滚机制确保在并发控制过程中出现异常时能够快速恢复到稳定状态。
+
+- **回滚触发条件**：
+  - 并发控制异常
+  - 资源分配失败
+  - 状态同步错误
+- **回滚策略**：
+  - 原子性操作保证
+  - 部分回滚支持
+  - 状态一致性验证
+- **恢复机制**：
+  - 自动恢复检测
+  - 手动干预支持
+  - 恢复过程监控
+
+章节来源
+- [src/features/ai/workspace-concurrency-context.ts](file://src/features/ai/workspace-concurrency-context.ts)
+- [src/features/ai/provider-pool-control.ts](file://src/features/ai/provider-pool-control.ts)
+- [src/features/ai/concurrency-rollout.ts](file://src/features/ai/concurrency-rollout.ts)
+
+## 提供商调度优化
+
+### 智能请求分发
+提供商调度系统实现了智能化的请求分发和负载均衡机制。
+
+- **分发策略**：
+  - 基于性能的动态选择
+  - 健康状态感知的路由
+  - 工作区特定的分发规则
+- **负载均衡**：
+  - 轮询和加权算法
+  - 连接池的智能分配
+  - 热点请求的分散处理
+- **故障转移**：
+  - 自动故障检测
+  - 无缝故障转移
+  - 降级策略执行
+
+### 调度窗口管理
+调度窗口管理负责控制请求的处理时间和资源占用。
+
+- **时间窗口**：
+  - 请求处理的超时控制
+  - 资源占用的时间限制
+  - 窗口大小的动态调整
+- **资源窗口**：
+  - 内存和CPU使用限制
+  - 网络带宽的合理分配
+  - 存储资源的配额管理
+- **并发窗口**：
+  - 并发请求的数量控制
+  - 长尾请求的优先级管理
+  - 紧急请求的快速通道
+
+```mermaid
+flowchart TD
+A["请求到达"] --> B{"检查调度窗口"}
+B --> |窗口可用| C["选择提供商"]
+B --> |窗口已满| D["进入等待队列"]
+C --> E["执行请求"]
+E --> F{"请求成功?"}
+F --> |是| G["更新调度统计"]
+F --> |否| H["触发故障转移"]
+H --> I["选择备用提供商"]
+I --> J["重试请求"]
+G --> K["返回结果"]
+J --> L{"重试成功?"}
+L --> |是| K
+L --> |否| M["标记提供商不可用"]
+D --> N{"等待超时?"}
+N --> |否| B
+N --> |是| O["返回超时错误"]
+```
+
+图表来源
+- [src/features/ai/provider-dispatch.ts](file://src/features/ai/provider-dispatch.ts)
+- [src/features/ai/provider-dispatch-window.ts](file://src/features/ai/provider-dispatch-window.ts)
+- [src/features/ai/provider-dispatch-wait-error.ts](file://src/features/ai/provider-dispatch-wait-error.ts)
+
+章节来源
+- [src/features/ai/provider-dispatch.ts](file://src/features/ai/provider-dispatch.ts)
+- [src/features/ai/provider-dispatch-window.ts](file://src/features/ai/provider-dispatch-window.ts)
+- [src/features/ai/provider-dispatch-wait-error.ts](file://src/features/ai/provider-dispatch-wait-error.ts)
+
+## 工作区并发投影系统
+
+### 并发状态投影
+工作区并发投影系统负责维护和同步跨工作区的并发状态。
+
+- **状态投影**：
+  - 并发计数的实时投影
+  - 资源使用情况的快照
+  - 性能指标的聚合计算
+- **同步机制**：
+  - 分布式锁保证一致性
+  - 事件驱动的增量更新
+  - 冲突检测和解决策略
+- **持久化存储**：
+  - 并发状态的持久化
+  - 历史数据的归档
+  - 状态恢复和重建
+
+### 跨工作区协调
+跨工作区协调确保多个工作区之间的并发控制和资源分配协调一致。
+
+- **协调策略**：
+  - 全局并发限制
+  - 工作区间的资源配额
+  - 优先级和抢占机制
+- **通信机制**：
+  - 工作区间的事件广播
+  - 状态变更的通知
+  - 协调协议的实现
+- **一致性保证**：
+  - 最终一致性模型
+  - 冲突检测和解决
+  - 数据完整性验证
+
+```mermaid
+graph LR
+subgraph "工作区A"
+A1["并发计数器"]
+A2["资源管理器"]
+A3["状态投影"]
+end
+subgraph "工作区B"
+B1["并发计数器"]
+B2["资源管理器"]
+B3["状态投影"]
+end
+subgraph "协调中心"
+C1["全局状态"]
+C2["协调器"]
+C3["同步器"]
+end
+A1 --> A3
+A2 --> A3
+B1 --> B3
+B2 --> B3
+A3 --> C1
+B3 --> C1
+C1 --> C2
+C2 --> C3
+C3 --> A3
+C3 --> B3
+```
+
+图表来源
+- [src/features/ai/workspace-concurrency-projection.ts](file://src/features/ai/workspace-concurrency-projection.ts)
+- [src/features/ai/workspace-concurrency-release.ts](file://src/features/ai/workspace-concurrency-release.ts)
+- [src/features/ai/workspace-concurrency.ts](file://src/features/ai/workspace-concurrency.ts)
+
+章节来源
+- [src/features/ai/workspace-concurrency-projection.ts](file://src/features/ai/workspace-concurrency-projection.ts)
+- [src/features/ai/workspace-concurrency-release.ts](file://src/features/ai/workspace-concurrency-release.ts)
+- [src/features/ai/workspace-concurrency.ts](file://src/features/ai/workspace-concurrency.ts)
 
 ## 熔断器与回退机制
 
@@ -373,6 +684,9 @@ note right of 半开状态 : 测试恢复<br/>渐进式恢复
 - **新增工作区依赖链**：配置模块现在依赖于工作区上下文，支持动态配置加载。
 - **熔断器依赖**：熔断器依赖监控数据和配置，不影响核心业务逻辑。
 - **回退机制依赖**：回退存储依赖配置和持久化层，提供可靠的备用提供商管理。
+- **重试机制依赖**：导演系统的重试机制依赖质量保留指令和工件读取器。
+- **并发控制依赖**：并发控制系统依赖工作区上下文和提供商池管理。
+- **调度系统依赖**：提供商调度依赖负载均衡算法和故障检测机制。
 
 ```mermaid
 classDiagram
@@ -411,6 +725,34 @@ class 配置系统 {
 +应用(配置) void
 +工作区上下文() 工作区配置
 }
+class 重试机制 {
++应用质量指令() 重试策略
++处理失败() 降级策略
++监控质量() 质量指标
+}
+class 工件读取器 {
++读取工件() 工件数据
++注入风格() 风格信息
++处理分支() 分支策略
+}
+class 并发控制 {
++检查并发() 布尔
++获取许可() 许可
++释放许可() void
++监控状态() 状态
+}
+class 提供商调度 {
++分发请求() 提供商
++负载均衡() 策略
++故障转移() 提供商
++监控性能() 指标
+}
+class 工作区投影 {
++投影状态() 状态
++同步状态() void
++监听变更() 事件
++恢复状态() 状态
+}
 class Gemini配置 {
 +工作区设置() 配置
 +凭据管理() 凭据
@@ -431,6 +773,11 @@ class OpenAI负载映射
 熔断器 --> 注册表 : "更新状态"
 回退存储 --> 路由 : "提供备用"
 配置系统 --> 注册表 : "应用"
+重试机制 --> 路由 : "增强"
+工件读取器 --> 重试机制 : "支持"
+并发控制 --> 注册表 : "限制"
+提供商调度 --> 路由 : "优化"
+工作区投影 --> 并发控制 : "同步"
 Gemini配置 --> 配置系统 : "继承"
 Mimo配置 --> 配置系统 : "继承"
 OpenAI兼容配置 --> OpenAI负载映射 : "生成"
@@ -451,6 +798,10 @@ Stepfun适配器 ..|> 统一接口
 - [src/features/ai/openai-compatible-payloads.ts](file://src/features/ai/openai-compatible-payloads.ts)
 - [src/features/ai/gemini-config.ts](file://src/features/ai/gemini-config.ts)
 - [src/features/ai/mimo-config.ts](file://src/features/ai/mimo-config.ts)
+- [src/features/director/runtime-artifact-reader.ts](file://src/features/director/runtime-artifact-reader.ts)
+- [src/features/ai/workspace-concurrency-context.ts](file://src/features/ai/workspace-concurrency-context.ts)
+- [src/features/ai/provider-dispatch.ts](file://src/features/ai/provider-dispatch.ts)
+- [src/features/ai/workspace-concurrency-projection.ts](file://src/features/ai/workspace-concurrency-projection.ts)
 
 章节来源
 - [src/features/ai/provider-registry.ts](file://src/features/ai/provider-registry.ts)
@@ -475,6 +826,22 @@ Stepfun适配器 ..|> 统一接口
   - 预加载备用提供商配置
   - 智能回退选择，减少不必要的切换
   - 回退结果缓存，提升后续请求性能
+- **重试机制优化**：
+  - 质量保留指令减少无效重试
+  - 智能退避策略避免雪崩效应
+  - 并行重试提升整体吞吐量
+- **工件读取优化**：
+  - 缓存风格信息减少重复计算
+  - 分支预测优化处理路径
+  - 增量更新减少IO开销
+- **并发控制优化**：
+  - 无锁并发数据结构提升性能
+  - 批量操作减少锁竞争
+  - 异步处理避免阻塞
+- **调度系统优化**：
+  - 智能负载均衡算法
+  - 缓存热点提供商信息
+  - 预取和预连接优化
 
 [本节为通用指导，不直接分析具体文件]
 
@@ -486,29 +853,42 @@ Stepfun适配器 ..|> 统一接口
   - **新增工作区级错误**：配置加载失败、工作区上下文缺失、凭据不匹配。
   - **熔断器错误**：熔断状态异常、探测失败、恢复失败。
   - **回退错误**：回退提供商不可用、回退策略失效、回退状态不一致。
+  - **重试错误**：质量保留失败、重试策略冲突、退避策略异常。
+  - **工件读取错误**：风格注入失败、分支处理异常、工件格式错误。
+  - **并发控制错误**：并发限制异常、资源分配失败、状态同步错误。
+  - **调度系统错误**：分发失败、负载均衡异常、故障转移失败。
 - 重试与退避：
   - 可重试错误（如5xx、限流）采用指数退避与抖动。
   - 不可重试错误（如4xx、参数错误）立即失败并记录诊断信息。
+  - **新增**：质量保留指令确保重试过程中的输出一致性。
 - 降级与熔断：
   - 当某提供商连续失败超过阈值，触发熔断，切换到备用提供商。
   - 熔断恢复后逐步放量验证健康度。
   - **新增**：熔断器状态监控，实时查看各提供商熔断状态。
   - **新增**：回退机制日志，跟踪回退决策和执行过程。
+  - **新增**：重试机制监控，跟踪重试频率和质量保持效果。
 - 诊断与观测：
   - 记录关键指标：QPS、P95/P99延迟、错误率、熔断状态。
   - 追踪链路ID，关联上下游日志。
   - **新增工作区监控**：跟踪不同工作区的配置使用情况与错误分布。
   - **新增熔断监控**：监控熔断触发频率、恢复成功率、回退使用率。
   - **新增回退监控**：跟踪回退提供商的性能表现和可靠性。
+  - **新增重试监控**：监控重试成功率、质量保持率、退避效果。
+  - **新增工件监控**：跟踪风格注入成功率、分支处理效率。
+  - **新增并发监控**：监控并发限制、资源使用率、等待队列长度。
+  - **新增调度监控**：监控分发成功率、负载均衡效果、故障转移频率。
 
 章节来源
 - [src/features/ai/route-contract-error.ts](file://src/features/ai/route-contract-error.ts)
 - [src/features/ai/route-provider-defaults.ts](file://src/features/ai/route-provider-defaults.ts)
 - [src/features/ai/provider-breaker.ts](file://src/features/ai/provider-breaker.ts)
 - [src/features/ai/fallback-provider-store.ts](file://src/features/ai/fallback-provider-store.ts)
+- [src/features/director/runtime-artifact-reader.ts](file://src/features/director/runtime-artifact-reader.ts)
+- [src/features/ai/workspace-concurrency-context.ts](file://src/features/ai/workspace-concurrency-context.ts)
+- [src/features/ai/provider-dispatch.ts](file://src/features/ai/provider-dispatch.ts)
 
 ## 结论
-PurpleInk的AI集成通过Provider模式实现了高度可扩展与可维护的架构。统一接口与注册表解耦了业务与实现，路由与配置系统提供了灵活的控制面。结合适配器设计与音频客户端，系统能够平滑接入多种AI服务提供商，并通过完善的错误处理、重试与熔断机制保障稳定性。新增的工作区上下文系统和熔断器回退机制进一步增强了多租户环境下的配置管理能力和系统容错能力。建议在扩展新提供商时严格遵循统一接口与配置校验流程，充分利用画像与路由策略提升整体性能与可靠性。
+PurpleInk的AI集成通过Provider模式实现了高度可扩展与可维护的架构。统一接口与注册表解耦了业务与实现，路由与配置系统提供了灵活的控制面。结合适配器设计与音频客户端，系统能够平滑接入多种AI服务提供商，并通过完善的错误处理、重试与熔断机制保障稳定性。新增的工作区上下文系统和熔断器回退机制进一步增强了多租户环境下的配置管理能力和系统容错能力。导演系统的重试机制和质量保留指令进一步提升了系统的可靠性和输出质量。**最新的并发控制系统和提供商调度优化显著提升了系统的并发处理能力和资源利用率，工作区并发投影系统确保了多租户环境下的状态同步和数据一致性。**建议在扩展新提供商时严格遵循统一接口与配置校验流程，充分利用画像与路由策略提升整体性能与可靠性。
 
 ## 附录
 
@@ -523,6 +903,11 @@ PurpleInk的AI集成通过Provider模式实现了高度可扩展与可维护的�
   7. 测试与观测：补充单元测试与集成测试，接入指标与日志。
   8. **新增**：配置熔断器支持，设置合适的熔断阈值和探测策略。
   9. **新增**：配置回退策略，定义备用提供商和切换条件。
+  10. **新增**：集成重试机制，配置质量保留指令和退避策略。
+  11. **新增**：支持工件读取器，实现风格注入和分支处理。
+  12. **新增**：配置并发控制，设置工作区级别的并发限制。
+  13. **新增**：集成提供商调度，实现智能负载均衡和故障转移。
+  14. **新增**：支持工作区并发投影，确保状态同步和数据一致性。
 - 最佳实践：
   - 保持适配器无状态，依赖通过注入提供。
   - 明确区分可重试与不可重试错误。
@@ -531,6 +916,11 @@ PurpleInk的AI集成通过Provider模式实现了高度可扩展与可维护的�
   - **新增**：为新提供商实现工作区级别的配置支持。
   - **新增**：配置合理的熔断阈值，避免误熔断和漏熔断。
   - **新增**：设计健壮的回退策略，确保降级服务质量。
+  - **新增**：实现质量保留指令，确保重试过程中的一致性。
+  - **新增**：支持工件读取器，实现智能风格注入。
+  - **新增**：配置适当的并发限制，避免资源耗尽。
+  - **新增**：实现高效的调度策略，提升整体吞吐量。
+  - **新增**：支持并发投影，确保多租户环境的正确性。
 
 章节来源
 - [src/features/ai/provider-registry.ts](file://src/features/ai/provider-registry.ts)
@@ -546,3 +936,7 @@ PurpleInk的AI集成通过Provider模式实现了高度可扩展与可维护的�
 - [src/features/ai/route-target.ts](file://src/features/ai/route-target.ts)
 - [src/features/ai/provider-breaker.ts](file://src/features/ai/provider-breaker.ts)
 - [src/features/ai/fallback-provider-store.ts](file://src/features/ai/fallback-provider-store.ts)
+- [src/features/director/runtime-artifact-reader.ts](file://src/features/director/runtime-artifact-reader.ts)
+- [src/features/ai/workspace-concurrency-context.ts](file://src/features/ai/workspace-concurrency-context.ts)
+- [src/features/ai/provider-dispatch.ts](file://src/features/ai/provider-dispatch.ts)
+- [src/features/ai/workspace-concurrency-projection.ts](file://src/features/ai/workspace-concurrency-projection.ts)

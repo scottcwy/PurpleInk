@@ -21,7 +21,10 @@ import {
   reserveProviderDispatch,
   type ProviderDispatchLease,
 } from '@/features/ai/provider-dispatch'
-import { ProviderRequestError } from '@/features/ai/provider-request-error'
+import {
+  ProviderRequestError,
+  type ProviderFailureKind,
+} from '@/features/ai/provider-request-error'
 import { billingInvocationNo } from '@/features/billing'
 
 interface DirectorBillingRuntime {
@@ -64,8 +67,9 @@ export function createDirectorBillingStream(input: {
 async function* billedEvents(
   input: Parameters<typeof createDirectorBillingStream>[0],
 ): AsyncGenerator<AssistantMessageEvent> {
-  let handle: ManagedAiHandle | null
+  let handle: ManagedAiHandle
   let dispatch: ProviderDispatchLease | null = null
+  let dispatchOutcome: 'success' | ProviderFailureKind = 'unknown'
   try {
     dispatch = await reserveProviderDispatch({
       providerId: input.runtime.providerId,
@@ -77,37 +81,42 @@ async function* billedEvents(
     })
     handle = await beginInvocation(input)
   } catch (error) {
-    await dispatch?.release()
+    await dispatch?.release('unknown')
     input.onPreflightFailure?.(error)
     throw error
   }
   let providerStarted = false
   let settled = false
   try {
+    await handle.markProviderStarted?.()
+    providerStarted = true
     const upstream = input.streamSimple(
       input.model,
       input.context,
       providerOptions(input.options),
     )
-    providerStarted = true
     for await (const event of upstream) {
       if (event.type === 'done' || event.type === 'error') {
         await settleTerminal(handle, event)
         settled = true
+        dispatchOutcome = event.type === 'done' ? 'success' : 'unknown'
       }
       yield event
     }
   } catch (error) {
+    dispatchOutcome = error instanceof ProviderRequestError ? error.kind : 'unknown'
     if (error instanceof ProviderRequestError && error.kind === 'rate_limit') {
       await dispatch?.defer(error.retryAt ? new Date(error.retryAt) : undefined)
     }
     if (handle && !settled) {
-      if (providerStarted) await handle.settleUnavailable(true)
+      if (providerStarted) {
+        await handle.settleUnavailable(true, safeFailureKind(error))
+      }
       else await handle.releaseBeforeCall()
     }
     throw error
   } finally {
-    await dispatch?.release()
+    await dispatch?.release(dispatchOutcome)
   }
 }
 
@@ -126,10 +135,9 @@ function providerOptions(
 
 async function beginInvocation(
   input: Parameters<typeof createDirectorBillingStream>[0],
-): Promise<ManagedAiHandle | null> {
-  if (!input.runtime.deductsManagedPool) return null
+): Promise<ManagedAiHandle> {
   if (!input.attemptId) {
-    throw new DirectorPreflightError('托管 Director 调用缺少可审计的 attemptId')
+    throw new DirectorPreflightError('Director 调用缺少可审计的 attemptId')
   }
   return input.gateway.begin({
     attemptId: input.attemptId,
@@ -148,10 +156,9 @@ async function beginInvocation(
 }
 
 async function settleTerminal(
-  handle: ManagedAiHandle | null,
+  handle: ManagedAiHandle,
   event: Extract<AssistantMessageEvent, { type: 'done' | 'error' }>,
 ): Promise<void> {
-  if (!handle) return
   const message = event.type === 'done' ? event.message : event.error
   const usage = reportedTextUsage(message)
   if (!usage) {
@@ -162,6 +169,10 @@ async function settleTerminal(
     .update(JSON.stringify(message))
     .digest('hex')
   await handle.settle(usage, outputHash, event.type === 'error')
+}
+
+function safeFailureKind(error: unknown): string {
+  return error instanceof ProviderRequestError ? error.kind : 'unknown'
 }
 
 function reportedTextUsage(message: AssistantMessage): ManagedUsage | null {

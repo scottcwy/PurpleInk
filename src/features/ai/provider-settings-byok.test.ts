@@ -53,7 +53,11 @@ describe('built-in provider funding settings', () => {
     }
 
     await expect(validateProviderSettings(input)).resolves.toMatchObject({ ok: true })
-    expect(mocks.validateGemini).toHaveBeenCalledWith('user-gemini-key')
+    expect(mocks.validateGemini).toHaveBeenCalledWith(
+      'user-gemini-key',
+      {},
+      expect.any(Function),
+    )
     expect(mocks.saveCredential).not.toHaveBeenCalled()
 
     await expect(applyProviderSettings(input)).resolves.toMatchObject({ ok: true })

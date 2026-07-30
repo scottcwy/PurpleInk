@@ -15,6 +15,18 @@ export const PLAN_DEFINITIONS: Record<PlanKey, PlanDefinition> = {
   max: { key: 'max', displayName: 'Max', limitCnyMicros: BigInt(2_000_000_000), rank: 3 },
 }
 
+const SUBSCRIPTION_CONCURRENCY_LIMITS: Record<PlanKey, number> = {
+  free: 3,
+  plus: 20,
+  pro: 20,
+  max: 50,
+}
+
+/** 同一 workspace 下所有项目与成员共享的活跃分镜上限。 */
+export function subscriptionConcurrencyLimit(plan: PlanKey): number {
+  return SUBSCRIPTION_CONCURRENCY_LIMITS[plan]
+}
+
 const ROLLING_PERIOD_MS = 30 * 24 * 60 * 60 * 1_000
 
 export function comparePlans(left: PlanKey, right: PlanKey): number {

@@ -146,7 +146,7 @@ export const rateCardUnits = pgTable(
       'rate_card_units_kind_check',
       sql`${table.unitKind} in (
         'input_token', 'cached_input_token', 'output_token',
-        'tts_character', 'audio_second'
+        'tts_character', 'audio_second', 'video_second'
       )`,
     ),
     check(

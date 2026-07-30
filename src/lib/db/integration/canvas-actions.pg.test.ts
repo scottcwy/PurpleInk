@@ -2,8 +2,6 @@ import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Db } from '@/lib/db/client'
 import {
-  canvasEdges,
-  canvasNodes,
   projects,
   workspaces,
 } from '@/lib/db/schema/index'
@@ -12,17 +10,13 @@ import {
   type PgTestDatabase,
 } from '@/lib/db/test/pg-test-database'
 import {
-  createProject,
   setProjectAutopilot,
   updateExportSettings,
 } from '@/features/canvas/actions'
+import { createProjectWithSource } from '@/features/projects'
 import {
   UnsupportedProjectWorkflowError,
 } from '@/features/projects/project-compatibility'
-import {
-  ACTIVE_WORKFLOW_VERSION,
-  serializeWorkflowVersion,
-} from '@/lib/workflow/version'
 import {
   getExportSettings,
   getProjectAutopilot,
@@ -56,8 +50,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   await database.reset()
   getDbMock.mockResolvedValue(database.db)
-  // 阶段 B 后 createProject 不再自建 workspace（创建点唯一在注册事务），
-  // 用例自行 seed 归属行。
+  // 项目服务不自建 workspace（创建点唯一在注册事务），用例自行 seed 归属行。
   await database.db
     .insert(workspaces)
     .values({ id: WORKSPACE_ID, slug: 'local', name: 'Local Workspace' })
@@ -68,78 +61,11 @@ afterAll(async () => {
   await database.close()
 })
 
-describe('createProject', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    getDbMock.mockResolvedValue(database.db)
-  })
-
-  it('atomically creates the project and four global nodes in the session workspace', async () => {
-    const result = createProject({ title: 'RAG 十分钟入门', script: '测试稿件' })
-    expect(result).toBeInstanceOf(Promise)
-    const project = await result
-    const nodes = await database.db.select().from(canvasNodes)
-    const edges = await database.db.select().from(canvasEdges)
-
-    expect(project.title).toBe('RAG 十分钟入门')
-    const [persistedProject] = await database.db.select().from(projects)
-    expect(persistedProject?.workflowVersion).toBe(
-      serializeWorkflowVersion(ACTIVE_WORKFLOW_VERSION)
-    )
-    expect(persistedProject?.exportSettings).toEqual({
-      schemaVersion: 1,
-      settings: { resolutionPreset: '1920x1080' },
-    })
-    expect(nodes.every((node) => node.workspaceId === WORKSPACE_ID)).toBe(true)
-    expect(nodes.map(({ type, stage }) => [type, stage])).toEqual([
-      ['script-import', 'INGEST'],
-      ['shot-split', 'DIRECT'],
-      ['score', 'ASSEMBLE'],
-      ['export', 'FINALIZE'],
-    ])
-    expect(nodes[0]?.data).toEqual({
-      schemaVersion: 1,
-      payload: {
-        directorInput: { rawScript: '测试稿件' },
-        visualTheme: 'dark',
-      },
-    })
-    expect(edges.map(({ source, target }) => [source, target])).toEqual([
-      [nodes[0]?.id, nodes[1]?.id],
-      [nodes[2]?.id, nodes[3]?.id],
-    ])
-  })
-
-  it('rolls back the project when initial graph creation fails', async () => {
-    await database.sql`
-      CREATE FUNCTION fail_initial_graph() RETURNS trigger AS $$
-      BEGIN
-        RAISE EXCEPTION 'injected graph failure';
-      END;
-      $$ LANGUAGE plpgsql
-    `
-    await database.sql`
-      CREATE TRIGGER fail_initial_graph
-      BEFORE INSERT ON canvas_nodes
-      FOR EACH ROW EXECUTE FUNCTION fail_initial_graph()
-    `
-
-    await expect(
-      createProject({ title: '失败项目', script: '稿件' })
-    ).rejects.toThrow()
-    expect(await database.db.select().from(projects)).toHaveLength(0)
-    // seed 的 workspace 行不受事务影响：createProject 不再负责建/删 workspace。
-    expect(await database.db.select().from(workspaces)).toHaveLength(1)
-  })
-})
-
 describe('export settings', () => {
   let projectId: string
 
   beforeEach(async () => {
-    projectId = (
-      await createProject({ title: '设置项目', script: '' })
-    ).id
+    projectId = (await createScriptProject('设置项目')).id
   })
 
   it('defaults to the master preset when never set', async () => {
@@ -196,9 +122,7 @@ describe('project autopilot', () => {
   let projectId: string
 
   beforeEach(async () => {
-    projectId = (
-      await createProject({ title: '自动推进项目', script: '' })
-    ).id
+    projectId = (await createScriptProject('自动推进项目')).id
   })
 
   it('defaults to disabled and persists explicit changes', async () => {
@@ -229,3 +153,24 @@ describe('project autopilot', () => {
     await expect(getProjectAutopilot(projectId)).resolves.toBe(false)
   })
 })
+
+async function createScriptProject(title: string) {
+  const result = await createProjectWithSource(
+    {
+      title,
+      source: {
+        schemaVersion: 1,
+        kind: 'script',
+        script: '用于设置测试的文稿',
+        visualTheme: 'dark',
+      },
+      sourceFingerprint: 'b'.repeat(64),
+    },
+    {
+      database: database.db,
+      workspaceId: WORKSPACE_ID,
+      createId: randomUUID,
+    },
+  )
+  return result.project
+}

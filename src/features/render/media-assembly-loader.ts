@@ -9,6 +9,7 @@ import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { type Db } from '@/lib/db/client'
 import { artifacts } from '@/lib/db/schema/index'
 import type { StorageAdapter } from '@/lib/storage'
+import { isDirectorIngestSourceNodeType } from '@/features/canvas'
 import {
   assembleTrustedMediaPlan,
   type ArtifactRef,
@@ -80,7 +81,9 @@ export async function loadMediaAssembly(
       )
     )
     .orderBy(desc(artifacts.version), desc(artifacts.createdAt))
-  const ingestNode = input.nodes.find((node) => node.type === 'script-import')
+  const ingestNode = input.nodes.find((node) =>
+    isDirectorIngestSourceNodeType(node.type),
+  )
   const ingestArtifact = ingestNode
     ? selectIngestAudioArtifact(rows, ingestNode.nodeId)
     : undefined

@@ -199,10 +199,24 @@ export async function synthesizeRoutedSpeech(
 ): Promise<SynthesizedSpeech> {
   const target = await resolveProvider('tts', dependencies.config)
   if (target.provider === CUSTOM_TTS_PROVIDER) {
-    return dependencies.synthesizeCustom(
-      { text: input.text, voiceId: input.voiceId },
-      dependencies.config,
-    )
+    return (dependencies.billManaged ?? runManagedAudioBilling)({
+      provider: target.provider,
+      model: target.model,
+      capability: 'tts',
+      billingContext: input.billingContext,
+      estimate: { kind: 'tts', characters: Array.from(input.text).length },
+      input: input.text,
+      invoke: () => dependencies.synthesizeCustom(
+        { text: input.text, voiceId: input.voiceId },
+        dependencies.config,
+      ),
+      outputBytes: (speech) => speech.audioBytes,
+      usageFromResult: (speech) => ({
+        kind: 'tts',
+        inputCharacters: Array.from(input.text).length,
+        outputAudioSeconds: Math.max(0, speech.durationMs / 1_000),
+      }),
+    })
   }
   if (target.provider !== 'stepfun' && target.provider !== 'mimo') {
     throw new Error(`媒体路由供应商不支持 TTS：${target.provider}`)
@@ -239,10 +253,26 @@ export async function transcribeRoutedSpeech(
 ): Promise<RoutedTranscribedSpeech> {
   const target = await resolveProvider('asr', dependencies.config)
   if (target.provider === CUSTOM_ASR_PROVIDER) {
-    const result = await dependencies.transcribeCustom(
-      { audioBytes: input.audioBytes, audioFormat: compactFormat(input, '自定义兼容 ASR') },
-      dependencies.config,
-    )
+    const audioSeconds = input.audioSeconds ?? 0
+    const result = await (dependencies.billManaged ?? runManagedAudioBilling)({
+      provider: target.provider,
+      model: target.model,
+      capability: 'asr',
+      billingContext: input.billingContext,
+      estimate: { kind: 'asr', audioSeconds },
+      input: input.audioBytes,
+      invoke: () => dependencies.transcribeCustom(
+        {
+          audioBytes: input.audioBytes,
+          audioFormat: compactFormat(input, '自定义兼容 ASR'),
+        },
+        dependencies.config,
+      ),
+      outputBytes: (speech) => speech.transcript,
+      usageFromResult: () => audioSeconds > 0
+        ? { kind: 'asr', inputAudioSeconds: audioSeconds }
+        : null,
+    })
     return {
       ...result,
       alignmentSource: result.timestampMode === 'segment'

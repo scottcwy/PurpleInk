@@ -1,5 +1,4 @@
 import 'server-only'
-import { queue } from './singleton'
 
 /**
  * 初始化标志锚定到 globalThis：instrumentation.ts 与各 API 路由分处不同模块图时，
@@ -32,15 +31,28 @@ export async function initQueue(): Promise<void> {
   if (globalStore.__cvcQueueInitializing) return globalStore.__cvcQueueInitializing
   globalStore.__cvcQueueInitializing = (async () => {
     try {
-      const [directorMod, renderMod, exportMod, mediaMod, lanes] = await Promise.all([
+      const [
+        queueMod,
+        directorMod,
+        renderMod,
+        exportMod,
+        mediaMod,
+        transcriptionMod,
+        websiteMod,
+        lanes,
+      ] = await Promise.all([
+        import('./singleton'),
         import('@/features/director/queue-handler'),
         import('@/features/render/queue-handler'),
         import('@/features/render/export-queue-handler'),
         import('@/features/audio/narration-queue-handler'),
+        import('@/features/audio/audio-transcription-queue-handler'),
+        import('@/features/website/website-queue-handler'),
         import('./runtime-config').then(
-          ({ loadLaneQuotasForStart }) => loadLaneQuotasForStart()
+          ({ loadLaneQuotasForStart }) => loadLaneQuotasForStart(),
         ),
       ])
+      const { queue } = queueMod
       if (typeof directorMod.registerDirectorStageHandler === 'function') {
         directorMod.registerDirectorStageHandler(queue)
       }
@@ -52,6 +64,14 @@ export async function initQueue(): Promise<void> {
       }
       if (typeof mediaMod.registerMediaNarrationHandler === 'function') {
         mediaMod.registerMediaNarrationHandler(queue)
+      }
+      if (
+        typeof transcriptionMod.registerAudioTranscriptionHandler === 'function'
+      ) {
+        transcriptionMod.registerAudioTranscriptionHandler(queue)
+      }
+      if (typeof websiteMod.registerWebsiteVideoHandler === 'function') {
+        websiteMod.registerWebsiteVideoHandler(queue)
       }
       queue.start(lanes)
       globalStore.__cvcQueueInitialized = true

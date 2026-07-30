@@ -1,7 +1,8 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import { and, eq, inArray } from 'drizzle-orm'
-import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { currentUserId, currentWorkspaceId, SYSTEM_USER_ID } from '@/lib/auth/workspace-context'
+import { registerWorkflowSlotsInTransaction } from '@/features/ai/workspace-concurrency'
 import { getDb } from '@/lib/db/client'
 import { canvasEdges, canvasNodes } from '@/lib/db/schema/index'
 import {
@@ -58,6 +59,15 @@ export async function materializeShotLanes(
       }
       await insertLaneEdges(tx, projectId, shotId, anchors)
     }
+    const actorUserId = currentUserId()
+    await registerWorkflowSlotsInTransaction(tx, {
+      workspaceId: currentWorkspaceId(),
+      actorUserId: actorUserId === SYSTEM_USER_ID || !isUuid(actorUserId)
+        ? null
+        : actorUserId,
+      projectId,
+      workUnitKeys: uniqueShots.map((shot) => shot.shotId),
+    })
     return inserted
   })
   // 事务提交后才广播拓扑变化；幂等重放（泳道已存在）不发事件。
@@ -212,4 +222,9 @@ function stableId(kind: 'node' | 'edge', ...parts: string[]): string {
     value.slice(16, 20),
     value.slice(20),
   ].join('-')
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    .test(value)
 }

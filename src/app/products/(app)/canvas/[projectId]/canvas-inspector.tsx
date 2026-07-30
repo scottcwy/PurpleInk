@@ -33,6 +33,7 @@ import { ARTIFACT_FILENAME, NODE_LABEL } from './canvas-inspector-labels'
 import { getNodeStatusLabel, getNodeStatusPresentation } from './flow-elements'
 import { isNodeActionBlocked, nodeActionLabel } from './node-action-presentation'
 import { StreamingLogCard } from './streaming-log-card'
+import { WebsiteStageInspector } from './website-stage-inspector'
 import { skipKindForNodeType } from '@/features/director/skip-policy'
 
 export function CanvasInspector({
@@ -250,9 +251,13 @@ function InspectorBody({
           )}
         </div>
       </div>
-      <div className="flex h-40 items-center justify-center rounded-md bg-ds-surface-muted">
-        <FileCode className="size-10 text-ds-text-muted" />
-      </div>
+      {node.type === 'website-stage' ? (
+        <WebsiteStageInspector node={node} />
+      ) : (
+        <div className="flex h-40 items-center justify-center rounded-md bg-ds-surface-muted">
+          <FileCode className="size-10 text-ds-text-muted" />
+        </div>
+      )}
       <SettingsGroup>
         <SettingsRow label="节点类型" value={node.type} />
         <SettingsSeparator />

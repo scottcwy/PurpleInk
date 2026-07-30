@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { EmptyState } from '@/components/ui/empty-state'
 import { withPageSession } from '@/features/auth/page-session'
 import { getBillingProjection } from '@/features/billing'
+import { getWorkspaceConcurrencyProjection } from '@/features/ai/workspace-concurrency-projection'
 import type { BillingUiProjection } from '@/features/billing/ui/projection-contract'
 import {
   computeLayout,
@@ -37,9 +38,10 @@ async function renderCanvas(projectId: string) {
   const project = projects.find((candidate) => candidate.id === projectId)
   if (!project) notFound()
 
-  const [graph, billing] = await Promise.all([
+  const [graph, billing, concurrency] = await Promise.all([
     getCanvasGraph(projectId),
     getBillingProjection(),
+    getWorkspaceConcurrencyProjection(),
   ])
   const billingProjection: BillingUiProjection = billing
   if (graph.nodes.length === 0) {
@@ -59,6 +61,7 @@ async function renderCanvas(projectId: string) {
       projectTitle={project.title}
       autopilot={await getProjectAutopilot(projectId)}
       billing={billingProjection}
+      concurrency={concurrency}
       nodes={nodes}
       edges={graph.edges}
     />

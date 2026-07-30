@@ -61,4 +61,6 @@ export const PIPELINE_NODE_TITLE: Record<CanvasNodeType, string> = {
   'shot-sfx': '音效',
   'shot-subtitle': '字幕',
   'shot-qa': '验收',
+  'audio-transcribe': '录音转稿',
+  'website-stage': '网站自动介绍',
 }

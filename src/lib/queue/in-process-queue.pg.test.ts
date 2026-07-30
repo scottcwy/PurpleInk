@@ -8,10 +8,12 @@ import {
 } from '@/lib/auth/workspace-context'
 import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
 import {
+  canvasNodes,
   pipelineRuns,
   projects,
   taskAttempts,
   users,
+  workflowConcurrencyLeases,
   workspaces,
 } from '@/lib/db/schema/index'
 import {
@@ -90,6 +92,26 @@ describe('legacy in-process queue PG compatibility', () => {
         status: 'queued',
       },
     ])
+  })
+
+  it('persists a trusted project-family workflow version on the real run', async () => {
+    const { InProcessQueue } = await import('./in-process-queue')
+    const projectId = await seedProject()
+    const queue = new InProcessQueue()
+
+    await inLocalWs(() =>
+      queue.enqueue(
+        'website-video',
+        { projectId, workflowVersion: 'purpleink-website-intro-video-v1' },
+        {
+          projectId,
+          workflowVersion: 'purpleink-website-intro-video-v1',
+        },
+      ),
+    )
+
+    const [run] = await database.db.select().from(pipelineRuns)
+    expect(run?.workflowVersion).toBe('purpleink-website-intro-video-v1')
   })
 
   it('executes a registered handler and exposes a workspace/project-safe snapshot', async () => {
@@ -215,8 +237,10 @@ describe('legacy in-process queue PG compatibility', () => {
     ])
     const projectId = await seedProject()
     const queue = new InProcessQueue()
-    const director = makeConcurrencyProbe()
-    const render = makeConcurrencyProbe()
+    // 领取一次 PG attempt 在低性能 CI 上可能超过 40ms；留足窗口验证通道配额，
+    // 避免把数据库延迟误判为队列只允许单并发。
+    const director = makeConcurrencyProbe(250)
+    const render = makeConcurrencyProbe(250)
     queue.register('director-stage', director.handler)
     queue.register('render-shot', render.handler)
 
@@ -243,6 +267,111 @@ describe('legacy in-process queue PG compatibility', () => {
       expect(director.state.max).toBe(2)
       expect(render.state.max).toBe(1)
     } finally {
+      queue.stop()
+    }
+  })
+
+  it('isolates audio and website jobs from the fallback lane used by the main workflow', async () => {
+    const [{ InProcessQueue }, { getJobSnapshot }] = await Promise.all([
+      import('./in-process-queue'),
+      import('./query'),
+    ])
+    const projectId = await seedProject()
+    const queue = new InProcessQueue()
+    const started = new Set<string>()
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    for (const kind of [
+      'audio-transcription',
+      'website-video',
+      'media-narration',
+    ]) {
+      queue.register(kind, async () => {
+        started.add(kind)
+        await gate
+      })
+    }
+    const ids = await Promise.all(
+      ['audio-transcription', 'website-video', 'media-narration'].map((kind) =>
+        inLocalWs(() => queue.enqueue(kind, {}, { projectId })),
+      ),
+    )
+
+    queue.start()
+    try {
+      for (let attempt = 0; attempt < 100 && started.size < 3; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+      expect([...started].sort()).toEqual([
+        'audio-transcription',
+        'media-narration',
+        'website-video',
+      ])
+    } finally {
+      release()
+      await waitForAllStatuses(
+        (id) => inLocalWs(() => getJobSnapshot(projectId, id)),
+        ids,
+        'done',
+      )
+      queue.stop()
+    }
+  })
+
+  it('gates shot jobs by the workspace Free cap even when the process lane is larger', async () => {
+    const { InProcessQueue } = await import('./in-process-queue')
+    const projectId = await seedProject()
+    const nodeIds = Array.from({ length: 5 }, () => randomUUID())
+    await database.db.insert(canvasNodes).values(nodeIds.map((id, index) => ({
+      workspaceId: LOCAL_WORKSPACE_ID,
+      id,
+      projectId,
+      logicalKey: `shot:queue-${index}:shot-script`,
+      type: 'shot-script',
+      stage: 'SHOT_SPEC',
+      status: 'queued',
+      data: {
+        schemaVersion: 1,
+        payload: { laneKey: `queue-${index}`, laneRole: 'shot-script' },
+      },
+    })))
+    const queue = new InProcessQueue()
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const handler = vi.fn(async () => gate)
+    queue.register('director-stage', handler)
+    await Promise.all(nodeIds.map((nodeId) => inLocalWs(() =>
+      queue.enqueue(
+        'director-stage',
+        { projectId, nodeId, stage: 'SHOT_SPEC' },
+        { projectId, nodeId },
+      )
+    )))
+
+    queue.start({ 'director-stage': 12 })
+    try {
+      await waitForCallCount(handler, 3)
+      await new Promise((resolve) => setTimeout(resolve, 700))
+      expect(handler).toHaveBeenCalledTimes(3)
+      const leases = await database.db.select().from(workflowConcurrencyLeases)
+      expect(leases.filter((lease) => lease.status === 'active')).toHaveLength(3)
+      expect(leases.filter((lease) => lease.status === 'waiting').length)
+        .toBeGreaterThanOrEqual(1)
+      const queuedNodes = await database.db.select().from(canvasNodes)
+      expect(queuedNodes.some((node) => {
+        const payload = (node.data as { payload?: Record<string, unknown> }).payload
+        const notice = payload?.executionNotice as Record<string, unknown> | undefined
+        return notice?.code === 'PLAN_CONCURRENCY_WAIT'
+          && notice.limit === 3
+          && typeof notice.waiting === 'number'
+      })).toBe(true)
+    } finally {
+      release()
+      await new Promise((resolve) => setTimeout(resolve, 100))
       queue.stop()
     }
   })
@@ -461,4 +590,15 @@ function makeConcurrencyProbe(delayMs = 40): {
     state.current -= 1
   })
   return { handler, state }
+}
+
+async function waitForCallCount(
+  handler: ReturnType<typeof vi.fn>,
+  count: number,
+): Promise<void> {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    if (handler.mock.calls.length >= count) return
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  throw new Error(`timed out waiting for ${count} handler calls`)
 }

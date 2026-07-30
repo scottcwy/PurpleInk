@@ -23,6 +23,8 @@ export const SKIPPABLE: Record<CanvasNodeType, boolean> = {
   'shot-sfx': true,
   'shot-subtitle': true,
   'shot-qa': true,
+  'audio-transcribe': false,
+  'website-stage': false,
 }
 
 export type SkipKind = 'output-degradation' | 'qa-waiver'
@@ -38,6 +40,8 @@ export const SKIP_KIND: Record<CanvasNodeType, SkipKind | null> = {
   'shot-sfx': 'output-degradation',
   'shot-subtitle': 'output-degradation',
   'shot-qa': 'qa-waiver',
+  'audio-transcribe': null,
+  'website-stage': null,
 }
 
 export function isSkippableNodeType(type: CanvasNodeType): boolean {

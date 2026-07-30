@@ -11,6 +11,11 @@
 >
 > **2026-07-29**：S3 生产画布已接线 `PipelineNode`（`NodeStatus` + `selected`）；Pencil `Qsovp` 选中态
 > 待同一次会话回写。
+>
+> **2026-07-30**：真实 AI 调用统计新增代码侧 `UsageTrendChart`，登记
+> `cumulative-line` 与 `stacked-bars` 两种变体。Pencil MCP 因编辑器未打开
+> `canvas.pen` 无法读取 schema，本轮不得绕过加密文件直接修改；B0 母组件与 S1/S6
+> 实例同步继续挂起，React、Playbook 与正式路由已按既有 token 合同接线。
 
 ---
 
@@ -201,7 +206,7 @@ Primary 按钮为**扁平实心**（Vercel/Linear 式）：零渐变、零投影
 | `InspectorTabs/Canonical` | `N4FZZS` | 固定四页签 | Data / Source / Gates / Execution |
 | `ProjectCard/Canonical` | `S1xDL` | 项目摘要 | surface / muted preview |
 | `PipelineNode/Canonical` | `Qsovp` | DAG 任务与 checkpoint | surface + semantic status；生产挂载 `/products/canvas/[projectId]`；状态枚举为领域 `NodeStatus`；实例 override 含 `selected` |
-| `QueueBar/Canonical` | `XL8t8` | Trigger/队列摘要 | surface + border |
+| `QueueBar/Canonical` | `XL8t8` | Trigger/队列摘要 | surface + border；可用 label 安全投影当前账号的套餐并发与排队数 |
 
 规则：
 
@@ -211,8 +216,11 @@ Primary 按钮为**扁平实心**（Vercel/Linear 式）：零渐变、零投影
 4. 不新增平行 Button、Card、Badge、Sidebar、Tabs 或 QueueBar。
 
 代码侧补充原语（已登记 `/playbook`，待 Pencil 会话补登记为 reusable symbol）：
-`SectionNav`（S6 右栏目录）、`SettingsPanel`（S6 折叠面板）、`SettingsField`（S6 表单行，
-2026-07-28 新增，吸收原 SettingsRow 行高覆写场景）。
+`SectionNav`（S6 右栏目录）、`SettingsPanel`（S6 折叠面板；AI 分镜并发使用只读
+`SettingsRow + StatusPill`，渲染并发保持独立可编辑）、`SettingsField`（S6 表单行，
+2026-07-28 新增，吸收原 SettingsRow 行高覆写场景）、`UsageTrendChart`
+（2026-07-30 新增；同一母组件提供会员累计额度阶梯线与账号每日调用堆叠柱；
+只接收真实 projection，fixture 仅存在于 `.demo.tsx` 与 `/playbook`）。
 
 ---
 
@@ -317,7 +325,7 @@ Canonical 状态集合：`loading / empty / ready / running / succeeded / failed
 
 **操作**：`plus`、`save`、`settings-2`、`ellipsis`、`x`、`upload`、`refresh-cw`、`arrow-left`、`chevron-right`、`skip-forward`、`zoom-in`、`zoom-out`、`maximize-2`
 
-**执行与内容**：`list-tree`、`sparkles`、`combine`、`file-code`、`play`、`loader-circle`
+**执行与内容**：`list-tree`、`sparkles`、`combine`、`file-code`、`audio-lines`、`globe`、`play`、`loader-circle`
 
 **状态**：`circle-check`、`triangle-alert`、`circle-x`、`shield-check`、`info`、`circle-slash`
 

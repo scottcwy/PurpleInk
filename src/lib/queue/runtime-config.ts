@@ -6,7 +6,7 @@ import { workspaceSettings } from '@/lib/db/schema'
 import {
   DEFAULT_DIRECTOR_STAGE_CONCURRENCY,
   defaultRenderShotConcurrency,
-} from './in-process-queue'
+} from './queue-defaults'
 import { resolveLaneQuotas } from './lane-quota-env'
 import type { LaneQuotas } from './types'
 

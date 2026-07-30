@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import type { AiUsageProjectionV1 } from '@/features/usage/client'
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: () => undefined }),
@@ -37,6 +38,56 @@ const projection: BillingUiProjection = {
   canRedeem: true,
 }
 
+const usageProjection: AiUsageProjectionV1 = {
+  schemaVersion: 1,
+  view: 'managed-cycle',
+  range: 'cycle',
+  timeZone: 'UTC',
+  coverage: {
+    completeFrom: '2026-07-28T00:00:00.000Z',
+    includesManagedHistory: true,
+    byokHistoryMissing: true,
+    attributionComplete: true,
+  },
+  summary: {
+    actualCalls: 1,
+    succeeded: 1,
+    failed: 0,
+    running: 0,
+    successRate: 100,
+    reportedTokens: {
+      input: 10,
+      cachedInput: 0,
+      output: 5,
+      reasoning: 0,
+      total: 15,
+    },
+    ttsCharacters: 0,
+    asrAudioSeconds: 0,
+    p95DurationMs: null,
+    recentCallAt: '2026-07-28T06:30:00.000Z',
+  },
+  series: [
+    {
+      date: '2026-07-28',
+      managedCalls: 1,
+      ownApiCalls: 0,
+      succeeded: 1,
+      failed: 0,
+      running: 0,
+      reportedTokens: 15,
+      cumulativePercent: 36,
+    },
+  ],
+  breakdown: {
+    funding: [],
+    provider: [],
+    capability: [],
+    operation: [],
+  },
+  usageUnavailableCount: 0,
+}
+
 describe('billing usage projections', () => {
   it('renders a readable sidebar meter and compact ring', () => {
     const expanded = renderToStaticMarkup(
@@ -65,7 +116,7 @@ describe('billing usage projections', () => {
 
   it('renders detailed dashboard usage from the public projection', () => {
     const html = renderToStaticMarkup(
-      createElement(BillingDashboardUsage, { projection }),
+      createElement(BillingDashboardUsage, { projection, usageProjection }),
     )
     expect(html).toContain('本周期用量')
     expect(html).toContain('128')
@@ -76,13 +127,15 @@ describe('billing usage projections', () => {
     expect(html).toContain('Mimo')
     expect(html).toContain('Gemini')
     expect(html).toContain('最近调用')
+    expect(html).toContain('周期累计额度')
+    expect(html).toContain('累计已用 36%')
     expect(html).toContain('2026')
     expect(html).not.toContain('limitCnyMicros')
   })
 
   it('renders four approved plans, a disabled payment path and redemption entry', () => {
     const html = renderToStaticMarkup(
-      createElement(BillingPageView, { projection }),
+      createElement(BillingPageView, { projection, usageProjection }),
     )
     for (const plan of ['Free', 'Plus', 'Pro', 'Max']) {
       expect(html).toContain(`>${plan}<`)

@@ -59,6 +59,7 @@ describe('executeManagedVisionQa', () => {
       content: '{"summary":"ok"}',
       usage: { inputTokens: 30, cachedInputTokens: 4, outputTokens: 8 },
     }))
+    const dispatch = vi.fn(async (_input, invoke) => invoke())
 
     await executeManagedVisionQa({
       attemptId: '00000000-0000-4000-8000-000000000001',
@@ -69,6 +70,7 @@ describe('executeManagedVisionQa', () => {
       resolveTarget: async () => target,
       gateway: { begin },
       complete,
+      dispatch,
     })
 
     expect(begin).toHaveBeenCalledWith(expect.objectContaining({
@@ -80,6 +82,12 @@ describe('executeManagedVisionQa', () => {
       apiKey: 'managed-key',
       maxOutputTokens: VISION_QA_MAX_OUTPUT_TOKENS,
     }))
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      providerId: 'gemini',
+      funding: 'managed',
+      apiKey: 'managed-key',
+      attemptId: '00000000-0000-4000-8000-000000000001',
+    }), expect.any(Function))
     expect(settle).toHaveBeenCalledWith(
       {
         kind: 'text',

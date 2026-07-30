@@ -3,12 +3,14 @@ export type BillingInvocationScope =
   | 'narration'
   | 'subtitle-asr'
   | 'vision-qa'
+  | 'source-asr'
 
 const PARTITION = {
   director: { start: 1, size: 9_999 },
   narration: { start: 10_000, size: 10_000 },
   'subtitle-asr': { start: 20_000, size: 10_000 },
   'vision-qa': { start: 30_000, size: 10_000 },
+  'source-asr': { start: 40_000, size: 10_000 },
 } as const satisfies Record<
   BillingInvocationScope,
   { start: number; size: number }

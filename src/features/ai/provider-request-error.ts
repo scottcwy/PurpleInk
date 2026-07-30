@@ -33,7 +33,7 @@ export interface ProviderRequestErrorOptions {
  * 在内存中的 cause，不能序列化进节点、Artifact 或 task_attempts.failure。
  */
 export class ProviderRequestError extends Error {
-  override readonly name = 'ProviderRequestError'
+  override readonly name: string = 'ProviderRequestError'
   readonly providerId: string
   readonly providerLabel: string
   readonly operation: string

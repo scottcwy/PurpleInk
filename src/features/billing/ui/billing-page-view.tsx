@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { StatusPill } from '@/components/ui/status-pill'
 import { TopBar } from '@/components/ui/top-bar'
+import type { AiUsageProjectionV1 } from '@/features/usage/client'
 import { cn } from '@/lib/utils'
 import {
   formatBillingPeriod,
@@ -16,8 +17,10 @@ import { BillingDashboardUsage } from './usage-panels'
 
 export function BillingPageView({
   projection,
+  usageProjection,
 }: {
   projection: BillingUiProjection
+  usageProjection: AiUsageProjectionV1 | null
 }) {
   return (
     <main className="min-h-0 flex-1 overflow-y-auto text-ds-text">
@@ -45,7 +48,10 @@ export function BillingPageView({
           </p>
         </header>
 
-        <BillingDashboardUsage projection={projection} />
+        <BillingDashboardUsage
+          projection={projection}
+          usageProjection={usageProjection}
+        />
 
         <section aria-labelledby="billing-plans-title">
           <div className="mb-3">

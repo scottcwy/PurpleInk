@@ -5,7 +5,11 @@ import {
   rateCards,
   rateCardUnits,
 } from '@/lib/db/schema/index'
-import type { RateCardPrice, RateUnitKind } from './rate-card'
+import type {
+  BillingCapability,
+  RateCardPrice,
+  RateUnitKind,
+} from './rate-card'
 
 export interface CurrentRateCard {
   id: string
@@ -19,7 +23,7 @@ export async function getCurrentRateCard(input: {
   catalogId?: string
   provider: string
   model: string
-  capability: 'text' | 'vision' | 'tts' | 'asr'
+  capability: BillingCapability
   now?: Date
 }): Promise<CurrentRateCard> {
   const database = await getDb()

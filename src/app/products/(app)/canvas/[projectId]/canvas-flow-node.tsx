@@ -13,6 +13,7 @@ import {
   FileCode,
   FileInput,
   Film,
+  Globe2,
   Music,
   ShieldCheck,
   Sparkles,
@@ -44,6 +45,8 @@ const NODE_ICON: Record<CanvasNodeType, LucideIcon> = {
   'shot-sfx': AudioLines,
   'shot-subtitle': Captions,
   'shot-qa': ShieldCheck,
+  'audio-transcribe': AudioLines,
+  'website-stage': Globe2,
 }
 
 export function CanvasFlowNode({ data, selected }: NodeProps<CanvasFlowNode>) {

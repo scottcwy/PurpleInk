@@ -138,6 +138,8 @@ describe('Director per-provider-call billing stream', () => {
 
   it('preserves caller options while capping provider timeout and disabling nested retries', async () => {
     const streamSimple = vi.fn(upstream)
+    const begin = vi.fn<ManagedAiGateway['begin']>()
+      .mockResolvedValue(handle([]))
     await consume(createDirectorBillingStream({
       model,
       context,
@@ -156,7 +158,8 @@ describe('Director per-provider-call billing stream', () => {
         deductsManagedPool: false,
       },
       invocationIndex: 1,
-      gateway: {} as ManagedAiGateway,
+      attemptId: '00000000-0000-4000-8000-000000000777',
+      gateway: { begin } as unknown as ManagedAiGateway,
       streamSimple,
     }))
 
@@ -165,6 +168,7 @@ describe('Director per-provider-call billing stream', () => {
       timeoutMs: DIRECTOR_PROVIDER_TIMEOUT_MS,
       maxRetries: 0,
     })
+    expect(begin).toHaveBeenCalledOnce()
   })
 
   it('does not start the next provider call when reservation is rejected', async () => {

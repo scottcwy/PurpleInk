@@ -18,6 +18,7 @@ import {
   audioDependencies,
   customOpenAiDependencies,
 } from './provider-settings-dependencies'
+import { subscriptionConcurrencyLimit } from '@/features/billing/domain'
 
 /**
  * GET 与 POST 共用的无 secret 投影。
@@ -79,6 +80,10 @@ export async function describeProviderSettings() {
   const byokByProvider = Object.fromEntries(byokCredentialEntries)
   return {
     planKey: plan,
+    shotConcurrency: {
+      planKey: plan,
+      limit: subscriptionConcurrencyLimit(plan),
+    },
     ...stepfunCredential,
     models,
     geminiConfigured: geminiCredential.configured,

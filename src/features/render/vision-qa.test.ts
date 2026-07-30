@@ -208,6 +208,7 @@ describe('routed Vision client and report storage', () => {
             releaseBeforeCall: vi.fn(async () => undefined),
           })),
         },
+        dispatch: async (_input, invoke) => invoke(),
         complete,
       },
     )

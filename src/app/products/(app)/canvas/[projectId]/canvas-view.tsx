@@ -15,6 +15,7 @@ import { QueueStatusBar } from '@/components/ui/queue-status-bar'
 import { Toast } from '@/components/ui/toast'
 import { BillingCanvasUsage } from '@/features/billing/ui/usage-panels'
 import type { BillingUiProjection } from '@/features/billing/ui/projection-contract'
+import type { WorkspaceConcurrencyProjection } from '@/features/ai/workspace-concurrency-projection'
 import type { CanvasGraphEdge, PositionedCanvasNode } from '@/features/canvas'
 import { fadeInUp } from '@/lib/motion/variants'
 import { useProjectStatusStream } from '@/lib/hooks/use-project-status-stream'
@@ -51,6 +52,7 @@ export interface CanvasViewProps {
   projectTitle: string
   autopilot: boolean
   billing: BillingUiProjection
+  concurrency: WorkspaceConcurrencyProjection
   nodes: PositionedCanvasNode[]
   edges: CanvasGraphEdge[]
 }
@@ -60,6 +62,7 @@ export function CanvasView({
   projectTitle,
   autopilot,
   billing,
+  concurrency,
   nodes,
   edges,
 }: CanvasViewProps) {
@@ -241,6 +244,7 @@ export function CanvasView({
           active={active}
           failed={failed}
           total={liveNodes.length}
+          label={`套餐并发 ${concurrency.active}/${concurrency.limit} · ${concurrency.waiting} 个分镜排队`}
         />
       </section>
       <CanvasInspector

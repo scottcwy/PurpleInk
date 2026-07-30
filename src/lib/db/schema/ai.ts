@@ -270,7 +270,9 @@ export const aiInvocations = pgTable(
     ),
     check(
       'ai_invocations_capability_check',
-      sql`${table.capability} is null or ${table.capability} in ('text', 'vision', 'tts', 'asr')`,
+      sql`${table.capability} is null or ${table.capability} in (
+        'text', 'vision', 'tts', 'asr', 'workflow'
+      )`,
     ),
     check(
       'ai_invocations_telemetry_version_check',
