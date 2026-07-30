@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { Download, Play } from 'lucide-react'
-import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
@@ -17,13 +16,17 @@ import { BillingCanvasUsage } from '@/features/billing/ui/usage-panels'
 import type { BillingUiProjection } from '@/features/billing/ui/projection-contract'
 import type { WorkspaceConcurrencyProjection } from '@/features/ai/workspace-concurrency-projection'
 import type { CanvasGraphEdge, PositionedCanvasNode } from '@/features/canvas'
-import { fadeInUp } from '@/lib/motion/variants'
 import { useProjectStatusStream } from '@/lib/hooks/use-project-status-stream'
 import { usePublishNavContext } from '@/features/navigation/nav-context'
 import { productExportHref } from '@/features/navigation/products-routes'
 import { CanvasAutoHideTopBar } from './canvas-auto-hide-top-bar'
+import {
+  CanvasContextMenu,
+  type CanvasMenuTarget,
+} from './canvas-context-menu'
 import { CanvasFlowNode } from './canvas-flow-node'
 import { CanvasInspector } from './canvas-inspector'
+import { CanvasLanePanel } from './canvas-lane-panel'
 import { CanvasMiniMap } from './canvas-minimap'
 import { CanvasViewportToolbar } from './canvas-viewport-toolbar'
 import { StageErrorDialog } from './stage-error-dialog'
@@ -41,10 +44,8 @@ import {
 } from './pipeline-feedback'
 import {
   buildLaneSummaries,
-  LaneSummaryDetails,
   toFlowEdge,
   toFlowNode,
-  type LaneSummary,
 } from './flow-elements'
 
 export interface CanvasViewProps {
@@ -72,6 +73,8 @@ export function CanvasView({
   const [pipelineQuotaOpen, setPipelineQuotaOpen] = useState(false)
   const [collapsedLanes, setCollapsedLanes] = useState<Set<string>>(() => new Set())
   const [selectedNodeId, setSelectedNodeId] = useState(nodes[0]?.id)
+  const [menuTarget, setMenuTarget] = useState<CanvasMenuTarget | null>(null)
+  const canvasRootRef = useRef<HTMLDivElement>(null)
   // SSE 状态覆盖层：props 是全量真值基线，覆盖层只做逐节点 status 替换。
   const hasActiveBaseline = nodes.some(
     ({ status }) => status === 'pending' || status === 'running'
@@ -178,7 +181,7 @@ export function CanvasView({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 bg-ds-canvas text-ds-text">
+    <div ref={canvasRootRef} className="flex min-h-0 flex-1 bg-ds-canvas text-ds-text">
       <section className="relative flex min-w-0 flex-1 flex-col">
         <CanvasAutoHideTopBar
           title={projectTitle}
@@ -228,12 +231,38 @@ export function CanvasView({
             maxZoom={2}
             proOptions={{ hideAttribution: true }}
             onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+            onNodeContextMenu={(event, node) => {
+              event.preventDefault()
+              setSelectedNodeId(node.id)
+              setMenuTarget({
+                kind: 'node',
+                nodeId: node.id,
+                position: { x: event.clientX, y: event.clientY },
+              })
+            }}
+            onPaneContextMenu={(event) => {
+              event.preventDefault()
+              setMenuTarget({
+                kind: 'pane',
+                position: { x: event.clientX, y: event.clientY },
+              })
+            }}
           >
             <Background color="var(--ds-text-muted)" gap={20} size={1} />
             <CanvasMiniMap onSelectNode={setSelectedNodeId} />
             <CanvasViewportToolbar />
+            <CanvasContextMenu
+              projectId={projectId}
+              nodes={liveNodes}
+              target={menuTarget}
+              onClose={() => setMenuTarget(null)}
+              onQueued={() => router.refresh()}
+              onQuotaExhausted={() => setPipelineQuotaOpen(true)}
+              onFeedback={setPipelineFeedback}
+              fullscreenTargetRef={canvasRootRef}
+            />
           </ReactFlow>
-          <LanePanel
+          <CanvasLanePanel
             laneSummaries={laneSummaries}
             collapsedLanes={collapsedLanes}
             onToggle={toggleLane}
@@ -264,55 +293,5 @@ export function CanvasView({
         onRetry={() => undefined}
       />
     </div>
-  )
-}
-
-interface LanePanelProps {
-  laneSummaries: LaneSummary[]
-  collapsedLanes: Set<string>
-  onToggle: (laneKey: string) => void
-}
-
-function LanePanel({ laneSummaries, collapsedLanes, onToggle }: LanePanelProps) {
-  return (
-    <aside className="absolute left-4 top-4 max-h-[calc(100%-8rem)] w-56 overflow-auto rounded-md border border-ds-border bg-ds-surface p-3 text-ds-text shadow-[var(--ds-shadow)] backdrop-blur-xl">
-      <p className="mb-2 text-xs font-semibold">
-        分镜通道 · {laneSummaries.length}
-      </p>
-      <div className="space-y-2">
-        {laneSummaries.map((summary) => {
-          const collapsed = collapsedLanes.has(summary.laneKey)
-          return (
-            <div key={summary.laneKey}>
-              <Button
-                variant="gray"
-                size="sm"
-                aria-expanded={!collapsed}
-                onClick={() => onToggle(summary.laneKey)}
-                className="w-full justify-between"
-              >
-                <span className="truncate">{summary.laneKey}</span>
-                <span className="text-ds-text-muted">
-                  {collapsed ? '展开' : '折叠'}
-                </span>
-              </Button>
-              <AnimatePresence initial={false}>
-                {!collapsed && (
-                  <motion.div
-                    key="summary"
-                    variants={fadeInUp}
-                    initial="hidden"
-                    animate="visible"
-                    exit="hidden"
-                  >
-                    <LaneSummaryDetails summary={summary} />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          )
-        })}
-      </div>
-    </aside>
   )
 }
