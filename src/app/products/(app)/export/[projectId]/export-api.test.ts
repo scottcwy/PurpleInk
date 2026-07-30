@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { loadExportReadiness, startProjectExport, updateExportResolution } from './export-api'
+import {
+  loadExportReadiness,
+  startProjectExport,
+  updateExportResolution,
+  waitForExportArtifact,
+} from './export-api'
 
 describe('export API client', () => {
   it('loads incomplete nodes and keeps export disabled', async () => {
@@ -203,6 +208,48 @@ describe('export API client', () => {
     await expect(
       startProjectExport('project-1', fetcher, async () => {})
     ).rejects.toThrow('缺少产物')
+  })
+
+  it('stops waiting at the wall-clock deadline instead of polling forever', async () => {
+    // 永不写回终态的作业（例如进程被杀）不能让 UI 永远停在「处理中」——
+    // 那条进度骨架屏会变成永久 Skeleton。
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => json({ ok: true, job: { status: 'running' } }))
+    let clock = 0
+    const wait = vi.fn(async () => {
+      clock += 60 * 1_000
+    })
+
+    await expect(
+      waitForExportArtifact('project-1', 'job-1', fetcher, wait, () => clock)
+    ).rejects.toThrow('导出等待超时')
+
+    // 30 分钟上限 / 每轮推进 1 分钟：第 30 轮触发截止，不再继续轮询。
+    expect(wait).toHaveBeenCalledTimes(30)
+  })
+
+  it('keeps polling while the deadline has not been reached', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(json({ ok: true, job: { status: 'running' } }))
+      .mockResolvedValueOnce(
+        json({
+          ok: true,
+          job: { status: 'done' },
+          artifactUrl: '/api/artifacts/final?projectId=project-1',
+        })
+      )
+
+    await expect(
+      waitForExportArtifact(
+        'project-1',
+        'job-1',
+        fetcher,
+        async () => {},
+        () => 0
+      )
+    ).resolves.toBe('/api/artifacts/final?projectId=project-1')
   })
 
   it('PATCHes the resolution preset to the project settings API', async () => {

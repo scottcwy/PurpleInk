@@ -13,7 +13,7 @@ import {
   MASTER_RESOLUTION_PRESET,
   type ResolutionPreset,
 } from '@/features/canvas/export-settings'
-import { type ExportReadiness } from './export-api'
+import { type ExportReadiness } from './export-readiness-contract'
 import { buildResolutionOptions } from './export-view-model'
 
 const RESOLUTION_OPTIONS = buildResolutionOptions()

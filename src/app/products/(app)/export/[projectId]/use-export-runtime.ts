@@ -6,8 +6,8 @@ import {
   loadExportReadiness,
   startProjectExport,
   updateExportResolution,
-  type ExportReadiness,
 } from './export-api'
+import { type ExportReadiness } from './export-readiness-contract'
 
 export function useExportRuntime(projectId: string) {
   const [readiness, setReadiness] = useState<ExportReadiness>()

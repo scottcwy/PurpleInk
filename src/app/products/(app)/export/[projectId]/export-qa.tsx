@@ -5,7 +5,10 @@ import { ArtifactChip } from '@/components/ui/artifact-chip'
 import { ContactSheetThumb } from '@/components/ui/contact-sheet-thumb'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Toast } from '@/components/ui/toast'
-import { blockingIssueLabel, type ExportReadiness } from './export-api'
+import {
+  blockingIssueLabel,
+  type ExportReadiness,
+} from './export-readiness-contract'
 
 export interface ExportQaProps {
   laneKeys: string[]

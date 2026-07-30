@@ -12,7 +12,7 @@ import { usePublishNavContext } from '@/features/navigation/nav-context'
 import { ExportQa } from './export-qa'
 import { ExportSettings } from './export-settings'
 import { buildShotClips } from './export-view-model'
-import type { ExportReadiness } from './export-api'
+import type { ExportReadiness } from './export-readiness-contract'
 import { useExportRuntime } from './use-export-runtime'
 
 export function ExportWorkspace({

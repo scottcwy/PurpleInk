@@ -13,8 +13,8 @@ const qa = readFileSync(
   'src/app/products/(app)/export/[projectId]/export-qa.tsx',
   'utf8',
 )
-const api = readFileSync(
-  'src/app/products/(app)/export/[projectId]/export-api.ts',
+const contract = readFileSync(
+  'src/app/products/(app)/export/[projectId]/export-readiness-contract.ts',
   'utf8',
 )
 
@@ -75,8 +75,8 @@ describe('Export workspace composition', () => {
 
   it('shows lane-scoped media blockers with human-readable labels', () => {
     expect(qa).toContain('blockingIssueLabel')
-    expect(api).toContain('缺旁白')
-    expect(api).toContain('缺字幕')
-    expect(api).toContain('产物无效')
+    expect(contract).toContain('缺旁白')
+    expect(contract).toContain('缺字幕')
+    expect(contract).toContain('产物无效')
   })
 })
