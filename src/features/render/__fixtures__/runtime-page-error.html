@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+      }
+
+      [data-composition-id] {
+        width: 1920px;
+        height: 1080px;
+      }
+    </style>
+  </head>
+  <body>
+    <main data-composition-id="runtime-error"></main>
+    <script>
+      window.__CVC_RENDER__ = {
+        version: 1,
+        seek() {},
+      }
+      missingRenderIdentifier()
+    </script>
+  </body>
+</html>

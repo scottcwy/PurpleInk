@@ -277,6 +277,41 @@ describe('render queue handler', () => {
     expect(rejectFabricateArtifact).toHaveBeenCalledWith(
       'project-1',
       'node-1',
+      renderJob.htmlKey,
+    )
+  })
+
+  it('rejects a fabricate artifact when a nested page script error breaks rendering', async () => {
+    const harness = createQueue()
+    const sourceFailure = new Error('shot 页面脚本执行失败')
+    const failure = new Error('打开截图 session 失败', { cause: sourceFailure })
+    const rejectFabricateArtifact = vi.fn(async () => {})
+    registerRenderShotHandler(harness.queue, {
+      repository: {
+        hasFabricateArtifact: vi.fn(async () => true),
+        loadRenderContext: vi.fn(async () => renderJob),
+        recordRenderError: vi.fn(async () => {}),
+        rejectFabricateArtifact,
+      },
+      transitionNodeStatus: vi.fn(async () => {}),
+      renderer: { render: vi.fn(async () => { throw failure }) },
+      fabricateShot: vi.fn(async () => {}),
+      advancePipeline: vi.fn(),
+    })
+
+    await expect(
+      harness.getHandler()?.({
+        id: 'job-1',
+        kind: 'render-shot',
+        status: 'running',
+        payload: { projectId: 'project-1', nodeId: 'node-1' },
+        attempts: 1,
+      })
+    ).rejects.toThrow(failure)
+    expect(rejectFabricateArtifact).toHaveBeenCalledWith(
+      'project-1',
+      'node-1',
+      renderJob.htmlKey,
     )
   })
 
@@ -462,6 +497,7 @@ describe('render queue handler', () => {
     expect(rejectFabricateArtifact).toHaveBeenCalledWith(
       'project-1',
       'node-1',
+      renderJob.htmlKey,
     )
   })
 

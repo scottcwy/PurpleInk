@@ -31,15 +31,20 @@ export async function openFrameCapture(
       deviceScaleFactor: 1,
     })
     const page = await context.newPage()
+    const pageScript = { failed: false }
+    page.on('pageerror', () => {
+      pageScript.failed = true
+    })
     await page.goto(pathToFileURL(path.resolve(htmlPath)).href, { waitUntil: 'load' })
     await page.evaluate(async () => {
       await document.fonts.ready
     })
+    assertPageScript(pageScript)
     await assertRuntime(page)
     await assertMasterCanvasGeometry(page)
     const cdp = await context.newCDPSession(page)
     await cdp.send('Page.enable')
-    return createSession(browser, context, page, cdp)
+    return createSession(browser, context, page, cdp, pageScript)
   } catch (error) {
     await browser.close()
     throw error
@@ -98,19 +103,23 @@ function createSession(
   browser: Browser,
   context: BrowserContext,
   page: Page,
-  cdp: CDPSession
+  cdp: CDPSession,
+  pageScript: { failed: boolean }
 ): FrameCaptureSession {
   let closed = false
   return {
     async capture(frame, fps) {
       if (closed) throw new Error('FrameCaptureSession 已关闭')
       validateFrame(frame, fps)
-      await seekRuntime(page, frame, fps)
+      assertPageScript(pageScript)
+      await seekFrameRuntime(page, frame, fps)
+      assertPageScript(pageScript)
       const screenshot = await cdp.send('Page.captureScreenshot', {
         format: 'png',
         fromSurface: true,
         captureBeyondViewport: false,
       })
+      assertPageScript(pageScript)
       return Buffer.from(screenshot.data, 'base64')
     },
     async close() {
@@ -121,6 +130,10 @@ function createSession(
       await browser.close()
     },
   }
+}
+
+function assertPageScript(state: { failed: boolean }): void {
+  if (state.failed) throw new Error('shot 页面脚本执行失败')
 }
 
 async function assertRuntime(page: Page): Promise<void> {
@@ -145,8 +158,12 @@ async function assertRuntime(page: Page): Promise<void> {
   if (!runtime.hasSeek) throw new Error('__CVC_RENDER__.seek 必须是函数')
 }
 
-async function seekRuntime(page: Page, frame: number, fps: number): Promise<void> {
-  await page.evaluate(
+export async function seekFrameRuntime(
+  page: Page,
+  frame: number,
+  fps: number
+): Promise<void> {
+  const outcome = await page.evaluate(
     async ({ targetFrame, targetFps }) => {
       const runtime = (
         window as unknown as {
@@ -155,10 +172,18 @@ async function seekRuntime(page: Page, frame: number, fps: number): Promise<void
           }
         }
       ).__CVC_RENDER__
-      await runtime.seek(targetFrame, targetFps)
+      try {
+        await runtime.seek(targetFrame, targetFps)
+        return 'ok'
+      } catch {
+        return 'source-error'
+      }
     },
     { targetFrame: frame, targetFps: fps }
   )
+  if (outcome === 'source-error') {
+    throw new Error('shot 页面脚本执行失败')
+  }
 }
 
 function validateFrame(frame: number, fps: number): void {

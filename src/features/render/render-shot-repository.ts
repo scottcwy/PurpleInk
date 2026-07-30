@@ -82,16 +82,17 @@ export class RenderShotRepository {
     return (await this.findFabricateArtifact(projectId, nodeId)) !== null
   }
 
-  /** runtime admission 证明 source 无效后拒绝最新 draft，下一次重试必须重新 FABRICATE。 */
+  /** runtime admission 证明 source 无效后只拒绝本次使用的 draft。 */
   async rejectFabricateArtifact(
     projectId: string,
     nodeId: string,
+    sourceKey: string,
   ): Promise<void> {
     const database = await this.database()
     await database.transaction(async (transaction) => {
-      const [artifact] = await transaction
-        .select({ id: artifacts.id, lifecycle: artifacts.lifecycle })
-        .from(artifacts)
+      await transaction
+        .update(artifacts)
+        .set({ lifecycle: 'rejected', updatedAt: new Date() })
         .where(
           and(
             eq(artifacts.workspaceId, currentWorkspaceId()),
@@ -99,23 +100,7 @@ export class RenderShotRepository {
             eq(artifacts.aggregateType, 'node'),
             eq(artifacts.aggregateId, nodeId),
             eq(artifacts.kind, 'director-fabricate'),
-            ne(artifacts.lifecycle, 'rejected'),
-          ),
-        )
-        .orderBy(desc(artifacts.version), desc(artifacts.createdAt))
-        .limit(1)
-        .for('update')
-      if (!artifact) return
-      if (artifact.lifecycle !== 'draft') {
-        throw new Error('已批准或发布的 FABRICATE 产物不可原地拒绝')
-      }
-      await transaction
-        .update(artifacts)
-        .set({ lifecycle: 'rejected', updatedAt: new Date() })
-        .where(
-          and(
-            eq(artifacts.workspaceId, currentWorkspaceId()),
-            eq(artifacts.id, artifact.id),
+            eq(artifacts.storageKey, sourceKey),
             eq(artifacts.lifecycle, 'draft'),
           ),
         )

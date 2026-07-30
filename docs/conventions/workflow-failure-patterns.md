@@ -881,6 +881,34 @@ website start 又没有该字段。临时在响应中硬塞 `autopilot=true` 只
 
 ---
 
+## 7.20 模式 Z：页面脚本运行时错误未拒绝 FABRICATE，渲染重试永久复用坏 HTML
+
+**症状**：FABRICATE 与确定性检查都成功，`director-fabricate` 也已登记；渲染连续三次
+返回 `RENDER_FAILED`，但每次都复用同一份 HTML，最终项目失败。直接在 Chromium 打开
+产物可见 `ReferenceError`，例如变量被赋值和读取却从未声明。
+
+**真实事故**：静态门禁已经能拦语法错误、runtime 缺失和伪造字体，但无法证明所有
+JavaScript 标识符在运行时都有定义。`openFrameCapture` 又没有监听 `pageerror`；脚本
+异常后若 runtime 已提前挂到 `window`，admission 仍可能通过。即使异常导致母版根节点
+没有创建，几何错误也会被脱敏成普通 runtime admission 失败，`isRenderSourceContractError`
+无法识别，补偿不会拒绝坏的 FABRICATE Artifact，自动重试只能重复失败。
+
+**规则与护栏**：
+
+- Chromium 页面从加载到每次 `seek` 都必须监听并 fail-closed 处理 `pageerror`；普通界面
+  只返回稳定的“页面脚本执行失败”，不得泄漏生成代码或本地路径。
+- 只在浏览器页面内部把 `runtime.seek()` 自身异常转换为 source 合同错误；
+  `page.evaluate`、CDP、Chromium 断连等基础设施失败必须原样进入重试，禁止误拒绝有效源。
+- runtime 缺失/版本/seek、页面脚本异常、母版几何不匹配都属于生成 source 合同失败；
+  即使被 frame-sequence 包装，也必须沿 `Error.cause` 识别。
+- source 合同失败必须按本次 `RenderJob.htmlKey` 精确把对应的
+  `director-fabricate` draft 转为 `rejected`；禁止按节点重新查询“最新版本”，否则
+  旧渲染失败会误拒绝并发生成的新 draft。后续恢复重新 FABRICATE，禁止继续渲染同一坏版本。
+- 回归测试必须包含“runtime 与 1920×1080 根节点都存在，但页面脚本仍抛 ReferenceError”
+  的真实 Chromium fixture，以及嵌套 cause 仍会拒绝 Artifact 的队列测试。
+
+---
+
 ## 9. 已知未修项
 
 当前无已确认而未修的代码/文档项。
@@ -895,7 +923,8 @@ website start 又没有该字段。临时在响应中硬塞 `autopilot=true` 只
 导致 post-commit TypeError（模式 O）、并发旁白调度等待被包装为上游失败导致
 配音永久失败（模式 P）、数据库与应用时钟混用导致 Provider 等待风暴和字幕文本重复
 调用（模式 Q）、产物血缘用 artifactId 强绑定导致旁白重跑即判字幕失效（模式 S）
-、队列执行超时未中止旧阶段并允许迟到写入（模式 Y）——见各节「已落地护栏」。
+、队列执行超时未中止旧阶段并允许迟到写入（模式 Y）、页面脚本异常未拒绝坏
+FABRICATE Artifact（模式 Z）——见各节「已落地护栏」。
 
 ---
 

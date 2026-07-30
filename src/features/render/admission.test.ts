@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { StorageAdapter } from '@/lib/storage'
 import type { FrameCaptureSession } from './frame-capture'
-import { assertRenderAdmission } from './admission'
+import {
+  assertRenderAdmission,
+  isRenderSourceContractError,
+} from './admission'
 import type { RenderJob } from './types'
 
 vi.mock('server-only', () => ({}))
@@ -53,9 +56,11 @@ describe('assertRenderAdmission', () => {
   })
 
   it.each([
-    'shot 缺少 window.__CVC_RENDER__ runtime',
-    '__CVC_RENDER__ runtime version 不匹配：2 != 1',
-  ])('propagates runtime admission failure: %s', async (message) => {
+    ['shot 缺少 window.__CVC_RENDER__ runtime', 'shot 缺少 window.__CVC_RENDER__ runtime'],
+    ['__CVC_RENDER__ runtime version 不匹配：2 != 1', '__CVC_RENDER__ runtime version 不匹配：2 != 1'],
+    ['shot 页面脚本执行失败', 'shot 页面脚本执行失败'],
+    ['母版画布几何不匹配：root=null×null', '母版画布几何不匹配'],
+  ])('propagates runtime admission failure: %s', async (message, expected) => {
     const openFrameCapture = vi.fn(async () => {
       throw new Error(message)
     })
@@ -65,7 +70,15 @@ describe('assertRenderAdmission', () => {
         storage: storageOf(VALID_SOURCE),
         openFrameCapture,
       })
-    ).rejects.toThrow(message)
+    ).rejects.toThrow(expected)
+  })
+
+  it('recognizes a source contract failure through a renderer wrapper cause', () => {
+    const contractFailure = new Error('shot 页面脚本执行失败')
+    const wrapped = new Error('打开截图 session 失败', { cause: contractFailure })
+
+    expect(isRenderSourceContractError(wrapped)).toBe(true)
+    expect(isRenderSourceContractError(new Error('browser process unavailable'))).toBe(false)
   })
 
   it('closes a successfully validated runtime session', async () => {

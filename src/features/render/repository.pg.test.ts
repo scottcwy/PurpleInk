@@ -257,26 +257,58 @@ describe('RenderRepository Postgres', () => {
     )
   })
 
-  it('rejects the latest draft fabricate artifact so the next retry regenerates source', async () => {
+  it('rejects only the draft fabricate artifact used by the failed render', async () => {
     const projectId = randomUUID()
     const retryable = await seedRenderFixture(database.db, TEST_WORKSPACE_ID, projectId, {
       codegenStatus: 'failed',
+    })
+    const newerArtifactId = await insertArtifact(database.db, {
+      projectId,
+      aggregateId: retryable.codegenNodeId,
+      attemptId: retryable.nodeAttemptId,
+      kind: 'director-fabricate',
+      storageKey: 'director/S001-v2.html',
+      contentHash: 'd'.repeat(64),
+      version: 2,
     })
     const repository = new RenderRepository(database.db)
 
     await repository.rejectFabricateArtifact(
       projectId,
       retryable.codegenNodeId,
+      'director/S001.html',
     )
 
-    await expect(
-      repository.hasFabricateArtifact(projectId, retryable.codegenNodeId)
-    ).resolves.toBe(false)
-    const [artifact] = await database.db
-      .select({ lifecycle: artifacts.lifecycle })
+    const rows = await database.db
+      .select({
+        id: artifacts.id,
+        lifecycle: artifacts.lifecycle,
+        storageKey: artifacts.storageKey,
+      })
       .from(artifacts)
-      .where(eq(artifacts.aggregateId, retryable.codegenNodeId))
-    expect(artifact.lifecycle).toBe('rejected')
+      .where(
+        and(
+          eq(artifacts.aggregateId, retryable.codegenNodeId),
+          eq(artifacts.kind, 'director-fabricate'),
+        ),
+      )
+      .orderBy(artifacts.version)
+    expect(rows).toEqual([
+      expect.objectContaining({
+        storageKey: 'director/S001.html',
+        lifecycle: 'rejected',
+      }),
+      expect.objectContaining({
+        id: newerArtifactId,
+        storageKey: 'director/S001-v2.html',
+        lifecycle: 'draft',
+      }),
+    ])
+    await expect(
+      repository.loadRenderAdmissionContext(projectId, retryable.codegenNodeId)
+    ).resolves.toMatchObject({
+      job: { htmlKey: 'director/S001-v2.html' },
+    })
   })
 
   it.each([
