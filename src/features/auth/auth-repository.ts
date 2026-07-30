@@ -66,6 +66,8 @@ export async function createUserWithWorkspace(input: {
   passwordHash: string
   workspaceName: string
   emailVerifiedAt: Date
+  /** 全局角色；仅管理后台建号传 `admin`，缺省走列默认 `user`。 */
+  role?: string
 }): Promise<{ userId: string; workspaceId: string }> {
   const database = await getDb()
   return withTransaction(database, async (tx) => {
@@ -76,6 +78,7 @@ export async function createUserWithWorkspace(input: {
         name: input.name,
         passwordHash: input.passwordHash,
         emailVerifiedAt: input.emailVerifiedAt,
+        ...(input.role ? { role: input.role } : {}),
       })
       .returning({ id: users.id })
     if (!user) throw new Error('user insert returned no row')
