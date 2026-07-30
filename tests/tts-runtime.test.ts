@@ -161,6 +161,35 @@ describe("MiMo worker TTS client", () => {
       audio: { format: "wav", voice: "mimo_default" },
     });
   });
+
+  it("rejects decoded bytes that are not a RIFF/WAVE container", async () => {
+    const fetchImpl = vi.fn(
+      async (_input: string | URL, _init?: RequestInit) =>
+        Response.json({
+          choices: [{
+            message: {
+              audio: {
+                data: Buffer.from("not audio").toString("base64"),
+              },
+            },
+          }],
+        })
+    );
+
+    await expect(
+      synthesizeMimoSpeech(
+        "无效旁白。",
+        {
+          TTS_PROVIDER: "mimo",
+          CVC_MANAGED_MIMO_API_KEY: "test-mimo-key",
+          MIMO_BASE_URL: "https://api.xiaomimimo.com/v1",
+          MIMO_TTS_MODEL: "mimo-v2.5-tts",
+          MIMO_TTS_VOICE: "mimo_default",
+        },
+        fetchImpl
+      )
+    ).rejects.toThrow("MiMo TTS returned invalid WAV audio");
+  });
 });
 
 describe("TTS media commands", () => {
