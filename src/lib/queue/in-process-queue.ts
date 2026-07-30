@@ -65,6 +65,7 @@ export class InProcessQueue implements QueueAdapter {
   private readonly heldAttempts = new Set<string>()
   private readonly activeExecutions = new Set<Promise<void>>()
   private readonly backgroundOperations = new Set<Promise<void>>()
+  private tickInProgress = false
   private lanes: Record<string, number> = {}
 
   async enqueue(
@@ -84,7 +85,7 @@ export class InProcessQueue implements QueueAdapter {
     if (this.timer) return
     this.lanes = resolved
     this.timer = setInterval(
-      () => this.trackBackground(this.tick(), '消费循环失败'),
+      () => this.trackBackground(this.runTick(), '消费循环失败'),
       200,
     )
     this.heartbeatTimer = setInterval(
@@ -260,6 +261,16 @@ export class InProcessQueue implements QueueAdapter {
     } finally {
       unregisterAttemptController(job.id, controller)
       await releaseTerminalSlot(database, job)
+    }
+  }
+
+  private async runTick(): Promise<void> {
+    if (this.tickInProgress) return
+    this.tickInProgress = true
+    try {
+      await this.tick()
+    } finally {
+      this.tickInProgress = false
     }
   }
 

@@ -63,6 +63,38 @@ afterAll(async () => {
 })
 
 describe('legacy in-process queue PG compatibility', () => {
+  it('does not overlap polling ticks when one claim cycle is slow', async () => {
+    const { InProcessQueue } = await import('./in-process-queue')
+    const queue = new InProcessQueue()
+    let releaseTick: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+      releaseTick = resolve
+    })
+    let activeTicks = 0
+    let maxActiveTicks = 0
+    const tickSpy = vi
+      .spyOn(
+        queue as unknown as { tick: () => Promise<void> },
+        'tick',
+      )
+      .mockImplementation(async () => {
+        activeTicks += 1
+        maxActiveTicks = Math.max(maxActiveTicks, activeTicks)
+        await gate
+        activeTicks -= 1
+      })
+
+    queue.start({ 'director-stage': 1 })
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 550))
+      expect(tickSpy).toHaveBeenCalledTimes(1)
+      expect(maxActiveTicks).toBe(1)
+    } finally {
+      releaseTick()
+      await queue.stopAndDrain()
+    }
+  })
+
   it('has no database side effect until enqueue and persists one run/attempt atomically', async () => {
     const { InProcessQueue } = await import('./in-process-queue')
     const queue = new InProcessQueue()
