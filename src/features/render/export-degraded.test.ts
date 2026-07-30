@@ -39,6 +39,7 @@ function plan(overrides: Partial<RenderExportPlan> = {}): RenderExportPlan {
     placeholderCandidates: [],
     placeholderLaneKeys: [],
     fps: 30,
+    timeline: { fps: 30, totalFrames: 0, shots: [] },
     media: {
       narrationReadyCount: 0,
       subtitleReadyCount: 0,

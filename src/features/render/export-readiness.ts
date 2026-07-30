@@ -46,6 +46,8 @@ export interface ExportReadinessResult {
   } | null
   blockingIssues: RenderExportPlan['blockingIssues']
   media: RenderExportPlan['media']
+  /** 时间轴真值（来自 INGEST 分配合同），供导出页按真实时长排布轨道。 */
+  timeline: RenderExportPlan['timeline']
   /** 当前缺渲染产物、可占位出片的 lane。 */
   placeholderCandidateLanes: string[]
   /** 降级导出是否可行（无项目级完整性阻塞）。 */
@@ -110,6 +112,7 @@ export async function getExportReadiness(
       : null,
     blockingIssues: plan.blockingIssues,
     media: plan.media,
+    timeline: plan.timeline,
     placeholderCandidateLanes,
     degradedReady,
     confirmationFingerprint: degradedReady && degradedPlan

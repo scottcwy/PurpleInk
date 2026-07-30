@@ -59,6 +59,20 @@ export interface LoadedMediaAssembly {
   placeholderLaneKeys: string[]
   /** 时间轴帧率（用于生成占位片段）；ingest 合同缺失时为 null。 */
   fps: number | null
+  /**
+   * 时间轴真值：来自 INGEST 音频分配合同，与产物是否就绪无关。
+   *
+   * 单独投影是因为 `plan` 只在完全就绪时才非空，而导出页在未就绪时同样要按
+   * 真实时长画轨道——否则只能退回常量宽度，UI 会暗示错误的时间位置。
+   * ingest 合同缺失或无效时为 null，此时页面显示未接线而不是编造刻度。
+   */
+  timeline: MediaTimeline | null
+}
+
+export interface MediaTimeline {
+  fps: 24 | 30 | 60
+  totalFrames: number
+  shots: { laneKey: string; durationInFrames: number }[]
 }
 
 const subtitleLineageSchema = z
@@ -184,6 +198,14 @@ export async function loadMediaAssembly(
     placeholderCandidates: result.placeholderCandidates,
     placeholderLaneKeys: result.placeholderLaneKeys,
     fps: parsedIngest.data.audioAllocation.fps,
+    timeline: {
+      fps: parsedIngest.data.audioAllocation.fps,
+      totalFrames: parsedIngest.data.audioAllocation.totalFrames,
+      shots: parsedIngest.data.audioAllocation.shots.map((shot) => ({
+        laneKey: shot.id,
+        durationInFrames: shot.durationInFrames,
+      })),
+    },
   }
 }
 
@@ -311,6 +333,7 @@ function blocked(
     placeholderCandidates: [],
     placeholderLaneKeys: [],
     fps: null,
+    timeline: null,
   }
 }
 

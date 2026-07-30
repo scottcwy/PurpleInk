@@ -17,6 +17,7 @@ import { storage as defaultStorage, type StorageAdapter } from '@/lib/storage'
 import {
   loadMediaAssembly,
   type LoadedMediaAssembly,
+  type MediaTimeline,
 } from './media-assembly-loader'
 import type {
   ArtifactRef,
@@ -64,6 +65,8 @@ export interface RenderExportPlan {
   placeholderLaneKeys: string[]
   /** 时间轴帧率（生成占位片段用）；ingest 合同缺失时 null。 */
   fps: number | null
+  /** 时间轴真值（来自 INGEST 分配合同），与产物就绪无关；缺合同时 null。 */
+  timeline: MediaTimeline | null
   media: {
     narrationReadyCount: number
     /** 本次交付不含字幕时为 null（未测量），不得回落成 requiredShotCount。 */
@@ -222,6 +225,7 @@ export class RenderRepository extends RenderArtifactRepository {
       placeholderCandidates: media.placeholderCandidates,
       placeholderLaneKeys: media.placeholderLaneKeys,
       fps: media.fps,
+      timeline: media.timeline,
       media: mediaReadiness(media, settings.subtitles),
     }
   }

@@ -514,6 +514,12 @@ function mediaFields(mediaAssemblyPlan: ReturnType<typeof completeMediaPlan> | n
     placeholderCandidates: [],
     placeholderLaneKeys: [],
     fps: mediaAssemblyPlan ? (30 as const) : null,
+    // 时间轴真值来自 INGEST 分配合同，与产物就绪无关：未就绪时它仍然存在。
+    timeline: {
+      fps: 30 as const,
+      totalFrames: 60,
+      shots: [{ laneKey: 'S001', durationInFrames: 60 }],
+    },
     media: {
       narrationReadyCount: mediaAssemblyPlan ? 1 : 0,
       subtitleReadyCount: mediaAssemblyPlan ? 1 : 0,
