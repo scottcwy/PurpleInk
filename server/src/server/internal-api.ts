@@ -14,7 +14,7 @@ import {
   getJob,
   toIntegratedJobView,
 } from "./job-store"
-import { runJob } from "./job-runner"
+import { cancelJob, runJob } from "./job-runner"
 
 export async function handleInternalRequest(
   req: IncomingMessage,
@@ -51,6 +51,14 @@ export async function handleInternalRequest(
       return true
     }
     sendJson(res, 200, toIntegratedJobView(job))
+    return true
+  }
+  if (req.method === "DELETE" && match && !match[2]) {
+    if (!cancelJob(match[1]!)) {
+      sendJson(res, 404, { error: "job not found" })
+      return true
+    }
+    sendJson(res, 200, { status: "cancelled" })
     return true
   }
 

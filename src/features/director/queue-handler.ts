@@ -59,7 +59,9 @@ export function registerDirectorStageHandler(
 ): void {
   targetQueue.register('director-stage', async (job) => {
     const payload = directorStageJobSchema.parse(job.payload)
+    job.signal?.throwIfAborted()
     await runStage(payload.projectId, payload.nodeId, payload.stage, job.id)
+    job.signal?.throwIfAborted()
   })
 }
 

@@ -139,6 +139,7 @@ export function registerMediaNarrationHandler(
   run: typeof runMediaNarrationJob = runMediaNarrationJob
 ): void {
   targetQueue.register('media-narration', async (job) => {
+    job.signal?.throwIfAborted()
     await run(mediaNarrationJobSchema.parse({
       ...job.payload,
       billingContext: {
@@ -146,6 +147,7 @@ export function registerMediaNarrationHandler(
         invocationNo: billingInvocationNo('narration', 1),
       },
     }))
+    job.signal?.throwIfAborted()
   })
 }
 

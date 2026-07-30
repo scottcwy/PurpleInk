@@ -477,6 +477,27 @@ describe('completeAttempt 自动重试', () => {
     expect((await readRun(seeded.runId)).status).toBe('succeeded')
     expect(await readRunAttempts(seeded.runId)).toHaveLength(1)
   })
+
+  it('执行代次失效后拒绝迟到成功并把节点收敛为 cancelled', async () => {
+    const { completeAttempt } = await import('./attempt-completion')
+    const projectId = await seedProject()
+    const seeded = await seedRunningNodeAttempt(projectId, {})
+    await database.db
+      .update(projects)
+      .set({ executionEpoch: 1, autopilot: false })
+      .where(eq(projects.id, projectId))
+
+    await completeAttempt(
+      database.db,
+      LOCAL_WORKSPACE_ID,
+      seeded.attemptId,
+      'succeeded',
+    )
+
+    expect((await readAttempt(seeded.attemptId)).status).toBe('cancelled')
+    expect((await readRun(seeded.runId)).status).toBe('cancelled')
+    expect((await readNode(seeded.nodeId)).status).toBe('cancelled')
+  })
 })
 
 async function seedProject(): Promise<string> {

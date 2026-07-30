@@ -194,6 +194,10 @@ export class InProcessQueue implements QueueAdapter {
     try {
       const database = await getDb()
       await sweepExpiredLeases(database)
+      const { reconcileStaleExecutionEpochs } = await import(
+        './execution-reconciliation'
+      )
+      await reconcileStaleExecutionEpochs(database)
       const { reconcileExpiredProviderTickets } = await import(
         '@/features/ai/provider-dispatch-ticket'
       )

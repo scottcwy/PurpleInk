@@ -15,6 +15,7 @@ const enginePhaseSchema = z.enum([
   'muxing',
   'done',
   'failed',
+  'cancelled',
 ])
 
 const engineJobSchema = z
@@ -22,7 +23,7 @@ const engineJobSchema = z
     id: z.string().min(1),
     requestId: z.string().min(1),
     origin: z.string().url(),
-    status: z.enum(['queued', 'running', 'done', 'failed']),
+    status: z.enum(['queued', 'running', 'done', 'failed', 'cancelled']),
     phase: enginePhaseSchema,
     durationSec: z.number().positive().nullable(),
     durationSource: z.enum(['request', 'output']).nullable(),
@@ -131,6 +132,12 @@ export class WebsiteEngineClient {
       throw new WebsiteEngineError('ENGINE_VIDEO_INVALID', false, response.status)
     }
     return readResponseBodyWithLimit(response, MAX_WEBSITE_VIDEO_BYTES)
+  }
+
+  async cancel(jobId: string): Promise<void> {
+    await this.request(`/internal/jobs/${encodeURIComponent(jobId)}`, {
+      method: 'DELETE',
+    })
   }
 
   private async request(

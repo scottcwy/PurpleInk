@@ -26,6 +26,7 @@ export interface RenderOptions {
   timeoutMs?: number
   /** 渲染帧率（可选，追加 --fps 参数） */
   fps?: number
+  signal?: AbortSignal
 }
 
 export interface RenderResult {
@@ -71,7 +72,8 @@ function runCommand(
   command: string,
   cwd: string,
   env: NodeJS.ProcessEnv,
-  timeoutMs: number
+  timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<{ code: number; output: string }> {
   return new Promise((resolve) => {
     const child = spawn(command, { cwd, env, shell: true })
@@ -85,12 +87,19 @@ function runCommand(
       child.kill("SIGKILL")
       output += "\n[purpleink] timed out\n"
     }, timeoutMs)
+    const abort = () => {
+      child.kill("SIGKILL")
+      output += "\n[purpleink] cancelled\n"
+    }
+    signal?.addEventListener("abort", abort, { once: true })
     child.on("close", (code) => {
       clearTimeout(timer)
+      signal?.removeEventListener("abort", abort)
       resolve({ code: code ?? -1, output })
     })
     child.on("error", (err) => {
       clearTimeout(timer)
+      signal?.removeEventListener("abort", abort)
       resolve({ code: -1, output: output + "\n[spawn error] " + String(err) })
     })
   })
@@ -127,6 +136,7 @@ function prependToPath(env: NodeJS.ProcessEnv, dir: string): void {
  * @param projectDir 项目目录（含 index.html）
  */
 export async function renderProject(projectDir: string, options: RenderOptions = {}): Promise<RenderResult> {
+  options.signal?.throwIfAborted()
   const timeoutMs = options.timeoutMs ?? 20 * 60 * 1000
   const ffmpegDir = await resolveFfmpegDir(options.ffmpegDir)
   const env: NodeJS.ProcessEnv = { ...process.env }
@@ -142,7 +152,14 @@ export async function renderProject(projectDir: string, options: RenderOptions =
   if (!options.skipCheck) {
     logger.info("render:check_start", { projectDir })
     const hyperframesCli = `"${getHyperframesCliPath()}"`
-    const check = await runCommand(`${hyperframesCli} check`, projectDir, env, timeoutMs)
+    const check = await runCommand(
+      `${hyperframesCli} check`,
+      projectDir,
+      env,
+      timeoutMs,
+      options.signal,
+    )
+    options.signal?.throwIfAborted()
     checkPassed = check.code === 0
     checkOutput = check.output
     logger.info("render:check_done", { checkPassed })
@@ -152,7 +169,14 @@ export async function renderProject(projectDir: string, options: RenderOptions =
   logger.info("render:render_start", { projectDir, quality, fps: options.fps })
   let renderCmd = `"${getHyperframesCliPath()}" render --quality ${quality}`
   if (options.fps) renderCmd += ` --fps ${options.fps}`
-  const render = await runCommand(renderCmd, projectDir, env, timeoutMs)
+  const render = await runCommand(
+    renderCmd,
+    projectDir,
+    env,
+    timeoutMs,
+    options.signal,
+  )
+  options.signal?.throwIfAborted()
   const videoPath = await findNewestMp4(projectDir)
   logger.info("render:render_done", { code: render.code, videoPath })
 

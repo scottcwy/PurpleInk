@@ -1,13 +1,30 @@
-import { and, eq, inArray, isNotNull, lt, sql, type SQL } from 'drizzle-orm'
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm'
 import { PIPELINE_STAGES, type PipelineStage } from '@/features/director/types'
 import { runInAuthContext, SYSTEM_USER_ID } from '@/lib/auth/workspace-context'
 import type { Db } from '@/lib/db/client'
-import { canvasNodes, pipelineRuns, taskAttempts } from '@/lib/db/schema/index'
+import {
+  canvasNodes,
+  pipelineRuns,
+  taskAttempts,
+  workflowConcurrencyLeases,
+} from '@/lib/db/schema/index'
 
 /** running attempt 的租约时长；持有进程按 HEARTBEAT_INTERVAL_MS 心跳续期。 */
 export const LEASE_DURATION_MS = 120_000
 export const HEARTBEAT_INTERVAL_MS = 30_000
 export const SWEEP_INTERVAL_MS = 60_000
+export const NULL_LEASE_STALE_MS = 20 * 60_000
+export const CANCELLATION_ACK_MS = 2 * HEARTBEAT_INTERVAL_MS
 
 const MINUTE_MS = 60_000
 
@@ -83,6 +100,7 @@ export async function renewLeases(db: Db, attemptIds: string[]): Promise<void> {
     .where(
       and(
         eq(taskAttempts.status, 'running'),
+        isNull(taskAttempts.cancelRequestedAt),
         inArray(taskAttempts.id, attemptIds),
       ),
     )
@@ -114,6 +132,9 @@ interface ExpiredAttemptRow {
   entityId: string
   checkpoint: unknown
   nodeStage: string | null
+  projectId: string
+  workUnitKey: string | null
+  cancelRequestedAt: Date | null
 }
 
 /**
@@ -132,6 +153,9 @@ export async function sweepExpiredLeases(db: Db): Promise<string[]> {
         entityId: taskAttempts.entityId,
         checkpoint: taskAttempts.checkpoint,
         nodeStage: canvasNodes.stage,
+        projectId: pipelineRuns.projectId,
+        workUnitKey: taskAttempts.workUnitKey,
+        cancelRequestedAt: taskAttempts.cancelRequestedAt,
       })
       .from(taskAttempts)
       .leftJoin(
@@ -141,20 +165,54 @@ export async function sweepExpiredLeases(db: Db): Promise<string[]> {
           eq(canvasNodes.id, taskAttempts.entityId)
         )
       )
+      .innerJoin(
+        pipelineRuns,
+        and(
+          eq(pipelineRuns.workspaceId, taskAttempts.workspaceId),
+          eq(pipelineRuns.id, taskAttempts.runId),
+        ),
+      )
       .where(
         and(
           eq(taskAttempts.status, 'running'),
-          isNotNull(taskAttempts.leaseExpiresAt),
-          lt(taskAttempts.leaseExpiresAt, sql`now()`)
+          or(
+            and(
+              isNotNull(taskAttempts.cancelRequestedAt),
+              lt(
+                taskAttempts.updatedAt,
+                sql`now() - make_interval(secs => ${CANCELLATION_ACK_MS / 1_000})`,
+              ),
+            ),
+            and(
+              isNotNull(taskAttempts.leaseExpiresAt),
+              lt(taskAttempts.leaseExpiresAt, sql`now()`),
+            ),
+            and(
+              isNull(taskAttempts.leaseExpiresAt),
+              lt(
+                taskAttempts.updatedAt,
+                sql`now() - make_interval(secs => ${NULL_LEASE_STALE_MS / 1_000})`,
+              ),
+            ),
+          ),
         )
       )
       .for('update', { of: taskAttempts, skipLocked: true })
     for (const row of rows) {
+      const cancelled = row.cancelRequestedAt !== null
       await transaction
         .update(taskAttempts)
         .set({
-          status: 'failed',
-          failure: { schemaVersion: 1, message: LEASE_EXPIRED_FAILURE_MESSAGE },
+          status: cancelled ? 'cancelled' : 'failed',
+          failure: cancelled
+            ? {
+                schemaVersion: 2,
+                code: 'TASK_INTERRUPTED',
+                message: '项目停止后执行进程未及时确认，系统已自动收敛',
+                retryable: true,
+              }
+            : { schemaVersion: 1, message: LEASE_EXPIRED_FAILURE_MESSAGE },
+          leaseExpiresAt: null,
           completedAt: sql`now()`,
           updatedAt: sql`now()`,
         })
@@ -166,13 +224,33 @@ export async function sweepExpiredLeases(db: Db): Promise<string[]> {
         )
       await transaction
         .update(pipelineRuns)
-        .set({ status: 'failed', completedAt: sql`now()`, updatedAt: sql`now()` })
+        .set({
+          status: cancelled ? 'cancelled' : 'failed',
+          completedAt: sql`now()`,
+          updatedAt: sql`now()`,
+        })
         .where(
           and(
             eq(pipelineRuns.workspaceId, row.workspaceId),
             eq(pipelineRuns.id, row.runId)
           )
         )
+      if (row.workUnitKey) {
+        await transaction
+          .update(workflowConcurrencyLeases)
+          .set({
+            status: cancelled ? 'cancelled' : 'expired',
+            leaseExpiresAt: null,
+            releasedAt: sql`now()`,
+            updatedAt: sql`now()`,
+          })
+          .where(and(
+            eq(workflowConcurrencyLeases.workspaceId, row.workspaceId),
+            eq(workflowConcurrencyLeases.projectId, row.projectId),
+            eq(workflowConcurrencyLeases.workUnitKey, row.workUnitKey),
+            inArray(workflowConcurrencyLeases.status, ['waiting', 'active']),
+          ))
+      }
     }
     return rows
   })
@@ -218,12 +296,17 @@ async function projectInterruptedNodes(
       await runInAuthContext(
         { workspaceId: row.workspaceId, userId: SYSTEM_USER_ID },
         async () => {
-          await transitionNodeStatus(row.entityId, 'failed')
-          await repository.recordStageError(
-            row.entityId,
-            resolveStage(row),
-            new Error(LEASE_EXPIRED_FAILURE_MESSAGE)
-          )
+          if (row.cancelRequestedAt) {
+            await transitionNodeStatus(row.entityId, 'cancelled')
+            console.info('[attempt_cancel_acknowledged]', { attemptId: row.id })
+          } else {
+            await transitionNodeStatus(row.entityId, 'failed')
+            await repository.recordStageError(
+              row.entityId,
+              resolveStage(row),
+              new Error(LEASE_EXPIRED_FAILURE_MESSAGE)
+            )
+          }
         }
       )
     } catch (error) {

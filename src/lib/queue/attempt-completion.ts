@@ -2,7 +2,13 @@ import { randomUUID } from 'node:crypto'
 import { and, eq, sql } from 'drizzle-orm'
 import { runInAuthContext, SYSTEM_USER_ID } from '@/lib/auth/workspace-context'
 import type { Db } from '@/lib/db/client'
-import { pipelineRuns, taskAttempts, type VersionedPayload } from '@/lib/db/schema/index'
+import {
+  canvasNodes,
+  pipelineRuns,
+  projects,
+  taskAttempts,
+  type VersionedPayload,
+} from '@/lib/db/schema/index'
 import { backoffMs, shouldAutoRetry } from './retry-policy'
 import { classifyWorkflowError } from '@/features/canvas/workflow-error'
 import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
@@ -30,6 +36,10 @@ interface CompletingAttemptRow extends ProviderWaitAttempt {
   attemptNo: number
   fingerprint: string
   checkpoint: VersionedPayload
+  workUnitKey: string | null
+  cancelRequestedAt: Date | null
+  runExecutionEpoch: number
+  projectExecutionEpoch: number
 }
 
 /**
@@ -60,8 +70,26 @@ export async function completeAttempt(
         attemptNo: taskAttempts.attemptNo,
         fingerprint: taskAttempts.fingerprint,
         checkpoint: taskAttempts.checkpoint,
+        workUnitKey: taskAttempts.workUnitKey,
+        cancelRequestedAt: taskAttempts.cancelRequestedAt,
+        runExecutionEpoch: pipelineRuns.executionEpoch,
+        projectExecutionEpoch: projects.executionEpoch,
       })
       .from(taskAttempts)
+      .innerJoin(
+        pipelineRuns,
+        and(
+          eq(pipelineRuns.workspaceId, taskAttempts.workspaceId),
+          eq(pipelineRuns.id, taskAttempts.runId),
+        ),
+      )
+      .innerJoin(
+        projects,
+        and(
+          eq(projects.workspaceId, pipelineRuns.workspaceId),
+          eq(projects.id, pipelineRuns.projectId),
+        ),
+      )
       .where(
         and(
           eq(taskAttempts.workspaceId, workspaceId),
@@ -69,12 +97,55 @@ export async function completeAttempt(
         )
       )
       .limit(1)
-      .for('update')
+      .for('update', { of: taskAttempts })
     if (!attempt) throw new Error(`legacy queue attempt not found: ${attemptId}`)
     // sweepExpiredLeases 可能在 handler 迟到完成前已把 attempt/run 收尸为失败。
     // 行锁保证这里读取的状态与后续写入属于同一原子窗口；非 running 的旧完成
     // 不得覆盖 TASK_INTERRUPTED 投影，也不得重置节点或追加新的 retry attempt。
     if (attempt.status !== 'running') return null
+    if (
+      attempt.cancelRequestedAt !== null
+      || attempt.runExecutionEpoch !== attempt.projectExecutionEpoch
+    ) {
+      await transaction
+        .update(taskAttempts)
+        .set({
+          status: 'cancelled',
+          failure: {
+            schemaVersion: 2,
+            code: 'TASK_INTERRUPTED',
+            message: '项目执行已停止，迟到结果未被采用',
+            retryable: true,
+          },
+          leaseExpiresAt: null,
+          completedAt: sql`now()`,
+          updatedAt: sql`now()`,
+        })
+        .where(and(
+          eq(taskAttempts.workspaceId, workspaceId),
+          eq(taskAttempts.id, attemptId),
+          eq(taskAttempts.status, 'running'),
+        ))
+      await transaction
+        .update(pipelineRuns)
+        .set({ status: 'cancelled', completedAt: sql`now()`, updatedAt: sql`now()` })
+        .where(and(
+          eq(pipelineRuns.workspaceId, workspaceId),
+          eq(pipelineRuns.id, attempt.runId),
+        ))
+      if (attempt.entityType === 'node') {
+        await transaction
+          .update(canvasNodes)
+          .set({ status: 'cancelled', updatedAt: sql`now()` })
+          .where(and(
+            eq(canvasNodes.workspaceId, workspaceId),
+            eq(canvasNodes.id, attempt.entityId),
+            eq(canvasNodes.status, 'running'),
+          ))
+      }
+      console.info('[stale_execution_fenced]', { attemptId })
+      return null
+    }
 
     const now = await databaseNow(transaction)
     const stage = retryStage(attempt.checkpoint)
@@ -225,6 +296,7 @@ async function scheduleRetry(
     checkpoint: patchQueueMeta(attempt.checkpoint, {
       ordinaryAttemptNo: ordinaryAttemptNo(attempt) + 1,
     }),
+    workUnitKey: attempt.workUnitKey,
     // 用 DB 时钟计算退避，避免应用与 DB 时钟漂移（与 leaseDeadline 同理）。
     visibleAt: sql`now() + make_interval(secs => ${backoffMs(attempt.attemptNo) / 1000})`,
   })

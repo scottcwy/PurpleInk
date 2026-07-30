@@ -102,7 +102,19 @@ export async function reconcileExpiredProviderTickets(
     .set({ status: 'cancelled', releasedAt: sql`now()` })
     .where(and(
       sql`${providerDispatches.status} in ('scheduled', 'in_flight')`,
-      sql`${providerDispatches.leaseExpiresAt} <= now()`,
+      sql`(
+        ${providerDispatches.leaseExpiresAt} <= now()
+        or (
+          ${providerDispatches.attemptId} is not null
+          and exists (
+            select 1
+            from task_attempts parent_attempt
+            where parent_attempt.workspace_id = ${providerDispatches.workspaceId}
+              and parent_attempt.id = ${providerDispatches.attemptId}
+              and parent_attempt.status <> 'running'
+          )
+        )
+      )`,
     ))
     .returning({ id: providerDispatches.id })
   if (rows.length > 0) {

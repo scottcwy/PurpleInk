@@ -69,13 +69,16 @@ export async function runWebsiteVideoQueueJob(
   run: (input: RunWebsiteVideoInput) => Promise<unknown> = runWebsiteVideo,
 ): Promise<void> {
   const payload = websiteVideoJobSchema.parse(job.payload)
+  job.signal?.throwIfAborted()
   try {
     await run({
       workspaceId: z.string().uuid().parse(job.workspaceId),
       projectId: payload.projectId,
       attemptId: z.string().uuid().parse(job.id),
       invocationNo: WEBSITE_BILLING_INVOCATION_NO,
+      ...(job.signal ? { signal: job.signal } : {}),
     })
+    job.signal?.throwIfAborted()
   } catch (error) {
     throw new WebsiteVideoAttemptTerminalError(websiteFailureCode(error))
   }

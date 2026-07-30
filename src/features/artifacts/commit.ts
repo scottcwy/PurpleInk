@@ -1,6 +1,6 @@
 import 'server-only'
 import { randomUUID } from 'node:crypto'
-import { and, desc, eq, gt, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm'
 import type { Db } from '@/lib/db/client'
 import {
   artifacts,
@@ -282,6 +282,13 @@ async function assertAttemptFence(
         eq(pipelineRuns.id, taskAttempts.runId)
       )
     )
+    .innerJoin(
+      projects,
+      and(
+        eq(projects.workspaceId, pipelineRuns.workspaceId),
+        eq(projects.id, pipelineRuns.projectId),
+      ),
+    )
     .where(
       and(
         eq(taskAttempts.workspaceId, input.workspaceId),
@@ -290,11 +297,13 @@ async function assertAttemptFence(
         eq(taskAttempts.entityId, input.aggregateId),
         eq(pipelineRuns.projectId, input.projectId),
         eq(pipelineRuns.status, 'running'),
-        eq(taskAttempts.status, 'running')
+        eq(taskAttempts.status, 'running'),
+        isNull(taskAttempts.cancelRequestedAt),
+        eq(pipelineRuns.executionEpoch, projects.executionEpoch),
       )
     )
     .limit(1)
-    .for('update')
+    .for('update', { of: taskAttempts })
   if (!attempt) throw new Error('STALE_ATTEMPT')
   const [newerAttempt] = await transaction
     .select({ id: taskAttempts.id })

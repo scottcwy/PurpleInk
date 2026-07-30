@@ -34,11 +34,13 @@ export interface WebsiteEngineExecutionResult {
 
 export interface WebsiteEngineExecutionDependencies {
   engine: Pick<WebsiteEngineClient, 'start' | 'getJob' | 'downloadVideo'>
+    & Partial<Pick<WebsiteEngineClient, 'cancel'>>
   onProgress(progress: WebsiteStageProgress): Promise<void>
   nowMs: () => number
   sleep(milliseconds: number): Promise<void>
   pollIntervalMs: number
   timeoutMs: number
+  signal?: AbortSignal
 }
 
 export class WebsiteExecutionError extends Error {
@@ -62,6 +64,7 @@ export async function executeWebsiteEngine(
   dependencies: WebsiteEngineExecutionDependencies,
 ): Promise<WebsiteEngineExecutionResult> {
   const requestId = createWebsiteEngineRequestId(input.projectId, input.attemptId)
+  dependencies.signal?.throwIfAborted()
   const startInput: StartWebsiteEngineInput = {
     requestId,
     url: input.url,
@@ -81,48 +84,63 @@ export async function executeWebsiteEngine(
     deadline,
     dependencies.nowMs,
   )
+  const cancelWorker = () => {
+    void dependencies.engine.cancel?.(job.id).catch(() => undefined)
+  }
+  dependencies.signal?.addEventListener('abort', cancelWorker, { once: true })
 
-  while (true) {
-    if (job.status === 'failed' || job.phase === 'failed') {
-      throw new WebsiteExecutionError('WEBSITE_ENGINE_FAILED')
-    }
-    await dependencies.onProgress(safeWebsiteStageProgress(job))
-    if (job.status === 'done') {
-      assertCompletedJob(job)
-      return {
-        requestId,
-        job,
-        videoBytes: await withinDeadline(
-          () => dependencies.engine.downloadVideo(job.id),
+  try {
+    while (true) {
+      dependencies.signal?.throwIfAborted()
+      if (
+        job.status === 'failed'
+        || job.phase === 'failed'
+        || job.status === 'cancelled'
+        || job.phase === 'cancelled'
+      ) {
+        throw new WebsiteExecutionError('WEBSITE_ENGINE_FAILED')
+      }
+      await dependencies.onProgress(safeWebsiteStageProgress(job))
+      if (job.status === 'done') {
+        assertCompletedJob(job)
+        return {
+          requestId,
+          job,
+          videoBytes: await withinDeadline(
+            () => dependencies.engine.downloadVideo(job.id),
+            deadline,
+            dependencies.nowMs,
+          ),
+        }
+      }
+      const remainingMs = deadline - dependencies.nowMs()
+      if (remainingMs <= 0) {
+        throw new WebsiteExecutionError('WEBSITE_ENGINE_TIMEOUT')
+      }
+      await dependencies.sleep(Math.min(pollIntervalMs, remainingMs))
+      dependencies.signal?.throwIfAborted()
+      if (dependencies.nowMs() >= deadline) {
+        throw new WebsiteExecutionError('WEBSITE_ENGINE_TIMEOUT')
+      }
+      try {
+        job = await withinDeadline(
+          () => dependencies.engine.getJob(job.id),
           deadline,
           dependencies.nowMs,
-        ),
+        )
+        assertRequestIdentity(job, requestId)
+      } catch (error) {
+        if (!isMissingJob(error) || restarted) throw error
+        restarted = true
+        job = await withinDeadline(
+          () => startChecked(dependencies.engine, startInput),
+          deadline,
+          dependencies.nowMs,
+        )
       }
     }
-    const remainingMs = deadline - dependencies.nowMs()
-    if (remainingMs <= 0) {
-      throw new WebsiteExecutionError('WEBSITE_ENGINE_TIMEOUT')
-    }
-    await dependencies.sleep(Math.min(pollIntervalMs, remainingMs))
-    if (dependencies.nowMs() >= deadline) {
-      throw new WebsiteExecutionError('WEBSITE_ENGINE_TIMEOUT')
-    }
-    try {
-      job = await withinDeadline(
-        () => dependencies.engine.getJob(job.id),
-        deadline,
-        dependencies.nowMs,
-      )
-      assertRequestIdentity(job, requestId)
-    } catch (error) {
-      if (!isMissingJob(error) || restarted) throw error
-      restarted = true
-      job = await withinDeadline(
-        () => startChecked(dependencies.engine, startInput),
-        deadline,
-        dependencies.nowMs,
-      )
-    }
+  } finally {
+    dependencies.signal?.removeEventListener('abort', cancelWorker)
   }
 }
 

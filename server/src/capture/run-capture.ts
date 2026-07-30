@@ -39,6 +39,7 @@ export interface RunCaptureOptions {
   credentialMode?: CredentialMode
   /** 仅公网采集；Playwright 会在导航及请求边界执行 URL 门禁。 */
   publicOnly?: boolean
+  signal?: AbortSignal
 }
 
 /**
@@ -46,7 +47,12 @@ export interface RunCaptureOptions {
  * @returns 写盘清单（含各资产描述）
  */
 export async function runCapture(url: string, options: RunCaptureOptions = {}): Promise<AdapterManifest> {
+  options.signal?.throwIfAborted()
   const driver = await createDriver(options.driver)
+  const abort = () => {
+    void driver.close()
+  }
+  options.signal?.addEventListener("abort", abort, { once: true })
   await driver.launch({
     headless: !options.headful,
     ...(options.publicOnly != null ? { publicOnly: options.publicOnly } : {}),
@@ -57,6 +63,7 @@ export async function runCapture(url: string, options: RunCaptureOptions = {}): 
   let pageTokens: PageTokens | undefined
 
   try {
+    options.signal?.throwIfAborted()
     // 1. 先落地首页抓品牌数据（落地页颜色/字体/CSS 变量最全）
     await driver.navigate(url)
     try {
@@ -178,8 +185,10 @@ export async function runCapture(url: string, options: RunCaptureOptions = {}): 
       assets: manifest.assets.length,
       visionUsed: manifest.visionUsed,
     })
+    options.signal?.throwIfAborted()
     return manifest
   } finally {
+    options.signal?.removeEventListener("abort", abort)
     await driver.close()
   }
 }

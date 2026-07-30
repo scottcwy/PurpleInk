@@ -47,6 +47,7 @@ export interface RunWebsiteVideoInput {
   projectId: string
   attemptId: string
   invocationNo: number
+  signal?: AbortSignal
 }
 
 export interface WebsiteExecutionDependencies {
@@ -151,7 +152,9 @@ async function produceWebsiteOutput(
     sleep: dependencies.sleep,
     pollIntervalMs: dependencies.pollIntervalMs,
     timeoutMs: Math.min(dependencies.timeoutMs, WEBSITE_EXECUTION_TIMEOUT_MS),
+    signal: input.signal,
   })
+  input.signal?.throwIfAborted()
   cursor.activePhase = 'export'
   const output = await dependencies.persistOutput({
     workspaceId: input.workspaceId,
@@ -160,6 +163,7 @@ async function produceWebsiteOutput(
     job: execution.job,
     videoBytes: execution.videoBytes,
   })
+  input.signal?.throwIfAborted()
   await dependencies.stages.complete(input.projectId, output)
   cursor.completedOutput = output
   return output
@@ -230,6 +234,7 @@ function parseRunInput(input: RunWebsiteVideoInput): RunWebsiteVideoInput {
     projectId: uuidSchema.parse(input.projectId),
     attemptId: uuidSchema.parse(input.attemptId),
     invocationNo: z.number().int().positive().parse(input.invocationNo),
+    ...(input.signal ? { signal: input.signal } : {}),
   }
 }
 

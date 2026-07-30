@@ -2,7 +2,7 @@
 // 每个 render 请求起一个后台 Job，前端/curl 轮询 GET /jobs/:id 拿进度与产物。
 import { randomUUID } from "node:crypto"
 
-export type JobStatus = "queued" | "running" | "done" | "failed"
+export type JobStatus = "queued" | "running" | "done" | "failed" | "cancelled"
 /** 阶段：与 run-pipeline 的 onPhase 对齐 */
 export type JobPhase =
   | "queued"
@@ -16,6 +16,7 @@ export type JobPhase =
   | "muxing"
   | "done"
   | "failed"
+  | "cancelled"
 
 export interface Job {
   id: string

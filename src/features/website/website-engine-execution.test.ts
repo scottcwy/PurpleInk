@@ -169,6 +169,25 @@ describe('executeWebsiteEngine', () => {
       vi.useRealTimers()
     }
   })
+
+  it('cancels the worker job when the project AbortSignal fires', async () => {
+    const controller = new AbortController()
+    const cancel = vi.fn(async () => undefined)
+
+    await expect(executeWebsiteEngine(input(), dependencies({
+      engine: {
+        start: vi.fn(async () => ({ reused: false, job: job() })),
+        getJob: vi.fn(async () => job()),
+        downloadVideo: vi.fn(),
+        cancel,
+      },
+      signal: controller.signal,
+      sleep: async () => {
+        controller.abort(new Error('PROJECT_EXECUTION_CANCELLED'))
+      },
+    }))).rejects.toThrow('PROJECT_EXECUTION_CANCELLED')
+    expect(cancel).toHaveBeenCalledWith('engine-job-1')
+  })
 })
 
 function input() {

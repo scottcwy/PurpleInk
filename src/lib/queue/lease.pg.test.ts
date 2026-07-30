@@ -102,6 +102,34 @@ describe('sweepExpiredLeases', () => {
       errorLog.mockRestore()
     }
   })
+
+  it('回收超过二十分钟的历史 running + null lease 僵尸', async () => {
+    const { sweepExpiredLeases } = await import('./lease')
+    const projectId = await seedProject()
+    const dbNow = await readDbNowMs()
+    const stale = await seedRunningNodeAttempt(projectId, {
+      leaseExpiresAt: null,
+      updatedAt: new Date(dbNow - 21 * 60_000),
+    })
+
+    await expect(sweepExpiredLeases(database.db)).resolves.toContain(stale.attemptId)
+    expect((await readAttempt(stale.attemptId)).status).toBe('failed')
+  })
+
+  it('停止请求失去心跳后收敛为 cancelled 而不是普通失败', async () => {
+    const { sweepExpiredLeases } = await import('./lease')
+    const projectId = await seedProject()
+    const dbNow = await readDbNowMs()
+    const stale = await seedRunningNodeAttempt(projectId, {
+      leaseExpiresAt: new Date(dbNow + 30 * 60_000),
+      cancelRequestedAt: new Date(dbNow - 2 * 60_000),
+      updatedAt: new Date(dbNow - 2 * 60_000),
+    })
+
+    await expect(sweepExpiredLeases(database.db)).resolves.toContain(stale.attemptId)
+    expect((await readAttempt(stale.attemptId)).status).toBe('cancelled')
+    expect((await readNode(stale.nodeId)).status).toBe('cancelled')
+  })
 })
 
 describe('renewLeases', () => {
@@ -204,7 +232,12 @@ async function seedProject(): Promise<string> {
 /** 种一条 running 的 director-stage attempt 及其 running 节点与 run。 */
 async function seedRunningNodeAttempt(
   projectId: string,
-  options: { leaseExpiresAt: Date | null; nodeStatus?: string }
+  options: {
+    leaseExpiresAt: Date | null
+    nodeStatus?: string
+    cancelRequestedAt?: Date
+    updatedAt?: Date
+  }
 ): Promise<{ nodeId: string; runId: string; attemptId: string }> {
   const nodeId = randomUUID()
   const runId = randomUUID()
@@ -244,6 +277,8 @@ async function seedRunningNodeAttempt(
     },
     startedAt: new Date(),
     leaseExpiresAt: options.leaseExpiresAt,
+    cancelRequestedAt: options.cancelRequestedAt,
+    updatedAt: options.updatedAt,
   })
   return { nodeId, runId, attemptId }
 }

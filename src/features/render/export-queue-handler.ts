@@ -72,6 +72,7 @@ export function registerExportProjectHandler(
 ): void {
   targetQueue.register(EXPORT_PROJECT_KIND, async (job) => {
     const payload = exportJobPayloadSchema.parse(job.payload)
+    job.signal?.throwIfAborted()
     if (
       payload.degraded
       && payload.exportNodeId
@@ -83,6 +84,7 @@ export function registerExportProjectHandler(
         exportNodeId: payload.exportNodeId,
         confirmationFingerprint: payload.confirmationFingerprint,
       })
+      job.signal?.throwIfAborted()
     }
     // 降级导出只由用户显式触发（payload.degraded）；自动推进不传该标志。
     const result = payload.degraded
@@ -93,6 +95,7 @@ export function registerExportProjectHandler(
             : {}),
         })
       : await dependencies.exportProject(payload.projectId)
+    job.signal?.throwIfAborted()
     if (!result.ok) {
       const mediaIssue = result.blockingIssues?.[0]
       if (mediaIssue) {
@@ -121,6 +124,7 @@ export function registerExportProjectHandler(
       )
     }
     if (payload.exportNodeId && dependencies.continueFinalReview) {
+      job.signal?.throwIfAborted()
       await dependencies.continueFinalReview({
         projectId: payload.projectId,
         exportNodeId: payload.exportNodeId,

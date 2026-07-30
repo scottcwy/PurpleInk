@@ -3,9 +3,11 @@
 import { isAbsolute, resolve } from "node:path"
 import { renderFromCapture, urlToVideo } from "../compose/run-pipeline"
 import type { UrlToVideoOptions } from "../compose/run-pipeline"
-import { updateJob, type Job, type JobPhase } from "./job-store"
+import { getJob, updateJob, type Job, type JobPhase } from "./job-store"
 import { logger } from "../lib/logger"
 import { errorMessage } from "../lib/error-message"
+
+const controllers = new Map<string, AbortController>()
 
 /** POST /render 的请求体（url 与 captureDir 二选一） */
 export interface RenderRequest {
@@ -29,6 +31,8 @@ export interface RenderRequest {
 /** 在后台跑一个 Job（fire-and-forget），异常吞进任务表不外抛。 */
 export function runJob(job: Job, req: RenderRequest): void {
   const startedAt = Date.now()
+  const controller = new AbortController()
+  controllers.set(job.id, controller)
   updateJob(job.id, { status: "running" })
 
   const onPhase = (phase: string) => {
@@ -52,6 +56,7 @@ export function runJob(job: Job, req: RenderRequest): void {
       ? { integratedRequestId: job.requestId }
       : {}),
     onPhase,
+    signal: controller.signal,
   }
 
   const promise =
@@ -61,6 +66,7 @@ export function runJob(job: Job, req: RenderRequest): void {
 
   promise
     .then((result) => {
+      if (controller.signal.aborted) return
       updateJob(job.id, {
         status: "done",
         phase: "done",
@@ -76,6 +82,16 @@ export function runJob(job: Job, req: RenderRequest): void {
       logger.info("job:done", { id: job.id, videoPath: result.videoPath, checkPassed: result.checkPassed })
     })
     .catch((err) => {
+      if (controller.signal.aborted) {
+        updateJob(job.id, {
+          status: "cancelled",
+          phase: "cancelled",
+          error: undefined,
+          elapsedSec: Number(((Date.now() - startedAt) / 1000).toFixed(1)),
+        })
+        logger.info("job:cancelled", { id: job.id })
+        return
+      }
       updateJob(job.id, {
         status: "failed",
         phase: "failed",
@@ -85,4 +101,18 @@ export function runJob(job: Job, req: RenderRequest): void {
       // 对外只留 message；完整栈只进服务端日志，便于排障又不外泄本机路径。
       logger.error("job:failed", { id: job.id, stack: String(err?.stack || err) })
     })
+    .finally(() => {
+      controllers.delete(job.id)
+    })
+}
+
+export function cancelJob(jobId: string): boolean {
+  const job = getJob(jobId)
+  if (!job || !job.integrated) return false
+  if (job.status === "done" || job.status === "failed" || job.status === "cancelled") {
+    return true
+  }
+  updateJob(jobId, { status: "cancelled", phase: "cancelled" })
+  controllers.get(jobId)?.abort(new Error("PROJECT_EXECUTION_CANCELLED"))
+  return true
 }

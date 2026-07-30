@@ -50,10 +50,12 @@ export async function renderFromCapture(
   captureDir: string,
   options: RenderFromCaptureOptions = {}
 ): Promise<PipelineResult> {
+  options.signal?.throwIfAborted()
   const visualModel = await buildVideoModel(captureDir, {
     ...(options.durationSec != null ? { durationSec: options.durationSec } : {}),
     ...(options.name != null ? { name: options.name } : {}),
   })
+  options.signal?.throwIfAborted()
   logger.info("pipeline:model_built", {
     scenes: visualModel.scenes.length,
     durationSec: visualModel.durationSec,
@@ -71,6 +73,7 @@ export async function renderFromCapture(
         runner: mediaRunner,
       }),
   })
+  options.signal?.throwIfAborted()
   logger.info("pipeline:narration_ready", {
     segments: narration.plan.segments.length,
     durationSec: visualModel.durationSec,
@@ -137,6 +140,7 @@ export async function renderFromCapture(
 
   options.onPhase?.("rendering")
   const rendered = await renderProject(written.projectDir, options)
+  options.signal?.throwIfAborted()
   if (!rendered.videoPath) {
     logger.error("pipeline:no_video", { renderTail: rendered.renderOutput.slice(-800) })
   }
@@ -198,6 +202,7 @@ export interface UrlToVideoOptions extends RenderFromCaptureOptions {
  * 注意：缓存只省「采集」，画质仍由后续渲染的 quality 决定，不受影响。
  */
 export async function urlToVideo(url: string, options: UrlToVideoOptions = {}): Promise<PipelineResult> {
+  options.signal?.throwIfAborted()
   const cacheRoot = options.cacheRoot || join(process.cwd(), "out", "cache")
   const cacheDir = join(cacheRoot, cacheSlugForUrl(url, options.integratedRequestId))
   const logTarget = options.integratedRequestId ? new URL(url).origin : url
@@ -213,7 +218,12 @@ export async function urlToVideo(url: string, options: UrlToVideoOptions = {}): 
   await rm(cacheDir, { recursive: true, force: true }).catch(() => {})
   options.onPhase?.("capturing")
   logger.info("pipeline:capture_start", { url: logTarget, cacheDir })
-  const manifest = await runCapture(url, { ...options.capture, outDir: options.capture?.outDir ?? cacheDir })
+  const manifest = await runCapture(url, {
+    ...options.capture,
+    outDir: options.capture?.outDir ?? cacheDir,
+    ...(options.signal ? { signal: options.signal } : {}),
+  })
+  options.signal?.throwIfAborted()
   logger.info("pipeline:capture_done", { captureDir: manifest.outDir, assets: manifest.assets.length })
   return renderFromCapture(manifest.outDir, options)
 }

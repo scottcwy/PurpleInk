@@ -64,6 +64,7 @@ export async function runAudioTranscriptionQueueJob(
 ): Promise<void> {
   const payload = audioTranscriptionPayloadSchema.parse(job.payload)
   const { workflowVersion: _workflowVersion, ...input } = payload
+  job.signal?.throwIfAborted()
   await run({
     ...input,
     billingContext: {
@@ -71,6 +72,7 @@ export async function runAudioTranscriptionQueueJob(
       invocationNo: billingInvocationNo('source-asr', 1),
     },
   })
+  job.signal?.throwIfAborted()
 }
 
 export function registerAudioTranscriptionHandler(

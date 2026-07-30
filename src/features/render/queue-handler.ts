@@ -88,11 +88,13 @@ export function registerRenderShotHandler(
   targetQueue.register('render-shot', async (job) => {
     const resolved = dependencies ?? createHandlerDependencies()
     const payload = renderJobPayloadSchema.parse(job.payload)
+    job.signal?.throwIfAborted()
     await resolved.transitionNodeStatus(payload.nodeId, 'running')
     try {
       if (!(await resolved.repository.hasFabricateArtifact(payload.projectId, payload.nodeId))) {
         await resolved.fabricateShot(payload.projectId, payload.nodeId, job.id)
       }
+      job.signal?.throwIfAborted()
     } catch (error) {
       await failFabricate(payload.nodeId, error, resolved)
       throw error
@@ -106,10 +108,12 @@ export function registerRenderShotHandler(
         ...context,
         ...(payload.forceRender ? { forceRender: true } : {}),
       })
+      job.signal?.throwIfAborted()
       await resolved.repository.recordOutputHash?.(
         payload.nodeId,
         result.contentHash
       )
+      job.signal?.throwIfAborted()
       await resolved.transitionNodeStatus(payload.nodeId, 'success')
       await advanceWithoutMasking(
         resolved.advancePipeline,
