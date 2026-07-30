@@ -17,6 +17,10 @@ import {
   storeProceduralSfxManifest,
 } from './procedural-sfx-manifest'
 import type { ProceduralSfxMixResult } from './procedural-sfx-mix'
+import {
+  degradedManifestStorageKey,
+  finalVideoStorageKey,
+} from './final-output-storage'
 
 /**
  * 降级导出编排：把缺渲染/旁白的失败分镜用真实占位片段顶替后出片，让 1/N 失败
@@ -188,7 +192,7 @@ export async function exportDegradedProject(
     const bytes = await storage.readLocalFile(temporaryOutput)
     const contentHash = createHash('sha256').update(bytes).digest('hex')
     const outputKey = await storage.put(
-      `exports/${projectId}/final-${contentHash}.mp4`,
+      finalVideoStorageKey({ projectId, attemptId, contentHash }),
       bytes
     )
     return commitDegraded(dependencies.repository, storage, {
@@ -243,7 +247,11 @@ async function commitDegraded(
   > | null = null
   try {
     manifestKey = await storage.put(
-      `exports/${input.projectId}/final-${input.contentHash}.degraded.json`,
+      degradedManifestStorageKey({
+        projectId: input.projectId,
+        attemptId: input.attemptId,
+        contentHash: input.contentHash,
+      }),
       manifestBytes
     )
     soundEffectsManifest = await storeProceduralSfxManifest(storage, {

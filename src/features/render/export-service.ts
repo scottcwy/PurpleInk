@@ -12,6 +12,7 @@ import {
 } from './repository'
 import type { FinalDeliveryInput } from './render-artifact-repository'
 import { storeProceduralSfxManifest } from './procedural-sfx-manifest'
+import { finalVideoStorageKey } from './final-output-storage'
 
 export type ExportProjectResult =
   | {
@@ -97,7 +98,7 @@ export async function exportProject(
     const contentHash = createHash('sha256').update(bytes).digest('hex')
     const outputKey = await exportPhase('store-output', () =>
       storage.put(
-        `exports/${projectId}/final-${contentHash}.mp4`,
+        finalVideoStorageKey({ projectId, attemptId, contentHash }),
         bytes
       )
     )
