@@ -96,6 +96,15 @@ v1 费率为每个向上取整的视频秒 `120000 CNY micros`（¥0.12）；
 `audio-transcription` 与 `website-video` 各有独立单并发 lane，不进入承载既有旁白、
 导出等作业的 fallback lane，长网站任务不得饿死主工作流。
 
+三类项目共用的 UI 执行状态只能来自数据库派生的 `ProjectExecutionSnapshot`。
+`projects.autopilot` 仍只表示 script Director 是否自动推进，不能通过响应字段把
+audio / website 伪装成 autopilot。website 的 `succeeded` 必须同时满足最新 attempt
+成功、六阶段成功、worker 校验通过，以及同一 attempt 的 approved MP4 Artifact 存在；
+任一事实不一致时必须投影为 `blocked`，不得提供正式下载。
+
+项目状态流的 SSE 只是低延迟失效提示，不是跨进程真值。画布在 active 状态下必须继续
+从 Postgres 对账；SSE 连接成功但没有事件时，不得停止轮询或宣称状态实时。
+
 降级不能伪造外部网站采集或媒体产物。模板回退、缓存命中和 Playwright 备用路径都
 必须作为可追溯的安全状态展示。诊断与验收继续遵循
 `docs/conventions/workflow-failure-patterns.md`。
