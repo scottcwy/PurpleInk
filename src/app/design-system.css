@@ -115,7 +115,8 @@
     0 0 0 1px color-mix(in srgb, var(--ds-blue) 25%, transparent),
     0 0 16px color-mix(in srgb, var(--ds-blue) 12%, transparent);
   opacity: 0;
-  transition: opacity 0.36s cubic-bezier(0.4, 0, 0.2, 1);
+  /* 时长/曲线走 token，禁止硬编码（motion-interaction.md §5.1）。 */
+  transition: opacity var(--duration-slow) var(--ease-standard);
   pointer-events: none;
 }
 [data-glow].glow-active::after {
