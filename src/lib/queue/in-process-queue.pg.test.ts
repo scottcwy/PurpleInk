@@ -423,7 +423,7 @@ describe('legacy in-process queue PG compatibility', () => {
       for (let attempt = 0; attempt < 50 && started.length === 0; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 20))
       }
-      expect(started[0]).toBe(nodeIds[6])
+      expect(started[0]).toBe(nodeIds[0])
     } finally {
       queue.stop()
     }

@@ -21,7 +21,7 @@ export const WORKFLOW_CONCURRENCY_STATUSES = [
 ] as const
 
 /**
- * 工作区级分镜并发真值。一个 laneKey 在同一工作区只有一行；重新生成时复用该行，
+ * 工作区级分镜并发真值。一个 laneKey 在同一项目只有一行；重新生成时复用该行，
  * 因而同一分镜内部的文本、视觉、音频步骤不会重复占用套餐名额。
  */
 export const workflowConcurrencyLeases = pgTable(
@@ -47,7 +47,7 @@ export const workflowConcurrencyLeases = pgTable(
   (table) => [
     primaryKey({
       name: 'workflow_concurrency_leases_pkey',
-      columns: [table.workspaceId, table.workUnitKey],
+      columns: [table.workspaceId, table.projectId, table.workUnitKey],
     }),
     foreignKey({
       name: 'workflow_concurrency_leases_project_fk',

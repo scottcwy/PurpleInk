@@ -2,7 +2,13 @@ import { and, asc, eq, like, lte, notInArray, sql } from 'drizzle-orm'
 import { tryAcquireWorkflowSlotInTransaction } from '@/features/ai/workspace-concurrency'
 import { patchPayload } from '@/features/canvas/status-payload'
 import { getDb } from '@/lib/db/client'
-import { canvasNodes, pipelineRuns, taskAttempts } from '@/lib/db/schema'
+import {
+  canvasNodes,
+  pipelineRuns,
+  projects,
+  taskAttempts,
+  workflowConcurrencyLeases,
+} from '@/lib/db/schema'
 import { parseCheckpoint } from './attempt-checkpoint'
 import { leaseDeadline } from './lease'
 import type { QueueJob } from './types'
@@ -34,6 +40,7 @@ export async function claimNextJob(
         attemptNo: taskAttempts.attemptNo,
         entityType: taskAttempts.entityType,
         entityId: taskAttempts.entityId,
+        workUnitKey: taskAttempts.workUnitKey,
         projectId: pipelineRuns.projectId,
         requestedByUserId: pipelineRuns.requestedByUserId,
       })
@@ -45,14 +52,41 @@ export async function claimNextJob(
           eq(pipelineRuns.id, taskAttempts.runId),
         ),
       )
+      .innerJoin(
+        projects,
+        and(
+          eq(projects.workspaceId, pipelineRuns.workspaceId),
+          eq(projects.id, pipelineRuns.projectId),
+        ),
+      )
+      .leftJoin(
+        workflowConcurrencyLeases,
+        and(
+          eq(workflowConcurrencyLeases.workspaceId, taskAttempts.workspaceId),
+          eq(workflowConcurrencyLeases.projectId, pipelineRuns.projectId),
+          eq(workflowConcurrencyLeases.workUnitKey, taskAttempts.workUnitKey),
+        ),
+      )
       .where(and(
         eq(taskAttempts.status, 'queued'),
         lte(taskAttempts.visibleAt, sql`now()`),
+        eq(pipelineRuns.executionEpoch, projects.executionEpoch),
         kindCondition,
       ))
-      .orderBy(asc(taskAttempts.createdAt), asc(taskAttempts.id))
+      .orderBy(
+        sql`case
+          when ${workflowConcurrencyLeases.status} = 'active' then 0
+          when ${taskAttempts.workUnitKey} is null then 1
+          when ${workflowConcurrencyLeases.status} = 'waiting'
+            and ${workflowConcurrencyLeases.notBefore} <= now() then 2
+          when ${workflowConcurrencyLeases.workspaceId} is null then 2
+          else 3
+        end`,
+        asc(taskAttempts.createdAt),
+        asc(taskAttempts.id),
+      )
       .limit(1)
-      .for('update', { skipLocked: true })
+      .for('update', { of: taskAttempts, skipLocked: true })
     if (!row) return null
     if (!await acquireShotSlot(transaction, row)) return null
     const [claimed] = await transaction
@@ -101,6 +135,7 @@ interface ClaimRow {
   entityId: string
   requestedByUserId: string | null
   projectId: string
+  workUnitKey: string | null
 }
 
 async function acquireShotSlot(
@@ -108,21 +143,12 @@ async function acquireShotSlot(
   row: ClaimRow,
 ): Promise<boolean> {
   if (row.entityType !== 'node') return true
-  const [node] = await transaction
-    .select({ data: canvasNodes.data })
-    .from(canvasNodes)
-    .where(and(
-      eq(canvasNodes.workspaceId, row.workspaceId),
-      eq(canvasNodes.id, row.entityId),
-    ))
-    .limit(1)
-  const workUnitKey = readLaneKey(node?.data)
-  if (!workUnitKey) return true
+  if (!row.workUnitKey) return true
   const decision = await tryAcquireWorkflowSlotInTransaction(transaction, {
     workspaceId: row.workspaceId,
     actorUserId: row.requestedByUserId,
     projectId: row.projectId,
-    workUnitKey,
+    workUnitKey: row.workUnitKey,
   })
   if (decision.status === 'active') return true
   const resumeAt = decision.resumeAt ?? new Date(Date.now() + 1_000)
@@ -134,6 +160,15 @@ async function acquireShotSlot(
       eq(taskAttempts.id, row.id),
       eq(taskAttempts.status, 'queued'),
     ))
+  const [node] = await transaction
+    .select({ data: canvasNodes.data })
+    .from(canvasNodes)
+    .where(and(
+      eq(canvasNodes.workspaceId, row.workspaceId),
+      eq(canvasNodes.projectId, row.projectId),
+      eq(canvasNodes.id, row.entityId),
+    ))
+    .limit(1)
   if (node) {
     await transaction
       .update(canvasNodes)
@@ -157,12 +192,4 @@ async function acquireShotSlot(
       ))
   }
   return false
-}
-
-function readLaneKey(value: unknown): string | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  const payload = (value as Record<string, unknown>).payload
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null
-  const laneKey = (payload as Record<string, unknown>).laneKey
-  return typeof laneKey === 'string' && laneKey.length > 0 ? laneKey : null
 }

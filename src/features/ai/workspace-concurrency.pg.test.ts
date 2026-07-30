@@ -174,6 +174,7 @@ describe('workspace shot concurrency', () => {
     }
     await releaseWorkflowSlot({
       workspaceId: WORKSPACE_ID,
+      projectId: PROJECT_A,
       workUnitKey: 'shot-0',
       outcome: 'released',
       now: new Date(START.getTime() + 2_000),

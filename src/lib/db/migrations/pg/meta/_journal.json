@@ -148,6 +148,13 @@
       "when": 1785350000000,
       "tag": "0020_provider_dispatch_tickets",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1785390000000,
+      "tag": "0021_project_execution_fencing",
+      "breakpoints": true
     }
   ]
 }

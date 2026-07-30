@@ -101,6 +101,7 @@ async function acquireWorkflowSlot(
       .from(workflowConcurrencyLeases)
       .where(and(
         eq(workflowConcurrencyLeases.workspaceId, input.workspaceId),
+        eq(workflowConcurrencyLeases.projectId, input.projectId),
         eq(workflowConcurrencyLeases.workUnitKey, input.workUnitKey),
       ))
       .limit(1)
@@ -112,6 +113,7 @@ async function acquireWorkflowSlot(
         .set({ leaseExpiresAt, updatedAt: now })
         .where(and(
           eq(workflowConcurrencyLeases.workspaceId, input.workspaceId),
+          eq(workflowConcurrencyLeases.projectId, input.projectId),
           eq(workflowConcurrencyLeases.workUnitKey, input.workUnitKey),
         ))
       return decisionCounts(transaction, input.workspaceId, limit, {
@@ -135,6 +137,7 @@ async function acquireWorkflowSlot(
           })
           .where(and(
             eq(workflowConcurrencyLeases.workspaceId, input.workspaceId),
+            eq(workflowConcurrencyLeases.projectId, input.projectId),
             eq(workflowConcurrencyLeases.workUnitKey, input.workUnitKey),
           ))
       }
@@ -155,6 +158,7 @@ async function acquireWorkflowSlot(
         })
         .where(and(
           eq(workflowConcurrencyLeases.workspaceId, input.workspaceId),
+          eq(workflowConcurrencyLeases.projectId, input.projectId),
           eq(workflowConcurrencyLeases.workUnitKey, input.workUnitKey),
         ))
     } else {
@@ -194,17 +198,6 @@ async function acquireWorkflowSlot(
       }
       shadowWaitReason = 'plan_limit'
     }
-    if (queueState.oldestWorkUnitKey !== input.workUnitKey) {
-      return {
-        status: 'waiting',
-        limit,
-        ...counts,
-        resumeAt: new Date(Math.max(
-          queueState.oldestNotBefore?.getTime() ?? now.getTime(),
-          now.getTime() + RECONCILE_MS,
-        )),
-      }
-    }
     const staggerUntil = queueState.latestActivatedAt
       ? new Date(queueState.latestActivatedAt.getTime() + SHOT_STAGGER_MS)
       : now
@@ -214,6 +207,7 @@ async function acquireWorkflowSlot(
         .set({ notBefore: staggerUntil, updatedAt: now })
         .where(and(
           eq(workflowConcurrencyLeases.workspaceId, input.workspaceId),
+          eq(workflowConcurrencyLeases.projectId, input.projectId),
           eq(workflowConcurrencyLeases.workUnitKey, input.workUnitKey),
         ))
       return {
@@ -234,9 +228,10 @@ async function acquireWorkflowSlot(
       })
       .where(and(
         eq(workflowConcurrencyLeases.workspaceId, input.workspaceId),
+        eq(workflowConcurrencyLeases.projectId, input.projectId),
         eq(workflowConcurrencyLeases.workUnitKey, input.workUnitKey),
       ))
-    return {
+    const decision: WorkflowSlotDecision = {
       status: 'active',
       limit,
       active: counts.active + 1,
@@ -244,6 +239,13 @@ async function acquireWorkflowSlot(
       leaseExpiresAt,
       ...(shadowWaitReason ? { shadowWaitReason } : {}),
     }
+    console.info('[workflow_lane_admitted]', {
+      projectId: input.projectId,
+      workUnitKey: input.workUnitKey,
+      active: decision.active,
+      limit,
+    })
+    return decision
 }
 
 async function readCounts(
@@ -261,8 +263,6 @@ async function readQueueState(
   active: number
   waiting: number
   latestActivatedAt: Date | null
-  oldestWorkUnitKey: string | null
-  oldestNotBefore: Date | null
 }> {
   const [row] = await transaction
     .select({
@@ -273,22 +273,6 @@ async function readQueueState(
         where ${workflowConcurrencyLeases.status} = 'waiting'
       )::int`,
       latestActivatedAt: max(workflowConcurrencyLeases.activatedAt),
-      oldestWorkUnitKey: sql<string | null>`(
-        select queue.work_unit_key
-        from workflow_concurrency_leases queue
-        where queue.workspace_id = ${workspaceId}
-          and queue.status = 'waiting'
-        order by queue.requested_at asc, queue.work_unit_key asc
-        limit 1
-      )`,
-      oldestNotBefore: sql<Date | null>`(
-        select queue.not_before
-        from workflow_concurrency_leases queue
-        where queue.workspace_id = ${workspaceId}
-          and queue.status = 'waiting'
-        order by queue.requested_at asc, queue.work_unit_key asc
-        limit 1
-      )`.mapWith(workflowConcurrencyLeases.notBefore),
     })
     .from(workflowConcurrencyLeases)
     .where(eq(workflowConcurrencyLeases.workspaceId, workspaceId))
@@ -296,8 +280,6 @@ async function readQueueState(
     active: row?.active ?? 0,
     waiting: row?.waiting ?? 0,
     latestActivatedAt: row?.latestActivatedAt ?? null,
-    oldestWorkUnitKey: row?.oldestWorkUnitKey ?? null,
-    oldestNotBefore: row?.oldestNotBefore ?? null,
   }
 }
 

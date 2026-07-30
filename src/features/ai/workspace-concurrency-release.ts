@@ -5,6 +5,7 @@ import { canvasNodes, workflowConcurrencyLeases } from '@/lib/db/schema'
 
 export async function releaseWorkflowSlot(input: {
   workspaceId: string
+  projectId: string
   workUnitKey: string
   outcome: 'released' | 'cancelled'
   database: Db
@@ -21,6 +22,7 @@ export async function releaseWorkflowSlot(input: {
     })
     .where(and(
       eq(workflowConcurrencyLeases.workspaceId, input.workspaceId),
+      eq(workflowConcurrencyLeases.projectId, input.projectId),
       eq(workflowConcurrencyLeases.workUnitKey, input.workUnitKey),
     ))
 }
@@ -33,6 +35,7 @@ export async function releaseTerminalWorkflowSlotForNode(input: {
 }): Promise<void> {
   const [node] = await input.database
     .select({
+      projectId: canvasNodes.projectId,
       type: canvasNodes.type,
       status: canvasNodes.status,
       data: canvasNodes.data,
@@ -52,6 +55,7 @@ export async function releaseTerminalWorkflowSlotForNode(input: {
   if (!terminal) return
   await releaseWorkflowSlot({
     workspaceId: input.workspaceId,
+    projectId: node.projectId,
     workUnitKey: laneKey,
     outcome: node.status === 'cancelled' ? 'cancelled' : 'released',
     database: input.database,
