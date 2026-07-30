@@ -46,6 +46,7 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm verify:v3
+pnpm verify:motion
 pnpm build
 git diff --check
 ```

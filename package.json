@@ -21,6 +21,8 @@
     "verify:v3": "tsx scripts/verify/v3-architecture.ts --check",
     "verify:managed-services": "node scripts/verify/managed-service-readiness.mjs",
     "verify:e2e": "tsx scripts/verify/e2e-smoke.ts",
+    "verify:motion": "tsx scripts/verify/motion-baseline.mjs",
+    "verify:motion:update": "tsx scripts/verify/motion-baseline.mjs --update",
     "report:v3": "tsx scripts/verify/v3-architecture.ts --report",
     "typecheck": "tsc --noEmit",
     "typecheck:web": "tsc --noEmit"
