@@ -90,6 +90,11 @@ export {
   type FabricateSourceViolation,
 } from './fabricate-source-contract'
 export {
+  SHOT_REVISION_BRIEF_MAX_LENGTH,
+  shotRevisionBriefSchema,
+  type ShotRevisionBrief,
+} from './shot-revision'
+export {
   DIRECTOR_INGEST_SOURCE_NODE_TYPES,
   isDirectorIngestSourceNodeType,
   type DirectorIngestSourceNodeType,

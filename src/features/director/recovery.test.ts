@@ -71,6 +71,53 @@ describe('executeNodeAction', () => {
     expect(result.action).toBe('rerender')
   })
 
+  it('forces a new FABRICATE version and carries a bounded revision brief', async () => {
+    const test = harness(true, 'success')
+
+    const result = await executeNodeAction(
+      {
+        projectId: 'project-1',
+        nodeId: 'codegen-s002',
+        intent: 'regenerate',
+        revisionBrief: '主视觉改成俯视构图',
+      },
+      test.dependencies,
+    )
+
+    expect(test.invalidate).toHaveBeenCalledWith(
+      'codegen-s002',
+      'manual-regenerate',
+    )
+    expect(test.enqueueRenderShot).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      nodeId: 'codegen-s002',
+      regenerateSource: true,
+      revisionBrief: '主视觉改成俯视构图',
+    })
+    expect(result).toMatchObject({
+      action: 'regenerate',
+      message: '已按修改要求排队重新生成分镜代码与视频',
+    })
+  })
+
+  it('rejects a revision brief for non-codegen nodes', async () => {
+    const test = harness(true, 'success')
+
+    await expect(
+      executeNodeAction(
+        {
+          projectId: 'project-1',
+          nodeId: 'script-s002',
+          intent: 'regenerate',
+          revisionBrief: '改变画面',
+        },
+        test.dependencies,
+      ),
+    ).rejects.toThrow('定向修改仅支持重新生成镜头代码')
+    expect(test.enqueueDirectorStage).not.toHaveBeenCalled()
+    expect(test.enqueueRenderShot).not.toHaveBeenCalled()
+  })
+
   it('allows one explicit repair after a configuration failure', async () => {
     const test = harness(true)
     test.graph.nodes[1] = node({

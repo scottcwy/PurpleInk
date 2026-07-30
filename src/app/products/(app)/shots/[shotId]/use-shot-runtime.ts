@@ -2,7 +2,11 @@
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { renderShotAndWait } from './shot-api'
+import {
+  generateShotAndWait,
+  renderShotAndWait,
+  reviseShotAndWait,
+} from './shot-api'
 
 /** 无代码时的占位文案，也用于判断是否需走“生成”入口。 */
 export const NO_CODE = '分镜代码尚未生成'
@@ -28,6 +32,7 @@ export function useShotRuntime(
   useEffect(() => {
     if (!previewUrl) return
     let active = true
+    setCodeLoading(true)
     void fetch(previewUrl)
       .then((response) => {
         if (!response.ok) throw new Error('分镜代码读取失败')
@@ -51,23 +56,44 @@ export function useShotRuntime(
     }
   }, [previewUrl])
 
-  async function render() {
+  async function run(task: () => ReturnType<typeof renderShotAndWait>): Promise<boolean> {
     setRendering(true)
     setError(undefined)
     try {
-      const result = await renderShotAndWait(projectId, nodeId)
+      const result = await task()
       if (result.status === 'failed') {
         setError(result.error ?? '单镜渲染失败')
+        return false
       } else {
         if (result.artifactUrl) setOutputUrl(result.artifactUrl)
         router.refresh()
+        return true
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '单镜渲染失败')
+      return false
     } finally {
       setRendering(false)
     }
   }
 
-  return { rendering, outputUrl, sourceCode, codeLoading, codeError, error, render }
+  const render = () => run(() =>
+    previewUrl
+      ? renderShotAndWait(projectId, nodeId)
+      : generateShotAndWait(projectId, nodeId)
+  )
+  const revise = (revisionBrief: string) =>
+    run(() => reviseShotAndWait(projectId, nodeId, revisionBrief))
+
+  return {
+    rendering,
+    outputUrl,
+    sourceCode,
+    codeLoading,
+    codeError,
+    error,
+    render,
+    revise,
+    canRevise: Boolean(previewUrl),
+  }
 }

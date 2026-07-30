@@ -8,6 +8,8 @@ import { buildStagePrompt } from './stage-prompt'
 import { prepareStageResult } from './stage-result'
 import { commitStageResult } from './stage-result-committer'
 import { writeValidatedArtifact } from './tools/write-artifact'
+import { appendShotRevisionContext } from './shot-revision-prompt'
+import { loadShotRevisionSource } from './shot-revision-source'
 
 /**
  * 为 shot-codegen 节点生成 HTML + renderSpec，但不改变节点状态。
@@ -19,8 +21,16 @@ export async function fabricateShot(
   projectId: string,
   nodeId: string,
   attemptId: string,
+  revisionBrief?: string,
 ): Promise<void> {
-  const repository = new DirectorRuntimeRepository(await getDb(), storage)
+  const database = await getDb()
+  const revision = revisionBrief === undefined
+    ? undefined
+    : {
+        revisionBrief,
+        sourceHtml: await loadShotRevisionSource(database, storage, projectId, nodeId),
+      }
+  const repository = new DirectorRuntimeRepository(database, storage)
   const runner = createStageRunner({
     repository,
     transitionNodeStatus: async () => {
@@ -28,7 +38,11 @@ export async function fabricateShot(
       // no-op 避免改变节点 pending/running 状态。
     },
     createSession: createDirectorSession,
-    buildPrompt: buildStagePrompt,
+    buildPrompt: (stage, context) =>
+      appendShotRevisionContext(
+        buildStagePrompt(stage, context),
+        revision,
+      ),
     writeArtifact: writeValidatedArtifact,
     prepareResult: prepareStageResult,
     commitResult: async (context, result, artifact) =>

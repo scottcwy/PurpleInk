@@ -123,6 +123,48 @@ describe('render queue handler', () => {
     expect(renderer.render).toHaveBeenCalledWith(renderJob)
   })
 
+  it('regenerates FABRICATE source with the parent attempt and revision brief', async () => {
+    const harness = createQueue()
+    const fabricateShot = vi.fn(async () => {})
+    registerRenderShotHandler(harness.queue, {
+      repository: {
+        hasFabricateArtifact: vi.fn(async () => true),
+        loadRenderContext: vi.fn(async () => renderJob),
+        recordRenderError: vi.fn(async () => {}),
+      },
+      transitionNodeStatus: vi.fn(async () => {}),
+      renderer: {
+        render: vi.fn(async (): Promise<RenderResult> => ({
+          shotId: 'S001',
+          outputKey: 'render/S001.mp4',
+          contentHash: 'hash',
+        })),
+      },
+      fabricateShot,
+      advancePipeline: vi.fn(async () => {}),
+    })
+
+    await harness.getHandler()?.({
+      id: 'parent-attempt-1',
+      kind: 'render-shot',
+      status: 'running',
+      payload: {
+        projectId: 'project-1',
+        nodeId: 'node-1',
+        regenerateSource: true,
+        revisionBrief: '主视觉改成俯视构图',
+      },
+      attempts: 1,
+    })
+
+    expect(fabricateShot).toHaveBeenCalledWith(
+      'project-1',
+      'node-1',
+      'parent-attempt-1',
+      '主视觉改成俯视构图',
+    )
+  })
+
   it('records a Director FABRICATE error instead of a render error when fabricateShot fails', async () => {
     const harness = createQueue()
     const failure = new Error('FABRICATE 阶段失败')
@@ -351,6 +393,39 @@ describe('render queue handler', () => {
 
     expect(order).toEqual(['load', 'admission', 'pending', 'enqueue'])
     expect(assertAdmission).toHaveBeenCalledWith(renderJob)
+  })
+
+  it('does not admit the old HTML when it is about to regenerate the source', async () => {
+    const harness = createQueue()
+    const assertAdmission = vi.fn(async () => {})
+
+    await enqueueRenderShot(
+      {
+        projectId: 'project-1',
+        nodeId: 'node-1',
+        regenerateSource: true,
+        revisionBrief: '主视觉改成俯视构图',
+      },
+      {
+        queue: harness.queue,
+        loadAdmissionContext: vi.fn(async () => retryAdmissionContext),
+        assertAdmission,
+        transitionNodeStatus: vi.fn(async () => {}),
+        recordRenderError: vi.fn(async () => {}),
+      },
+    )
+
+    expect(assertAdmission).not.toHaveBeenCalled()
+    expect(harness.queue.enqueue).toHaveBeenCalledWith(
+      'render-shot',
+      {
+        projectId: 'project-1',
+        nodeId: 'node-1',
+        regenerateSource: true,
+        revisionBrief: '主视觉改成俯视构图',
+      },
+      { projectId: 'project-1', nodeId: 'node-1' },
+    )
   })
 
   it('rejects runtime admission before pending or queue side effects', async () => {

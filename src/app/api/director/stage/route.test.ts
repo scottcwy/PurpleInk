@@ -110,6 +110,44 @@ describe('POST /api/director/stage', () => {
     expect(mocks.executeNodeAction).toHaveBeenCalledWith(input)
   })
 
+  it('routes a trimmed single-shot revision through the billed regenerate action', async () => {
+    const response = await POST(request({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      intent: 'regenerate',
+      revisionBrief: '  主视觉改成俯视构图  ',
+    }))
+
+    expect(response.status).toBe(200)
+    expect(mocks.assertBillingAvailable).toHaveBeenCalledOnce()
+    expect(mocks.executeNodeAction).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      intent: 'regenerate',
+      revisionBrief: '主视觉改成俯视构图',
+    })
+  })
+
+  it('rejects revision briefs on non-regenerate actions or over 200 characters', async () => {
+    const wrongIntent = await POST(request({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      intent: 'repair',
+      revisionBrief: '提高标题对比度',
+    }))
+    const oversized = await POST(request({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      intent: 'regenerate',
+      revisionBrief: '改'.repeat(201),
+    }))
+
+    expect(wrongIntent.status).toBe(400)
+    expect(oversized.status).toBe(400)
+    expect(mocks.assertBillingAvailable).not.toHaveBeenCalled()
+    expect(mocks.executeNodeAction).not.toHaveBeenCalled()
+  })
+
   it('cancels a deferred provider wait without billing admission or execution', async () => {
     const input = {
       projectId: 'project-1',

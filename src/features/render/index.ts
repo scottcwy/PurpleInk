@@ -12,8 +12,8 @@ export { HyperframesRenderer, type Renderer } from './renderer'
 export {
   enqueueRenderShot,
   registerRenderShotHandler,
-  type RenderShotInput,
 } from './queue-handler'
+export type { RenderShotInput } from './render-job-payload'
 export { RenderRepository } from './repository'
 export {
   captureThumbnails,

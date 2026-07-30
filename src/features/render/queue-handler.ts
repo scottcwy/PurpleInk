@@ -1,5 +1,4 @@
 import 'server-only'
-import { z } from 'zod'
 import {
   captureNodeInputFingerprint,
   transitionNodeStatus,
@@ -18,19 +17,13 @@ import {
 import { openFrameCapture } from './frame-capture'
 import { RenderRepository } from './repository'
 import { HyperframesRenderer, type Renderer } from './renderer'
+import {
+  renderJobPayloadSchema,
+  type RenderShotInput,
+} from './render-job-payload'
 import type { RenderAdmissionContext, RenderJob } from './types'
 import { advancePipeline } from '@/features/director/advance'
 import { fabricateShot } from '@/features/director/fabricate'
-
-const renderJobPayloadSchema = z
-  .object({
-    projectId: z.string().min(1),
-    nodeId: z.string().min(1),
-    forceRender: z.boolean().optional(),
-  })
-  .strict()
-
-export type RenderShotInput = z.infer<typeof renderJobPayloadSchema>
 
 interface HandlerRepository {
   hasFabricateArtifact(projectId: string, nodeId: string): Promise<boolean>
@@ -56,6 +49,7 @@ interface HandlerDependencies {
     projectId: string,
     nodeId: string,
     attemptId: string,
+    revisionBrief?: string,
   ) => Promise<void>
   advancePipeline: (
     projectId: string,
@@ -91,8 +85,14 @@ export function registerRenderShotHandler(
     job.signal?.throwIfAborted()
     await resolved.transitionNodeStatus(payload.nodeId, 'running')
     try {
-      if (!(await resolved.repository.hasFabricateArtifact(payload.projectId, payload.nodeId))) {
-        await resolved.fabricateShot(payload.projectId, payload.nodeId, job.id)
+      if (
+        payload.regenerateSource
+        || !(await resolved.repository.hasFabricateArtifact(payload.projectId, payload.nodeId))
+      ) {
+        const args = [payload.projectId, payload.nodeId, job.id] as const
+        await (payload.revisionBrief
+          ? resolved.fabricateShot(...args, payload.revisionBrief)
+          : resolved.fabricateShot(...args))
       }
       job.signal?.throwIfAborted()
     } catch (error) {
@@ -140,7 +140,7 @@ export async function enqueueRenderShot(
       payload.projectId,
       payload.nodeId
     )
-    if (admission.job) {
+    if (admission.job && !payload.regenerateSource) {
       await resolved.assertAdmission(admission.job)
     }
     await resolved.captureInputFingerprint?.(payload.nodeId)

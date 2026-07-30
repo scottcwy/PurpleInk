@@ -1,13 +1,11 @@
 import 'server-only'
-import {
-  type CanvasGraph,
-  type CanvasGraphNode,
-} from '@/features/canvas'
+import { type CanvasGraph, type CanvasGraphNode } from '@/features/canvas'
 import type { RenderShotInput } from '@/features/render'
 import type { DirectorStageJobInput } from './queue-handler'
 import { PIPELINE_STAGES, type PipelineStage } from './types'
 import type { ExportFinalizationResult } from './export-finalization'
 import { createRecoveryDependencies } from './recovery-dependencies'
+import { normalizeShotRevisionBrief } from './shot-revision-policy'
 
 export type NodeActionIntent = 'execute' | 'repair' | 'regenerate' | 'rerender'
 
@@ -141,12 +139,18 @@ export async function executeNodeAction(
     projectId: string
     nodeId: string
     intent: NodeActionIntent
+    revisionBrief?: string
   },
   dependencies?: NodeRecoveryDependencies
 ): Promise<NodeActionResult> {
   const resolved = dependencies ?? await createRecoveryDependencies()
   const graph = await resolved.getGraph(input.projectId)
   const requested = findNode(graph, input.nodeId)
+  const revisionBrief = normalizeShotRevisionBrief(
+    input.revisionBrief,
+    input.intent,
+    requested.type,
+  )
   assertActionAllowed(requested)
   await resolved.setAutopilot(input.projectId, true)
 
@@ -188,7 +192,13 @@ export async function executeNodeAction(
     if (requested.status === 'success') {
       await resolved.invalidate(requested.id, 'manual-regenerate')
     }
-    return enqueueNode(resolved, input.projectId, requested, 'regenerate')
+    return enqueueNode(
+      resolved,
+      input.projectId,
+      requested,
+      'regenerate',
+      revisionBrief,
+    )
   }
 
   if (requested.type === 'shot-codegen') {
@@ -253,10 +263,18 @@ async function enqueueNode(
   dependencies: NodeRecoveryDependencies,
   projectId: string,
   node: CanvasGraphNode,
-  action: 'execute' | 'regenerate'
+  action: 'execute' | 'regenerate',
+  revisionBrief?: string,
 ): Promise<NodeActionResult> {
   if (node.type === 'shot-codegen') {
-    return enqueueRenderResult(dependencies, projectId, node, false, action)
+    return enqueueRenderResult(
+      dependencies,
+      projectId,
+      node,
+      false,
+      action,
+      revisionBrief,
+    )
   }
   if (!isPipelineStage(node.stage)) {
     throw new Error('当前节点缺少可执行阶段')
@@ -280,19 +298,28 @@ async function enqueueRenderResult(
   projectId: string,
   node: CanvasGraphNode,
   forceRender: boolean,
-  action: 'execute' | 'regenerate' | 'rerender'
+  action: 'execute' | 'regenerate' | 'rerender',
+  revisionBrief?: string,
 ): Promise<NodeActionResult> {
   const jobId = await dependencies.enqueueRenderShot({
     projectId,
     nodeId: node.id,
     ...(forceRender ? { forceRender: true } : {}),
+    ...(action === 'regenerate' ? { regenerateSource: true } : {}),
+    ...(revisionBrief ? { revisionBrief } : {}),
   })
   return result(
     action,
     node.id,
     node.id,
     jobId,
-    action === 'rerender' ? '已绕过缓存排队重新渲染' : '已排队执行此阶段'
+    action === 'rerender'
+      ? '已绕过缓存排队重新渲染'
+      : action === 'regenerate'
+        ? revisionBrief
+          ? '已按修改要求排队重新生成分镜代码与视频'
+          : '已排队重新生成分镜代码与视频'
+        : '已排队执行此阶段'
   )
 }
 

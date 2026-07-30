@@ -6,6 +6,7 @@ import {
   QuotaExhaustedError,
 } from '@/features/billing'
 import { classifyWorkflowError } from '@/features/canvas'
+import { shotRevisionBriefSchema } from '@/features/canvas/contracts'
 import {
   cancelProviderWaitAction,
   executeNodeAction,
@@ -24,6 +25,7 @@ const requestSchema = z
     projectId: z.string().min(1),
     nodeId: z.string().min(1),
     intent: z.enum(['execute', 'repair', 'regenerate', 'skip', 'cancel-wait']),
+    revisionBrief: shotRevisionBriefSchema.optional(),
     skipReason: z
       .string()
       .trim()
@@ -39,6 +41,10 @@ const requestSchema = z
   .refine((data) => data.intent === 'skip' || data.skipReason === undefined, {
     message: '仅 intent=skip 允许携带 skipReason',
   })
+  .refine(
+    (data) => data.intent === 'regenerate' || data.revisionBrief === undefined,
+    { message: '仅 intent=regenerate 允许携带 revisionBrief' },
+  )
 
 export function POST(request: Request): Promise<Response> {
   return withApiSession(() => handlePost(request))
@@ -53,7 +59,7 @@ async function handlePost(request: Request) {
       { status: 400 }
     )
   }
-  const { projectId, nodeId, intent, skipReason } = parsed.data
+  const { projectId, nodeId, intent, revisionBrief, skipReason } = parsed.data
   try {
     if (intent === 'skip') {
       return NextResponse.json(
@@ -66,7 +72,12 @@ async function handlePost(request: Request) {
     await assertBillingAvailable()
     await initQueue()
     return NextResponse.json(
-      await executeNodeAction({ projectId, nodeId, intent })
+      await executeNodeAction({
+        projectId,
+        nodeId,
+        intent,
+        ...(revisionBrief ? { revisionBrief } : {}),
+      })
     )
   } catch (error) {
     if (error instanceof QuotaExhaustedError) {

@@ -38,3 +38,8 @@ export {
   type FabricateSourceInspection,
   type FabricateSourceViolation,
 } from './fabricate-source-contract'
+export {
+  SHOT_REVISION_BRIEF_MAX_LENGTH,
+  shotRevisionBriefSchema,
+  type ShotRevisionBrief,
+} from './shot-revision'
