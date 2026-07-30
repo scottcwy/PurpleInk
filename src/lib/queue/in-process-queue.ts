@@ -74,6 +74,8 @@ export class InProcessQueue implements QueueAdapter {
   private readonly running = new Map<string, number>()
   /** 本进程当前持有的 running attempt；心跳只续租这些。 */
   private readonly heldAttempts = new Set<string>()
+  private readonly activeExecutions = new Set<Promise<void>>()
+  private readonly backgroundOperations = new Set<Promise<void>>()
   private lanes: Record<string, number> = {}
 
   async enqueue(
@@ -151,18 +153,20 @@ export class InProcessQueue implements QueueAdapter {
     const resolved = resolveLanes(lanes)
     if (this.timer) return
     this.lanes = resolved
-    this.timer = setInterval(() => {
-      void this.tick().catch((error) => {
-        if (this.timer) console.error('[queue] 消费循环失败', error)
-      })
-    }, 200)
+    this.timer = setInterval(
+      () => this.trackBackground(this.tick(), '消费循环失败'),
+      200,
+    )
     this.heartbeatTimer = setInterval(
-      () => void this.heartbeat(),
+      () => this.trackBackground(this.heartbeat(), '租约续期失败'),
       HEARTBEAT_INTERVAL_MS
     )
-    this.sweepTimer = setInterval(() => void this.sweep(), SWEEP_INTERVAL_MS)
+    this.sweepTimer = setInterval(
+      () => this.trackBackground(this.sweep(), '僵尸回收失败'),
+      SWEEP_INTERVAL_MS,
+    )
     // 启动即回收上个进程崩溃遗留的僵尸 attempt，不等首个 sweep 周期。
-    void this.sweep()
+    this.trackBackground(this.sweep(), '启动清扫失败')
   }
 
   stop(): void {
@@ -231,11 +235,16 @@ export class InProcessQueue implements QueueAdapter {
       if (!job) return
       this.heldAttempts.add(job.id)
       this.running.set(laneKey, (this.running.get(laneKey) ?? 0) + 1)
-      // run() 已把超时也收敛为正常返回，finally 只会执行一次：
-      // 后台残留的 handler promise 不会重复递减计数或重复释放持有集合。
-      void this.run(job).finally(() => {
+      const execution = this.run(job)
+      this.activeExecutions.add(execution)
+      const release = (): void => {
         this.running.set(laneKey, (this.running.get(laneKey) ?? 0) - 1)
         this.heldAttempts.delete(job.id)
+        this.activeExecutions.delete(execution)
+      }
+      void execution.then(release, (error: unknown) => {
+        release()
+        console.error('[queue] 作业收敛失败', error)
       })
     }
   }
@@ -322,6 +331,43 @@ export class InProcessQueue implements QueueAdapter {
       unregisterAttemptController(job.id, controller)
       await releaseTerminalSlot(database, job)
     }
+  }
+
+  async stopAndDrain(timeoutMs = 30_000): Promise<void> {
+    this.stop()
+    const deadline = Date.now() + timeoutMs
+    while (this.activeExecutions.size > 0 || this.backgroundOperations.size > 0) {
+      const remainingMs = deadline - Date.now()
+      if (remainingMs <= 0) throw new Error('queue drain timed out')
+      let timeout: ReturnType<typeof setTimeout> | undefined
+      try {
+        await Promise.race([
+          Promise.allSettled([
+            ...this.activeExecutions,
+            ...this.backgroundOperations,
+          ]),
+          new Promise<never>((_, reject) => {
+            timeout = setTimeout(
+              () => reject(new Error('queue drain timed out')),
+              remainingMs,
+            )
+          }),
+        ])
+      } finally {
+        if (timeout) clearTimeout(timeout)
+      }
+    }
+  }
+
+  private trackBackground(operation: Promise<void>, label: string): void {
+    this.backgroundOperations.add(operation)
+    void operation.then(
+      () => this.backgroundOperations.delete(operation),
+      (error: unknown) => {
+        this.backgroundOperations.delete(operation)
+        console.error(`[queue] ${label}`, error)
+      },
+    )
   }
 }
 

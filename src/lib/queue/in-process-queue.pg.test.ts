@@ -149,7 +149,7 @@ describe('legacy in-process queue PG compatibility', () => {
         await inLocalWs(() => getJobSnapshot(randomUUID(), attemptId))
       ).toBeNull()
     } finally {
-      queue.stop()
+      await queue.stopAndDrain()
     }
   })
 
@@ -172,7 +172,7 @@ describe('legacy in-process queue PG compatibility', () => {
       )
       expect(snapshot?.error).toBe('上游产物缺失或不包含当前镜头，需要先修复上游阶段。')
     } finally {
-      queue.stop()
+      await queue.stopAndDrain()
     }
   })
 
@@ -217,7 +217,7 @@ describe('legacy in-process queue PG compatibility', () => {
         )
       ).toMatchObject({ id: foreign.attemptId, status: 'done' })
     } finally {
-      queue.stop()
+      await queue.stopAndDrain()
     }
   })
 
@@ -267,7 +267,7 @@ describe('legacy in-process queue PG compatibility', () => {
       expect(director.state.max).toBe(2)
       expect(render.state.max).toBe(1)
     } finally {
-      queue.stop()
+      await queue.stopAndDrain()
     }
   })
 
@@ -316,7 +316,7 @@ describe('legacy in-process queue PG compatibility', () => {
         ids,
         'done',
       )
-      queue.stop()
+      await queue.stopAndDrain()
     }
   })
 
@@ -372,7 +372,7 @@ describe('legacy in-process queue PG compatibility', () => {
     } finally {
       release()
       await new Promise((resolve) => setTimeout(resolve, 100))
-      queue.stop()
+      await queue.stopAndDrain()
     }
   })
 
@@ -425,7 +425,7 @@ describe('legacy in-process queue PG compatibility', () => {
       }
       expect(started[0]).toBe(nodeIds[0])
     } finally {
-      queue.stop()
+      await queue.stopAndDrain()
     }
   })
 
@@ -475,7 +475,7 @@ describe('legacy in-process queue PG compatibility', () => {
         'done'
       )
     } finally {
-      queue.stop()
+      await queue.stopAndDrain()
     }
   })
 
@@ -504,7 +504,7 @@ describe('legacy in-process queue PG compatibility', () => {
       )
       expect(probe.state.max).toBe(1)
     } finally {
-      queue.stop()
+      await queue.stopAndDrain()
     }
   })
 

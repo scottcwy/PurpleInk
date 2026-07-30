@@ -156,7 +156,7 @@ describe('completeAttempt 自动重试', () => {
       expect(handled).toHaveBeenCalledTimes(1)
       expect((await readRun(seeded.runId)).status).toBe('succeeded')
     } finally {
-      queue.stop()
+      await queue.stopAndDrain()
     }
   })
 

@@ -201,7 +201,7 @@ describe('claim 租约与 visibleAt 门', () => {
       await waitForAttemptStatus(attemptId, 'succeeded')
     } finally {
       release()
-      queue.stop()
+      await queue.stopAndDrain()
     }
   })
 })
