@@ -29,7 +29,7 @@ Select-String -Path src/**/*.tsx -Pattern 'z-\[?(40|50|1000|1001)'
 | 1 | `ui/dialog.tsx` | 无动画 / 无 ESC / 无 focus trap / 无 scroll lock；`z-[1000]` | `modal` |
 | 2 | `ui/popover.tsx` | 无动画 / 无 ESC；用全屏透明 `button` 兜 dismiss；1000/1001 | `popover` |
 | 3 | `ui/hover-preview.tsx` | inline `${fadeMs}ms`；手写视口边界 | `popover`（**保留指针几何**，见 §3.2） |
-| 4 | `ui/tooltip.tsx` | 裸 `transition-opacity`，无时长无延迟 | 取决于 08 §3.4 结论 |
+| 4 | `ui/tooltip.tsx` | 裸 `transition-opacity`，无时长无延迟；真实侧栏已证实被裁切 | `popover` + `dismissal="manual"` |
 | 5 | `ui/toast.tsx` | 无动画 / 无 viewport / 无 portal / **不自动消失** | 见 §3.3 |
 | 6 | `ui/sidebar-chrome.tsx` AccountMenu | 裸 div，零覆盖层能力 | `popover` |
 | 7 | `ui/context-menu.tsx` | **已合规**，是参照物 | 见 §3.1 |
@@ -52,12 +52,10 @@ Select-String -Path src/**/*.tsx -Pattern 'z-\[?(40|50|1000|1001)'
 
 它已经合规且是全仓库最完整的覆盖层。**不要为了"统一"把它推翻重写。**
 
-按 08 §7 第 5 问的结论二选一：
-
-- 若 `OverlayRoot` 基于 Popover API 且能替掉手写 dismiss —— `ContextMenu` 改为消费它，
-  保留 `context-menu-placement.ts`（纯函数 + 4 例单测，是真实资产）；
-- 若 `OverlayRoot` 是抽取既有逻辑 —— **以 `ContextMenu` 为蓝本**抽出内核，
-  它反而是第一个"已经在用"的消费者，改动最小。
+08 §7 已确定采用**混合方案**：`ContextMenu` 改为消费原生 `popover="auto"`，
+由平台替掉外部指针 / Esc / 窗口失焦等重复 dismiss 与同级互斥；保留并抽出
+`context-menu-placement.ts`、`role="menu"` / `menuitem`、方向键 roving focus 与
+焦点策略。原生 Popover 不提供这些能力，禁止因“统一”而删除。
 
 ### 3.2 `hover-preview` 的指针几何要保留
 
@@ -104,14 +102,15 @@ Select-String -Path src/**/*.tsx -Pattern 'z-\[?(40|50|1000|1001)'
 ```
 OverlayRoot mode="modal"     → <dialog> + showModal()
   平台负责：top layer / focus trap / 背景 inert / ESC
-  自己负责：scroll lock（08 §3.2 的结论）、进出场（08 §3.1 的结论）
+  自己负责：最近 [data-overlay-scroll-root] 的 scroll lock、常驻挂载的退出 phase
 
-OverlayRoot mode="popover"   → popover="auto"（或抽取 ContextMenu 逻辑）
-  平台/内核负责：top layer / light dismiss / 焦点归还 / 同级互斥
-  自己负责：定位（JS，D7）、进出场
+OverlayRoot mode="popover"   → popover="auto" | popover="manual"
+  平台负责：top layer；auto 另负责 light dismiss / Esc 焦点归还 / 同级互斥
+  自己负责：定位（JS，D7）、进出场、role 与菜单 roving focus
 ```
 
-两模式共用：L1 recipe 参数（意图 5-10）、portal、进出场编排。
+两模式共用：L1 recipe 参数（意图 5-10）、定位接口与进出场编排。top layer 元素
+不再为层叠而 portal；Toast 的 viewport / portal 在 09-5 独立处理。
 
 规模注意：内核容易膨胀到 350 行以上。**定位、dismiss、focus 管理、动效编排**
 是四个不同的变化原因，从一开始就分文件，不要等门禁拦下来再拆
@@ -123,11 +122,11 @@ OverlayRoot mode="popover"   → popover="auto"（或抽取 ContextMenu 逻辑�
 | --- | --- | --- |
 | 09-1 | `OverlayRoot` 内核 + 单测 + 登记 `/playbook`（无消费者切换） | 是 |
 | 09-2 | Dialog 迁移 + 改写 `dialog-layering.test.ts` | 是 |
-| 09-3 | Popover / HoverPreview / AccountMenu / 营销移动菜单 + 改写 `popover.test.ts` | 是 |
+| 09-3 | Popover / HoverPreview / Tooltip / ContextMenu / AccountMenu / 营销移动菜单 + 改写 `popover.test.ts` | 是 |
 | 09-4 | DrawerOverlay 预设 + 删两处重复 ESC + 补 `shot-panels` | 是 |
 | 09-5 | Toast 补齐（viewport / portal / 自动消失 / `aria-live`） | 是 |
 
-`ContextMenu` 与 Tooltip 按 08 结论插入对应提交，或明确记为不动。
+`ContextMenu` 与 Tooltip 已按 08 结论纳入 09-3。
 
 **每个提交后都要跑基线 + 键盘验证**，不要攒到最后一起验。
 

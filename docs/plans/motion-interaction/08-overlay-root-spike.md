@@ -115,17 +115,17 @@ spike 本身没有"通过"，只有"得出结论"。完成标准是 §7 的五�
 
 | # | 问题 | 结论 | 证据 |
 | --- | --- | --- | --- |
-| 1 | `<dialog>` 退出动画时序用哪个模式 | 待填 | |
-| 2 | scroll lock 在本项目布局下怎么实现 | 待填 | |
-| 3 | `popover="auto"` 的焦点归还 / 互斥是否可靠 | 待填 | |
-| 4 | Tooltip 是否被 `overflow-hidden` 裁切 | 待填 | |
-| 5 | `OverlayRoot` 应基于 Popover API 还是抽取 `ContextMenu` 的既有逻辑 | 待填 | |
+| 1 | `<dialog>` 退出动画时序用哪个模式 | **常驻挂载 + 命令式 `showModal()` + 退出完成后 `close()`**。`showModal()` 前守卫 `dialog.open`；重新打开时取消待执行的 close 并清退出态。无需 `AnimatePresence` 卸载 dialog，内容层用 Motion phase / `onAnimationComplete` 即可。 | Chromium 151：退出 60ms 时 `open=true`、opacity 约 0.36，180ms 后关闭；close→40ms→open 连击后 `open=true`、无 closing、无异常。截图 `output/playwright/motion-08-dialog-exit.png`。 |
+| 2 | scroll lock 在本项目布局下怎么实现 | `body` lock **无效**；锁触发元素所在的最近 `[data-overlay-scroll-root]`（允许显式 ref 覆盖），保存并恢复原 overflow。容器使用 `scrollbar-gutter: stable` 防跳动。 | body hidden 时内部 `scrollTop 400→640`；真实根加锁后 `640→640`；`clientWidth 1043→1043`。 |
+| 3 | `popover="auto"` 的焦点归还 / 互斥是否可靠 | 平台的 Esc、指针 light dismiss、同级互斥和 Esc 后焦点归还可靠；指针外点关闭后焦点落在实际点击目标（本例 `BODY`），不应强抢回触发器。Tab / Shift+Tab 顺序正确；平台**不提供** menu role、方向键 roving 或定位。嵌套在 dialog 时第一次 Esc 只关 popover，第二次才关 dialog。 | Tab→`item-one`，Shift+Tab→`trigger-one`；Esc→trigger；A/B 状态 `false/true`；ArrowDown 仍停 `item-one`；dialog/popover 两级 Esc 状态正确。截图 `output/playwright/motion-08-popover-stack.png`。 |
+| 4 | Tooltip 是否被 `overflow-hidden` 裁切 | **会裁切，09 必须纳入。** 使用 `mode="popover"` 的 manual dismissal 进入 top layer，hover/focus 自己控制，不用尚不稳定的 `popover="hint"`。 | 真实 `/products/settings`：侧栏裁切根 `overflow=hidden`、右边界 248px，Tooltip 几何右边界 307.7px，越界探针命中其它元素。截图 `output/playwright/motion-08-tooltip-clipped.png`。 |
+| 5 | `OverlayRoot` 应基于 Popover API 还是抽取 `ContextMenu` 的既有逻辑 | **混合方案，以平台 Popover API 为底座。** 平台接管 top layer / dismiss / Esc / 互斥；从 `ContextMenu` 保留并抽出 JS 定位、role/menuitem 语义、roving focus 与焦点策略。删除与原生 dismiss 重复的监听，不推翻 `context-menu-placement.ts`。 | Chromium 151 原型无 console/page errors；平台能力与缺口分别由第 3 行的互斥、焦点、ArrowDown 和 role 结果证明。 |
 
 ## 8. 完成判据
 
-- [ ] 五个问题均有实测结论与证据；
-- [ ] 结论已写回本文档 §7；
-- [ ] 若结论与 `motion-interaction.md` §4 不一致，规范已先行更新；
-- [ ] spike 产物已删除，工作区无残留；
-- [ ] 09 的范围已按结论确定（尤其 Tooltip 是否纳入）；
-- [ ] 单个 Conventional Commit（只含文档与规范更新，无产品代码改动）。
+- [x] 五个问题均有实测结论与证据；
+- [x] 结论已写回本文档 §7；
+- [x] 结论与原 `motion-interaction.md` §4 的差异已先行更新；
+- [x] spike HTML / 脚本已删除，生产代码无改动；
+- [x] 09 已确定采用平台 + `ContextMenu` 能力的混合方案，并纳入 Tooltip；
+- [x] 单个 Conventional Commit（只含文档与规范更新，无产品代码改动）。

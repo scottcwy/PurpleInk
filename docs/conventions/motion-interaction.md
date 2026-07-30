@@ -149,14 +149,17 @@ Tailwind v4 从 `@theme` 读取的 duration 命名空间是 **`--transition-dura
 
 不引入 Radix / Base UI。项目已有 46 个自研 UI 组件族登记在 `/playbook`，
 再引一套 headless 库等于长期双体系，违反 `AGENTS.md` §3。
-改为一个 `OverlayRoot` 内核，两个模式，把 a11y 交给平台：
+改为一个 `OverlayRoot` 内核，两个模式，平台能力与项目策略明确分工：
 
 | 模式 | 底层 | 平台负责 |
 | --- | --- | --- |
 | `mode="modal"` | `<dialog>` + `showModal()` | top layer、focus trap、背景 inert、ESC |
-| `mode="popover"` | `popover="auto"` | top layer、点击外部与 Esc 的 light dismiss、焦点归还、同级互斥关闭 |
+| `mode="popover"`，`dismissal="auto"` | `popover="auto"` | top layer、点击外部与 Esc 的 light dismiss、Esc 后焦点归还、同级互斥关闭 |
+| `mode="popover"`，`dismissal="manual"` | `popover="manual"` | top layer；Tooltip 等 hover/focus 覆盖层自行控制开关且不转移焦点 |
 
-两模式共用：scroll lock、§3 的进出场 recipe、内容层动画。
+两模式共用 §3 的进出场 recipe、内容层动画与 JS 定位接口；scroll lock 只属于 modal。
+Popover API **不提供**业务语义、菜单方向键 roving 或定位，这些复用
+`ContextMenu` 已验证的 role / focus / geometry 策略。
 
 **收益**：`z-40 / z-50 / z-[1000] / z-[1001]` 四个互不相通的层级段全部作废——
 top layer 天然位于所有 stacking context 之上，不需要 z-index。
@@ -165,16 +168,20 @@ top layer 天然位于所有 stacking context 之上，不需要 z-index。
 
 ### 4.2 必须自己实现的部分（不要假设平台全包）
 
-- **`<dialog>` 不锁背景滚动。** scroll lock 必须自己做，这是平台唯一不覆盖的项。
+- **`<dialog>` 不锁背景滚动。** 本项目 body 本身不滚，锁 body 无效。modal 从触发元素
+  查找最近 `[data-overlay-scroll-root]`（可由显式 ref 覆盖），保存/恢复其 overflow；
+  滚动根用 `scrollbar-gutter: stable` 避免宽度跳动。
 - **退出动画与 `close()` 的时序。** `close()` 会立即移出 top layer，退出动画来不及播。
   模式：dialog 元素常驻挂载，`open` 变化时命令式 `showModal()`，
-  退出在动画完成回调里再 `close()`。
+  退出在动画完成回调里再 `close()`；快速重新打开要取消待执行 close，且
+  `showModal()` 前必须守卫 `dialog.open`。dialog 本身不靠 `AnimatePresence` 卸载。
 - **CSS anchor positioning 不作为依赖。** 其浏览器支持仍在铺开（Firefox / Safari 支持版本
   很新且资料互相矛盾），定位逻辑留在 JS，锚点定位只作为 `@supports` 渐进增强。
-- **Tooltip 不使用 Popover API。** `popover="hint"` 支持度不足。保留 CSS `group-hover`
-  结构，补延迟、token 化时长与 `aria-describedby`。
-  ⚠️ 已知风险：app-shell 多层 `overflow-hidden`，`absolute` 定位的 tooltip 可能被祖先裁切，
-  需实测；若被裁切则升级为 `mode="popover"`。
+- **原生 dismiss 不等于完整菜单。** Esc 关闭会把焦点归还触发器；指针外点关闭后焦点
+  留在实际点击目标。`role="menu"` / `menuitem`、方向键 roving 与焦点策略仍由组件实现。
+- **Tooltip 使用 `mode="popover"` + `dismissal="manual"`。** 真实应用侧栏已证明 absolute
+  Tooltip 会被 `overflow-hidden` 裁切；manual popover 只借 top layer，仍由 hover / focus
+  控制 300ms 进入、0ms 退出，并提供 `aria-describedby`。不依赖 `popover="hint"`。
 
 ---
 
@@ -277,11 +284,11 @@ top layer 天然位于所有 stacking context 之上，不需要 z-index。
 | `ui/popover.tsx` | 无动画 / 无 ESC；全屏透明 button 兜 dismiss | `mode="popover"` | todo |
 | `ui/hover-preview.tsx` | inline `${fadeMs}ms`；手写视口边界 | `mode="popover"`（**保留指针几何**，见下） | todo |
 | `navigation/collapsible-panel.tsx` | 唯一做对进出场 | 成为抽屉预设并登记 `/playbook` | todo |
-| `ui/tooltip.tsx` | 裸 `transition-opacity`，无 duration 无延迟 | §4.2 方案 | todo |
+| `ui/tooltip.tsx` | 裸 `transition-opacity`，无 duration 无延迟；真实侧栏被 overflow 裁切 | `mode="popover"` + `dismissal="manual"`，补延迟与 `aria-describedby` | todo |
 | `ui/toast.tsx` | 无动画 / 无 viewport / 无 portal / **不自动消失** | 补齐 + `aria-live` | todo |
 | `ui/sidebar-chrome.tsx` AccountMenu | 裸 div，零覆盖层能力 | `mode="popover"` | todo |
 | `marketing/header.tsx` 移动菜单 | 自写 `duration: 0.2` | `mode="popover"` | todo |
-| `ui/context-menu.tsx` | 2026-07-30 新增；自研指针锚定定位 + 自研 light dismiss（进出场已按 §3 意图 8 / §5.3） | `mode="popover"` | todo |
+| `ui/context-menu.tsx` | 2026-07-30 新增；定位、语义、roving focus 已验证，但 dismiss 与平台重复 | 以 `popover="auto"` 接管 top layer / dismiss / 互斥，保留既有 geometry / menu focus 策略 | todo |
 
 `hover-preview-geometry.ts` 的指针离开方向判定有独立测试，是真实资产，迁移时保留。
 迁移会使 `dialog-layering.test.ts` / `popover.test.ts` 失败——它们断言 `createPortal`
