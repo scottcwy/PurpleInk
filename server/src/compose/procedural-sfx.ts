@@ -41,41 +41,52 @@ export async function applyWebsiteProceduralSfx(
     };
   }
 
-  const plan = buildBoundaryCuePlan({
-    fps: input.fps,
-    totalFrames: input.totalFrames,
-    boundaries: input.boundaries,
-  });
-  const base: Pick<
-    WebsiteProceduralSfxResult,
-    "mode" | "generatorVersion" | "cueCount" | "timingHash" | "cuePlanHash"
-  > = {
-    mode: "procedural",
-    generatorVersion: PROCEDURAL_SFX_GENERATOR_VERSION,
-    cueCount: plan.cues.length,
-    timingHash: plan.timingHash,
-    cuePlanHash: plan.cuePlanHash,
-  };
-  if (plan.cues.length === 0) {
-    return {
-      videoPath: input.narratedVideoPath,
-      soundEffects: {
-        ...base,
-        status: "omitted-no-cues",
-        waveformHashes: [],
-      },
-    };
-  }
-
-  const cueDirectory = await mkdtemp(
-    join(input.workDirectory, ".procedural-sfx-")
-  );
-  const extension = extname(input.narratedVideoPath) || ".mp4";
-  const outputPath = join(
-    dirname(input.narratedVideoPath),
-    `${basename(input.narratedVideoPath, extension)}-sfx${extension}`
-  );
+  let cueDirectory: string | null = null;
+  let outputPath: string | null = null;
+  let failureResult = omittedError();
   try {
+    const plan = buildBoundaryCuePlan({
+      fps: input.fps,
+      totalFrames: input.totalFrames,
+      boundaries: input.boundaries,
+    });
+    const base: Pick<
+      WebsiteProceduralSfxResult,
+      "mode" | "generatorVersion" | "cueCount" | "timingHash" | "cuePlanHash"
+    > = {
+      mode: "procedural",
+      generatorVersion: PROCEDURAL_SFX_GENERATOR_VERSION,
+      cueCount: plan.cues.length,
+      timingHash: plan.timingHash,
+      cuePlanHash: plan.cuePlanHash,
+    };
+    failureResult = {
+      ...base,
+      status: "omitted-error",
+      waveformHashes: [],
+      failureCode: "PROCEDURAL_SFX_MIX_FAILED",
+    };
+    if (plan.cues.length === 0) {
+      return {
+        videoPath: input.narratedVideoPath,
+        soundEffects: {
+          ...base,
+          status: "omitted-no-cues",
+          waveformHashes: [],
+        },
+      };
+    }
+
+    const createdCueDirectory = await mkdtemp(
+      join(input.workDirectory, ".procedural-sfx-")
+    );
+    cueDirectory = createdCueDirectory;
+    const extension = extname(input.narratedVideoPath) || ".mp4";
+    const mixedOutputPath = join(
+      dirname(input.narratedVideoPath),
+      `${basename(input.narratedVideoPath, extension)}-sfx${extension}`
+    );
+    outputPath = mixedOutputPath;
     const waveforms = await Promise.all(
       plan.cues.map(async (cue, index) => {
         const bytes = synthesizeProceduralWav({
@@ -83,7 +94,7 @@ export async function applyWebsiteProceduralSfx(
           seed: `${plan.cuePlanHash}:${index}:${cue.preset}`,
         });
         const path = join(
-          cueDirectory,
+          createdCueDirectory,
           `cue-${String(index).padStart(2, "0")}-${cue.preset}.wav`
         );
         await writeFile(path, bytes);
@@ -97,11 +108,11 @@ export async function applyWebsiteProceduralSfx(
     );
     const result = await runner(
       "ffmpeg",
-      buildMixArguments(input, waveforms, outputPath)
+      buildMixArguments(input, waveforms, mixedOutputPath)
     );
     if (result.code !== 0) throw new Error("WEBSITE_PROCEDURAL_SFX_MIX_FAILED");
     return {
-      videoPath: outputPath,
+      videoPath: mixedOutputPath,
       soundEffects: {
         ...base,
         status: "applied",
@@ -109,20 +120,19 @@ export async function applyWebsiteProceduralSfx(
       },
     };
   } catch {
-    await rm(outputPath, { force: true }).catch(() => undefined);
+    if (outputPath) {
+      await rm(outputPath, { force: true }).catch(() => undefined);
+    }
     return {
       videoPath: input.narratedVideoPath,
-      soundEffects: {
-        ...base,
-        status: "omitted-error",
-        waveformHashes: [],
-        failureCode: "PROCEDURAL_SFX_MIX_FAILED",
-      },
+      soundEffects: failureResult,
     };
   } finally {
-    await rm(cueDirectory, { recursive: true, force: true }).catch(
-      () => undefined
-    );
+    if (cueDirectory) {
+      await rm(cueDirectory, { recursive: true, force: true }).catch(
+        () => undefined
+      );
+    }
   }
 }
 
@@ -194,6 +204,13 @@ function omitted(
     timingHash: null,
     cuePlanHash: null,
     waveformHashes: [],
+  };
+}
+
+function omittedError(): WebsiteProceduralSfxResult {
+  return {
+    ...omitted("procedural", "omitted-error"),
+    failureCode: "PROCEDURAL_SFX_MIX_FAILED",
   };
 }
 

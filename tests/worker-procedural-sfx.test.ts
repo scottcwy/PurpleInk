@@ -90,6 +90,54 @@ describe("website procedural sound effects", () => {
     expect(JSON.stringify(result.soundEffects)).not.toContain("private path");
   });
 
+  it("falls back safely when the cue plan cannot be built", async () => {
+    const baseInput = input(workDirectory);
+    const runner = vi.fn();
+
+    const result = await applyWebsiteProceduralSfx(
+      { ...baseInput, fps: 0 },
+      runner
+    );
+
+    expect(result).toEqual({
+      videoPath: baseInput.narratedVideoPath,
+      soundEffects: {
+        mode: "procedural",
+        status: "omitted-error",
+        generatorVersion: "procedural-sfx/1.0.0",
+        cueCount: 0,
+        timingHash: null,
+        cuePlanHash: null,
+        waveformHashes: [],
+        failureCode: "PROCEDURAL_SFX_MIX_FAILED",
+      },
+    });
+    expect(runner).not.toHaveBeenCalled();
+  });
+
+  it("falls back safely when the cue directory cannot be created", async () => {
+    const baseInput = input(workDirectory);
+    const runner = vi.fn();
+
+    const result = await applyWebsiteProceduralSfx(
+      {
+        ...baseInput,
+        workDirectory: join(workDirectory, "missing-parent"),
+      },
+      runner
+    );
+
+    expect(result.videoPath).toBe(baseInput.narratedVideoPath);
+    expect(result.soundEffects).toMatchObject({
+      mode: "procedural",
+      status: "omitted-error",
+      cueCount: 3,
+      failureCode: "PROCEDURAL_SFX_MIX_FAILED",
+    });
+    expect(result.soundEffects.waveformHashes).toEqual([]);
+    expect(runner).not.toHaveBeenCalled();
+  });
+
   it("produces a decodable MP4 with real ffmpeg bytes", async () => {
     if (!ffmpegPath) throw new Error("ffmpeg-static is unavailable");
     const executable = ffmpegPath;
