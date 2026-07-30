@@ -15,6 +15,8 @@ const nextConfig: NextConfig = {
   // 导致 Director 全部阶段的模型调用失败；保持外部化走原生 Node 解析。
   serverExternalPackages: [
     "ffmpeg-static",
+    "postgres",
+    "drizzle-orm",
     "@earendil-works/pi-ai",
     "@earendil-works/pi-agent-core",
   ],

@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { eq } from 'drizzle-orm'
+import { drizzle } from 'drizzle-orm/postgres-js'
+import postgres from 'postgres'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   currentUserId,
@@ -16,6 +18,7 @@ import {
   workflowConcurrencyLeases,
   workspaces,
 } from '@/lib/db/schema/index'
+import * as schema from '@/lib/db/schema/index'
 import {
   createPgTestDatabase,
   type PgTestDatabase,
@@ -63,6 +66,64 @@ afterAll(async () => {
 })
 
 describe('legacy in-process queue PG compatibility', () => {
+  it('does not exhaust a five-connection pool while polling four lanes and fallback', async () => {
+    const client = postgres(process.env.TEST_DATABASE_URL!, { max: 5 })
+    const poolDatabase = drizzle(client, { schema })
+    let activeTransactions = 0
+    let maxActiveTransactions = 0
+    const observedDatabase = new Proxy(poolDatabase, {
+      get(target, property, receiver) {
+        if (property !== 'transaction') {
+          return Reflect.get(target, property, receiver)
+        }
+        return async (
+          operation: Parameters<typeof poolDatabase.transaction>[0],
+        ) => target.transaction(async (transaction) => {
+          activeTransactions += 1
+          maxActiveTransactions = Math.max(
+            maxActiveTransactions,
+            activeTransactions,
+          )
+          try {
+            await new Promise((resolve) => setTimeout(resolve, 25))
+            return await operation(transaction)
+          } finally {
+            activeTransactions -= 1
+          }
+        })
+      },
+    })
+    getDbMock.mockResolvedValue(observedDatabase)
+    const { InProcessQueue } = await import('./in-process-queue')
+    const queue = new InProcessQueue()
+    const internal = queue as unknown as {
+      lanes: Record<string, number>
+      tick: () => Promise<void>
+    }
+    internal.lanes = {
+      'director-stage': 1,
+      'render-shot': 1,
+      'export-project': 1,
+      'media-narration': 1,
+    }
+
+    try {
+      await expect(Promise.race([
+        internal.tick(),
+        new Promise<never>((_, reject) => {
+          setTimeout(
+            () => reject(new Error('queue polling exhausted the database pool')),
+            1_000,
+          )
+        }),
+      ])).resolves.toBeUndefined()
+      expect(maxActiveTransactions).toBe(1)
+    } finally {
+      await client.end({ timeout: 1 })
+      getDbMock.mockResolvedValue(database.db)
+    }
+  })
+
   it('does not overlap polling ticks when one claim cycle is slow', async () => {
     const { InProcessQueue } = await import('./in-process-queue')
     const queue = new InProcessQueue()

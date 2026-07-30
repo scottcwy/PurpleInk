@@ -148,14 +148,12 @@ export class InProcessQueue implements QueueAdapter {
 
   private async tick(): Promise<void> {
     const knownKinds = Object.keys(this.lanes)
-    await Promise.all([
-      ...knownKinds.map((kind) =>
-        this.drainLane(kind, this.lanes[kind]!, { kind })
-      ),
-      this.drainLane(FALLBACK_LANE, FALLBACK_LANE_QUOTA, {
-        excludeKinds: knownKinds,
-      }),
-    ])
+    for (const kind of knownKinds) {
+      await this.drainLane(kind, this.lanes[kind]!, { kind })
+    }
+    await this.drainLane(FALLBACK_LANE, FALLBACK_LANE_QUOTA, {
+      excludeKinds: knownKinds,
+    })
   }
 
   /** 在单个通道内按配额领取作业；`laneKey` 是并发计数的桶，不一定等于作业的真实 kind（兜底通道混装多个未登记 kind）。 */
