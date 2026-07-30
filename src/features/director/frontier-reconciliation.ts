@@ -17,6 +17,8 @@ export interface DirectorFrontierCandidate {
 export const DIRECTOR_FRONTIER_RECOVERY_WINDOW_MS = 15 * 60 * 1_000
 /** 每轮只恢复最新项目，避免一次启动唤醒一批历史工作流。 */
 export const DIRECTOR_FRONTIER_RECOVERY_LIMIT = 1
+/** 扫描多个候选，锁繁忙或失败的队首不得饿死后续可恢复项目。 */
+export const DIRECTOR_FRONTIER_SCAN_LIMIT = 16
 
 interface ReconciliationDependencies {
   listCandidates?: (database: Db) => Promise<DirectorFrontierCandidate[]>
@@ -55,6 +57,11 @@ export async function reconcileDirectorFrontiers(
   }
 
   for (const candidate of candidates) {
+    if (
+      result.reconciledProjectIds.length >= DIRECTOR_FRONTIER_RECOVERY_LIMIT
+    ) {
+      break
+    }
     try {
       const resumed = await runInAuthContext(
         {
@@ -105,9 +112,27 @@ export async function listDirectorFrontierCandidates(
       project.workspace_id as "workspaceId",
       project.id as "projectId"
     from projects project
+    cross join lateral (
+      select max(source.updated_at) as activity_at
+      from (
+        select node_activity.updated_at
+        from canvas_nodes node_activity
+        where node_activity.workspace_id = project.workspace_id
+          and node_activity.project_id = project.id
+        union all
+        select attempt_activity.updated_at
+        from task_attempts attempt_activity
+        inner join pipeline_runs run_activity
+          on run_activity.workspace_id = attempt_activity.workspace_id
+          and run_activity.id = attempt_activity.run_id
+        where attempt_activity.workspace_id = project.workspace_id
+          and run_activity.project_id = project.id
+          and run_activity.execution_epoch = project.execution_epoch
+      ) source
+    ) activity
     where project.autopilot = true
       and project.workflow_kind in ('script', 'audio')
-      and project.updated_at >=
+      and activity.activity_at >=
         now() - (${DIRECTOR_FRONTIER_RECOVERY_WINDOW_MS} * interval '1 millisecond')
       and exists (
         select 1
@@ -139,8 +164,8 @@ export async function listDirectorFrontierCandidates(
           and run.execution_epoch = project.execution_epoch
           and attempt.status in ('queued', 'running')
       )
-    order by project.updated_at desc, project.id desc
-    limit ${DIRECTOR_FRONTIER_RECOVERY_LIMIT}
+    order by activity.activity_at desc, project.id desc
+    limit ${DIRECTOR_FRONTIER_SCAN_LIMIT}
   `)
   return Array.from(rows, (row) => ({
     workspaceId: String(row.workspaceId),

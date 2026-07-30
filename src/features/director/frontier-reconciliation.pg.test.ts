@@ -51,35 +51,57 @@ it('selects only an unattended ready DAG with no active attempt', async () => {
   ])
 })
 
-it('does not recover a ready project outside the recent crash window', async () => {
+it('uses node activity instead of a stale project timestamp for the recovery window', async () => {
+  const [clock] = await database.sql<{ now: string | Date }[]>`select now() as now`
+  const now = new Date(clock!.now)
+  const projectId = await seedProject({
+    autopilot: true,
+    downstreamStatus: 'idle',
+    updatedAt: new Date(now.getTime() - 16 * 60 * 1_000),
+    nodeUpdatedAt: new Date(now.getTime() - 60 * 1_000),
+    attemptUpdatedAt: new Date(now.getTime() - 16 * 60 * 1_000),
+  })
+
+  await expect(listDirectorFrontierCandidates(database.db)).resolves.toEqual([
+    { workspaceId: WORKSPACE_ID, projectId },
+  ])
+})
+
+it('does not recover when only the project row is recent but node and attempt activity are old', async () => {
   const [clock] = await database.sql<{ now: string | Date }[]>`select now() as now`
   const now = new Date(clock!.now)
   await seedProject({
     autopilot: true,
     downstreamStatus: 'idle',
-    updatedAt: new Date(now.getTime() - 16 * 60 * 1_000),
+    updatedAt: new Date(now.getTime() - 60 * 1_000),
+    nodeUpdatedAt: new Date(now.getTime() - 16 * 60 * 1_000),
+    attemptUpdatedAt: new Date(now.getTime() - 16 * 60 * 1_000),
   })
 
   await expect(listDirectorFrontierCandidates(database.db)).resolves.toEqual([])
 })
 
-it('selects only the most recently updated project when several are recoverable', async () => {
+it('orders the recovery scan by real node and attempt activity', async () => {
   const [clock] = await database.sql<{ now: string | Date }[]>`select now() as now`
   const now = new Date(clock!.now)
   const olderProjectId = await seedProject({
     autopilot: true,
     downstreamStatus: 'idle',
-    updatedAt: new Date(now.getTime() - 2 * 60 * 1_000),
+    updatedAt: new Date(now.getTime() - 30 * 1_000),
+    nodeUpdatedAt: new Date(now.getTime() - 2 * 60 * 1_000),
+    attemptUpdatedAt: new Date(now.getTime() - 3 * 60 * 1_000),
   })
   const latestProjectId = await seedProject({
     autopilot: true,
     downstreamStatus: 'idle',
-    updatedAt: new Date(now.getTime() - 60 * 1_000),
+    updatedAt: new Date(now.getTime() - 10 * 60 * 1_000),
+    attemptUpdatedAt: new Date(now.getTime() - 60 * 1_000),
   })
 
   expect(olderProjectId).not.toBe(latestProjectId)
   await expect(listDirectorFrontierCandidates(database.db)).resolves.toEqual([
     { workspaceId: WORKSPACE_ID, projectId: latestProjectId },
+    { workspaceId: WORKSPACE_ID, projectId: olderProjectId },
   ])
 })
 
@@ -88,6 +110,8 @@ async function seedProject(input: {
   downstreamStatus: 'idle' | 'succeeded'
   activeAttempt?: boolean
   updatedAt?: Date
+  nodeUpdatedAt?: Date
+  attemptUpdatedAt?: Date
 }): Promise<string> {
   const projectId = randomUUID()
   const entryId = randomUUID()
@@ -113,6 +137,7 @@ async function seedProject(input: {
       stage: 'INGEST',
       status: 'succeeded',
       data: { schemaVersion: 1, payload: {} },
+      ...(input.nodeUpdatedAt ? { updatedAt: input.nodeUpdatedAt } : {}),
     },
     {
       workspaceId: WORKSPACE_ID,
@@ -123,6 +148,7 @@ async function seedProject(input: {
       stage: 'DIRECT',
       status: input.downstreamStatus,
       data: { schemaVersion: 1, payload: {} },
+      ...(input.nodeUpdatedAt ? { updatedAt: input.nodeUpdatedAt } : {}),
     },
   ])
   await database.db.insert(canvasEdges).values({
@@ -152,6 +178,7 @@ async function seedProject(input: {
     status: input.activeAttempt ? 'queued' : 'succeeded',
     fingerprint: randomUUID().replaceAll('-', '').padEnd(64, '0'),
     checkpoint: { schemaVersion: 1 },
+    ...(input.attemptUpdatedAt ? { updatedAt: input.attemptUpdatedAt } : {}),
   })
   return projectId
 }

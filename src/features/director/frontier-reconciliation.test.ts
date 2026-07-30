@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import type { PipelineStartResult } from './advance'
 import {
   DIRECTOR_FRONTIER_RECOVERY_LIMIT,
   DIRECTOR_FRONTIER_RECOVERY_WINDOW_MS,
+  DIRECTOR_FRONTIER_SCAN_LIMIT,
   reconcileDirectorFrontiers,
   type DirectorFrontierCandidate,
 } from './frontier-reconciliation'
@@ -28,9 +30,12 @@ describe('reconcileDirectorFrontiers', () => {
   it('publishes the bounded recent-crash recovery policy', () => {
     expect(DIRECTOR_FRONTIER_RECOVERY_WINDOW_MS).toBe(15 * 60 * 1_000)
     expect(DIRECTOR_FRONTIER_RECOVERY_LIMIT).toBe(1)
+    expect(DIRECTOR_FRONTIER_SCAN_LIMIT).toBeGreaterThan(
+      DIRECTOR_FRONTIER_RECOVERY_LIMIT,
+    )
   })
 
-  it('resumes every persisted ready frontier inside its owning workspace', async () => {
+  it('resumes only the bounded number of persisted frontiers per pass', async () => {
     const observedContexts: string[] = []
     const resume = vi.fn(async () => {
       observedContexts.push(currentWorkspaceId())
@@ -50,14 +55,41 @@ describe('reconcileDirectorFrontiers', () => {
       lockProject: (_projectId, operation) => operation(),
     })
 
-    expect(observedContexts).toEqual(candidates.map(({ workspaceId }) => workspaceId))
-    expect(resume.mock.calls).toEqual(
-      candidates.map(({ projectId }) => [projectId]),
-    )
+    expect(observedContexts).toEqual([candidates[0]!.workspaceId])
+    expect(resume.mock.calls).toEqual([[candidates[0]!.projectId]])
     expect(result).toEqual({
-      reconciledProjectIds: candidates.map(({ projectId }) => projectId),
+      reconciledProjectIds: [candidates[0]!.projectId],
       failedProjectIds: [],
       deferredProjectIds: [],
+    })
+  })
+
+  it('continues past a lock-busy candidate so it cannot starve the next project', async () => {
+    const resume = vi.fn(async () => ({
+      autopilot: true as const,
+      status: 'started' as const,
+      enqueuedNodeIds: ['next'],
+      repairRootNodeIds: [],
+      failedNodeIds: [],
+      blockedNodes: [],
+    }))
+    const lockProject = vi.fn(
+      async (projectId: string, operation: () => Promise<PipelineStartResult>) =>
+        projectId === candidates[0]!.projectId ? null : operation()
+    )
+
+    const result = await reconcileDirectorFrontiers({} as never, {
+      listCandidates: vi.fn(async () => candidates),
+      resume,
+      lockProject,
+    })
+
+    expect(lockProject).toHaveBeenCalledTimes(2)
+    expect(resume).toHaveBeenCalledWith(candidates[1]!.projectId)
+    expect(result).toEqual({
+      reconciledProjectIds: [candidates[1]!.projectId],
+      failedProjectIds: [],
+      deferredProjectIds: [candidates[0]!.projectId],
     })
   })
 
