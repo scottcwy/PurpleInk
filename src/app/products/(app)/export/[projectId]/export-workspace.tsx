@@ -74,6 +74,7 @@ export function ExportWorkspace({
               onDegradedExport={handleDegradedExport}
               onResolutionChange={runtime.updateResolution}
               onSubtitlesChange={runtime.updateSubtitles}
+              onSoundEffectsChange={runtime.updateSoundEffects}
             />
           </Popover>
         }
@@ -174,18 +175,62 @@ function ExportTimeline({
         icon={Music}
         label="音乐"
         muted
-        emptyLabel="接口预留 · 未实现"
+        emptyLabel="音乐暂不实现"
         clips={[]}
       />
+      <SoundEffectsTrack readiness={readiness} />
+    </section>
+  )
+}
+
+function SoundEffectsTrack({
+  readiness,
+}: {
+  readiness?: ExportReadiness
+}) {
+  const actual = readiness?.artifactSoundEffects
+  if (!actual) {
+    return (
       <TimelineTrack
         icon={Volume2}
         label="音效"
         muted
-        emptyLabel="接口预留 · 未实现"
+        emptyLabel="尚无可验证成片音效"
         clips={[]}
       />
-    </section>
+    )
+  }
+  if (actual.status === 'applied') {
+    return (
+      <TimelineTrack
+        icon={Volume2}
+        label="音效"
+        meta={`${actual.cueCount} 个`}
+        title={`最近成片已验证 ${actual.cueCount} 个代码音效`}
+        emptyLabel={`已验证代码音效 · ${actual.cueCount} 个触发点`}
+        clips={[]}
+      />
+    )
+  }
+  return (
+    <TimelineTrack
+      icon={Volume2}
+      label="音效"
+      muted
+      title="状态来自最近成片绑定的音效 Manifest"
+      emptyLabel={soundEffectsTrackLabel(actual.status)}
+      clips={[]}
+    />
   )
+}
+
+function soundEffectsTrackLabel(
+  status: NonNullable<ExportReadiness['artifactSoundEffects']>['status']
+): string {
+  if (status === 'omitted-off') return '最近成片未包含音效'
+  if (status === 'omitted-no-cues') return '最近成片没有可用音效触发点'
+  if (status === 'omitted-error') return '最近成片音效混入失败 · 已安全省略'
+  return '最近成片不支持代码音效 · 已省略'
 }
 
 function readyRenderLanes(

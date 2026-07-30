@@ -5,6 +5,11 @@ import {
   type ResolutionPreset,
   type SubtitleDeliveryMode,
 } from '@/features/canvas/export-settings'
+import {
+  isSoundEffectsMode,
+  parseExportArtifactSoundEffects,
+  type ExportArtifactSoundEffects,
+} from './export-sfx-contract'
 
 /**
  * 导出就绪合同的客户端形状、解析与文案。
@@ -23,6 +28,10 @@ export interface ExportReadiness {
   resolutionPreset: ResolutionPreset
   /** 当前导出设置里的字幕交付选择（下次导出会产出什么）。 */
   subtitles: SubtitleDeliveryMode
+  /** 下一次导出的设置，不代表最近成片实际已混入。 */
+  soundEffects: ExportArtifactSoundEffects['mode']
+  /** 最近成片实际音效，仅在 Manifest 与该终片严格绑定时存在。 */
+  artifactSoundEffects: ExportArtifactSoundEffects | null
   artifactUrl?: string
   blockingIssues: ExportBlockingIssue[]
   media: ExportMediaReadiness
@@ -94,6 +103,11 @@ export function parseExportReadiness(
     subtitles: isSubtitleMode(body.subtitles)
       ? body.subtitles
       : DEFAULT_EXPORT_SETTINGS.subtitles,
+    soundEffects: isSoundEffectsMode(body.soundEffects)
+      ? body.soundEffects
+      : DEFAULT_EXPORT_SETTINGS.soundEffects,
+    artifactSoundEffects:
+      parseExportArtifactSoundEffects(body.artifactSoundEffects),
     blockingIssues: toBlockingIssues(body.blockingIssues),
     media: toMediaReadiness(body.media, body.shotCount),
     placeholderCandidateLanes: toStringArray(body.placeholderCandidateLanes),

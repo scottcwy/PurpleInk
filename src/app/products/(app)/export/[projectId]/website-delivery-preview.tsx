@@ -1,6 +1,9 @@
 import { Download, Film, ShieldAlert } from 'lucide-react'
 import { ArtifactChip } from '@/components/ui/artifact-chip'
-import type { ProjectExecutionSnapshot } from '@/features/projects'
+import type {
+  ProjectExecutionSnapshot,
+  WebsiteDeliverySnapshot,
+} from '@/features/projects'
 import {
   websiteDeliveryForDownload,
   websiteDownloadHref,
@@ -74,6 +77,10 @@ export function WebsiteDeliveryPreview({
             : '尚未登记'}
         />
         <Fact
+          label="代码音效"
+          value={websiteSoundEffectsLabel(evidence?.soundEffects)}
+        />
+        <Fact
           label="内容哈希"
           value={evidence?.contentHash ?? '尚未登记'}
           mono
@@ -81,6 +88,19 @@ export function WebsiteDeliveryPreview({
       </dl>
     </section>
   )
+}
+
+function websiteSoundEffectsLabel(
+  soundEffects: WebsiteDeliverySnapshot['soundEffects']
+): string {
+  if (!soundEffects) return '尚无可验证清单'
+  if (soundEffects.status === 'applied') {
+    return `已混入 · ${soundEffects.cueCount} 个`
+  }
+  if (soundEffects.status === 'omitted-off') return '未包含音效'
+  if (soundEffects.status === 'omitted-no-cues') return '无可用触发点'
+  if (soundEffects.status === 'omitted-error') return '混音失败 · 已安全省略'
+  return '当前素材不支持 · 已省略'
 }
 
 function Fact({

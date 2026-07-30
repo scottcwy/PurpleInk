@@ -183,6 +183,8 @@ function readiness(overrides: Partial<ExportReadiness> = {}): ExportReadiness {
     shotQa: {},
     resolutionPreset: '1920x1080',
     subtitles: 'burn-in',
+    soundEffects: 'off',
+    artifactSoundEffects: null,
     timeline: null,
     blockingIssues: [],
     media: {

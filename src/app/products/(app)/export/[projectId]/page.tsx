@@ -1,6 +1,10 @@
 import { notFound } from 'next/navigation'
 import { withPageSession } from '@/features/auth/page-session'
-import { getCanvasGraph, listProjects } from '@/features/canvas'
+import {
+  getCanvasGraph,
+  getExportSettings,
+  listProjects,
+} from '@/features/canvas'
 import { getProjectRouteState } from '@/features/projects/project-compatibility'
 import { getProjectExecutionSnapshot } from '@/features/projects'
 import { UnsupportedProjectNotice } from '@/features/canvas/unsupported-project-notice'
@@ -29,10 +33,14 @@ async function renderExport(projectId: string) {
   )
   if (!project) notFound()
   if (project.kind === 'website') {
-    const initialExecution = await getProjectExecutionSnapshot(projectId)
+    const [initialExecution, exportSettings] = await Promise.all([
+      getProjectExecutionSnapshot(projectId),
+      getExportSettings(projectId),
+    ])
     return (
       <WebsiteExportWorkspace
         initialExecution={initialExecution}
+        initialSoundEffects={exportSettings.soundEffects}
         projectId={projectId}
         projectTitle={project.title}
       />

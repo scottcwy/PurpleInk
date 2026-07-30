@@ -16,7 +16,11 @@ import {
   type FinalArtifactRecord,
   type RenderExportPlan,
 } from './repository'
-import { proceduralSfxPlanFingerprintFacts } from './procedural-sfx-manifest'
+import {
+  proceduralSfxPlanFingerprintFacts,
+  type ProceduralSfxManifest,
+} from './procedural-sfx-manifest'
+import { readFinalProceduralSfx } from './procedural-sfx-read'
 
 /**
  * 导出就绪投影与幂等指纹。
@@ -27,6 +31,21 @@ import { proceduralSfxPlanFingerprintFacts } from './procedural-sfx-manifest'
  */
 
 export type ExportArtifactDelivery = 'none' | FinalVideoDelivery
+export interface ExportArtifactSoundEffects {
+  mode: 'off' | 'procedural'
+  status:
+    | 'applied'
+    | 'omitted-off'
+    | 'omitted-no-cues'
+    | 'omitted-unsupported'
+    | 'omitted-error'
+  generatorVersion: 'procedural-sfx/1.0.0'
+  cueCount: number
+  timingHash: string | null
+  cuePlanHash: string | null
+  waveformHashes: string[]
+  failureCode?: 'PROCEDURAL_SFX_MIX_FAILED'
+}
 
 export interface ExportReadinessResult {
   ready: boolean
@@ -39,6 +58,8 @@ export interface ExportReadinessResult {
   /** 当前导出设置里的字幕交付选择（下次导出会产出什么）。 */
   subtitles: SubtitleDeliveryMode
   soundEffects: NonNullable<RenderExportPlan['soundEffects']>
+  /** 最新成片实际音效；只来自与 final attempt/hash 严格绑定的 Manifest。 */
+  artifactSoundEffects: ExportArtifactSoundEffects | null
   finalArtifactId: string | null
   /** 最新成片的可追溯事实；无成片时为 null。 */
   finalArtifact: {
@@ -75,9 +96,15 @@ export interface ExportReadinessRepository {
   ): Promise<{ placeholderLanes: string[]; waivedQaLanes: string[] } | null>
 }
 
+type FinalSoundEffectsReader = (
+  projectId: string,
+  final: FinalArtifactRecord
+) => Promise<ProceduralSfxManifest | null>
+
 export async function getExportReadiness(
   projectId: string,
-  repository: ExportReadinessRepository = new RenderRepository()
+  repository: ExportReadinessRepository = new RenderRepository(),
+  readSoundEffects?: FinalSoundEffectsReader
 ): Promise<ExportReadinessResult> {
   const plan = await repository.getExportPlan(projectId)
   const finalArtifact = await repository.findLatestFinalArtifact(projectId)
@@ -105,6 +132,14 @@ export async function getExportReadiness(
     resolutionPreset: plan.resolutionPreset,
     subtitles: plan.subtitles,
     soundEffects: plan.soundEffects ?? 'off',
+    artifactSoundEffects: finalArtifact
+      ? soundEffectsProjection(
+          await resolveSoundEffectsReader(repository, readSoundEffects)(
+            projectId,
+            finalArtifact,
+          ),
+        )
+      : null,
     finalArtifactId: finalArtifact?.artifactId ?? null,
     finalArtifact: finalArtifact
       ? {
@@ -206,6 +241,32 @@ function degradedConfirmationFingerprint(input: {
     blockingIssues,
   })
   return createHash('sha256').update(canonical).digest('hex')
+}
+
+function resolveSoundEffectsReader(
+  repository: ExportReadinessRepository,
+  supplied?: FinalSoundEffectsReader,
+): FinalSoundEffectsReader {
+  if (supplied) return supplied
+  return repository instanceof RenderRepository
+    ? readFinalProceduralSfx
+    : async () => null
+}
+
+function soundEffectsProjection(
+  manifest: Awaited<ReturnType<typeof readFinalProceduralSfx>>,
+): ExportArtifactSoundEffects | null {
+  if (!manifest) return null
+  return {
+    mode: manifest.mode,
+    status: manifest.status,
+    generatorVersion: manifest.generatorVersion,
+    cueCount: manifest.cueCount,
+    timingHash: manifest.timingHash,
+    cuePlanHash: manifest.cuePlanHash,
+    waveformHashes: manifest.waveformHashes,
+    ...(manifest.failureCode ? { failureCode: manifest.failureCode } : {}),
+  }
 }
 
 

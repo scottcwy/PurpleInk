@@ -1,5 +1,6 @@
 import {
   type ExportSettingsPatch,
+  type ExportSettings,
   type ResolutionPreset,
   type SubtitleDeliveryMode,
 } from '@/features/canvas/export-settings'
@@ -158,6 +159,15 @@ export async function updateExportSubtitles(
   fetcher: typeof fetch = fetch
 ): Promise<void> {
   return updateExportSettings(projectId, { subtitles }, fetcher)
+}
+
+/** 更新项目代码音效选择；只影响下一次导出，不伪装成最近成片事实。 */
+export async function updateExportSoundEffects(
+  projectId: string,
+  soundEffects: ExportSettings['soundEffects'],
+  fetcher: typeof fetch = fetch
+): Promise<void> {
+  return updateExportSettings(projectId, { soundEffects }, fetcher)
 }
 
 async function updateExportSettings(

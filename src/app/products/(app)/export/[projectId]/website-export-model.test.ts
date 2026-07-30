@@ -35,6 +35,12 @@ describe('website export view model', () => {
     expect(
       websiteDeliveryForDownload({
         ...valid,
+        delivery: { ...valid.delivery!, soundEffects: undefined },
+      }),
+    ).toBeNull()
+    expect(
+      websiteDeliveryForDownload({
+        ...valid,
         delivery: { ...valid.delivery!, attemptId: 'older-attempt' },
       }),
     ).toBeNull()
@@ -118,6 +124,17 @@ function snapshot(
         goldenVerified: true,
         goldenCheckCount: 1,
         outcome: 'passed',
+      },
+      soundEffects: {
+        artifactId: 'manifest-1',
+        lifecycle: 'approved',
+        mode: 'procedural',
+        status: 'applied',
+        generatorVersion: 'procedural-sfx/1.0.0',
+        cueCount: 2,
+        timingHash: 'b'.repeat(64),
+        cuePlanHash: 'c'.repeat(64),
+        waveformHashes: ['d'.repeat(64), 'e'.repeat(64)],
       },
       downloadUrl: '/api/artifacts/artifact-1?projectId=project-1',
     },

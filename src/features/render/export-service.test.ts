@@ -329,6 +329,61 @@ describe('getExportReadiness', () => {
     expect(result.finalArtifact?.delivery).toBe('narration-no-subtitle-v3')
   })
 
+  it('describes final SFX only from the manifest bound to that final attempt and hash', async () => {
+    const findProceduralSfxForFinal = vi.fn(async () => ({
+      schemaVersion: 'cvc.procedural-sfx-manifest/v1' as const,
+      attemptId: ATTEMPT_ID,
+      finalContentHash: 'f'.repeat(64),
+      mode: 'off' as const,
+      status: 'omitted-off' as const,
+      generatorVersion: 'procedural-sfx/1.0.0' as const,
+      cueCount: 0,
+      timingHash: null,
+      cuePlanHash: null,
+      waveformHashes: [],
+    }))
+    const repository = {
+      getExportPlan: vi.fn(async () => ({
+        incompleteNodeIds: [],
+        shots: [{ nodeId: 'node-1', laneKey: 'S001', outputKey: 'render/S001.mp4' }],
+        musicKey: null,
+        subtitles: 'burn-in' as const,
+        soundEffects: 'procedural' as const,
+        targetResolution: { width: 1920, height: 1080 },
+        resolutionPreset: '1920x1080' as const,
+        shotQa: { S001: true },
+        ...mediaFields(completeMediaPlan()),
+      })),
+      findLatestFinalArtifact: vi.fn(async () => ({
+        artifactId: 'artifact-final',
+        attemptId: ATTEMPT_ID,
+        path: 'exports/project-1/final.mp4',
+        contentHash: 'f'.repeat(64),
+        schemaVersion: 'cvc.final-video/v3',
+        sizeBytes: 1_024,
+      })),
+      findDegradedExport: vi.fn(async () => null),
+    }
+    const result = await getExportReadiness(
+      'project-1',
+      repository,
+      findProceduralSfxForFinal,
+    )
+
+    expect(findProceduralSfxForFinal).toHaveBeenCalledWith(
+      'project-1',
+      expect.objectContaining({
+        attemptId: ATTEMPT_ID,
+        contentHash: 'f'.repeat(64),
+      }),
+    )
+    expect(result.soundEffects).toBe('procedural')
+    expect(result.artifactSoundEffects).toMatchObject({
+      mode: 'off',
+      status: 'omitted-off',
+    })
+  })
+
   it('changes the idempotency fingerprint when the subtitle delivery changes', async () => {
     // 不进指纹的话，切换开关后重导出会命中同一个已完成作业并返回旧成片。
     const fingerprintFor = async (subtitles: 'burn-in' | 'off') =>

@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react'
 import {
   type ResolutionPreset,
+  type ExportSettings,
   type SubtitleDeliveryMode,
 } from '@/features/canvas/export-settings'
 import {
   loadExportReadiness,
   startProjectExport,
   updateExportResolution,
+  updateExportSoundEffects,
   updateExportSubtitles,
 } from './export-api'
 import { type ExportReadiness } from './export-readiness-contract'
@@ -91,6 +93,19 @@ export function useExportRuntime(projectId: string) {
     }
   }
 
+  async function updateSoundEffects(
+    soundEffects: ExportSettings['soundEffects']
+  ) {
+    setReadiness((prev) => (prev ? { ...prev, soundEffects } : prev))
+    try {
+      await updateExportSoundEffects(projectId, soundEffects)
+      await refreshReadiness()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '音效设置更新失败')
+      void refreshReadiness().catch(() => {})
+    }
+  }
+
   return {
     readiness,
     outputUrl,
@@ -100,5 +115,6 @@ export function useExportRuntime(projectId: string) {
     exportDegraded,
     updateResolution,
     updateSubtitles,
+    updateSoundEffects,
   }
 }

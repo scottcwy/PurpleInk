@@ -3,6 +3,7 @@ import {
   loadExportReadiness,
   startProjectExport,
   updateExportResolution,
+  updateExportSoundEffects,
   updateExportSubtitles,
   waitForExportArtifact,
 } from './export-api'
@@ -17,6 +18,16 @@ describe('export API client', () => {
         shotCount: 1,
         shotQa: { S001: null, S002: true },
         resolutionPreset: '1280x720',
+        soundEffects: 'procedural',
+        artifactSoundEffects: {
+          mode: 'off',
+          status: 'omitted-off',
+          generatorVersion: 'procedural-sfx/1.0.0',
+          cueCount: 0,
+          timingHash: null,
+          cuePlanHash: null,
+          waveformHashes: [],
+        },
         blockingIssues: [
           { laneKey: 'S001', kind: 'subtitle', code: 'artifact-missing' },
         ],
@@ -37,6 +48,16 @@ describe('export API client', () => {
       shotQa: { S001: null, S002: true },
       resolutionPreset: '1280x720',
       subtitles: 'burn-in',
+      soundEffects: 'procedural',
+      artifactSoundEffects: {
+        mode: 'off',
+        status: 'omitted-off',
+        generatorVersion: 'procedural-sfx/1.0.0',
+        cueCount: 0,
+        timingHash: null,
+        cuePlanHash: null,
+        waveformHashes: [],
+      },
       blockingIssues: [
         { laneKey: 'S001', kind: 'subtitle', code: 'artifact-missing' },
       ],
@@ -68,6 +89,8 @@ describe('export API client', () => {
       shotQa: {},
       resolutionPreset: '1920x1080',
       subtitles: 'burn-in',
+      soundEffects: 'off',
+      artifactSoundEffects: null,
       blockingIssues: [],
       media: {
         narrationReadyCount: 0,
@@ -364,6 +387,20 @@ describe('export API client', () => {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ exportSettings: { subtitles: 'off' } }),
+    })
+  })
+
+  it('PATCHes only the procedural sound-effect choice to the project settings API', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      json({ ok: true, exportSettings: { soundEffects: 'procedural' } })
+    )
+    await expect(
+      updateExportSoundEffects('project-1', 'procedural', fetcher)
+    ).resolves.toBeUndefined()
+    expect(fetcher).toHaveBeenCalledWith('/api/projects/project-1', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ exportSettings: { soundEffects: 'procedural' } }),
     })
   })
 })

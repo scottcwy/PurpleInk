@@ -5,11 +5,15 @@ import {
   Play,
   RefreshCw,
   Square,
+  Volume2,
 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { TopBar } from '@/components/ui/top-bar'
+import { Toggle } from '@/components/ui/toggle'
+import type { ExportSettings as ExportSettingsValue } from '@/features/canvas'
 import type { ProjectExecutionSnapshot } from '@/features/projects'
+import { getProjectExecution } from '@/features/projects/execution-client'
 import {
   startPipeline,
   stopPipeline,
@@ -24,13 +28,16 @@ import {
 } from './website-export-model'
 import { WebsiteDeliveryPreview } from './website-delivery-preview'
 import { WebsiteExportStageList } from './website-export-stage-list'
+import { updateExportSoundEffects } from './export-api'
 
 export function WebsiteExportWorkspace({
   initialExecution,
+  initialSoundEffects,
   projectId,
   projectTitle,
 }: {
   initialExecution: ProjectExecutionSnapshot
+  initialSoundEffects: ExportSettingsValue['soundEffects']
   projectId: string
   projectTitle: string
 }) {
@@ -41,6 +48,7 @@ export function WebsiteExportWorkspace({
   const progress = websiteExportProgress(execution)
   const [feedback, setFeedback] = useState<string>()
   const [submitting, setSubmitting] = useState(false)
+  const [soundEffects, setSoundEffects] = useState(initialSoundEffects)
   const inFlightRef = useRef(false)
 
   usePublishNavContext({ projectId })
@@ -60,6 +68,25 @@ export function WebsiteExportWorkspace({
       setFeedback(controlFeedback(result.status, result.execution.state))
     } catch {
       setFeedback('操作暂时失败，请稍后重试；后台状态不受页面同步影响')
+    } finally {
+      inFlightRef.current = false
+      setSubmitting(false)
+    }
+  }
+
+  async function changeSoundEffects(checked: boolean) {
+    if (inFlightRef.current || execution.active) return
+    const next = checked ? 'procedural' : 'off'
+    inFlightRef.current = true
+    setSubmitting(true)
+    setFeedback(undefined)
+    try {
+      await updateExportSoundEffects(projectId, next)
+      setSoundEffects(next)
+      runtime.adopt(await getProjectExecution(projectId))
+      setFeedback('音效设置已保存；实际结果将在成片清单中确认')
+    } catch {
+      setFeedback('音效设置更新失败，请稍后重试')
     } finally {
       inFlightRef.current = false
       setSubmitting(false)
@@ -107,6 +134,25 @@ export function WebsiteExportWorkspace({
               {feedback}
             </p>
           )}
+          <div className="mt-3 flex items-center justify-between gap-4 rounded-lg border border-ds-border-subtle bg-ds-surface-muted px-3 py-2.5">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <Volume2 className="size-4 shrink-0 text-ds-text-muted" />
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-ds-text">
+                  下次生成代码音效
+                </p>
+                <p className="mt-0.5 text-[11px] text-ds-text-muted">
+                  开关是请求设置；实际是否混入以成片 Manifest 为准
+                </p>
+              </div>
+            </div>
+            <Toggle
+              checked={soundEffects === 'procedural'}
+              disabled={submitting || execution.active}
+              aria-label="下次网站视频生成包含代码音效"
+              onCheckedChange={(checked) => void changeSoundEffects(checked)}
+            />
+          </div>
         </header>
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">

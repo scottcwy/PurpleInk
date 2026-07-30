@@ -44,6 +44,7 @@ export function websiteDeliveryForDownload(
     || !delivery
     || delivery.attemptId !== execution.attempt.id
     || delivery.lifecycle !== 'approved'
+    || delivery.soundEffects?.lifecycle !== 'approved'
     || !delivery.downloadUrl
     || verification?.outcome !== 'passed'
     || verification.checkPassed !== true

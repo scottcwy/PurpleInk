@@ -87,14 +87,14 @@ describe('Export workspace composition', () => {
     expect(settings).toContain('本操作需要人工确认')
   })
 
-  it('renders only readiness-backed media tracks and marks BGM/SFX as unwired', () => {
+  it('renders a manifest-backed SFX track while music remains unimplemented', () => {
     expect(workspace).toContain('readiness={runtime.readiness}')
     expect(workspace).toContain('旁白就绪')
     expect(workspace).toContain('字幕就绪')
-    // 音乐与音效是纯接口预留（generateScore / generateSfx 是桩，无写入方，
-    // concat 的配乐分支永不执行）。文案必须说清是「未实现」而不是含糊的「未接线」，
-    // 且不得给出可点击却没有行为的开关。
-    expect(workspace).toContain('接口预留 · 未实现')
+    expect(workspace).toContain('音乐暂不实现')
+    expect(workspace).toContain('artifactSoundEffects')
+    expect(workspace).toContain('最近成片未包含音效')
+    expect(workspace).toContain('已验证代码音效')
     expect(workspace).not.toContain('未接线')
     // 关闭字幕交付时显示「本次不入片」，不得把未测量塌成 0/5。
     expect(workspace).toContain('本次不入片')
@@ -102,6 +102,8 @@ describe('Export workspace composition', () => {
     expect(workspace).not.toContain("'00:20'")
     expect(workspace).not.toContain('fullTrackClip')
     expect(settings).toContain('硬字幕烧录')
+    expect(settings).toContain('下次导出音效')
+    expect(settings).toContain('最近成片音效')
     expect(settings).toContain('旧版静音成片')
     expect(settings).not.toContain('暂不支持（P1）')
   })
@@ -111,11 +113,13 @@ describe('Export workspace composition', () => {
     expect(settings).toContain('最近成片字幕')
     expect(settings).toContain('<Toggle')
     expect(workspace).toContain('onSubtitlesChange={runtime.updateSubtitles}')
+    expect(workspace).toContain('onSoundEffectsChange={runtime.updateSoundEffects}')
     expect(workspace).toContain('readiness?.timeline')
     expect(workspace).toContain('buildTimelineSpans')
     expect(workspace).toContain('formatTimelineDuration')
     expect(workspace).not.toContain('buildLaneSpans')
     expect(runtime).toContain('updateExportSubtitles(projectId, subtitles)')
+    expect(runtime).toContain('updateExportSoundEffects(projectId, soundEffects)')
     expect(runtime).toContain('await refreshReadiness()')
   })
 
@@ -132,6 +136,8 @@ describe('Export workspace composition', () => {
     expect(websiteBranch).toBeGreaterThan(-1)
     expect(graphRead).toBeGreaterThan(websiteBranch)
     expect(page).toContain('getProjectExecutionSnapshot(projectId)')
+    expect(page).toContain('getExportSettings(projectId)')
+    expect(page).toContain('initialSoundEffects={exportSettings.soundEffects}')
     expect(page).toContain('<WebsiteExportWorkspace')
   })
 
@@ -143,8 +149,14 @@ describe('Export workspace composition', () => {
     expect(websiteWorkspace).not.toContain('startProjectExport')
     expect(websiteWorkspace).not.toContain('BGM')
     expect(websiteWorkspace).not.toContain('SFX')
+    expect(websiteWorkspace).toContain('下次生成代码音效')
+    expect(websiteWorkspace).toContain('实际是否混入以成片 Manifest 为准')
+    expect(websiteWorkspace).toContain('updateExportSoundEffects')
+    expect(websiteWorkspace).toContain('<Toggle')
     expect(websitePreview).toContain('<video')
     expect(websitePreview).toContain('内容哈希')
     expect(websitePreview).toContain('Golden 校验')
+    expect(websitePreview).toContain('代码音效')
+    expect(websitePreview).toContain('soundEffects')
   })
 })

@@ -13,6 +13,7 @@ import {
   EXPORT_RESOLUTION_PRESETS,
   MASTER_RESOLUTION_PRESET,
   type ResolutionPreset,
+  type ExportSettings as ExportSettingsValue,
   type SubtitleDeliveryMode,
 } from '@/features/canvas/export-settings'
 import { type ExportReadiness } from './export-readiness-contract'
@@ -32,6 +33,7 @@ export interface ExportSettingsProps {
   onDegradedExport: () => void
   onResolutionChange: (preset: ResolutionPreset) => void
   onSubtitlesChange: (mode: SubtitleDeliveryMode) => void
+  onSoundEffectsChange: (mode: ExportSettingsValue['soundEffects']) => void
 }
 
 /** 导出参数与开始导出二次交互面板内容。 */
@@ -44,9 +46,11 @@ export function ExportSettings({
   onDegradedExport,
   onResolutionChange,
   onSubtitlesChange,
+  onSoundEffectsChange,
 }: ExportSettingsProps) {
   const currentPreset = readiness?.resolutionPreset ?? MASTER_RESOLUTION_PRESET
   const subtitles = readiness?.subtitles ?? 'burn-in'
+  const soundEffects = readiness?.soundEffects ?? 'off'
   return (
     <SettingsGroup>
       <div className="flex flex-col gap-2 px-4 py-3">
@@ -95,6 +99,29 @@ export function ExportSettings({
       <SettingsRow
         label="最近成片字幕"
         value={artifactSubtitleLabel(readiness, outputUrl)}
+        chevron={false}
+      />
+      <SettingsSeparator />
+      <SettingsRow
+        label="下次导出音效"
+        value={soundEffects === 'procedural'
+          ? '代码音效 · 已启用'
+          : '不添加音效'}
+        chevron={false}
+      >
+        <Toggle
+          checked={soundEffects === 'procedural'}
+          disabled={!readiness || exporting}
+          aria-label="下次导出包含代码音效"
+          onCheckedChange={(checked) =>
+            onSoundEffectsChange(checked ? 'procedural' : 'off')
+          }
+        />
+      </SettingsRow>
+      <SettingsSeparator />
+      <SettingsRow
+        label="最近成片音效"
+        value={artifactSoundEffectsLabel(readiness)}
         chevron={false}
       />
       {readiness?.degradedExport && (
@@ -151,6 +178,20 @@ export function ExportSettings({
       </div>
     </SettingsGroup>
   )
+}
+
+function artifactSoundEffectsLabel(
+  readiness: ExportReadiness | undefined
+): string {
+  const actual = readiness?.artifactSoundEffects
+  if (!actual) return '尚无可验证音效清单'
+  if (actual.status === 'applied') {
+    return `已混入 · ${actual.cueCount} 个代码音效`
+  }
+  if (actual.status === 'omitted-off') return '未包含音效'
+  if (actual.status === 'omitted-no-cues') return '已启用 · 无可用触发点'
+  if (actual.status === 'omitted-error') return '混音失败 · 已安全省略'
+  return '当前素材不支持 · 已省略'
 }
 
 function artifactSubtitleLabel(
