@@ -38,3 +38,14 @@ export function parseCheckpoint(value: unknown): LegacyQueueCheckpoint {
     payload: record.payload as Record<string, unknown>,
   }
 }
+
+export function resolveCheckpointStage(value: unknown): string {
+  try {
+    const checkpoint = parseCheckpoint(value)
+    if (checkpoint.kind === 'render-shot') return 'RENDER'
+    const stage = checkpoint.payload.stage
+    return typeof stage === 'string' ? stage : 'QUEUE'
+  } catch {
+    return 'QUEUE'
+  }
+}

@@ -14,6 +14,7 @@ import { classifyWorkflowError } from '@/features/canvas/workflow-error'
 import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
 import { databaseNow } from '@/features/ai/workspace-concurrency-context'
 import type { WorkflowExecutionNotice, WorkflowFault } from '@/features/canvas/workflow-fault'
+import { resolveCheckpointStage } from './attempt-checkpoint'
 import {
   boundedProviderResumeAt,
   MAX_PROVIDER_WAIT_MS,
@@ -148,7 +149,7 @@ export async function completeAttempt(
     }
 
     const now = await databaseNow(transaction)
-    const stage = retryStage(attempt.checkpoint)
+    const stage = resolveCheckpointStage(attempt.checkpoint)
     if (
       status === 'failed'
       && failure instanceof ProviderQueueDeferral
@@ -340,14 +341,3 @@ async function resetNodeForRetry(
 }
 
 /** shouldAutoRetry 的兜底 stage：director 作业取 payload.stage，渲染作业归 RENDER。 */
-function retryStage(checkpoint: unknown): string {
-  if (!checkpoint || typeof checkpoint !== 'object') return 'QUEUE'
-  const record = checkpoint as Record<string, unknown>
-  if (record.kind === 'render-shot') return 'RENDER'
-  const payload = record.payload
-  if (payload && typeof payload === 'object') {
-    const stage = (payload as Record<string, unknown>).stage
-    if (typeof stage === 'string') return stage
-  }
-  return 'QUEUE'
-}
