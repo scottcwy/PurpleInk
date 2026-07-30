@@ -26,6 +26,7 @@ describe('Pencil canonical components', () => {
       createElement(QueueStatusBar, {
         completed: 1,
         active: 1,
+        waiting: 0,
         failed: 0,
         total: 2,
       }),

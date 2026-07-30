@@ -6,6 +6,7 @@ export function QueueStatusBarDemo() {
     <QueueStatusBar
       completed={2}
       active={1}
+      waiting={0}
       failed={0}
       total={8}
       label="套餐并发 3/3 · 5 个分镜排队"

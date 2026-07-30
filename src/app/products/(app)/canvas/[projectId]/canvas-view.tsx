@@ -114,8 +114,12 @@ export function CanvasView({
   )
   const selectedNode = liveNodes.find(({ id }) => id === selectedNodeId)
   const completed = liveNodes.filter(({ status }) => status === 'success').length
+  const waiting = liveNodes.filter(
+    ({ executionNotice }) => executionNotice != null
+  ).length
   const active = liveNodes.filter(
-    ({ status }) => status === 'pending' || status === 'running'
+    ({ status, executionNotice }) =>
+      (status === 'pending' || status === 'running') && !executionNotice
   ).length
   const failed = liveNodes.filter(({ status }) => status === 'failed').length
   const rendererNodeId = liveNodes.find(({ type }) => type === 'shot-codegen')?.id
@@ -271,6 +275,7 @@ export function CanvasView({
         <QueueStatusBar
           completed={completed}
           active={active}
+          waiting={waiting}
           failed={failed}
           total={liveNodes.length}
           label={`套餐并发 ${concurrency.active}/${concurrency.limit} · ${concurrency.waiting} 个分镜排队`}
