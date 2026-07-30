@@ -1,6 +1,6 @@
 schema_version: 1
 module_path: ""
-title: PurpleInk AI 工作流平台（Next.js 前端 + Node 渲染后端）
+title: PurpleInk AI SaaS 全栈应用（Next.js + 独立渲染 Worker）
 scope: []
 source_files: []
 depends_on: []
