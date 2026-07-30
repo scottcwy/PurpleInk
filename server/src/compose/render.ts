@@ -230,7 +230,10 @@ export async function verifyGolden(projectDir: string): Promise<{ passed: boolea
   // Ken Burns: x/y 偏移
   check("Ken Burns x 偏移", /x:\s*-?\d+/.test(html), "shot timeline should have x offset")
   check("Ken Burns y 偏移", /y:\s*-?\d+/.test(html), "shot timeline should have y offset")
-  check("Ken Burns power1.inOut 缓动", html.includes("power1.inOut"))
+  check(
+    "Ken Burns 使用受支持缓动",
+    /ease:\s*["'](?:power[1-4]\.(?:inOut|out)|expo\.out)["']/u.test(html),
+  )
 
   // 分层入场: shot-visual opacity 动画
   check("分层入场 shot-visual 淡入", html.includes(".shot-visual") && html.includes("opacity"))
