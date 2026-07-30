@@ -8,6 +8,8 @@ import { classifyWorkflowError } from '@/features/canvas'
 import {
   ProjectExecutionStopError,
   ProjectWorkflowStartError,
+  getProjectExecutionSnapshot,
+  recoverWebsiteDelivery,
   startProjectWorkflow,
   stopProjectExecution,
 } from '@/features/projects'
@@ -37,10 +39,39 @@ async function handlePost(context: RouteContext): Promise<Response> {
   const parsedId = await parseProjectId(context)
   if (!parsedId.success) return parsedId.response
   try {
+    const current = await getProjectExecutionSnapshot(parsedId.projectId)
+    if (current.workflowKind === 'website' && current.state === 'succeeded') {
+      return NextResponse.json({
+        ok: true,
+        kind: 'website',
+        status: 'complete',
+        execution: current,
+      })
+    }
+    if (current.workflowKind === 'website' && current.state === 'blocked') {
+      const recovered = await recoverWebsiteDelivery(parsedId.projectId)
+      if (recovered) {
+        const execution = await getProjectExecutionSnapshot(parsedId.projectId)
+        if (execution.state === 'succeeded') {
+          return NextResponse.json({
+            ok: true,
+            kind: 'website',
+            status: 'complete',
+            execution,
+          })
+        }
+      }
+    }
     await initQueue()
+    const started = await startProjectWorkflow(parsedId.projectId)
+    const execution = await getProjectExecutionSnapshot(parsedId.projectId)
     return NextResponse.json({
       ok: true,
-      ...(await startProjectWorkflow(parsedId.projectId)),
+      ...started,
+      status: started.kind === 'website'
+        ? websiteStartStatus(execution.state)
+        : started.status,
+      execution,
     })
   } catch (error) {
     if (error instanceof QuotaExhaustedError) {
@@ -76,9 +107,11 @@ async function handleDelete(context: RouteContext): Promise<Response> {
   const parsedId = await parseProjectId(context)
   if (!parsedId.success) return parsedId.response
   try {
+    const stopped = await stopProjectExecution(parsedId.projectId)
     return NextResponse.json({
       ok: true,
-      ...(await stopProjectExecution(parsedId.projectId)),
+      ...stopped,
+      execution: await getProjectExecutionSnapshot(parsedId.projectId),
     })
   } catch (error) {
     if (error instanceof ProjectExecutionStopError) {
@@ -93,6 +126,14 @@ async function handleDelete(context: RouteContext): Promise<Response> {
       { status: 409 },
     )
   }
+}
+
+function websiteStartStatus(
+  state: Awaited<ReturnType<typeof getProjectExecutionSnapshot>>['state'],
+): 'started' | 'complete' | 'blocked' {
+  if (state === 'succeeded') return 'complete'
+  if (state === 'blocked') return 'blocked'
+  return 'started'
 }
 
 async function parseProjectId(context: RouteContext): Promise<

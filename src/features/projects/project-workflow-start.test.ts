@@ -116,7 +116,7 @@ describe('startProjectWorkflow', () => {
     expect(deps.startScript).toHaveBeenCalledWith(PROJECT_ID)
   })
 
-  it('reports a succeeded website attempt as complete without a false enqueue', async () => {
+  it('leaves succeeded website delivery truth to the execution snapshot', async () => {
     const deps = dependencies('website')
     vi.mocked(deps.enqueueWebsite).mockResolvedValue({
       attemptId: 'website-attempt',
@@ -127,7 +127,7 @@ describe('startProjectWorkflow', () => {
     await expect(startProjectWorkflow(PROJECT_ID, deps)).resolves.toEqual({
       kind: 'website',
       entryNodeId: ENTRY_ID,
-      status: 'complete',
+      status: 'started',
       jobId: 'website-attempt',
       attemptStatus: 'succeeded',
       reused: true,

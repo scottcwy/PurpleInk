@@ -95,7 +95,45 @@ describe('runWebsiteVideo', () => {
     expect(JSON.stringify(stages.fail.mock.calls)).not.toContain('example.com')
   })
 
-  it('does not settle managed billing when the workflow completion projection fails', async () => {
+  it('settles real output usage before blocking a degraded delivery', async () => {
+    const stages = stageProjector()
+    const degraded = {
+      ...await dependencies().persistOutput({
+        workspaceId: WORKSPACE_ID,
+        projectId: PROJECT_ID,
+        attemptId: ATTEMPT_ID,
+        job: completedJob(),
+        videoBytes: Buffer.from('mp4'),
+      }),
+      verification: {
+        checkPassed: false,
+        goldenVerified: true,
+        goldenCheckCount: 2,
+        outcome: 'degraded' as const,
+      },
+    }
+    const completion = vi.fn()
+
+    await expect(runWebsiteVideo(runInput(), dependencies({
+      stages,
+      persistOutput: vi.fn(async () => degraded),
+      bill: async <T>(input: ManagedWebsiteBillingInput<T>): Promise<T> => {
+        const result = await input.invoke()
+        completion(input.completion(result))
+        return result
+      },
+    }))).rejects.toMatchObject({ code: 'WEBSITE_VERIFICATION_FAILED' })
+
+    expect(completion).toHaveBeenCalledWith({
+      durationSec: degraded.durationSec,
+      durationSource: 'output',
+      outputHash: degraded.contentHash,
+    })
+    expect(stages.block).toHaveBeenCalledWith(PROJECT_ID, degraded)
+    expect(stages.complete).not.toHaveBeenCalled()
+  })
+
+  it('keeps real usage settled when the terminal projection fails afterwards', async () => {
     const projectionFailure = new Error('projection failed')
     const stages = stageProjector()
     stages.complete.mockRejectedValueOnce(projectionFailure)
@@ -110,7 +148,7 @@ describe('runWebsiteVideo', () => {
       },
     }))).rejects.toBe(projectionFailure)
 
-    expect(settled).not.toHaveBeenCalled()
+    expect(settled).toHaveBeenCalledOnce()
     expect(stages.fail).toHaveBeenCalledWith(
       PROJECT_ID,
       'export',
@@ -209,6 +247,7 @@ function stageProjector() {
   return {
     progress: vi.fn(async () => undefined),
     complete: vi.fn(async () => undefined),
+    block: vi.fn(async () => undefined),
     fail: vi.fn(async () => undefined),
   }
 }

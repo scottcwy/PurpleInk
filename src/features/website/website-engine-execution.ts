@@ -106,10 +106,11 @@ export async function executeWebsiteEngine(
         return {
           requestId,
           job,
-          videoBytes: await withinDeadline(
-            () => dependencies.engine.downloadVideo(job.id),
+          videoBytes: await downloadCompletedVideo(
+            job.id,
+            dependencies,
             deadline,
-            dependencies.nowMs,
+            pollIntervalMs,
           ),
         }
       }
@@ -130,6 +131,7 @@ export async function executeWebsiteEngine(
         )
         assertRequestIdentity(job, requestId)
       } catch (error) {
+        if (isTransientEngineOutage(error)) continue
         if (!isMissingJob(error) || restarted) throw error
         restarted = true
         job = await withinDeadline(
@@ -141,6 +143,31 @@ export async function executeWebsiteEngine(
     }
   } finally {
     dependencies.signal?.removeEventListener('abort', cancelWorker)
+  }
+}
+
+async function downloadCompletedVideo(
+  jobId: string,
+  dependencies: WebsiteEngineExecutionDependencies,
+  deadline: number,
+  pollIntervalMs: number,
+): Promise<Buffer> {
+  while (true) {
+    dependencies.signal?.throwIfAborted()
+    try {
+      return await withinDeadline(
+        () => dependencies.engine.downloadVideo(jobId),
+        deadline,
+        dependencies.nowMs,
+      )
+    } catch (error) {
+      if (!isTransientEngineOutage(error)) throw error
+      const remainingMs = deadline - dependencies.nowMs()
+      if (remainingMs <= 0) {
+        throw new WebsiteExecutionError('WEBSITE_ENGINE_TIMEOUT')
+      }
+      await dependencies.sleep(Math.min(pollIntervalMs, remainingMs))
+    }
   }
 }
 
@@ -208,4 +235,10 @@ function assertCompletedJob(job: WebsiteEngineJob): void {
 function isMissingJob(error: unknown): boolean {
   return error instanceof WebsiteEngineError
     && error.code === 'ENGINE_JOB_NOT_FOUND'
+}
+
+function isTransientEngineOutage(error: unknown): boolean {
+  return error instanceof WebsiteEngineError
+    && error.code === 'ENGINE_UNAVAILABLE'
+    && error.retryable
 }

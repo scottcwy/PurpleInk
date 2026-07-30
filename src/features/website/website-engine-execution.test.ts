@@ -95,6 +95,81 @@ describe('executeWebsiteEngine', () => {
     expect(getJob).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps polling the same job after a transient worker outage', async () => {
+    const unavailable = new WebsiteEngineError(
+      'ENGINE_UNAVAILABLE',
+      true,
+      503,
+    )
+    const getJob = vi
+      .fn()
+      .mockRejectedValueOnce(unavailable)
+      .mockResolvedValueOnce(job({
+        status: 'done',
+        phase: 'done',
+        durationSec: 5,
+        durationSource: 'output',
+        elapsedSec: 40,
+        checkPassed: false,
+        goldenVerified: false,
+        goldenCheckCount: 15,
+        hasVideo: true,
+        videoUrl: '/internal/video',
+      }))
+    const start = vi.fn(async () => ({ reused: false, job: job() }))
+
+    const result = await executeWebsiteEngine(input(), dependencies({
+      engine: {
+        start,
+        getJob,
+        downloadVideo: vi.fn(async () => Buffer.from('video')),
+      },
+    }))
+
+    expect(result.videoBytes).toEqual(Buffer.from('video'))
+    expect(start).toHaveBeenCalledOnce()
+    expect(getJob).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries a transient video download without starting another render', async () => {
+    const unavailable = new WebsiteEngineError(
+      'ENGINE_UNAVAILABLE',
+      true,
+      503,
+    )
+    const start = vi.fn(async () => ({
+      reused: false,
+      job: job({
+        status: 'done',
+        phase: 'done',
+        durationSec: 5,
+        durationSource: 'output',
+        elapsedSec: 40,
+        checkPassed: false,
+        goldenVerified: false,
+        goldenCheckCount: 15,
+        hasVideo: true,
+        videoUrl: '/internal/video',
+      }),
+    }))
+    const downloadVideo = vi
+      .fn()
+      .mockRejectedValueOnce(unavailable)
+      .mockResolvedValueOnce(Buffer.from('video'))
+
+    const result = await executeWebsiteEngine(input(), dependencies({
+      engine: {
+        start,
+        getJob: vi.fn(),
+        downloadVideo,
+      },
+    }))
+
+    expect(result.videoBytes).toEqual(Buffer.from('video'))
+    expect(start).toHaveBeenCalledOnce()
+    expect(downloadVideo).toHaveBeenCalledTimes(2)
+  })
+
   it('stops at the 45 minute boundary without issuing another poll', async () => {
     let now = 0
     const getJob = vi.fn(async () => job())

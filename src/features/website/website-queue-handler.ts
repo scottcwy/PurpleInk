@@ -128,13 +128,13 @@ async function enqueueWebsiteVideoOnce(
         eq(taskAttempts.entityType, 'project'),
         eq(taskAttempts.entityId, payload.projectId),
         eq(taskAttempts.fingerprint, fingerprint),
-        inArray(taskAttempts.status, ['queued', 'running', 'succeeded']),
+        inArray(taskAttempts.status, ['queued', 'running']),
       ))
       .limit(1)
     if (attempt) {
       return {
         attemptId: attempt.id,
-        status: z.enum(['queued', 'running', 'succeeded']).parse(attempt.status),
+        status: z.enum(['queued', 'running']).parse(attempt.status),
         reused: true,
       }
     }

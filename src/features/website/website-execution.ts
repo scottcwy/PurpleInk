@@ -86,17 +86,22 @@ export async function runWebsiteVideo(
       resolved = await createDefaultDependencies(parsed.workspaceId, stages)
     }
     const project = await resolved.loadProject(parsed.projectId)
-    return await runBilledWebsiteProject(parsed, project, resolved, cursor)
-  } catch (error) {
-    if (cursor.completedOutput) {
-      console.error('[website-billing]', JSON.stringify({
-        code: 'WEBSITE_BILLING_SETTLEMENT_DEFERRED',
-        projectId: parsed.projectId,
-        attemptId: parsed.attemptId,
-      }))
-      return cursor.completedOutput
+    const output = await runBilledWebsiteProject(
+      parsed,
+      project,
+      resolved,
+      cursor,
+    )
+    if (output.verification.outcome === 'degraded') {
+      await resolved.stages.block(parsed.projectId, output)
+      cursor.terminalProjected = true
+      throw new WebsiteExecutionError('WEBSITE_VERIFICATION_FAILED')
     }
-    if (failureStages) {
+    await resolved.stages.complete(parsed.projectId, output)
+    cursor.terminalProjected = true
+    return output
+  } catch (error) {
+    if (failureStages && !cursor.terminalProjected) {
       await projectFailureWithoutMasking(
         failureStages,
         parsed.projectId,
@@ -114,19 +119,29 @@ async function runBilledWebsiteProject(
   dependencies: WebsiteExecutionDependencies,
   cursor: WebsiteExecutionCursor,
 ): Promise<PersistedWebsiteOutput> {
-  return dependencies.bill({
-    workspaceId: input.workspaceId,
-    attemptId: input.attemptId,
-    invocationNo: input.invocationNo,
-    requestIdentity: project.sourceFingerprint,
-    maximumDurationSeconds: project.source.durationSec,
-    invoke: () => produceWebsiteOutput(input, project, dependencies, cursor),
-    completion: (result) => ({
-      durationSec: result.durationSec,
-      durationSource: result.durationSource,
-      outputHash: result.contentHash,
-    }),
-  })
+  try {
+    return await dependencies.bill({
+      workspaceId: input.workspaceId,
+      attemptId: input.attemptId,
+      invocationNo: input.invocationNo,
+      requestIdentity: project.sourceFingerprint,
+      maximumDurationSeconds: project.source.durationSec,
+      invoke: () => produceWebsiteOutput(input, project, dependencies, cursor),
+      completion: (result) => ({
+        durationSec: result.durationSec,
+        durationSource: result.durationSource,
+        outputHash: result.contentHash,
+      }),
+    })
+  } catch (error) {
+    if (!cursor.persistedOutput) throw error
+    console.error('[website-billing]', JSON.stringify({
+      code: 'WEBSITE_BILLING_SETTLEMENT_DEFERRED',
+      projectId: input.projectId,
+      attemptId: input.attemptId,
+    }))
+    return cursor.persistedOutput
+  }
 }
 
 async function produceWebsiteOutput(
@@ -164,14 +179,14 @@ async function produceWebsiteOutput(
     videoBytes: execution.videoBytes,
   })
   input.signal?.throwIfAborted()
-  await dependencies.stages.complete(input.projectId, output)
-  cursor.completedOutput = output
+  cursor.persistedOutput = output
   return output
 }
 
 interface WebsiteExecutionCursor {
   activePhase: WebsiteWorkflowPhase
-  completedOutput?: PersistedWebsiteOutput
+  persistedOutput?: PersistedWebsiteOutput
+  terminalProjected?: boolean
 }
 
 async function createDefaultDependencies(

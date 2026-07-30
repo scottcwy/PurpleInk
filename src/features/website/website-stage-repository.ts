@@ -11,7 +11,7 @@ import {
 } from '@/features/canvas'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb, type Db } from '@/lib/db/client'
-import { canvasNodes } from '@/lib/db/schema'
+import { artifacts, canvasNodes } from '@/lib/db/schema'
 import { statusBus } from '@/lib/stream/status-bus'
 import {
   WEBSITE_WORKFLOW_PHASES,
@@ -47,7 +47,7 @@ interface WebsiteStageMutation {
 interface StageExecutionProjection {
   schemaVersion: 1
   phase: WebsiteWorkflowPhase
-  state: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+  state: 'queued' | 'running' | 'succeeded' | 'blocked' | 'failed' | 'cancelled'
   updatedAt: string
   enginePhase?: WebsiteStageProgress['enginePhase']
   durationSec?: number | null
@@ -100,6 +100,49 @@ export class PostgresWebsiteStageProjector implements WebsiteStageProjector {
     await this.commit(projectId, mutations)
   }
 
+  async block(
+    projectId: string,
+    output: WebsiteOutputProjection,
+  ): Promise<void> {
+    const updatedAt = new Date().toISOString()
+    const mutations = new Map<string, WebsiteStageMutation>(
+      WEBSITE_WORKFLOW_PHASES.map((phase) => [
+        `website:${phase}`,
+        {
+          target: phase === 'export' ? 'failed' as const : 'success' as const,
+          projection: phase === 'export'
+            ? {
+                schemaVersion: 1,
+                phase,
+                state: 'blocked',
+                enginePhase: 'done',
+                durationSec: output.durationSec,
+                durationSource: output.durationSource,
+                elapsedSec: output.elapsedSec,
+                verification: output.verification,
+                artifact: {
+                  artifactId: output.artifactId,
+                  contentHash: output.contentHash,
+                  sizeBytes: output.sizeBytes,
+                },
+                failure: { code: 'WEBSITE_VERIFICATION_FAILED' },
+                updatedAt,
+              }
+            : phase === 'render'
+              ? {
+                  ...succeededProjection(phase, updatedAt),
+                  verification: output.verification,
+                }
+              : succeededProjection(phase, updatedAt),
+        },
+      ]),
+    )
+    await this.commit(projectId, mutations, {
+      artifactId: output.artifactId,
+      lifecycle: 'rejected',
+    })
+  }
+
   async complete(
     projectId: string,
     output: WebsiteOutputProjection,
@@ -133,7 +176,10 @@ export class PostgresWebsiteStageProjector implements WebsiteStageProjector {
       },
       ]),
     )
-    await this.commit(projectId, mutations)
+    await this.commit(projectId, mutations, {
+      artifactId: output.artifactId,
+      lifecycle: 'approved',
+    })
   }
 
   async fail(
@@ -169,6 +215,10 @@ export class PostgresWebsiteStageProjector implements WebsiteStageProjector {
   private async commit(
     projectId: string,
     mutations: ReadonlyMap<string, WebsiteStageMutation>,
+    artifactTransition?: {
+      artifactId: string
+      lifecycle: 'approved' | 'rejected'
+    },
   ): Promise<void> {
     const events = await this.database.transaction(async (transaction) => {
       const rows = await transaction
@@ -210,6 +260,24 @@ export class PostgresWebsiteStageProjector implements WebsiteStageProjector {
           ))
         if (resolved.changed) {
           statusEvents.push({ nodeId: row.id, status: resolved.status })
+        }
+      }
+      if (artifactTransition) {
+        const [updated] = await transaction
+          .update(artifacts)
+          .set({
+            lifecycle: artifactTransition.lifecycle,
+            updatedAt: new Date(),
+          })
+          .where(and(
+            eq(artifacts.workspaceId, this.workspaceId),
+            eq(artifacts.projectId, projectId),
+            eq(artifacts.id, artifactTransition.artifactId),
+            eq(artifacts.lifecycle, 'draft'),
+          ))
+          .returning({ id: artifacts.id })
+        if (!updated) {
+          throw new Error('网站视频 Artifact 终态不一致')
         }
       }
       return statusEvents
@@ -268,15 +336,8 @@ function succeededProjection(
 
 function isPersistedStatus(value: string): value is PersistedWebsiteNodeStatus {
   return [
-    'idle',
-    'queued',
-    'running',
-    'succeeded',
-    'failed',
-    'cancelled',
-    'stale',
-    'skipped',
-    'blocked',
+    'idle', 'queued', 'running', 'succeeded', 'failed',
+    'cancelled', 'stale', 'skipped', 'blocked',
   ].includes(value)
 }
 

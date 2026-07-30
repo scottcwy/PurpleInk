@@ -56,7 +56,7 @@ export type ProjectWorkflowStartResult =
       jobId: string
       attemptStatus: QueueEnqueueReceipt['status']
       reused: boolean
-      status: 'started' | 'complete'
+      status: 'started'
       enqueuedNodeIds: string[]
     }
 
@@ -142,7 +142,7 @@ export async function startProjectWorkflow(
   return {
     kind: 'website',
     entryNodeId: descriptor.entryNodeId,
-    status: receipt.status === 'succeeded' ? 'complete' : 'started',
+    status: 'started',
     jobId: receipt.attemptId,
     attemptStatus: receipt.status,
     reused: receipt.reused,

@@ -31,6 +31,8 @@ const mocks = vi.hoisted(() => {
     initQueue: vi.fn(),
     startProjectWorkflow: vi.fn(),
     stopProjectExecution: vi.fn(),
+    getProjectExecutionSnapshot: vi.fn(),
+    recoverWebsiteDelivery: vi.fn(),
     classifyWorkflowError: vi.fn(),
   }
 })
@@ -50,6 +52,8 @@ vi.mock('@/features/projects', () => ({
   ProjectWorkflowStartError: mocks.ProjectWorkflowStartError,
   startProjectWorkflow: mocks.startProjectWorkflow,
   stopProjectExecution: mocks.stopProjectExecution,
+  getProjectExecutionSnapshot: mocks.getProjectExecutionSnapshot,
+  recoverWebsiteDelivery: mocks.recoverWebsiteDelivery,
 }))
 vi.mock('@/lib/queue/init', () => ({ initQueue: mocks.initQueue }))
 
@@ -80,6 +84,8 @@ describe('POST /api/projects/[id]/start', () => {
       cancelledLeases: 2,
       remainingRunning: 1,
     })
+    mocks.getProjectExecutionSnapshot.mockResolvedValue(execution())
+    mocks.recoverWebsiteDelivery.mockResolvedValue(false)
     mocks.classifyWorkflowError.mockReturnValue({
       code: 'QUEUE_FAILED',
       message: '工作流暂时无法启动',
@@ -95,9 +101,67 @@ describe('POST /api/projects/[id]/start', () => {
       jobId: 'attempt-1',
       attemptStatus: 'queued',
       reused: false,
+      execution: { state: 'queued', workflowKind: 'audio' },
     })
     expect(mocks.initQueue).toHaveBeenCalledOnce()
     expect(mocks.startProjectWorkflow).toHaveBeenCalledWith(PROJECT_ID)
+  })
+
+  it('returns an already delivered website project without enqueuing it again', async () => {
+    mocks.getProjectExecutionSnapshot.mockResolvedValue({
+      ...execution(),
+      workflowKind: 'website',
+      state: 'succeeded',
+      active: false,
+      canStart: false,
+      canStop: false,
+    })
+
+    const response = await POST(new Request('http://localhost'), context(PROJECT_ID))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      kind: 'website',
+      status: 'complete',
+      execution: { workflowKind: 'website', state: 'succeeded' },
+    })
+    expect(mocks.initQueue).not.toHaveBeenCalled()
+    expect(mocks.startProjectWorkflow).not.toHaveBeenCalled()
+  })
+
+  it('repairs a verified website draft without invoking the engine again', async () => {
+    mocks.getProjectExecutionSnapshot
+      .mockResolvedValueOnce({
+        ...execution(),
+        workflowKind: 'website',
+        state: 'blocked',
+        active: false,
+        canStart: true,
+        canStop: false,
+      })
+      .mockResolvedValueOnce({
+        ...execution(),
+        workflowKind: 'website',
+        state: 'succeeded',
+        active: false,
+        canStart: false,
+        canStop: false,
+      })
+    mocks.recoverWebsiteDelivery.mockResolvedValue(true)
+
+    const response = await POST(new Request('http://localhost'), context(PROJECT_ID))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      kind: 'website',
+      status: 'complete',
+      execution: { workflowKind: 'website', state: 'succeeded' },
+    })
+    expect(mocks.recoverWebsiteDelivery).toHaveBeenCalledWith(PROJECT_ID)
+    expect(mocks.initQueue).not.toHaveBeenCalled()
+    expect(mocks.startProjectWorkflow).not.toHaveBeenCalled()
   })
 
   it('rejects an invalid path before touching billing or queue state', async () => {
@@ -158,6 +222,7 @@ describe('POST /api/projects/[id]/start', () => {
       cancelledTickets: 1,
       cancelledLeases: 2,
       remainingRunning: 1,
+      execution: execution(),
     })
     expect(mocks.stopProjectExecution).toHaveBeenCalledWith(PROJECT_ID)
     expect(mocks.initQueue).not.toHaveBeenCalled()
@@ -188,4 +253,23 @@ describe('POST /api/projects/[id]/start', () => {
 
 function context(id: string) {
   return { params: Promise.resolve({ id }) }
+}
+
+function execution() {
+  return {
+    workflowKind: 'audio',
+    state: 'queued',
+    active: true,
+    canStart: false,
+    canStop: true,
+    attempt: {
+      id: 'attempt-1',
+      status: 'queued',
+      updatedAt: '2026-07-30T00:00:00.000Z',
+    },
+    currentStage: null,
+    stages: [],
+    delivery: null,
+    revision: 'a'.repeat(64),
+  }
 }

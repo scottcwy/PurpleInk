@@ -19,6 +19,7 @@ export type WebsiteExecutionFailureCode =
   | 'WEBSITE_ENGINE_RESPONSE_INVALID'
   | 'WEBSITE_VIDEO_INVALID'
   | 'WEBSITE_PROJECT_INVALID'
+  | 'WEBSITE_VERIFICATION_FAILED'
   | 'WEBSITE_EXECUTION_FAILED'
 
 export interface WebsiteVerificationProjection {
@@ -51,6 +52,7 @@ export interface WebsiteOutputProjection {
 export interface WebsiteStageProjector {
   progress(projectId: string, progress: WebsiteStageProgress): Promise<void>
   complete(projectId: string, output: WebsiteOutputProjection): Promise<void>
+  block(projectId: string, output: WebsiteOutputProjection): Promise<void>
   fail(
     projectId: string,
     phase: WebsiteWorkflowPhase,

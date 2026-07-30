@@ -64,6 +64,18 @@ export {
   type ProjectKindCounts,
 } from './project-cards'
 export {
+  deriveProjectExecutionSnapshot,
+  getProjectExecutionSnapshot,
+  ProjectExecutionSnapshotError,
+  type ProjectExecutionFacts,
+  type ProjectExecutionSnapshot,
+  type ProjectExecutionState,
+  type WebsiteDeliverySnapshot,
+  type WebsiteStageSnapshot,
+  type WebsiteStageState,
+} from './project-execution-snapshot'
+export { recoverWebsiteDelivery } from './project-execution-recovery'
+export {
   startProjectWorkflow,
   loadProjectWorkflowStartDescriptor,
   ProjectWorkflowStartError,

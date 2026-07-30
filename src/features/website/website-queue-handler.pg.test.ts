@@ -54,7 +54,7 @@ afterAll(async () => {
 })
 
 describe('website video enqueue idempotency', () => {
-  it.each(['queued', 'running', 'succeeded'] as const)(
+  it.each(['queued', 'running'] as const)(
     'reuses an existing %s project attempt under the advisory lock',
     async (status) => {
       const existingId = await seedAttempt(status)
@@ -78,6 +78,29 @@ describe('website video enqueue idempotency', () => {
       expect(enqueue).not.toHaveBeenCalled()
     },
   )
+
+  it('does not reuse a succeeded attempt when delivery requires a replacement', async () => {
+    await seedAttempt('succeeded')
+    const replacementId = randomUUID()
+    const enqueue = vi.fn(async () => replacementId)
+    const preflight = vi.fn(async () => undefined)
+
+    await expect(enqueueWebsiteVideo(
+      {
+        projectId: PROJECT_ID,
+        workflowVersion: activeWorkflowVersionFor('website'),
+      },
+      adapter(enqueue),
+      preflight,
+      database.db,
+    )).resolves.toEqual({
+      attemptId: replacementId,
+      status: 'queued',
+      reused: false,
+    })
+    expect(preflight).toHaveBeenCalledOnce()
+    expect(enqueue).toHaveBeenCalledOnce()
+  })
 
   it('does not reuse a failed attempt and enqueues a project-level replacement', async () => {
     await seedAttempt('failed')
