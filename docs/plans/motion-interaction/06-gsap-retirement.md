@@ -43,6 +43,12 @@ Select-String -Path src/**/*.ts,src/**/*.tsx -Pattern 'ScrollTrigger'
 此时 `gsap` 依赖不能删，只能把 `image-reveal.tsx` 改写并在规范里记录
 "GSAP 仅限渲染侧"的例外。**这一条必须在动手前查清，它决定本批次的形态。**
 
+**执行结论（2026-07-31）**：`src/lib/gsap/seek-bridge.ts` 是渲染侧
+HyperFrames 确定性 seek 合同，只负责生成暂停 timeline 的脚本文本，本身不 import
+npm `gsap`；`server/` 的渲染模板同样使用固定 CDN 版本，不依赖根 workspace 的 npm
+包。根依赖的唯一运行时消费者确为营销页 `image-reveal.tsx`，因此保留渲染侧合同并
+移除 npm `gsap` 是安全的。
+
 ### 2.2 Lenis
 
 `lenis: ^1.3.3`，唯一消费者 `src/components/marketing/smooth-scroll.tsx`，
@@ -123,10 +129,13 @@ GSAP 的 ScrollTrigger 基于滚动位置区间与 scrub，motion 的 `useScroll
 
 ## 7. 完成判据
 
-- [ ] `src/lib/gsap/` 的归属已查清并记录在本文档；
-- [ ] `image-reveal.tsx` 已改用 motion，营销页滚动录屏确认视觉等价（或记录已接受的差异）；
-- [ ] `gsap` 已从 `package.json` 移除（或已记录渲染侧例外及理由）；
+- [x] `src/lib/gsap/` 的归属已查清并记录在本文档；
+- [x] `image-reveal.tsx` 已改用 motion，营销页滚动录屏确认视觉等价（原始 GSAP：
+  `output/playwright/motion-06-image-reveal-before.webm`；Motion：
+  `output/playwright/motion-06-image-reveal-after.webm`）；
+- [x] `gsap` 已从 `package.json` 移除（渲染侧固定 CDN / seek 合同不依赖该包）；
 - [ ] `scroll-behavior` 已收窄，设置页 TOC 定位实测正常；
-- [ ] 营销页 `reduced-motion` 实测有效；
+- [x] 营销页 `reduced-motion` 实测有效，图片首帧与稳定态均为终态且无 hydration
+  mismatch；
 - [ ] `motion-interaction.md` §5.4 与 §7.4 已回写；
 - [ ] 两个 Conventional Commit。

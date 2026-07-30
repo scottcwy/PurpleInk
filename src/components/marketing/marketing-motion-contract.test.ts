@@ -49,4 +49,23 @@ describe('marketing motion contracts', () => {
     expect(toolsCarousel).toContain('motion-reduce:transform-none!')
     expect(toolsCarousel).toContain('motion-reduce:opacity-100!')
   })
+
+  it('uses Motion for the marketing image reveal without deleting render contracts', () => {
+    const imageReveal = readMarketingSource('image-reveal.tsx')
+    const packageSource = readFileSync('package.json', 'utf8')
+    const seekBridge = readFileSync('src/lib/gsap/seek-bridge.ts', 'utf8')
+
+    expect(imageReveal).not.toContain('from "gsap"')
+    expect(imageReveal).not.toContain('ScrollTrigger')
+    expect(imageReveal).toContain('useScroll')
+    expect(imageReveal).toContain('useTransform')
+    expect(imageReveal).toContain('useReducedMotion')
+    expect(imageReveal).toContain('useSyncExternalStore')
+    expect(imageReveal).toContain('motion-reduce:transform-none!')
+    expect(imageReveal).toContain('motion-reduce:opacity-100!')
+    expect(packageSource).not.toContain('"gsap"')
+    expect(seekBridge).toContain('gsap.timeline({ paused: true })')
+    expect(seekBridge).toContain('tl.seek(frame / fps)')
+    expect(seekBridge).not.toMatch(/from ['"]gsap/u)
+  })
 })

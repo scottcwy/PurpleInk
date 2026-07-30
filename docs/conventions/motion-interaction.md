@@ -213,7 +213,9 @@ top layer 天然位于所有 stacking context 之上，不需要 z-index。
   它只是同一张表的另一档。
 - Lenis 平滑滚动**只在 `(marketing)` 段生效**；应用壳内禁止，
   它会干扰 `section-nav` 的滚动定位与覆盖层的 scroll lock。
-- 动画引擎唯一为 `motion`。禁止为单个组件引入第二个引擎（GSAP 已按此收敛，见 §7）。
+- UI 动画引擎唯一为 `motion`。禁止为单个组件引入第二个引擎（营销页 GSAP 已按此
+  收敛，见 §7）。渲染侧为保证逐帧确定性而生成的固定 CDN GSAP 脚本与
+  `src/lib/gsap/seek-bridge.ts` 属渲染合同，不是 UI 运行时依赖，不受此条删除范围约束。
 
 ### 5.5 reduced-motion
 
@@ -305,7 +307,7 @@ ESC 逻辑从 `app-sidebar-shell.tsx`、`canvas-inspector.tsx` 两处删除；
 | `lib/marketing-motion.tsx` | 12 个导出仅文件内部互引；唯一外部 import 是 `providers.tsx` 取 `ReducedMotionProvider`，而读取它的 `useReducedMotion` 零外部消费者（其余均从 `motion/react` 取） | 整文件删除 | done |
 | 同名 `fadeInUp` 冲突 | marketing 版 y:20 vs `variants.ts` y:8 | 随上一条消失 | done |
 | reduced-motion 第三套 | 同上 | 收敛为 §5.5 两层 | done |
-| GSAP `^3.15.0` | 仅 `marketing/image-reveal.tsx` 一个消费者；motion 的 `useScroll` 已在 `text-reveal` / `stats` / `hero` 做同类事；且 GSAP 自带第三套 reduced-motion | 改写后删依赖 | todo |
+| GSAP `^3.15.0` | npm 包仅 `marketing/image-reveal.tsx` 一个消费者；`src/lib/gsap/seek-bridge.ts` 与 `server/` 固定 CDN 脚本是独立的渲染侧确定性合同，不 import 根依赖 | 图片揭示改用 `motion`，删除 npm 依赖；保留渲染侧合同 | done |
 | Lenis | 与 `globals.css` 全局 `scroll-behavior: smooth` 重复 | 保留但限定 `(marketing)`，收窄全局规则 | todo |
 | 侧栏宽度双路径 | `sidebar.tsx` 自带 `transition-[width] duration-200` + `w-[60px]/w-[248px]`，但生产路径外层 `AnimatedAside`（220ms）传入 `w-full` 覆盖了内部宽度类 → 那条 200ms **在生产是死代码，只在 `/playbook` demo 活着** | 宽度动画唯一归 `AnimatedAside`；`sidebar.tsx` 删过渡与宽度类；demo 改用 `AnimatedAside` 包裹 | done |
 
