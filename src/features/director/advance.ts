@@ -1,7 +1,11 @@
 import 'server-only'
 import { getDb } from '@/lib/db/client'
 import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
-import type { CanvasNodeType, NodeStatus } from '@/features/canvas'
+import {
+  assertNodeExecutionActive,
+  type CanvasNodeType,
+  type NodeStatus,
+} from '@/features/canvas'
 import { AdvanceRepositoryImpl } from './advance-repository'
 import { PIPELINE_STAGES, type PipelineStage } from './types'
 import type {
@@ -106,8 +110,10 @@ interface PipelineControlDependencies {
 export async function advancePipeline(
   projectId: string,
   completedNodeId: string,
-  dependencies?: AdvanceDependencies
+  dependencies?: AdvanceDependencies,
+  execution?: { attemptId: string; signal?: AbortSignal },
 ): Promise<AdvanceResult> {
+  await assertExecutionActive()
   const resolved = dependencies ?? (await createDefaultDependencies())
   const result: AdvanceResult = { enqueuedNodeIds: [], failedNodeIds: [] }
   if (!(await resolved.repository.isAutopilotEnabled(projectId))) return result
@@ -137,6 +143,7 @@ export async function advancePipeline(
       continue
     }
     try {
+      await assertExecutionActive()
       if (candidate.type === 'shot-codegen') {
         if (!(await resolved.repository.isMediaReady(projectId))) continue
         await resolved.enqueueRenderShot({ projectId, nodeId: candidate.id })
@@ -163,6 +170,7 @@ export async function advancePipeline(
           stage: candidate.stage,
         })
       }
+      await assertExecutionActive()
       result.enqueuedNodeIds.push(candidate.id)
     } catch (error) {
       result.failedNodeIds.push(candidate.id)
@@ -174,6 +182,18 @@ export async function advancePipeline(
     }
   }
   return result
+
+  async function assertExecutionActive(): Promise<void> {
+    execution?.signal?.throwIfAborted()
+    if (execution && !dependencies) {
+      await assertNodeExecutionActive(completedNodeId, {
+        projectId,
+        attemptId: execution.attemptId,
+        signal: execution.signal,
+      })
+    }
+    execution?.signal?.throwIfAborted()
+  }
 }
 
 /** 开启项目 autopilot，并从入口或既有成功前沿继续执行。 */

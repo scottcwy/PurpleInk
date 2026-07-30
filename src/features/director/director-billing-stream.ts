@@ -39,6 +39,7 @@ interface DirectorBillingRuntime {
 
 /** 单次上游调用的硬上限；队列层负责重试，SDK 内不得再做嵌套重试。 */
 export const DIRECTOR_PROVIDER_TIMEOUT_MS = 4 * 60_000
+const PROVIDER_SDK_TIMEOUT_GRACE_MS = 1_000
 
 /** 模型出网前的内部审计/计费上下文不完整；不得计入 Provider 熔断。 */
 export class DirectorPreflightError extends Error {
@@ -92,7 +93,13 @@ async function* billedEvents(
   try {
     await handle.markProviderStarted?.()
     providerStarted = true
-    const options = providerOptions(input.options)
+    const deadlineMs = providerDeadlineMs(input.options)
+    const deadlineController = new AbortController()
+    const options = providerOptions(
+      input.options,
+      deadlineMs,
+      deadlineController.signal,
+    )
     const upstream = input.streamSimple(
       input.model,
       input.context,
@@ -100,8 +107,9 @@ async function* billedEvents(
     )
     for await (const event of eventsBeforeDeadline(
       upstream,
-      options.timeoutMs ?? DIRECTOR_PROVIDER_TIMEOUT_MS,
+      deadlineMs,
       input.runtime,
+      deadlineController,
     )) {
       if (event.type === 'done' || event.type === 'error') {
         await settleTerminal(handle, event)
@@ -134,6 +142,7 @@ async function* eventsBeforeDeadline(
   upstream: AssistantMessageEventStream,
   timeoutMs: number,
   runtime: DirectorBillingRuntime,
+  deadlineController: AbortController,
 ): AsyncGenerator<AssistantMessageEvent> {
   const iterator = upstream[Symbol.asyncIterator]()
   const deadline = Date.now() + timeoutMs
@@ -143,6 +152,7 @@ async function* eventsBeforeDeadline(
         iterator,
         Math.max(0, deadline - Date.now()),
         runtime,
+        deadlineController,
       )
       if (next.done) return
       yield next.value
@@ -161,17 +171,20 @@ async function nextBeforeDeadline(
   iterator: AsyncIterator<AssistantMessageEvent>,
   remainingMs: number,
   runtime: DirectorBillingRuntime,
+  deadlineController: AbortController,
 ): Promise<IteratorResult<AssistantMessageEvent>> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
-      reject(new ProviderRequestError({
+      const failure = new ProviderRequestError({
         providerId: runtime.providerId,
         providerLabel: runtime.providerLabel,
         operation: 'Director',
         funding: runtime.funding,
         kind: 'timeout',
-      }))
+      })
+      reject(failure)
+      deadlineController.abort(failure)
     }, remainingMs)
   })
   try {
@@ -183,15 +196,29 @@ async function nextBeforeDeadline(
 
 function providerOptions(
   options: SimpleStreamOptions | undefined,
+  deadlineMs: number,
+  deadlineSignal: AbortSignal,
 ): SimpleStreamOptions {
+  const signal = options?.signal
+    ? AbortSignal.any([options.signal, deadlineSignal])
+    : deadlineSignal
   return {
     ...options,
-    timeoutMs: Math.min(
-      options?.timeoutMs ?? DIRECTOR_PROVIDER_TIMEOUT_MS,
-      DIRECTOR_PROVIDER_TIMEOUT_MS,
-    ),
+    signal,
+    // SDK 自身会把非 HTTP 超时压成 generic error event；让可信墙钟闸门先
+    // 收敛并中止 SDK，才能稳定保留 PROVIDER_TIMEOUT 类型。
+    timeoutMs: deadlineMs + PROVIDER_SDK_TIMEOUT_GRACE_MS,
     maxRetries: 0,
   }
+}
+
+function providerDeadlineMs(
+  options: SimpleStreamOptions | undefined,
+): number {
+  return Math.min(
+    options?.timeoutMs ?? DIRECTOR_PROVIDER_TIMEOUT_MS,
+    DIRECTOR_PROVIDER_TIMEOUT_MS,
+  )
 }
 
 async function beginInvocation(

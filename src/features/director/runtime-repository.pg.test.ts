@@ -177,12 +177,12 @@ describe('DirectorRuntimeRepository Postgres', () => {
   })
 
   it('commits stream bytes with real hash/size and skips empty text', async () => {
-    await repository.persistStreamLog(
-      PROJECT_ID,
-      INGEST_ID,
-      'INGEST',
-      '流式全文'
-    )
+    await repository.persistStreamLog({
+      projectId: PROJECT_ID,
+      nodeId: INGEST_ID,
+      stage: 'INGEST',
+      text: '流式全文',
+    })
     const [row] = await db
       .select()
       .from(artifacts)
@@ -199,8 +199,144 @@ describe('DirectorRuntimeRepository Postgres', () => {
       contentHash: createHash('sha256').update('流式全文').digest('hex'),
     })
 
-    await repository.persistStreamLog(PROJECT_ID, INGEST_ID, 'INGEST', '')
+    await repository.persistStreamLog({
+      projectId: PROJECT_ID,
+      nodeId: INGEST_ID,
+      stage: 'INGEST',
+      text: '',
+    })
     expect(vi.mocked(storage.put)).toHaveBeenCalledTimes(1)
+  })
+
+  it('removes staged stream bytes and commits no row when abort lands inside storage.put', async () => {
+    const attemptId = ATTEMPTS.get(INGEST_ID)!
+    const before = await db
+      .select({ id: artifacts.id })
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.aggregateId, INGEST_ID),
+          eq(artifacts.kind, 'director-stream-log'),
+        ),
+      )
+    let announcePut: () => void = () => undefined
+    let releasePut: () => void = () => undefined
+    const putStarted = new Promise<void>((resolve) => {
+      announcePut = resolve
+    })
+    const putGate = new Promise<void>((resolve) => {
+      releasePut = resolve
+    })
+    storage.put = vi.fn(async (
+      key: string,
+      data: string | Buffer | Uint8Array,
+    ) => {
+      announcePut()
+      await putGate
+      files.set(key, Buffer.from(data))
+      return key
+    })
+    repository = new DirectorRuntimeRepository(db, storage)
+    const controller = new AbortController()
+    const timeout = Object.assign(new Error('阶段执行超时'), {
+      name: 'ExecutionTimeoutError',
+    })
+    const pending = repository.persistStreamLog({
+      projectId: PROJECT_ID,
+      nodeId: INGEST_ID,
+      stage: 'INGEST',
+      text: '不得迟到落库',
+      attemptId,
+      signal: controller.signal,
+    })
+    await putStarted
+    controller.abort(timeout)
+    releasePut()
+
+    await expect(pending).rejects.toBe(timeout)
+    const after = await db
+      .select({ id: artifacts.id })
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.aggregateId, INGEST_ID),
+          eq(artifacts.kind, 'director-stream-log'),
+        ),
+      )
+    expect(after).toHaveLength(before.length)
+    expect([...files.keys()]).not.toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(
+          new RegExp(
+            `^director-stream/${PROJECT_ID}/${INGEST_ID}/${attemptId}/ingest-`,
+          ),
+        ),
+      ]),
+    )
+  })
+
+  it('rolls back a stream artifact when abort lands inside its database lock wait', async () => {
+    const attemptId = ATTEMPTS.get(INGEST_ID)!
+    const text = '数据库锁内不得迟到落库'
+    const contentHash = createHash('sha256').update(text).digest('hex')
+    const storageKey =
+      `director-stream/${PROJECT_ID}/${INGEST_ID}/${attemptId}/ingest-${contentHash}.log`
+    const before = await db
+      .select({ id: artifacts.id })
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.aggregateId, INGEST_ID),
+          eq(artifacts.kind, 'director-stream-log'),
+        ),
+      )
+    let announceNodeLock: () => void = () => undefined
+    let releaseNodeLock: () => void = () => undefined
+    const nodeLocked = new Promise<void>((resolve) => {
+      announceNodeLock = resolve
+    })
+    const holdNodeLock = new Promise<void>((resolve) => {
+      releaseNodeLock = resolve
+    })
+    const lock = db.transaction(async (transaction) => {
+      await transaction
+        .select({ id: canvasNodes.id })
+        .from(canvasNodes)
+        .where(eq(canvasNodes.id, INGEST_ID))
+        .for('update')
+      announceNodeLock()
+      await holdNodeLock
+    })
+    await nodeLocked
+    const controller = new AbortController()
+    const timeout = Object.assign(new Error('阶段执行超时'), {
+      name: 'ExecutionTimeoutError',
+    })
+    const pending = repository.persistStreamLog({
+      projectId: PROJECT_ID,
+      nodeId: INGEST_ID,
+      stage: 'INGEST',
+      text,
+      attemptId,
+      signal: controller.signal,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    controller.abort(timeout)
+    releaseNodeLock()
+    await lock
+
+    await expect(pending).rejects.toBe(timeout)
+    const after = await db
+      .select({ id: artifacts.id })
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.aggregateId, INGEST_ID),
+          eq(artifacts.kind, 'director-stream-log'),
+        ),
+      )
+    expect(after).toHaveLength(before.length)
+    expect(files.has(storageKey)).toBe(false)
   })
 
   it('commits an actual pointer and rejects unsafe storage keys', async () => {

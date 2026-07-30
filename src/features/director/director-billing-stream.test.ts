@@ -125,8 +125,9 @@ describe('Director per-provider-call billing stream', () => {
       model,
       context,
       expect.objectContaining({
-        timeoutMs: DIRECTOR_PROVIDER_TIMEOUT_MS,
+        timeoutMs: DIRECTOR_PROVIDER_TIMEOUT_MS + 1_000,
         maxRetries: 0,
+        signal: expect.any(AbortSignal),
       }),
     )
     expect(order).toEqual([
@@ -163,18 +164,29 @@ describe('Director per-provider-call billing stream', () => {
       streamSimple,
     }))
 
-    expect(streamSimple).toHaveBeenCalledWith(model, context, {
+    expect(streamSimple).toHaveBeenCalledWith(model, context, expect.objectContaining({
       maxTokens: 512,
-      timeoutMs: DIRECTOR_PROVIDER_TIMEOUT_MS,
+      timeoutMs: DIRECTOR_PROVIDER_TIMEOUT_MS + 1_000,
       maxRetries: 0,
-    })
+      signal: expect.any(AbortSignal),
+    }))
     expect(begin).toHaveBeenCalledOnce()
   })
 
   it('enforces the provider deadline when the SDK stream never settles', async () => {
     const order: string[] = []
     const billingHandle = handle(order)
-    const streamSimple = vi.fn(() => createAssistantMessageEventStream())
+    let providerSignal: AbortSignal | undefined
+    let providerTimeoutMs: number | undefined
+    const streamSimple = vi.fn((
+      _model: Model<Api>,
+      _context: Context,
+      options?: { signal?: AbortSignal; timeoutMs?: number },
+    ) => {
+      providerSignal = options?.signal
+      providerTimeoutMs = options?.timeoutMs
+      return createAssistantMessageEventStream()
+    })
     const onProviderFailure = vi.fn()
     const events = await consume(createDirectorBillingStream({
       model,
@@ -200,6 +212,12 @@ describe('Director per-provider-call billing stream', () => {
 
     expect(events.at(-1)?.type).toBe('error')
     expect(billingHandle.settleUnavailable).toHaveBeenCalledWith(true, 'timeout')
+    expect(providerTimeoutMs).toBeGreaterThan(15)
+    expect(providerSignal?.aborted).toBe(true)
+    expect(providerSignal?.reason).toMatchObject({
+      name: 'ProviderRequestError',
+      kind: 'timeout',
+    })
     expect(onProviderFailure).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'ProviderRequestError',

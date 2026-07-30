@@ -181,14 +181,18 @@ describe('createStageRunner', () => {
       output: { kind: 'assistant-text' },
     })
     expect(harness.repository.persistStreamLog).toHaveBeenCalledTimes(1)
-    expect(harness.runStageEffect).toHaveBeenCalledWith(context)
-    expect(harness.repository.persistStreamLog).toHaveBeenCalledWith(
+    expect(harness.runStageEffect).toHaveBeenCalledWith(context, undefined)
+    expect(harness.repository.persistStreamLog).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      stage: 'INGEST',
+      text: '展示完成',
+    })
+    expect(harness.advancePipeline).toHaveBeenCalledWith(
       'project-1',
       'node-1',
-      'INGEST',
-      '展示完成'
+      undefined,
     )
-    expect(harness.advancePipeline).toHaveBeenCalledWith('project-1', 'node-1')
     expect(harness.scheduleMediaNarration).toHaveBeenCalledWith({
       projectId: 'project-1',
       nodeId: 'node-1',
@@ -197,8 +201,15 @@ describe('createStageRunner', () => {
 
   it('passes the queue attempt id into the Director session', async () => {
     const harness = createHarness()
+    const controller = new AbortController()
 
-    await harness.runner('project-1', 'node-1', 'INGEST', 'queue-attempt-1')
+    await harness.runner(
+      'project-1',
+      'node-1',
+      'INGEST',
+      'queue-attempt-1',
+      controller.signal,
+    )
 
     expect(harness.createSession).toHaveBeenCalledWith(expect.objectContaining({
       projectId: 'project-1',
@@ -210,6 +221,89 @@ describe('createStageRunner', () => {
       nodeId: 'node-1',
       attemptId: 'queue-attempt-1',
     }))
+    expect(harness.repository.persistStreamLog).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      stage: 'INGEST',
+      text: '展示完成',
+      attemptId: 'queue-attempt-1',
+      signal: controller.signal,
+    })
+    expect(harness.repository.registerArtifactPointer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'project-1',
+        nodeId: 'node-1',
+        attemptId: 'queue-attempt-1',
+        signal: controller.signal,
+      }),
+    )
+    expect(harness.runStageEffect).toHaveBeenCalledWith(
+      expect.objectContaining({ attemptId: 'queue-attempt-1' }),
+      controller.signal,
+    )
+    expect(harness.scheduleMediaNarration).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      attemptId: 'queue-attempt-1',
+      signal: controller.signal,
+    })
+    expect(harness.advancePipeline).toHaveBeenCalledWith(
+      'project-1',
+      'node-1',
+      {
+        attemptId: 'queue-attempt-1',
+        signal: controller.signal,
+      },
+    )
+    expect(harness.transitionNodeStatus).toHaveBeenCalledWith(
+      'node-1',
+      'success',
+      {
+        execution: {
+          projectId: 'project-1',
+          attemptId: 'queue-attempt-1',
+          signal: controller.signal,
+        },
+      },
+    )
+  })
+
+  it('stops after an abort that lands inside stream-log persistence', async () => {
+    const harness = createHarness()
+    const controller = new AbortController()
+    const timeout = Object.assign(new Error('阶段执行超时'), {
+      name: 'ExecutionTimeoutError',
+    })
+    let releaseLog: () => void = () => undefined
+    const logGate = new Promise<void>((resolve) => {
+      releaseLog = resolve
+    })
+    harness.repository.persistStreamLog.mockImplementationOnce(async () => {
+      await logGate
+    })
+
+    const pending = harness.runner(
+      'project-1',
+      'node-1',
+      'INGEST',
+      'queue-attempt-1',
+      controller.signal,
+    )
+    await vi.waitFor(() => {
+      expect(harness.repository.persistStreamLog).toHaveBeenCalledOnce()
+    })
+    controller.abort(timeout)
+    releaseLog()
+
+    await expect(pending).rejects.toBe(timeout)
+    expect(harness.repository.registerArtifactPointer).not.toHaveBeenCalled()
+    expect(harness.transitionNodeStatus).not.toHaveBeenCalledWith(
+      'node-1',
+      'success',
+      expect.anything(),
+    )
+    expect(harness.scheduleMediaNarration).not.toHaveBeenCalled()
+    expect(harness.advancePipeline).not.toHaveBeenCalled()
   })
 
   it('does not let a timed-out attempt write artifacts or node terminal state after its provider returns late', async () => {
@@ -260,8 +354,16 @@ describe('createStageRunner', () => {
       harness.runner('project-1', 'node-1', 'INGEST')
     ).resolves.toBeUndefined()
 
-    expect(harness.transitionNodeStatus).toHaveBeenCalledWith('node-1', 'success')
-    expect(harness.advancePipeline).toHaveBeenCalledWith('project-1', 'node-1')
+    expect(harness.transitionNodeStatus).toHaveBeenCalledWith(
+      'node-1',
+      'success',
+      undefined,
+    )
+    expect(harness.advancePipeline).toHaveBeenCalledWith(
+      'project-1',
+      'node-1',
+      undefined,
+    )
     expect(harness.repository.recordStageError).not.toHaveBeenCalled()
   })
 
@@ -440,7 +542,11 @@ describe('createStageRunner', () => {
       'running',
       'success',
     ])
-    expect(harness.advancePipeline).toHaveBeenCalledWith('project-1', 'node-1')
+    expect(harness.advancePipeline).toHaveBeenCalledWith(
+      'project-1',
+      'node-1',
+      { attemptId: 'attempt-2', signal: undefined },
+    )
   })
 
   it('reuses the same FABRICATE session for at most two gate-feedback retries', async () => {

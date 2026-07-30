@@ -124,12 +124,22 @@ export async function commitArtifactRecord<T = undefined>(
   updateProjection?: (
     transaction: TransactionContext,
     artifactId: string
-  ) => Promise<T>
+  ) => Promise<T>,
+  options?: { signal?: AbortSignal },
 ): Promise<{ artifactId: string; version: number; projection: T | undefined }> {
   return withTransaction(database, async (transaction) => {
+    options?.signal?.throwIfAborted()
     await lockAggregate(transaction, input)
+    options?.signal?.throwIfAborted()
     await assertAttemptFence(transaction, input)
-    return insertArtifactVersion(transaction, input, updateProjection)
+    options?.signal?.throwIfAborted()
+    const committed = await insertArtifactVersion(
+      transaction,
+      input,
+      updateProjection,
+    )
+    options?.signal?.throwIfAborted()
+    return committed
   })
 }
 

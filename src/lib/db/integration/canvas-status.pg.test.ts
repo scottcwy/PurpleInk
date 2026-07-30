@@ -5,7 +5,9 @@ import type { Db } from '@/lib/db/client'
 import {
   canvasEdges,
   canvasNodes,
+  pipelineRuns,
   projects,
+  taskAttempts,
   workspaces,
 } from '@/lib/db/schema/index'
 import {
@@ -84,6 +86,56 @@ describe('canvas node status', () => {
         )
       )
     expect(node?.status).toBe('succeeded')
+  })
+
+  it('rolls back an attempt-scoped transition when abort lands inside its row lock wait', async () => {
+    const nodeId = await insertNode(database.db, WORKSPACE_ID, projectId)
+    await transitionNodeStatus(nodeId, 'pending')
+    const attemptId = await insertRunningAttempt(
+      database.db,
+      projectId,
+      nodeId,
+    )
+    let releaseAttemptLock: () => void = () => undefined
+    let announceAttemptLock: () => void = () => undefined
+    const attemptLocked = new Promise<void>((resolve) => {
+      announceAttemptLock = resolve
+    })
+    const holdAttemptLock = new Promise<void>((resolve) => {
+      releaseAttemptLock = resolve
+    })
+    const lock = database.db.transaction(async (transaction) => {
+      await transaction
+        .select({ id: taskAttempts.id })
+        .from(taskAttempts)
+        .where(eq(taskAttempts.id, attemptId))
+        .for('update')
+      announceAttemptLock()
+      await holdAttemptLock
+    })
+    await attemptLocked
+    const controller = new AbortController()
+    const timeout = Object.assign(new Error('阶段执行超时'), {
+      name: 'ExecutionTimeoutError',
+    })
+    const pending = transitionNodeStatus(nodeId, 'running', {
+      execution: {
+        projectId,
+        attemptId,
+        signal: controller.signal,
+      },
+    })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    controller.abort(timeout)
+    releaseAttemptLock()
+    await lock
+
+    await expect(pending).rejects.toBe(timeout)
+    const [node] = await database.db
+      .select({ status: canvasNodes.status })
+      .from(canvasNodes)
+      .where(eq(canvasNodes.id, nodeId))
+    expect(node?.status).toBe('queued')
   })
 
   it('clears stale stage errors when a retry finally succeeds', async () => {
@@ -337,6 +389,37 @@ async function insertNode(
       status,
     })
   return id
+}
+
+async function insertRunningAttempt(
+  db: Db,
+  projectId: string,
+  nodeId: string,
+): Promise<string> {
+  const runId = randomUUID()
+  const attemptId = randomUUID()
+  await db.insert(pipelineRuns).values({
+    workspaceId: WORKSPACE_ID,
+    id: runId,
+    projectId,
+    status: 'running',
+    workflowVersion: 'canvas-test-v1',
+    fingerprint: 'a'.repeat(64),
+    executionEpoch: 0,
+  })
+  await db.insert(taskAttempts).values({
+    workspaceId: WORKSPACE_ID,
+    id: attemptId,
+    runId,
+    taskId: 'legacy.director-stage',
+    entityType: 'node',
+    entityId: nodeId,
+    attemptNo: 1,
+    status: 'running',
+    fingerprint: 'b'.repeat(64),
+    checkpoint: { schemaVersion: 1 },
+  })
+  return attemptId
 }
 
 function versionedData(

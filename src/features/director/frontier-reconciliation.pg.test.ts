@@ -105,6 +105,25 @@ it('orders the recovery scan by real node and attempt activity', async () => {
   ])
 })
 
+it('does not truncate a recoverable candidate behind sixteen newer frontiers', async () => {
+  const [clock] = await database.sql<{ now: string | Date }[]>`select now() as now`
+  const now = new Date(clock!.now)
+  const projectIds: string[] = []
+  for (let index = 0; index < 17; index += 1) {
+    projectIds.push(await seedProject({
+      autopilot: true,
+      downstreamStatus: 'idle',
+      nodeUpdatedAt: new Date(now.getTime() - index * 1_000),
+      attemptUpdatedAt: new Date(now.getTime() - index * 1_000),
+    }))
+  }
+
+  const candidates = await listDirectorFrontierCandidates(database.db)
+
+  expect(candidates).toHaveLength(17)
+  expect(candidates.map(({ projectId }) => projectId)).toContain(projectIds.at(-1))
+})
+
 async function seedProject(input: {
   autopilot: boolean
   downstreamStatus: 'idle' | 'succeeded'

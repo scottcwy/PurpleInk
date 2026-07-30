@@ -1,5 +1,10 @@
 import type { Db } from './client'
 
+export {
+  assertNodeExecutionFence,
+  type NodeExecutionFence,
+} from './node-execution-fence'
+
 export type TransactionContext = Parameters<
   Parameters<Db['transaction']>[0]
 >[0]

@@ -7,7 +7,9 @@ import {
   canvasNodes,
 } from '@/lib/db/schema/index'
 import {
+  assertNodeExecutionFence,
   withTransaction,
+  type NodeExecutionFence,
   type TransactionContext,
 } from '@/lib/db/transaction'
 import { statusBus } from '@/lib/stream/status-bus'
@@ -61,8 +63,10 @@ export async function transitionNodeStatus(
     skipMeta?: SkipMeta
     executionNotice?: WorkflowExecutionNotice | null
     workflowBlock?: WorkflowBlock
+    execution?: NodeExecutionFence
   }
 ): Promise<void> {
+  options?.execution?.signal?.throwIfAborted()
   const database = await getDb()
   const projectId = await withTransaction(database, async (tx) => {
     const [node] = await tx
@@ -81,6 +85,9 @@ export async function transitionNodeStatus(
       )
       .for('update')
     if (!node) throw new Error(`节点不存在：${nodeId}`)
+    if (options?.execution) {
+      await assertNodeExecutionFence(tx, node, options.execution)
+    }
     const current = fromPersistedStatus(node.status)
     const providerWaitTransition =
       current === 'running'
@@ -117,6 +124,7 @@ export async function transitionNodeStatus(
           eq(canvasNodes.id, nodeId)
         )
       )
+    options?.execution?.signal?.throwIfAborted()
     return node.projectId
   })
   // 严格在事务提交之后发布（回滚路径零事件）；发布失败不影响状态迁移。
@@ -125,6 +133,33 @@ export async function transitionNodeStatus(
   } catch {
     // 推送是体验增强，不反向阻断状态机。
   }
+}
+
+export async function assertNodeExecutionActive(
+  nodeId: string,
+  execution: NodeExecutionFence,
+): Promise<void> {
+  execution.signal?.throwIfAborted()
+  const database = await getDb()
+  await withTransaction(database, async (tx) => {
+    const [node] = await tx
+      .select({
+        id: canvasNodes.id,
+        projectId: canvasNodes.projectId,
+      })
+      .from(canvasNodes)
+      .where(
+        and(
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
+          eq(canvasNodes.id, nodeId),
+        ),
+      )
+      .limit(1)
+      .for('update')
+    if (!node) throw new Error(`节点不存在：${nodeId}`)
+    await assertNodeExecutionFence(tx, node, execution)
+    execution.signal?.throwIfAborted()
+  })
 }
 
 /**

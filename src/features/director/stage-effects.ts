@@ -33,7 +33,8 @@ interface StageEffectDependencies {
 }
 
 export type DirectorStageEffect = (
-  context: DirectorStageContext
+  context: DirectorStageContext,
+  signal?: AbortSignal,
 ) => Promise<void>
 
 /**
@@ -45,13 +46,15 @@ export type DirectorStageEffect = (
 export function createDirectorStageEffect(
   dependencies: StageEffectDependencies
 ): DirectorStageEffect {
-  return async (context) => {
+  return async (context, signal) => {
+    signal?.throwIfAborted()
     if (context.nodeType === 'shot-sfx') {
       const input = shotSfxPromptInputSchema.parse(context.directorInput)
       await dependencies.loadNarration(
         context.projectId,
         input.shotAllocation.audioUnitId
       )
+      signal?.throwIfAborted()
       return
     }
     if (context.nodeType === 'shot-subtitle') {
@@ -60,6 +63,7 @@ export function createDirectorStageEffect(
         context.projectId,
         input.shotAllocation.audioUnitId
       )
+      signal?.throwIfAborted()
       await dependencies.generateSubtitle({
         projectId: context.projectId,
         nodeId: context.nodeId,
@@ -80,6 +84,7 @@ export function createDirectorStageEffect(
             }
           : {}),
       })
+      signal?.throwIfAborted()
       return
     }
     if (context.nodeType === 'shot-qa') {
@@ -88,12 +93,14 @@ export function createDirectorStageEffect(
       }
       const input = shotQaPromptInputSchema.parse(context.directorInput)
       await dependencies.runRuleQa(context.projectId, context.nodeId)
+      signal?.throwIfAborted()
       await dependencies.runVisionQa({
         projectId: context.projectId,
         qaNodeId: context.nodeId,
         attemptId: context.attemptId,
         shot: input.shot,
       })
+      signal?.throwIfAborted()
     }
   }
 }

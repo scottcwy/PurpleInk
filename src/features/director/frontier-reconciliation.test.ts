@@ -4,7 +4,6 @@ import type { PipelineStartResult } from './advance'
 import {
   DIRECTOR_FRONTIER_RECOVERY_LIMIT,
   DIRECTOR_FRONTIER_RECOVERY_WINDOW_MS,
-  DIRECTOR_FRONTIER_SCAN_LIMIT,
   reconcileDirectorFrontiers,
   type DirectorFrontierCandidate,
 } from './frontier-reconciliation'
@@ -30,9 +29,6 @@ describe('reconcileDirectorFrontiers', () => {
   it('publishes the bounded recent-crash recovery policy', () => {
     expect(DIRECTOR_FRONTIER_RECOVERY_WINDOW_MS).toBe(15 * 60 * 1_000)
     expect(DIRECTOR_FRONTIER_RECOVERY_LIMIT).toBe(1)
-    expect(DIRECTOR_FRONTIER_SCAN_LIMIT).toBeGreaterThan(
-      DIRECTOR_FRONTIER_RECOVERY_LIMIT,
-    )
   })
 
   it('resumes only the bounded number of persisted frontiers per pass', async () => {
@@ -148,6 +144,44 @@ describe('reconcileDirectorFrontiers', () => {
       failedProjectIds: [],
       deferredProjectIds: candidates.map(({ projectId }) => projectId),
     })
+  })
+
+  it('reaches the seventeenth candidate when the first sixteen make no progress', async () => {
+    const crowdedCandidates = Array.from({ length: 17 }, (_, index) => ({
+      workspaceId: '00000000-0000-4000-8000-000000000101',
+      projectId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+    }))
+    const resume = vi.fn(async (projectId: string) => {
+      const madeProgress = projectId === crowdedCandidates.at(-1)!.projectId
+      return {
+        autopilot: true as const,
+        status: madeProgress ? 'started' as const : 'blocked' as const,
+        enqueuedNodeIds: madeProgress ? ['next'] : [],
+        repairRootNodeIds: [],
+        failedNodeIds: [],
+        blockedNodes: madeProgress
+          ? []
+          : [{
+              nodeId: 'media',
+              code: 'MEDIA_NOT_READY',
+              message: '媒体尚未就绪',
+            }],
+      }
+    })
+
+    const result = await reconcileDirectorFrontiers({} as never, {
+      listCandidates: vi.fn(async () => crowdedCandidates),
+      resume,
+      lockProject: (_projectId, operation) => operation(),
+    })
+
+    expect(resume).toHaveBeenCalledTimes(17)
+    expect(result.reconciledProjectIds).toEqual([
+      crowdedCandidates.at(-1)!.projectId,
+    ])
+    expect(result.deferredProjectIds).toEqual(
+      crowdedCandidates.slice(0, -1).map(({ projectId }) => projectId),
+    )
   })
 
   it('defers a project when another process owns its frontier lock', async () => {

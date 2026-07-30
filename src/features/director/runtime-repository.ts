@@ -170,13 +170,15 @@ export class DirectorRuntimeRepository {
     return this.writer.registerPointer(input)
   }
 
-  persistStreamLog(
-    projectId: string,
-    nodeId: string,
-    stage: PipelineStage,
+  persistStreamLog(input: {
+    projectId: string
+    nodeId: string
+    stage: PipelineStage
     text: string
-  ): Promise<void> {
-    return this.writer.persistStreamLog(projectId, nodeId, stage, text)
+    attemptId?: string
+    signal?: AbortSignal
+  }): Promise<void> {
+    return this.writer.persistStreamLog(input)
   }
 
   /**

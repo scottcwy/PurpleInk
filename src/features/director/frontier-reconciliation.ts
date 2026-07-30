@@ -17,8 +17,6 @@ export interface DirectorFrontierCandidate {
 export const DIRECTOR_FRONTIER_RECOVERY_WINDOW_MS = 15 * 60 * 1_000
 /** 每轮只恢复最新项目，避免一次启动唤醒一批历史工作流。 */
 export const DIRECTOR_FRONTIER_RECOVERY_LIMIT = 1
-/** 扫描多个候选，锁繁忙或失败的队首不得饿死后续可恢复项目。 */
-export const DIRECTOR_FRONTIER_SCAN_LIMIT = 16
 
 interface ReconciliationDependencies {
   listCandidates?: (database: Db) => Promise<DirectorFrontierCandidate[]>
@@ -186,7 +184,6 @@ export async function listDirectorFrontierCandidates(
           and attempt.status in ('queued', 'running')
       )
     order by activity.activity_at desc, project.id desc
-    limit ${DIRECTOR_FRONTIER_SCAN_LIMIT}
   `)
   return Array.from(rows, (row) => ({
     workspaceId: String(row.workspaceId),
