@@ -644,10 +644,20 @@ Stage Runner 先记为 `failed + directorError`，队列随后再改回
 
 **已落地护栏**：`provider-dispatch.ts` 把事务内数据库时间传给
 `nextProviderWindow`，`provider-wait-scheduler.ts` 用数据库表达式钳制未来
-`visible_at`；Stage Runner 对 Provider 等待不再落失败，并通过 attempt 的
-`providerScopeKey` 与节点已提交 Artifact 识别字幕副作用续跑。状态迁移在写入
-`executionNotice` 时清除旧失败投影；录音 ASR 入口同样保持 `running`，由队列原子
-收敛到等待态，不再经过临时 `failed`。
+`visible_at`；Stage Runner 对 Provider 等待不再落失败，并通过节点已提交 Artifact
+识别字幕副作用续跑。状态迁移在写入 `executionNotice` 时清除旧失败投影；录音 ASR
+入口同样保持 `running`，由队列原子收敛到等待态，不再经过临时 `failed`。
+
+字幕续跑判定曾额外要求 attempt checkpoint 里存在 `providerScopeKey`，已移除：票据化
+调度后只有 `deferProviderAttempt`（原地延迟、复用同一 attemptId）会写该字段，而
+`scheduleProviderRateLimitWait`（真实 429、新建 attempt）只是继承旧 queueMeta，于是
+「是否重复调用文本模型」取决于此前是否恰好发生过一次无关的调度延迟。判定现在只依据
+节点投影的 `directorArtifactId` + `outputContentHash` 是否对上本 run 提交的产物。
+
+另有一处隐式耦合必须一并保住：字幕续跑之所以能复用同一 `attemptId` 而不撞
+`(attemptId, invocationNo)` 唯一键，前提是托管音频把计费预留 `begin()` 放在
+Provider 许可**之后**（`managed-audio-billing.ts`），因此等待期不产生 invocation 行。
+把预留移回许可之前会静默破坏字幕续跑，改动该顺序时必须同时复核本节。
 
 ---
 
@@ -688,6 +698,45 @@ attempt/run/ticket/lease；worker 通过 `AbortSignal` 协作取消，Artifact �
 
 ---
 
+## 7.13 模式 S：产物血缘用 artifactId 强绑定，重跑同字节产物即判失效
+
+**症状**：分镜、旁白、字幕节点全部成功，导出却持续被阻塞，UI 显示「S00x 产物无效」
+或「S00x 缺字幕」。重跑字幕节点后能好一阵，过一段时间又复现。字幕内容本身完全正确。
+
+**真实事故**：`media-assembly-shots.ts` 的 `subtitleValid` 用
+`lineage.sourceAudioArtifactId === narration.artifactId` 判定字幕与旁白同源，而
+`artifacts` 提交（`features/artifacts/commit.ts` 的 `insertArtifactVersion`）**没有
+content-hash 去重**：每次提交一律 `version + 1` 并生成新 `artifactId`，即使
+`storageKey` 与 `contentHash` 完全一致。模式 Q 的等待风暴期间旁白被反复重跑，真实
+项目上 `narration-audio` 版本链已达 96 层，于是每一次重跑都把上一版字幕判成
+`artifact-invalid`。
+
+而且不会自愈：`canvas/status.ts` 的 `isStaleInTransaction` 只比对**画布边上游节点**的
+`outputContentHash`，旁白是侧生产物、不在依赖集内，所以 `shot-subtitle` 不会转
+`stale`、不会自动重跑，阻塞只能靠人工干预解除。
+
+同一个函数里当时并存两套口径：`narrationValid` 用内容哈希（`manifest.sha256`）比对，
+宽容且正确；`subtitleValid` 用行 ID 比对，脆弱。
+
+**规则**：
+
+- 跨产物的同源判定只能基于内容标识（内容寻址的 `storageKey` 或 `content_hash`），
+  不得使用 `artifactId` / `version` 等行身份。版本链会因重试无限增长，行身份必然漂移。
+- 内容寻址键要成为内容等价证明，必须保证「同键不再重新生成字节」。旁白满足这一点：
+  `narrationAudioKey` 由 `(engine, voice, text)` 求 SHA-256，`reuseNarrationAudio`
+  命中即复用字节、跳过合成。新增内容寻址产物时必须同样保证，否则改用 `content_hash`。
+- 同一个校验函数里不得对不同产物使用宽严不一的口径；宽的那一套通常才是对的。
+- 侧生产物（旁白音频等）不在画布边上，`stale` 机制覆盖不到。依赖它们的节点必须用
+  内容口径校验，不能指望失效传播来兜底。
+- 产物版本链深度与重试次数成正比，会同时拖慢项目删除（见 `project-deletion.ts` 按
+  进展收敛的删除循环）。修限流与重试放大，也是在修这里。
+
+**已落地护栏**：`subtitleValid` 只比对 `sourceAudioKey`，`sourceAudioArtifactId` 仍
+写入血缘供追溯但不再当门禁。`media-assembly.test.ts` 锁定双向行为：旁白重跑成同字节
+新版本时字幕仍有效；来源键改变时仍然阻塞。
+
+---
+
 ## 9. 已知未修项
 
 当前无已确认而未修的代码/文档项。
@@ -701,7 +750,8 @@ attempt/run/ticket/lease；worker 通过 `AbortSignal` 协作取消，Artifact �
 （模式 L）、RPM 限流被普通重试与熔断放大（模式 M）、databaseNow 非 Date 返回
 导致 post-commit TypeError（模式 O）、并发旁白调度等待被包装为上游失败导致
 配音永久失败（模式 P）、数据库与应用时钟混用导致 Provider 等待风暴和字幕文本重复
-调用（模式 Q）——见各节「已落地护栏」。
+调用（模式 Q）、产物血缘用 artifactId 强绑定导致旁白重跑即判字幕失效（模式 S）
+——见各节「已落地护栏」。
 
 ---
 
