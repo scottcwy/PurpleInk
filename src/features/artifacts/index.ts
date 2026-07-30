@@ -16,6 +16,7 @@ export {
 } from './preview-mode'
 export {
   commitArtifactRecord,
+  commitArtifactRecords,
   commitDerivedArtifact,
   resolveCurrentAttemptId,
   resolveDerivedSourceAttemptId,

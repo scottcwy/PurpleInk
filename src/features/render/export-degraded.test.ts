@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { StorageAdapter } from '@/lib/storage'
 import type { MediaAssemblyPlan } from './media-assembly'
+import type { ConcatExportResult } from './concat'
 import type { RenderExportPlan } from './repository'
 import {
   exportDegradedProject,
@@ -23,6 +24,7 @@ vi.mock('./placeholder-clip', () => ({
 }))
 
 const RESOLUTION = { width: 1920, height: 1080 }
+const ATTEMPT_ID = '00000000-0000-4000-8000-000000000001'
 
 function plan(overrides: Partial<RenderExportPlan> = {}): RenderExportPlan {
   return {
@@ -30,6 +32,7 @@ function plan(overrides: Partial<RenderExportPlan> = {}): RenderExportPlan {
     shots: [],
     musicKey: null,
     subtitles: 'burn-in',
+    soundEffects: 'off',
     targetResolution: RESOLUTION,
     resolutionPreset: '1920x1080',
     shotQa: {},
@@ -137,8 +140,9 @@ describe('exportDegradedProject', () => {
         })
       )
       .mockResolvedValueOnce(assembled)
-    const registerFinalArtifact = vi.fn(async () => 'artifact-final')
-    const registerDegradedManifest = vi.fn(async () => 'artifact-manifest')
+    const registerFinalDelivery = vi.fn(async () =>
+      finalDelivery('artifact-final')
+    )
     const puts: Array<{ key: string; bytes: Buffer }> = []
     const storage = createStorage()
     vi.mocked(storage.put).mockImplementation(async (key, data) => {
@@ -146,10 +150,10 @@ describe('exportDegradedProject', () => {
       return key
     })
     vi.mocked(storage.readLocalFile).mockResolvedValue(Buffer.from('final-mp4-bytes'))
-    const concat = vi.fn(async () => 'ok')
+    const concat = vi.fn(async () => successfulConcat('/tmp/final.mp4'))
 
-    const result = await exportDegradedProject('p1', {
-      repository: { getExportPlan, registerFinalArtifact, registerDegradedManifest },
+    const result = await exportDegradedProject('p1', ATTEMPT_ID, {
+      repository: { getExportPlan, registerFinalDelivery },
       storage,
       concat: concat as never,
     })
@@ -159,7 +163,14 @@ describe('exportDegradedProject', () => {
       placeholderLanes: ['S007'],
       waivedQaLanes: ['S004'],
     })
-    expect(registerFinalArtifact).toHaveBeenCalledOnce()
+    expect(registerFinalDelivery).toHaveBeenCalledOnce()
+    expect(registerFinalDelivery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attemptId: ATTEMPT_ID,
+        degradedManifest: expect.any(Object),
+        soundEffectsManifest: expect.any(Object),
+      })
+    )
     // 清单字节含与成片一致的 finalContentHash。
     const manifestPut = puts.find((entry) => entry.key.endsWith('.degraded.json'))
     const manifest = JSON.parse(manifestPut!.bytes.toString('utf-8')) as {
@@ -200,14 +211,13 @@ describe('exportDegradedProject', () => {
     const storage = createStorage()
     vi.mocked(storage.readLocalFile).mockResolvedValue(Buffer.from('final-mp4-bytes'))
 
-    const result = await exportDegradedProject('p1', {
+    const result = await exportDegradedProject('p1', ATTEMPT_ID, {
       repository: {
         getExportPlan,
-        registerFinalArtifact: vi.fn(async () => 'final'),
-        registerDegradedManifest: vi.fn(async () => 'manifest'),
+        registerFinalDelivery: vi.fn(async () => finalDelivery('final')),
       },
       storage,
-      concat: vi.fn(async () => 'ok') as never,
+      concat: vi.fn(async () => successfulConcat('/tmp/final.mp4')),
     })
 
     expect(result).toMatchObject({
@@ -223,11 +233,10 @@ describe('exportDegradedProject', () => {
     )
     const concat = vi.fn()
 
-    const result = await exportDegradedProject('p1', {
+    const result = await exportDegradedProject('p1', ATTEMPT_ID, {
       repository: {
         getExportPlan,
-        registerFinalArtifact: vi.fn(async () => 'x'),
-        registerDegradedManifest: vi.fn(async () => 'y'),
+        registerFinalDelivery: vi.fn(async () => finalDelivery('x')),
       },
       storage: createStorage(),
       concat: concat as never,
@@ -235,6 +244,38 @@ describe('exportDegradedProject', () => {
 
     expect(result.ok).toBe(false)
     expect(concat).not.toHaveBeenCalled()
+  })
+
+  it('removes the stored MP4 when degraded-manifest storage fails', async () => {
+    const assembled = plan({
+      mediaAssemblyPlan: assemblyPlan(),
+      placeholderLaneKeys: [],
+      waivedQaLanes: ['S004'],
+    })
+    const getExportPlan = vi
+      .fn()
+      .mockResolvedValueOnce(assembled)
+      .mockResolvedValueOnce(assembled)
+    const storage = createStorage()
+    vi.mocked(storage.readLocalFile).mockResolvedValue(
+      Buffer.from('final-mp4-bytes')
+    )
+    vi.mocked(storage.put)
+      .mockResolvedValueOnce('exports/p1/final.mp4')
+      .mockRejectedValueOnce(new Error('manifest storage failed'))
+
+    await expect(
+      exportDegradedProject('p1', ATTEMPT_ID, {
+        repository: {
+          getExportPlan,
+          registerFinalDelivery: vi.fn(async () => finalDelivery('final')),
+        },
+        storage,
+        concat: vi.fn(async () => successfulConcat('/tmp/final.mp4')),
+      })
+    ).rejects.toThrow('manifest storage failed')
+
+    expect(storage.delete).toHaveBeenCalledWith('exports/p1/final.mp4')
   })
 })
 
@@ -259,6 +300,30 @@ function assemblyPlan(): MediaAssemblyPlan {
     targetResolution: RESOLUTION,
     musicKey: null,
     subtitles: 'burn-in',
+    soundEffects: 'off',
+  }
+}
+
+function successfulConcat(outputPath: string): ConcatExportResult {
+  return {
+    outputPath,
+    soundEffects: {
+      mode: 'off',
+      status: 'omitted-off',
+      generatorVersion: 'procedural-sfx/1.0.0',
+      cueCount: 0,
+      timingHash: null,
+      cuePlanHash: null,
+      waveformHashes: [],
+    },
+  }
+}
+
+function finalDelivery(finalArtifactId: string) {
+  return {
+    finalArtifactId,
+    soundEffectsManifestArtifactId: 'artifact-sfx',
+    degradedManifestArtifactId: 'artifact-degraded',
   }
 }
 

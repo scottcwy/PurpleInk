@@ -3,7 +3,6 @@ import path from 'node:path'
 import { writeFile } from 'node:fs/promises'
 import {
   PROCEDURAL_SFX_GENERATOR_VERSION,
-  buildBoundaryCuePlan,
   synthesizeProceduralWav,
   type ProceduralSfxMode,
   type ProceduralSfxStatus,
@@ -14,6 +13,7 @@ import {
   type SoundEffectInput,
 } from './media-ffmpeg-args'
 import type { MediaAssemblyPlan } from './media-assembly'
+import { resolveProceduralSfxPlan } from './procedural-sfx-manifest'
 
 export interface ProceduralSfxMixResult {
   mode: ProceduralSfxMode
@@ -67,29 +67,25 @@ async function materializeProceduralSfxUnchecked(
   plan: MediaAssemblyPlan,
   workDirectory: string
 ): Promise<PreparedProceduralSfx> {
-  const cuePlan = buildBoundaryCuePlan({
-    fps: plan.fps,
-    totalFrames: plan.totalFrames,
-    boundaries: shotBoundaries(plan),
-  })
-  if (cuePlan.cues.length === 0) {
+  const resolvedPlan = resolveProceduralSfxPlan(plan)
+  if (resolvedPlan.cues.length === 0) {
     return {
       inputs: [],
       result: {
         ...baseResult('procedural'),
         status: 'omitted-no-cues',
-        timingHash: cuePlan.timingHash,
-        cuePlanHash: cuePlan.cuePlanHash,
+        timingHash: resolvedPlan.facts.timingHash,
+        cuePlanHash: resolvedPlan.facts.cuePlanHash,
       },
     }
   }
 
   const inputs: SoundEffectInput[] = []
   const waveformHashes: string[] = []
-  for (const [index, cue] of cuePlan.cues.entries()) {
+  for (const [index, cue] of resolvedPlan.cues.entries()) {
     const bytes = synthesizeProceduralWav({
       preset: cue.preset,
-      seed: `${cuePlan.cuePlanHash}:${index}:${cue.preset}`,
+      seed: `${resolvedPlan.facts.cuePlanHash}:${index}:${cue.preset}`,
     })
     const file = path.join(
       workDirectory,
@@ -112,8 +108,8 @@ async function materializeProceduralSfxUnchecked(
       status: 'applied',
       generatorVersion: PROCEDURAL_SFX_GENERATOR_VERSION,
       cueCount: inputs.length,
-      timingHash: cuePlan.timingHash,
-      cuePlanHash: cuePlan.cuePlanHash,
+      timingHash: resolvedPlan.facts.timingHash,
+      cuePlanHash: resolvedPlan.facts.cuePlanHash,
       waveformHashes,
     },
   }
@@ -157,15 +153,6 @@ async function runSfxAssembly(input: {
   } catch (cause) {
     throw new ProceduralSfxMixError('程序化音效混音失败', { cause })
   }
-}
-
-function shotBoundaries(plan: MediaAssemblyPlan): number[] {
-  let frame = 0
-  return plan.shots.map((shot) => {
-    const boundary = frame
-    frame += shot.durationInFrames
-    return boundary
-  })
 }
 
 function baseResult(mode: ProceduralSfxMode): ProceduralSfxMixResult {

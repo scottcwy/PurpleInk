@@ -2,6 +2,7 @@ import 'server-only'
 import { and, desc, eq } from 'drizzle-orm'
 import {
   commitArtifactRecord,
+  commitArtifactRecords,
   commitDerivedArtifact,
   resolveCurrentAttemptId,
   resolveDerivedSourceAttemptId,
@@ -21,6 +22,7 @@ import type {
 
 export interface FinalArtifactInput {
   projectId: string
+  attemptId: string
   outputKey: string
   contentHash: string
   sizeBytes: number
@@ -31,13 +33,34 @@ export interface FinalArtifactInput {
 /** 降级导出的占位/未验收清单（JSON 字节）：与 final-mp4 同一 project attempt 提交。 */
 export interface DegradedManifestInput {
   projectId: string
+  attemptId: string
   storageKey: string
   contentHash: string
   sizeBytes: number
 }
 
+export interface FinalDeliveryInput {
+  projectId: string
+  attemptId: string
+  outputKey: string
+  finalContentHash: string
+  finalSizeBytes: number
+  subtitles: SubtitleDeliveryMode
+  soundEffectsManifest: {
+    storageKey: string
+    contentHash: string
+    sizeBytes: number
+  }
+  degradedManifest?: {
+    storageKey: string
+    contentHash: string
+    sizeBytes: number
+  }
+}
+
 export interface FinalArtifactRecord {
   artifactId: string
+  attemptId: string
   path: string
   contentHash: string
   schemaVersion: string
@@ -59,12 +82,6 @@ export interface VisionReportRegistration extends ThumbnailRegistration {
 export class RenderArtifactRepository extends RenderShotRepository {
   async registerFinalArtifact(input: FinalArtifactInput): Promise<string> {
     const database = await this.database()
-    const attemptId = await resolveCurrentAttemptId(database, {
-      workspaceId: currentWorkspaceId(),
-      projectId: input.projectId,
-      aggregateType: 'project',
-      aggregateId: input.projectId,
-    })
     const committed = await commitArtifactRecord(database, {
       workspaceId: currentWorkspaceId(),
       projectId: input.projectId,
@@ -75,9 +92,60 @@ export class RenderArtifactRepository extends RenderShotRepository {
       storageKey: input.outputKey,
       sizeBytes: input.sizeBytes,
       contentHash: input.contentHash,
-      attemptId,
+      attemptId: input.attemptId,
     })
     return committed.artifactId
+  }
+
+  async registerFinalDelivery(
+    input: FinalDeliveryInput
+  ): Promise<{
+    finalArtifactId: string
+    soundEffectsManifestArtifactId: string
+    degradedManifestArtifactId: string | null
+  }> {
+    const workspaceId = currentWorkspaceId()
+    const shared = {
+      workspaceId,
+      projectId: input.projectId,
+      aggregateType: 'project' as const,
+      aggregateId: input.projectId,
+      attemptId: input.attemptId,
+    }
+    const committed = await commitArtifactRecords(await this.database(), [
+      {
+        ...shared,
+        kind: 'final-mp4',
+        schemaVersion: finalVideoSchemaVersion(input.subtitles),
+        storageKey: input.outputKey,
+        sizeBytes: input.finalSizeBytes,
+        contentHash: input.finalContentHash,
+      },
+      {
+        ...shared,
+        kind: 'procedural-sfx-manifest',
+        schemaVersion: 'cvc.procedural-sfx-manifest/v1',
+        ...input.soundEffectsManifest,
+      },
+      ...(input.degradedManifest
+        ? [
+            {
+              ...shared,
+              kind: 'final-mp4-degraded-manifest',
+              schemaVersion: 'cvc.final-degraded-manifest/v3',
+              ...input.degradedManifest,
+            },
+          ]
+        : []),
+    ])
+    const final = committed[0]
+    const soundEffects = committed[1]
+    if (!final || !soundEffects) throw new Error('终片 Artifact 批量提交不完整')
+    return {
+      finalArtifactId: final.artifactId,
+      soundEffectsManifestArtifactId: soundEffects.artifactId,
+      degradedManifestArtifactId: committed[2]?.artifactId ?? null,
+    }
   }
 
   async findLatestFinalArtifact(
@@ -87,6 +155,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
     const [row] = await database
       .select({
         id: artifacts.id,
+        attemptId: artifacts.attemptId,
         storageKey: artifacts.storageKey,
         contentHash: artifacts.contentHash,
         schemaVersion: artifacts.schemaVersion,
@@ -107,6 +176,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
     return row
       ? {
           artifactId: row.id,
+          attemptId: row.attemptId,
           path: row.storageKey,
           contentHash: row.contentHash,
           schemaVersion: row.schemaVersion,
@@ -123,12 +193,6 @@ export class RenderArtifactRepository extends RenderShotRepository {
     input: DegradedManifestInput
   ): Promise<string> {
     const database = await this.database()
-    const attemptId = await resolveCurrentAttemptId(database, {
-      workspaceId: currentWorkspaceId(),
-      projectId: input.projectId,
-      aggregateType: 'project',
-      aggregateId: input.projectId,
-    })
     const committed = await commitArtifactRecord(database, {
       workspaceId: currentWorkspaceId(),
       projectId: input.projectId,
@@ -139,7 +203,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
       storageKey: input.storageKey,
       sizeBytes: input.sizeBytes,
       contentHash: input.contentHash,
-      attemptId,
+      attemptId: input.attemptId,
     })
     return committed.artifactId
   }

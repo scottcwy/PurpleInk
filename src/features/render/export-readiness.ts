@@ -1,5 +1,6 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
+import { PROCEDURAL_SFX_GENERATOR_VERSION } from '@purpleink/procedural-sfx'
 import type {
   ResolutionPreset,
   SubtitleDeliveryMode,
@@ -15,6 +16,7 @@ import {
   type FinalArtifactRecord,
   type RenderExportPlan,
 } from './repository'
+import { proceduralSfxPlanFingerprintFacts } from './procedural-sfx-manifest'
 
 /**
  * 导出就绪投影与幂等指纹。
@@ -36,6 +38,7 @@ export interface ExportReadinessResult {
   resolutionPreset: ResolutionPreset
   /** 当前导出设置里的字幕交付选择（下次导出会产出什么）。 */
   subtitles: SubtitleDeliveryMode
+  soundEffects: NonNullable<RenderExportPlan['soundEffects']>
   finalArtifactId: string | null
   /** 最新成片的可追溯事实；无成片时为 null。 */
   finalArtifact: {
@@ -101,6 +104,7 @@ export async function getExportReadiness(
     waivedQaLanes: plan.waivedQaLanes,
     resolutionPreset: plan.resolutionPreset,
     subtitles: plan.subtitles,
+    soundEffects: plan.soundEffects ?? 'off',
     finalArtifactId: finalArtifact?.artifactId ?? null,
     finalArtifact: finalArtifact
       ? {
@@ -143,6 +147,15 @@ function exportInputFingerprint(plan: RenderExportPlan): string {
     // 直接返回上一版成片，开关就成了静默失效的假开关。musicKey 同理——它现在
     // 恒为 null（配乐是只留接口的桩），但一旦接上就是同一个坑，先补掉更便宜。
     subtitles: plan.subtitles,
+    soundEffects: plan.mediaAssemblyPlan
+      ? proceduralSfxPlanFingerprintFacts(plan.mediaAssemblyPlan)
+      : {
+          mode: plan.soundEffects ?? 'off',
+          generatorVersion: PROCEDURAL_SFX_GENERATOR_VERSION,
+          cueCount: 0,
+          timingHash: null,
+          cuePlanHash: null,
+        },
     musicKey: plan.musicKey,
     shotQa: Object.entries(plan.shotQa).sort(([left], [right]) =>
       left.localeCompare(right)
@@ -188,11 +201,13 @@ function degradedConfirmationFingerprint(input: {
     waivedQaLanes: [...input.plan.waivedQaLanes].sort(),
     resolutionPreset: input.plan.resolutionPreset,
     subtitles: input.plan.subtitles,
+    soundEffects: input.plan.soundEffects ?? 'off',
     shotQa,
     blockingIssues,
   })
   return createHash('sha256').update(canonical).digest('hex')
 }
+
 
 function finalDelivery(
   artifact: FinalArtifactRecord | null

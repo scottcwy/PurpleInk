@@ -289,6 +289,7 @@ describe('RenderRepository Postgres', () => {
       // 对已存在的成片说谎。
       const artifactId = await new RenderRepository(database.db).registerFinalArtifact({
         projectId: fixture.projectId,
+        attemptId: fixture.projectAttemptId,
         outputKey: `exports/final-${subtitles}.mp4`,
         contentHash: (subtitles === 'burn-in' ? '9' : '8').repeat(64),
         sizeBytes: 123,
@@ -307,6 +308,65 @@ describe('RenderRepository Postgres', () => {
       expect(row?.schemaVersion).toBe(expectedSchemaVersion)
     }
   )
+
+  it('atomically binds final MP4 and procedural SFX manifest to the supplied attempt', async () => {
+    const repository = new RenderRepository(database.db)
+    const finalContentHash = '6'.repeat(64)
+    const manifestContentHash = '7'.repeat(64)
+
+    const registered = await repository.registerFinalDelivery({
+      projectId: fixture.projectId,
+      attemptId: fixture.projectAttemptId,
+      outputKey: `exports/${fixture.projectId}/final-${finalContentHash}.mp4`,
+      finalContentHash,
+      finalSizeBytes: 123,
+      subtitles: 'off',
+      soundEffectsManifest: {
+        storageKey:
+          `exports/${fixture.projectId}/procedural-sfx/` +
+          `${fixture.projectAttemptId}-${finalContentHash}.json`,
+        contentHash: manifestContentHash,
+        sizeBytes: 456,
+      },
+    })
+    const rows = await database.db
+      .select({
+        id: artifacts.id,
+        kind: artifacts.kind,
+        attemptId: artifacts.attemptId,
+        contentHash: artifacts.contentHash,
+      })
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.workspaceId, TEST_WORKSPACE_ID),
+          eq(artifacts.projectId, fixture.projectId),
+          eq(artifacts.aggregateType, 'project')
+        )
+      )
+
+    expect(registered).toEqual({
+      finalArtifactId: expect.any(String),
+      soundEffectsManifestArtifactId: expect.any(String),
+      degradedManifestArtifactId: null,
+    })
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: registered.finalArtifactId,
+          kind: 'final-mp4',
+          attemptId: fixture.projectAttemptId,
+          contentHash: finalContentHash,
+        }),
+        expect.objectContaining({
+          id: registered.soundEffectsManifestArtifactId,
+          kind: 'procedural-sfx-manifest',
+          attemptId: fixture.projectAttemptId,
+          contentHash: manifestContentHash,
+        }),
+      ])
+    )
+  })
 
   it('commits Vision report and node projection in one transaction', async () => {
     const repository = new RenderRepository(database.db)

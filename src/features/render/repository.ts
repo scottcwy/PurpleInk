@@ -39,7 +39,6 @@ import {
 import type { ShotQaCheckData, ShotQaVisionData } from './types'
 
 export type { FinalArtifactInput, FinalArtifactRecord }
-
 export interface ExportShot {
   nodeId: string
   laneKey: string
@@ -54,6 +53,7 @@ export interface RenderExportPlan {
   resolutionPreset: ResolutionPreset
   /** 本次交付的字幕形态，来自项目导出设置。 */
   subtitles: SubtitleDeliveryMode
+  soundEffects?: import('@purpleink/procedural-sfx').ProceduralSfxMode
   shotQa: Record<string, boolean | null>
   /** 人工豁免、未经验收的分镜；不等于 QA 通过。 */
   waivedQaLanes: string[]
@@ -97,7 +97,6 @@ export class RenderRepository extends RenderArtifactRepository {
   ) {
     super(suppliedDb)
   }
-
   async getExportPlan(
     projectId: string,
     options: ExportPlanOptions = {}
@@ -203,6 +202,7 @@ export class RenderRepository extends RenderArtifactRepository {
       targetResolution: resolutionForPreset(settings.resolutionPreset),
       musicKey: await this.latestMusicKey(projectId),
       subtitles: settings.subtitles,
+      soundEffects: settings.soundEffects,
       ...(options.degraded ? { degraded: true } : {}),
       ...(options.placeholderVideos
         ? { placeholderVideos: options.placeholderVideos }
@@ -218,6 +218,7 @@ export class RenderRepository extends RenderArtifactRepository {
       targetResolution: resolutionForPreset(settings.resolutionPreset),
       resolutionPreset: settings.resolutionPreset,
       subtitles: settings.subtitles,
+      soundEffects: settings.soundEffects,
       shotQa,
       waivedQaLanes,
       mediaAssemblyPlan: media.plan,
@@ -250,7 +251,8 @@ export class RenderRepository extends RenderArtifactRepository {
           eq(artifacts.projectId, projectId),
           eq(artifacts.aggregateType, 'project'),
           eq(artifacts.aggregateId, projectId),
-          eq(artifacts.kind, 'final-mp4-degraded-manifest')
+          eq(artifacts.kind, 'final-mp4-degraded-manifest'),
+          eq(artifacts.attemptId, final.attemptId)
         )
       )
       .orderBy(desc(artifacts.version), desc(artifacts.createdAt))
@@ -282,7 +284,6 @@ export class RenderRepository extends RenderArtifactRepository {
     }
     return null
   }
-
   async getShotQaTargets(projectId: string): Promise<ShotQaTarget[]> {
     const database = await this.database()
     const rows = await database

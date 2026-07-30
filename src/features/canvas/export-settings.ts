@@ -1,4 +1,8 @@
 import { z } from 'zod'
+import {
+  PROCEDURAL_SFX_MODES,
+  type ProceduralSfxMode,
+} from '@purpleink/procedural-sfx'
 
 /**
  * 导出分辨率预设：全部保持 16:9 横屏比例（与 FABRICATE 母版画幅同比例）。
@@ -31,6 +35,7 @@ export type SubtitleDeliveryMode = (typeof SUBTITLE_DELIVERY_MODES)[number]
 export interface ExportSettings {
   resolutionPreset: ResolutionPreset
   subtitles: SubtitleDeliveryMode
+  soundEffects: ProceduralSfxMode
 }
 
 /** 母版画幅预设：与 features/director/stage-result.ts 的 FABRICATE 画幅一致，不可经导出设置更改。 */
@@ -44,6 +49,7 @@ export const MASTER_ASPECT_RATIO = MASTER_WIDTH / MASTER_HEIGHT
 export const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   resolutionPreset: MASTER_RESOLUTION_PRESET,
   subtitles: 'burn-in',
+  soundEffects: 'off',
 }
 
 const RESOLUTION_PRESET_KEYS = Object.keys(EXPORT_RESOLUTION_PRESETS) as [
@@ -63,6 +69,7 @@ export const exportSettingsSchema = z
   .object({
     resolutionPreset: z.enum(RESOLUTION_PRESET_KEYS),
     subtitles: z.enum(SUBTITLE_DELIVERY_MODES).default('burn-in'),
+    soundEffects: z.enum(PROCEDURAL_SFX_MODES).default('off'),
   })
   .strict()
 
@@ -76,6 +83,7 @@ export const exportSettingsPatchSchema = z
   .object({
     resolutionPreset: z.enum(RESOLUTION_PRESET_KEYS).optional(),
     subtitles: z.enum(SUBTITLE_DELIVERY_MODES).optional(),
+    soundEffects: z.enum(PROCEDURAL_SFX_MODES).optional(),
   })
   .strict()
   .refine((input) => Object.keys(input).length > 0, {

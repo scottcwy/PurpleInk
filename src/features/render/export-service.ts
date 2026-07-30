@@ -8,9 +8,10 @@ import { buildSubtitleAss } from './export-subtitles'
 import { runShotQaChecks } from './qa-check'
 import {
   RenderRepository,
-  type FinalArtifactInput,
   type RenderExportPlan,
 } from './repository'
+import type { FinalDeliveryInput } from './render-artifact-repository'
+import { storeProceduralSfxManifest } from './procedural-sfx-manifest'
 
 export type ExportProjectResult =
   | {
@@ -22,7 +23,13 @@ export type ExportProjectResult =
 
 interface ExportRepository {
   getExportPlan(projectId: string): Promise<RenderExportPlan>
-  registerFinalArtifact(input: FinalArtifactInput): Promise<string>
+  registerFinalDelivery(
+    input: FinalDeliveryInput
+  ): Promise<{
+    finalArtifactId: string
+    soundEffectsManifestArtifactId: string
+    degradedManifestArtifactId: string | null
+  }>
 }
 
 interface ExportDependencies {
@@ -33,6 +40,7 @@ interface ExportDependencies {
 
 export async function exportProject(
   projectId: string,
+  attemptId: string,
   dependencies: ExportDependencies = {}
 ): Promise<ExportProjectResult> {
   if (!dependencies.repository) {
@@ -65,22 +73,24 @@ export async function exportProject(
   )
   try {
     const temporaryOutput = path.join(workDirectory, 'final.mp4')
-    await exportPhase('concat', () => concat(
-      assembly,
-      {
-        videoPaths: assembly.shots.map((shot) =>
-          storage.localPath(shot.video.storageKey)
-        ),
-        narrationPaths: assembly.shots.map((shot) =>
-          storage.localPath(shot.narration.artifact.storageKey)
-        ),
-        musicPath: assembly.musicKey
-          ? storage.localPath(assembly.musicKey)
-          : null,
-      },
-      subtitleAss,
-      temporaryOutput
-    ))
+    const concatResult = await exportPhase('concat', () =>
+      concat(
+        assembly,
+        {
+          videoPaths: assembly.shots.map((shot) =>
+            storage.localPath(shot.video.storageKey)
+          ),
+          narrationPaths: assembly.shots.map((shot) =>
+            storage.localPath(shot.narration.artifact.storageKey)
+          ),
+          musicPath: assembly.musicKey
+            ? storage.localPath(assembly.musicKey)
+            : null,
+        },
+        subtitleAss,
+        temporaryOutput
+      )
+    )
     const bytes = await exportPhase('read-output', () =>
       storage.readLocalFile(temporaryOutput)
     )
@@ -91,19 +101,41 @@ export async function exportProject(
         bytes
       )
     )
+    let soundEffectsManifest: Awaited<
+      ReturnType<typeof storeProceduralSfxManifest>
+    > | null = null
     try {
-      const artifactId = await exportPhase('register-artifact', () =>
-        repository.registerFinalArtifact({
+      const storedManifest = await exportPhase('store-sfx-manifest', () =>
+        storeProceduralSfxManifest(storage, {
           projectId,
-          outputKey,
-          contentHash,
-          sizeBytes: bytes.byteLength,
-          subtitles: assembly.subtitles,
+          attemptId,
+          finalContentHash: contentHash,
+          soundEffects: concatResult.soundEffects,
         })
       )
-      return { ok: true, artifactId, outputKey, contentHash }
+      soundEffectsManifest = storedManifest
+      const registered = await exportPhase('register-artifacts', () =>
+        repository.registerFinalDelivery({
+          projectId,
+          attemptId,
+          outputKey,
+          finalContentHash: contentHash,
+          finalSizeBytes: bytes.byteLength,
+          subtitles: assembly.subtitles,
+          soundEffectsManifest: storedManifest,
+        })
+      )
+      return {
+        ok: true,
+        artifactId: registered.finalArtifactId,
+        outputKey,
+        contentHash,
+      }
     } catch (error) {
       await storage.delete(outputKey)
+      if (soundEffectsManifest) {
+        await storage.delete(soundEffectsManifest.storageKey)
+      }
       throw error
     }
   } finally {

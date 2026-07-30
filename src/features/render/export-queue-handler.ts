@@ -89,13 +89,13 @@ export function registerExportProjectHandler(
     }
     // 降级导出只由用户显式触发（payload.degraded）；自动推进不传该标志。
     const result = payload.degraded
-      ? await dependencies.exportDegradedProject(payload.projectId, {
+      ? await dependencies.exportDegradedProject(payload.projectId, job.id, {
           repository: new RenderRepository(),
           ...(payload.confirmationFingerprint
             ? { confirmationFingerprint: payload.confirmationFingerprint }
             : {}),
         })
-      : await dependencies.exportProject(payload.projectId)
+      : await dependencies.exportProject(payload.projectId, job.id)
     job.signal?.throwIfAborted()
     if (!result.ok) {
       const mediaIssue = result.blockingIssues?.[0]

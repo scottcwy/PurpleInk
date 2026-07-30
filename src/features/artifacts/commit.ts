@@ -134,6 +134,30 @@ export async function commitArtifactRecord<T = undefined>(
 }
 
 /**
+ * 同一阶段一次产生多个互相引用的产物时使用。所有记录共享一个数据库事务；
+ * 任一 attempt 栅栏或版本登记失败，整批回滚，避免只留下半套交付合同。
+ */
+export async function commitArtifactRecords(
+  database: Db,
+  inputs: readonly CommitArtifactInput[]
+): Promise<Array<{ artifactId: string; version: number }>> {
+  if (inputs.length === 0) throw new Error('批量 Artifact 提交不能为空')
+  return withTransaction(database, async (transaction) => {
+    const committed: Array<{ artifactId: string; version: number }> = []
+    for (const input of inputs) {
+      await lockAggregate(transaction, input)
+      await assertAttemptFence(transaction, input)
+      const result = await insertArtifactVersion(transaction, input)
+      committed.push({
+        artifactId: result.artifactId,
+        version: result.version,
+      })
+    }
+    return committed
+  })
+}
+
+/**
  * 提交派生产物。与 `commitArtifactRecord` 的唯一差别是不做 running attempt 门禁：
  * `attemptId` 必须是本项目内真实存在的 attempt（血缘可追溯），但不要求它仍在运行。
  *

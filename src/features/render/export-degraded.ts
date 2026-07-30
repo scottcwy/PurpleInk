@@ -11,9 +11,12 @@ import {
 } from './placeholder-clip'
 import type { ExportPlanOptions, RenderExportPlan } from './repository'
 import type {
-  DegradedManifestInput,
-  FinalArtifactInput,
+  FinalDeliveryInput,
 } from './render-artifact-repository'
+import {
+  storeProceduralSfxManifest,
+} from './procedural-sfx-manifest'
+import type { ProceduralSfxMixResult } from './procedural-sfx-mix'
 
 /**
  * 降级导出编排：把缺渲染/旁白的失败分镜用真实占位片段顶替后出片，让 1/N 失败
@@ -46,8 +49,13 @@ interface DegradedPlanRepository {
 }
 
 interface DegradedExportRepository extends DegradedPlanRepository {
-  registerFinalArtifact(input: FinalArtifactInput): Promise<string>
-  registerDegradedManifest(input: DegradedManifestInput): Promise<string>
+  registerFinalDelivery(
+    input: FinalDeliveryInput
+  ): Promise<{
+    finalArtifactId: string
+    soundEffectsManifestArtifactId: string
+    degradedManifestArtifactId: string | null
+  }>
 }
 
 export interface DegradedExportDependencies {
@@ -143,6 +151,7 @@ export async function resolveDegradedPlan(
 /** 生成占位并拼接出片；提交 final-mp4 后登记降级占位清单。 */
 export async function exportDegradedProject(
   projectId: string,
+  attemptId: string,
   dependencies: DegradedExportDependencies
 ): Promise<DegradedExportResult> {
   const storage = dependencies.storage ?? defaultStorage
@@ -162,7 +171,7 @@ export async function exportDegradedProject(
   const workDirectory = await storage.tempDir('cvc-export-')
   try {
     const temporaryOutput = path.join(workDirectory, 'final.mp4')
-    await concat(
+    const concatResult = await concat(
       assembly,
       {
         videoPaths: assembly.shots.map((shot) =>
@@ -184,6 +193,7 @@ export async function exportDegradedProject(
     )
     return commitDegraded(dependencies.repository, storage, {
       projectId,
+      attemptId,
       outputKey,
       contentHash,
       sizeBytes: bytes.byteLength,
@@ -191,6 +201,7 @@ export async function exportDegradedProject(
       placeholderLanes: degraded.placeholderLanes,
       waivedQaLanes: degraded.waivedQaLanes,
       confirmationFingerprint: dependencies.confirmationFingerprint,
+      soundEffects: concatResult.soundEffects,
     })
   } finally {
     await storage.removeTempDir(workDirectory)
@@ -201,7 +212,14 @@ export async function exportDegradedProject(
 async function commitDegraded(
   repository: DegradedExportRepository,
   storage: StorageAdapter,
-  input: FinalArtifactInput & {
+  input: {
+    projectId: string
+    attemptId: string
+    outputKey: string
+    contentHash: string
+    sizeBytes: number
+    subtitles: MediaAssemblyPlan['subtitles']
+    soundEffects: ProceduralSfxMixResult
     placeholderLanes: string[]
     waivedQaLanes: string[]
     confirmationFingerprint?: string
@@ -219,27 +237,38 @@ async function commitDegraded(
     'utf-8'
   )
   const manifestHash = createHash('sha256').update(manifestBytes).digest('hex')
-  const manifestKey = await storage.put(
-    `exports/${input.projectId}/final-${input.contentHash}.degraded.json`,
-    manifestBytes
-  )
+  let manifestKey: string | null = null
+  let soundEffectsManifest: Awaited<
+    ReturnType<typeof storeProceduralSfxManifest>
+  > | null = null
   try {
-    const artifactId = await repository.registerFinalArtifact({
+    manifestKey = await storage.put(
+      `exports/${input.projectId}/final-${input.contentHash}.degraded.json`,
+      manifestBytes
+    )
+    soundEffectsManifest = await storeProceduralSfxManifest(storage, {
       projectId: input.projectId,
-      outputKey: input.outputKey,
-      contentHash: input.contentHash,
-      sizeBytes: input.sizeBytes,
-      subtitles: input.subtitles,
+      attemptId: input.attemptId,
+      finalContentHash: input.contentHash,
+      soundEffects: input.soundEffects,
     })
-    await repository.registerDegradedManifest({
+    const registered = await repository.registerFinalDelivery({
       projectId: input.projectId,
-      storageKey: manifestKey,
-      contentHash: manifestHash,
-      sizeBytes: manifestBytes.byteLength,
+      attemptId: input.attemptId,
+      outputKey: input.outputKey,
+      finalContentHash: input.contentHash,
+      finalSizeBytes: input.sizeBytes,
+      subtitles: input.subtitles,
+      soundEffectsManifest,
+      degradedManifest: {
+        storageKey: manifestKey,
+        contentHash: manifestHash,
+        sizeBytes: manifestBytes.byteLength,
+      },
     })
     return {
       ok: true,
-      artifactId,
+      artifactId: registered.finalArtifactId,
       outputKey: input.outputKey,
       contentHash: input.contentHash,
       placeholderLanes: input.placeholderLanes,
@@ -247,7 +276,10 @@ async function commitDegraded(
     }
   } catch (error) {
     await storage.delete(input.outputKey)
-    await storage.delete(manifestKey)
+    if (manifestKey) await storage.delete(manifestKey)
+    if (soundEffectsManifest) {
+      await storage.delete(soundEffectsManifest.storageKey)
+    }
     throw error
   }
 }

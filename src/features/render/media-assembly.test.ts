@@ -105,6 +105,7 @@ describe('assembleTrustedMediaPlan', () => {
       targetResolution: { width: 1920, height: 1080 },
       musicKey: null,
       subtitles: 'burn-in',
+      soundEffects: 'off',
       shots: [
         {
           laneKey: 'S001',

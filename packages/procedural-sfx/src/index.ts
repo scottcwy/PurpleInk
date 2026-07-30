@@ -8,7 +8,8 @@ export const PROCEDURAL_SFX_PRESETS = [
 ] as const;
 
 export type ProceduralSfxPreset = (typeof PROCEDURAL_SFX_PRESETS)[number];
-export type ProceduralSfxMode = "off" | "procedural";
+export const PROCEDURAL_SFX_MODES = ["off", "procedural"] as const;
+export type ProceduralSfxMode = (typeof PROCEDURAL_SFX_MODES)[number];
 
 export interface ProceduralSfxCue {
   preset: ProceduralSfxPreset;

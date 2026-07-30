@@ -101,6 +101,8 @@ export interface TrustedMediaInput {
   musicKey: string | null
   /** 本次交付的字幕形态；`off` 时不解析也不校验字幕产物。 */
   subtitles: SubtitleDeliveryMode
+  /** 本次成片是否混入确定性代码音效。 */
+  soundEffects?: ProceduralSfxMode
   /** 降级导出：允许缺渲染/旁白/字幕的 lane 用占位顶替，而不阻塞出片。 */
   degraded?: boolean
   /** laneKey -> 占位黑场视频引用（由 export-degraded 预先生成）。 */
@@ -163,6 +165,7 @@ export function assembleTrustedMediaPlan(input: TrustedMediaInput): AssembleResu
           targetResolution: input.targetResolution,
           musicKey: input.musicKey,
           subtitles: input.subtitles,
+          soundEffects: input.soundEffects ?? 'off',
         }
       : null,
     blockingIssues: issues,

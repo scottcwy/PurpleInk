@@ -34,6 +34,7 @@ describe('export-settings presets', () => {
     expect(DEFAULT_EXPORT_SETTINGS).toEqual({
       resolutionPreset: '1920x1080',
       subtitles: 'burn-in',
+      soundEffects: 'off',
     })
   })
 
@@ -47,6 +48,7 @@ describe('resolveExportSettings', () => {
     expect(resolveExportSettings({ resolutionPreset: '1280x720' })).toEqual({
       resolutionPreset: '1280x720',
       subtitles: 'burn-in',
+      soundEffects: 'off',
     })
   })
 
@@ -56,13 +58,32 @@ describe('resolveExportSettings', () => {
     expect(resolveExportSettings({ resolutionPreset: '960x540' })).toEqual({
       resolutionPreset: '960x540',
       subtitles: 'burn-in',
+      soundEffects: 'off',
     })
   })
 
   it('reads a persisted subtitles choice back', () => {
     expect(
       resolveExportSettings({ resolutionPreset: '1280x720', subtitles: 'off' })
-    ).toEqual({ resolutionPreset: '1280x720', subtitles: 'off' })
+    ).toEqual({
+      resolutionPreset: '1280x720',
+      subtitles: 'off',
+      soundEffects: 'off',
+    })
+  })
+
+  it('reads a persisted procedural sound-effects choice back', () => {
+    expect(
+      resolveExportSettings({
+        resolutionPreset: '1280x720',
+        subtitles: 'off',
+        soundEffects: 'procedural',
+      })
+    ).toEqual({
+      resolutionPreset: '1280x720',
+      subtitles: 'off',
+      soundEffects: 'procedural',
+    })
   })
 
   it('falls back to default for null / non-object / invalid preset / extra keys', () => {
@@ -116,6 +137,9 @@ describe('exportSettingsPatchSchema', () => {
     expect(
       exportSettingsPatchSchema.safeParse({ resolutionPreset: '1280x720' }).success
     ).toBe(true)
+    expect(
+      exportSettingsPatchSchema.safeParse({ soundEffects: 'procedural' }).success
+    ).toBe(true)
   })
 
   it('rejects an empty patch and unknown keys', () => {
@@ -128,14 +152,20 @@ describe('exportSettingsPatchSchema', () => {
 
 describe('mergeExportSettings', () => {
   it('only overwrites the fields present in the patch', () => {
-    const current = { resolutionPreset: '960x540', subtitles: 'off' } as const
+    const current = {
+      resolutionPreset: '960x540',
+      subtitles: 'off',
+      soundEffects: 'procedural',
+    } as const
     expect(mergeExportSettings(current, { resolutionPreset: '1280x720' })).toEqual({
       resolutionPreset: '1280x720',
       subtitles: 'off',
+      soundEffects: 'procedural',
     })
     expect(mergeExportSettings(current, { subtitles: 'burn-in' })).toEqual({
       resolutionPreset: '960x540',
       subtitles: 'burn-in',
+      soundEffects: 'procedural',
     })
   })
 })

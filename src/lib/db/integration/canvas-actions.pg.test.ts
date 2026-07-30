@@ -72,6 +72,7 @@ describe('export settings', () => {
     await expect(getExportSettings(projectId)).resolves.toEqual({
       resolutionPreset: '1920x1080',
       subtitles: 'burn-in',
+      soundEffects: 'off',
     })
   })
 
@@ -80,13 +81,18 @@ describe('export settings', () => {
     await expect(getExportSettings(projectId)).resolves.toEqual({
       resolutionPreset: '1280x720',
       subtitles: 'burn-in',
+      soundEffects: 'off',
     })
     const [row] = await database.db
       .select({ exportSettings: projects.exportSettings })
       .from(projects)
     expect(row?.exportSettings).toEqual({
       schemaVersion: 1,
-      settings: { resolutionPreset: '1280x720', subtitles: 'burn-in' },
+      settings: {
+        resolutionPreset: '1280x720',
+        subtitles: 'burn-in',
+        soundEffects: 'off',
+      },
     })
   })
 
@@ -94,15 +100,18 @@ describe('export settings', () => {
     // 这一列是整体覆盖写入的 jsonb：如果「只改分辨率」按完整对象写回，
     // 用户已选的字幕交付会被顺手抹回默认，反之亦然。
     await updateExportSettings(projectId, { subtitles: 'off' })
+    await updateExportSettings(projectId, { soundEffects: 'procedural' })
     await updateExportSettings(projectId, { resolutionPreset: '960x540' })
     await expect(getExportSettings(projectId)).resolves.toEqual({
       resolutionPreset: '960x540',
       subtitles: 'off',
+      soundEffects: 'procedural',
     })
     await updateExportSettings(projectId, { subtitles: 'burn-in' })
     await expect(getExportSettings(projectId)).resolves.toEqual({
       resolutionPreset: '960x540',
       subtitles: 'burn-in',
+      soundEffects: 'procedural',
     })
   })
 
@@ -117,6 +126,7 @@ describe('export settings', () => {
     await expect(getExportSettings(projectId)).resolves.toEqual({
       resolutionPreset: '1920x1080',
       subtitles: 'burn-in',
+      soundEffects: 'off',
     })
   })
 
@@ -136,7 +146,11 @@ describe('export settings', () => {
     const [row] = await database.db.select().from(projects)
     expect(row?.exportSettings).toEqual({
       schemaVersion: 1,
-      settings: { resolutionPreset: '1920x1080', subtitles: 'burn-in' },
+      settings: {
+        resolutionPreset: '1920x1080',
+        subtitles: 'burn-in',
+        soundEffects: 'off',
+      },
     })
   })
 })

@@ -1,5 +1,6 @@
 import os from 'node:os'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { StorageAdapter } from '@/lib/storage'
@@ -7,11 +8,13 @@ import type { ConcatExportResult } from './concat'
 import type { MediaAssemblyPlan } from './media-assembly'
 import { getExportReadiness } from './export-readiness'
 import { exportProject } from './export-service'
-import type { FinalArtifactInput } from './render-artifact-repository'
+import type { FinalDeliveryInput } from './render-artifact-repository'
+import { parseProceduralSfxManifestForFinal } from './procedural-sfx-manifest'
 
 vi.mock('server-only', () => ({}))
 
 const directories: string[] = []
+const ATTEMPT_ID = '00000000-0000-4000-8000-000000000001'
 
 describe('exportProject', () => {
   afterEach(async () => {
@@ -24,7 +27,7 @@ describe('exportProject', () => {
 
   it('returns all incomplete ids without invoking concat', async () => {
     const concat = vi.fn()
-    const result = await exportProject('project-1', {
+    const result = await exportProject('project-1', ATTEMPT_ID, {
       repository: {
         getExportPlan: vi.fn(async () => ({
           incompleteNodeIds: ['node-2', 'node-1'],
@@ -36,7 +39,7 @@ describe('exportProject', () => {
           shotQa: {},
           ...mediaFields(null),
         })),
-        registerFinalArtifact: vi.fn(async () => 'unused'),
+        registerFinalDelivery: vi.fn(async () => finalDelivery('unused')),
       },
       storage: createStorage(),
       concat,
@@ -58,7 +61,7 @@ describe('exportProject', () => {
         code: 'artifact-invalid' as const,
       },
     ]
-    const result = await exportProject('project-1', {
+    const result = await exportProject('project-1', ATTEMPT_ID, {
       repository: {
         getExportPlan: vi.fn(async () => ({
           incompleteNodeIds: [],
@@ -71,7 +74,7 @@ describe('exportProject', () => {
           ...mediaFields(null),
           blockingIssues,
         })),
-        registerFinalArtifact: vi.fn(async () => 'unused'),
+        registerFinalDelivery: vi.fn(async () => finalDelivery('unused')),
       },
       storage: createStorage(),
       concat,
@@ -100,8 +103,8 @@ describe('exportProject', () => {
     vi.mocked(storage.removeTempDir).mockImplementation((absolutePath) =>
       rm(absolutePath, { recursive: true, force: true })
     )
-    const registerFinalArtifact = vi.fn(
-      async (_input: FinalArtifactInput) => 'artifact-final'
+    const registerFinalDelivery = vi.fn(async (_input: FinalDeliveryInput) =>
+      finalDelivery('artifact-final')
     )
     const concat = vi.fn(async (
       _plan: MediaAssemblyPlan,
@@ -113,7 +116,7 @@ describe('exportProject', () => {
       return successfulConcat(outputPath)
     })
 
-    const result = await exportProject('project-1', {
+    const result = await exportProject('project-1', ATTEMPT_ID, {
       repository: {
         getExportPlan: vi.fn(async () => ({
           incompleteNodeIds: [],
@@ -128,7 +131,7 @@ describe('exportProject', () => {
           shotQa: {},
           ...mediaFields(completeMediaPlan()),
         })),
-        registerFinalArtifact,
+        registerFinalDelivery,
       },
       storage,
       concat,
@@ -146,11 +149,12 @@ describe('exportProject', () => {
       ],
     })
     expect(concat.mock.calls[0]?.[2]).toContain('Dialogue:')
-    expect(registerFinalArtifact.mock.calls[0]?.[0]).toMatchObject({
+    expect(registerFinalDelivery.mock.calls[0]?.[0]).toMatchObject({
       subtitles: 'burn-in',
+      attemptId: ATTEMPT_ID,
     })
-    expect(storage.put).toHaveBeenCalledOnce()
-    expect(registerFinalArtifact).toHaveBeenCalledOnce()
+    expect(storage.put).toHaveBeenCalledTimes(2)
+    expect(registerFinalDelivery).toHaveBeenCalledOnce()
     expect(storage.removeTempDir).toHaveBeenCalledOnce()
   })
 
@@ -168,8 +172,8 @@ describe('exportProject', () => {
     vi.mocked(storage.removeTempDir).mockImplementation((absolutePath) =>
       rm(absolutePath, { recursive: true, force: true })
     )
-    const registerFinalArtifact = vi.fn(
-      async (_input: FinalArtifactInput) => 'artifact-final'
+    const registerFinalDelivery = vi.fn(async (_input: FinalDeliveryInput) =>
+      finalDelivery('artifact-final')
     )
     const concat = vi.fn(async (
       _plan: MediaAssemblyPlan,
@@ -182,7 +186,7 @@ describe('exportProject', () => {
     })
     const plan = completeMediaPlan()
 
-    const result = await exportProject('project-1', {
+    const result = await exportProject('project-1', ATTEMPT_ID, {
       repository: {
         getExportPlan: vi.fn(async () => ({
           incompleteNodeIds: [],
@@ -201,7 +205,7 @@ describe('exportProject', () => {
             shots: plan.shots.map((shot) => ({ ...shot, subtitle: null })),
           }),
         })),
-        registerFinalArtifact,
+        registerFinalDelivery,
       },
       storage,
       concat,
@@ -211,7 +215,7 @@ describe('exportProject', () => {
     // null 而不是空字符串：concat 据此跳过写 .ass、跳过字体校验、去掉 ass 滤镜。
     expect(concat.mock.calls[0]?.[2]).toBeNull()
     // 交付形态跟着写进产物，页面才不会把无字幕成片说成硬字幕烧录。
-    expect(registerFinalArtifact.mock.calls[0]?.[0]).toMatchObject({
+    expect(registerFinalDelivery.mock.calls[0]?.[0]).toMatchObject({
       subtitles: 'off',
     })
   })
@@ -232,7 +236,7 @@ describe('exportProject', () => {
     })
 
     await expect(
-      exportProject('project-1', {
+      exportProject('project-1', ATTEMPT_ID, {
         repository: {
           getExportPlan: vi.fn(async () => ({
             incompleteNodeIds: [],
@@ -244,7 +248,7 @@ describe('exportProject', () => {
             shotQa: {},
             ...mediaFields(completeMediaPlan()),
           })),
-          registerFinalArtifact: vi.fn(async () => 'unused'),
+          registerFinalDelivery: vi.fn(async () => finalDelivery('unused')),
         },
         storage,
         concat,
@@ -273,6 +277,7 @@ describe('getExportReadiness', () => {
       })),
       findLatestFinalArtifact: vi.fn(async () => ({
         artifactId: 'artifact-final',
+        attemptId: ATTEMPT_ID,
         path: 'exports/project-1/final.mp4',
         contentHash: 'hash-final',
         schemaVersion: 'cvc.final-video/v2',
@@ -310,6 +315,7 @@ describe('getExportReadiness', () => {
       })),
       findLatestFinalArtifact: vi.fn(async () => ({
         artifactId: 'artifact-final',
+        attemptId: ATTEMPT_ID,
         path: 'exports/project-1/final.mp4',
         contentHash: 'hash-final',
         schemaVersion: 'cvc.final-video/v3',
@@ -347,6 +353,142 @@ describe('getExportReadiness', () => {
 
     expect(await fingerprintFor('burn-in')).not.toBe(await fingerprintFor('off'))
     expect(await fingerprintFor('off')).toBe(await fingerprintFor('off'))
+  })
+
+  it('stores an attempt-scoped SFX manifest whose bytes and hash match the final MP4', async () => {
+    const tempRoot = await createTempRoot()
+    const storage = createStorage()
+    const puts: Array<{ key: string; bytes: Buffer }> = []
+    vi.mocked(storage.localPath).mockImplementation((key) => path.join(tempRoot, key))
+    vi.mocked(storage.put).mockImplementation(async (key, data) => {
+      puts.push({ key, bytes: Buffer.from(data) })
+      return key
+    })
+    vi.mocked(storage.tempDir).mockImplementation((prefix) =>
+      mkdtemp(path.join(tempRoot, prefix))
+    )
+    vi.mocked(storage.readLocalFile).mockImplementation((absolutePath) =>
+      readFile(absolutePath)
+    )
+    vi.mocked(storage.removeTempDir).mockImplementation((absolutePath) =>
+      rm(absolutePath, { recursive: true, force: true })
+    )
+    const registerFinalDelivery = vi.fn(async (_input: FinalDeliveryInput) => ({
+      finalArtifactId: 'artifact-final',
+      soundEffectsManifestArtifactId: 'artifact-sfx',
+      degradedManifestArtifactId: null,
+    }))
+    const concat = vi.fn(async (
+      _plan: MediaAssemblyPlan,
+      _paths: unknown,
+      _subtitleAss: string | null,
+      outputPath: string
+    ) => {
+      await writeFile(outputPath, Buffer.from('deterministic-final-mp4'))
+      return successfulConcat(outputPath)
+    })
+
+    const result = await exportProject('project-1', ATTEMPT_ID, {
+      repository: {
+        getExportPlan: vi.fn(async () => ({
+          incompleteNodeIds: [],
+          shots: [
+            { nodeId: 'node-1', laneKey: 'S001', outputKey: 'render/S001.mp4' },
+            { nodeId: 'node-2', laneKey: 'S002', outputKey: 'render/S002.mp4' },
+          ],
+          musicKey: null,
+          subtitles: 'off' as const,
+          soundEffects: 'off' as const,
+          targetResolution: { width: 1920, height: 1080 },
+          resolutionPreset: '1920x1080' as const,
+          shotQa: {},
+          ...mediaFields({
+            ...completeMediaPlan(),
+            subtitles: 'off',
+            soundEffects: 'off',
+          }),
+        })),
+        registerFinalDelivery,
+      },
+      storage,
+      concat,
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected successful export')
+    const manifestPut = puts.find((entry) =>
+      entry.key.includes('/procedural-sfx/')
+    )
+    expect(manifestPut).toBeDefined()
+    expect(
+      parseProceduralSfxManifestForFinal(manifestPut!.bytes, {
+        attemptId: ATTEMPT_ID,
+        finalContentHash: result.contentHash,
+      })
+    ).toMatchObject({
+      mode: 'off',
+      status: 'omitted-off',
+    })
+    expect(registerFinalDelivery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'project-1',
+        attemptId: ATTEMPT_ID,
+        finalContentHash: result.contentHash,
+        soundEffectsManifest: expect.objectContaining({
+          storageKey: manifestPut!.key,
+          contentHash: createHash('sha256')
+            .update(manifestPut!.bytes)
+            .digest('hex'),
+          sizeBytes: manifestPut!.bytes.byteLength,
+        }),
+      })
+    )
+  })
+
+  it('changes the idempotency fingerprint for SFX mode and timing facts', async () => {
+    const fingerprintFor = async (
+      soundEffects: 'off' | 'procedural',
+      durationInFrames = 30
+    ) => {
+      const mediaPlan = completeMediaPlan()
+      mediaPlan.soundEffects = soundEffects
+      mediaPlan.shots = mediaPlan.shots.map((shot) => ({
+        ...shot,
+        durationInFrames,
+      }))
+      mediaPlan.totalFrames = durationInFrames * mediaPlan.shots.length
+      return (
+        await getExportReadiness('project-1', {
+          getExportPlan: vi.fn(async () => ({
+            incompleteNodeIds: [],
+            shots: [
+              {
+                nodeId: 'node-1',
+                laneKey: 'S001',
+                outputKey: 'render/S001.mp4',
+              },
+            ],
+            musicKey: null,
+            subtitles: 'off' as const,
+            soundEffects,
+            targetResolution: { width: 1920, height: 1080 },
+            resolutionPreset: '1920x1080' as const,
+            shotQa: { S001: true },
+            ...mediaFields(mediaPlan),
+          })),
+          findLatestFinalArtifact: vi.fn(async () => null),
+          findDegradedExport: vi.fn(async () => null),
+        })
+      ).inputFingerprint
+    }
+
+    const off = await fingerprintFor('off')
+    const procedural = await fingerprintFor('procedural')
+    const retimed = await fingerprintFor('procedural', 45)
+
+    expect(procedural).not.toBe(off)
+    expect(retimed).not.toBe(procedural)
+    expect(await fingerprintFor('procedural')).toBe(procedural)
   })
 
   it('lists a skipped lane as a degraded placeholder candidate instead of a hard block', async () => {
@@ -485,6 +627,14 @@ function successfulConcat(outputPath: string): ConcatExportResult {
       cuePlanHash: null,
       waveformHashes: [],
     },
+  }
+}
+
+function finalDelivery(finalArtifactId: string) {
+  return {
+    finalArtifactId,
+    soundEffectsManifestArtifactId: 'artifact-sfx',
+    degradedManifestArtifactId: null,
   }
 }
 

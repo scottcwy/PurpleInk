@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { and, desc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import type { SubtitleDeliveryMode } from '@/features/canvas/export-settings'
+import type { ProceduralSfxMode } from '@purpleink/procedural-sfx'
 import {
   audioAllocationSchema,
   audioManifestSchema,
@@ -36,6 +37,7 @@ interface LoadInput {
   musicKey: string | null
   /** 本次交付的字幕形态；`off` 时不读也不校验字幕产物。 */
   subtitles: SubtitleDeliveryMode
+  soundEffects?: ProceduralSfxMode
   /** 降级导出：允许缺产物的 lane 用占位顶替。 */
   degraded?: boolean
   placeholderVideos?: ReadonlyMap<string, ArtifactRef>
@@ -175,6 +177,7 @@ export async function loadMediaAssembly(
     targetResolution: input.targetResolution,
     musicKey: input.musicKey,
     subtitles: input.subtitles,
+    soundEffects: input.soundEffects ?? 'off',
     ...(input.degraded ? { degraded: true } : {}),
     ...(input.placeholderVideos
       ? { placeholderVideos: input.placeholderVideos }

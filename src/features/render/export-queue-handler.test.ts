@@ -156,7 +156,7 @@ describe('registerExportProjectHandler', () => {
 
     await handlers.get(EXPORT_PROJECT_KIND)?.(job({ projectId: 'project-1' }))
 
-    expect(exportProject).toHaveBeenCalledWith('project-1')
+    expect(exportProject).toHaveBeenCalledWith('project-1', 'job-1')
     expect(exportDegradedProject).not.toHaveBeenCalled()
   })
 
@@ -211,7 +211,7 @@ describe('registerExportProjectHandler', () => {
       job({ projectId: 'project-1', degraded: true })
     )
 
-    expect(exportDegradedProject).toHaveBeenCalledWith('project-1', {
+    expect(exportDegradedProject).toHaveBeenCalledWith('project-1', 'job-1', {
       repository: expect.anything(),
     })
     expect(exportProject).not.toHaveBeenCalled()
@@ -243,7 +243,7 @@ describe('registerExportProjectHandler', () => {
       })
     )
 
-    expect(exportDegradedProject).toHaveBeenCalledWith('project-1', {
+    expect(exportDegradedProject).toHaveBeenCalledWith('project-1', 'job-1', {
       repository: expect.anything(),
       confirmationFingerprint: 'confirmation-v1',
     })
