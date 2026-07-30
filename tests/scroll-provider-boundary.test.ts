@@ -7,6 +7,8 @@ const MARKETING_LAYOUT = 'src/app/(marketing)/layout.tsx'
 const MARKETING_PROVIDERS = 'src/components/marketing/providers.tsx'
 const LEGACY_MARKETING_MOTION = 'src/lib/marketing-motion.tsx'
 const PRODUCTS_LAYOUT = 'src/app/products/(app)/layout.tsx'
+const GLOBAL_STYLES = 'src/app/globals.css'
+const SECTION_NAV = 'src/components/ui/section-nav.tsx'
 
 describe('滚动 Provider 路由边界', () => {
   it('根布局只挂全局 Provider，不跨层引用营销 Provider', () => {
@@ -46,5 +48,16 @@ describe('滚动 Provider 路由边界', () => {
     const source = readFileSync(PRODUCTS_LAYOUT, 'utf8')
     expect(source).not.toContain('SmoothScroll')
     expect(source).not.toContain('@/components/marketing/providers')
+  })
+
+  it('全局不启用原生 smooth，营销与应用目录各自由单一滚动实现负责', () => {
+    const rootLayout = readFileSync(ROOT_LAYOUT, 'utf8')
+    const globalStyles = readFileSync(GLOBAL_STYLES, 'utf8')
+    const sectionNav = readFileSync(SECTION_NAV, 'utf8')
+
+    expect(rootLayout).not.toContain('data-scroll-behavior="smooth"')
+    expect(globalStyles).not.toMatch(/\bscroll-behavior\s*:/u)
+    expect(sectionNav).toContain('animate(container.scrollTop, to')
+    expect(sectionNav).toContain('container.scrollTop = value')
   })
 })

@@ -84,6 +84,12 @@ npm `gsap`；`server/` 的渲染模板同样使用固定 CDN 版本，不依赖�
 但必须先实测：删掉后设置页 TOC 点击定位是否仍平滑。若变成瞬跳，说明 `animate()`
 路径没覆盖全部入口，改回 A。
 
+**执行结论（2026-07-31）**：采用 **B**。删除全局规则与根节点上已无消费者的
+`data-scroll-behavior="smooth"` 后，营销页仍由 Lenis 产生连续滚动样本；设置页
+`SectionNav` 在不挂载 Lenis 的前提下由 Motion `animate()` 连续更新嵌套容器
+`scrollTop`，完成后 `[data-glow]` 正常进入 `glow-active`。两侧计算得到的原生
+`scroll-behavior` 均为 `auto`，不存在原生平滑与 JS 补间叠加。
+
 ## 4. 执行步骤
 
 1. **先查清 `src/lib/gsap/` 的归属**（§2.1 的 ⚠️）。这决定 `gsap` 能不能删。
@@ -134,8 +140,8 @@ GSAP 的 ScrollTrigger 基于滚动位置区间与 scrub，motion 的 `useScroll
   `output/playwright/motion-06-image-reveal-before.webm`；Motion：
   `output/playwright/motion-06-image-reveal-after.webm`）；
 - [x] `gsap` 已从 `package.json` 移除（渲染侧固定 CDN / seek 合同不依赖该包）；
-- [ ] `scroll-behavior` 已收窄，设置页 TOC 定位实测正常；
+- [x] `scroll-behavior` 已删除，设置页 TOC 定位实测平滑且 glow 正常；
 - [x] 营销页 `reduced-motion` 实测有效，图片首帧与稳定态均为终态且无 hydration
   mismatch；
-- [ ] `motion-interaction.md` §5.4 与 §7.4 已回写；
-- [ ] 两个 Conventional Commit。
+- [x] `motion-interaction.md` §5.4 与 §7.4 已回写；
+- [x] 两个 Conventional Commit。

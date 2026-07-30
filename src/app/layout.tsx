@@ -37,7 +37,7 @@ export default function RootLayout({
   children: ReactNode;
 }>): ReactNode {
   return (
-    <html lang="zh-CN" data-scroll-behavior="smooth" suppressHydrationWarning>
+    <html lang="zh-CN" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{

@@ -212,7 +212,9 @@ top layer 天然位于所有 stacking context 之上，不需要 z-index。
   应用壳内使用即为违规。营销层不得拥有独立的 token 文件或第二套 reduced-motion 机制，
   它只是同一张表的另一档。
 - Lenis 平滑滚动**只在 `(marketing)` 段生效**；应用壳内禁止，
-  它会干扰 `section-nav` 的滚动定位与覆盖层的 scroll lock。
+  它会干扰 `section-nav` 的滚动定位与覆盖层的 scroll lock。全局不设置原生
+  `scroll-behavior: smooth`：营销页由 Lenis 负责，应用壳目录定位由
+  `SectionNav` 的 Motion `animate()` 负责。
 - UI 动画引擎唯一为 `motion`。禁止为单个组件引入第二个引擎（营销页 GSAP 已按此
   收敛，见 §7）。渲染侧为保证逐帧确定性而生成的固定 CDN GSAP 脚本与
   `src/lib/gsap/seek-bridge.ts` 属渲染合同，不是 UI 运行时依赖，不受此条删除范围约束。
@@ -308,7 +310,7 @@ ESC 逻辑从 `app-sidebar-shell.tsx`、`canvas-inspector.tsx` 两处删除；
 | 同名 `fadeInUp` 冲突 | marketing 版 y:20 vs `variants.ts` y:8 | 随上一条消失 | done |
 | reduced-motion 第三套 | 同上 | 收敛为 §5.5 两层 | done |
 | GSAP `^3.15.0` | npm 包仅 `marketing/image-reveal.tsx` 一个消费者；`src/lib/gsap/seek-bridge.ts` 与 `server/` 固定 CDN 脚本是独立的渲染侧确定性合同，不 import 根依赖 | 图片揭示改用 `motion`，删除 npm 依赖；保留渲染侧合同 | done |
-| Lenis | 与 `globals.css` 全局 `scroll-behavior: smooth` 重复 | 保留但限定 `(marketing)`，收窄全局规则 | todo |
+| Lenis | 与 `globals.css` 全局 `scroll-behavior: smooth` 重复；路由合同已证明只挂载在营销 layout | 保留且限定 `(marketing)`；删除全局原生 smooth，应用壳 TOC 由 Motion 独占 | done |
 | 侧栏宽度双路径 | `sidebar.tsx` 自带 `transition-[width] duration-200` + `w-[60px]/w-[248px]`，但生产路径外层 `AnimatedAside`（220ms）传入 `w-full` 覆盖了内部宽度类 → 那条 200ms **在生产是死代码，只在 `/playbook` demo 活着** | 宽度动画唯一归 `AnimatedAside`；`sidebar.tsx` 删过渡与宽度类；demo 改用 `AnimatedAside` 包裹 | done |
 
 ### 7.5 已合规（keep）
