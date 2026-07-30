@@ -82,6 +82,11 @@ v1 费率为每个向上取整的视频秒 `120000 CNY micros`（¥0.12）；
 
 - 所有 Artifact 必须来自实际最终字节，记录真实 SHA-256、大小、版本与 attempt。
 - audio 至少保留源录音、ASR 文稿、时间对齐与最终视频 lineage。
+- audio 的每个原声 WAV 切片同时登记两种不可变索引：`user-audio-cut` 保留诊断与
+  来源谱系，公开 `narration-audio:{unitId}` 供既有 Director / render 消费；两条记录
+  必须指向同一真实 storage key、SHA-256、大小与 attempt。音频 manifest 必须明确
+  `source=user` 和原录音采样 offset，不得把用户原声伪装成 TTS。消费端除了解析
+  ingest JSON，还必须逐 unit 核验 narration Artifact 的实际字节 hash 与大小。
 - website 至少保留安全的采集证据投影、编排结果与最终视频 lineage。
 - approved / released Artifact 不可原地更新或删除；重试产生新版本并保留谱系。
   唯一例外是 §9 的整项目删除——那是把整个项目连同其全部产物一次性清除，
