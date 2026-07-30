@@ -1,10 +1,18 @@
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildAssDocument } from './subtitle-ass'
 import {
   SUBTITLE_BAND_FRACTIONS,
+  SUBTITLE_FONT_FILE,
+  SUBTITLE_FONT_NAME,
+  SUBTITLE_FONT_SIZE,
+  SUBTITLE_FONTS_DIRECTORY,
   SUBTITLE_MARGIN_V,
   SUBTITLE_MARGIN_X,
+  SUBTITLE_MAX_LINE_GRAPHEMES,
   SUBTITLE_STYLE_FORMAT,
+  SUBTITLE_USABLE_WIDTH,
   subtitleStyleLines,
   subtitleStyleName,
 } from './subtitle-style'
@@ -61,6 +69,31 @@ describe('subtitleStyleLines', () => {
       // Alignment 2 = 底部居中。
       expect(field(style, 'Alignment')).toBe('2')
     }
+  })
+
+  it('derives the single-line gate so the worst-case advance still fits the safe width', () => {
+    // 全角字前进宽最坏等于 Fontsize（1.0 em）。闸门必须保证即使命中最坏比值也不溢出，
+    // 否则「字号调大了但闸门没跟着调小」只会在长句子上暴露。
+    expect(SUBTITLE_MAX_LINE_GRAPHEMES * SUBTITLE_FONT_SIZE).toBeLessThanOrEqual(
+      SUBTITLE_USABLE_WIDTH
+    )
+    // 同时不能保守到白扔宽度：再多一个字就会越界。
+    expect(
+      (SUBTITLE_MAX_LINE_GRAPHEMES + 1) * SUBTITLE_FONT_SIZE
+    ).toBeGreaterThan(SUBTITLE_USABLE_WIDTH)
+    expect(SUBTITLE_USABLE_WIDTH).toBe(1920 - 2 * SUBTITLE_MARGIN_X)
+  })
+
+  it('names a font that ships with the repository instead of a generic family', () => {
+    // sans-serif 之类的通用族名把解析权交给宿主 fontconfig，拉丁与中文会落到两个
+    // face；字体必须随仓库交付并由 fontsdir 指定。
+    expect(SUBTITLE_FONT_NAME).not.toMatch(
+      /^(sans-serif|serif|monospace|system-ui)$/
+    )
+    expect(SUBTITLE_FONT_FILE).toMatch(/\.(otf|ttf)$/)
+    expect(
+      existsSync(join(process.cwd(), SUBTITLE_FONTS_DIRECTORY, SUBTITLE_FONT_FILE))
+    ).toBe(true)
   })
 
   it('keeps the probe band inside the frame and above the bottom safe margin', () => {

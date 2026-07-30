@@ -1,4 +1,5 @@
 import {
+  SUBTITLE_MAX_LINE_GRAPHEMES,
   SUBTITLE_PLAY_RES_X,
   SUBTITLE_PLAY_RES_Y,
   SUBTITLE_STYLE_FORMAT,
@@ -40,22 +41,13 @@ interface AssDocumentInput {
 }
 
 /**
- * 单行字数闸门。
+ * 单行字数闸门。字幕只排一行；上限由可用宽度推导，推导过程与取证方式见
+ * `subtitle-style.ts` 的 `SUBTITLE_MAX_LINE_GRAPHEMES`。
  *
- * 字幕只排一行——换行让底框裂成两条宽度不等的板，是成片里最直接的廉价感来源。
- * 上限来自可用宽度而不是审美偏好：PlayResX 1920 减去 MarginL/R 各 120 得 1680px，
- * 全角字的前进宽最坏等于 Fontsize（1.0 em），于是 1680 / 52 ≈ 32。取 32 意味着
- * 无论 libass 最终解析到哪个字体、其垂直度量把 Fontsize 折算成多大的字面，单行都
- * 不会溢出安全区。（实测 Fontsize 52 下常见中文字体的前进宽约 39px，也就是 32 字
- * 实际只占约 1250px，闸门留了大约 25% 余量。）
- *
- * 闸门不会削减内容：MAX_CUE_MS 4000ms 配合中文旁白约 5 字/秒，真实 cue 长度上限
- * 在 20 字左右，32 只是溢出保险。
- *
- * libass 不能替代这道闸门——它的智能换行只在空格等断词机会处生效，连续中文没有
- * 任何断点，超长行会直接画到画面外被裁掉（实测 50 字一行的墨迹横跨 x=0..1919）。
+ * 一条 cue 就是一行，所以两个上限相等——不要再把 cue 上限写成行上限的倍数，那等于
+ * 用常量结构把「允许换行」写死。
  */
-const MAX_LINE_GRAPHEMES = 32
+const MAX_LINE_GRAPHEMES = SUBTITLE_MAX_LINE_GRAPHEMES
 const MAX_CUE_GRAPHEMES = MAX_LINE_GRAPHEMES
 const MAX_CUE_MS = 4_000
 const TARGET_MIN_CUE_MS = 1_200

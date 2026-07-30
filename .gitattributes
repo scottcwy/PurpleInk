@@ -1,0 +1,9 @@
+# 字体是渲染真值，必须按字节原样往返。
+# 仓库在 Windows 上带 CRLF 转换（提交文本文件时 git 会提示 LF→CRLF），一旦哪天
+# 行尾或编码过滤器作用到字体文件上，libass 会拿到损坏的字形表并静默产出错误字幕。
+# 显式标记为 binary 关掉所有 text 过滤，不依赖 git 的自动二进制探测。
+*.otf binary
+*.ttf binary
+*.ttc binary
+*.woff binary
+*.woff2 binary

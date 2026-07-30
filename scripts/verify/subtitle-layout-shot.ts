@@ -26,6 +26,7 @@ import ffmpegPath from 'ffmpeg-static'
 import { buildAssDocument } from '../../src/features/audio/subtitle-ass'
 import {
   SUBTITLE_MARGIN_X,
+  SUBTITLE_MAX_LINE_GRAPHEMES,
   SUBTITLE_PLAY_RES_X,
   SUBTITLE_PLAY_RES_Y,
   subtitleStyleLines,
@@ -53,18 +54,22 @@ interface Case {
   text: string
   contrast: SubtitleContrast
   background: string
+  /** 期望的 cue 条数；省略表示 1 条。 */
+  expectedCues?: number
 }
 
-const LONG_CJK = '一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十'
-const GATE_MAX_CJK = '甲'.repeat(32)
+/** 恰好压在闸门上限：必须仍是一条 cue、一行，且不越出安全区。 */
+const GATE_MAX_CJK = '甲'.repeat(SUBTITLE_MAX_LINE_GRAPHEMES)
+/** 超出闸门一倍：必须切成多条 cue，每条各自单行，而不是折行或丢字。 */
+const OVER_GATE_CJK = '乙'.repeat(SUBTITLE_MAX_LINE_GRAPHEMES * 2)
 const MIXED = 'PurpleInk 把产品事实与真实演示证据做成可发布的视频'
 
 const CASES: Case[] = [
-  { name: 'dark-bg/on-dark/cjk-30', text: LONG_CJK, contrast: 'on-dark', background: DARK_BG },
   { name: 'dark-bg/on-dark/gate-max', text: GATE_MAX_CJK, contrast: 'on-dark', background: DARK_BG },
+  { name: 'dark-bg/on-dark/over-gate', text: OVER_GATE_CJK, contrast: 'on-dark', background: DARK_BG, expectedCues: 2 },
   { name: 'dark-bg/on-dark/mixed', text: MIXED, contrast: 'on-dark', background: DARK_BG },
-  { name: 'light-bg/on-light/cjk-30', text: LONG_CJK, contrast: 'on-light', background: LIGHT_BG },
   { name: 'light-bg/on-light/gate-max', text: GATE_MAX_CJK, contrast: 'on-light', background: LIGHT_BG },
+  { name: 'light-bg/on-light/over-gate', text: OVER_GATE_CJK, contrast: 'on-light', background: LIGHT_BG, expectedCues: 2 },
   { name: 'light-bg/on-light/mixed', text: MIXED, contrast: 'on-light', background: LIGHT_BG },
 ]
 
@@ -147,7 +152,11 @@ function runCase(work: string, item: Case, index: number): boolean {
   renderGray(item.background, assPath, drawnPath)
   const cues = ass.split('\n').filter((line) => line.startsWith('Dialogue:')).length
   const result = measure(basePath, drawnPath, cues)
-  const ok = result.lineBands === 1 && result.withinSafeArea
+  // 同一帧只会画出当前时间点生效的那一条 cue，所以无论切成几条，lineBands 都必须是 1。
+  const ok =
+    result.lineBands === 1
+    && result.withinSafeArea
+    && result.cues === (item.expectedCues ?? 1)
   console.log(
     `${ok ? 'PASS' : 'FAIL'} ${item.name}: cues=${String(result.cues)} `
     + `lineBands=${String(result.lineBands)} `

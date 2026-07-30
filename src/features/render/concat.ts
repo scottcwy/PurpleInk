@@ -4,6 +4,10 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { mkdir, mkdtemp, rename, rm, stat, writeFile } from 'node:fs/promises'
 import ffmpegPath from 'ffmpeg-static'
+import {
+  SUBTITLE_FONT_FILE,
+  SUBTITLE_FONTS_DIRECTORY,
+} from '@/features/audio/subtitle-style'
 import type { MediaAssemblyPlan } from './media-assembly'
 
 export interface LocalMediaPaths {
@@ -17,8 +21,33 @@ interface MediaAssemblyArgsInput {
   concatListPath: string
   narrationPaths: string[]
   subtitlePath: string
+  fontsDirectory: string
   musicPath: string | null
   outputPath: string
+}
+
+/**
+ * 随仓库交付的字幕字体目录。
+ *
+ * 按 `process.cwd()` 解析（与 `src/lib/db/migrate.ts` 同一套约定；Docker 运行阶段
+ * WORKDIR 是 /app，Dockerfile 需要把 assets 复制进去）。缺文件必须显式失败：libass
+ * 找不到指定族名时会静默回退到宿主字体，成片字幕会变成拉丁与中文分属两个 face 的
+ * 混排，而且没有任何报错——静默的视觉降级比一次明确的导出失败难查得多。
+ */
+export function subtitleFontsDirectory(): string {
+  return path.join(process.cwd(), SUBTITLE_FONTS_DIRECTORY)
+}
+
+async function assertSubtitleFont(directory: string): Promise<void> {
+  const file = path.join(directory, SUBTITLE_FONT_FILE)
+  try {
+    await stat(file)
+  } catch (error) {
+    throw new Error(
+      `字幕字体缺失：${SUBTITLE_FONTS_DIRECTORY}/${SUBTITLE_FONT_FILE}`,
+      { cause: error }
+    )
+  }
 }
 
 /** 一次 ffmpeg 调用完成分镜拼接、旁白裁剪、硬字幕和最终编码。 */
@@ -31,6 +60,8 @@ export async function concatExport(
   if (!ffmpegPath) throw new Error('ffmpeg-static 未提供当前平台二进制')
   assertPathCounts(plan, paths)
   await assertInputs(paths)
+  const fontsDirectory = subtitleFontsDirectory()
+  await assertSubtitleFont(fontsDirectory)
   await mkdir(path.dirname(outputPath), { recursive: true })
   const workDirectory = await mkdtemp(
     path.join(path.dirname(outputPath), '.cvc-assembly-')
@@ -58,6 +89,7 @@ export async function concatExport(
         concatListPath: listPath,
         narrationPaths: paths.narrationPaths,
         subtitlePath,
+        fontsDirectory,
         musicPath: paths.musicPath,
         outputPath: temporaryPath,
       })
@@ -125,11 +157,14 @@ export function buildMediaAssemblyArgs(
       `[narration][music]amix=inputs=2:duration=first:normalize=0[audio]`
     )
   }
+  // fontsdir 让 libass 只从随仓库交付的目录取字体，dev 与生产渲染同一份字节；
+  // 不传它就退回宿主 fontconfig，拉丁与中文会落到两个不同的 face。
   filters.push(
     '[0:v:0]' +
       [
         `scale=${plan.targetResolution.width}:${plan.targetResolution.height}:flags=lanczos`,
-        `ass=filename='${escapeFilterPath(input.subtitlePath)}'`,
+        `ass=filename='${escapeFilterPath(input.subtitlePath)}'`
+          + `:fontsdir='${escapeFilterPath(input.fontsDirectory)}'`,
       ].join(',') +
       '[video]'
   )

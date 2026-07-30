@@ -31,16 +31,61 @@ export const SUBTITLE_PLAY_RES_X = 1920
 export const SUBTITLE_PLAY_RES_Y = 1080
 
 /**
- * 字体族名。`sans-serif` 把解析权交给 fontconfig，会导致拉丁与中文分属两个 face、
- * 同一行里字面大小不一致，且解析结果随宿主与依赖版本漂移。刀 3a 会换成随仓库
- * 交付的字体族并给 ffmpeg 的 ass 滤镜传 fontsdir。
+ * 字体族名与随仓库交付的字体文件。
+ *
+ * 不能用 `sans-serif`：那把解析权交给宿主 fontconfig，拉丁与中文会落到两个不同的
+ * face，同一行里字面大小不一致（实测同一 Fontsize 下 `sans-serif` 的拉丁字面高 33、
+ * 显式指定单一字体族时 30），而且解析结果随宿主与依赖版本漂移——运行镜像里显式安装的
+ * 只有 fonts-wqy-zenhei，但 `playwright install-deps chromium` 会顺带带进拉丁字体族，
+ * 这套组合还会随 Playwright 版本变化。
+ *
+ * 所以字体随仓库交付，并通过 ffmpeg `ass` 滤镜的 `fontsdir` 显式指定目录，让 dev 与
+ * 生产渲染同一份字节。族名用 typographic family（name 表 nameID 16）而不是 legacy
+ * family（nameID 1 是 "Noto Sans SC Medium"）：前者在后续增加字重时仍然稳定。两者都
+ * 实测能解析（对照组用不存在的族名，结果与无 fontsdir 的回退完全一致）。
  */
-export const SUBTITLE_FONT_NAME = 'sans-serif'
-export const SUBTITLE_FONT_SIZE = 52
+export const SUBTITLE_FONT_NAME = 'Noto Sans SC'
+export const SUBTITLE_FONT_FILE = 'NotoSansSC-Medium.otf'
+/** 字体目录相对仓库根；与 migrate.ts 一样按 `process.cwd()` 解析（Docker 中为 /app）。 */
+export const SUBTITLE_FONTS_DIRECTORY = 'assets/fonts'
+
+/**
+ * 字号。实测 Noto Sans SC 在 Fontsize 56 下中文前进宽 38.70px，即字面占画幅高
+ * 3.58%，落在广播常规的 3.5–4% 区间。换字体会改变「Fontsize → 实际字面」的比值
+ * （同为 52 时 `sans-serif` 解析到的字体给 39.00、Noto Sans SC 给 35.90，也就是从
+ * 3.6% 掉到 3.32%），所以调整字体必须同时用 `scripts/verify/subtitle-layout-shot.ts`
+ * 重新取证。
+ */
+export const SUBTITLE_FONT_SIZE = 56
 /** 左右安全边距，同时是单行字数闸门的宽度预算依据。 */
 export const SUBTITLE_MARGIN_X = 120
 /** 底部安全边距。 */
 export const SUBTITLE_MARGIN_V = 72
+
+/** 单行可用宽度。 */
+export const SUBTITLE_USABLE_WIDTH =
+  SUBTITLE_PLAY_RES_X - 2 * SUBTITLE_MARGIN_X
+
+/**
+ * 单行字数闸门，由可用宽度推导而不是手写。
+ *
+ * 全角字的前进宽最坏等于 Fontsize（1.0 em），因此 floor(可用宽度 / Fontsize) 是「无论
+ * 字体的垂直度量把 Fontsize 折算成多大字面，单行都不溢出安全区」的上界。当前取值 30
+ * （1680 / 56）；按实测前进宽 38.70 计算，30 字实际只占约 1161px，留了约 30% 余量。
+ *
+ * 推导而非写死的意义：改 Fontsize 时闸门自动跟随，不会出现「字号调大了但闸门没跟着调
+ * 小」这类只在长句子上暴露的溢出。`subtitle-style.test.ts` 锁定该不变量，
+ * `subtitle-ass.test.ts` 用真实 ffmpeg 在闸门上限渲染并核对未越出安全区。
+ *
+ * 闸门不削减内容：MAX_CUE_MS 4000ms 配合中文旁白约 5 字/秒，真实 cue 长度上限在 20
+ * 字左右，闸门只是溢出保险。
+ *
+ * libass 不能替代这道闸门——它的智能换行只在空格等断词机会处生效，连续中文没有任何
+ * 断点，超长行会直接画到画面外被裁掉（实测 50 字一行墨迹横跨 x=0..1919）。
+ */
+export const SUBTITLE_MAX_LINE_GRAPHEMES = Math.floor(
+  SUBTITLE_USABLE_WIDTH / SUBTITLE_FONT_SIZE
+)
 
 /**
  * 字幕带在画面中的位置，以画幅比例表示。
@@ -50,7 +95,7 @@ export const SUBTITLE_MARGIN_V = 72
  */
 export const SUBTITLE_BAND_FRACTIONS = {
   x: SUBTITLE_MARGIN_X / SUBTITLE_PLAY_RES_X,
-  width: (SUBTITLE_PLAY_RES_X - 2 * SUBTITLE_MARGIN_X) / SUBTITLE_PLAY_RES_X,
+  width: SUBTITLE_USABLE_WIDTH / SUBTITLE_PLAY_RES_X,
   y:
     (SUBTITLE_PLAY_RES_Y - SUBTITLE_MARGIN_V - SUBTITLE_FONT_SIZE * 2)
     / SUBTITLE_PLAY_RES_Y,

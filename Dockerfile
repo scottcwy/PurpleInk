@@ -69,6 +69,10 @@ RUN apt-get update \
 COPY --from=build /repo/node_modules ./node_modules
 COPY --from=build /repo/.next ./.next
 COPY --from=build /repo/public ./public
+# assets/fonts 是硬字幕烧录的字体真值：concat.ts 按 process.cwd() 拼出 assets/fonts
+# 并传给 ffmpeg 的 ass 滤镜 fontsdir。漏掉这一层 COPY，导出会因缺字体直接失败
+# （故意不静默回退——回退会产出中英分属两个 face 的混排字幕且无任何报错）。
+COPY --from=build /repo/assets ./assets
 COPY --from=build /repo/next.config.ts ./next.config.ts
 COPY --from=build /repo/package.json ./package.json
 

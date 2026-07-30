@@ -44,6 +44,7 @@ describe('buildMediaAssemblyArgs', () => {
       concatListPath: 'C:/tmp/shots.ffconcat',
       narrationPaths: ['C:/tmp/a1.mp3', 'C:/tmp/a2.mp3'],
       subtitlePath: 'C:/tmp/final.ass',
+      fontsDirectory: 'C:/repo/assets/fonts',
       musicPath: null,
       outputPath: 'C:/tmp/final.mp4',
     })
@@ -57,6 +58,8 @@ describe('buildMediaAssemblyArgs', () => {
     expect(command).toContain('-c:a aac')
     expect(command).toContain('-b:a 192k')
     expect(filter).toContain('ass=')
+    // 必须显式指定字体目录：缺了它 libass 退回宿主 fontconfig，中英会分属两个 face。
+    expect(filter).toContain(String.raw`fontsdir='C\:/repo/assets/fonts'`)
     expect(filter).toContain('aresample=48000')
     expect(filter).toContain('channel_layouts=stereo')
     expect(filter).toContain('atrim=start=0.1:end=0.9')
