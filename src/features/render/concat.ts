@@ -8,7 +8,14 @@ import {
   SUBTITLE_FONT_FILE,
   SUBTITLE_FONTS_DIRECTORY,
 } from '@/features/audio/subtitle-style'
+import {
+  buildMediaAssemblyArgs,
+  subtitleFontFile,
+  subtitleFontsDirectory,
+} from './media-ffmpeg-args'
 import type { MediaAssemblyPlan } from './media-assembly'
+
+export { subtitleFontsDirectory }
 
 export interface LocalMediaPaths {
   videoPaths: string[]
@@ -16,32 +23,9 @@ export interface LocalMediaPaths {
   musicPath: string | null
 }
 
-interface MediaAssemblyArgsInput {
-  plan: MediaAssemblyPlan
-  concatListPath: string
-  narrationPaths: string[]
-  subtitlePath: string
-  fontsDirectory: string
-  musicPath: string | null
-  outputPath: string
-}
-
-/**
- * 随仓库交付的字幕字体目录。
- *
- * 按 `process.cwd()` 解析（与 `src/lib/db/migrate.ts` 同一套约定；Docker 运行阶段
- * WORKDIR 是 /app，Dockerfile 需要把 assets 复制进去）。缺文件必须显式失败：libass
- * 找不到指定族名时会静默回退到宿主字体，成片字幕会变成拉丁与中文分属两个 face 的
- * 混排，而且没有任何报错——静默的视觉降级比一次明确的导出失败难查得多。
- */
-export function subtitleFontsDirectory(): string {
-  return path.join(process.cwd(), SUBTITLE_FONTS_DIRECTORY)
-}
-
 async function assertSubtitleFont(directory: string): Promise<void> {
-  const file = path.join(directory, SUBTITLE_FONT_FILE)
   try {
-    await stat(file)
+    await stat(subtitleFontFile(directory))
   } catch (error) {
     throw new Error(
       `字幕字体缺失：${SUBTITLE_FONTS_DIRECTORY}/${SUBTITLE_FONT_FILE}`,
@@ -50,24 +34,30 @@ async function assertSubtitleFont(directory: string): Promise<void> {
   }
 }
 
-/** 一次 ffmpeg 调用完成分镜拼接、旁白裁剪、硬字幕和最终编码。 */
+/**
+ * 一次 ffmpeg 调用完成分镜拼接、旁白裁剪、硬字幕和最终编码。
+ *
+ * `subtitleAss` 为 null 表示本次交付不烧字幕：既不写 .ass，也不校验字体，
+ * 视频滤镜只做缩放。字体缺失的显式失败只约束真正要烧字幕的那条路径。
+ */
 export async function concatExport(
   plan: MediaAssemblyPlan,
   paths: LocalMediaPaths,
-  subtitleAss: string,
+  subtitleAss: string | null,
   outputPath: string
 ): Promise<string> {
   if (!ffmpegPath) throw new Error('ffmpeg-static 未提供当前平台二进制')
   assertPathCounts(plan, paths)
   await assertInputs(paths)
   const fontsDirectory = subtitleFontsDirectory()
-  await assertSubtitleFont(fontsDirectory)
+  if (subtitleAss !== null) await assertSubtitleFont(fontsDirectory)
   await mkdir(path.dirname(outputPath), { recursive: true })
   const workDirectory = await mkdtemp(
     path.join(path.dirname(outputPath), '.cvc-assembly-')
   )
   const listPath = path.join(workDirectory, 'shots.ffconcat')
-  const subtitlePath = path.join(workDirectory, 'subtitles.ass')
+  const subtitlePath =
+    subtitleAss === null ? null : path.join(workDirectory, 'subtitles.ass')
   const temporaryPath = path.join(
     path.dirname(outputPath),
     `.${path.basename(outputPath)}.tmp-${randomUUID()}.mp4`
@@ -81,7 +71,9 @@ export async function concatExport(
     ].join('\n')
     await Promise.all([
       writeFile(listPath, `${list}\n`, 'utf8'),
-      writeFile(subtitlePath, subtitleAss, 'utf8'),
+      ...(subtitlePath === null
+        ? []
+        : [writeFile(subtitlePath, subtitleAss ?? '', 'utf8')]),
     ])
     await runFfmpeg(
       buildMediaAssemblyArgs({
@@ -102,114 +94,6 @@ export async function concatExport(
   } finally {
     await rm(workDirectory, { recursive: true, force: true })
   }
-}
-
-export function buildMediaAssemblyArgs(
-  input: MediaAssemblyArgsInput
-): string[] {
-  const { plan } = input
-  if (plan.shots.length === 0) {
-    throw new Error('媒体装配至少需要一个分镜')
-  }
-  if (input.narrationPaths.length !== plan.shots.length) {
-    throw new Error('旁白输入数量与分镜数量不一致')
-  }
-  const totalSeconds = plan.totalFrames / plan.fps
-  const args = [
-    '-hide_banner',
-    '-loglevel',
-    'error',
-    '-nostdin',
-    '-f',
-    'concat',
-    '-safe',
-    '0',
-    '-i',
-    input.concatListPath,
-  ]
-  for (const narrationPath of input.narrationPaths) {
-    args.push('-i', narrationPath)
-  }
-  if (input.musicPath) args.push('-stream_loop', '-1', '-i', input.musicPath)
-
-  const filters = plan.shots.map((shot, index) => {
-    const shotSeconds = shot.durationInFrames / plan.fps
-    return (
-      `[${index + 1}:a:0]` +
-      [
-        `atrim=start=${seconds(shot.narration.startInUnitMs)}:end=${seconds(shot.narration.endInUnitMs)}`,
-        'asetpts=PTS-STARTPTS',
-        'aresample=48000',
-        'aformat=sample_rates=48000:channel_layouts=stereo',
-        'apad',
-        `atrim=duration=${number(shotSeconds)}`,
-      ].join(',') +
-      `[a${index}]`
-    )
-  })
-  filters.push(
-    `${plan.shots.map((_, index) => `[a${index}]`).join('')}concat=n=${plan.shots.length}:v=0:a=1[narration]`
-  )
-  const musicIndex = plan.shots.length + 1
-  if (input.musicPath) {
-    filters.push(
-      `[${musicIndex}:a:0]aresample=48000,aformat=sample_rates=48000:channel_layouts=stereo,volume=-18dB,atrim=duration=${number(totalSeconds)}[music]`,
-      `[narration][music]amix=inputs=2:duration=first:normalize=0[audio]`
-    )
-  }
-  // fontsdir 让 libass 只从随仓库交付的目录取字体，dev 与生产渲染同一份字节；
-  // 不传它就退回宿主 fontconfig，拉丁与中文会落到两个不同的 face。
-  filters.push(
-    '[0:v:0]' +
-      [
-        `scale=${plan.targetResolution.width}:${plan.targetResolution.height}:flags=lanczos`,
-        `ass=filename='${escapeFilterPath(input.subtitlePath)}'`
-          + `:fontsdir='${escapeFilterPath(input.fontsDirectory)}'`,
-      ].join(',') +
-      '[video]'
-  )
-
-  args.push(
-    '-filter_complex',
-    filters.join(';'),
-    '-map',
-    '[video]',
-    '-map',
-    input.musicPath ? '[audio]' : '[narration]',
-    '-c:v',
-    'libx264',
-    '-preset',
-    'veryfast',
-    '-crf',
-    '18',
-    '-pix_fmt',
-    'yuv420p',
-    '-c:a',
-    'aac',
-    '-b:a',
-    '192k',
-    '-ar',
-    '48000',
-    '-ac',
-    '2',
-    '-t',
-    number(totalSeconds),
-    '-threads',
-    '1',
-    '-fflags',
-    '+bitexact',
-    '-flags:v',
-    '+bitexact',
-    '-flags:a',
-    '+bitexact',
-    '-map_metadata',
-    '-1',
-    '-movflags',
-    '+faststart',
-    '-y',
-    input.outputPath
-  )
-  return args
 }
 
 function assertPathCounts(
@@ -273,22 +157,4 @@ function runFfmpeg(args: string[]): Promise<void> {
 function escapeConcatPath(file: string): string {
   if (/[\r\n]/.test(file)) throw new Error('concat 文件路径不能包含换行')
   return path.resolve(file).replaceAll('\\', '/').replaceAll("'", "'\\''")
-}
-
-function escapeFilterPath(file: string): string {
-  return path
-    .resolve(file)
-    .replaceAll('\\', '/')
-    .replace(':', String.raw`\:`)
-    .replaceAll("'", String.raw`\'`)
-    .replaceAll('[', String.raw`\[`)
-    .replaceAll(']', String.raw`\]`)
-}
-
-function seconds(milliseconds: number): string {
-  return number(milliseconds / 1_000)
-}
-
-function number(value: number): string {
-  return Number(value.toFixed(9)).toString()
 }

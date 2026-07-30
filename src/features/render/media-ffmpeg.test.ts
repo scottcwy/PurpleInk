@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { MediaAssemblyPlan } from './media-assembly'
-import { buildMediaAssemblyArgs } from './concat'
+import { buildMediaAssemblyArgs } from './media-ffmpeg-args'
 
 vi.mock('server-only', () => ({}))
 

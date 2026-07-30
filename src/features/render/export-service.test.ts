@@ -99,7 +99,7 @@ describe('exportProject', () => {
     const concat = vi.fn(async (
       _plan: MediaAssemblyPlan,
       _paths: unknown,
-      _subtitleAss: string,
+      _subtitleAss: string | null,
       outputPath: string
     ) => {
       await writeFile(outputPath, Buffer.from('deterministic-final-mp4'))
