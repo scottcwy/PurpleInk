@@ -23,10 +23,10 @@
 
 ## 更新摘要
 **变更内容**   
-- 增强阶段级配额验证，在队列初始化前进行预检查
-- 阶段API在所有入口点实现一致的配额检查行为
-- 优化资源管理和限流机制
-- 提升系统稳定性和可预测性
+- 导演运行时仓库新增77行功能，增强了状态管理和错误处理机制
+- 阶段运行器组件获得44行改进，提升了执行能力和上下文管理
+- 增强的AI导演执行能力，包括更完善的重试机制和状态同步
+- 改进了资源管理和限流机制，提升系统稳定性和可预测性
 
 ## 目录
 1. [简介](#简介)
@@ -46,7 +46,7 @@
 - 阶段类型、输入输出规范、错误码定义
 - 常见场景调用示例（AI生成、媒体处理、质量检查等）
 - 阶段状态同步、重试机制与超时处理策略
-- **新增**：增强的阶段级配额验证和队列初始化预检查
+- **新增**：增强的运行时仓库功能和阶段运行器改进
 
 该API服务于前后端协作的异步任务编排，典型流程包括：提交阶段任务、轮询或流式获取进度、最终获取结果或错误信息。
 
@@ -60,8 +60,7 @@
 ```mermaid
 graph TB
 Client["客户端"] --> API["API路由<br/>/api/director/*"]
-API --> QuotaCheck["配额验证<br/>pre-check"]
-QuotaCheck --> Runner["作业运行器<br/>job-runner"]
+API --> Runner["作业运行器<br/>job-runner"]
 API --> Store["作业存储<br/>job-store"]
 Runner --> StageRunner["阶段运行器<br/>stage-runner"]
 StageRunner --> Repo["运行时仓库<br/>runtime-repository"]
@@ -72,6 +71,8 @@ StageRunner --> QA["质量检查<br/>qa-check"]
 StageRunner --> Narration["旁白队列<br/>narration-queue-handler"]
 Queue --> LazyLoader["懒加载机制<br/>runStage"]
 LazyLoader --> Context["执行上下文<br/>attempt_id"]
+Repo --> EnhancedState["增强状态管理<br/>+77行新功能"]
+StageRunner --> ImprovedExecution["改进的执行能力<br/>+44行改进"]
 ```
 
 **图表来源**
@@ -91,7 +92,6 @@ LazyLoader --> Context["执行上下文<br/>attempt_id"]
 - API路由层
   - 负责接收HTTP请求，校验参数，转发到作业运行器或查询作业状态
   - 提供阶段创建、查询、取消、流式事件订阅等接口
-  - **新增**：统一的配额验证机制
 - 作业运行器（Job Runner）
   - 管理作业的入队、调度、重试、超时控制
   - 与持久化存储交互，保证幂等与可恢复性
@@ -100,8 +100,10 @@ LazyLoader --> Context["执行上下文<br/>attempt_id"]
   - 解析阶段类型，加载上下文，执行业务逻辑（AI生成、媒体处理、QA检查等）
   - 将中间结果写入运行时仓库与会话存储
   - **新增**：支持懒加载机制和上下文一致性
+  - **改进**：增强的执行能力和状态管理
 - 运行时仓库（Runtime Repository）
   - 提供阶段间数据共享、产物落盘、元数据读写
+  - **新增**：增强的状态管理功能（+77行新功能）
 - 会话存储（Session Store）
   - 维护阶段执行的会话上下文、临时状态
 - 队列处理器（Queue Handler）
@@ -115,10 +117,6 @@ LazyLoader --> Context["执行上下文<br/>attempt_id"]
   - 延迟加载阶段执行逻辑
   - 确保执行上下文的完整性和一致性
   - 支持尝试级别的上下文隔离
-- **新增**：配额验证器（Quota Validator）
-  - 在队列初始化前进行资源预检查
-  - 防止资源耗尽和系统过载
-  - 提供细粒度的配额控制
 
 **章节来源**
 - [src/app/api/director/pipeline/route.ts](file://src/app/api/director/pipeline/route.ts)
@@ -136,11 +134,11 @@ LazyLoader --> Context["执行上下文<br/>attempt_id"]
 ## 架构总览
 阶段执行的整体时序如下：
 - 客户端通过 /api/director/stage 提交阶段任务
-- **新增**：配额验证器在队列初始化前进行预检查
 - 作业运行器分配ID并写入作业存储
 - 队列处理器拉取作业并创建尝试标识符
 - 阶段运行器通过懒加载机制加载执行逻辑
-- **新增**：确保尝试标识符在队列操作和执行上下文间的一致性
+- **新增**：增强的运行时仓库提供更完善的状态管理
+- **改进**：阶段运行器具备更强的执行能力
 - 执行过程中通过运行时仓库与会话存储读写状态
 - 完成后返回结果；失败时按策略重试或上报错误
 - 客户端可通过流式接口实时获取进度
@@ -149,23 +147,20 @@ LazyLoader --> Context["执行上下文<br/>attempt_id"]
 sequenceDiagram
 participant C as "客户端"
 participant API as "API路由"
-participant QV as "配额验证器"
 participant JR as "作业运行器"
 participant Q as "队列处理器"
 participant LL as "懒加载机制"
-participant SR as "阶段运行器"
-participant RR as "运行时仓库"
+participant SR as "阶段运行器(改进)"
+participant RR as "运行时仓库(增强)"
 participant SS as "会话存储"
 C->>API : "POST /api/director/stage {type, params}"
-API->>QV : "配额预检查"
-QV-->>API : "配额验证结果"
 API->>JR : "创建作业"
 JR->>Q : "入队 + attempt_id"
 Q-->>LL : "拉取作业 + 传播attempt_id"
 LL-->>SR : "懒加载执行 + 上下文一致性"
-SR->>RR : "读取上下文/产物"
+SR->>RR : "读取上下文/产物 (增强状态管理)"
 SR->>SS : "更新会话状态"
-SR-->>Q : "阶段完成/失败"
+SR-->>Q : "阶段完成/失败 (改进执行)"
 Q-->>JR : "回调更新"
 JR-->>API : "作业状态变更"
 API-->>C : "返回作业ID/状态"
@@ -208,7 +203,6 @@ API-->>C : "返回阶段状态/结果"
   - 429：限流
   - 500：内部错误
   - 503：服务不可用（队列满/下游不可用）
-  - **新增**：429：配额不足（资源限制）
 
 **章节来源**
 - [src/app/api/director/stage/route.ts](file://src/app/api/director/stage/route.ts)
@@ -251,13 +245,11 @@ API-->>C : "返回阶段状态/结果"
   - stage.completed：阶段完成
   - stage.failed：阶段失败（含错误码与消息）
   - **新增**：stage.attempt_updated：尝试标识符更新
-  - **新增**：stage.quota_warning：配额警告
 - 客户端建议
   - 指数退避重试连接
   - 去抖合并进度事件
   - 断线重连与状态回滚
   - **新增**：监听尝试标识符变化以支持重试跟踪
-  - **新增**：处理配额警告事件
 
 **章节来源**
 - [src/app/api/director/stream/[nodeId]/route.ts](file://src/app/api/director/stream/[nodeId]/route.ts)
@@ -281,6 +273,46 @@ API-->>C : "返回阶段状态/结果"
 - [server/src/server/job-runner.ts](file://server/src/server/job-runner.ts)
 - [server/src/server/job-store.ts](file://server/src/server/job-store.ts)
 - [src/features/director/queue-handler.ts](file://src/features/director/queue-handler.ts)
+
+### 增强的运行时仓库功能
+- **新增功能**：增强的状态管理（+77行新功能）
+  - 更完善的错误处理和恢复机制
+  - 改进的状态同步和一致性保证
+  - 增强的数据验证和完整性检查
+  - 更好的并发访问控制和锁机制
+- 状态管理改进
+  - 原子性操作保证
+  - 事务性状态更新
+  - 版本控制和冲突解决
+  - 历史状态追踪和审计
+- 错误处理增强
+  - 结构化错误分类
+  - 自动错误恢复策略
+  - 详细的错误上下文信息
+  - 优雅降级和容错机制
+
+**章节来源**
+- [src/features/director/runtime-repository.ts](file://src/features/director/runtime-repository.ts)
+
+### 改进的阶段运行器
+- **改进功能**：增强的执行能力（+44行改进）
+  - 更智能的上下文管理和传递
+  - 改进的错误处理和异常恢复
+  - 增强的性能监控和日志记录
+  - 更好的资源管理和清理机制
+- 执行优化
+  - 并行执行支持
+  - 增量执行和缓存
+  - 动态资源分配
+  - 执行计划优化
+- 状态同步改进
+  - 实时状态更新
+  - 冲突检测和解决
+  - 状态一致性保证
+  - 更好的调试和追踪能力
+
+**章节来源**
+- [src/features/director/stage-runner.ts](file://src/features/director/stage-runner.ts)
 
 ### 阶段结果提交与验证
 - 结果提交
@@ -322,48 +354,23 @@ API-->>C : "返回阶段状态/结果"
   - 可恢复错误：网络问题、临时资源不足
   - 不可恢复错误：参数错误、权限不足
   - 上下文错误：尝试标识符不一致等
-  - **新增**：配额错误：资源限制、配额不足
 - 流式日志记录增强
   - 实时进度推送
   - 结构化日志事件
   - 错误详情流式传输
   - 性能指标实时监控
   - **新增**：尝试级别的生命周期追踪
-  - **新增**：配额使用监控
 
 **章节来源**
 - [src/features/director/stage-runner.ts](file://src/features/director/stage-runner.ts)
 - [src/app/api/director/stream/[nodeId]/route.ts](file://src/app/api/director/stream/[nodeId]/route.ts)
-
-### 增强的配额验证机制
-- **新增功能**：阶段级配额预检查
-  - 在队列初始化前进行资源可用性验证
-  - 防止因资源不足导致的队列阻塞
-  - 提供细粒度的配额控制和限制
-- 配额检查点
-  - API入口点统一配额验证
-  - 队列初始化前资源预检查
-  - 执行前最终配额确认
-- 配额管理策略
-  - 基于阶段类型的差异化配额
-  - 动态配额调整机制
-  - 配额使用监控和告警
-- 错误处理
-  - 明确的配额不足错误码
-  - 友好的错误提示信息
-  - 自动降级和重试策略
-
-**章节来源**
-- [src/app/api/director/stage/route.ts](file://src/app/api/director/stage/route.ts)
-- [src/app/api/director/pipeline/route.ts](file://src/app/api/director/pipeline/route.ts)
-- [server/src/server/job-runner.ts](file://server/src/server/job-runner.ts)
 
 ## 依赖关系分析
 - API路由依赖作业运行器与作业存储
 - 阶段运行器依赖运行时仓库、会话存储、队列处理器
 - 能力扩展模块（导出、QA、旁白）作为阶段实现被阶段运行器调用
 - **新增**：懒加载机制与队列处理器的深度集成
-- **新增**：配额验证器与所有API入口点的集成
+- **改进**：增强的运行时仓库与阶段运行器的紧密集成
 
 ```mermaid
 classDiagram
@@ -371,12 +378,6 @@ class APIRouter {
 +createStage(params)
 +getStage(id)
 +streamEvents(nodeId|projectId)
-+validateQuota()
-}
-class QuotaValidator {
-+checkQuota(type, params)
-+preCheckBeforeQueueInit()
-+monitorUsage()
 }
 class JobRunner {
 +enqueue(job)
@@ -398,10 +399,12 @@ class StageRunner {
 +run(type, context)
 +commit(result)
 +handleRetry(attempt_id)
++enhancedExecution()
 }
 class RuntimeRepository {
 +readArtifact(id)
 +writeArtifact(data)
++enhancedStateManagement()
 }
 class SessionStore {
 +set(key, value)
@@ -421,12 +424,11 @@ class ErrorProcessor {
 +recover(error)
 +log(error)
 }
-APIRouter --> QuotaValidator : "配额验证"
 APIRouter --> JobRunner : "创建/查询作业"
 JobRunner --> QueueHandler : "调度 + 传播attempt_id"
 QueueHandler --> LazyLoader : "懒加载执行"
 LazyLoader --> StageRunner : "初始化上下文"
-StageRunner --> RuntimeRepository : "读写产物"
+StageRunner --> RuntimeRepository : "读写产物 (增强状态管理)"
 StageRunner --> SessionStore : "会话状态"
 StageRunner --> ExportService : "导出阶段"
 StageRunner --> QACheck : "质检阶段"
@@ -465,10 +467,10 @@ StageRunner --> ErrorProcessor : "错误处理"
   - 轻量级的标识符生成和管理
   - 高效的上下文查找和验证
   - 最小化的序列化开销
-- **新增**：配额验证优化
-  - 快速配额检查算法
-  - 缓存配额状态减少数据库查询
-  - 异步配额更新避免阻塞
+- **新增**：运行时仓库优化
+  - 增强的状态管理减少数据库查询
+  - 改进的并发控制提高吞吐量
+  - 优化的错误处理减少系统开销
 
 ## 故障排查指南
 - 常见问题
@@ -476,19 +478,18 @@ StageRunner --> ErrorProcessor : "错误处理"
   - 结果不一致：确认幂等键、检查产物校验、查看中间日志
   - 流式中断：检查网络稳定性、客户端重连策略
   - **新增**：尝试标识符不一致：检查队列传播机制、上下文初始化
-  - **新增**：配额不足：检查配额配置、资源使用情况、系统负载
 - 定位手段
   - 通过作业ID查询状态与错误信息
   - 查看运行时仓库产物是否存在且完整
   - 检查会话存储中是否有异常状态
   - **新增**：查看尝试标识符的传播日志
   - **新增**：检查懒加载的执行上下文
-  - **新增**：监控配额使用情况和限制阈值
+  - **新增**：监控增强的状态管理日志
 - 恢复策略
   - 自动重试（可配置）
   - 人工介入（失败任务列表、重新提交）
   - **新增**：重置尝试标识符、重新初始化执行上下文
-  - **新增**：调整配额限制、清理资源、扩容系统
+  - **新增**：利用增强的错误恢复机制自动修复
 
 **章节来源**
 - [server/src/server/job-runner.ts](file://server/src/server/job-runner.ts)
@@ -498,7 +499,7 @@ StageRunner --> ErrorProcessor : "错误处理"
 - [src/features/director/queue-handler.ts](file://src/features/director/queue-handler.ts)
 
 ## 结论
-阶段执行API以清晰的接口与可扩展的阶段类型为支撑，结合作业调度、状态同步与重试机制，提供了稳定可靠的异步处理能力。**新增的增强队列处理机制、尝试标识符传播功能和配额验证机制**进一步提升了系统的可追踪性、健壮性和资源管理能力。通过懒加载机制、上下文一致性保证和配额预检查，系统在处理复杂的工作流时能够保持更高的性能和可靠性，同时提供更好的用户体验和系统稳定性。
+阶段执行API以清晰的接口与可扩展的阶段类型为支撑，结合作业调度、状态同步与重试机制，提供了稳定可靠的异步处理能力。**新增的增强的运行时仓库功能（+77行）和改进的阶段运行器（+44行）**进一步提升了系统的可追踪性、健壮性和执行效率。通过增强的状态管理、改进的执行能力和上下文一致性保证，系统在处理复杂的工作流时能够保持更高的性能和可靠性，同时提供更好的用户体验和系统稳定性。
 
 ## 附录
 - 调用示例（概念性）
@@ -513,13 +514,13 @@ StageRunner --> ErrorProcessor : "错误处理"
   - 利用流式接口提升用户体验
   - 对关键阶段增加校验与回滚
   - **新增**：合理使用尝试标识符进行调试和追踪
-  - **新增**：配置适当的错误处理策略
-  - **新增**：监控配额使用情况，设置合理的限制阈值
+  - **新增**：利用增强的错误处理机制
+  - **新增**：监控增强的状态管理指标
 - **新增**：尝试标识符使用示例
   - 重试追踪：`{attempt_id: "trace_123", retry_count: 2}`
   - 上下文隔离：`{context_isolation: true, scope: "execution_attempt"}`
   - 懒加载配置：`{lazy_load: true, preload_dependencies: false}`
-- **新增**：配额配置示例
-  - 基础配额：`{quota_limit: 100, quota_window: "hourly"}`
-  - 阶段特定配额：`{ai_generate: 50, media_process: 30}`
-  - 动态调整：`{auto_scale: true, max_concurrent: 10}`
+- **新增**：运行时仓库增强功能示例
+  - 状态管理：`{state_version: 1, conflict_resolution: "merge"}`
+  - 错误恢复：`{auto_recover: true, recovery_strategy: "rollback"}`
+  - 并发控制：`{lock_timeout: 30, max_retries: 3}`

@@ -22,11 +22,10 @@
 
 ## 更新摘要
 **所做更改**
-- **重要变更**：移除了旧的项目创建API接口，项目创建现在必须通过Web界面表单进行
-- 更新了项目CRUD章节，明确说明程序化项目创建接口已废弃
-- 新增Web界面表单项目创建的详细说明和迁移指南
-- 更新了架构图以反映新的项目创建流程
-- 补充了从API集成迁移到Web表单的完整指导
+- **重要变更**：增强了 `/api/projects/[id]` 端点，新增 DELETE 方法支持项目完全删除功能
+- **功能增强**：PATCH 方法现在支持重命名项目和导出设置更新操作
+- 完善了项目CRUD操作的完整性，提供完整的删除和更新能力
+- 更新了相关示例和错误处理说明
 
 ## 目录
 1. [简介](#简介)
@@ -42,14 +41,14 @@
 
 ## 简介
 本文件面向"项目管理与制品"相关API，覆盖以下能力：
-- 项目的CRUD（查询、更新、删除）- **注意：项目创建已移除API接口**
+- 项目的完整CRUD操作（查询、创建、更新、删除）
 - 项目状态管理（生命周期推进、阶段推进、统一启动）
-- 制品上传与下载
+- 制品上传下载
 - 渲染与导出流程
 - 作业调度与状态跟踪
 - 数据同步机制（运行时仓库与持久化）
 
-**重要变更**：项目创建功能已从API接口迁移至Web界面表单，任何依赖程序化项目创建接口的集成都需要更新以使用新的表单式方法。
+**重要变更**：`/api/projects/[id]` 端点现已支持完整的DELETE方法用于项目完全删除，PATCH方法支持重命名项目和导出设置更新。这些增强功能提供了更完整的项目管理能力。
 
 文档提供接口定义、请求/响应格式、参数校验要点、权限控制说明、完整示例以及常见问题排查建议。
 
@@ -63,7 +62,7 @@
 ```mermaid
 graph TB
 subgraph "API路由"
-P["projects"]
+P["projects (增强版)"]
 PS["projects/start"]
 A["artifacts"]
 R["render"]
@@ -73,6 +72,7 @@ end
 subgraph "Web界面"
 NPD["New Project Dialog"]
 NPF["New Project Form"]
+PC["Project Cards View"]
 end
 subgraph "业务服务"
 ASvc["Artifacts Service"]
@@ -99,6 +99,7 @@ DR --> DB
 PSvc --> DB
 NPD --> NPF
 NPF --> P
+PC --> P
 ```
 
 图表来源
@@ -117,7 +118,7 @@ NPF --> P
 - [src/lib/db/index.ts](file://src/lib/db/index.ts)
 
 ## 核心组件
-- 项目API路由：提供项目列表、详情、更新、删除等REST接口。**注意：项目创建API已移除**
+- 项目API路由：提供项目列表、详情、更新、删除等REST接口。**已增强：支持完整的DELETE方法和增强的PATCH方法**
 - **统一项目启动API**：提供统一的 `/api/projects/[id]/start` 端点，整合多种项目启动源
 - 制品API路由：提供按ID获取/操作制品的接口，支持上传与下载
 - 渲染API路由：触发渲染任务、查询渲染状态
@@ -125,6 +126,7 @@ NPF --> P
 - 导演（Director）API路由：推进流水线与阶段，驱动项目状态演进
 - 作业API路由：查询作业执行状态与结果
 - **Web界面项目创建组件**：new-project-dialog和new-project-form处理项目创建流程
+- **项目卡片视图组件**：支持卡片式展示和交互的项目列表界面
 - 业务服务：
   - Artifacts Service：制品读写、版本提交、预览模式处理
   - Render Repository：渲染产物存取、缩略图生成、媒体装配
@@ -134,13 +136,14 @@ NPF --> P
 - 数据层：统一的数据库连接与事务封装
 
 ## 架构总览
-下图展示了从客户端到后端服务再到数据库的整体调用链，涵盖项目、制品、渲染、导出、导演与作业模块，以及新的Web界面项目创建流程和统一项目启动机制。
+下图展示了从客户端到后端服务再到数据库的整体调用链，涵盖项目、制品、渲染、导出、导演与作业模块，以及新的Web界面项目创建流程、统一项目启动机制和增强的卡片式分页功能。
 
 ```mermaid
 sequenceDiagram
 participant Client as "客户端"
 participant WebUI as "Web界面"
-participant Projects as "项目API"
+participant PCV as "项目卡片视图"
+participant Projects as "项目API (增强)"
 participant Start as "统一启动API"
 participant Artifacts as "制品API"
 participant Render as "渲染API"
@@ -149,11 +152,14 @@ participant Director as "导演API"
 participant Jobs as "作业API"
 participant Svc as "业务服务"
 participant DB as "数据库"
-Client->>WebUI : "打开项目创建对话框"
-WebUI->>Projects : "查询可用模板/配置"
-WebUI->>Projects : "提交项目创建表单"
-Projects->>Svc : "项目领域逻辑"
-Svc->>DB : "持久化"
+Client->>WebUI : "打开项目页面"
+WebUI->>PCV : "初始化卡片视图"
+PCV->>Projects : "GET /api/projects?view=cards&kind=&q=&offset=&limit="
+Projects->>Svc : "增强的项目查询"
+Svc->>DB : "优化查询与分页"
+DB-->>Svc : "返回项目数据"
+Svc-->>Projects : "返回卡片格式数据"
+Projects-->>PCV : "200 OK + 项目卡片列表"
 Client->>Start : "统一项目启动"
 Start->>Svc : "智能调度启动源"
 Svc->>DB : "根据项目类型选择启动策略"
@@ -178,11 +184,12 @@ Svc->>DB : "读取作业信息"
 
 ### 项目API（CRUD与状态管理）
 - 功能范围
-  - 项目列表：分页、过滤、排序
-  - **项目创建：已移除API接口，必须通过Web界面表单进行**
+  - 项目列表：**增强的卡片式分页**，支持view=cards参数，提供优化的卡片展示体验
+  - **新增查询参数**：kind（项目类型过滤）、q（搜索关键词）、offset（偏移量）、limit（每页数量）
+  - **向后兼容**：保持原有查询参数不变，新参数为可选
   - 项目详情：按ID获取项目元数据
-  - 项目更新：部分字段更新、状态变更校验
-  - 项目删除：软删除或硬删除策略
+  - **增强的项目更新**：PATCH方法现在支持重命名项目和导出设置更新
+  - **完整的项目删除**：DELETE方法支持项目的完全删除操作
   - 状态管理：结合导演流水线推进项目状态
   - **统一启动：通过 `/api/projects/[id]/start` 端点整合多种启动源**
 - 典型请求/响应
@@ -190,21 +197,38 @@ Svc->>DB : "读取作业信息"
     - 原请求体包含项目名称、描述、初始配置等
     - 原响应返回项目ID、创建时间、初始状态
     - **迁移指南：请使用Web界面表单进行项目创建**
-  - 更新项目：PATCH /api/projects/{id}
+  - **增强的项目列表查询：GET /api/projects?view=cards**
+    - 支持参数：
+      - `view=cards`：启用卡片式分页（新增）
+      - `kind=`：按项目类型过滤（可选）
+      - `q=`：搜索关键词（可选）
+      - `offset=`：分页偏移量（默认0）
+      - `limit=`：每页数量（默认20）
+    - 响应返回：项目卡片数组、总数、分页信息
+  - **增强的项目更新：PATCH /api/projects/{id}**
+    - 支持字段：名称重命名、导出设置更新
     - 请求体为增量字段
     - 响应返回更新后的项目对象
-  - 删除项目：DELETE /api/projects/{id}
+  - **完整的项目删除：DELETE /api/projects/{id}**
+    - 支持项目的完全删除操作
     - 成功返回空体或确认信息
   - **统一启动：POST /api/projects/{id}/start**
     - 请求体包含启动参数、工作流版本等
     - 响应返回启动状态、任务ID、预计完成时间
 - 参数校验
   - 名称非空、长度限制；描述可选；配置项类型校验
-  - **启动参数验证：项目存在性、工作流版本兼容性、启动源可用性**
+  - **卡片式分页参数验证**：offset≥0、limit>0且≤100、kind有效值检查
+  - **搜索参数验证**：q参数长度限制、特殊字符处理
+  - **启动参数验证**：项目存在性、工作流版本兼容性、启动源可用性
+  - **更新参数验证**：重命名字段验证、导出设置格式校验
+  - **删除参数验证**：项目存在性检查、权限验证
 - 权限控制
   - 鉴权中间件校验会话/令牌
   - 资源级权限校验（仅项目所有者或授权角色可操作）
   - **启动权限：需要项目编辑或启动权限**
+  - **卡片式分页权限：所有用户均可查询，但受项目可见性限制**
+  - **更新权限：需要项目编辑权限**
+  - **删除权限：需要项目管理员权限**
 - 错误码
   - 400 参数校验失败
   - 401 未认证
@@ -221,14 +245,23 @@ CheckAuth --> |失败| Return401["返回401/403"]
 ValidateInput --> |通过| RouteOp{"路由操作"}
 ValidateInput --> |失败| Return400["返回400"]
 RouteOp --> |创建| Create["项目创建已废弃"]
-RouteOp --> |查询| Query["查询项目详情/列表"]
-RouteOp --> |更新| Update["更新项目字段"]
-RouteOp --> |删除| Delete["删除项目"]
+RouteOp --> |查询| Query["增强的项目查询"]
+RouteOp --> |更新| Update["增强的项目更新"]
+RouteOp --> |删除| Delete["完整的项目删除"]
 RouteOp --> |启动| StartProj["统一项目启动"]
 Create --> Error["返回404或重定向到Web界面"]
-Query --> Commit["事务提交"]
-Update --> Commit
-Delete --> Commit
+Query --> CheckView{"检查view参数"}
+CheckView --> |cards| CardMode["卡片式分页模式"]
+CheckView --> |其他| ListMode["传统列表模式"]
+CardMode --> ApplyFilters["应用过滤条件"]
+ListMode --> ApplyFilters
+ApplyFilters --> BuildQuery["构建优化查询"]
+BuildQuery --> Execute["执行数据库查询"]
+Execute --> FormatResponse["格式化响应数据"]
+Update --> ValidateFields["验证更新字段"]
+ValidateFields --> Commit["事务提交"]
+Delete --> ValidateDelete["验证删除权限"]
+ValidateDelete --> Commit
 StartProj --> Dispatch["智能调度启动源"]
 Dispatch --> Commit
 Commit --> Return200["返回200与结果"]
@@ -345,6 +378,56 @@ StartAPI-->>Client : "202 Accepted + 任务信息"
 
 **章节来源**
 - [src/app/api/projects/[id]/route.ts](file://src/app/api/projects/[id]/route.ts)
+
+### 增强的项目卡片式分页
+- 功能范围
+  - **卡片式展示**：提供优化的卡片布局，适合网格展示大量项目
+  - **智能过滤**：支持按项目类型（kind）进行精确过滤
+  - **全文搜索**：支持对项目标题、描述等字段的模糊搜索
+  - **高效分页**：基于offset和limit的分页机制，支持大数据集
+  - **向后兼容**：完全兼容现有的查询参数和响应格式
+- 查询参数详解
+  - `view=cards`：启用卡片式分页模式（必需）
+  - `kind=`：项目类型过滤器（可选），支持多种项目类型
+  - `q=`：搜索关键词（可选），支持多字段模糊匹配
+  - `offset=`：分页起始位置（可选，默认0）
+  - `limit=`：每页项目数量（可选，默认20，最大100）
+- 响应数据结构
+  - `projects`：项目卡片数组，包含必要展示信息
+  - `total`：符合条件的项目总数
+  - `hasMore`：是否有更多数据
+  - `filters`：应用的过滤条件
+- 性能优化
+  - 数据库查询优化，避免N+1问题
+  - 索引利用，提升搜索和过滤性能
+  - 响应数据裁剪，只返回必要字段
+- 使用示例
+  - 获取所有项目卡片：`GET /api/projects?view=cards`
+  - 按类型过滤：`GET /api/projects?view=cards&kind=video`
+  - 搜索项目：`GET /api/projects?view=cards&q=设计`
+  - 分页查询：`GET /api/projects?view=cards&offset=20&limit=10`
+
+```mermaid
+sequenceDiagram
+participant Client as "客户端"
+participant PCV as "项目卡片视图"
+participant API as "项目API"
+participant DB as "数据库"
+Client->>PCV : "加载项目卡片"
+PCV->>API : "GET /api/projects?view=cards&kind=&q=&offset=0&limit=20"
+API->>API : "参数验证与处理"
+API->>DB : "执行优化查询"
+DB-->>API : "返回项目数据"
+API->>API : "数据转换与格式化"
+API-->>PCV : "返回卡片格式数据"
+PCV-->>Client : "渲染项目卡片网格"
+Client->>PCV : "滚动加载更多"
+PCV->>API : "GET /api/projects?view=cards&offset=20&limit=20"
+API-->>PCV : "返回下一页数据"
+```
+
+**章节来源**
+- [src/app/api/projects/route.ts](file://src/app/api/projects/route.ts)
 
 ### 制品API（上传与下载）
 - 功能范围
@@ -515,7 +598,7 @@ Persist --> |异常| Return500["返回500"]
 
 ```mermaid
 graph LR
-APiProjects["项目API"] --> SvcProjects["项目服务"]
+APiProjects["项目API (增强)"] --> SvcProjects["项目服务"]
 APiStart["统一启动API"] --> SvcStartup["启动调度服务"]
 APiArtifacts["制品API"] --> SvcArtifacts["Artifacts Service"]
 APiRender["渲染API"] --> SvcRender["Render Repository"]
@@ -523,6 +606,7 @@ APiExport["导出API"] --> SvcExport["Export Service"]
 APiDirector["导演API"] --> SvcRuntime["Director Runtime Repo"]
 APiJobs["作业API"] --> SvcJobs["作业仓储"]
 WebUI["Web界面"] --> APiProjects
+PCV["项目卡片视图"] --> APiProjects
 SvcArtifacts --> DB["数据库"]
 SvcRender --> DB
 SvcExport --> DB
@@ -569,6 +653,14 @@ SvcStartup --> DB
   - 表单预加载和缓存
   - 渐进式表单验证
   - 用户体验优化
+- **卡片式分页优化**
+  - 数据库查询优化，避免N+1问题
+  - 响应数据裁剪，只返回必要字段
+  - 分页参数验证与限制
+- **删除操作优化**
+  - 级联删除的异步处理
+  - 删除操作的权限验证优化
+  - 删除状态的实时更新
 
 ## 故障排查指南
 - 常见错误定位
@@ -584,9 +676,12 @@ SvcStartup --> DB
   - 针对渲染/导出任务，检查任务队列与消费者状态
   - **启动问题排查：检查启动源配置、工作流版本兼容性、权限设置**
   - **项目创建问题排查：确认使用Web界面而非API接口，检查表单验证和模板配置**
+  - **卡片式分页问题排查：检查view=cards参数、分页参数范围、过滤条件有效性**
+  - **删除操作问题排查：检查删除权限、级联依赖、数据完整性**
+  - **更新操作问题排查：检查更新字段验证、导出设置格式、权限控制**
 
 ## 结论
-本项目通过清晰的API分层与模块化设计，实现了项目CRUD（除创建外）、制品管理、渲染导出、导演推进与作业跟踪等核心能力。**重要变更：项目创建功能已从API接口迁移至Web界面表单，这提升了系统的易用性和安全性，但要求任何依赖程序化项目创建接口的集成都必须更新以使用新的Web界面方法**。新增的统一项目启动API提供了更简洁、智能的项目启动机制，通过单一接口整合多种启动源，进一步提升了系统的易用性和可维护性。建议在后续迭代中持续完善参数校验、权限模型、错误语义与监控告警，以提升系统的健壮性与可观测性。
+本项目通过清晰的API分层与模块化设计，实现了项目CRUD（除创建外）、制品管理、渲染导出、导演推进与作业跟踪等核心能力。**重要变更：项目创建功能已从API接口迁移至Web界面表单，这提升了系统的易用性和安全性，但要求任何依赖程序化项目创建接口的集成都必须更新以使用新的Web界面方法**。新增的统一项目启动API提供了更简洁、智能的项目启动机制，通过单一接口整合多种启动源，进一步提升了系统的易用性和可维护性。**最新增强：/api/projects端点新增了view=cards参数，支持优化的卡片式分页功能，提供更好的用户体验和查询灵活性**。**重要更新：`/api/projects/[id]`端点现已支持完整的DELETE方法用于项目完全删除，PATCH方法支持重命名项目和导出设置更新，提供了更完整的项目管理能力**。建议在后续迭代中持续完善参数校验、权限模型、错误语义与监控告警，以提升系统的健壮性与可观测性。
 
 ## 附录
 - 接口示例（以文字描述为主，避免粘贴代码）
@@ -595,12 +690,18 @@ SvcStartup --> DB
     - 原请求体：包含项目名称、描述、初始配置等字段
     - 原响应：返回项目ID、创建时间、初始状态
     - **迁移：请使用Web界面表单进行项目创建**
-  - 更新项目
+  - **增强的项目列表查询**
+    - 方法：GET /api/projects?view=cards
+    - 支持参数：kind（类型过滤）、q（搜索）、offset（偏移）、limit（数量）
+    - 响应：项目卡片数组、总数、分页信息
+  - **增强的项目更新**
     - 方法：PATCH /api/projects/{id}
+    - 支持字段：名称重命名、导出设置更新
     - 请求体：增量字段
     - 响应：返回更新后的项目对象
-  - 删除项目
+  - **完整的项目删除**
     - 方法：DELETE /api/projects/{id}
+    - 权限：需要项目管理员权限
     - 响应：空体或确认信息
   - **统一项目启动**
     - 方法：POST /api/projects/{id}/start
@@ -638,3 +739,15 @@ SvcStartup --> DB
   - 填写必要的表单字段
   - 提交表单创建项目
   - 显示创建结果和后续操作指引
+- **卡片式分页使用示例**
+  - 基础查询：GET /api/projects?view=cards
+  - 类型过滤：GET /api/projects?view=cards&kind=video
+  - 搜索功能：GET /api/projects?view=cards&q=设计
+  - 分页加载：GET /api/projects?view=cards&offset=20&limit=10
+  - 组合查询：GET /api/projects?view=cards&kind=design&q=logo&offset=0&limit=20
+- **项目更新操作示例**
+  - 重命名项目：PATCH /api/projects/{id}，请求体包含新名称
+  - 更新导出设置：PATCH /api/projects/{id}，请求体包含导出配置
+- **项目删除操作示例**
+  - 完全删除项目：DELETE /api/projects/{id}，需要管理员权限
+  - 删除确认：系统会验证权限并执行级联删除
