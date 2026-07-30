@@ -4,7 +4,7 @@ import {
   materializeShotLanes,
   transitionNodeStatus,
 } from '@/features/canvas'
-import { advancePipeline } from '@/features/director/advance'
+import { startProjectPipeline } from '@/features/director/advance'
 import { DirectorArtifactWriter } from '@/features/director/runtime-artifact-writer'
 import { patchNodePayload } from '@/features/director/runtime-node-data'
 import { PostgresProjectSourceRepository } from '@/features/projects'
@@ -54,7 +54,8 @@ Promise<AudioTranscriptionDependencies> {
     transition: transitionNodeStatus,
     recordState: (nodeId, state, outputContentHash) =>
       persistTranscriptionState(database, nodeId, state, outputContentHash),
-    advance: advancePipeline,
+    // ASR 是 audio 项目的真实入口；成功后在这里开启 autopilot 并续接 Director。
+    advance: startProjectPipeline,
     now: () => new Date(),
   }
 }

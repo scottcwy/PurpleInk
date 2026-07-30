@@ -162,7 +162,7 @@ describe('runAudioTranscriptionJob', () => {
       }),
       'a'.repeat(64),
     )
-    expect(deps.advance).toHaveBeenCalledWith(JOB.projectId, JOB.nodeId)
+    expect(deps.advance).toHaveBeenCalledWith(JOB.projectId)
     expect(synthesizeTts).not.toHaveBeenCalled()
   })
 

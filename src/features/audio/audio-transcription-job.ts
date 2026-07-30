@@ -89,7 +89,7 @@ export interface AudioTranscriptionDependencies {
     state: AudioTranscriptionState,
     outputContentHash?: string,
   ): Promise<void>
-  advance(projectId: string, nodeId: string): Promise<unknown>
+  advance(projectId: string): Promise<unknown>
   now(): Date
 }
 
@@ -275,7 +275,7 @@ async function advanceWithoutMasking(
   nodeId: string,
 ): Promise<void> {
   try {
-    await dependencies.advance(projectId, nodeId)
+    await dependencies.advance(projectId)
   } catch (error) {
     console.error('[audio-transcription] 下游自动推进失败', {
       projectId,
