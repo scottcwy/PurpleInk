@@ -43,7 +43,9 @@ async function renderProjects() {
           initialPages={initial.pages}
           initialCounts={initial.kindCounts}
           pageSize={PROJECT_CARD_FIRST_PAGE_SIZE}
-          newProjectAction={<NewProjectDialog triggerSize="sm" />}
+          newProjectAction={
+            <NewProjectDialog key="top-bar-new-project" triggerSize="sm" />
+          }
           emptyActions={{
             script: <NewProjectDialog key="script" initialKind="script" />,
             audio: <NewProjectDialog key="audio" initialKind="audio" />,
