@@ -4,7 +4,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { StorageAdapter } from '@/lib/storage'
 import type { MediaAssemblyPlan } from './media-assembly'
-import { exportProject, getExportReadiness } from './export-service'
+import { getExportReadiness } from './export-readiness'
+import { exportProject } from './export-service'
 
 vi.mock('server-only', () => ({}))
 

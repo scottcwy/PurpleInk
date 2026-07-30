@@ -2,10 +2,8 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { withApiSession } from '@/features/auth/api-session'
 import { requestExportFinalization } from '@/features/director/export-finalization'
-import {
-  ensureShotQaChecked,
-  getExportReadiness,
-} from '@/features/render/export-service'
+import { getExportReadiness } from '@/features/render/export-readiness'
+import { ensureShotQaChecked } from '@/features/render/export-service'
 import { initQueue } from '@/lib/queue/init'
 import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 

@@ -7,7 +7,8 @@ import {
   type JobSnapshot,
   type QueueAdapter,
 } from '@/lib/queue'
-import { exportProject, getExportReadiness } from './export-service'
+import { getExportReadiness } from './export-readiness'
+import { exportProject } from './export-service'
 import { exportDegradedProject } from './export-degraded'
 import { RenderRepository } from './repository'
 import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'

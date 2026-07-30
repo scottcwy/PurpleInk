@@ -9,7 +9,7 @@ import {
   enqueueProjectExport,
   type ExportProjectInput,
 } from '@/features/render/export-queue-handler'
-import { getExportReadiness } from '@/features/render/export-service'
+import { getExportReadiness } from '@/features/render/export-readiness'
 
 export type ExportFinalizationTrigger =
   | 'autopilot'
