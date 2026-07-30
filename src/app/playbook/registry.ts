@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sidebar-chrome.demo";
 import { ButtonDemo } from "@/components/ui/button.demo";
 import { CollapsibleCardDemo } from "@/components/ui/collapsible-card.demo";
+import { ContextMenuDemo } from "@/components/ui/context-menu.demo";
 import { DialogDemo } from "@/components/ui/dialog.demo";
 import { EmptyStateDemo } from "@/components/ui/empty-state.demo";
 import { IconButtonDemo } from "@/components/ui/icon-button.demo";
@@ -65,7 +66,7 @@ export const PENCIL_COMPONENT_FAMILY_COUNT = 35;
  * 计入 UI 登记总数。SectionNav 待 canvas.pen 有可用编辑器会话时补登记为
  * reusable symbol；在此之前只是代码侧的已注册组件。
  */
-export const UI_COMPONENT_FAMILY_COUNT = 46;
+export const UI_COMPONENT_FAMILY_COUNT = 47;
 export const PENCIL_CONSOLIDATION_NOTE =
   "当前登记 35 个已转译的应用组件族；其余 reusable symbols 属于上游 kit、变体或尚未进入 PurpleInk 公共边界的设计资产。";
 
@@ -99,6 +100,12 @@ export const PLAYBOOK_ENTRIES: PlaybookEntry[] = [
     name: "ContactSheetThumb",
     category: "ui",
     Demo: ContactSheetThumbDemo,
+  },
+  {
+    id: "context-menu",
+    name: "ContextMenu",
+    category: "ui",
+    Demo: ContextMenuDemo,
   },
   {
     id: "export-node",
