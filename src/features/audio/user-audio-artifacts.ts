@@ -1,6 +1,5 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
-import type { ArtifactPointerInput } from '@/features/director/runtime-artifact-writer'
 import type {
   AudioAllocation,
   AudioManifest,
@@ -10,6 +9,7 @@ import type { AudioProjectSourcePayload } from '@/features/projects'
 import type { StorageAdapter } from '@/lib/storage'
 import type { UserAudioTimeline } from './user-audio-timeline'
 import type { UserRecordingAudioSlice } from './user-audio-slicer'
+import type { AttemptArtifactPointerInput } from './attempt-artifact-writer'
 import { narrationArtifactKind } from './narration-repository'
 import {
   buildUserAudioContracts,
@@ -24,18 +24,31 @@ export const USER_AUDIO_ARTIFACT_KINDS = {
 } as const
 
 export interface AudioArtifactPointerWriter {
-  registerPointer(input: ArtifactPointerInput): Promise<string>
+  registerPointer(input: AttemptArtifactPointerInput): Promise<string>
 }
 
 export interface PersistUserAudioArtifactsInput {
   projectId: string
   nodeId: string
   attemptId: string
+  sourceArtifact: PersistedUserAudioSourceArtifact
+  timeline: UserAudioTimeline
+  slices: readonly UserRecordingAudioSlice[]
+}
+
+export interface PersistUserAudioSourceArtifactInput {
+  projectId: string
+  nodeId: string
+  attemptId: string
   source: AudioProjectSourcePayload
   sourceContentHash: string
   sourceBytes: Buffer
-  timeline: UserAudioTimeline
-  slices: readonly UserRecordingAudioSlice[]
+}
+
+export interface PersistedUserAudioSourceArtifact {
+  artifactId: string
+  storageKey: string
+  contentHash: string
 }
 
 export interface PersistedUserAudioArtifacts {
@@ -54,6 +67,22 @@ export interface UserAudioArtifactDependencies {
   writer: AudioArtifactPointerWriter
 }
 
+/** 在任何外部 ASR 调用前登记已校验的用户上传源字节。 */
+export async function persistUserAudioSourceArtifact(
+  input: PersistUserAudioSourceArtifactInput,
+  dependencies: UserAudioArtifactDependencies,
+): Promise<PersistedUserAudioSourceArtifact> {
+  const base = artifactBase(input)
+  return writePointer(
+    dependencies,
+    input,
+    `${base}/source-${input.sourceContentHash}.${input.source.container}`,
+    input.sourceBytes,
+    USER_AUDIO_ARTIFACT_KINDS.source,
+    input.sourceContentHash,
+  )
+}
+
 /**
  * 只登记已经完整生成的不可变字节。attempt 摘要进入路径，重试不会覆盖前一次
  * 已登记产物；JSON 合同最后写入，避免消费者读到半成品。
@@ -63,14 +92,7 @@ export async function persistUserAudioArtifacts(
   dependencies: UserAudioArtifactDependencies,
 ): Promise<PersistedUserAudioArtifacts> {
   const base = artifactBase(input)
-  const source = await writePointer(
-    dependencies,
-    input,
-    `${base}/source.${input.source.container}`,
-    input.sourceBytes,
-    USER_AUDIO_ARTIFACT_KINDS.source,
-    input.sourceContentHash,
-  )
+  const source = input.sourceArtifact
 
   const storedSlices: StoredUserAudioSlice[] = []
   const cutArtifactIds: string[] = []
@@ -87,6 +109,7 @@ export async function persistUserAudioArtifacts(
     await dependencies.writer.registerPointer({
       projectId: input.projectId,
       nodeId: input.nodeId,
+      attemptId: input.attemptId,
       kind: narrationArtifactKind(slice.unitId),
       storageKey: cut.storageKey,
       contentHash: cut.contentHash,
@@ -99,7 +122,7 @@ export async function persistUserAudioArtifacts(
   const contracts = buildUserAudioContracts({
     scriptUnits,
     sourceStorageKey: source.storageKey,
-    sourceContentHash: input.sourceContentHash,
+    sourceContentHash: source.contentHash,
     slices: storedSlices,
   })
   const ingest = await writeJsonPointer(
@@ -128,14 +151,22 @@ export async function persistUserAudioArtifacts(
   }
 }
 
-function artifactBase(input: PersistUserAudioArtifactsInput): string {
+function artifactBase(
+  input: Pick<
+    PersistUserAudioArtifactsInput,
+    'projectId' | 'nodeId' | 'attemptId'
+  >,
+): string {
   const attempt = sha256(input.attemptId).slice(0, 20)
   return `director/${input.projectId}/${input.nodeId}/audio-transcription/${attempt}`
 }
 
 async function writeJsonPointer(
   dependencies: UserAudioArtifactDependencies,
-  aggregate: Pick<PersistUserAudioArtifactsInput, 'projectId' | 'nodeId'>,
+  aggregate: Pick<
+    PersistUserAudioArtifactsInput,
+    'projectId' | 'nodeId' | 'attemptId'
+  >,
   storageKey: string,
   kind: string,
   value: unknown,
@@ -159,7 +190,10 @@ interface StoredPointer {
 
 async function writePointer(
   dependencies: UserAudioArtifactDependencies,
-  aggregate: Pick<PersistUserAudioArtifactsInput, 'projectId' | 'nodeId'>,
+  aggregate: Pick<
+    PersistUserAudioArtifactsInput,
+    'projectId' | 'nodeId' | 'attemptId'
+  >,
   requestedKey: string,
   bytes: Buffer,
   kind: string,
@@ -173,6 +207,7 @@ async function writePointer(
   const artifactId = await dependencies.writer.registerPointer({
     projectId: aggregate.projectId,
     nodeId: aggregate.nodeId,
+    attemptId: aggregate.attemptId,
     kind,
     storageKey,
     contentHash,

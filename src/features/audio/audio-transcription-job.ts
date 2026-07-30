@@ -15,7 +15,9 @@ import type { ScriptUnit } from '@/features/director/schemas/ingest'
 import type { AudioProjectSourcePayload } from '@/features/projects'
 import {
   type PersistUserAudioArtifactsInput,
+  type PersistUserAudioSourceArtifactInput,
   type PersistedUserAudioArtifacts,
+  type PersistedUserAudioSourceArtifact,
 } from './user-audio-artifacts'
 import {
   sliceDecodedUserRecording,
@@ -78,6 +80,9 @@ export interface AudioTranscriptionDependencies {
     audioSeconds: number
     billingContext: AudioTranscriptionJobInput['billingContext']
   }): Promise<RoutedTranscribedSpeech>
+  persistSource(
+    input: PersistUserAudioSourceArtifactInput,
+  ): Promise<PersistedUserAudioSourceArtifact>
   persistArtifacts(
     input: PersistUserAudioArtifactsInput,
   ): Promise<PersistedUserAudioArtifacts>
@@ -122,6 +127,14 @@ export async function runAudioTranscriptionJob(
     const loaded = await resolved.loadSource(payload.projectId)
     const sourceBytes = await resolved.readSourceBytes(loaded.source.storageKey)
     verifySourceBytes(loaded, sourceBytes)
+    const sourceArtifact = await resolved.persistSource({
+      projectId: payload.projectId,
+      nodeId: payload.nodeId,
+      attemptId: payload.billingContext.attemptId,
+      source: loaded.source,
+      sourceContentHash: loaded.sourceFingerprint,
+      sourceBytes,
+    })
 
     const decoded = await resolved.decode(sourceBytes)
     verifyDecodedMetadata(loaded.source, decoded)
@@ -142,9 +155,7 @@ export async function runAudioTranscriptionJob(
       projectId: payload.projectId,
       nodeId: payload.nodeId,
       attemptId: payload.billingContext.attemptId,
-      source: loaded.source,
-      sourceContentHash: loaded.sourceFingerprint,
-      sourceBytes,
+      sourceArtifact,
       timeline,
       slices,
     })

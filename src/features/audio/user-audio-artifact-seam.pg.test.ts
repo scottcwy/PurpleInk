@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DirectorArtifactWriter } from '@/features/director/runtime-artifact-writer'
 import { loadMediaAssembly } from '@/features/render/media-assembly-loader'
 import { type Db } from '@/lib/db/client'
 import {
@@ -18,7 +17,11 @@ import {
 } from '@/lib/db/test/pg-test-database'
 import type { StorageAdapter } from '@/lib/storage'
 import { AudioRuntimeRepository } from './runtime-repository'
-import { persistUserAudioArtifacts } from './user-audio-artifacts'
+import { AudioAttemptArtifactWriter } from './attempt-artifact-writer'
+import {
+  persistUserAudioArtifacts,
+  persistUserAudioSourceArtifact,
+} from './user-audio-artifacts'
 import { sliceDecodedUserRecording } from './user-audio-slicer'
 import { buildUserAudioTimeline } from './user-audio-timeline'
 
@@ -113,6 +116,102 @@ describe('user audio Artifact seam', () => {
         { laneKey: 'S001', kind: 'narration', code: 'artifact-missing' },
       ],
     })
+  })
+
+  it('reuses the same attempt-scoped source record on retry', async () => {
+    const seam = await seedSeam(database.db)
+
+    const retried = await persistUserAudioSourceArtifact(
+      seam.sourceInput,
+      seam.artifactDependencies,
+    )
+    const sourceRows = await database.db
+      .select()
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.projectId, seam.projectId),
+          eq(artifacts.kind, 'user-audio-source'),
+        ),
+      )
+
+    expect(retried.artifactId).toBe(seam.persisted.sourceArtifactId)
+    expect(sourceRows).toHaveLength(1)
+
+    const changedBytes = Buffer.from('另一份录音来源')
+    await expect(
+      persistUserAudioSourceArtifact(
+        {
+          ...seam.sourceInput,
+          source: {
+            ...seam.sourceInput.source,
+            sizeBytes: changedBytes.byteLength,
+          },
+          sourceContentHash: digest(changedBytes),
+          sourceBytes: changedBytes,
+        },
+        seam.artifactDependencies,
+      ),
+    ).rejects.toThrow('同一 audio attempt')
+    await expect(
+      seam.storage.get(sourceRows[0]!.storageKey),
+    ).resolves.toEqual(SOURCE_BYTES)
+  })
+
+  it('keeps same-kind cuts distinct and deduplicates one concurrent pointer', async () => {
+    const seam = await seedSeam(database.db)
+    const writer = seam.artifactDependencies.writer
+    const firstKey = `director/${seam.projectId}/extra/U002.wav`
+    const secondKey = `director/${seam.projectId}/extra/U003.wav`
+    const raceKey = `director/${seam.projectId}/extra/race.wav`
+    await seam.storage.put(firstKey, Buffer.from('cut-two'))
+    await seam.storage.put(secondKey, Buffer.from('cut-three'))
+    await seam.storage.put(raceKey, Buffer.from('race-cut'))
+
+    await writer.registerPointer({
+      projectId: seam.projectId,
+      nodeId: seam.audioNodeId,
+      attemptId: seam.audioAttemptId,
+      kind: 'user-audio-cut',
+      storageKey: firstKey,
+    })
+    await expect(
+      writer.registerPointer({
+        projectId: seam.projectId,
+        nodeId: seam.audioNodeId,
+        attemptId: seam.audioAttemptId,
+        kind: 'user-audio-cut',
+        storageKey: secondKey,
+      }),
+    ).resolves.toEqual(expect.any(String))
+
+    const concurrent = await Promise.all([
+      writer.registerPointer({
+        projectId: seam.projectId,
+        nodeId: seam.audioNodeId,
+        attemptId: seam.audioAttemptId,
+        kind: 'user-audio-race',
+        storageKey: raceKey,
+      }),
+      writer.registerPointer({
+        projectId: seam.projectId,
+        nodeId: seam.audioNodeId,
+        attemptId: seam.audioAttemptId,
+        kind: 'user-audio-race',
+        storageKey: raceKey,
+      }),
+    ])
+    expect(new Set(concurrent)).toHaveLength(1)
+    const raceRows = await database.db
+      .select()
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.projectId, seam.projectId),
+          eq(artifacts.kind, 'user-audio-race'),
+        ),
+      )
+    expect(raceRows).toHaveLength(1)
   })
 
   it('fails closed when narration storage bytes or indexed size drift', async () => {
@@ -217,30 +316,44 @@ async function seedSeam(db: Db) {
     { measured, pcmBytes: Buffer.alloc(SAMPLE_COUNT * 2, 7) },
     timeline,
   )
+  const artifactDependencies = {
+    storage,
+    writer: new AudioAttemptArtifactWriter(db, storage),
+  }
+  const sourceInput = {
+    projectId,
+    nodeId: audioNodeId,
+    attemptId: audioAttemptId,
+    source: {
+      schemaVersion: 1 as const,
+      kind: 'audio' as const,
+      storageKey: 'sources/user.wav',
+      fileName: '用户录音.wav',
+      mimeType: 'audio/wav' as const,
+      container: 'wav' as const,
+      sizeBytes: SOURCE_BYTES.byteLength,
+      durationMs: 1_000,
+      sampleRate: SAMPLE_RATE,
+      sampleCount: SAMPLE_COUNT,
+      visualTheme: 'dark' as const,
+    },
+    sourceContentHash: SOURCE_HASH,
+    sourceBytes: SOURCE_BYTES,
+  }
+  const sourceArtifact = await persistUserAudioSourceArtifact(
+    sourceInput,
+    artifactDependencies,
+  )
   const persisted = await persistUserAudioArtifacts(
     {
       projectId,
       nodeId: audioNodeId,
       attemptId: audioAttemptId,
-      source: {
-        schemaVersion: 1,
-        kind: 'audio',
-        storageKey: 'sources/user.wav',
-        fileName: '用户录音.wav',
-        mimeType: 'audio/wav',
-        container: 'wav',
-        sizeBytes: SOURCE_BYTES.byteLength,
-        durationMs: 1_000,
-        sampleRate: SAMPLE_RATE,
-        sampleCount: SAMPLE_COUNT,
-        visualTheme: 'dark',
-      },
-      sourceContentHash: SOURCE_HASH,
-      sourceBytes: SOURCE_BYTES,
+      sourceArtifact,
       timeline,
       slices,
     },
-    { storage, writer: new DirectorArtifactWriter(db, storage) },
+    artifactDependencies,
   )
   const renderBytes = Buffer.from('rendered video')
   const renderKey = `render/${projectId}/S001.mp4`
@@ -267,6 +380,8 @@ async function seedSeam(db: Db) {
     storage,
     persisted,
     sliceBytes: slices[0]!.audioBytes,
+    sourceInput,
+    artifactDependencies,
   }
 }
 

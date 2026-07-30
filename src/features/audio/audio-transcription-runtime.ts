@@ -5,7 +5,6 @@ import {
   transitionNodeStatus,
 } from '@/features/canvas'
 import { startProjectPipeline } from '@/features/director/advance'
-import { DirectorArtifactWriter } from '@/features/director/runtime-artifact-writer'
 import { patchNodePayload } from '@/features/director/runtime-node-data'
 import { PostgresProjectSourceRepository } from '@/features/projects'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
@@ -14,6 +13,7 @@ import { canvasNodes, projects } from '@/lib/db/schema/index'
 import { storage } from '@/lib/storage'
 import {
   persistUserAudioArtifacts,
+  persistUserAudioSourceArtifact,
 } from './user-audio-artifacts'
 import {
   decodeUserRecording,
@@ -23,6 +23,7 @@ import type {
   AudioTranscriptionDependencies,
   AudioTranscriptionState,
 } from './audio-transcription-job'
+import { AudioAttemptArtifactWriter } from './attempt-artifact-writer'
 
 export async function createAudioTranscriptionDependencies():
 Promise<AudioTranscriptionDependencies> {
@@ -31,7 +32,7 @@ Promise<AudioTranscriptionDependencies> {
     database,
     currentWorkspaceId(),
   )
-  const writer = new DirectorArtifactWriter(database, storage)
+  const writer = new AudioAttemptArtifactWriter(database, storage)
   return {
     loadSource: async (projectId) => {
       const record = await sourceRepository.get(projectId)
@@ -46,6 +47,8 @@ Promise<AudioTranscriptionDependencies> {
     readSourceBytes: (storageKey) => storage.get(storageKey),
     decode: decodeUserRecording,
     transcribe: transcribeRoutedSpeech,
+    persistSource: (input) =>
+      persistUserAudioSourceArtifact(input, { storage, writer }),
     persistArtifacts: (input) =>
       persistUserAudioArtifacts(input, { storage, writer }),
     updateProjectScript: (projectId, transcript) =>

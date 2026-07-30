@@ -7,7 +7,10 @@ import {
   runAudioTranscriptionJob,
   type AudioTranscriptionDependencies,
 } from './audio-transcription-job'
-import { persistUserAudioArtifacts } from './user-audio-artifacts'
+import {
+  persistUserAudioArtifacts,
+  persistUserAudioSourceArtifact,
+} from './user-audio-artifacts'
 import { sliceDecodedUserRecording } from './user-audio-slicer'
 import { buildUserAudioTimeline } from './user-audio-timeline'
 
@@ -66,6 +69,11 @@ function dependencies(): AudioTranscriptionDependencies {
       pcmBytes: Buffer.alloc(SAMPLE_COUNT * 2),
     })),
     transcribe: vi.fn(async () => speech()),
+    persistSource: vi.fn(async () => ({
+      artifactId: 'source-artifact',
+      storageKey: 'director/project/audio/source.mp3',
+      contentHash: SOURCE_HASH,
+    })),
     persistArtifacts: vi.fn<AudioTranscriptionDependencies['persistArtifacts']>(
       async (input) => ({
       sourceArtifactId: 'source-artifact',
@@ -111,14 +119,35 @@ const JOB = {
 describe('runAudioTranscriptionJob', () => {
   it('uses measured ASR timing, original PCM cuts, and never requests TTS', async () => {
     const deps = dependencies()
+    const sourceArtifact = {
+      artifactId: 'source-artifact',
+      storageKey: 'director/project/audio/source.mp3',
+      contentHash: SOURCE_HASH,
+    }
+    const persistSource = vi.fn(async () => sourceArtifact)
     const synthesizeTts = vi.fn()
     const withForbiddenTts = {
       ...deps,
+      persistSource,
       synthesizeTts,
-    } as AudioTranscriptionDependencies & { synthesizeTts: typeof synthesizeTts }
+    } as AudioTranscriptionDependencies & {
+      persistSource: typeof persistSource
+      synthesizeTts: typeof synthesizeTts
+    }
 
     await runAudioTranscriptionJob(JOB, withForbiddenTts)
 
+    expect(persistSource).toHaveBeenCalledWith({
+      projectId: JOB.projectId,
+      nodeId: JOB.nodeId,
+      attemptId: JOB.billingContext.attemptId,
+      source: audioSource(),
+      sourceContentHash: SOURCE_HASH,
+      sourceBytes: SOURCE_BYTES,
+    })
+    expect(persistSource.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(deps.transcribe).mock.invocationCallOrder[0]!,
+    )
     expect(deps.transcribe).toHaveBeenCalledWith({
       audioBytes: SOURCE_BYTES,
       audioFormat: 'mp3',
@@ -130,7 +159,7 @@ describe('runAudioTranscriptionJob', () => {
         projectId: JOB.projectId,
         nodeId: JOB.nodeId,
         attemptId: JOB.billingContext.attemptId,
-        sourceBytes: SOURCE_BYTES,
+        sourceArtifact,
         slices: [
           expect.objectContaining({ unitId: 'U001', durationMs: 9_500 }),
           expect.objectContaining({ unitId: 'U002', durationMs: 10_500 }),
@@ -216,11 +245,21 @@ describe('runAudioTranscriptionJob', () => {
 
   it('stores a safe provider projection and leaves no downstream work on ASR failure', async () => {
     const deps = dependencies()
+    const persistSource = vi.fn(async () => ({
+      artifactId: 'source-artifact',
+      storageKey: 'director/project/audio/source.mp3',
+      contentHash: SOURCE_HASH,
+    }))
     vi.mocked(deps.transcribe).mockRejectedValueOnce(
       new Error('StepFun ASR HTTP 503 raw provider body'),
     )
 
-    await expect(runAudioTranscriptionJob(JOB, deps)).rejects.toThrow(
+    await expect(
+      runAudioTranscriptionJob(JOB, {
+        ...deps,
+        persistSource,
+      } as AudioTranscriptionDependencies & { persistSource: typeof persistSource }),
+    ).rejects.toThrow(
       'StepFun ASR HTTP 503',
     )
 
@@ -236,6 +275,10 @@ describe('runAudioTranscriptionJob', () => {
       }),
     )
     expect(JSON.stringify(failure)).not.toContain('raw provider body')
+    expect(persistSource).toHaveBeenCalledTimes(1)
+    expect(persistSource.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(deps.transcribe).mock.invocationCallOrder[0]!,
+    )
     expect(deps.persistArtifacts).not.toHaveBeenCalled()
     expect(deps.updateProjectScript).not.toHaveBeenCalled()
     expect(deps.materialize).not.toHaveBeenCalled()
@@ -316,33 +359,44 @@ describe('persistUserAudioArtifacts', () => {
     })
     const slices = sliceDecodedUserRecording(decoded, timeline)
 
+    const input = {
+      projectId: 'project-1',
+      nodeId: 'audio-node-1',
+      attemptId: 'attempt-secret',
+      source: audioSource(),
+      sourceContentHash: SOURCE_HASH,
+      sourceBytes: SOURCE_BYTES,
+    }
+    const artifactDependencies = {
+      storage,
+      writer: {
+        registerPointer: vi.fn(async (pointer) => {
+          const bytes = memory.get(pointer.storageKey)
+          expect(bytes).toBeDefined()
+          expect(sha256(bytes!)).toBe(pointer.contentHash)
+          pointers.push({
+            kind: pointer.kind,
+            storageKey: pointer.storageKey,
+            contentHash: pointer.contentHash!,
+          })
+          return `artifact-${pointers.length}`
+        }),
+      },
+    }
+    const sourceArtifact = await persistUserAudioSourceArtifact(
+      input,
+      artifactDependencies,
+    )
     const result = await persistUserAudioArtifacts(
       {
-        projectId: 'project-1',
-        nodeId: 'audio-node-1',
-        attemptId: 'attempt-secret',
-        source: audioSource(),
-        sourceContentHash: SOURCE_HASH,
-        sourceBytes: SOURCE_BYTES,
+        projectId: input.projectId,
+        nodeId: input.nodeId,
+        attemptId: input.attemptId,
+        sourceArtifact,
         timeline,
         slices,
       },
-      {
-        storage,
-        writer: {
-          registerPointer: vi.fn(async (pointer) => {
-            const bytes = memory.get(pointer.storageKey)
-            expect(bytes).toBeDefined()
-            expect(sha256(bytes!)).toBe(pointer.contentHash)
-            pointers.push({
-              kind: pointer.kind,
-              storageKey: pointer.storageKey,
-              contentHash: pointer.contentHash!,
-            })
-            return `artifact-${pointers.length}`
-          }),
-        },
-      },
+      artifactDependencies,
     )
 
     expect(pointers.map(({ kind }) => kind)).toEqual([
