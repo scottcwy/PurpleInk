@@ -54,6 +54,10 @@ export function websiteDeliveryForDownload(
   return delivery
 }
 
+export function websiteDownloadHref(url: string): string {
+  return `${url}${url.includes('?') ? '&' : '?'}download=1`
+}
+
 export function websiteExportProgress(
   execution: ProjectExecutionSnapshot,
 ): { completed: number; total: number; label: string } {

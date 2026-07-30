@@ -1,7 +1,10 @@
 import { Download, Film, ShieldAlert } from 'lucide-react'
 import { ArtifactChip } from '@/components/ui/artifact-chip'
 import type { ProjectExecutionSnapshot } from '@/features/projects'
-import { websiteDeliveryForDownload } from './website-export-model'
+import {
+  websiteDeliveryForDownload,
+  websiteDownloadHref,
+} from './website-export-model'
 
 export function WebsiteDeliveryPreview({
   delivery,
@@ -50,7 +53,8 @@ export function WebsiteDeliveryPreview({
           <ArtifactChip
             icon={Download}
             filename={`website-video-v${delivery.version}.mp4`}
-            href={delivery.downloadUrl}
+            href={websiteDownloadHref(delivery.downloadUrl)}
+            download
           />
         )}
       </div>

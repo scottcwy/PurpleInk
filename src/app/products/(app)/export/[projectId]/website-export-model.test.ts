@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ProjectExecutionSnapshot } from '@/features/projects'
 import {
   websiteDeliveryForDownload,
+  websiteDownloadHref,
   websiteExportAction,
   websiteExportProgress,
 } from './website-export-model'
@@ -63,6 +64,15 @@ describe('website export view model', () => {
     })
     execution.stages.pop()
     expect(websiteExportProgress(execution).label).toBe('已完成 4/6 阶段')
+  })
+
+  it('keeps preview inline and opts the explicit download link into attachment mode', () => {
+    expect(websiteDownloadHref('/api/artifacts/a-1?projectId=p-1')).toBe(
+      '/api/artifacts/a-1?projectId=p-1&download=1',
+    )
+    expect(websiteDownloadHref('/api/artifacts/a-1')).toBe(
+      '/api/artifacts/a-1?download=1',
+    )
   })
 })
 
