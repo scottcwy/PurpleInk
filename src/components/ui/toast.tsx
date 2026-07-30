@@ -3,8 +3,10 @@
 import type { ComponentType, ReactNode } from 'react'
 import { X, Info, CircleCheck, TriangleAlert, CircleX } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import type { ToastVariant } from './toast-store'
 
-export type ToastVariant = 'info' | 'success' | 'warning' | 'error'
+export { toast } from './toast-store'
+export type { ToastVariant } from './toast-store'
 
 export interface ToastProps {
   variant?: ToastVariant
@@ -51,6 +53,7 @@ export function Toast({ variant = 'info', title, body, onClose, className }: Toa
         <button
           type="button"
           onClick={onClose}
+          aria-label="关闭通知"
           className="shrink-0 text-ds-text-muted transition-colors duration-fast ease-standard hover:text-ds-text"
         >
           <X className="h-4 w-4" />
@@ -58,38 +61,4 @@ export function Toast({ variant = 'info', title, body, onClose, className }: Toa
       )}
     </div>
   )
-}
-
-interface ToastItem {
-  id: string
-  variant: ToastVariant
-  title: ReactNode
-  body?: ReactNode
-}
-
-let listeners: ((toasts: ToastItem[]) => void)[] = []
-let toasts: ToastItem[] = []
-
-function notify() {
-  listeners.forEach((listener) => listener([...toasts]))
-}
-
-/** 全局 toast 调用入口（最小可用）。 */
-export const toast = {
-  show(variant: ToastVariant, title: ReactNode, body?: ReactNode) {
-    const id = crypto.randomUUID()
-    toasts = [...toasts, { id, variant, title, body }]
-    notify()
-  },
-  dismiss(id: string) {
-    toasts = toasts.filter((t) => t.id !== id)
-    notify()
-  },
-  subscribe(listener: (toasts: ToastItem[]) => void) {
-    listeners.push(listener)
-    listener([...toasts])
-    return () => {
-      listeners = listeners.filter((l) => l !== listener)
-    }
-  },
 }

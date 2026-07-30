@@ -107,8 +107,7 @@ export const MOTION_INTENTS: MotionIntent[] = [
     title: 'Toast 进 / 出',
     category: 'spatial',
     params: '进 SPRING_SPATIAL_DEFAULT / 出 fast+exit',
-    status: 'pending',
-    current: 'ui/toast.tsx 无动画、无 viewport、无 portal，且不会自动消失',
+    status: 'unified',
   },
   {
     id: 'stagger',

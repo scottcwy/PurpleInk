@@ -164,13 +164,13 @@ OverlayRoot mode="popover"   → popover="auto" | popover="manual"
 
 ## 8. 完成判据
 
-- [ ] `OverlayRoot` 已登记 `/playbook`，`DrawerOverlay` / `AnimatedAside` 同批补登记；
-- [ ] 9 套覆盖层已按 08 结论各自处理（迁移 / 保留 / 记录例外），无遗漏；
-- [ ] Dialog 的 5 个消费者零改动或 API 已调整（未反向改消费者）；
-- [ ] `dialog-layering.test.ts` / `popover.test.ts` 已改为断言行为；
-- [ ] 两处重复 ESC 已删，`shot-panels` 的两个抽屉已具备 ESC；
-- [ ] Toast 具备 viewport / portal / 自动消失 / `aria-live`；
-- [ ] 覆盖层不再依赖 z-index 分层（§3.4 的组合场景实测）；
-- [ ] 意图 5 / 6 / 8 / 9 / 10 标为 `unified`；
-- [ ] `motion-interaction.md` §4 与 §7.2 已回写（含任何降级决策）；
-- [ ] 五个 Conventional Commit。
+- [x] `OverlayRoot` 已登记 `/playbook`，`DrawerOverlay` / `AnimatedAside` 同批补登记；
+- [x] 9 套覆盖层已按 08 结论各自处理（迁移 / 保留 / 记录例外），无遗漏；
+- [x] Dialog 的 5 个消费者零改动或 API 已调整（未反向改消费者）；
+- [x] `dialog-layering.test.ts` / `popover.test.tsx` 已改为断言行为；
+- [x] 两处重复 ESC 已删，`shot-panels` 的两个抽屉已具备 ESC；
+- [x] Toast 具备 viewport / portal / 自动消失 / `aria-live`；
+- [x] 覆盖层不再依赖 z-index 分层（§3.4 的组合场景实测）；
+- [x] 意图 5 / 6 / 8 / 9 / 10 标为 `unified`；
+- [x] `motion-interaction.md` §4 与 §7.2 已回写（含 Toast portal 例外）；
+- [x] 五个 Conventional Commit。

@@ -147,7 +147,7 @@ Tailwind v4 从 `@theme` 读取的 duration 命名空间是 **`--transition-dura
 
 ### 4.1 结论：平台能力优先（路 B）
 
-不引入 Radix / Base UI。项目已有 46 个自研 UI 组件族登记在 `/playbook`，
+不引入 Radix / Base UI。项目已有 50 个自研 UI 组件族登记在 `/playbook`，
 再引一套 headless 库等于长期双体系，违反 `AGENTS.md` §3。
 改为一个 `OverlayRoot` 内核，两个模式，平台能力与项目策略明确分工：
 
@@ -160,6 +160,11 @@ Tailwind v4 从 `@theme` 读取的 duration 命名空间是 **`--transition-dura
 两模式共用 §3 的进出场 recipe、内容层动画与 JS 定位接口；scroll lock 只属于 modal。
 Popover API **不提供**业务语义、菜单方向键 roving 或定位，这些复用
 `ContextMenu` 已验证的 role / focus / geometry 策略。
+
+Toast 不属于可夺取焦点的覆盖层，不进入 top layer：根级 `ToastViewport` 单独 portal 到
+`document.body`，用一个固定视口堆叠通知、`aria-live="polite"` 播报，并由 store 统一处理
+5 秒自动消失与显式关闭。它是本节唯一保留的 portal；Dialog / Drawer / Popover / Menu /
+Tooltip 均不得借此退回 portal 或 z-index 分层。
 
 **收益**：`z-40 / z-50 / z-[1000] / z-[1001]` 四个互不相通的层级段全部作废——
 top layer 天然位于所有 stacking context 之上，不需要 z-index。
@@ -276,25 +281,26 @@ top layer 天然位于所有 stacking context 之上，不需要 z-index。
 | `verify:v3` 动效字面量门禁 | 无，规范只能靠人工遵守 | `motionLiterals` baseline 冻结；`MOTION_LITERAL` 新增即失败 | done |
 | `/playbook/motion` | 不存在 | §3 意图对照台 | done |
 
-### 7.2 覆盖层（8 套 → 2 模式）
+### 7.2 覆盖层（9 套 → 2 模式）
 
 | 组件 | 现状缺陷 | 目标 | 状态 |
 | --- | --- | --- | --- |
-| `ui/dialog.tsx` | 无动画 / 无 ESC / 无 focus trap / 无 scroll lock | `mode="modal"` | todo |
-| `ui/popover.tsx` | 无动画 / 无 ESC；全屏透明 button 兜 dismiss | `mode="popover"` | todo |
-| `ui/hover-preview.tsx` | inline `${fadeMs}ms`；手写视口边界 | `mode="popover"`（**保留指针几何**，见下） | todo |
-| `navigation/collapsible-panel.tsx` | 唯一做对进出场 | 成为抽屉预设并登记 `/playbook` | todo |
-| `ui/tooltip.tsx` | 裸 `transition-opacity`，无 duration 无延迟；真实侧栏被 overflow 裁切 | `mode="popover"` + `dismissal="manual"`，补延迟与 `aria-describedby` | todo |
-| `ui/toast.tsx` | 无动画 / 无 viewport / 无 portal / **不自动消失** | 补齐 + `aria-live` | todo |
-| `ui/sidebar-chrome.tsx` AccountMenu | 裸 div，零覆盖层能力 | `mode="popover"` | todo |
-| `marketing/header.tsx` 移动菜单 | 自写 `duration: 0.2` | `mode="popover"` | todo |
-| `ui/context-menu.tsx` | 2026-07-30 新增；定位、语义、roving focus 已验证，但 dismiss 与平台重复 | 以 `popover="auto"` 接管 top layer / dismiss / 互斥，保留既有 geometry / menu focus 策略 | todo |
+| `ui/dialog.tsx` | 无动画 / 无 ESC / 无 focus trap / 无 scroll lock | `mode="modal"` | done |
+| `ui/popover.tsx` | 无动画 / 无 ESC；全屏透明 button 兜 dismiss | `mode="popover"` | done |
+| `ui/hover-preview.tsx` | inline `${fadeMs}ms`；手写视口边界 | `mode="popover"`（**保留指针几何**，见下） | done |
+| `navigation/collapsible-panel.tsx` | 唯一做对进出场 | 成为抽屉预设并登记 `/playbook` | done |
+| `ui/tooltip.tsx` | 裸 `transition-opacity`，无 duration 无延迟；真实侧栏被 overflow 裁切 | `mode="popover"` + `dismissal="manual"`，补延迟与 `aria-describedby` | done |
+| `ui/toast.tsx` | 无动画 / 无 viewport / 无 portal / **不自动消失** | 根级 viewport + portal + 自动消失 + `aria-live` | done |
+| `ui/sidebar-chrome.tsx` AccountMenu | 裸 div，零覆盖层能力 | `mode="popover"` | done |
+| `marketing/header.tsx` 移动菜单 | 自写 `duration: 0.2` | `mode="popover"` | done |
+| `ui/context-menu.tsx` | 2026-07-30 新增；定位、语义、roving focus 已验证，但 dismiss 与平台重复 | 以 `popover="auto"` 接管 top layer / dismiss / 互斥，保留既有 geometry / menu focus 策略 | done |
 
 `hover-preview-geometry.ts` 的指针离开方向判定有独立测试，是真实资产，迁移时保留。
 迁移会使 `dialog-layering.test.ts` / `popover.test.ts` 失败——它们断言 `createPortal`
 与 `z-[1000]` 字符串。这是**预期结果**，须同批改为断言行为而非源码字符串。
 ESC 逻辑从 `app-sidebar-shell.tsx`、`canvas-inspector.tsx` 两处删除；
 `shot-panels.tsx` 两个漏掉 ESC 的抽屉随之自动补齐。
+Toast 是非模态通知例外：使用根级 portal viewport，不消费 `OverlayRoot`，也不参与焦点约束。
 
 ### 7.3 控件与字面量
 

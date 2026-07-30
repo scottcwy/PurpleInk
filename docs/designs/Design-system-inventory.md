@@ -196,7 +196,7 @@ Primary 按钮为**扁平实心**（Vercel/Linear 式）：零渐变、零投影
 | 曲线 | `standard` / `emphasized` / `exit` | 该文 §2.3 |
 | 弹性 | spatial 三档（`visualDuration` + `bounce`）；effects 类属性禁用 | 该文 §2.4 |
 | 意图表 | 17 条交互意图 → 参数映射 | 该文 §3 |
-| 覆盖层 | `OverlayRoot` 双模式（`<dialog>` / `popover="auto"`） | 该文 §4 |
+| 覆盖层 | `OverlayRoot` 双模式（`<dialog>` / Popover API）；Toast 使用独立根级 viewport | 该文 §4 |
 
 token 在 `src/app/globals.css` 分两层落地：`:root` 存语义值，`@theme inline` 用
 Tailwind v4 的 `--transition-duration-*` 命名空间导出为 class。
