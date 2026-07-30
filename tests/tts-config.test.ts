@@ -29,4 +29,33 @@ describe("TTS environment", () => {
       })
     ).toThrow(/LISTENHUB_TTS_ENDPOINT/);
   });
+
+  it("accepts an explicitly selected managed MiMo worker configuration", () => {
+    expect(
+      parseTtsEnv({
+        TTS_PROVIDER: "mimo",
+        CVC_MANAGED_MIMO_API_KEY: "test-mimo-key",
+        MIMO_BASE_URL: "https://api.xiaomimimo.com/v1",
+        MIMO_TTS_MODEL: "mimo-v2.5-tts",
+        MIMO_TTS_VOICE: "mimo_default",
+      })
+    ).toEqual({
+      TTS_PROVIDER: "mimo",
+      CVC_MANAGED_MIMO_API_KEY: "test-mimo-key",
+      MIMO_BASE_URL: "https://api.xiaomimimo.com/v1",
+      MIMO_TTS_MODEL: "mimo-v2.5-tts",
+      MIMO_TTS_VOICE: "mimo_default",
+    });
+  });
+
+  it("rejects MiMo worker configuration without the managed key", () => {
+    expect(() =>
+      parseTtsEnv({
+        TTS_PROVIDER: "mimo",
+        MIMO_BASE_URL: "https://api.xiaomimimo.com/v1",
+        MIMO_TTS_MODEL: "mimo-v2.5-tts",
+        MIMO_TTS_VOICE: "mimo_default",
+      })
+    ).toThrow(/CVC_MANAGED_MIMO_API_KEY/);
+  });
 });

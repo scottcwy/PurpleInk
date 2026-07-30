@@ -4,8 +4,8 @@ PurpleInk 的媒体能力与文本模型分别路由。旁白 TTS 和字幕 ASR 
 阶跃星辰，或各自独立的 OpenAI 兼容自定义端点；音频失败不会撤销已经提交的文本与
 分镜合同。
 
-本文件只覆盖 Next 应用内的媒体链路。`server/` 渲染 worker 有一条独立的 TTS 实现
-（ListenHub，纯 env 配置），不读 `provider_credentials`，也不消费本页任何配置。
+Next 应用内的媒体链路与 `server/` 渲染 worker 各自解析配置。worker 不读
+`provider_credentials`；它只接受显式 env 供应商选择，不会在失败时静默换供应商。
 
 ## 供应商
 
@@ -39,6 +39,19 @@ MIMO_ASR_MODEL=mimo-v2.5-asr
 ```
 
 真实 Key 只通过设置页验证后加密保存，不写入仓库、浏览器状态、产物或日志。
+
+## 渲染 worker 的显式 TTS 路由
+
+`server/` 通过 `TTS_PROVIDER` 选择旁白供应商：
+
+- `listenhub-flowspeech`：使用 `LISTENHUB_API_KEY`、`LISTENHUB_API_BASE_URL`、
+  `LISTENHUB_TTS_ENDPOINT`、`LISTENHUB_TTS_VOICE` 与
+  `LISTENHUB_TTS_RESPONSE_FORMAT`。
+- `mimo`：使用 `CVC_MANAGED_MIMO_API_KEY`、`MIMO_BASE_URL`、
+  `MIMO_TTS_MODEL` 与可选的 `MIMO_TTS_VOICE`（默认 `mimo_default`），输出 WAV。
+
+两条配置是互斥的判别联合：选中哪家就只校验、调用哪家。上游失败会保留为失败，
+不会生成静音、把错误 JSON 当音频，或自动回落到另一家。
 
 ## 自定义兼容音频端点
 

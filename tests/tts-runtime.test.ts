@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { synthesizeFlowSpeech } from "../server/src/tts/listenhub";
+import { synthesizeMimoSpeech } from "../server/src/tts/mimo";
 import {
   buildNarrationTrack,
   measureAudioDuration,
   muxNarration,
   type ProcessRunner,
 } from "../server/src/tts/media";
+import { mp3Frames } from "../src/features/audio/mp3.fixture";
 
 const ttsConfig = {
   TTS_PROVIDER: "listenhub-flowspeech" as const,
@@ -21,7 +23,7 @@ describe("FlowSpeech client", () => {
   it("sends the documented request without a model field", async () => {
     const fetchImpl = vi.fn(
       async (_input: string | URL, _init?: RequestInit) =>
-        new Response(new Uint8Array([1, 2, 3]), {
+        new Response(Uint8Array.from(mp3Frames(2)), {
           status: 200,
           headers: { "Content-Type": "audio/mpeg" },
         })
@@ -33,7 +35,7 @@ describe("FlowSpeech client", () => {
       fetchImpl
     );
 
-    expect(new Uint8Array(audio)).toEqual(new Uint8Array([1, 2, 3]));
+    expect(Buffer.from(audio)).toEqual(mp3Frames(2));
     expect(fetchImpl).toHaveBeenCalledOnce();
     const [url, init] = fetchImpl.mock.calls[0]!;
     expect(url).toBe("https://api.marswave.ai/openapi/v1/tts");
@@ -41,6 +43,7 @@ describe("FlowSpeech client", () => {
       Authorization: "Bearer test-key",
       "Content-Type": "application/json",
     });
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
     expect(JSON.parse(String(init?.body))).toEqual({
       input: "独立旁白。",
       voice: "nanzhongyin-4897116a",
@@ -61,6 +64,102 @@ describe("FlowSpeech client", () => {
     await expect(
       synthesizeFlowSpeech("旁白。", ttsConfig, fetchImpl)
     ).rejects.not.toThrow("upstream secret detail");
+  });
+
+  it("rejects provider error JSON returned with HTTP 200", async () => {
+    const fetchImpl = vi.fn(
+      async (_input: string | URL, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            code: 26004,
+            message: "provider account detail must stay private",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }
+        )
+    );
+
+    await expect(
+      synthesizeFlowSpeech("旁白。", ttsConfig, fetchImpl)
+    ).rejects.toThrow("FlowSpeech TTS failed with provider code 26004");
+    await expect(
+      synthesizeFlowSpeech("旁白。", ttsConfig, fetchImpl)
+    ).rejects.not.toThrow("provider account detail must stay private");
+  });
+
+  it("rejects provider error JSON even when the content type claims audio", async () => {
+    const fetchImpl = vi.fn(
+      async (_input: string | URL, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            code: 26004,
+            message: "provider account detail must stay private",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "audio/mpeg" },
+          }
+        )
+    );
+
+    await expect(
+      synthesizeFlowSpeech("旁白。", ttsConfig, fetchImpl)
+    ).rejects.toThrow("FlowSpeech TTS failed with provider code 26004");
+    await expect(
+      synthesizeFlowSpeech("旁白。", ttsConfig, fetchImpl)
+    ).rejects.not.toThrow("provider account detail must stay private");
+  });
+
+  it("rejects bytes that do not match the configured audio container", async () => {
+    const fetchImpl = vi.fn(
+      async (_input: string | URL, _init?: RequestInit) =>
+        new Response(new Uint8Array([1, 2, 3]), {
+          status: 200,
+          headers: { "Content-Type": "audio/mpeg" },
+        })
+    );
+
+    await expect(
+      synthesizeFlowSpeech("旁白。", ttsConfig, fetchImpl)
+    ).rejects.toThrow("FlowSpeech TTS returned invalid mp3 audio");
+  });
+});
+
+describe("MiMo worker TTS client", () => {
+  it("sends the chat-completions audio contract and returns WAV bytes", async () => {
+    const wav = makeTinyWav();
+    const fetchImpl = vi.fn(
+      async (_input: string | URL, _init?: RequestInit) =>
+        Response.json({
+          choices: [{ message: { audio: { data: wav.toString("base64") } } }],
+        })
+    );
+
+    const audio = await synthesizeMimoSpeech(
+      "独立旁白。",
+      {
+        TTS_PROVIDER: "mimo",
+        CVC_MANAGED_MIMO_API_KEY: "test-mimo-key",
+        MIMO_BASE_URL: "https://api.xiaomimimo.com/v1",
+        MIMO_TTS_MODEL: "mimo-v2.5-tts",
+        MIMO_TTS_VOICE: "mimo_default",
+      },
+      fetchImpl
+    );
+
+    expect(Buffer.from(audio)).toEqual(wav);
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toBe("https://api.xiaomimimo.com/v1/chat/completions");
+    expect(init?.headers).toEqual({
+      "api-key": "test-mimo-key",
+      "content-type": "application/json",
+    });
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      model: "mimo-v2.5-tts",
+      audio: { format: "wav", voice: "mimo_default" },
+    });
   });
 });
 
@@ -160,3 +259,21 @@ describe("TTS media commands", () => {
     expect(args).toEqual(expect.arrayContaining(["-t", "7"]));
   });
 });
+
+function makeTinyWav(): Buffer {
+  const bytes = Buffer.alloc(44);
+  bytes.write("RIFF", 0, "ascii");
+  bytes.writeUInt32LE(36, 4);
+  bytes.write("WAVE", 8, "ascii");
+  bytes.write("fmt ", 12, "ascii");
+  bytes.writeUInt32LE(16, 16);
+  bytes.writeUInt16LE(1, 20);
+  bytes.writeUInt16LE(1, 22);
+  bytes.writeUInt32LE(16_000, 24);
+  bytes.writeUInt32LE(32_000, 28);
+  bytes.writeUInt16LE(2, 32);
+  bytes.writeUInt16LE(16, 34);
+  bytes.write("data", 36, "ascii");
+  bytes.writeUInt32LE(0, 40);
+  return bytes;
+}
