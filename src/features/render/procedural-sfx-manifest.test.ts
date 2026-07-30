@@ -104,6 +104,58 @@ describe('procedural SFX manifest', () => {
     expect(text).not.toContain('path')
   })
 
+  it.each([
+    {
+      name: 'applied with no cues',
+      patch: { cueCount: 0, waveformHashes: [] },
+    },
+    {
+      name: 'applied without plan hashes',
+      patch: { timingHash: null, cuePlanHash: null },
+    },
+    {
+      name: 'applied with fewer waveforms than cues',
+      patch: { cueCount: 2, waveformHashes: ['d'.repeat(64)] },
+    },
+    {
+      name: 'applied with a failure code',
+      patch: { failureCode: 'PROCEDURAL_SFX_MIX_FAILED' },
+    },
+    {
+      name: 'off with procedural mode',
+      patch: { mode: 'procedural' },
+      base: disabledManifest(),
+    },
+    {
+      name: 'off with hashes',
+      patch: { timingHash: 'b'.repeat(64) },
+      base: disabledManifest(),
+    },
+    {
+      name: 'error without safe failure code',
+      patch: {},
+      base: {
+        ...appliedManifest(),
+        status: 'omitted-error',
+      },
+    },
+  ])('fails closed for a contradictory $name manifest', ({ patch, base }) => {
+    const bytes = Buffer.from(JSON.stringify({
+      schemaVersion: 'cvc.procedural-sfx-manifest/v1',
+      attemptId: ATTEMPT_ID,
+      finalContentHash: FINAL_HASH,
+      ...(base ?? appliedManifest()),
+      ...patch,
+    }), 'utf-8')
+
+    expect(
+      parseProceduralSfxManifestForFinal(bytes, {
+        attemptId: ATTEMPT_ID,
+        finalContentHash: FINAL_HASH,
+      })
+    ).toBeNull()
+  })
+
   it('writes real storage bytes whose SHA-256 matches the registered descriptor', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'pi-sfx-manifest-'))
     try {
@@ -163,6 +215,30 @@ describe('procedural SFX manifest', () => {
     }
   })
 })
+
+function appliedManifest() {
+  return {
+    mode: 'procedural',
+    status: 'applied',
+    generatorVersion: 'procedural-sfx/1.0.0',
+    cueCount: 1,
+    timingHash: 'b'.repeat(64),
+    cuePlanHash: 'c'.repeat(64),
+    waveformHashes: ['d'.repeat(64)],
+  } as const
+}
+
+function disabledManifest() {
+  return {
+    mode: 'off',
+    status: 'omitted-off',
+    generatorVersion: 'procedural-sfx/1.0.0',
+    cueCount: 0,
+    timingHash: null,
+    cuePlanHash: null,
+    waveformHashes: [],
+  } as const
+}
 
 function plan(soundEffects: 'off' | 'procedural'): MediaAssemblyPlan {
   return {

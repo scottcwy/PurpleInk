@@ -160,6 +160,7 @@ describe('GET /api/render/export', () => {
     mocks.getExportReadiness.mockReturnValue(
       readiness({
         finalArtifactId: 'artifact-final',
+        artifactDownloadable: true,
         confirmationFingerprint: 'sha256:current',
       }),
     )
@@ -173,6 +174,21 @@ describe('GET /api/render/export', () => {
       artifactUrl: '/api/artifacts/artifact-final?projectId=project-1',
       confirmationFingerprint: 'sha256:current',
     })
+  })
+
+  it('does not expose an old final URL when delivery is not currently downloadable', async () => {
+    mocks.getExportReadiness.mockReturnValue(
+      readiness({
+        finalArtifactId: 'artifact-final',
+        artifactDownloadable: false,
+      }),
+    )
+
+    const response = await GET(
+      new Request('http://localhost/api/render/export?projectId=project-1'),
+    )
+
+    await expect(response.json()).resolves.toMatchObject({ artifactUrl: null })
   })
 })
 

@@ -185,6 +185,10 @@ function readiness(overrides: Partial<ExportReadiness> = {}): ExportReadiness {
     subtitles: 'burn-in',
     soundEffects: 'off',
     artifactSoundEffects: null,
+    artifactLifecycle: null,
+    artifactAttemptStatus: null,
+    artifactSettingsMatch: false,
+    artifactDownloadable: false,
     timeline: null,
     blockingIssues: [],
     media: {

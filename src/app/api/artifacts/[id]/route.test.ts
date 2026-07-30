@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 
 const mocks = vi.hoisted(() => ({
   getArtifactDescriptor: vi.fn(),
+  getExportReadiness: vi.fn(),
   getProjectExecutionSnapshot: vi.fn(),
   readArtifact: vi.fn(),
 }))
@@ -28,10 +30,14 @@ vi.mock('@/features/artifacts', async () => {
 vi.mock('@/features/projects', () => ({
   getProjectExecutionSnapshot: mocks.getProjectExecutionSnapshot,
 }))
+vi.mock('@/features/render/export-readiness', () => ({
+  getExportReadiness: mocks.getExportReadiness,
+}))
 
 const { GET } = await import('./route')
 
-const HASH = '8d21f3a4b5c6'.padEnd(64, '0')
+const FINAL_BYTES = Buffer.from('mp4-bytes')
+const HASH = createHash('sha256').update(FINAL_BYTES).digest('hex')
 
 describe('GET /api/artifacts/[id]', () => {
   beforeEach(() => {
@@ -51,7 +57,11 @@ describe('GET /api/artifacts/[id]', () => {
         kind: 'final-mp4',
         contentHash: HASH,
       },
-      bytes: Buffer.from('mp4-bytes'),
+      bytes: FINAL_BYTES,
+    })
+    mocks.getExportReadiness.mockResolvedValue({
+      finalArtifactId: 'artifact-1',
+      artifactDownloadable: true,
     })
   })
 
@@ -77,7 +87,7 @@ describe('GET /api/artifacts/[id]', () => {
     )
 
     expect(response.headers.get('content-disposition')).toBe(
-      'attachment; filename="final-mp4-8d21f3a4b5c6.mp4"'
+      `attachment; filename="final-mp4-${HASH.slice(0, 12)}.mp4"`
     )
     expect(response.headers.get('content-type')).toBe('video/mp4')
   })
@@ -103,6 +113,27 @@ describe('GET /api/artifacts/[id]', () => {
     expect(response.status).toBe(404)
     await expect(response.text()).resolves.toBe('产物不存在')
     expect(response.headers.get('content-disposition')).toBeNull()
+  })
+
+  it.each([
+    ['draft artifact', { artifactLifecycle: 'draft', artifactAttemptStatus: 'succeeded' }],
+    ['rejected artifact', { artifactLifecycle: 'rejected', artifactAttemptStatus: 'succeeded' }],
+    ['failed attempt', { artifactLifecycle: 'approved', artifactAttemptStatus: 'failed' }],
+    ['changed sound-effect setting', { artifactLifecycle: 'approved', artifactAttemptStatus: 'succeeded', artifactSettingsMatch: false }],
+  ])('does not serve a generic final MP4 for %s', async (_name, facts) => {
+    mocks.getExportReadiness.mockResolvedValue({
+      finalArtifactId: 'artifact-1',
+      artifactDownloadable: false,
+      ...facts,
+    })
+
+    const response = await GET(
+      new Request('https://app.test/api/artifacts/artifact-1?projectId=project-1'),
+      { params: Promise.resolve({ id: 'artifact-1' }) }
+    )
+
+    expect(response.status).toBe(404)
+    expect(mocks.readArtifact).not.toHaveBeenCalled()
   })
 
   it('does not expose a blocked or rejected website video', async () => {

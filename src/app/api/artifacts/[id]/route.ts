@@ -9,6 +9,7 @@ import {
 } from '@/features/artifacts'
 import { withApiSession } from '@/features/auth/api-session'
 import { getProjectExecutionSnapshot } from '@/features/projects'
+import { getExportReadiness } from '@/features/render/export-readiness'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,9 +40,18 @@ async function handleGet(request: Request, params: Promise<{ id: string }>) {
         throw new Error('website delivery unavailable')
       }
     }
+    if (candidate.kind === 'final-mp4') {
+      const readiness = await getExportReadiness(projectId)
+      if (
+        readiness.finalArtifactId !== artifactId
+        || !readiness.artifactDownloadable
+      ) {
+        throw new Error('final delivery unavailable')
+      }
+    }
     const { descriptor, bytes } = await readArtifact(projectId, artifactId)
     if (
-      descriptor.kind === 'website-video-mp4'
+      (descriptor.kind === 'website-video-mp4' || descriptor.kind === 'final-mp4')
       && (
         !descriptor.contentHash
         || createHash('sha256').update(bytes).digest('hex')
@@ -57,7 +67,9 @@ async function handleGet(request: Request, params: Promise<{ id: string }>) {
         'content-type': artifactContentType(descriptor.kind),
         'content-length': String(bytes.length),
         'cache-control': 'private, no-store',
-        ...(descriptor.kind === 'website-video-mp4'
+        ...(
+          descriptor.kind === 'website-video-mp4'
+          || descriptor.kind === 'final-mp4'
           ? { 'x-content-sha256': descriptor.contentHash ?? '' }
           : {}),
         ...(attachment

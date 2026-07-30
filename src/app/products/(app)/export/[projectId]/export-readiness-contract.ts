@@ -32,6 +32,17 @@ export interface ExportReadiness {
   soundEffects: ExportArtifactSoundEffects['mode']
   /** 最近成片实际音效，仅在 Manifest 与该终片严格绑定时存在。 */
   artifactSoundEffects: ExportArtifactSoundEffects | null
+  artifactLifecycle: 'draft' | 'approved' | 'released' | 'rejected' | null
+  artifactAttemptStatus:
+    | 'queued'
+    | 'running'
+    | 'succeeded'
+    | 'failed'
+    | 'cancelled'
+    | 'superseded'
+    | null
+  artifactSettingsMatch: boolean
+  artifactDownloadable: boolean
   artifactUrl?: string
   blockingIssues: ExportBlockingIssue[]
   media: ExportMediaReadiness
@@ -92,6 +103,7 @@ export function parseExportReadiness(
   ) {
     throw new Error('导出状态响应无效')
   }
+  const artifactDownloadable = body.artifactDownloadable === true
   return {
     ready: body.ready,
     incompleteNodeIds: body.incompleteNodeIds as string[],
@@ -108,6 +120,10 @@ export function parseExportReadiness(
       : DEFAULT_EXPORT_SETTINGS.soundEffects,
     artifactSoundEffects:
       parseExportArtifactSoundEffects(body.artifactSoundEffects),
+    artifactLifecycle: toArtifactLifecycle(body.artifactLifecycle),
+    artifactAttemptStatus: toArtifactAttemptStatus(body.artifactAttemptStatus),
+    artifactSettingsMatch: body.artifactSettingsMatch === true,
+    artifactDownloadable,
     blockingIssues: toBlockingIssues(body.blockingIssues),
     media: toMediaReadiness(body.media, body.shotCount),
     placeholderCandidateLanes: toStringArray(body.placeholderCandidateLanes),
@@ -122,10 +138,35 @@ export function parseExportReadiness(
       ? body.artifactDelivery
       : 'none',
     timeline: toTimeline(body.timeline),
-    ...(typeof body.artifactUrl === 'string'
+    ...(artifactDownloadable && typeof body.artifactUrl === 'string'
       ? { artifactUrl: body.artifactUrl }
       : {}),
   }
+}
+
+function toArtifactLifecycle(
+  value: unknown
+): ExportReadiness['artifactLifecycle'] {
+  return typeof value === 'string'
+    && ['draft', 'approved', 'released', 'rejected'].includes(value)
+    ? value as ExportReadiness['artifactLifecycle']
+    : null
+}
+
+function toArtifactAttemptStatus(
+  value: unknown
+): ExportReadiness['artifactAttemptStatus'] {
+  return typeof value === 'string'
+    && [
+      'queued',
+      'running',
+      'succeeded',
+      'failed',
+      'cancelled',
+      'superseded',
+    ].includes(value)
+    ? value as ExportReadiness['artifactAttemptStatus']
+    : null
 }
 
 function toShotQa(value: unknown): Record<string, boolean | null> {

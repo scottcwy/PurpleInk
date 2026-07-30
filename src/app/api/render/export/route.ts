@@ -46,11 +46,16 @@ async function handleGet(request: Request) {
         }`
       )
     }
-    const { finalArtifactId, ...readiness } = await getExportReadiness(projectId)
+    const {
+      finalArtifactId,
+      artifactDownloadable,
+      ...readiness
+    } = await getExportReadiness(projectId)
     return NextResponse.json({
       ok: true,
       ...readiness,
-      artifactUrl: finalArtifactId
+      artifactDownloadable,
+      artifactUrl: finalArtifactId && artifactDownloadable
         ? `/api/artifacts/${finalArtifactId}?projectId=${encodeURIComponent(projectId)}`
         : null,
     })

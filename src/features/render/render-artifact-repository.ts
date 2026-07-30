@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import {
   commitArtifactRecord,
   commitArtifactRecords,
@@ -10,7 +10,7 @@ import {
 import type { SubtitleDeliveryMode } from '@/features/canvas/export-settings'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { type Db } from '@/lib/db/client'
-import { artifacts } from '@/lib/db/schema/index'
+import { artifacts, taskAttempts } from '@/lib/db/schema/index'
 import { finalVideoSchemaVersion } from './final-video-delivery'
 import { writeNodeProjection } from './persistence'
 import { RenderShotRepository } from './render-shot-repository'
@@ -65,6 +65,8 @@ export interface FinalArtifactRecord {
   contentHash: string
   schemaVersion: string
   sizeBytes: number
+  lifecycle?: string
+  attemptStatus?: string
 }
 
 export interface ThumbnailRegistration {
@@ -141,6 +143,21 @@ export class RenderArtifactRepository extends RenderShotRepository {
     const final = committed[0]
     const soundEffects = committed[1]
     if (!final || !soundEffects) throw new Error('终片 Artifact 批量提交不完整')
+    const artifactIds = committed.map((artifact) => artifact.artifactId)
+    const approved = await (await this.database())
+      .update(artifacts)
+      .set({ lifecycle: 'approved', updatedAt: new Date() })
+      .where(and(
+        eq(artifacts.workspaceId, workspaceId),
+        eq(artifacts.projectId, input.projectId),
+        eq(artifacts.attemptId, input.attemptId),
+        eq(artifacts.lifecycle, 'draft'),
+        inArray(artifacts.id, artifactIds),
+      ))
+      .returning({ id: artifacts.id })
+    if (approved.length !== artifactIds.length) {
+      throw new Error('终片 Artifact 批量批准不完整')
+    }
     return {
       finalArtifactId: final.artifactId,
       soundEffectsManifestArtifactId: soundEffects.artifactId,
@@ -160,8 +177,17 @@ export class RenderArtifactRepository extends RenderShotRepository {
         contentHash: artifacts.contentHash,
         schemaVersion: artifacts.schemaVersion,
         sizeBytes: artifacts.sizeBytes,
+        lifecycle: artifacts.lifecycle,
+        attemptStatus: taskAttempts.status,
       })
       .from(artifacts)
+      .innerJoin(
+        taskAttempts,
+        and(
+          eq(taskAttempts.workspaceId, artifacts.workspaceId),
+          eq(taskAttempts.id, artifacts.attemptId),
+        ),
+      )
       .where(
         and(
           eq(artifacts.workspaceId, currentWorkspaceId()),
@@ -181,6 +207,8 @@ export class RenderArtifactRepository extends RenderShotRepository {
           contentHash: row.contentHash,
           schemaVersion: row.schemaVersion,
           sizeBytes: row.sizeBytes,
+          lifecycle: row.lifecycle,
+          attemptStatus: row.attemptStatus,
         }
       : null
   }

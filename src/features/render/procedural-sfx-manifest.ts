@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import {
   PROCEDURAL_SFX_GENERATOR_VERSION,
   buildBoundaryCuePlan,
+  isProceduralSfxResultContract,
   type ProceduralSfxCue,
   type ProceduralSfxMode,
 } from '@purpleink/procedural-sfx'
@@ -48,6 +49,9 @@ const manifestSchema = z
     failureCode: z.literal('PROCEDURAL_SFX_MIX_FAILED').optional(),
   })
   .strict()
+  .refine(isProceduralSfxResultContract, {
+    message: '程序化音效 Manifest 字段组合无效',
+  })
 
 export type ProceduralSfxManifest = z.infer<typeof manifestSchema>
 

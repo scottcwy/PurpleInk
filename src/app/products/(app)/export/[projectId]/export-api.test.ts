@@ -58,6 +58,10 @@ describe('export API client', () => {
         cuePlanHash: null,
         waveformHashes: [],
       },
+      artifactLifecycle: null,
+      artifactAttemptStatus: null,
+      artifactSettingsMatch: false,
+      artifactDownloadable: false,
       blockingIssues: [
         { laneKey: 'S001', kind: 'subtitle', code: 'artifact-missing' },
       ],
@@ -73,7 +77,6 @@ describe('export API client', () => {
       confirmationFingerprint: null,
       degradedExport: null,
       artifactDelivery: 'legacy-silent-v1',
-      artifactUrl: '/api/artifacts/final?projectId=project-1',
       timeline: null,
     })
   })
@@ -91,6 +94,10 @@ describe('export API client', () => {
       subtitles: 'burn-in',
       soundEffects: 'off',
       artifactSoundEffects: null,
+      artifactLifecycle: null,
+      artifactAttemptStatus: null,
+      artifactSettingsMatch: false,
+      artifactDownloadable: false,
       blockingIssues: [],
       media: {
         narrationReadyCount: 0,

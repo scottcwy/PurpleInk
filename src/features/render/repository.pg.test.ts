@@ -335,6 +335,7 @@ describe('RenderRepository Postgres', () => {
         kind: artifacts.kind,
         attemptId: artifacts.attemptId,
         contentHash: artifacts.contentHash,
+        lifecycle: artifacts.lifecycle,
       })
       .from(artifacts)
       .where(
@@ -357,12 +358,14 @@ describe('RenderRepository Postgres', () => {
           kind: 'final-mp4',
           attemptId: fixture.projectAttemptId,
           contentHash: finalContentHash,
+          lifecycle: 'approved',
         }),
         expect.objectContaining({
           id: registered.soundEffectsManifestArtifactId,
           kind: 'procedural-sfx-manifest',
           attemptId: fixture.projectAttemptId,
           contentHash: manifestContentHash,
+          lifecycle: 'approved',
         }),
       ])
     )

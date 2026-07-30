@@ -60,6 +60,17 @@ export interface ExportReadinessResult {
   soundEffects: NonNullable<RenderExportPlan['soundEffects']>
   /** 最新成片实际音效；只来自与 final attempt/hash 严格绑定的 Manifest。 */
   artifactSoundEffects: ExportArtifactSoundEffects | null
+  artifactLifecycle: 'draft' | 'approved' | 'released' | 'rejected' | null
+  artifactAttemptStatus:
+    | 'queued'
+    | 'running'
+    | 'succeeded'
+    | 'failed'
+    | 'cancelled'
+    | 'superseded'
+    | null
+  artifactSettingsMatch: boolean
+  artifactDownloadable: boolean
   finalArtifactId: string | null
   /** 最新成片的可追溯事实；无成片时为 null。 */
   finalArtifact: {
@@ -67,6 +78,11 @@ export interface ExportReadinessResult {
     contentHash: string
     sizeBytes: number
     delivery: FinalVideoDelivery
+    attemptId: string
+    lifecycle: ExportReadinessResult['artifactLifecycle']
+    attemptStatus: ExportReadinessResult['artifactAttemptStatus']
+    settingsMatch: boolean
+    downloadable: boolean
   } | null
   blockingIssues: RenderExportPlan['blockingIssues']
   media: RenderExportPlan['media']
@@ -108,6 +124,23 @@ export async function getExportReadiness(
 ): Promise<ExportReadinessResult> {
   const plan = await repository.getExportPlan(projectId)
   const finalArtifact = await repository.findLatestFinalArtifact(projectId)
+  const artifactManifest = finalArtifact
+    ? await resolveSoundEffectsReader(repository, readSoundEffects)(
+        projectId,
+        finalArtifact,
+      )
+    : null
+  const artifactSoundEffects = soundEffectsProjection(artifactManifest)
+  const artifactLifecycle = finalLifecycle(finalArtifact?.lifecycle)
+  const artifactAttemptStatus = finalAttemptStatus(finalArtifact?.attemptStatus)
+  const artifactSettingsMatch =
+    artifactSoundEffects !== null
+    && artifactSoundEffects.mode === (plan.soundEffects ?? 'off')
+  const artifactDownloadable =
+    finalArtifact !== null
+    && (artifactLifecycle === 'approved' || artifactLifecycle === 'released')
+    && artifactAttemptStatus === 'succeeded'
+    && artifactSettingsMatch
   const ready =
     plan.incompleteNodeIds.length === 0 &&
     plan.blockingIssues.length === 0 &&
@@ -132,14 +165,11 @@ export async function getExportReadiness(
     resolutionPreset: plan.resolutionPreset,
     subtitles: plan.subtitles,
     soundEffects: plan.soundEffects ?? 'off',
-    artifactSoundEffects: finalArtifact
-      ? soundEffectsProjection(
-          await resolveSoundEffectsReader(repository, readSoundEffects)(
-            projectId,
-            finalArtifact,
-          ),
-        )
-      : null,
+    artifactSoundEffects,
+    artifactLifecycle,
+    artifactAttemptStatus,
+    artifactSettingsMatch,
+    artifactDownloadable,
     finalArtifactId: finalArtifact?.artifactId ?? null,
     finalArtifact: finalArtifact
       ? {
@@ -147,6 +177,11 @@ export async function getExportReadiness(
           contentHash: finalArtifact.contentHash,
           sizeBytes: finalArtifact.sizeBytes,
           delivery: deliveryFromSchemaVersion(finalArtifact.schemaVersion),
+          attemptId: finalArtifact.attemptId,
+          lifecycle: artifactLifecycle,
+          attemptStatus: artifactAttemptStatus,
+          settingsMatch: artifactSettingsMatch,
+          downloadable: artifactDownloadable,
         }
       : null,
     blockingIssues: plan.blockingIssues,
@@ -275,4 +310,27 @@ function finalDelivery(
 ): ExportArtifactDelivery {
   if (!artifact) return 'none'
   return deliveryFromSchemaVersion(artifact.schemaVersion)
+}
+
+function finalLifecycle(
+  value: string | undefined
+): ExportReadinessResult['artifactLifecycle'] {
+  return ['draft', 'approved', 'released', 'rejected'].includes(value ?? '')
+    ? value as ExportReadinessResult['artifactLifecycle']
+    : null
+}
+
+function finalAttemptStatus(
+  value: string | undefined
+): ExportReadinessResult['artifactAttemptStatus'] {
+  return [
+    'queued',
+    'running',
+    'succeeded',
+    'failed',
+    'cancelled',
+    'superseded',
+  ].includes(value ?? '')
+    ? value as ExportReadinessResult['artifactAttemptStatus']
+    : null
 }

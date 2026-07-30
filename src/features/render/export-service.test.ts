@@ -382,7 +382,66 @@ describe('getExportReadiness', () => {
       mode: 'off',
       status: 'omitted-off',
     })
+    expect(result.artifactSettingsMatch).toBe(false)
+    expect(result.artifactDownloadable).toBe(false)
   })
+
+  it.each([
+    ['draft', 'succeeded', false],
+    ['rejected', 'succeeded', false],
+    ['approved', 'failed', false],
+    ['approved', 'succeeded', true],
+  ] as const)(
+    'projects final lifecycle=%s attempt=%s as downloadable=%s',
+    async (lifecycle, attemptStatus, downloadable) => {
+      const result = await getExportReadiness(
+        'project-1',
+        {
+          getExportPlan: vi.fn(async () => ({
+            incompleteNodeIds: [],
+            shots: [{ nodeId: 'node-1', laneKey: 'S001', outputKey: 'render/S001.mp4' }],
+            musicKey: null,
+            subtitles: 'off' as const,
+            soundEffects: 'off' as const,
+            targetResolution: { width: 1920, height: 1080 },
+            resolutionPreset: '1920x1080' as const,
+            shotQa: { S001: true },
+            ...mediaFields(completeMediaPlan()),
+          })),
+          findLatestFinalArtifact: vi.fn(async () => ({
+            artifactId: 'artifact-final',
+            attemptId: ATTEMPT_ID,
+            path: 'exports/project-1/final.mp4',
+            contentHash: 'f'.repeat(64),
+            schemaVersion: 'cvc.final-video/v3',
+            sizeBytes: 1_024,
+            lifecycle,
+            attemptStatus,
+          })),
+          findDegradedExport: vi.fn(async () => null),
+        },
+        vi.fn(async () => ({
+          schemaVersion: 'cvc.procedural-sfx-manifest/v1' as const,
+          attemptId: ATTEMPT_ID,
+          finalContentHash: 'f'.repeat(64),
+          mode: 'off' as const,
+          status: 'omitted-off' as const,
+          generatorVersion: 'procedural-sfx/1.0.0' as const,
+          cueCount: 0,
+          timingHash: null,
+          cuePlanHash: null,
+          waveformHashes: [],
+        })),
+      )
+
+      expect(result).toMatchObject({
+        artifactLifecycle: lifecycle,
+        artifactAttemptStatus: attemptStatus,
+        artifactSettingsMatch: true,
+        artifactDownloadable: downloadable,
+      })
+    },
+  )
 
   it('changes the idempotency fingerprint when the subtitle delivery changes', async () => {
     // 不进指纹的话，切换开关后重导出会命中同一个已完成作业并返回旧成片。
