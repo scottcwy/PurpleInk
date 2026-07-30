@@ -11,7 +11,7 @@ import type { Transition } from 'motion/react'
  * `tokens.test.ts` 的同步测试会校验本文件与 globals.css 一致。
  */
 export const DURATION = {
-  fast: 0.12,
+  fast: 0.15,
   base: 0.22,
   slow: 0.36,
   /** 营销叙事档，仅 (marketing) 段可用，见规范 §5.4。 */

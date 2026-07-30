@@ -21,7 +21,8 @@
 
 本规范落地前的实测状况（作为反面基线保留）：
 
-- `duration-150` 出现 8 处，而体系三档是 120 / 220 / 360——150 不属于任何一档；
+- `duration-150` 显式出现 8 处，另有 15+ 处裸 `transition-*` 隐式吃 Tailwind 默认的
+  150ms——150 已是事实标准，却没有语义名字；
 - hover 换底有 6 种写法，其中 `sidebar-chrome.tsx` 的 AccountMenu 行完全没有过渡；
 - 折叠展开有 3 套实现，`marketing/faq.tsx` 用了体系内不存在的曲线 `[0.25,0.46,0.45,0.94]`；
 - 覆盖层有 8 套独立实现，Dialog 无 ESC / 无 focus trap / 无 scroll lock，Toast 不会自动消失；
@@ -43,7 +44,7 @@ Tailwind v4 从 `@theme` 读取的 duration 命名空间是 **`--transition-dura
 
 ```css
 :root {
-  --duration-fast: 120ms;
+  --duration-fast: 150ms;
   --duration-base: 220ms;
   --duration-slow: 360ms;
   --duration-narrative: 300ms;
@@ -67,7 +68,7 @@ Tailwind v4 从 `@theme` 读取的 duration 命名空间是 **`--transition-dura
 
 | Token | 值 | 用途 |
 | --- | --- | --- |
-| `fast` | 120ms | 微交互：hover 换底、focus ring、图标色变、tooltip 淡入 |
+| `fast` | 150ms | 微交互：hover 换底、focus ring、图标色变、tooltip 淡入 |
 | `base` | 220ms | 标准 UI 变化：面板、抽屉、折叠、路由转场 |
 | `slow` | 360ms | 大面积或强调：全屏遮罩、TOC 定位发光 |
 | `narrative` | 300ms | **仅 `(marketing)` 段**的叙事进入（见 §5.4） |
@@ -100,6 +101,10 @@ Tailwind v4 从 `@theme` 读取的 duration 命名空间是 **`--transition-dura
 
 **bounce 与元素尺寸反相关**，这是刻意的：小控件弹一点有生气，大面积 overshoot 会被放大成
 "果冻感"，正是 `design-quality-pitfalls.md` §1.2 要防的廉价感。不要按"越慢越弹"直觉设置。
+
+**待验项（批次 03）**：`fast` 校准为 150ms 后，`SPRING_SPATIAL_FAST` 的 0.18s
+只余 0.03s 弹性时间。须在真实 toggle knob 与按压回弹上判断是否仍有可辨识的弹性；
+没有实物证据前不调整到 0.20–0.22s。
 
 **例外：拖拽与惯性仍用物理参数。** `visualDuration / bounce` 不吸收当前手势速度，
 不跟手。侧栏 / 面板拖拽调宽保持 `TRANSITION_INSTANT`（duration 0），1:1 跟随指针。
@@ -253,6 +258,7 @@ top layer 天然位于所有 stacking context 之上，不需要 z-index。
 | `lib/motion/tokens.ts` spring | 无 | 补 §2.4 三档 | done |
 | `lib/motion/tokens.test.ts` | 只测 JS 侧递增 | 补 CSS↔JS 同步测试 | done |
 | `design-system.css` `[data-glow]` | 硬编码 `0.36s cubic-bezier(0.4,0,0.2,1)` | `var(--duration-slow) var(--ease-standard)` | done |
+| `fast` token 校准 | 120ms 与全站事实标准 150ms 分叉 | 按 D1 统一为 150ms | done |
 | `/playbook/foundations` | 无动效段 | 补 token 对照 | done |
 | `/playbook/motion` | 不存在 | §3 意图对照台 | done |
 

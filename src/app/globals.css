@@ -73,7 +73,7 @@
   /* 动效时长语义值。权威源 docs/conventions/motion-interaction.md §2.2。
      Tailwind class 由下方 @theme inline 的 --transition-duration-* 导出，
      新增档位必须同步改 :root、@theme inline 与 src/lib/motion/tokens.ts 三处。 */
-  --duration-fast: 120ms;
+  --duration-fast: 150ms;
   --duration-base: 220ms;
   --duration-slow: 360ms;
   /* 营销叙事档，仅 (marketing) 段可用，见规范 §5.4。 */
@@ -208,7 +208,7 @@
   --radius-pill: var(--radius-pill);
   /* Tailwind v4 的 duration 命名空间是 --transition-duration-*，不是 --duration-*。
      少了这四行，duration-fast/base/slow/narrative 这些 class 根本不存在，
-     控件只能回退到 Tailwind 默认的 duration-150（既非 120 也非 220）。 */
+     控件只能回退到没有语义名字的 Tailwind 默认 duration-150。 */
   --transition-duration-fast: var(--duration-fast);
   --transition-duration-base: var(--duration-base);
   --transition-duration-slow: var(--duration-slow);

@@ -192,7 +192,7 @@ Primary 按钮为**扁平实心**（Vercel/Linear 式）：零渐变、零投影
 
 | 维度 | 值 | 详见 |
 | --- | --- | --- |
-| 时长 | `fast` 120 / `base` 220 / `slow` 360 / `narrative` 300（仅营销层） | 该文 §2.2 |
+| 时长 | `fast` 150 / `base` 220 / `slow` 360 / `narrative` 300（仅营销层） | 该文 §2.2 |
 | 曲线 | `standard` / `emphasized` / `exit` | 该文 §2.3 |
 | 弹性 | spatial 三档（`visualDuration` + `bounce`）；effects 类属性禁用 | 该文 §2.4 |
 | 意图表 | 17 条交互意图 → 参数映射 | 该文 §3 |
