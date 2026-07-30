@@ -1,11 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { type ResolutionPreset } from '@/features/canvas/export-settings'
+import {
+  type ResolutionPreset,
+  type SubtitleDeliveryMode,
+} from '@/features/canvas/export-settings'
 import {
   loadExportReadiness,
   startProjectExport,
   updateExportResolution,
+  updateExportSubtitles,
 } from './export-api'
 import { type ExportReadiness } from './export-readiness-contract'
 
@@ -16,15 +20,20 @@ export function useExportRuntime(projectId: string) {
   const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
-    void loadExportReadiness(projectId)
-      .then((nextReadiness) => {
-        setReadiness(nextReadiness)
-        setOutputUrl(nextReadiness.artifactUrl)
-      })
+    void refreshReadiness()
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? cause.message : '导出状态读取失败')
       })
+    // refreshReadiness 只依赖当前 projectId；项目切换时重新读取服务端真值。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
+
+  async function refreshReadiness(): Promise<ExportReadiness> {
+    const nextReadiness = await loadExportReadiness(projectId)
+    setReadiness(nextReadiness)
+    setOutputUrl(nextReadiness.artifactUrl)
+    return nextReadiness
+  }
 
   async function exportVideo(): Promise<string | undefined> {
     return runExport({})
@@ -50,7 +59,7 @@ export function useExportRuntime(projectId: string) {
     try {
       const url = await startProjectExport(projectId, fetch, undefined, options)
       setOutputUrl(url)
-      void loadExportReadiness(projectId).then(setReadiness).catch(() => {})
+      void refreshReadiness().catch(() => {})
       return url
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '终片导出失败')
@@ -64,11 +73,32 @@ export function useExportRuntime(projectId: string) {
     setReadiness((prev) => (prev ? { ...prev, resolutionPreset: preset } : prev))
     try {
       await updateExportResolution(projectId, preset)
+      await refreshReadiness()
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '导出设置更新失败')
-      void loadExportReadiness(projectId).then(setReadiness).catch(() => {})
+      void refreshReadiness().catch(() => {})
     }
   }
 
-  return { readiness, outputUrl, error, exporting, exportVideo, exportDegraded, updateResolution }
+  async function updateSubtitles(subtitles: SubtitleDeliveryMode) {
+    setReadiness((prev) => (prev ? { ...prev, subtitles } : prev))
+    try {
+      await updateExportSubtitles(projectId, subtitles)
+      await refreshReadiness()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '字幕交付设置更新失败')
+      void refreshReadiness().catch(() => {})
+    }
+  }
+
+  return {
+    readiness,
+    outputUrl,
+    error,
+    exporting,
+    exportVideo,
+    exportDegraded,
+    updateResolution,
+    updateSubtitles,
+  }
 }

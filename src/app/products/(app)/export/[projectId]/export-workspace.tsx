@@ -11,7 +11,10 @@ import { TopBar } from '@/components/ui/top-bar'
 import { usePublishNavContext } from '@/features/navigation/nav-context'
 import { ExportDeliveryCheck } from './export-delivery-check'
 import { ExportSettings } from './export-settings'
-import { buildLaneSpans } from './export-view-model'
+import {
+  buildTimelineSpans,
+  formatTimelineDuration,
+} from './export-view-model'
 import type { ExportReadiness } from './export-readiness-contract'
 import { useExportRuntime } from './use-export-runtime'
 
@@ -28,7 +31,6 @@ export function ExportWorkspace({
 }) {
   const runtime = useExportRuntime(projectId)
   const disabled = !runtime.readiness?.ready || runtime.exporting
-  const shotClips = buildLaneSpans(laneKeys)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   usePublishNavContext({ projectId, rendererNodeId })
@@ -71,6 +73,7 @@ export function ExportWorkspace({
               onExport={handleExport}
               onDegradedExport={handleDegradedExport}
               onResolutionChange={runtime.updateResolution}
+              onSubtitlesChange={runtime.updateSubtitles}
             />
           </Popover>
         }
@@ -82,7 +85,6 @@ export function ExportWorkspace({
       />
       <ExportTimeline
         laneKeys={laneKeys}
-        shotClips={shotClips}
         readiness={runtime.readiness}
       />
       <ExportDeliveryCheck
@@ -121,13 +123,14 @@ function ExportPreview({
 
 function ExportTimeline({
   laneKeys,
-  shotClips,
   readiness,
 }: {
   laneKeys: string[]
-  shotClips: ReturnType<typeof buildLaneSpans>
   readiness?: ExportReadiness
 }) {
+  const timeline = readiness?.timeline ?? null
+  const timelineMeta = formatTimelineDuration(timeline)
+  const renderLanes = readyRenderLanes(laneKeys, readiness)
   const narrationLanes = readyMediaLanes(laneKeys, readiness, 'narration')
   // 关闭字幕交付时服务端不再测量就绪数（投影为 null）。此处必须显示「本次不入片」
   // 而不是把它塌成 0 —— 「字幕 0/5」会被读成「字幕一个都没好」。
@@ -140,8 +143,10 @@ function ExportTimeline({
       <TimelineTrack
         icon={Film}
         label="分镜"
-        meta={`${laneKeys.length}`}
-        clips={shotClips}
+        meta={timeline ? timelineMeta : undefined}
+        title={timeline ? `时间轴总长 ${timelineMeta}` : '媒体时间合同尚未就绪'}
+        emptyLabel={timeline ? undefined : '时间合同尚未就绪'}
+        clips={buildTimelineSpans(timeline, renderLanes)}
       />
       <TimelineTrack
         icon={Captions}
@@ -156,14 +161,14 @@ function ExportTimeline({
               meta: `${subtitleLanes.length}/${laneKeys.length}`,
               title: `字幕就绪 ${subtitleLanes.length} / ${laneKeys.length}`,
             })}
-        clips={buildLaneSpans(laneKeys, subtitleLanes)}
+        clips={buildTimelineSpans(timeline, subtitleLanes)}
       />
       <TimelineTrack
         icon={AudioLines}
         label="配音"
         meta={`${narrationLanes.length}/${laneKeys.length}`}
         title={`旁白就绪 ${narrationLanes.length} / ${laneKeys.length}`}
-        clips={buildLaneSpans(laneKeys, narrationLanes)}
+        clips={buildTimelineSpans(timeline, narrationLanes)}
       />
       <TimelineTrack
         icon={Music}
@@ -181,6 +186,22 @@ function ExportTimeline({
       />
     </section>
   )
+}
+
+function readyRenderLanes(
+  laneKeys: string[],
+  readiness: ExportReadiness | undefined
+): string[] {
+  if (!readiness) return []
+  const blocked = new Set(
+    readiness.blockingIssues
+      .filter((issue) => issue.kind === 'render' && issue.laneKey)
+      .map((issue) => issue.laneKey)
+  )
+  return [...laneKeys]
+    .sort((left, right) => left.localeCompare(right))
+    .filter((laneKey) => !blocked.has(laneKey))
+    .slice(0, readiness.shotCount)
 }
 
 function readyMediaLanes(

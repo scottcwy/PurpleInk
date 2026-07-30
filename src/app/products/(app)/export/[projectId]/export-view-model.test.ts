@@ -2,40 +2,49 @@ import { describe, expect, it } from 'vitest'
 import type { ExportReadiness } from './export-readiness-contract'
 import {
   buildExportDeliveryCheck,
-  buildLaneSpans,
+  buildTimelineSpans,
   buildResolutionOptions,
+  formatTimelineDuration,
 } from './export-view-model'
 
 describe('export view model', () => {
-  it('lays lanes out in sorted order across the full track width', () => {
-    expect(buildLaneSpans(['S003', 'S001', 'S002'])).toEqual([
-      { start: 0, width: 1 / 3, label: 'S001' },
-      { start: 1 / 3, width: 1 / 3, label: 'S002' },
-      { start: 2 / 3, width: 1 / 3, label: 'S003' },
+  it('lays clips out from real frame durations in timeline order', () => {
+    expect(buildTimelineSpans(timeline())).toEqual([
+      { start: 0, width: 0.2, label: 'S001' },
+      { start: 0.2, width: 0.3, label: 'S002' },
+      { start: 0.5, width: 0.5, label: 'S003' },
     ])
   })
 
-  it('leaves a gap for a missing lane instead of shifting later lanes forward', () => {
+  it('leaves the real-duration gap for a missing lane instead of shifting later lanes', () => {
     // 回归锁：S002 缺产物时 S003 必须留在第三格。旧实现按过滤后的数组重新编号，
     // 把 S003 画到第二格，暗示错误的时间位置且与分镜轨对不齐。
-    expect(buildLaneSpans(['S001', 'S002', 'S003'], ['S001', 'S003'])).toEqual([
-      { start: 0, width: 1 / 3, label: 'S001' },
-      { start: 2 / 3, width: 1 / 3, label: 'S003' },
+    expect(buildTimelineSpans(timeline(), ['S001', 'S003'])).toEqual([
+      { start: 0, width: 0.2, label: 'S001' },
+      { start: 0.5, width: 0.5, label: 'S003' },
     ])
   })
 
-  it('spans the whole width for a single lane and stays empty without lanes', () => {
-    expect(buildLaneSpans(['S001'])).toEqual([
-      { start: 0, width: 1, label: 'S001' },
-    ])
-    expect(buildLaneSpans([])).toEqual([])
-    expect(buildLaneSpans([], ['S001'])).toEqual([])
+  it('stays empty without a real timeline instead of falling back to equal fake slots', () => {
+    expect(buildTimelineSpans(null)).toEqual([])
   })
 
-  it('ignores lanes that are present but not part of the project', () => {
-    expect(buildLaneSpans(['S001'], ['S001', 'S404'])).toEqual([
-      { start: 0, width: 1, label: 'S001' },
+  it('ignores present lanes that are absent from the timeline contract', () => {
+    expect(buildTimelineSpans(timeline(), ['S001', 'S404'])).toEqual([
+      { start: 0, width: 0.2, label: 'S001' },
     ])
+  })
+
+  it('formats the total duration from frames and fps', () => {
+    expect(formatTimelineDuration(timeline())).toBe('00:10')
+    expect(
+      formatTimelineDuration({
+        fps: 30,
+        totalFrames: 95,
+        shots: [{ laneKey: 'S001', durationInFrames: 95 }],
+      })
+    ).toBe('00:03.2')
+    expect(formatTimelineDuration(null)).toBe('时间未就绪')
   })
 
   it('projects every supported resolution preset to its existing tier label', () => {
@@ -174,6 +183,7 @@ function readiness(overrides: Partial<ExportReadiness> = {}): ExportReadiness {
     shotQa: {},
     resolutionPreset: '1920x1080',
     subtitles: 'burn-in',
+    timeline: null,
     blockingIssues: [],
     media: {
       narrationReadyCount: 0,
@@ -188,5 +198,17 @@ function readiness(overrides: Partial<ExportReadiness> = {}): ExportReadiness {
     degradedExport: null,
     artifactDelivery: 'none',
     ...overrides,
+  }
+}
+
+function timeline(): NonNullable<ExportReadiness['timeline']> {
+  return {
+    fps: 30,
+    totalFrames: 300,
+    shots: [
+      { laneKey: 'S001', durationInFrames: 60 },
+      { laneKey: 'S002', durationInFrames: 90 },
+      { laneKey: 'S003', durationInFrames: 150 },
+    ],
   }
 }

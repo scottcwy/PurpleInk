@@ -22,28 +22,44 @@ export function buildResolutionOptions() {
 }
 
 /**
- * 把分镜通道摆到轨道上，位置按它在**全部通道**里的次序。
+ * 把真实媒体时间合同投影成轨道 clip。
  *
- * `present` 用来表达「这条轨道上只有部分通道有产物」。关键是缺失的通道要留出
- * 空位，而不是让后面的 clip 前移：S001 与 S003 就绪、S002 缺失时，S003 必须画在
- * 第三格。否则轨道会暗示错误的时间位置，且与分镜轨对不齐。
- *
- * 宽度目前按通道数均分。真实时长（`ExportReadiness.timeline`）的接线随导出页
- * 布局重做一起落地。
+ * `present` 只控制哪些 clip 可见，累计起点始终包含缺失通道的真实帧数，所以
+ * S002 缺失时 S003 会留在其真实时间位置。没有时间合同时返回空轨，不按镜头数
+ * 均分编造时长。
  */
-export function buildLaneSpans(
-  allLaneKeys: readonly string[],
-  present: readonly string[] = allLaneKeys
+export function buildTimelineSpans(
+  timeline: ExportReadiness['timeline'],
+  present?: readonly string[]
 ): TimelineClipSpan[] {
-  const ordered = [...allLaneKeys].sort((left, right) => left.localeCompare(right))
-  if (ordered.length === 0) return []
-  const slot = 1 / ordered.length
-  const visible = new Set(present)
-  return ordered.flatMap((laneKey, index) =>
-    visible.has(laneKey)
-      ? [{ start: index * slot, width: slot, label: laneKey }]
+  if (!timeline || timeline.totalFrames === 0) return []
+  const visible = present ? new Set(present) : null
+  let elapsedFrames = 0
+  return timeline.shots.flatMap((shot) => {
+    const start = elapsedFrames / timeline.totalFrames
+    elapsedFrames += shot.durationInFrames
+    return visible === null || visible.has(shot.laneKey)
+      ? [{
+          start,
+          width: shot.durationInFrames / timeline.totalFrames,
+          label: shot.laneKey,
+        }]
       : []
-  )
+  })
+}
+
+export function formatTimelineDuration(
+  timeline: ExportReadiness['timeline']
+): string {
+  if (!timeline) return '时间未就绪'
+  const seconds = timeline.totalFrames / timeline.fps
+  const minutes = Math.floor(seconds / 60)
+  const remaining = seconds - minutes * 60
+  const whole = Number.isInteger(remaining)
+  const secondsLabel = whole
+    ? String(remaining).padStart(2, '0')
+    : remaining.toFixed(1).padStart(4, '0')
+  return `${String(minutes).padStart(2, '0')}:${secondsLabel}`
 }
 
 export type ExportDeliveryState = 'ready' | 'degraded' | 'needs-attention'

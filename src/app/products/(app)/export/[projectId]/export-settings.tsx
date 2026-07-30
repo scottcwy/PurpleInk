@@ -8,13 +8,18 @@ import { SettingsGroup, SettingsSeparator } from '@/components/ui/settings-group
 import { SettingsRow } from '@/components/ui/settings-row'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StatusPill } from '@/components/ui/status-pill'
+import { Toggle } from '@/components/ui/toggle'
 import {
   EXPORT_RESOLUTION_PRESETS,
   MASTER_RESOLUTION_PRESET,
   type ResolutionPreset,
+  type SubtitleDeliveryMode,
 } from '@/features/canvas/export-settings'
 import { type ExportReadiness } from './export-readiness-contract'
-import { buildResolutionOptions } from './export-view-model'
+import {
+  buildResolutionOptions,
+  formatTimelineDuration,
+} from './export-view-model'
 
 const RESOLUTION_OPTIONS = buildResolutionOptions()
 
@@ -26,6 +31,7 @@ export interface ExportSettingsProps {
   onExport: () => void
   onDegradedExport: () => void
   onResolutionChange: (preset: ResolutionPreset) => void
+  onSubtitlesChange: (mode: SubtitleDeliveryMode) => void
 }
 
 /** 导出参数与开始导出二次交互面板内容。 */
@@ -37,15 +43,10 @@ export function ExportSettings({
   onExport,
   onDegradedExport,
   onResolutionChange,
+  onSubtitlesChange,
 }: ExportSettingsProps) {
   const currentPreset = readiness?.resolutionPreset ?? MASTER_RESOLUTION_PRESET
-  const delivery = readiness
-    ? readiness.artifactDelivery === 'legacy-silent-v1' && outputUrl
-      ? '旧版静音成片'
-      : readiness.media.delivery === 'narration-hard-subtitle-v2'
-        ? '旁白 + 硬字幕烧录'
-        : '旧版静音成片'
-    : '等待媒体就绪'
+  const subtitles = readiness?.subtitles ?? 'burn-in'
   return (
     <SettingsGroup>
       <div className="flex flex-col gap-2 px-4 py-3">
@@ -62,11 +63,40 @@ export function ExportSettings({
         />
       </div>
       <SettingsSeparator />
-      <SettingsRow label="帧率" value="30 fps" />
+      <SettingsRow
+        label="帧率"
+        value={readiness?.timeline ? `${readiness.timeline.fps} fps` : '等待时间合同'}
+        chevron={false}
+      />
       <SettingsSeparator />
-      <SettingsRow label="格式" value="MP4 (H.264 + AAC)" />
+      <SettingsRow
+        label="真实时长"
+        value={formatTimelineDuration(readiness?.timeline ?? null)}
+        chevron={false}
+      />
       <SettingsSeparator />
-      <SettingsRow label="字幕交付" value={delivery} />
+      <SettingsRow label="格式" value="MP4 (H.264 + AAC)" chevron={false} />
+      <SettingsSeparator />
+      <SettingsRow
+        label="本次导出字幕"
+        value={subtitles === 'burn-in' ? '含字幕 · 硬字幕烧录' : '不含字幕'}
+        chevron={false}
+      >
+        <Toggle
+          checked={subtitles === 'burn-in'}
+          disabled={!readiness || exporting}
+          aria-label="本次导出包含字幕"
+          onCheckedChange={(checked) =>
+            onSubtitlesChange(checked ? 'burn-in' : 'off')
+          }
+        />
+      </SettingsRow>
+      <SettingsSeparator />
+      <SettingsRow
+        label="最近成片字幕"
+        value={artifactSubtitleLabel(readiness, outputUrl)}
+        chevron={false}
+      />
       {readiness?.degradedExport && (
         <>
           <SettingsSeparator />
@@ -121,6 +151,22 @@ export function ExportSettings({
       </div>
     </SettingsGroup>
   )
+}
+
+function artifactSubtitleLabel(
+  readiness: ExportReadiness | undefined,
+  outputUrl: string | undefined
+): string {
+  if (!readiness || !outputUrl || readiness.artifactDelivery === 'none') {
+    return '尚无成片'
+  }
+  if (readiness.artifactDelivery === 'narration-hard-subtitle-v2') {
+    return '已烧录字幕'
+  }
+  if (readiness.artifactDelivery === 'narration-no-subtitle-v3') {
+    return '不含字幕'
+  }
+  return '旧版静音成片'
 }
 
 /** 待占位镜头数：优先用候选 lane，回退到阻塞项中的渲染缺失数。 */

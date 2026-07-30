@@ -1,4 +1,8 @@
-import { type ResolutionPreset } from '@/features/canvas/export-settings'
+import {
+  type ExportSettingsPatch,
+  type ResolutionPreset,
+  type SubtitleDeliveryMode,
+} from '@/features/canvas/export-settings'
 import { throwIfUnauthenticated } from '@/features/auth/unauthenticated-error'
 import {
   parseExportReadiness,
@@ -144,10 +148,27 @@ export async function updateExportResolution(
   resolutionPreset: ResolutionPreset,
   fetcher: typeof fetch = fetch
 ): Promise<void> {
+  return updateExportSettings(projectId, { resolutionPreset }, fetcher)
+}
+
+/** 更新项目字幕交付选择；服务端按局部补丁合并，不覆盖分辨率。 */
+export async function updateExportSubtitles(
+  projectId: string,
+  subtitles: SubtitleDeliveryMode,
+  fetcher: typeof fetch = fetch
+): Promise<void> {
+  return updateExportSettings(projectId, { subtitles }, fetcher)
+}
+
+async function updateExportSettings(
+  projectId: string,
+  exportSettings: ExportSettingsPatch,
+  fetcher: typeof fetch
+): Promise<void> {
   const response = await fetcher(`/api/projects/${encodeURIComponent(projectId)}`, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ exportSettings: { resolutionPreset } }),
+    body: JSON.stringify({ exportSettings }),
   })
   throwIfUnauthenticated(response)
   if (!response.ok) {

@@ -3,6 +3,7 @@ import {
   loadExportReadiness,
   startProjectExport,
   updateExportResolution,
+  updateExportSubtitles,
   waitForExportArtifact,
 } from './export-api'
 
@@ -52,6 +53,7 @@ describe('export API client', () => {
       degradedExport: null,
       artifactDelivery: 'legacy-silent-v1',
       artifactUrl: '/api/artifacts/final?projectId=project-1',
+      timeline: null,
     })
   })
 
@@ -79,6 +81,7 @@ describe('export API client', () => {
       confirmationFingerprint: null,
       degradedExport: null,
       artifactDelivery: 'none',
+      timeline: null,
     })
   })
 
@@ -106,6 +109,62 @@ describe('export API client', () => {
     expect(readiness.subtitles).toBe('off')
     expect(readiness.media.subtitleReadyCount).toBeNull()
     expect(readiness.media.delivery).toBe('narration-no-subtitle-v3')
+  })
+
+  it('keeps the real media timeline and subtitle-free artifact delivery', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      json({
+        ok: true,
+        ready: true,
+        incompleteNodeIds: [],
+        shotCount: 2,
+        subtitles: 'off',
+        timeline: {
+          fps: 30,
+          totalFrames: 150,
+          shots: [
+            { laneKey: 'S001', durationInFrames: 60 },
+            { laneKey: 'S002', durationInFrames: 90 },
+          ],
+        },
+        artifactDelivery: 'narration-no-subtitle-v3',
+      })
+    )
+
+    const readiness = await loadExportReadiness('project-1', fetcher)
+
+    expect(readiness.timeline).toEqual({
+      fps: 30,
+      totalFrames: 150,
+      shots: [
+        { laneKey: 'S001', durationInFrames: 60 },
+        { laneKey: 'S002', durationInFrames: 90 },
+      ],
+    })
+    expect(readiness.artifactDelivery).toBe('narration-no-subtitle-v3')
+  })
+
+  it('rejects an inconsistent media timeline instead of inventing clip widths', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      json({
+        ok: true,
+        ready: false,
+        incompleteNodeIds: [],
+        shotCount: 2,
+        timeline: {
+          fps: 30,
+          totalFrames: 150,
+          shots: [
+            { laneKey: 'S001', durationInFrames: 60 },
+            { laneKey: 'S002', durationInFrames: 60 },
+          ],
+        },
+      })
+    )
+
+    await expect(loadExportReadiness('project-1', fetcher)).rejects.toThrow(
+      '导出时间轴响应无效'
+    )
   })
 
   it('polls the export job until it yields the controlled final artifact URL', async () => {
@@ -291,6 +350,20 @@ describe('export API client', () => {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ exportSettings: { resolutionPreset: '1280x720' } }),
+    })
+  })
+
+  it('PATCHes only the subtitle delivery choice to the project settings API', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      json({ ok: true, exportSettings: { subtitles: 'off' } })
+    )
+    await expect(
+      updateExportSubtitles('project-1', 'off', fetcher)
+    ).resolves.toBeUndefined()
+    expect(fetcher).toHaveBeenCalledWith('/api/projects/project-1', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ exportSettings: { subtitles: 'off' } }),
     })
   })
 })

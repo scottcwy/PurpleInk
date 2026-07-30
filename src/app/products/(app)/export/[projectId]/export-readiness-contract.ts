@@ -39,6 +39,9 @@ export interface ExportReadiness {
     | 'none'
     | 'legacy-silent-v1'
     | 'narration-hard-subtitle-v2'
+    | 'narration-no-subtitle-v3'
+  /** 来自 INGEST 音频分配合同的真实时间轴；合同尚未建立时为 null。 */
+  timeline: ExportTimeline | null
 }
 
 export interface ExportBlockingIssue {
@@ -60,6 +63,12 @@ export interface ExportMediaReadiness {
     | 'legacy-silent-v1'
     | 'narration-hard-subtitle-v2'
     | 'narration-no-subtitle-v3'
+}
+
+export interface ExportTimeline {
+  fps: 24 | 30 | 60
+  totalFrames: number
+  shots: { laneKey: string; durationInFrames: number }[]
 }
 
 /** 把未受信响应体收窄成 ExportReadiness；结构不合法直接抛错而不是编造默认值。 */
@@ -98,6 +107,7 @@ export function parseExportReadiness(
     artifactDelivery: isArtifactDelivery(body.artifactDelivery)
       ? body.artifactDelivery
       : 'none',
+    timeline: toTimeline(body.timeline),
     ...(typeof body.artifactUrl === 'string'
       ? { artifactUrl: body.artifactUrl }
       : {}),
@@ -196,8 +206,65 @@ function isArtifactDelivery(
   return (
     value === 'none' ||
     value === 'legacy-silent-v1' ||
-    value === 'narration-hard-subtitle-v2'
+    value === 'narration-hard-subtitle-v2' ||
+    value === 'narration-no-subtitle-v3'
   )
+}
+
+function toTimeline(value: unknown): ExportTimeline | null {
+  if (value === undefined || value === null) return null
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('导出时间轴响应无效')
+  }
+  const raw = value as Record<string, unknown>
+  if (
+    !isTimelineFps(raw.fps) ||
+    !isNonNegativeInteger(raw.totalFrames) ||
+    !Array.isArray(raw.shots)
+  ) {
+    throw new Error('导出时间轴响应无效')
+  }
+  const shots: ExportTimeline['shots'] = []
+  const lanes = new Set<string>()
+  for (const item of raw.shots) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error('导出时间轴响应无效')
+    }
+    const shot = item as Record<string, unknown>
+    if (
+      typeof shot.laneKey !== 'string' ||
+      shot.laneKey.length === 0 ||
+      lanes.has(shot.laneKey) ||
+      !isPositiveInteger(shot.durationInFrames)
+    ) {
+      throw new Error('导出时间轴响应无效')
+    }
+    lanes.add(shot.laneKey)
+    shots.push({
+      laneKey: shot.laneKey,
+      durationInFrames: shot.durationInFrames,
+    })
+  }
+  const measuredFrames = shots.reduce(
+    (total, shot) => total + shot.durationInFrames,
+    0
+  )
+  if (measuredFrames !== raw.totalFrames) {
+    throw new Error('导出时间轴响应无效')
+  }
+  return { fps: raw.fps, totalFrames: raw.totalFrames, shots }
+}
+
+function isTimelineFps(value: unknown): value is ExportTimeline['fps'] {
+  return value === 24 || value === 30 || value === 60
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
 }
 
 function toStringArray(value: unknown): string[] {

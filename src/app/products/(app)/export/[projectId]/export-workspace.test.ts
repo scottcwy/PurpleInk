@@ -33,6 +33,10 @@ const websitePreview = readFileSync(
   'src/app/products/(app)/export/[projectId]/website-delivery-preview.tsx',
   'utf8',
 )
+const runtime = readFileSync(
+  'src/app/products/(app)/export/[projectId]/use-export-runtime.ts',
+  'utf8',
+)
 
 describe('Export workspace composition', () => {
   it('opens export settings from a TopBar toggle instead of a permanent side panel', () => {
@@ -100,6 +104,19 @@ describe('Export workspace composition', () => {
     expect(settings).toContain('硬字幕烧录')
     expect(settings).toContain('旧版静音成片')
     expect(settings).not.toContain('暂不支持（P1）')
+  })
+
+  it('uses the persisted subtitle setting and the real media timeline', () => {
+    expect(settings).toContain('本次导出字幕')
+    expect(settings).toContain('最近成片字幕')
+    expect(settings).toContain('<Toggle')
+    expect(workspace).toContain('onSubtitlesChange={runtime.updateSubtitles}')
+    expect(workspace).toContain('readiness?.timeline')
+    expect(workspace).toContain('buildTimelineSpans')
+    expect(workspace).toContain('formatTimelineDuration')
+    expect(workspace).not.toContain('buildLaneSpans')
+    expect(runtime).toContain('updateExportSubtitles(projectId, subtitles)')
+    expect(runtime).toContain('await refreshReadiness()')
   })
 
   it('shows lane-scoped media blockers with human-readable labels', () => {
