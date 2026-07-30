@@ -268,6 +268,7 @@ top layer 天然位于所有 stacking context 之上，不需要 z-index。
 | `ui/toast.tsx` | 无动画 / 无 viewport / 无 portal / **不自动消失** | 补齐 + `aria-live` | todo |
 | `ui/sidebar-chrome.tsx` AccountMenu | 裸 div，零覆盖层能力 | `mode="popover"` | todo |
 | `marketing/header.tsx` 移动菜单 | 自写 `duration: 0.2` | `mode="popover"` | todo |
+| `ui/context-menu.tsx` | 2026-07-30 新增；自研指针锚定定位 + 自研 light dismiss（进出场已按 §3 意图 8 / §5.3） | `mode="popover"` | todo |
 
 `hover-preview-geometry.ts` 的指针离开方向判定有独立测试，是真实资产，迁移时保留。
 迁移会使 `dialog-layering.test.ts` / `popover.test.ts` 失败——它们断言 `createPortal`
@@ -325,3 +326,4 @@ ESC 逻辑从 `app-sidebar-shell.tsx`、`canvas-inspector.tsx` 两处删除；
 | `docs/designs/canvas.pen` | 静态像素真值。**不含动效**，动效不从 Pencil 推导 |
 | `routing.md` §2.4 | `/playbook/motion` 的路由登记与"文档改动须同批落标本"的约束 |
 | `src/lib/motion/tokens.ts` | 本文 §2 的 JS 镜像，由同步测试锁定 |
+| `docs/plans/motion-interaction/` | 把本文 §7 的 `todo` 拆成 9 个编号批次的执行计划。**本文是规范（做什么对），计划是排期（按什么顺序做）**；两者冲突时以本文为准，并同批修正计划 |

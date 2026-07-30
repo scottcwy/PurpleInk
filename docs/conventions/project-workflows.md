@@ -84,6 +84,8 @@ v1 费率为每个向上取整的视频秒 `120000 CNY micros`（¥0.12）；
 - audio 至少保留源录音、ASR 文稿、时间对齐与最终视频 lineage。
 - website 至少保留安全的采集证据投影、编排结果与最终视频 lineage。
 - approved / released Artifact 不可原地更新或删除；重试产生新版本并保留谱系。
+  唯一例外是 §9 的整项目删除——那是把整个项目连同其全部产物一次性清除，
+  不是对某个版本的就地改写。
 - UI 只展示安全投影，不展示 raw worker 日志、credential、prompt 或隐藏推理。
 
 ## 7. 容灾与降级
@@ -115,3 +117,37 @@ v1 费率为每个向上取整的视频秒 `120000 CNY micros`（¥0.12）；
 - 禁止展示或序列化完整 URL 的 path/query/hash、header、cookie、DOM、credential、
   prompt、provider 原始错误、worker 原始日志、缓存目录或隐藏推理。缓存未投影
   hit/miss 时只显示隔离策略，不显示伪造命中结果。
+
+## 9. 项目删除合同
+
+用户在项目页右键菜单发起的「删除」是**不可恢复的整项目物理删除**，不是归档：
+`projects` 行连同该项目的画布节点、边、pipeline run、task attempt、并发租约、
+项目来源与全部 Artifact 记录一起从 Postgres 消失。删除范围严格锚定
+`(workspaceId, projectId)`，不影响同工作区的其他项目。
+
+入口与状态口径见 `routing.md` §4 的 `/api/projects/[id]` DELETE 行。实现是
+`src/features/projects/project-deletion.ts` 的单个事务，顺序即正确性：
+
+1. **在途守卫**：该项目存在 `queued` / `running` 的 `task_attempts`，或
+   `waiting` / `active` 的 `workflow_concurrency_leases` 时，返回 409 且一行不删。
+   worker 可能正握着这些行，先删会让它在写回时撞外键。
+2. **声明清除意图**：事务内 `set_config('purpleink.project_purge', 'on', true)`。
+   `artifacts_immutable_lifecycle_trigger` 只在这个标记下放行 approved / released
+   产物的 DELETE，且**只豁免 DELETE、不豁免 UPDATE**（migration 0019）。因此
+   「已审批产物永不被就地改写」这条不变量在删除路径上依然成立。
+3. **断开外部产物引用**：把引用了本项目产物的 `ai_invocations.trace_artifact_id`
+   置空。挂在本项目 run / attempt 上的 invocation 明细会由既有
+   `ai_invocations_run_fk` / `ai_invocations_attempt_fk` 的 CASCADE 一并消失；
+   工作区级的用量周期与计费账本不属于项目级联，金额真值不受影响。
+4. **按谱系分层删除产物**：`artifacts.supersedes_artifact_id` 是 RESTRICT 自引用，
+   不能延迟到语句末，一条 DELETE 清不掉父子行；每轮只删当前无人 supersedes 引用
+   的产物，直到清空。不用「把 supersedes 置空再批量删」，那等于就地改写谱系。
+5. **删除 projects 行**：其余表由 CASCADE 收走（产物已先删，
+   `artifacts.attempt_id → task_attempts` 的 RESTRICT 不再阻塞）。
+6. **提交后清理字节**：按收集到的 `storage_key` 逐个调 `StorageAdapter.delete`。
+   单个文件失败只跳过并计数，不回滚——数据库是真值，孤儿文件不该把已成功的
+   删除翻回失败。
+
+回归护栏在 `src/features/projects/project-deletion.pg.test.ts`：含 supersedes 谱系
+可删、存活 invocation 只被置空、存储字节被清、在途 attempt 与未释放租约各自 409
+且一行不删、同工作区其他项目完全不受影响、未知项目 404。

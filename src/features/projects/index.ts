@@ -28,6 +28,21 @@ export {
   type ProjectCreationDependencies,
 } from './project-creation'
 export {
+  ProjectDeleteBlockedError,
+  ProjectNotFoundError,
+  ProjectTitleError,
+} from './project-mutation-errors'
+export {
+  deleteProject,
+  type ProjectDeletionDependencies,
+  type ProjectDeletionResult,
+} from './project-deletion'
+export {
+  renameProject,
+  type ProjectRenameDependencies,
+  type RenamedProject,
+} from './project-rename'
+export {
   createProjectFromRequest,
   MAX_PROJECT_AUDIO_BYTES,
   MAX_PROJECT_AUDIO_DURATION_MS,

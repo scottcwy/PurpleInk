@@ -239,6 +239,9 @@ JS 镜像在 `src/lib/motion/tokens.ts`，由 `tokens.test.ts` 的同步测试�
 2026-07-28 新增，吸收原 SettingsRow 行高覆写场景）、`UsageTrendChart`
 （2026-07-30 新增；同一母组件提供会员累计额度阶梯线与账号每日调用堆叠柱；
 只接收真实 projection，fixture 仅存在于 `.demo.tsx` 与 `/playbook`）。
+`ContextMenu`（2026-07-30 新增；全应用右键菜单的唯一原语。按指针坐标锚定，
+区别于 `Popover` 的 trigger rect 锚定，二者不可互代；菜单项为声明式数据，
+禁用项必须同时给出文本原因，danger 项图标与颜色双重语义）。
 
 ---
 
@@ -341,7 +344,7 @@ Canonical 状态集合：`loading / empty / ready / running / succeeded / failed
 
 **应用壳与导航**：`clapperboard`、`layout-dashboard`、`folder`、`waypoints`、`film`、`download`、`settings`
 
-**操作**：`plus`、`save`、`settings-2`、`ellipsis`、`x`、`upload`、`refresh-cw`、`arrow-left`、`chevron-right`、`skip-forward`、`zoom-in`、`zoom-out`、`maximize-2`
+**操作**：`plus`、`save`、`settings-2`、`ellipsis`、`x`、`upload`、`refresh-cw`、`arrow-left`、`chevron-right`、`skip-forward`、`zoom-in`、`zoom-out`、`maximize-2`、`minimize-2`、`folder-open`、`pencil`、`trash-2`
 
 **执行与内容**：`list-tree`、`sparkles`、`combine`、`file-code`、`audio-lines`、`globe`、`play`、`loader-circle`
 

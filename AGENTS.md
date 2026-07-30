@@ -127,6 +127,9 @@ baseline 来掩盖门禁。
 
 - Postgres 是唯一结构化业务数据源；不得新增 SQLite 运行依赖或双写路径。
 - approved / released Artifact 不可原地更新或删除；新版本使用新记录并保留 lineage。
+  该规则约束存续项目内的版本演进；用户显式二次确认的**整项目删除**是另一类
+  授权操作，按 `docs/conventions/project-workflows.md` §9 的删除合同执行：
+  只豁免产物的 DELETE、不豁免 UPDATE，且范围严格锁定单个项目。
 - `content_hash` 必须来自实际字节的 SHA-256；文件大小、状态、版本与来源不能伪造。
 - UI 可见字段必须可追溯到 API、数据库投影、Artifact，或明确标注的未接线占位。
 - 禁止固定假百分比、恒真成功 / QA、无 Artifact 的下载链接、可点击但无行为的业务按钮、永久 Skeleton。
