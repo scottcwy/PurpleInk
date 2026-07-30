@@ -33,6 +33,7 @@ type RunStage = (
   nodeId: string,
   stage: PipelineStage,
   attemptId?: string,
+  signal?: AbortSignal,
 ) => Promise<void>
 
 interface EnqueueDependencies {
@@ -60,7 +61,13 @@ export function registerDirectorStageHandler(
   targetQueue.register('director-stage', async (job) => {
     const payload = directorStageJobSchema.parse(job.payload)
     job.signal?.throwIfAborted()
-    await runStage(payload.projectId, payload.nodeId, payload.stage, job.id)
+    await runStage(
+      payload.projectId,
+      payload.nodeId,
+      payload.stage,
+      job.id,
+      job.signal,
+    )
     job.signal?.throwIfAborted()
   })
 }

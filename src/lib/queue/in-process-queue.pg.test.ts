@@ -156,6 +156,36 @@ describe('legacy in-process queue PG compatibility', () => {
     }
   })
 
+  it('does not overlap startup and interval sweeps', async () => {
+    const { InProcessQueue } = await import('./in-process-queue')
+    const queue = new InProcessQueue()
+    let releaseSweep: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+      releaseSweep = resolve
+    })
+    let activeSweeps = 0
+    let maxActiveSweeps = 0
+    const internal = queue as unknown as {
+      sweep: () => Promise<void>
+      runSweep: () => Promise<void>
+    }
+    vi.spyOn(internal, 'sweep').mockImplementation(async () => {
+      activeSweeps += 1
+      maxActiveSweeps = Math.max(maxActiveSweeps, activeSweeps)
+      await gate
+      activeSweeps -= 1
+    })
+
+    const startupSweep = internal.runSweep()
+    const intervalSweep = internal.runSweep()
+    await Promise.resolve()
+    expect(maxActiveSweeps).toBe(1)
+
+    releaseSweep()
+    await Promise.all([startupSweep, intervalSweep])
+    expect(maxActiveSweeps).toBe(1)
+  })
+
   it('has no database side effect until enqueue and persists one run/attempt atomically', async () => {
     const { InProcessQueue } = await import('./in-process-queue')
     const queue = new InProcessQueue()

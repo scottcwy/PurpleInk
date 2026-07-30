@@ -36,6 +36,7 @@ describe('director queue handler', () => {
       }
     )
     const payload = vi.mocked(harness.queue.enqueue).mock.calls[0]?.[1]
+    const controller = new AbortController()
 
     await harness.getHandler()?.({
       id: 'job-1',
@@ -44,13 +45,20 @@ describe('director queue handler', () => {
       status: 'running',
       payload: payload ?? {},
       attempts: 1,
+      signal: controller.signal,
     })
 
     expect(harness.queue.register).toHaveBeenCalledWith(
       'director-stage',
       expect.any(Function)
     )
-    expect(runStage).toHaveBeenCalledWith('project-1', 'node-1', 'INGEST', 'job-1')
+    expect(runStage).toHaveBeenCalledWith(
+      'project-1',
+      'node-1',
+      'INGEST',
+      'job-1',
+      controller.signal,
+    )
   })
 
   it('moves the node to pending before enqueueing', async () => {

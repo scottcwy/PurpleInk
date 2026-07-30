@@ -71,15 +71,20 @@ export class ExecutionTimeoutError extends Error {
   }
 }
 
-/** 按 kind 的超时包住 handler；超时后 handler promise 仍在后台，迟到的 rejection 被吞掉。 */
+/** 超时时先中止同一 attempt controller；迟到 handler 的 rejection 仍会被吞掉。 */
 export async function withExecutionTimeout<T>(
   kind: string,
-  task: () => Promise<T>
+  task: () => Promise<T>,
+  controller?: AbortController,
 ): Promise<T> {
   const timeoutMs = executionTimeoutMs(kind)
   let timer: ReturnType<typeof setTimeout> | undefined
   const deadline = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new ExecutionTimeoutError(timeoutMs)), timeoutMs)
+    timer = setTimeout(() => {
+      const error = new ExecutionTimeoutError(timeoutMs)
+      controller?.abort(error)
+      reject(error)
+    }, timeoutMs)
   })
   const running = task()
   // 预挂 catch：超时胜出后 handler 迟到的失败不得变成 unhandled rejection。

@@ -57,6 +57,7 @@ export interface ValidatedArtifactInput {
     rawContent: string
   ) => PreparedStageResult | Promise<PreparedStageResult>
   writeArtifact: (input: WriteArtifactInput) => Promise<ArtifactCommitResult>
+  signal?: AbortSignal
 }
 
 export interface ValidatedArtifact {
@@ -71,19 +72,23 @@ export async function generateValidatedArtifact(
   let prompt = input.initialPrompt
   let retries = 0
   while (true) {
+    input.signal?.throwIfAborted()
     const result = await input.session.run({
       prompt,
       tools: toolsForStage(input.stage),
       output: STAGE_OUTPUT[input.stage],
     })
+    input.signal?.throwIfAborted()
     try {
       const prepared = await input.prepareResult(
         input.context,
         result.artifactContent
       )
+      input.signal?.throwIfAborted()
       const artifact = await input.writeArtifact(
         outputArtifact(input.context, prepared.content)
       )
+      input.signal?.throwIfAborted()
       return { displayText: result.displayText, prepared, artifact }
     } catch (error) {
       if (
@@ -153,6 +158,7 @@ function outputArtifact(
   return {
     projectId: context.projectId,
     nodeId: context.nodeId,
+    ...(context.attemptId ? { attemptId: context.attemptId } : {}),
     kind: `director-${slug}`,
     key: `director/${context.projectId}/${context.nodeId}/${slug}-${digest}.${extension}`,
     content,

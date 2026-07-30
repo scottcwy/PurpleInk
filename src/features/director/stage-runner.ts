@@ -44,7 +44,8 @@ interface StageRepository {
   recordStageOutput(
     nodeId: string,
     result: PreparedStageResult,
-    artifact: ArtifactCommitResult
+    artifact: ArtifactCommitResult,
+    signal?: AbortSignal,
   ): Promise<void>
   persistStreamLog(
     projectId: string,
@@ -71,7 +72,8 @@ interface StageRunnerDependencies {
   commitResult: (
     context: DirectorStageContext,
     result: PreparedStageResult,
-    artifact: ArtifactCommitResult
+    artifact: ArtifactCommitResult,
+    signal?: AbortSignal,
   ) => Promise<void>
   runStageEffect: (context: DirectorStageContext) => Promise<void>
   advancePipeline: (
@@ -89,14 +91,21 @@ type StageRunner = (
   nodeId: string,
   stage: PipelineStage,
   attemptId?: string,
+  signal?: AbortSignal,
 ) => Promise<void>
 
 let defaultRunner: Promise<StageRunner> | undefined
 
 /** 首次真正执行作业时才打开 Postgres，模块导入保持无副作用。 */
-export const runStage: StageRunner = async (projectId, nodeId, stage, attemptId) => {
+export const runStage: StageRunner = async (
+  projectId,
+  nodeId,
+  stage,
+  attemptId,
+  signal,
+) => {
   defaultRunner ??= createDefaultRunner()
-  return (await defaultRunner)(projectId, nodeId, stage, attemptId)
+  return (await defaultRunner)(projectId, nodeId, stage, attemptId, signal)
 }
 
 async function createDefaultRunner(): Promise<StageRunner> {
@@ -108,8 +117,8 @@ async function createDefaultRunner(): Promise<StageRunner> {
     buildPrompt: buildStagePrompt,
     writeArtifact: writeValidatedArtifact,
     prepareResult: prepareStageResult,
-    commitResult: async (context, result, artifact) =>
-      commitStageResult(repository, context, result, artifact),
+    commitResult: async (context, result, artifact, signal) =>
+      commitStageResult(repository, context, result, artifact, signal),
     runStageEffect: async (context) => {
       if (
         context.nodeType !== 'shot-sfx' &&
@@ -134,18 +143,20 @@ async function createDefaultRunner(): Promise<StageRunner> {
 export function createStageRunner(
   dependencies: StageRunnerDependencies
 ): StageRunner {
-  return async (projectId, nodeId, stage, attemptId) => {
+  return async (projectId, nodeId, stage, attemptId, signal) => {
     const streamKey = `${projectId}:${nodeId}`
     let session: DirectorSession | undefined
     let closed = false
     let sessionPointerAttempted = false
     try {
+      signal?.throwIfAborted()
       await dependencies.transitionNodeStatus(nodeId, 'running')
       const context = await dependencies.repository.loadStageContext(
         projectId,
         nodeId,
         stage
       )
+      signal?.throwIfAborted()
       const executionContext: DirectorStageContext = attemptId
         ? { ...context, attemptId }
         : context
@@ -158,6 +169,7 @@ export function createStageRunner(
         )
       ) {
         await dependencies.runStageEffect(executionContext)
+        signal?.throwIfAborted()
         await dependencies.transitionNodeStatus(nodeId, 'success')
         await advanceWithoutMasking(
           dependencies.advancePipeline,
@@ -177,14 +189,18 @@ export function createStageRunner(
       })
       const { displayText, prepared, artifact } = await generateValidatedArtifact({
         stage,
-        context,
+        context: executionContext,
         session,
         initialPrompt: prompt,
         prepareResult: dependencies.prepareResult,
         writeArtifact: dependencies.writeArtifact,
+        signal,
       })
-      await dependencies.commitResult(context, prepared, artifact)
+      signal?.throwIfAborted()
+      await dependencies.commitResult(executionContext, prepared, artifact, signal)
+      signal?.throwIfAborted()
       await dependencies.runStageEffect(executionContext)
+      signal?.throwIfAborted()
       await dependencies.repository.persistStreamLog(
         projectId,
         nodeId,
@@ -194,6 +210,7 @@ export function createStageRunner(
       streamBus.markDone(streamKey)
       await session.close()
       closed = true
+      signal?.throwIfAborted()
       sessionPointerAttempted = true
       await dependencies.repository.registerArtifactPointer({
         projectId,
@@ -201,7 +218,9 @@ export function createStageRunner(
         kind: 'pi-session',
         storageKey: session.storageKey,
       })
+      signal?.throwIfAborted()
       await dependencies.transitionNodeStatus(nodeId, 'success')
+      signal?.throwIfAborted()
       if (stage === 'INGEST' && dependencies.scheduleMediaNarration) {
         await scheduleMediaWithoutMasking(dependencies.scheduleMediaNarration, {
           projectId,
@@ -215,6 +234,9 @@ export function createStageRunner(
       )
     } catch (error) {
       if (session && !closed) await closeWithoutMasking(session)
+      if (signal?.aborted) {
+        throw signal.reason ?? error
+      }
       const cleanupErrors: unknown[] = []
       if (session && !sessionPointerAttempted) {
         try {

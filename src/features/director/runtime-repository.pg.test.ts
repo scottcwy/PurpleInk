@@ -271,6 +271,111 @@ describe('DirectorRuntimeRepository Postgres', () => {
     ).resolves.toHaveLength(1)
   })
 
+  it('rejects a late artifact from an old attempt after a newer attempt exists', async () => {
+    const nodeId = randomUUID()
+    const oldAttemptId = randomUUID()
+    const newAttemptId = randomUUID()
+    await db.insert(canvasNodes).values({
+      workspaceId: LOCAL_WORKSPACE_ID,
+      id: nodeId,
+      projectId: PROJECT_ID,
+      logicalKey: `late:${nodeId}`,
+      type: 'export',
+      stage: 'FINALIZE',
+      status: 'running',
+      data: { schemaVersion: 1, payload: {} },
+    })
+    await db.insert(taskAttempts).values([
+      {
+        workspaceId: LOCAL_WORKSPACE_ID,
+        id: oldAttemptId,
+        runId: RUN_ID,
+        taskId: 'legacy.director-stage',
+        entityType: 'node',
+        entityId: nodeId,
+        attemptNo: 1,
+        status: 'failed',
+        fingerprint: HASH,
+        checkpoint: { schemaVersion: 1 },
+        completedAt: new Date(),
+      },
+      {
+        workspaceId: LOCAL_WORKSPACE_ID,
+        id: newAttemptId,
+        runId: RUN_ID,
+        taskId: 'legacy.director-stage',
+        entityType: 'node',
+        entityId: nodeId,
+        attemptNo: 2,
+        status: 'running',
+        fingerprint: HASH,
+        checkpoint: { schemaVersion: 1 },
+      },
+    ])
+    const staged = {
+      ...stagedArtifact(nodeId, 'director-ingest'),
+      attemptId: oldAttemptId,
+    }
+    files.set(staged.storageKey, Buffer.from('迟到产物'))
+
+    await expect(
+      repository.recordStageOutput(
+        nodeId,
+        { content: '迟到产物' },
+        staged,
+      ),
+    ).rejects.toThrow('STALE_ATTEMPT')
+
+    await expect(
+      db
+        .select()
+        .from(artifacts)
+        .where(eq(artifacts.id, staged.id)),
+    ).resolves.toHaveLength(0)
+    const [nodeRow] = await db
+      .select({ data: canvasNodes.data })
+      .from(canvasNodes)
+      .where(eq(canvasNodes.id, nodeId))
+    expect(nodeRow?.data).toEqual({ schemaVersion: 1, payload: {} })
+    await db.delete(taskAttempts).where(eq(taskAttempts.entityId, nodeId))
+    await db.delete(canvasNodes).where(eq(canvasNodes.id, nodeId))
+  })
+
+  it('rolls back artifact and node projection when timeout aborts during commit', async () => {
+    const staged = stagedArtifact(SPLIT_ID, 'director-timeout-probe')
+    files.set(staged.storageKey, Buffer.from('超时产物'))
+    const [before] = await db
+      .select({ data: canvasNodes.data })
+      .from(canvasNodes)
+      .where(eq(canvasNodes.id, SPLIT_ID))
+    const controller = new AbortController()
+    const timeout = Object.assign(new Error('阶段执行超时'), {
+      name: 'ExecutionTimeoutError',
+    })
+    controller.abort(timeout)
+
+    await expect(
+      repository.recordStageOutput(
+        SPLIT_ID,
+        { content: '超时产物' },
+        staged,
+        controller.signal,
+      ),
+    ).rejects.toBe(timeout)
+
+    await expect(
+      db
+        .select()
+        .from(artifacts)
+        .where(eq(artifacts.id, staged.id)),
+    ).resolves.toHaveLength(0)
+    const [after] = await db
+      .select({ data: canvasNodes.data })
+      .from(canvasNodes)
+      .where(eq(canvasNodes.id, SPLIT_ID))
+    expect(after?.data).toEqual(before?.data)
+  })
+
   it('assembles score input from versioned lane payload and artifact rows', async () => {
     const context = await repository.loadStageContext(
       PROJECT_ID,

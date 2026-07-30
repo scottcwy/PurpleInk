@@ -54,15 +54,22 @@ describe('withExecutionTimeout', () => {
 
   it('永不 resolve 的 handler 到达 kind 超时后强制失败，并注明超时分钟数', async () => {
     vi.useFakeTimers()
+    const controller = new AbortController()
     const pending = withExecutionTimeout(
       'director-stage',
-      () => new Promise<never>(() => {})
+      () => new Promise<never>(() => {}),
+      controller,
     )
     const assertion = expect(pending).rejects.toThrow(
       '阶段执行超时（10 分钟），已强制释放'
     )
     await vi.advanceTimersByTimeAsync(600_000)
     await assertion
+    expect(controller.signal.aborted).toBe(true)
+    expect(controller.signal.reason).toBeInstanceOf(Error)
+    expect(controller.signal.reason).toMatchObject({
+      name: 'ExecutionTimeoutError',
+    })
   })
 
   it('render-shot 使用 15 分钟超时：14 分钟时仍未失败', async () => {

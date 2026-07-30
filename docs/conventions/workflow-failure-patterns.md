@@ -799,6 +799,9 @@ content-hash 去重**：每次提交一律 `version + 1` 并生成新 `artifactI
 - Provider SDK 的 timeout 只能作为第一层取消信号，不能作为工作流硬截止的唯一保证。
 - 出网边界必须用本地墙钟对异步迭代器的每次 `next()` 做总截止竞速；截止后产生安全的
   `ProviderRequestError(kind=timeout)`，并进入既有结算、票据释放与重试语义。
+- pi 会把异步迭代器抛错投影成普通 `error` event；计费流必须在该降格发生前把原始
+  `ProviderRequestError` 旁路交给会话，由会话以同一对象完成熔断记账和 WorkflowFault
+  投影，禁止再从脱敏文案反推错误类型。
 - 本地硬截止使用与传给 SDK 相同且已封顶的 `timeoutMs`，不得形成两个不同口径。
 - 终止悬挂流时允许尽力调用迭代器 `return()`，但不得等待一个同样可能悬挂的清理 Promise。
 - `director-billing-stream.test.ts` 必须包含“上游永不产生事件”的回归测试，并断言
@@ -850,6 +853,34 @@ website start 又没有该字段。临时在响应中硬塞 `autopilot=true` 只
 
 ---
 
+## 7.19 模式 Y：队列超时只结束等待，旧阶段继续把产物写给新 attempt
+
+**症状**：阶段已经因执行超时进入失败或重试，新 attempt 也已开始，但旧 Provider 调用
+稍后返回后，节点又被改成成功/失败，甚至把旧结果登记到新 attempt 名下。启动清扫与
+定时清扫同时触发时，还会重复扫描和补偿同一批状态。
+
+**真实事故**：`withExecutionTimeout` 只用 `Promise.race` 拒绝外层等待，没有中止
+`registerAttemptController` 为该 attempt 登记的 controller。队列随即释放 lane 并允许
+重试，旧 handler 却仍在后台运行。Director 的产物写入会动态解析当前 running attempt，
+因此迟到 handler 若没有在写入前检查取消信号，可能错误归属刚启动的新 attempt；其错误
+补偿也可能覆盖新 attempt 的节点投影。与此同时 queue 的消费 tick 已有单飞，sweep
+仍允许启动调用与 interval 调用重叠。
+
+**规则与护栏**：
+
+- 阶段墙钟超时必须先用同一个 `ExecutionTimeoutError` 中止该 attempt controller，再
+  拒绝外层等待；领域 handler 必须在 Provider 返回、Artifact 写入、节点终态和下游推进
+  之间检查该信号。
+- 已取消的 Stage Runner 只允许尽力关闭本地会话，不得再登记 Artifact、写节点终态/
+  错误投影、写流日志或推进下游。
+- Artifact 提交继续以 attempt 状态、更新 attempt 与 execution epoch 做数据库栅栏；
+  AbortSignal 是及时停止副作用，数据库栅栏是最终一致性保护，两者不能互相替代。
+- sweep 与 tick 一样必须单飞；启动清扫未完成时，定时清扫直接跳过该轮。
+- 回归测试必须覆盖“Provider 在超时后迟到返回”，断言旧 runner 不调用 Artifact 写入、
+  节点终态/错误投影或下游推进，并验证 controller 的 abort reason 与队列超时错误一致。
+
+---
+
 ## 9. 已知未修项
 
 当前无已确认而未修的代码/文档项。
@@ -864,7 +895,7 @@ website start 又没有该字段。临时在响应中硬塞 `autopilot=true` 只
 导致 post-commit TypeError（模式 O）、并发旁白调度等待被包装为上游失败导致
 配音永久失败（模式 P）、数据库与应用时钟混用导致 Provider 等待风暴和字幕文本重复
 调用（模式 Q）、产物血缘用 artifactId 强绑定导致旁白重跑即判字幕失效（模式 S）
-——见各节「已落地护栏」。
+、队列执行超时未中止旧阶段并允许迟到写入（模式 Y）——见各节「已落地护栏」。
 
 ---
 

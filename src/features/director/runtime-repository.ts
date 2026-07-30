@@ -270,9 +270,10 @@ export class DirectorRuntimeRepository {
   recordStageOutput(
     nodeId: string,
     result: PreparedStageResult,
-    artifact: ArtifactCommitResult
+    artifact: ArtifactCommitResult,
+    signal?: AbortSignal,
   ): Promise<void> {
-    return this.writer.recordStageOutput(nodeId, result, artifact)
+    return this.writer.recordStageOutput(nodeId, result, artifact, signal)
   }
 
   private async updateNodePayload(

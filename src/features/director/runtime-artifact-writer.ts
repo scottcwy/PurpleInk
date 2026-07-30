@@ -98,7 +98,8 @@ export class DirectorArtifactWriter {
   async recordStageOutput(
     nodeId: string,
     result: PreparedStageResult,
-    artifact: ArtifactCommitResult
+    artifact: ArtifactCommitResult,
+    signal?: AbortSignal,
   ): Promise<void> {
     assertArtifactMatchesNode(nodeId, artifact)
     try {
@@ -118,6 +119,7 @@ export class DirectorArtifactWriter {
           id: artifact.id,
         },
         async (transaction, artifactId) => {
+          signal?.throwIfAborted()
           const [node] = await transaction
             .select({ data: canvasNodes.data })
             .from(canvasNodes)
@@ -130,6 +132,7 @@ export class DirectorArtifactWriter {
             )
             .limit(1)
           if (!node) throw new Error(`节点不存在：${nodeId}`)
+          signal?.throwIfAborted()
           await transaction
             .update(canvasNodes)
             .set({
@@ -146,6 +149,7 @@ export class DirectorArtifactWriter {
                 eq(canvasNodes.id, nodeId)
               )
             )
+          signal?.throwIfAborted()
         }
       )
     } catch (error) {

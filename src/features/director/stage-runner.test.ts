@@ -205,6 +205,51 @@ describe('createStageRunner', () => {
       nodeId: 'node-1',
       attemptId: 'queue-attempt-1',
     }))
+    expect(harness.writeArtifact).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      attemptId: 'queue-attempt-1',
+    }))
+  })
+
+  it('does not let a timed-out attempt write artifacts or node terminal state after its provider returns late', async () => {
+    let releaseProvider: () => void = () => undefined
+    const providerGate = new Promise<void>((resolve) => {
+      releaseProvider = resolve
+    })
+    const harness = createHarness(async () => {
+      await providerGate
+      return directorResult('迟到业务产物')
+    })
+    const controller = new AbortController()
+    const timeout = Object.assign(new Error('阶段执行超时'), {
+      name: 'ExecutionTimeoutError',
+    })
+
+    const pending = harness.runner(
+      'project-1',
+      'node-1',
+      'INGEST',
+      'queue-attempt-1',
+      controller.signal,
+    )
+    await vi.waitFor(() => {
+      expect(harness.session.run).toHaveBeenCalledOnce()
+    })
+    controller.abort(timeout)
+    releaseProvider()
+
+    await expect(pending).rejects.toBe(timeout)
+    expect(harness.session.close).toHaveBeenCalledOnce()
+    expect(harness.writeArtifact).not.toHaveBeenCalled()
+    expect(harness.commitResult).not.toHaveBeenCalled()
+    expect(harness.repository.registerArtifactPointer).not.toHaveBeenCalled()
+    expect(harness.repository.persistStreamLog).not.toHaveBeenCalled()
+    expect(harness.repository.recordStageError).not.toHaveBeenCalled()
+    expect(harness.transitionNodeStatus.mock.calls.map((call) => call[1])).toEqual([
+      'running',
+    ])
+    expect(harness.advancePipeline).not.toHaveBeenCalled()
   })
 
   it('keeps INGEST successful when the asynchronous media queue is unavailable', async () => {

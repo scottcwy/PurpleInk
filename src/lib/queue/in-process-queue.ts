@@ -66,6 +66,7 @@ export class InProcessQueue implements QueueAdapter {
   private readonly activeExecutions = new Set<Promise<void>>()
   private readonly backgroundOperations = new Set<Promise<void>>()
   private tickInProgress = false
+  private sweepInProgress = false
   private lanes: Record<string, number> = {}
 
   async enqueue(
@@ -93,11 +94,11 @@ export class InProcessQueue implements QueueAdapter {
       HEARTBEAT_INTERVAL_MS
     )
     this.sweepTimer = setInterval(
-      () => this.trackBackground(this.sweep(), '僵尸回收失败'),
+      () => this.trackBackground(this.runSweep(), '僵尸回收失败'),
       SWEEP_INTERVAL_MS,
     )
     // 启动即回收上个进程崩溃遗留的僵尸 attempt，不等首个 sweep 周期。
-    this.trackBackground(this.sweep(), '启动清扫失败')
+    this.trackBackground(this.runSweep(), '启动清扫失败')
   }
 
   stop(): void {
@@ -208,14 +209,17 @@ export class InProcessQueue implements QueueAdapter {
     const cancellableJob = { ...job, signal: controller.signal }
     try {
       controller.signal.throwIfAborted()
-      await withExecutionTimeout(job.kind, () =>
-        runInAuthContext(
-          {
-            workspaceId: job.workspaceId,
-            userId: job.requestedByUserId ?? SYSTEM_USER_ID,
-          },
-          () => handler(cancellableJob)
-        )
+      await withExecutionTimeout(
+        job.kind,
+        () =>
+          runInAuthContext(
+            {
+              workspaceId: job.workspaceId,
+              userId: job.requestedByUserId ?? SYSTEM_USER_ID,
+            },
+            () => handler(cancellableJob)
+          ),
+        controller,
       )
       controller.signal.throwIfAborted()
       await completeAttempt(database, job.workspaceId, job.id, 'succeeded')
@@ -273,6 +277,16 @@ export class InProcessQueue implements QueueAdapter {
       await this.tick()
     } finally {
       this.tickInProgress = false
+    }
+  }
+
+  private async runSweep(): Promise<void> {
+    if (this.sweepInProgress) return
+    this.sweepInProgress = true
+    try {
+      await this.sweep()
+    } finally {
+      this.sweepInProgress = false
     }
   }
 

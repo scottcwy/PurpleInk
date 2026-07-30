@@ -16,6 +16,7 @@ const inputSchema = z
   .object({
     projectId: z.string().min(1),
     nodeId: z.string().min(1).optional(),
+    attemptId: z.string().min(1).optional(),
     kind: z.string().min(1),
     key: z
       .string()
@@ -82,10 +83,12 @@ export async function writeValidatedArtifact(
 
   const aggregateType = parsed.data.nodeId ? 'node' : 'project'
   const aggregateId = parsed.data.nodeId ?? parsed.data.projectId
-  const attemptId = await (dependencies.resolveAttempt ?? defaultAttemptResolver)({
-    projectId: parsed.data.projectId,
-    nodeId: parsed.data.nodeId,
-  })
+  const attemptId =
+    parsed.data.attemptId ??
+    await (dependencies.resolveAttempt ?? defaultAttemptResolver)({
+      projectId: parsed.data.projectId,
+      nodeId: parsed.data.nodeId,
+    })
   const contentHash = createHash('sha256')
     .update(parsed.data.content)
     .digest('hex')

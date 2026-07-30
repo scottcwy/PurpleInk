@@ -29,6 +29,27 @@ function createStorage(): StorageAdapter {
 }
 
 describe('writeValidatedArtifact', () => {
+  it('keeps the queue attempt binding instead of resolving a newer running attempt', async () => {
+    const storage = createStorage()
+    const resolveAttempt = vi.fn(async () => 'new-attempt')
+
+    const result = await writeValidatedArtifact(
+      {
+        projectId: 'project-1',
+        nodeId: 'node-1',
+        attemptId: 'old-attempt',
+        kind: 'director-output',
+        key: 'project-1/node-1/old-output.json',
+        content: '{"source":"old"}',
+        validation: 'non-empty',
+      },
+      { storage, resolveAttempt },
+    )
+
+    expect(resolveAttempt).not.toHaveBeenCalled()
+    expect(result.attemptId).toBe('old-attempt')
+  })
+
   it('validates and resolves a legal attempt before staging bytes', async () => {
     const order: string[] = []
     const storage = createStorage()
