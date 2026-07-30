@@ -493,6 +493,8 @@ UI 投影为未知问题并连续重试；数据库没有 `export-project` attem
 - [ ] Provider 硬超时是否短于阶段执行上限，SDK 内重试是否关闭；租约是否覆盖完整执行窗口，父 attempt 终态后是否仍存在 `running/reserved` 孤儿调用（模式 J）。
 - [ ] FABRICATE HTML 是否实际通过 JavaScript 解析与 Chromium runtime admission；动态证明无效的 draft 是否转为 rejected，自动重试是否会重新生成而非复用坏缓存（模式 K）。
 - [ ] TTS 字符与 ASR 音频秒是否按各自计费原子归一化；音频探针的小数秒是否在预留和实际结算两条路径保持一致（模式 L）。
+- [ ] TTS 供应商是否可能用 HTTP 200 返回错误 JSON；写盘前是否同时验证媒体合同并拒绝错误正文（模式 T）。
+- [ ] LLM 生成的 HyperFrames HTML 是否在落盘前检查 `<style>` 内的赋值号污染；结构合法不能替代 CSS 可编译性（模式 U）。
 - [ ] Provider 并发、RPM、TPM 是否按共享凭据分别建模；429 是否只延后且不消耗普通重试/失败预算/熔断计数，等待上限与取消路径是否可恢复（模式 M）。
 - [ ] Provider 调度迁移的 journal 是否严格递增且目标表真实存在；租约创建、过期判断与释放是否使用同一数据库时钟（模式 M）。
 - [ ] 分镜租约身份是否同时包含 project 与 work unit；claim 是否只有一套公平顺序且会跳过暂不可准入的队首；停止是否以 execution epoch + 协作取消收敛全部旧作业（模式 R）。
@@ -734,6 +736,48 @@ content-hash 去重**：每次提交一律 `version + 1` 并生成新 `artifactI
 **已落地护栏**：`subtitleValid` 只比对 `sourceAudioKey`，`sourceAudioArtifactId` 仍
 写入血缘供追溯但不再当门禁。`media-assembly.test.ts` 锁定双向行为：旁白重跑成同字节
 新版本时字幕仍有效；来源键改变时仍然阻塞。
+
+---
+
+## 7.14 模式 T：TTS 用 HTTP 200 返回错误 JSON，错误正文被写成音频
+
+**症状**：旁白合成阶段看似完成了多个 MP3，文件却都只有几十字节；随后
+`ffprobe` 在时长测量阶段失败。UI 最终只看到渲染失败，供应商的真实失败点被延后。
+
+**真实事故**：ListenHub 的业务错误仍使用 HTTP 200。额度不足时响应为
+`application/json`，包含非零业务码 `26004`；旧客户端只检查 `response.ok`，把正文
+直接写成 `.mp3`。真实 URL 工作流因此生成了四个 66 字节伪音频，直到
+`measureAudioDuration` 才暴露。
+
+**规则与护栏**：
+
+- 二进制媒体客户端不能只以 HTTP 状态判断成功；必须在写盘前验证响应媒体合同。
+- JSON 错误只记录稳定状态或业务码，不写入产物，也不把供应商 message 投影给 UI。
+- 供应商不可用时不得生成静音或静默换供应商。替代供应商必须通过显式配置选择。
+- worker 的 MiMo 路由与 ListenHub 路由是互斥配置；MiMo 返回值还需通过 RIFF/WAVE
+  头校验后才能落盘。
+- `tts-runtime.test.ts` 锁定 HTTP 200 错误 JSON 的拒绝、错误正文脱敏，以及 MiMo
+  请求合同和 WAV 字节校验。
+
+---
+
+## 7.15 模式 U：LLM 把 JavaScript 赋值写进 CSS，结构校验通过但编译失败
+
+**症状**：网站抓取、旁白和章节生成都成功，HyperFrames `check` 与 `render` 却在
+`Compiling composition` 立即失败，报 `<css input>:… Unknown word left=0`。
+
+**真实事故**：LLM 生成的开场章节包含
+`#cir1{...;left=0;left:180px;...}`。原校验只检查 composition 属性、时间线注册、禁用
+元素与时长，没有验证 `<style>` 中的声明语法，因此把该章节标记为 `source=llm` 并写入
+最终项目；模板回落机制完全没有机会接管。
+
+**规则与护栏**：
+
+- LLM 章节进入合成前必须同时通过结构合同与最低 CSS 语法门禁。
+- `<style>` 声明起始位置出现 `property=value` 时立即拒绝该章节并使用既有模板回落；
+  不在最终项目上做字符串替换，因为无法证明其余生成内容仍语义正确。
+- 合法的 `left: 0` 与非法的 `left=0` 由 `chapter-validation.test.ts` 双向锁定。
+- 真实工作流验证必须看到 `render_done code=0` 与最终 MP4；`chapters_generated` 不是成功。
 
 ---
 
