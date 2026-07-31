@@ -156,6 +156,27 @@ describe('media provider dispatcher', () => {
     expect(deps.synthesizeCustom).not.toHaveBeenCalled()
   })
 
+  it('forwards the project cancellation signal to the routed ASR adapter', async () => {
+    const deps = routedDependencies('mimo')
+    const controller = new AbortController()
+
+    await transcribeRoutedSpeech({
+      audioBytes: Buffer.from('wav'),
+      audioFormat: 'wav',
+      audioSeconds: 1,
+      signal: controller.signal,
+    }, deps)
+
+    expect(deps.transcribeMimo).toHaveBeenCalledWith(
+      {
+        audioBytes: Buffer.from('wav'),
+        audioFormat: 'wav',
+      },
+      undefined,
+      { signal: controller.signal },
+    )
+  })
+
   it('keeps provider adapters untouched when the managed quota gate rejects', async () => {
     const deps = {
       ...routedDependencies('mimo'),

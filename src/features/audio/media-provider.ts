@@ -78,6 +78,7 @@ interface RoutedMediaDependencies {
   transcribeCustom: (
     input: { audioBytes: Buffer; audioFormat: 'mp3' | 'wav' },
     deps: AiConfigDependencies,
+    options?: { signal?: AbortSignal },
   ) => Promise<TranscribedSpeech & { timestampMode: 'segment' | 'none' }>
   billManaged?: <T>(input: ManagedAudioBillingInput<T>) => Promise<T>
 }
@@ -96,13 +97,13 @@ function defaultDependencies(): RoutedMediaDependencies {
         getApiKey: () =>
           deps.credentials.loadSecret(currentWorkspaceId(), CUSTOM_TTS_PROVIDER),
       }),
-    transcribeCustom: (input, deps) =>
+    transcribeCustom: (input, deps, options) =>
       transcribeOpenAiCompatibleSpeech(input, {
         fetcher: fetch,
         getProfile: () => audioProfiles(deps).findAsr(currentWorkspaceId()),
         getApiKey: () =>
           deps.credentials.loadSecret(currentWorkspaceId(), CUSTOM_ASR_PROVIDER),
-      }),
+      }, options),
   }
 }
 
@@ -248,6 +249,7 @@ export async function transcribeRoutedSpeech(
     audioFormat: 'mp3' | 'wav' | 'ogg' | 'pcm'
     audioSeconds?: number
     billingContext?: AudioBillingContext
+    signal?: AbortSignal
   },
   dependencies: RoutedMediaDependencies = defaultDependencies(),
 ): Promise<RoutedTranscribedSpeech> {
@@ -267,6 +269,7 @@ export async function transcribeRoutedSpeech(
           audioFormat: compactFormat(input, '自定义兼容 ASR'),
         },
         dependencies.config,
+        { signal: input.signal },
       ),
       outputBytes: (speech) => speech.transcript,
       usageFromResult: () => audioSeconds > 0
@@ -290,16 +293,24 @@ export async function transcribeRoutedSpeech(
   }
   const invoke = async () => {
     if (managedProvider === 'mimo') {
-      const result = await dependencies.transcribeMimo({
-        audioBytes: input.audioBytes,
-        audioFormat: compactFormat(input, 'MiMo ASR'),
-      })
+      const result = await dependencies.transcribeMimo(
+        {
+          audioBytes: input.audioBytes,
+          audioFormat: compactFormat(input, 'MiMo ASR'),
+        },
+        undefined,
+        { signal: input.signal },
+      )
       return { ...result, alignmentSource: 'mimo-asr-segment' as const }
     }
-    const result = await dependencies.transcribeStepfun({
-      audioBytes: input.audioBytes,
-      audioFormat: input.audioFormat,
-    })
+    const result = await dependencies.transcribeStepfun(
+      {
+        audioBytes: input.audioBytes,
+        audioFormat: input.audioFormat,
+      },
+      undefined,
+      { signal: input.signal },
+    )
     return { ...result, alignmentSource: 'stepfun-asr' as const }
   }
   return (dependencies.billManaged ?? runManagedAudioBilling)({

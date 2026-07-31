@@ -26,7 +26,7 @@ export interface NodeActionResult {
 
 export interface NodeRecoveryDependencies {
   getGraph(projectId: string): Promise<CanvasGraph>
-  setAutopilot(projectId: string, enabled: boolean): Promise<void>
+  enableAutomaticAdvance(projectId: string): Promise<void>
   inspectShotSpec(
     projectId: string,
     laneKey: string,
@@ -61,7 +61,7 @@ export async function repairProjectFrontier(
     handledSuccessfulNodeIds: [],
     blockedNodes: [],
   }
-  await resolved.setAutopilot(projectId, true)
+  await resolved.enableAutomaticAdvance(projectId)
   for (const node of graph.nodes) {
     if (node.status === 'blocked' && node.workflowBlock) {
       result.blockedNodes.push({
@@ -152,7 +152,7 @@ export async function executeNodeAction(
     requested.type,
   )
   assertActionAllowed(requested)
-  await resolved.setAutopilot(input.projectId, true)
+  await resolved.enableAutomaticAdvance(input.projectId)
 
   if (requested.type === 'export') {
     const finalization = await resolved.requestExportFinalization({

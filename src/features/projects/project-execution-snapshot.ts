@@ -51,6 +51,7 @@ export async function getProjectExecutionSnapshot(
       id: projects.id,
       workflowKind: projects.workflowKind,
       autopilot: projects.autopilot,
+      directorContinuationEnabled: projects.directorContinuationEnabled,
       exportSettings: projects.exportSettings,
     })
     .from(projects)
@@ -109,6 +110,7 @@ export async function getProjectExecutionSnapshot(
       id: project.id,
       workflowKind: project.workflowKind,
       autopilot: project.autopilot,
+      directorContinuationEnabled: project.directorContinuationEnabled,
       soundEffects:
         resolvePersistedExportSettings(project.exportSettings).soundEffects,
     },

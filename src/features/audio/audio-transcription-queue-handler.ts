@@ -24,6 +24,7 @@ import { queueFingerprint } from '@/lib/queue/attempt-checkpoint'
 import { activeWorkflowVersionFor } from '@/lib/workflow/project-workflow-registry'
 import {
   runAudioTranscriptionJob,
+  type AudioTranscriptionExecution,
   type AudioTranscriptionJobInput,
 } from './audio-transcription-job'
 import { describeMediaProvider } from './media-provider'
@@ -57,28 +58,40 @@ export interface AudioTranscriptionEnqueueDependencies {
   queue: QueueAdapter
 }
 
+type AudioTranscriptionRunner = (
+  input: AudioTranscriptionJobInput,
+  execution: AudioTranscriptionExecution,
+) => Promise<void>
+
+const runAudioTranscription: AudioTranscriptionRunner = (input, execution) =>
+  runAudioTranscriptionJob(input, undefined, execution)
+
 export async function runAudioTranscriptionQueueJob(
   job: QueueJob,
-  run: (input: AudioTranscriptionJobInput) => Promise<void> =
-    runAudioTranscriptionJob,
+  run: AudioTranscriptionRunner = runAudioTranscription,
 ): Promise<void> {
   const payload = audioTranscriptionPayloadSchema.parse(job.payload)
   const { workflowVersion: _workflowVersion, ...input } = payload
   job.signal?.throwIfAborted()
-  await run({
-    ...input,
-    billingContext: {
-      attemptId: z.string().uuid().parse(job.id),
-      invocationNo: billingInvocationNo('source-asr', 1),
+  await run(
+    {
+      ...input,
+      billingContext: {
+        attemptId: z.string().uuid().parse(job.id),
+        invocationNo: billingInvocationNo('source-asr', 1),
+      },
     },
-  })
+    {
+      attemptId: job.id,
+      ...(job.signal ? { signal: job.signal } : {}),
+    },
+  )
   job.signal?.throwIfAborted()
 }
 
 export function registerAudioTranscriptionHandler(
   targetQueue: QueueAdapter = defaultQueue,
-  run: (input: AudioTranscriptionJobInput) => Promise<void> =
-    runAudioTranscriptionJob,
+  run: AudioTranscriptionRunner = runAudioTranscription,
 ): void {
   targetQueue.register(AUDIO_TRANSCRIPTION_KIND, (job) =>
     runAudioTranscriptionQueueJob(job, run),

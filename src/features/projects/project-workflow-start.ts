@@ -36,6 +36,14 @@ interface ScriptStartResult {
   blockedNodes: Array<{ nodeId: string; code: string; message: string }>
 }
 
+interface AudioResumeResult {
+  status: 'started' | 'blocked' | 'complete'
+  enqueuedNodeIds: string[]
+  repairRootNodeIds: string[]
+  failedNodeIds: string[]
+  blockedNodes: Array<{ nodeId: string; code: string; message: string }>
+}
+
 export type ProjectWorkflowStartResult =
   | ({ kind: 'script'; entryNodeId: string } & ScriptStartResult)
   | {
@@ -63,6 +71,7 @@ export type ProjectWorkflowStartResult =
 export interface ProjectWorkflowStartDependencies {
   loadDescriptor(projectId: string): Promise<ProjectWorkflowStartDescriptor>
   startScript(projectId: string): Promise<ScriptStartResult>
+  resumeAudio(projectId: string): Promise<AudioResumeResult>
   enqueueAudio(input: {
     projectId: string
     nodeId: string
@@ -118,7 +127,7 @@ export async function startProjectWorkflow(
         jobId: receipt.attemptId,
         attemptStatus: receipt.status,
         reused: receipt.reused,
-        ...(await resolved.startScript(projectId)),
+        ...(await resolved.resumeAudio(projectId)),
       }
     }
     return {
@@ -157,6 +166,12 @@ function defaultDependencies(): ProjectWorkflowStartDependencies {
     startScript: async (projectId) => {
       const { startProjectPipeline } = await import('@/features/director/advance')
       return startProjectPipeline(projectId)
+    },
+    resumeAudio: async (projectId) => {
+      const { activateAudioDirectorContinuation } = await import(
+        '@/features/director/audio-continuation'
+      )
+      return activateAudioDirectorContinuation(projectId)
     },
     enqueueAudio: async (input) => {
       const { enqueueAudioTranscription } = await import('@/features/audio')

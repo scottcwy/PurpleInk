@@ -322,7 +322,7 @@ function harness(shotSpecValid: boolean, codegenStatus: CanvasGraphNode['status'
   }))
   const dependencies: NodeRecoveryDependencies = {
     getGraph: vi.fn(async () => graph),
-    setAutopilot: vi.fn(async () => {}),
+    enableAutomaticAdvance: vi.fn(async () => {}),
     inspectShotSpec: vi.fn(async () => shotSpecValid),
     invalidate,
     enqueueDirectorStage,

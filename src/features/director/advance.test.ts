@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { PipelineStage } from './types'
 import {
   advancePipeline,
+  resumeProjectPipeline,
   startProjectPipeline,
   type AdvanceCandidate,
   type AdvanceDependencies,
@@ -26,7 +27,7 @@ function harness(
   ready: Record<string, boolean> = {}
 ) {
   const repository: AdvanceDependencies['repository'] = {
-    isAutopilotEnabled: vi.fn(async () => true),
+    isAutomaticAdvanceEnabled: vi.fn(async () => true),
     listDownstreamCandidates: vi.fn(async () => candidates),
     areAllUpstreamsSuccessful: vi.fn(
       async (_projectId, nodeId) => ready[nodeId] ?? true
@@ -64,7 +65,7 @@ function harness(
 describe('advancePipeline', () => {
   it('does nothing while project autopilot is disabled', async () => {
     const test = harness([candidate()])
-    vi.mocked(test.repository.isAutopilotEnabled).mockResolvedValue(false)
+    vi.mocked(test.repository.isAutomaticAdvanceEnabled).mockResolvedValue(false)
 
     const result = await advancePipeline('project-1', 'node-1', test.dependencies)
 
@@ -306,6 +307,31 @@ describe('advancePipeline', () => {
 })
 
 describe('startProjectPipeline', () => {
+  it('resumes an established frontier without mutating the script autopilot latch', async () => {
+    const test = harness([])
+    const repository = {
+      ...test.repository,
+      setAutopilot: vi.fn(async () => true),
+      getEntryNode: vi.fn(async () =>
+        candidate({
+          id: 'ingest',
+          type: 'script-import',
+          stage: 'INGEST',
+          status: 'pending',
+        }),
+      ),
+      listCompletedNodeIds: vi.fn(async () => ['ingest']),
+    }
+
+    await resumeProjectPipeline('project-1', {
+      repository,
+      enqueueDirectorStage: test.enqueueDirectorStage,
+      advance: vi.fn(async () => ({ enqueuedNodeIds: [], failedNodeIds: [] })),
+    })
+
+    expect(repository.setAutopilot).not.toHaveBeenCalled()
+  })
+
   it.each(['idle', 'stale'] as const)(
     'enqueues the trusted INGEST entry when it is %s',
     async (status) => {

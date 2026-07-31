@@ -28,6 +28,13 @@ function dependencies(
       failedNodeIds: [],
       blockedNodes: [],
     })),
+    resumeAudio: vi.fn(async () => ({
+      status: 'started' as const,
+      enqueuedNodeIds: [ENTRY_ID],
+      repairRootNodeIds: [],
+      failedNodeIds: [],
+      blockedNodes: [],
+    })),
     enqueueAudio: vi.fn(async () => ({
       attemptId: 'audio-attempt',
       status: 'queued' as const,
@@ -105,7 +112,8 @@ describe('startProjectWorkflow', () => {
       reused: true,
     })
 
-    await expect(startProjectWorkflow(PROJECT_ID, deps)).resolves.toMatchObject({
+    const result = await startProjectWorkflow(PROJECT_ID, deps)
+    expect(result).toMatchObject({
       kind: 'audio',
       status: 'started',
       jobId: 'audio-attempt',
@@ -113,7 +121,9 @@ describe('startProjectWorkflow', () => {
       reused: true,
       enqueuedNodeIds: [ENTRY_ID],
     })
-    expect(deps.startScript).toHaveBeenCalledWith(PROJECT_ID)
+    expect(result).not.toHaveProperty('autopilot')
+    expect(deps.resumeAudio).toHaveBeenCalledWith(PROJECT_ID)
+    expect(deps.startScript).not.toHaveBeenCalled()
   })
 
   it('leaves succeeded website delivery truth to the execution snapshot', async () => {

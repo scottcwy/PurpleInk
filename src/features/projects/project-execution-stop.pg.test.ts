@@ -105,6 +105,39 @@ describe('stopProjectExecution', () => {
     expect(lease?.status).toBe('active')
     expect(ticket?.status).toBe('in_flight')
   })
+
+  it('clears an audio crash-gap continuation latch exactly once', async () => {
+    const projectId = randomUUID()
+    await database.db.insert(projects).values({
+      workspaceId: WORKSPACE_ID,
+      id: projectId,
+      title: '录音续接停止测试',
+      script: '已经转写',
+      workflowKind: 'audio',
+      workflowVersion: 'test',
+      exportSettings: { schemaVersion: 1 },
+      autopilot: false,
+      directorContinuationEnabled: true,
+    })
+
+    await inWorkspace(() => stopProjectExecution(projectId, {
+      database: database.db,
+      releaseReservation: vi.fn(async () => undefined),
+    }))
+    const [stopped] = await database.db.select().from(projects)
+    expect(stopped).toMatchObject({
+      autopilot: false,
+      directorContinuationEnabled: false,
+      executionEpoch: 1,
+    })
+
+    await inWorkspace(() => stopProjectExecution(projectId, {
+      database: database.db,
+      releaseReservation: vi.fn(async () => undefined),
+    }))
+    const [repeated] = await database.db.select().from(projects)
+    expect(repeated?.executionEpoch).toBe(1)
+  })
 })
 
 async function seedExecution(status: 'queued' | 'running') {

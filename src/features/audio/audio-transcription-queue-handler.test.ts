@@ -42,6 +42,7 @@ function dependencies(): AudioTranscriptionEnqueueDependencies {
 describe('audio transcription queue integration', () => {
   it('binds ASR billing to the real queue attempt and never accepts it from payload', async () => {
     const run = vi.fn(async () => undefined)
+    const controller = new AbortController()
     await runAudioTranscriptionQueueJob(
       {
         id: ATTEMPT_ID,
@@ -50,18 +51,25 @@ describe('audio transcription queue integration', () => {
         status: 'running',
         payload: PAYLOAD,
         attempts: 1,
+        signal: controller.signal,
       },
       run,
     )
 
-    expect(run).toHaveBeenCalledWith({
-      projectId: PROJECT_ID,
-      nodeId: NODE_ID,
-      billingContext: {
-        attemptId: ATTEMPT_ID,
-        invocationNo: 40_000,
+    expect(run).toHaveBeenCalledWith(
+      {
+        projectId: PROJECT_ID,
+        nodeId: NODE_ID,
+        billingContext: {
+          attemptId: ATTEMPT_ID,
+          invocationNo: 40_000,
+        },
       },
-    })
+      {
+        attemptId: ATTEMPT_ID,
+        signal: controller.signal,
+      },
+    )
   })
 
   it('runs preflight and node projection only when enqueueOnce creates a job', async () => {

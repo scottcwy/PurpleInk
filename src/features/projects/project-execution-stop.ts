@@ -69,6 +69,7 @@ export async function stopProjectExecution(
     const [project] = await transaction
       .select({
         autopilot: projects.autopilot,
+        directorContinuationEnabled: projects.directorContinuationEnabled,
         executionEpoch: projects.executionEpoch,
       })
       .from(projects)
@@ -106,6 +107,7 @@ export async function stopProjectExecution(
     const queued = attempts.filter((attempt) => attempt.status === 'queued')
     const running = attempts.filter((attempt) => attempt.status === 'running')
     const shouldFence = project.autopilot
+      || project.directorContinuationEnabled
       || queued.length > 0
       || running.some((attempt) => attempt.cancelRequestedAt === null)
     if (shouldFence) {
@@ -113,6 +115,7 @@ export async function stopProjectExecution(
         .update(projects)
         .set({
           autopilot: false,
+          directorContinuationEnabled: false,
           executionEpoch: project.executionEpoch + 1,
           updatedAt: sql`now()`,
         })

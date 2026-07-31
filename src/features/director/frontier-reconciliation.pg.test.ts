@@ -38,6 +38,18 @@ afterAll(async () => {
 
 it('selects only an unattended ready DAG with no active attempt', async () => {
   const readyProjectId = await seedProject({ autopilot: true, downstreamStatus: 'idle' })
+  const audioReadyProjectId = await seedProject({
+    workflowKind: 'audio',
+    autopilot: false,
+    directorContinuationEnabled: true,
+    downstreamStatus: 'idle',
+  })
+  await seedProject({
+    workflowKind: 'audio',
+    autopilot: true,
+    directorContinuationEnabled: false,
+    downstreamStatus: 'idle',
+  })
   await seedProject({ autopilot: false, downstreamStatus: 'idle' })
   await seedProject({ autopilot: true, downstreamStatus: 'succeeded' })
   await seedProject({
@@ -46,9 +58,12 @@ it('selects only an unattended ready DAG with no active attempt', async () => {
     activeAttempt: true,
   })
 
-  await expect(listDirectorFrontierCandidates(database.db)).resolves.toEqual([
+  const candidates = await listDirectorFrontierCandidates(database.db)
+  expect(candidates).toHaveLength(2)
+  expect(candidates).toEqual(expect.arrayContaining([
     { workspaceId: WORKSPACE_ID, projectId: readyProjectId },
-  ])
+    { workspaceId: WORKSPACE_ID, projectId: audioReadyProjectId },
+  ]))
 })
 
 it('blocks an active current epoch but ignores an active attempt from an old epoch', async () => {
@@ -189,6 +204,8 @@ it('does not truncate a recoverable candidate behind sixteen newer frontiers', a
 
 async function seedProject(input: {
   autopilot: boolean
+  workflowKind?: 'script' | 'audio'
+  directorContinuationEnabled?: boolean
   downstreamStatus: 'idle' | 'succeeded' | 'failed'
   retryable?: boolean
   errorProjection?:
@@ -212,8 +229,9 @@ async function seedProject(input: {
     title: '文稿项目',
     script: '真实文稿',
     workflowVersion: 'test',
-    workflowKind: 'script',
+    workflowKind: input.workflowKind ?? 'script',
     autopilot: input.autopilot,
+    directorContinuationEnabled: input.directorContinuationEnabled ?? false,
     executionEpoch: input.activeAttemptEpoch === 'old' ? 1 : 0,
     exportSettings: { schemaVersion: 1 },
     ...(input.updatedAt ? { updatedAt: input.updatedAt } : {}),

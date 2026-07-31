@@ -2,7 +2,6 @@ import 'server-only'
 import {
   getCanvasGraph,
   invalidateNodeForRegeneration,
-  setProjectAutopilot,
 } from '@/features/canvas'
 import { enqueueRenderShot } from '@/features/render'
 import { getDb } from '@/lib/db/client'
@@ -11,15 +10,15 @@ import { requestExportFinalization } from './export-finalization'
 import { enqueueDirectorStage } from './queue-handler'
 import type { NodeRecoveryDependencies } from './recovery'
 import { DirectorArtifactSource } from './runtime-artifact-source'
+import { enableProjectAutomaticAdvance } from './automatic-advance-control'
 
 export async function createRecoveryDependencies(): Promise<NodeRecoveryDependencies> {
   const database = await getDb()
   const source = new DirectorArtifactSource(database, storage)
   return {
     getGraph: getCanvasGraph,
-    setAutopilot: async (projectId, enabled) => {
-      await setProjectAutopilot(projectId, enabled)
-    },
+    enableAutomaticAdvance: (projectId) =>
+      enableProjectAutomaticAdvance(projectId, database),
     inspectShotSpec: async (projectId, laneKey, sourceUnitId) => {
       const shotPlan = await source.loadShotSpecArtifact(projectId, laneKey)
       if (shotPlan.shots.length !== 1) return false

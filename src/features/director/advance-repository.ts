@@ -29,20 +29,31 @@ export class AdvanceRepositoryImpl
     this.artifactSource = new DirectorArtifactSource(db, storage)
   }
 
-  async isAutopilotEnabled(projectId: string): Promise<boolean> {
+  async isAutomaticAdvanceEnabled(projectId: string): Promise<boolean> {
     const [project] = await this.db
-      .select({ autopilot: projects.autopilot })
+      .select({
+        workflowKind: projects.workflowKind,
+        autopilot: projects.autopilot,
+        directorContinuationEnabled: projects.directorContinuationEnabled,
+      })
       .from(projects)
       .where(scope(projects.workspaceId, projects.id, projectId))
       .limit(1)
-    return project?.autopilot ?? false
+    if (project?.workflowKind === 'script') return project.autopilot
+    if (project?.workflowKind === 'audio') {
+      return project.directorContinuationEnabled
+    }
+    return false
   }
 
   async setAutopilot(projectId: string, enabled: boolean): Promise<boolean> {
     const [updated] = await this.db
       .update(projects)
       .set({ autopilot: enabled, updatedAt: new Date() })
-      .where(scope(projects.workspaceId, projects.id, projectId))
+      .where(and(
+        scope(projects.workspaceId, projects.id, projectId),
+        eq(projects.workflowKind, 'script'),
+      ))
       .returning({ autopilot: projects.autopilot })
     if (!updated) throw new Error(`项目不存在：${projectId}`)
     return updated.autopilot

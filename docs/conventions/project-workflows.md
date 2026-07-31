@@ -112,6 +112,12 @@ audio / website 伪装成 autopilot。website 的 `succeeded` 必须同时满足
 成功、六阶段成功、worker 校验通过，以及同一 attempt 的 approved MP4 Artifact 存在；
 任一事实不一致时必须投影为 `blocked`，不得提供正式下载。
 
+audio 使用独立的 `projects.director_continuation_enabled` 续接门闩。ASR 在入口节点
+成功落库前，必须先在同一执行栅栏下开启该门闩；随后才把入口标为成功并恢复 Director
+前沿。这样进程即使退出在“入口成功”和 `advancePipeline` 之间，后台仍能从 Postgres
+识别并续跑。复用已成功 ASR 的显式启动只开启 audio 门闩，不得改写或返回 script
+`autopilot`。
+
 项目状态流的 SSE 只是低延迟失效提示，不是跨进程真值。画布在 active 状态下必须继续
 从 Postgres 对账；SSE 连接成功但没有事件时，不得停止轮询或宣称状态实时。
 
@@ -185,9 +191,9 @@ audio / website 伪装成 autopilot。website 的 `succeeded` 必须同时满足
 `DELETE /api/director/pipeline` 只做代理兼容。停止目标是单个项目的执行，不终止
 共享 Web、队列或渲染 worker：
 
-1. 事务锁定项目，关闭 autopilot；只有当前代次仍有 queued 作业、尚未收到取消请求的
-   running 作业或 autopilot 仍开启时才递增 `execution_epoch`。重复查询停止状态不得
-   再次递增代次。
+1. 事务锁定项目，同时关闭 script autopilot 与 audio Director 续接门闩；只有当前代次
+   仍有 queued 作业、尚未收到取消请求的 running 作业，或任一来源专属门闩仍开启时才
+   递增 `execution_epoch`。重复查询停止状态不得再次递增代次。
 2. 旧代次 queued attempt/run 立即进入 `cancelled`；running attempt 写
    `cancel_requested_at`，由持有者心跳触发 `AbortSignal` 后确认退出。
 3. waiting 租约与 scheduled Provider ticket 立即取消。Provider 尚未出网的计费预留

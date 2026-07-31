@@ -86,6 +86,9 @@ export const projects = pgTable(
     executionEpoch: bigint('execution_epoch', { mode: 'number' }).default(0).notNull(),
     exportSettings: jsonb('export_settings').$type<VersionedPayload>().notNull(),
     autopilot: boolean('autopilot').default(false).notNull(),
+    directorContinuationEnabled: boolean('director_continuation_enabled')
+      .default(false)
+      .notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },

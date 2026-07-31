@@ -4,9 +4,11 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { currentUserId, currentWorkspaceId, SYSTEM_USER_ID } from '@/lib/auth/workspace-context'
 import { registerWorkflowSlotsInTransaction } from '@/features/ai/workspace-concurrency'
 import { getDb } from '@/lib/db/client'
-import { canvasEdges, canvasNodes } from '@/lib/db/schema/index'
+import { canvasEdges, canvasNodes, taskAttempts } from '@/lib/db/schema/index'
 import {
+  assertNodeExecutionFence,
   withTransaction,
+  type NodeExecutionFence,
   type TransactionContext,
 } from '@/lib/db/transaction'
 import { statusBus } from '@/lib/stream/status-bus'
@@ -34,13 +36,15 @@ type AnchorType = 'shot-split' | 'score'
 /** 在单个事务内幂等物化分镜通道及其首尾锚点连线。 */
 export async function materializeShotLanes(
   projectId: string,
-  shots: readonly (string | ShotLaneSeed)[]
+  shots: readonly (string | ShotLaneSeed)[],
+  execution?: NodeExecutionFence,
 ): Promise<void> {
   const uniqueShots = deduplicateShots(shots)
   if (uniqueShots.length === 0) return
 
   const database = await getDb()
   const insertedLanes = await withTransaction(database, async (tx) => {
+    if (execution) await assertMaterializationExecution(tx, projectId, execution)
     const anchors = await findAnchors(tx, projectId)
     const existingKeys = await findExistingLaneKeys(tx, projectId, uniqueShots)
 
@@ -222,6 +226,28 @@ function stableId(kind: 'node' | 'edge', ...parts: string[]): string {
     value.slice(16, 20),
     value.slice(20),
   ].join('-')
+}
+
+async function assertMaterializationExecution(
+  tx: TransactionContext,
+  projectId: string,
+  execution: NodeExecutionFence,
+): Promise<void> {
+  const [attempt] = await tx
+    .select({ entityId: taskAttempts.entityId })
+    .from(taskAttempts)
+    .where(and(
+      eq(taskAttempts.workspaceId, currentWorkspaceId()),
+      eq(taskAttempts.id, execution.attemptId),
+      eq(taskAttempts.entityType, 'node'),
+    ))
+    .limit(1)
+  if (!attempt) throw new Error('STALE_ATTEMPT')
+  await assertNodeExecutionFence(
+    tx,
+    { id: attempt.entityId, projectId },
+    execution,
+  )
 }
 
 function isUuid(value: string): boolean {

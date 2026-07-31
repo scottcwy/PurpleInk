@@ -5,7 +5,7 @@ import {
   SYSTEM_USER_ID,
 } from '@/lib/auth/workspace-context'
 import type { Db } from '@/lib/db/client'
-import type { PipelineStartResult } from './advance'
+import type { PipelineResumeResult } from './advance'
 import { tryProjectFrontierLock } from './frontier-lock'
 
 export interface DirectorFrontierCandidate {
@@ -20,11 +20,11 @@ export const DIRECTOR_FRONTIER_RECOVERY_LIMIT = 1
 
 interface ReconciliationDependencies {
   listCandidates?: (database: Db) => Promise<DirectorFrontierCandidate[]>
-  resume?: (projectId: string) => Promise<PipelineStartResult>
+  resume?: (projectId: string) => Promise<PipelineResumeResult>
   lockProject?: (
     projectId: string,
-    operation: () => Promise<PipelineStartResult>,
-  ) => Promise<PipelineStartResult | null>
+    operation: () => Promise<PipelineResumeResult>,
+  ) => Promise<PipelineResumeResult | null>
 }
 
 export interface DirectorFrontierReconciliationResult {
@@ -117,7 +117,7 @@ export async function reconcileDirectorFrontiers(
  * status/blockedNodes 只是本次扫描的诊断投影，不能证明持久化前沿已经前移。
  * 只有真实入队、上游修复或节点失败落库才消耗本轮恢复配额。
  */
-function madePersistedProgress(result: PipelineStartResult): boolean {
+function madePersistedProgress(result: PipelineResumeResult): boolean {
   return result.enqueuedNodeIds.length > 0
     || result.repairRootNodeIds.length > 0
     || result.failedNodeIds.length > 0
@@ -149,8 +149,13 @@ export async function listDirectorFrontierCandidates(
           and run_activity.execution_epoch = project.execution_epoch
       ) source
     ) activity
-    where project.autopilot = true
-      and project.workflow_kind in ('script', 'audio')
+    where (
+      (project.workflow_kind = 'script' and project.autopilot = true)
+      or (
+        project.workflow_kind = 'audio'
+        and project.director_continuation_enabled = true
+      )
+    )
       and activity.activity_at >=
         now() - (${DIRECTOR_FRONTIER_RECOVERY_WINDOW_MS} * interval '1 millisecond')
       and exists (
@@ -207,7 +212,7 @@ export async function listDirectorFrontierCandidates(
   }))
 }
 
-async function defaultResume(projectId: string): Promise<PipelineStartResult> {
-  const { startProjectPipeline } = await import('./advance')
-  return startProjectPipeline(projectId)
+async function defaultResume(projectId: string): Promise<PipelineResumeResult> {
+  const { resumeProjectPipeline } = await import('./advance')
+  return resumeProjectPipeline(projectId)
 }

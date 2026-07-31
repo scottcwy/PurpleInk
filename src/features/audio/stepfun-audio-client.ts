@@ -177,8 +177,10 @@ export async function synthesizeSpeech(
 
 export async function transcribeSpeech(
   input: z.input<typeof transcriptionInputSchema>,
-  dependencies: StepfunAudioDependencies = defaultDependencies()
+  dependencies: StepfunAudioDependencies = defaultDependencies(),
+  options: { signal?: AbortSignal } = {},
 ): Promise<TranscribedSpeech> {
+  options.signal?.throwIfAborted()
   const parsed = transcriptionInputSchema.parse(input)
   const config = requireKey(await dependencies.getConfig())
   const response = await request(
@@ -207,6 +209,7 @@ export async function transcribeSpeech(
       }),
     },
     'StepFun ASR',
+    options.signal,
   )
   if (!response.ok) {
     throw providerErrorFromResponse({
@@ -286,10 +289,15 @@ async function request(
   url: string,
   init: RequestInit | undefined,
   operation: string,
+  externalSignal?: AbortSignal,
 ): Promise<Response> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined
   try {
-    const signal = AbortSignal.timeout(PROVIDER_TIMEOUT_MS)
+    externalSignal?.throwIfAborted()
+    const timeoutSignal = AbortSignal.timeout(PROVIDER_TIMEOUT_MS)
+    const signal = externalSignal
+      ? AbortSignal.any([externalSignal, timeoutSignal])
+      : timeoutSignal
     const response = fetcher(url, { ...init, signal })
     const timeout = new Promise<never>((_resolve, reject) => {
       timeoutId = setTimeout(() => {
@@ -298,6 +306,7 @@ async function request(
     })
     return await Promise.race([response, timeout])
   } catch (error) {
+    externalSignal?.throwIfAborted()
     throw providerNetworkError({
       providerId: 'stepfun',
       providerLabel: '阶跃星辰',

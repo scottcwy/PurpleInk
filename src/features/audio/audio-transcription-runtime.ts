@@ -1,15 +1,24 @@
 import 'server-only'
 import { and, eq } from 'drizzle-orm'
 import {
+  assertNodeExecutionActive,
   materializeShotLanes,
   transitionNodeStatus,
 } from '@/features/canvas'
-import { startProjectPipeline } from '@/features/director/advance'
+import {
+  enableAudioDirectorContinuation,
+} from '@/features/director/audio-continuation'
+import { resumeProjectPipeline } from '@/features/director/advance'
 import { patchNodePayload } from '@/features/director/runtime-node-data'
 import { PostgresProjectSourceRepository } from '@/features/projects'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb } from '@/lib/db/client'
-import { canvasNodes, projects } from '@/lib/db/schema/index'
+import {
+  assertNodeExecutionFence,
+  type NodeExecutionFence,
+  type TransactionContext,
+} from '@/lib/db/transaction'
+import { canvasNodes, projects, taskAttempts } from '@/lib/db/schema/index'
 import { storage } from '@/lib/storage'
 import {
   persistUserAudioArtifacts,
@@ -51,14 +60,28 @@ Promise<AudioTranscriptionDependencies> {
       persistUserAudioSourceArtifact(input, { storage, writer }),
     persistArtifacts: (input) =>
       persistUserAudioArtifacts(input, { storage, writer }),
-    updateProjectScript: (projectId, transcript) =>
-      updateAudioProjectScript(database, projectId, transcript),
-    materialize: materializeShotLanes,
-    transition: transitionNodeStatus,
-    recordState: (nodeId, state, outputContentHash) =>
-      persistTranscriptionState(database, nodeId, state, outputContentHash),
-    // ASR 是 audio 项目的真实入口；成功后在这里开启 autopilot 并续接 Director。
-    advance: startProjectPipeline,
+    assertActive: assertNodeExecutionActive,
+    updateProjectScript: (projectId, transcript, execution) =>
+      updateAudioProjectScript(database, projectId, transcript, execution),
+    materialize: (projectId, shots, execution) =>
+      materializeShotLanes(projectId, shots, execution),
+    transition: (nodeId, status, execution) =>
+      transitionNodeStatus(nodeId, status, execution ? { execution } : undefined),
+    recordState: (nodeId, state, outputContentHash, execution) =>
+      persistTranscriptionState(
+        database,
+        nodeId,
+        state,
+        outputContentHash,
+        execution,
+      ),
+    activateContinuation: (projectId, nodeId, execution) =>
+      enableAudioDirectorContinuation(
+        projectId,
+        execution ? { nodeId, fence: execution } : undefined,
+        database,
+      ),
+    advance: (projectId) => resumeProjectPipeline(projectId),
     now: () => new Date(),
   }
 }
@@ -67,19 +90,29 @@ async function updateAudioProjectScript(
   database: Awaited<ReturnType<typeof getDb>>,
   projectId: string,
   transcript: string,
+  execution?: NodeExecutionFence,
 ): Promise<void> {
-  const [updated] = await database
-    .update(projects)
-    .set({ script: transcript, updatedAt: new Date() })
-    .where(
-      and(
-        eq(projects.workspaceId, currentWorkspaceId()),
-        eq(projects.id, projectId),
-        eq(projects.workflowKind, 'audio'),
-      ),
-    )
-    .returning({ id: projects.id })
-  if (!updated) throw new Error('录音项目不存在或工作流类型不匹配')
+  await database.transaction(async (transaction) => {
+    if (execution) {
+      await assertNodeExecutionFence(
+        transaction,
+        { id: await executionNodeId(transaction, execution), projectId },
+        execution,
+      )
+    }
+    const [updated] = await transaction
+      .update(projects)
+      .set({ script: transcript, updatedAt: new Date() })
+      .where(
+        and(
+          eq(projects.workspaceId, currentWorkspaceId()),
+          eq(projects.id, projectId),
+          eq(projects.workflowKind, 'audio'),
+        ),
+      )
+      .returning({ id: projects.id })
+    if (!updated) throw new Error('录音项目不存在或工作流类型不匹配')
+  })
 }
 
 async function persistTranscriptionState(
@@ -87,6 +120,7 @@ async function persistTranscriptionState(
   nodeId: string,
   state: AudioTranscriptionState,
   outputContentHash?: string,
+  execution?: NodeExecutionFence,
 ): Promise<void> {
   await database.transaction(async (transaction) => {
     const [node] = await transaction
@@ -101,6 +135,13 @@ async function persistTranscriptionState(
       .limit(1)
       .for('update')
     if (!node) throw new Error('录音转写节点不存在')
+    if (execution) {
+      await assertNodeExecutionFence(
+        transaction,
+        { id: nodeId, projectId: execution.projectId },
+        execution,
+      )
+    }
     await transaction
       .update(canvasNodes)
       .set({
@@ -117,4 +158,21 @@ async function persistTranscriptionState(
         ),
       )
   })
+}
+
+async function executionNodeId(
+  transaction: TransactionContext,
+  execution: NodeExecutionFence,
+): Promise<string> {
+  const [attempt] = await transaction
+    .select({ entityId: taskAttempts.entityId })
+    .from(taskAttempts)
+    .where(and(
+      eq(taskAttempts.workspaceId, currentWorkspaceId()),
+      eq(taskAttempts.id, execution.attemptId),
+      eq(taskAttempts.entityType, 'node'),
+    ))
+    .limit(1)
+  if (!attempt) throw new Error('STALE_ATTEMPT')
+  return attempt.entityId
 }

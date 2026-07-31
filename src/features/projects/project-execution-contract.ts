@@ -101,6 +101,7 @@ export interface ProjectExecutionFacts {
     id: string
     workflowKind: ProjectWorkflowKind
     autopilot: boolean
+    directorContinuationEnabled: boolean
     soundEffects: 'off' | 'procedural'
   }
   attempt: {

@@ -133,7 +133,9 @@ export async function synthesizeOpenAiCompatibleSpeech(
 export async function transcribeOpenAiCompatibleSpeech(
   input: z.input<typeof transcriptionInputSchema>,
   dependencies: OpenAiCompatibleAsrDependencies,
+  options: { signal?: AbortSignal } = {},
 ): Promise<OpenAiCompatibleTranscription> {
+  options.signal?.throwIfAborted()
   const parsed = transcriptionInputSchema.parse(input)
   const { profile, apiKey } = await resolveAsr(dependencies)
   const response = await request(
@@ -151,6 +153,7 @@ export async function transcribeOpenAiCompatibleSpeech(
       ),
     },
     '自定义兼容 ASR',
+    options.signal,
   )
   if (!response.ok) {
     throw providerErrorFromResponse({
@@ -250,13 +253,19 @@ async function request(
   url: string,
   init: RequestInit,
   operation: string,
+  externalSignal?: AbortSignal,
 ): Promise<Response> {
   try {
+    externalSignal?.throwIfAborted()
+    const timeoutSignal = AbortSignal.timeout(PROVIDER_TIMEOUT_MS)
     return await fetcher(url, {
       ...init,
-      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+      signal: externalSignal
+        ? AbortSignal.any([externalSignal, timeoutSignal])
+        : timeoutSignal,
     })
   } catch (error) {
+    externalSignal?.throwIfAborted()
     throw providerNetworkError({
       providerId: operation.includes('TTS')
         ? 'openai-compatible-tts'

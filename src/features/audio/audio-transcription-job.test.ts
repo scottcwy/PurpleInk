@@ -101,8 +101,10 @@ function dependencies(): AudioTranscriptionDependencies {
       },
       }),
     ),
+    assertActive: vi.fn(async () => {}),
     updateProjectScript: vi.fn(async () => {}),
     materialize: vi.fn(async () => {}),
+    activateContinuation: vi.fn(async () => {}),
     transition: vi.fn(async () => {}),
     recordState: vi.fn(async () => {}),
     advance: vi.fn(async () => {}),
@@ -182,6 +184,12 @@ describe('runAudioTranscriptionJob', () => {
     ])
     expect(deps.transition).toHaveBeenNthCalledWith(1, JOB.nodeId, 'running')
     expect(deps.transition).toHaveBeenNthCalledWith(2, JOB.nodeId, 'success')
+    expect(deps.activateContinuation).toHaveBeenCalledWith(
+      JOB.projectId,
+      JOB.nodeId,
+    )
+    expect(vi.mocked(deps.activateContinuation).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(deps.transition).mock.invocationCallOrder[1]!)
     expect(deps.recordState).toHaveBeenLastCalledWith(
       JOB.nodeId,
       expect.objectContaining({
@@ -191,8 +199,87 @@ describe('runAudioTranscriptionJob', () => {
       }),
       'a'.repeat(64),
     )
-    expect(deps.advance).toHaveBeenCalledWith(JOB.projectId)
+    expect(deps.advance).toHaveBeenCalledWith(JOB.projectId, JOB.nodeId)
     expect(synthesizeTts).not.toHaveBeenCalled()
+  })
+
+  it('does not persist ASR output or failure state after the execution is cancelled', async () => {
+    const deps = dependencies()
+    const controller = new AbortController()
+    vi.mocked(deps.transcribe).mockImplementationOnce(async () => {
+      controller.abort(new Error('项目已停止'))
+      return speech()
+    })
+
+    await expect(runAudioTranscriptionJob(JOB, deps, {
+      attemptId: JOB.billingContext.attemptId,
+      signal: controller.signal,
+    })).rejects.toThrow('项目已停止')
+
+    expect(deps.persistArtifacts).not.toHaveBeenCalled()
+    expect(deps.updateProjectScript).not.toHaveBeenCalled()
+    expect(deps.materialize).not.toHaveBeenCalled()
+    expect(deps.activateContinuation).not.toHaveBeenCalled()
+    expect(deps.advance).not.toHaveBeenCalled()
+    expect(deps.recordState).not.toHaveBeenCalledWith(
+      JOB.nodeId,
+      expect.objectContaining({ status: 'failed' }),
+      expect.anything(),
+      expect.anything(),
+    )
+    expect(deps.transition).not.toHaveBeenCalledWith(
+      JOB.nodeId,
+      'success',
+      expect.anything(),
+    )
+  })
+
+  it('does not mutate project state when cancellation arrives after Artifact commit', async () => {
+    const deps = dependencies()
+    const controller = new AbortController()
+    vi.mocked(deps.persistArtifacts).mockImplementationOnce(async (input) => {
+      controller.abort(new Error('项目已停止'))
+      return {
+        sourceArtifactId: 'source-artifact',
+        cutArtifactIds: input.slices.map((_, index) => `cut-${index + 1}`),
+        ingestArtifactId: 'ingest-artifact',
+        ingestAudioArtifactId: 'audio-artifact',
+        ingestContentHash: 'a'.repeat(64),
+        audioContentHash: 'b'.repeat(64),
+        audioManifest: {
+          version: 1,
+          engine: 'user-recording-asr',
+          units: [],
+          totalMs: 20_000,
+        },
+        audioAllocation: {
+          schemaVersion: 1,
+          inputDigests: {
+            audioManifest: `sha256:${'a'.repeat(64)}`,
+            runtimeBindings: `sha256:${'b'.repeat(64)}`,
+            scriptUnits: `sha256:${'c'.repeat(64)}`,
+          },
+          fps: 30,
+          shots: [],
+          totalFrames: 600,
+        },
+      }
+    })
+
+    await expect(runAudioTranscriptionJob(JOB, deps, {
+      attemptId: JOB.billingContext.attemptId,
+      signal: controller.signal,
+    })).rejects.toThrow('项目已停止')
+
+    expect(deps.updateProjectScript).not.toHaveBeenCalled()
+    expect(deps.materialize).not.toHaveBeenCalled()
+    expect(deps.activateContinuation).not.toHaveBeenCalled()
+    expect(deps.advance).not.toHaveBeenCalled()
+    expect(deps.transition).not.toHaveBeenCalledWith(
+      JOB.nodeId,
+      'success',
+      expect.anything(),
+    )
   })
 
   it('rejects source hash drift before decoding or calling ASR', async () => {

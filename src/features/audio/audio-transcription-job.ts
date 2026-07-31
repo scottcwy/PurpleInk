@@ -1,111 +1,37 @@
 import 'server-only'
-import { createHash } from 'node:crypto'
-import { z } from 'zod'
 import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
-import {
-  type ShotLaneSeed,
-} from '@/features/canvas'
-import {
-  classifyWorkflowError,
-  type WorkflowErrorProjection,
-  type WorkflowExecutionNotice,
-} from '@/features/canvas/workflow-error'
+import { type ShotLaneSeed } from '@/features/canvas'
+import { classifyWorkflowError } from '@/features/canvas/workflow-error'
 import { shotIdFor } from '@/features/director/audio-timing'
 import type { ScriptUnit } from '@/features/director/schemas/ingest'
-import type { AudioProjectSourcePayload } from '@/features/projects'
-import {
-  type PersistUserAudioArtifactsInput,
-  type PersistUserAudioSourceArtifactInput,
-  type PersistedUserAudioArtifacts,
-  type PersistedUserAudioSourceArtifact,
-} from './user-audio-artifacts'
-import {
-  sliceDecodedUserRecording,
-  type DecodedUserRecording,
-} from './user-audio-slicer'
+import type { NodeExecutionFence } from '@/lib/db/transaction'
+import { sliceDecodedUserRecording } from './user-audio-slicer'
 import {
   buildUserAudioTimeline,
   type UserAudioTimeline,
 } from './user-audio-timeline'
-import type { RoutedTranscribedSpeech } from './media-provider'
+import {
+  audioTranscriptionJobSchema,
+  transcriptSchema,
+  verifyDecodedMetadata,
+  verifySourceBytes,
+  type AudioTranscriptionDependencies,
+  type AudioTranscriptionExecution,
+  type AudioTranscriptionJobInput,
+  type AudioTranscriptionState,
+} from './audio-transcription-contract'
 import { createAudioTranscriptionDependencies } from './audio-transcription-runtime'
 
-const audioTranscriptionJobSchema = z
-  .object({
-    projectId: z.string().min(1),
-    nodeId: z.string().min(1),
-    billingContext: z
-      .object({
-        attemptId: z.string().min(1),
-        invocationNo: z.number().int().min(1),
-      })
-      .strict(),
-  })
-  .strict()
-
-const transcriptSchema = z.string().trim().min(1).max(200_000)
-
-export type AudioTranscriptionJobInput = z.infer<typeof audioTranscriptionJobSchema>
-
-export interface LoadedAudioProjectSource {
-  source: AudioProjectSourcePayload
-  sourceFingerprint: string
-}
-
-export type AudioTranscriptionState =
-  | { status: 'running'; startedAt: string }
-  | ({ status: 'waiting' } & WorkflowExecutionNotice)
-  | {
-      status: 'ready'
-      ingestArtifactId: string
-      audioArtifactId: string
-      unitCount: number
-      alignmentMode: UserAudioTimeline['alignmentMode']
-      alignmentSource: RoutedTranscribedSpeech['alignmentSource']
-      completedAt: string
-    }
-  | {
-      status: 'failed'
-      error: WorkflowErrorProjection
-      completedAt: string
-    }
-
-export interface AudioTranscriptionDependencies {
-  loadSource(projectId: string): Promise<LoadedAudioProjectSource>
-  readSourceBytes(storageKey: string): Promise<Buffer>
-  decode(sourceBytes: Buffer): Promise<DecodedUserRecording>
-  transcribe(input: {
-    audioBytes: Buffer
-    audioFormat: 'mp3' | 'wav'
-    audioSeconds: number
-    billingContext: AudioTranscriptionJobInput['billingContext']
-  }): Promise<RoutedTranscribedSpeech>
-  persistSource(
-    input: PersistUserAudioSourceArtifactInput,
-  ): Promise<PersistedUserAudioSourceArtifact>
-  persistArtifacts(
-    input: PersistUserAudioArtifactsInput,
-  ): Promise<PersistedUserAudioArtifacts>
-  updateProjectScript(projectId: string, transcript: string): Promise<void>
-  materialize(projectId: string, shots: readonly ShotLaneSeed[]): Promise<void>
-  transition(nodeId: string, status: 'running' | 'success' | 'failed'): Promise<void>
-  recordState(
-    nodeId: string,
-    state: AudioTranscriptionState,
-    outputContentHash?: string,
-  ): Promise<void>
-  advance(projectId: string): Promise<unknown>
-  now(): Date
-}
-
-export class AudioSourceIntegrityError extends Error {
-  readonly code = 'AUDIO_SOURCE_INTEGRITY_INVALID'
-
-  constructor(message: string) {
-    super(message)
-    this.name = 'AudioSourceIntegrityError'
-  }
-}
+export {
+  AudioSourceIntegrityError,
+  verifyDecodedMetadata,
+  verifySourceBytes,
+  type AudioTranscriptionDependencies,
+  type AudioTranscriptionExecution,
+  type AudioTranscriptionJobInput,
+  type AudioTranscriptionState,
+  type LoadedAudioProjectSource,
+} from './audio-transcription-contract'
 
 /**
  * 录音工作流入口：原音频只解码一次，ASR 后直接复用 PCM 构造时间线与 WAV 切片。
@@ -114,19 +40,24 @@ export class AudioSourceIntegrityError extends Error {
 export async function runAudioTranscriptionJob(
   input: AudioTranscriptionJobInput,
   dependencies?: AudioTranscriptionDependencies,
+  execution?: AudioTranscriptionExecution,
 ): Promise<void> {
   const payload = audioTranscriptionJobSchema.parse(input)
   const resolved = dependencies ?? (await createAudioTranscriptionDependencies())
-  await resolved.transition(payload.nodeId, 'running')
+  const fence = executionFence(payload, execution)
+  await assertActive(resolved, payload.nodeId, fence)
+  await transition(resolved, payload.nodeId, 'running', fence)
 
   try {
-    await resolved.recordState(payload.nodeId, {
+    await recordState(resolved, payload.nodeId, {
       status: 'running',
       startedAt: resolved.now().toISOString(),
-    })
+    }, undefined, fence)
+    await assertActive(resolved, payload.nodeId, fence)
     const loaded = await resolved.loadSource(payload.projectId)
     const sourceBytes = await resolved.readSourceBytes(loaded.source.storageKey)
     verifySourceBytes(loaded, sourceBytes)
+    await assertActive(resolved, payload.nodeId, fence)
     const sourceArtifact = await resolved.persistSource({
       projectId: payload.projectId,
       nodeId: payload.nodeId,
@@ -136,14 +67,18 @@ export async function runAudioTranscriptionJob(
       sourceBytes,
     })
 
+    await assertActive(resolved, payload.nodeId, fence)
     const decoded = await resolved.decode(sourceBytes)
     verifyDecodedMetadata(loaded.source, decoded)
+    await assertActive(resolved, payload.nodeId, fence)
     const speech = await resolved.transcribe({
       audioBytes: sourceBytes,
       audioFormat: loaded.source.container,
       audioSeconds: decoded.measured.durationMs / 1_000,
       billingContext: payload.billingContext,
+      ...(fence?.signal ? { signal: fence.signal } : {}),
     })
+    await assertActive(resolved, payload.nodeId, fence)
     const transcript = transcriptSchema.parse(speech.transcript)
     const timeline = buildUserAudioTimeline({
       transcript,
@@ -151,6 +86,7 @@ export async function runAudioTranscriptionJob(
       measured: decoded.measured,
     })
     const slices = sliceDecodedUserRecording(decoded, timeline)
+    await assertActive(resolved, payload.nodeId, fence)
     const persisted = await resolved.persistArtifacts({
       projectId: payload.projectId,
       nodeId: payload.nodeId,
@@ -160,9 +96,13 @@ export async function runAudioTranscriptionJob(
       slices,
     })
 
-    await resolved.updateProjectScript(payload.projectId, transcript)
-    await resolved.materialize(payload.projectId, shotSeeds(timeline))
-    await resolved.recordState(
+    await assertActive(resolved, payload.nodeId, fence)
+    await updateProjectScript(resolved, payload.projectId, transcript, fence)
+    await assertActive(resolved, payload.nodeId, fence)
+    await materialize(resolved, payload.projectId, shotSeeds(timeline), fence)
+    await assertActive(resolved, payload.nodeId, fence)
+    await recordState(
+      resolved,
       payload.nodeId,
       {
         status: 'ready',
@@ -174,45 +114,35 @@ export async function runAudioTranscriptionJob(
         completedAt: resolved.now().toISOString(),
       },
       persisted.ingestContentHash,
+      fence,
     )
-    await resolved.transition(payload.nodeId, 'success')
+    await assertActive(resolved, payload.nodeId, fence)
+    await activateContinuation(
+      resolved,
+      payload.projectId,
+      payload.nodeId,
+      fence,
+    )
+    await assertActive(resolved, payload.nodeId, fence)
+    await transition(resolved, payload.nodeId, 'success', fence)
   } catch (error) {
+    if (isStoppedExecution(error, fence)) throw error
+    await assertActive(resolved, payload.nodeId, fence)
     if (error instanceof ProviderQueueDeferral && error.retryAt) {
-      await settleDispatchWait(payload.nodeId, error, error.retryAt, resolved)
+      await settleDispatchWait(payload.nodeId, error, error.retryAt, resolved, fence)
     } else {
-      await settleFailure(payload.nodeId, error, resolved)
+      await settleFailure(payload.nodeId, error, resolved, fence)
     }
     throw error
   }
 
-  await advanceWithoutMasking(resolved, payload.projectId, payload.nodeId)
-}
-
-export function verifySourceBytes(
-  loaded: LoadedAudioProjectSource,
-  sourceBytes: Buffer,
-): void {
-  if (
-    sourceBytes.length !== loaded.source.sizeBytes ||
-    sha256(sourceBytes) !== loaded.sourceFingerprint
-  ) {
-    throw new AudioSourceIntegrityError('录音源文件与创建项目时登记的字节证据不一致')
-  }
-}
-
-export function verifyDecodedMetadata(
-  source: AudioProjectSourcePayload,
-  decoded: DecodedUserRecording,
-): void {
-  const measured = decoded.measured
-  if (
-    measured.container !== source.container ||
-    measured.sampleRateHz !== source.sampleRate ||
-    measured.sampleCount !== source.sampleCount ||
-    Math.round(measured.durationMs) !== source.durationMs
-  ) {
-    throw new AudioSourceIntegrityError('录音源文件的实测媒体元数据与项目来源记录不一致')
-  }
+  await assertActive(resolved, payload.nodeId, fence)
+  await advanceWithoutMasking(
+    resolved,
+    payload.projectId,
+    payload.nodeId,
+    fence,
+  )
 }
 
 function shotSeeds(timeline: UserAudioTimeline): ShotLaneSeed[] {
@@ -227,16 +157,17 @@ async function settleDispatchWait(
   error: ProviderQueueDeferral,
   retryAt: string,
   dependencies: AudioTranscriptionDependencies,
+  execution?: NodeExecutionFence,
 ): Promise<void> {
   const cleanupErrors: unknown[] = []
   try {
-    await dependencies.recordState(nodeId, {
+    await recordState(dependencies, nodeId, {
       status: 'waiting',
       code: 'PROVIDER_POOL_WAIT',
       message: `${error.providerLabel}正在等待可用调用窗口`,
       resumeAt: retryAt,
       providerLabel: error.providerLabel,
-    })
+    }, undefined, execution)
   } catch (cleanupError) {
     cleanupErrors.push(cleanupError)
   }
@@ -252,6 +183,7 @@ async function settleFailure(
   nodeId: string,
   error: unknown,
   dependencies: AudioTranscriptionDependencies,
+  execution?: NodeExecutionFence,
 ): Promise<void> {
   const cleanupErrors: unknown[] = []
   const projection = classifyWorkflowError(error, {
@@ -259,16 +191,16 @@ async function settleFailure(
     sourceNodeId: nodeId,
   })
   try {
-    await dependencies.recordState(nodeId, {
+    await recordState(dependencies, nodeId, {
       status: 'failed',
       error: projection,
       completedAt: dependencies.now().toISOString(),
-    })
+    }, undefined, execution)
   } catch (cleanupError) {
     cleanupErrors.push(cleanupError)
   }
   try {
-    await dependencies.transition(nodeId, 'failed')
+    await transition(dependencies, nodeId, 'failed', execution)
   } catch (cleanupError) {
     cleanupErrors.push(cleanupError)
   }
@@ -284,9 +216,14 @@ async function advanceWithoutMasking(
   dependencies: AudioTranscriptionDependencies,
   projectId: string,
   nodeId: string,
+  execution?: NodeExecutionFence,
 ): Promise<void> {
   try {
-    await dependencies.advance(projectId)
+    if (execution) {
+      await dependencies.advance(projectId, nodeId, execution)
+    } else {
+      await dependencies.advance(projectId, nodeId)
+    }
   } catch (error) {
     console.error('[audio-transcription] 下游自动推进失败', {
       projectId,
@@ -296,6 +233,94 @@ async function advanceWithoutMasking(
   }
 }
 
-function sha256(bytes: Buffer): string {
-  return createHash('sha256').update(bytes).digest('hex')
+async function assertActive(
+  dependencies: AudioTranscriptionDependencies,
+  nodeId: string,
+  execution?: NodeExecutionFence,
+): Promise<void> {
+  execution?.signal?.throwIfAborted()
+  if (execution) await dependencies.assertActive(nodeId, execution)
+  execution?.signal?.throwIfAborted()
+}
+
+function executionFence(
+  payload: AudioTranscriptionJobInput,
+  execution?: AudioTranscriptionExecution,
+): NodeExecutionFence | undefined {
+  if (!execution) return undefined
+  if (execution.attemptId !== payload.billingContext.attemptId) {
+    throw new Error('音频任务执行身份与计费 attempt 不一致')
+  }
+  return {
+    projectId: payload.projectId,
+    attemptId: execution.attemptId,
+    ...(execution.signal ? { signal: execution.signal } : {}),
+  }
+}
+
+function isStoppedExecution(
+  error: unknown,
+  execution?: NodeExecutionFence,
+): boolean {
+  return execution?.signal?.aborted === true
+    || (error instanceof Error && error.message === 'STALE_ATTEMPT')
+}
+
+function transition(
+  dependencies: AudioTranscriptionDependencies,
+  nodeId: string,
+  status: 'running' | 'success' | 'failed',
+  execution?: NodeExecutionFence,
+): Promise<void> {
+  return execution
+    ? dependencies.transition(nodeId, status, execution)
+    : dependencies.transition(nodeId, status)
+}
+
+function recordState(
+  dependencies: AudioTranscriptionDependencies,
+  nodeId: string,
+  state: AudioTranscriptionState,
+  outputContentHash?: string,
+  execution?: NodeExecutionFence,
+): Promise<void> {
+  if (execution) {
+    return dependencies.recordState(nodeId, state, outputContentHash, execution)
+  }
+  return outputContentHash === undefined
+    ? dependencies.recordState(nodeId, state)
+    : dependencies.recordState(nodeId, state, outputContentHash)
+}
+
+function updateProjectScript(
+  dependencies: AudioTranscriptionDependencies,
+  projectId: string,
+  transcript: string,
+  execution?: NodeExecutionFence,
+): Promise<void> {
+  return execution
+    ? dependencies.updateProjectScript(projectId, transcript, execution)
+    : dependencies.updateProjectScript(projectId, transcript)
+}
+
+function materialize(
+  dependencies: AudioTranscriptionDependencies,
+  projectId: string,
+  shots: readonly ShotLaneSeed[],
+  execution?: NodeExecutionFence,
+): Promise<void> {
+  return execution
+    ? dependencies.materialize(projectId, shots, execution)
+    : dependencies.materialize(projectId, shots)
+}
+
+function activateContinuation(
+  dependencies: AudioTranscriptionDependencies,
+  projectId: string,
+  nodeId: string,
+  execution?: NodeExecutionFence,
+): Promise<void> {
+  return execution
+    ? dependencies.activateContinuation(projectId, nodeId, execution)
+    : dependencies.activateContinuation(projectId, nodeId)
 }

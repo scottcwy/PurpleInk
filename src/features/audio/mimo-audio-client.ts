@@ -90,8 +90,10 @@ export async function synthesizeMimoSpeech(
 
 export async function transcribeMimoSpeech(
   input: z.input<typeof transcriptionInputSchema>,
-  dependencies: MimoAudioDependencies = defaultDependencies()
+  dependencies: MimoAudioDependencies = defaultDependencies(),
+  options: { signal?: AbortSignal } = {},
 ): Promise<TranscribedSpeech> {
+  options.signal?.throwIfAborted()
   const parsed = transcriptionInputSchema.parse(input)
   const config = requireKey(await dependencies.getConfig())
   const mime = parsed.audioFormat === 'wav' ? 'audio/wav' : 'audio/mpeg'
@@ -107,7 +109,7 @@ export async function transcribeMimoSpeech(
       }],
     }],
     asr_options: { language: 'auto' },
-  }, 'MiMo ASR')
+  }, 'MiMo ASR', options.signal)
   const body = asrResponseSchema.parse(await response.json())
   return {
     transcript: body.choices[0]!.message.content,
@@ -120,9 +122,12 @@ async function request(
   fetcher: typeof fetch,
   config: MimoConfig & { apiKey: string },
   body: Record<string, unknown>,
-  operation: string
+  operation: string,
+  externalSignal?: AbortSignal,
 ): Promise<Response> {
   try {
+    externalSignal?.throwIfAborted()
+    const timeoutSignal = AbortSignal.timeout(PROVIDER_TIMEOUT_MS)
     const response = await fetcher(
       `${config.baseUrl.replace(/\/+$/, '')}/chat/completions`,
       {
@@ -132,7 +137,9 @@ async function request(
           'content-type': 'application/json',
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
+        signal: externalSignal
+          ? AbortSignal.any([externalSignal, timeoutSignal])
+          : timeoutSignal,
       }
     )
     if (!response.ok) {
@@ -146,6 +153,7 @@ async function request(
     }
     return response
   } catch (error) {
+    externalSignal?.throwIfAborted()
     throw providerNetworkError({
       providerId: 'mimo',
       providerLabel: '小米 MiMo',

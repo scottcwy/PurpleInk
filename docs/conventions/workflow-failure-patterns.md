@@ -844,6 +844,9 @@ website start 又没有该字段。临时在响应中硬塞 `autopilot=true` 只
 **规则与护栏**：
 
 - script 的 autopilot 与项目执行状态必须分离；audio / website 不得伪造 autopilot。
+- audio 的自动续接使用独立持久门闩，并必须在 ASR 入口成功状态落库前受 attempt /
+  execution epoch 栅栏保护地开启；只在进程内调用 `advance` 会留下不可恢复的崩溃间隙。
+- stop 必须同时清除 script autopilot 与 audio 续接门闩；重复 stop 不得再次递增 epoch。
 - 三类项目的 UI 状态统一从 attempt、节点、Artifact 派生，响应只携带同一快照。
 - SSE 只做失效提示；active 项目必须持续用 Postgres 快照对账，不能以 socket open
   代替“收到过最新状态”。
@@ -939,7 +942,8 @@ JavaScript 标识符在运行时都有定义。`openFrameCapture` 又没有监�
 - 候选筛选是项目级信号，节点级推进仍必须独立执行同一门禁，禁止不可重试节点借
   同项目另一条 ready 分支被顺带重新入队。
 - 候选仍必须同时满足：全部上游成功/跳过、同 execution epoch 无 active attempt、
-  项目 autopilot 开启且在恢复时间窗内。
+  来源专属自动推进门闩开启且在恢复时间窗内。script 使用 `autopilot`，audio 使用
+  `director_continuation_enabled`，website 不进入 Director 前沿恢复。
 - PG 回归必须同时证明 retryable failed 会被领取，terminal failed 不会进入候选。
 
 ---

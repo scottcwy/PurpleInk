@@ -18,6 +18,7 @@ describe('deriveProjectExecutionSnapshot', () => {
           id: PROJECT_ID,
           workflowKind,
           autopilot: true,
+          directorContinuationEnabled: workflowKind === 'audio',
           soundEffects: 'off',
         },
         attempt: attempt('succeeded'),
@@ -41,6 +42,7 @@ describe('deriveProjectExecutionSnapshot', () => {
           id: PROJECT_ID,
           workflowKind,
           autopilot: true,
+          directorContinuationEnabled: workflowKind === 'audio',
           soundEffects: 'off',
         },
         attempt: attempt('succeeded'),
@@ -89,6 +91,7 @@ describe('deriveProjectExecutionSnapshot', () => {
         id: PROJECT_ID,
         workflowKind: 'website',
         autopilot: false,
+        directorContinuationEnabled: false,
         soundEffects: 'procedural',
       },
       attempt: attempt('succeeded'),
@@ -114,6 +117,23 @@ describe('deriveProjectExecutionSnapshot', () => {
     expect(snapshot.state).toBe('recovering')
     expect(snapshot.active).toBe(true)
     expect(snapshot.canStop).toBe(true)
+  })
+
+  it('does not recover an unfinished audio DAG when its continuation latch is off', () => {
+    const snapshot = deriveProjectExecutionSnapshot(facts({
+      project: {
+        id: PROJECT_ID,
+        workflowKind: 'audio',
+        autopilot: false,
+        directorContinuationEnabled: false,
+        soundEffects: 'off',
+      },
+      attempt: attempt('succeeded'),
+      nodes: [node('entry', 'succeeded'), node('next', 'idle')],
+    }))
+
+    expect(snapshot.state).toBe('idle')
+    expect(snapshot.active).toBe(false)
   })
 
   it('maps verification failure to blocked without exposing raw failure text', () => {
@@ -149,6 +169,7 @@ function facts(
       id: PROJECT_ID,
       workflowKind: 'website',
       autopilot: false,
+      directorContinuationEnabled: false,
       soundEffects: 'off',
     },
     attempt: null,

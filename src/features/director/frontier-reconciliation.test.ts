@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
-import type { PipelineStartResult } from './advance'
+import type { PipelineResumeResult } from './advance'
 import {
   DIRECTOR_FRONTIER_RECOVERY_LIMIT,
   DIRECTOR_FRONTIER_RECOVERY_WINDOW_MS,
@@ -70,7 +70,7 @@ describe('reconcileDirectorFrontiers', () => {
       blockedNodes: [],
     }))
     const lockProject = vi.fn(
-      async (projectId: string, operation: () => Promise<PipelineStartResult>) =>
+      async (projectId: string, operation: () => Promise<PipelineResumeResult>) =>
         projectId === candidates[0]!.projectId ? null : operation()
     )
 

@@ -22,7 +22,7 @@ export interface AdvanceCandidate {
 }
 
 export interface AdvanceRepository {
-  isAutopilotEnabled(projectId: string): Promise<boolean>
+  isAutomaticAdvanceEnabled(projectId: string): Promise<boolean>
   listDownstreamCandidates(
     projectId: string,
     completedNodeId: string
@@ -87,6 +87,12 @@ export interface PipelineStartResult extends AdvanceResult {
   blockedNodes: PipelineBlock[]
 }
 
+export interface PipelineResumeResult extends AdvanceResult {
+  status: 'started' | 'blocked' | 'complete'
+  repairRootNodeIds: string[]
+  blockedNodes: PipelineBlock[]
+}
+
 interface PipelineControlDependencies {
   repository: PipelineRepository
   enqueueDirectorStage: EnqueueDirectorStage
@@ -116,7 +122,7 @@ export async function advancePipeline(
   await assertExecutionActive()
   const resolved = dependencies ?? (await createDefaultDependencies())
   const result: AdvanceResult = { enqueuedNodeIds: [], failedNodeIds: [] }
-  if (!(await resolved.repository.isAutopilotEnabled(projectId))) return result
+  if (!(await resolved.repository.isAutomaticAdvanceEnabled(projectId))) return result
 
   const candidates = await resolved.repository.listDownstreamCandidates(
     projectId,
@@ -204,11 +210,24 @@ export async function startProjectPipeline(
   if (!dependencies) await assertProjectWorkflowSupported(projectId)
   const resolved = dependencies ?? (await createDefaultControlDependencies())
   await resolved.repository.setAutopilot(projectId, true)
+  return {
+    autopilot: true,
+    ...(await resumeProjectPipeline(projectId, resolved)),
+  }
+}
+
+/** 不改写来源专属门闩，只从入口或既有成功前沿恢复 Director。 */
+export async function resumeProjectPipeline(
+  projectId: string,
+  dependencies?: PipelineControlDependencies,
+): Promise<PipelineResumeResult> {
+  if (!dependencies) await assertProjectWorkflowSupported(projectId)
+  const resolved = dependencies ?? (await createDefaultControlDependencies())
   const entry = await resolved.repository.getEntryNode(projectId)
   const enqueued = new Set<string>()
   const failed = new Set<string>()
   const repairRoots = new Set<string>()
-  const blockedNodes: PipelineStartResult['blockedNodes'] = []
+  const blockedNodes: PipelineResumeResult['blockedNodes'] = []
   const handledSuccessfulNodes = new Set<string>()
 
   if (entry.status === 'success') {
@@ -258,7 +277,6 @@ export async function startProjectPipeline(
     })
   }
   return {
-    autopilot: true,
     status: complete ? 'complete' : enqueued.size > 0 ? 'started' : 'blocked',
     enqueuedNodeIds: [...enqueued],
     repairRootNodeIds: [...repairRoots],

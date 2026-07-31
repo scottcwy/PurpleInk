@@ -72,7 +72,7 @@ function executionState(
 ): ProjectExecutionState {
   const attempt = facts.attempt
   if (!attempt) {
-    if (facts.project.workflowKind === 'script' && facts.project.autopilot) {
+    if (isAutomaticContinuationEnabled(facts)) {
       return 'running'
     }
     return 'idle'
@@ -103,7 +103,7 @@ function executionState(
       && facts.nodes.every((node) =>
         node.status === 'succeeded' || node.status === 'skipped')
     if (complete) return 'succeeded'
-    return facts.project.autopilot ? 'recovering' : 'idle'
+    return isAutomaticContinuationEnabled(facts) ? 'recovering' : 'idle'
   }
   const passed = stages.length === WEBSITE_WORKFLOW_PHASES.length
     && stages.every((stage) => stage.state === 'succeeded')
@@ -113,6 +113,14 @@ function executionState(
     && delivery.soundEffects?.lifecycle === 'approved'
     && delivery.soundEffects.mode === facts.project.soundEffects
   return passed ? 'succeeded' : 'blocked'
+}
+
+function isAutomaticContinuationEnabled(facts: ProjectExecutionFacts): boolean {
+  if (facts.project.workflowKind === 'script') return facts.project.autopilot
+  if (facts.project.workflowKind === 'audio') {
+    return facts.project.directorContinuationEnabled
+  }
+  return false
 }
 
 function websiteStages(
