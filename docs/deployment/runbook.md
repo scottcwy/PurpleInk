@@ -198,3 +198,38 @@ Test-NetConnection -ComputerName localhost -Port 5432
   的 `GET /api/ping` 互不影响。
 - `worker` 同样需要 CJK 字体与 Chromium（`server/Dockerfile` 已装），因为它的
   采集/截图链路也过 Playwright。
+
+## 9. 工作流完整性巡检与事故恢复
+
+部署前、迁移后、worker 异常退出后以及每日运维巡检分别执行：
+
+```powershell
+pnpm verify:workflow
+pnpm recover:workflow -- --output .data/workflow-integrity/before.json
+```
+
+健康阈值：`terminal_attempt_running_invocation`、`orphan_active_workflow_lease`、
+`orphan_active_provider_dispatch`、`active_execution_epoch_mismatch`、
+`telemetry_v3_identity_missing`、`invalid_artifact_evidence` 必须全部为 0。历史
+`historical_timestamp_inversion` 是 advisory，不阻断发布，但不得据此伪造或回写时间。
+
+需要修复时先保存 dry-run 的脱敏 ID、父状态、epoch、时间与 row hash，再执行：
+
+```powershell
+pnpm recover:workflow -- --apply --output .data/workflow-integrity/apply.json
+pnpm recover:workflow -- --apply --output .data/workflow-integrity/apply-second.json
+pnpm verify:workflow
+```
+
+第二次 apply 必须更新 0 条。工具只 CAS 修复可变 orphan invocation/lease；不得修复
+历史完成时间、旧 failure 报文、approved/released Artifact。若 blocking 项未归零，
+停止发布，按 `task_attempts.failure.message → attempt/run/epoch → invocation → ticket/lease
+→ Artifact 字节/哈希` 顺序取证，并保留输出中的安全 referenceId。
+
+时钟检查以 PostgreSQL `SELECT now()` 为绝对时间真值；应用主机只比较偏差并报警，
+不得作为数据库不可用时的写入 fallback。偏差超过 30 秒报警，超过 90 秒停止新执行并
+修复宿主/NTP；已开始 Provider 调用按终态结算合同收敛。
+
+回滚代码时不得回滚已发生的合法账本终态。先停止新 start，部署上一版本，再执行只读
+审计；若旧版本不认识 telemetry v3，只允许读取公共兼容字段，禁止批量回填或降级 v3
+身份。数据库恢复仅使用受控备份与演练过的恢复流程。

@@ -108,3 +108,19 @@ period 建立与审计。无效、过期、撤销和已被其他 workspace 使�
 
 同级码延长到期时间；高级码立即升级并开启新周期；低级码不能覆盖未到期的高级
 会员，且拒绝时不消费代码。
+
+## 8. 计划身份与终态对账
+
+telemetry v3 的 invocation 必须从同一 `ResolvedExecutionPlanV2` 写入逻辑模型、出网
+模型、部署、渠道、适配器、价格身份、资金来源、provider pool 与 failure domain；
+任何字段缺失都属于审计阻断，不允许用旧目录猜测回填。
+
+停止或清扫时按真实出网边界结算：
+
+| 状态 | Managed | BYOK / custom / not-applicable |
+| --- | --- | --- |
+| Provider 未开始 | invocation cancelled，释放全部预留 | cancelled，不产生平台费用 |
+| Provider 已开始且用量未知 | failed + `usageStatus=unavailable`，按既有最大预留合同结算 | failed，用量标记不确定但平台金额为零 |
+
+终态 attempt 下不得保留 running invocation。对账只修复可变孤儿，不改写历史完成
+记录、旧 failure 报文或 approved/released Artifact。

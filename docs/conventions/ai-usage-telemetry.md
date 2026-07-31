@@ -67,3 +67,17 @@ actor、duration 或 BYOK usage。会员周期仍可使用旧 managed 结算历�
 - 会员页面使用当前滚动 30 天周期的累计额度消耗阶梯线，数据仅来自 settled managed。
 - 工作台使用 7/30 天每日调用堆叠柱，分段为“平台托管 / 自己的 API”。
 - Token、字符与音频秒不得相加成伪总量。空、部分完整、失败状态均不得回退演示数字。
+
+## 7. telemetry v3 身份与失败边界
+
+v3 新行必须同时记录 `ResolvedExecutionPlanV2` 的逻辑模型、出网模型、部署、渠道、
+适配器、官方价格身份、资金来源、provider pool 与 failure domain。Director、Vision、
+TTS、ASR 和 worker 网关使用同一字段集；v1/v2 历史行保持只读缺失，不虚构回填。
+
+- 每次真实 HTTP 出网恰好对应一条 invocation；Gemini fallback 与传输重试各自独立。
+- 出网前路由/配置/凭据失败不建立调用量；若已有预留，必须在失败路径释放。
+- `operationId` 标识业务操作，`invocationNo` 标识出网轮次，`repairNo` 只标识 gate
+  修复；三者不得互相复用。
+- `WorkflowFailureV2` 只保存安全 code、origin、retryable、recovery 与 referenceId，
+  不复制 Provider 原始响应或 Prompt。
+- `pnpm verify:workflow` 的 `telemetry_v3_identity_missing` 必须为 0，才能通过发布门禁。

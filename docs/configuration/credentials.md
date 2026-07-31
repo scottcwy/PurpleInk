@@ -100,3 +100,18 @@ pnpm tsx scripts/migration/provision-master-key.ts --env .env.local
 5. Managed 和 BYOK 不交叉 fallback。
 6. 设置写入必须先验证；验证失败返回 422 且不覆盖旧 secret。
 7. 对话、日志或历史文件中出现过的 Managed Key 在生产启用前必须轮换。
+
+## 8. `CredentialLease` 生命周期
+
+不可变执行计划只保存 `credentialRef`、版本与来源，不保存明文或可逆密文。Provider
+发送前由 Next server-only 边界按计划签发短生命周期 `CredentialLease`：
+
+1. 校验 workspace、funding、provider、deployment 与计划版本一致；
+2. 只在适配器调用栈内解密或读取环境 Key；
+3. 不进入 invocation、任务 failure、日志、SSE、Artifact 或 worker 请求；
+4. 计划内 fallback 复用同一凭据版本，不重新选择资金来源；
+5. 凭据服务暂不可用可按结构化 `retryable` 进入基础设施恢复，确定性缺失/错误必须
+   立即失败且不覆盖现有 secret。
+
+`server/` 只持有服务间认证 Key。它不得签发凭据租约、读取 provider credential，
+也不得在网关失败后直连供应商。

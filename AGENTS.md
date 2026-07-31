@@ -183,6 +183,22 @@ git diff --check
 `task_attempts.failure.message`。新发现的复发型失败追加为该文件的新模式，
 不要另开文件。
 
+工作流代码改动还必须先核对以下统一合同，任何一项变化都要有 RED 测试和对应权威
+文档更新：
+
+1. `ResolvedExecutionPlanV2` 是否仍为 attempt 内唯一的路由、资金、凭据版本、价格、
+   provider pool 与 failure-domain 真值；授权不得消费 outbound model。
+2. 每次真实 Provider 出网是否恰好一条 invocation；出网前失败、容量等待、fallback、
+   gate repair 和传输重试是否仍按各自身份与预算分离。
+3. start/stop/recovery 是否同时校验 workspace、attempt、execution epoch、lease/ticket，
+   旧 epoch 是否仍禁止节点写回、Artifact 登记和 DAG 推进。
+4. `ProjectExecutionSnapshotV2` 的 script/audio/website 判别联合是否完整；UI 是否只把
+   SSE 当失效提示并在刷新后读取数据库快照。
+5. 持久化生命周期时间是否来自 PostgreSQL；终态 attempt 的 invocation、lease 和
+   ticket 是否通过 `pnpm verify:workflow` 对账为零。
+6. Prompt、DAG、Artifact 与队列合同如无对应 RED 证明不得顺手改动；历史 v1/v2
+   telemetry 与 approved/released Artifact 不得虚构回填。
+
 ## 9. 权威文档
 
 | 文档 | 责任 |

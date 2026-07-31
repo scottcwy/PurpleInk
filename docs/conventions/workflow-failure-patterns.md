@@ -507,6 +507,11 @@ UI 投影为未知问题并连续重试；数据库没有 `export-project` attem
 - [ ] 账本与公共投影是否都未持久化或返回 Prompt、消息正文、Tool 参数、凭据、原始 Provider 错误、隐藏推理、成本、哈希或内部调用 ID。
 - [ ] 真实产物证据：`artifacts.content_hash` 与磁盘字节 SHA-256 逐条核对一致。
 - [ ] `databaseNow` 等数据库时钟取值是否不依赖业务表有行；返回值是否经过 `instanceof Date` + `getTime()` 有效性双重验证；传入 Drizzle 算子前是否保证可序列化（模式 O）。
+- [ ] attempt 内是否只解析一次 `ResolvedExecutionPlanV2`；授权、传输、计费、调度是否分别读取 logical/outbound/price/pool 身份（模式 AF/AG）。
+- [ ] `ManagedAiError` 是否按结构化 code/retryable 映射；确定性错误是否仍可能被字符串规则改成可重试 Provider 失败（模式 AH）。
+- [ ] stop/sweep 后 `pnpm verify:workflow` 的终态 invocation、无主 lease/ticket 与旧 epoch 项是否归零；恢复 apply 是否以 CAS 幂等（模式 AI）。
+- [ ] 所有持久化生命周期时间是否使用 PostgreSQL `now()`；数据库时间失败时是否仍存在主机墙钟 fallback（模式 AJ）。
+- [ ] UI 是否只读 SnapshotV2 判别联合，SSE 是否仍只是失效提示；v1 别名是否由同一 v2 真值派生（模式 AK）。
 
 真实证据的取法示例：
 
@@ -1071,9 +1076,101 @@ ExecutionPlan、套餐权限、两层并发、预占结算和 BYOK 官方 URL �
 
 ---
 
+## 7.26 模式 AF：逻辑模型与出网模型混用，合法路由被二次授权拒绝
+
+**症状**：`SHOT_SPEC` 在 Provider 出网前失败，逻辑模型 `gpt-5.6-luna` 已解析成
+`openai/gpt-5.6-luna`，网关却用出网 ID 再做一次工作区授权；没有对应 invocation，
+节点仍被通用重试重复执行。
+
+**规则与护栏**：attempt 只解析一次 `ResolvedExecutionPlanV2`。授权只读
+`logicalModelId`，传输只读 `outboundModelId`，计费只读 `officialPriceIdentity`，
+调度只读 pool/failure-domain。网关接受已授权计划，不得重新把出网 ID 当逻辑 SKU。
+
+## 7.27 模式 AG：调用链重复解析，调度、凭据与计费消费不同事实
+
+**症状**：Director、Vision、TTS、ASR 或 worker 在同一 attempt 内重新查询路由、
+凭据或价格；配置切换后，一个调用的传输目标、账本身份和并发池不再一致。
+
+**规则与护栏**：同一 attempt 的 invocation 只能从不可变计划派生。凭据由 server-only
+`CredentialLease` 临时解析，计划和账本只存引用、版本与来源。Gemini 同渠道回退是
+计划内子部署，但每次真实出网仍建立独立 invocation。
+
+## 7.28 模式 AH：结构化内部错误被字符串规则改写，形成多层重试放大
+
+**症状**：`ManagedAiError` 已明确 `code/retryable`，外层仍按中文或关键词匹配成
+`PROVIDER_FAILED`，传输重试、节点重试和用户自动恢复叠加成五轮以上重复执行。
+
+**规则与护栏**：`WorkflowFailureV2` 只按结构化字段映射。路由、配置与确定性凭据
+错误零自动重试；容量等待进入调度票据且不记失败；网络、429、5xx 只在传输层按既有
+上限重试。Provider 已开始后的失败不得再叠加节点级自动重试。
+
+## 7.29 模式 AI：父任务终态后 invocation、lease 或 ticket 仍活动
+
+**症状**：取消 attempt 下仍有 running invocation，或无活动父任务/旧 epoch 下仍有
+waiting lease；UI 已终态，但配额、计费预留和后台领取仍被占用。
+
+**规则与护栏**：停止与定期清扫必须按 Provider 是否开始和资金来源收敛账本，并取消
+无主或旧 epoch 资源。`verify:workflow` 把终态 running invocation、无主 lease/ticket
+作为阻断项；恢复脚本默认 dry-run，`--apply` 只 CAS 修复可变孤儿且必须幂等。
+
+## 7.30 模式 AJ：主机时间与数据库时间混写，产生负持续时间和错误回收
+
+**症状**：数据库与应用主机约 69 秒偏差时，created/updated/completed 顺序倒置，
+历史记录出现负持续时间，租约与 pacing 判断可能提前或延后。
+
+**规则与护栏**：持久化生命周期时间统一使用 PostgreSQL `now()`；
+`performance.now()` 只计算进程内持续时间。数据库时间不可读时明确失败，不回退主机
+墙钟。历史逆序只作为 advisory 投影，不回写伪造时间。
+
+## 7.31 模式 AK：统一快照名义存在，三来源实际投影继续漂移
+
+**症状**：网站有六阶段详情，脚本/音频只能看到笼统 attempt；页面分别读取 SSE、节点
+或旧顶层字段，同一个项目在画布、侧栏和导出页显示不同状态。
+
+**规则与护栏**：`ProjectExecutionSnapshotV2` 固定公共字段并以 `detail` 判别联合表达
+三来源。UI 只读 v2；v1 仅保留一个发布周期兼容。SSE 只负责失效提示，数据库快照是
+刷新后的唯一真值，失败仅暴露安全分类与引用号。
+
+## 7.32 模式 AL：Provider 终止事件丢失分类，被投影为平台内部错误
+
+**症状**：Provider 已真实出网并在硬超时或流终止时失败，invocation 只留下
+`failure_kind=unknown`，任务却显示 `PLATFORM_INTERNAL_ERROR`；队列继续依据笼统的
+`retryable` 创建新 attempt，形成传输重试之外的节点级放大。
+
+**规则与护栏**：无 HTTP 状态的 `ProviderRequestError` 仍属于 provider failure
+domain，不得归给平台内部错误。Director、Vision、TTS、ASR 必须把结构化 kind 原样
+写入 invocation；任务层保留手动重试入口，但 `completeAttempt` 一旦确认该 attempt
+存在 `provider_started_at`，除 429/容量票据原地等待外，不得再生成节点级自动重试。
+
+## 7.33 模式 AM：TTS 未声明时长被当作无效音频，真实字节无法进入测量边界
+
+**症状**：TTS 调用、计费和音频字节均成功，但供应商未提供字幕时间戳，返回的声明
+时长为 `0`；Next→worker 响应合同要求 `durationMs > 0`，导致网站链在 narration
+阶段失败，ffmpeg 尚未获得机会从真实字节测量时长。
+
+**规则与护栏**：TTS 网关响应允许声明时长为 0，但音频字节仍必须非空且格式受限。
+worker 的媒体编排继续使用 ffmpeg 对实际文件测量，供应商自报时长不能替代真实字节
+证据，也不能在缺失时阻断可信测量。该规则不放宽项目来源与已登记 Artifact 的正时长
+要求。
+
+---
+
 ## 9. 已知未修项
 
-当前无已确认而未修的代码/文档项。
+本节改为可验证关闭表；“已实现护栏”不等于最终验收通过：
+
+| 本轮问题 | 代码/合同 | PostgreSQL 对账 | 三来源真实 E2E | 状态 |
+| --- | --- | --- | --- | --- |
+| AF 逻辑/出网身份混用 | 已通过回归 | 不适用 | 待最终 E2E | 验收待完成 |
+| AG 重复解析 | 已统一 ExecutionPlanV2 | telemetry v3 完整性为 0 缺失 | 待最终 E2E | 验收待完成 |
+| AH 错误重试放大 | 已通过确定性零重试回归 | 不适用 | 待最终 E2E | 验收待完成 |
+| AI 终态孤儿 | 已实现 stop/sweep/CAS | 阻断项归零，二次 apply 为 0 | 待 UI 恢复检查 | 验收待完成 |
+| AJ 跨时钟 | 新写入统一数据库时钟 | 历史逆序仅 advisory | 待最终 E2E | 验收待完成 |
+| AK 快照漂移 | v2 + v1 兼容已通过合同测试 | 三来源快照 PG 用例通过 | 待 Chromium 检查 | 验收待完成 |
+| AL Provider 分类丢失 | 已通过结构化投影与节点重试回归 | Provider-started attempt 不再生成新 attempt | 音频链已验证，脚本受额度阻断 | 验收待完成 |
+| AM TTS 零声明时长 | 已允许进入真实字节测量边界 | 不适用 | 网站复测受额度阻断 | 验收待完成 |
+
+只有全量门禁、数据库对账和三条真实 E2E 均通过后，才把上述状态改为“已关闭”。
 
 已修：`shot-sfx` / `shot-subtitle` 无法解析 Director 文本模型（模式 C）、
 `DEFAULT_PROVIDER` 与 `media_routes` 双真值（模式 A）、内部路由矛盾仍走文案

@@ -21,20 +21,20 @@
 
 ---
 
-## Stage A 概览
+## 产品概览
 
-PurpleInk 是一个本地优先的产品发布视频工作区。当前 Stage A 把营销出片链路、CodeVideoCanvas 过渡应用、组件 Playbook 和新 Product/Release 路由骨架合并在一个 Next.js 仓库中。
+PurpleInk 是把脚本、录音或公开网站转成发布视频的工作区。Next.js 应用负责项目、
+画布、模型网关、账本与 Artifact，独立 worker 负责采集、媒体处理和渲染。
 
 ## 当前可用入口
 
 | 入口 | 状态 | 说明 |
 | --- | --- | --- |
-| `/` | 已接线 | PurpleInk 营销页；可向本地 worker 发起出片任务 |
+| `/` | 已接线 | PurpleInk 营销页 |
 | `/api/engine/*` | 已接线 | Next 同源反代到 `server/` worker |
-| `/legacy/*` | 过渡应用 | CVC 工作台、项目、画布、导出和设置，读取 Postgres |
-| `/playbook/*` | 过渡应用 | CVC 组件登记与展示 |
-| `/login`、`/signup`、`/dashboard` | 路由壳 | 明确标注 Stage B 未接线 |
-| `/products*`、`/releases*` | 路由壳 | Product/Release 新规范与六步导航，不含假数据 |
+| `/products/*` | 已接线 | 项目、画布、镜头、导出、计费与设置，读取真实 Postgres/Artifact/队列 |
+| `/playbook/*` | 已接线 | 设计系统组件登记与视觉验收 |
+| `/login`、`/signup` | 已接线 | 账号会话入口 |
 
 完整路由、守卫和状态见 [routing.md](docs/conventions/routing.md)，迁移事实与验收证据见 [stage-a-report.md](docs/archive/migration/stage-a-report.md)（历史记录，只供追溯）。
 
@@ -46,6 +46,11 @@ Director / 渲染 / 音频 / 模型路由这条链路的复发失败模式、取
 阶段失败时先看那份文件的 §1：画布弹窗里的文案是脱敏投影，原始报文在
 `task_attempts.failure.message`。改动阶段合同、错误分类或节点类型映射前，
 按 §8 的清单逐条自检；新发现的同类失败追加为新模式，不要另建文件。
+
+三来源状态机、停止/恢复和 Artifact 边界见
+[project-workflows.md](docs/conventions/project-workflows.md)；路由与统一执行快照见
+[routing.md](docs/conventions/routing.md)。日常只读完整性检查使用 `pnpm verify:workflow`；
+恢复脚本默认 dry-run，只有按运行手册保存快照后才使用 `--apply`。
 
 ## 环境要求
 
@@ -87,7 +92,9 @@ pnpm dev:worker
 | `pnpm test:pg` | 串行 Postgres 集成测试 |
 | `pnpm build` | Next 生产构建 |
 | `pnpm db:migrate` | 应用 Postgres migrations |
-| `pnpm verify:v3` | 过渡架构诊断；Stage A 不作为门禁 |
+| `pnpm verify:v3` | 架构、规模、禁用依赖与编码门禁 |
+| `pnpm verify:workflow` | 只读检查 attempt、invocation、epoch、lease/ticket 与 Artifact 完整性 |
+| `pnpm recover:workflow` | 默认 dry-run 的可变孤儿恢复；`--apply` 需按运行手册执行 |
 
 ## 目录结构
 
@@ -95,8 +102,7 @@ pnpm dev:worker
 src/
   app/
     (marketing)/          PurpleInk 营销首页
-    (product)/            Stage B 产品路由壳
-    legacy/(app)/         CVC 过渡页面
+    products/(app)/       制作应用：项目、画布、镜头、导出、设置
     playbook/             组件登记页面
     api/                  Next 自有 API
   components/
@@ -112,10 +118,10 @@ docs/                     路由规范、迁移报告和浏览器证据
 
 TypeScript 别名 `@/*` 映射到 `src/*`。仓库使用 pnpm workspace 管理根应用与 `server/`，不要生成 npm lockfile。
 
-## Stage A 边界
+## 生产边界
 
-- 新 Product/Release 页面只提供路由、导航、职责和未来数据来源，不做认证、审批、数据库或引擎接线。
-- `/legacy/*` 仍是 CVC 过渡域，不等于新 Product/Release 域模型。
+- `/products/*` 使用真实 Postgres、Artifact、队列与内部 AI/worker 网关；未接线能力必须显式标注。
+- 三类来源保留各自 DAG，但共用 attempt、execution epoch、执行计划、账本与快照合同。
 - 本地 mock 采集必须明确标注，不能宣称为真实外部网站采集。
 - UI 不得显示假统计、假进度、恒真成功或没有真实 Artifact 的下载入口。
 - Artifact 内容哈希来自实际字节；凭据只在服务端使用且不进入 Git。

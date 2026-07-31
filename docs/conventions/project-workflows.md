@@ -219,3 +219,35 @@ audio 使用独立的 `projects.director_continuation_enabled` 续接门闩。AS
 已持 active 租约的后续阶段优先，其次项目级任务，再次是到期 waiting 分镜；暂不可
 准入的候选不得阻断扫描窗口内的后续可执行候选。500ms 只控制首批启动节奏，active 为
 0 时必须立即放行首个分镜，不能循环重置倒计时。
+
+## 11. 三来源状态机与提交点
+
+三类来源共用 `start → attempt → execution_epoch → queue → artifact commit → advance`
+控制链，但不合并其业务拓扑：
+
+| 来源 | 固定拓扑 | 成功提交点 |
+| --- | --- | --- |
+| script | 导入 → Director → 动态镜头 fan-out → 汇聚 → 导出 | 当前 epoch 的最终 MP4 Artifact 已按真实字节登记且 schema 与导出设置一致 |
+| audio | ASR → 原音频绑定 → Director → 镜头链 → 汇聚 → 导出 | ASR 与原音频 Artifact 均绑定，最终 MP4 满足同一交付门禁 |
+| website | capture → script → narration → compose → render → export | 六阶段完成，最终 Artifact approved 且验证证据通过 |
+
+- `start` 在事务内决定创建新 attempt 或复用当前 epoch 的 active attempt；不得持锁
+  调用外部队列。入队失败进入可恢复前沿，不伪造 running。
+- fan-out 的每个镜头节点有独立逻辑键，汇聚只消费当前 epoch 已提交的 Artifact；旧
+  epoch 结果即使稍后成功返回，也不得写节点、登记 Artifact 或推进 DAG。
+- “跳过”只适用于既定媒体/验收节点。跳过或降级必须产生 manifest 证据，UI 显示
+  `cancelled/blocked/degraded` 语义，禁止冒充成功或 QA 通过。
+- 恢复只自动领取 Provider 尚未开始的基础设施中断；Provider 已开始后的失败由安全
+  失败投影明确结束，用户重试产生新 attempt。
+
+## 12. 统一执行快照与恢复
+
+`ProjectExecutionSnapshotV2` 是三来源控制面的唯一读模型。公共字段为
+`schemaVersion/projectKind/state/attempt/currentWork/failure/recovery/delivery/detail`，
+`detail` 按 `script | audio | website` 判别。一个发布周期内保留 v1 顶层别名供旧
+消费者只读；新 UI 只读 v2。SSE 仅发送失效提示，刷新后数据库快照重新成为真值。
+
+终态 attempt 必须同步收敛 invocation、Provider ticket 与并发租约。默认只读命令
+`pnpm verify:workflow` 用于持续审计；`pnpm recover:workflow -- --apply` 只可用 CAS
+修复仍满足 workspace、父 attempt、epoch 与当前状态条件的可变孤儿。历史时间逆序
+显示为“历史时钟异常”，不得伪造持续时间或改写历史完成记录。

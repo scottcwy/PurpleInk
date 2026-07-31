@@ -147,3 +147,20 @@ INGEST 文本成功
 - ASR 使用 `input_audio` data URL 与 `asr_options.language=auto`。
 - 当前 MiMo 非流式 ASR 没有 StepFun 式逐词时间戳，因此字幕以实测音频时长
   生成整段时间边界，不伪造逐词对齐。
+
+## 统一执行计划与重试
+
+TTS/ASR 不再接收含义模糊的 `model` 参数。媒体路由在 attempt 开始时解析到
+`ResolvedExecutionPlanV2`：逻辑媒体 SKU 用于授权，出网模型用于协议 body，官方价格
+身份用于计费，provider pool/failure domain 用于调度。自定义 TTS 与 ASR 仍是两个
+独立 `kind=custom` 计划，凭据、模型、格式与时间戳能力不得交叉复用。
+
+- Provider admission 在计费预留之前；容量/pacing 等待复用 attempt，不产生失败或
+  invocation。
+- 网络、429、5xx 只由音频传输层有限重试。确定性配置、格式、响应媒体合同错误零
+  自动重试，Provider 已开始后不再叠加节点级重试。
+- 录音项目 ASR 完成后绑定用户原音频并进入 Director；禁止将原声替换成 TTS。
+- 媒体状态的 started/completed/updated 持久化时间来自 PostgreSQL；历史负持续时间只
+  显示为时钟异常。
+- worker TTS 只能携带 workspace/attempt/operation 身份回调内部网关，不能接收或保存
+  Provider Key、URL 与原始错误。

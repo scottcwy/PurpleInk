@@ -79,3 +79,20 @@ BYOK 按 `workspace + provider` 建立独立失败域。
 - invocation：每次 outbound attempt 的开始、成功或脱敏失败；
 - reservation / 双账本：预占、官方参考成本、权益扣减与释放；
 - workflow 父记录：只聚合子调用，不额外扣费。
+
+## 7. `ResolvedExecutionPlanV2` 唯一合同
+
+attempt 开始执行时只解析一次不可变计划。内置与自定义端点使用
+`kind: built-in | custom` 判别联合，并完整冻结：`logicalModelId`、
+`outboundModelId`、`deploymentId`、`channelId`、`adapterId`、
+`officialPriceIdentity`、`providerPoolId`、`failureDomainId`、`funding`、
+`capability` 与路由策略版本。
+
+- 授权消费逻辑模型，HTTP 适配器消费出网模型，计费消费官方价格身份，调度消费
+  provider pool 与 failure domain；禁止继续传递语义模糊的 `model`。
+- Director、Vision、TTS、ASR 与 worker 网关不得在 attempt 内重新查询路由、凭据、
+  价格或并发池。配置变化只影响新 attempt。
+- Gemini 3.6 → 3.1 是计划内同渠道子部署；每次真实出网各建一条 invocation，复用
+  attempt 与凭据版本，但保留独立部署和价格身份。
+- 路由未授权、配置错误与确定性凭据错误零自动重试；容量等待进入调度票据，不改写
+  为 Provider 失败。

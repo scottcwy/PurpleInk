@@ -92,3 +92,17 @@ AI_SHOT_CONCURRENCY_ENFORCEMENT_PERCENT
 
 客户端只可看到当前账号的套餐上限、活跃分镜数、等待数、供应商标签和预计恢复时间。
 不得返回全平台调用量、其他用户身份、凭据指纹、Prompt、原始供应商错误或内部调度参数。
+
+## 6. 执行计划与等待语义
+
+调度身份完全取自 `ResolvedExecutionPlanV2.providerPoolId/failureDomainId`，不得根据
+出网 URL 或展示标签临时重算。`operationId + invocationNo + repairNo` 分别标识业务
+操作、真实出网轮次和 gate 修复轮次；gate repair 不重复占用工作区 work unit。
+
+- Provider admission 早于 invocation 预留；pacing/RPM/并发等待只更新数据库票据和
+  attempt 可见时间，不计失败、不消耗普通重试预算。
+- 网络、429、5xx 的有限重试只在传输层发生。Provider 已开始后，队列不得再叠加
+  节点级自动重试。
+- 停止或旧 epoch 清扫必须取消 waiting/active lease 与 scheduled ticket；旧结果不能
+  重新取得许可或推进节点。
+- 调度、租约和 ticket 的持久化绝对时间只使用 PostgreSQL 时钟。
