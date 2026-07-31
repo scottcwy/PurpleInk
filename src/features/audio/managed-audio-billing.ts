@@ -99,9 +99,13 @@ export async function runManagedAudioBilling<T>(
     // Provider 调度等待不是上游失败：透传让队列用内置的 dispatch-wait 调度恢复，
     // 不得包装为 managedUpstreamError（会丢掉 retryAt 并消耗普通重试预算）。
     if (error instanceof ProviderQueueDeferral) throw error
-    if (error instanceof ProviderRequestError && isRejectedWithoutUsage(error)) {
-      if (handle.settleRejected) await handle.settleRejected(error.kind)
-      else await handle.releaseBeforeCall()
+    if (error instanceof ProviderRequestError) {
+      if (isRejectedWithoutUsage(error)) {
+        if (handle.settleRejected) await handle.settleRejected(error.kind)
+        else await handle.releaseBeforeCall()
+      } else {
+        await handle.settleUnavailable(true, error.kind)
+      }
       throw error
     }
     await handle.settleUnavailable(true, 'unknown')

@@ -132,6 +132,22 @@ describe('classifyWorkflowError', () => {
       },
     })
   })
+
+  it('keeps a status-less provider terminal event in the provider failure domain', () => {
+    const fault = classifyWorkflowError(new ProviderRequestError({
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      operation: '文本生成',
+      funding: 'managed',
+      kind: 'unknown',
+    }), { stage: 'FABRICATE' })
+
+    expect(fault).toMatchObject({
+      code: 'PROVIDER_FAILED',
+      origin: 'provider',
+      recovery: 'manual_retry',
+    })
+  })
   it('projects quota exhaustion as a non-retryable workflow stop', () => {
     const error = Object.assign(new Error('Managed AI quota is exhausted'), {
       name: 'QuotaExhaustedError',

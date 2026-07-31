@@ -173,8 +173,8 @@ function providerClassification(error: ProviderErrorShape) {
       return providerResult('PROVIDER_REQUEST_REJECTED', 'content', '请求内容无法处理',
         '模型、输入或素材不符合当前服务要求，请修改设置或内容后再试。', false, 'edit_input')
     default:
-      return providerResult('PLATFORM_INTERNAL_ERROR', 'unknown', '执行遇到未知问题',
-        '系统尚不能确认具体原因，请使用参考号联系支持。', false, 'contact_support')
+      return providerResult('PROVIDER_FAILED', 'provider', '第三方服务未完成请求',
+        `${error.providerLabel} 未返回可进一步分类的状态，可以稍后重新执行。`, true, 'manual_retry')
   }
 }
 

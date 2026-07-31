@@ -134,7 +134,10 @@ export async function executeManagedVisionQa(
       if (handle.settleRejected) await handle.settleRejected(error.kind)
       else await handle.releaseBeforeCall()
     } else {
-      await handle.settleUnavailable(true, 'unknown')
+      await handle.settleUnavailable(
+        true,
+        error instanceof ProviderRequestError ? error.kind : 'unknown',
+      )
     }
     throw error
   }

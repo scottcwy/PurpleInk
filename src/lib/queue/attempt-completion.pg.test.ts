@@ -6,6 +6,7 @@ import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
 import { ProviderRequestError } from '@/features/ai/provider-request-error'
 import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
 import {
+  aiInvocations,
   canvasNodes,
   pipelineRuns,
   projects,
@@ -198,6 +199,42 @@ describe('completeAttempt 自动重试', () => {
       seeded.attemptId,
       'failed',
       RETRYABLE_MESSAGE
+    )
+
+    expect((await readAttempt(seeded.attemptId)).status).toBe('failed')
+    expect((await readRun(seeded.runId)).status).toBe('failed')
+    expect(await readRunAttempts(seeded.runId)).toHaveLength(1)
+  })
+
+  it('Provider 已开始后不再叠加节点级自动重试', async () => {
+    const { completeAttempt } = await import('./attempt-completion')
+    const projectId = await seedProject()
+    const seeded = await seedRunningNodeAttempt(projectId, { nodeStatus: 'failed' })
+    await database.db.insert(aiInvocations).values({
+      workspaceId: LOCAL_WORKSPACE_ID,
+      id: randomUUID(),
+      runId: seeded.runId,
+      attemptId: seeded.attemptId,
+      invocationNo: 1,
+      status: 'failed',
+      provider: 'stepfun',
+      model: 'step-3.7-flash',
+      providerStartedAt: new Date(),
+      failureKind: 'timeout',
+    })
+
+    await completeAttempt(
+      database.db,
+      LOCAL_WORKSPACE_ID,
+      seeded.attemptId,
+      'failed',
+      new ProviderRequestError({
+        providerId: 'stepfun',
+        providerLabel: '阶跃星辰',
+        operation: '文本生成',
+        funding: 'managed',
+        kind: 'timeout',
+      }),
     )
 
     expect((await readAttempt(seeded.attemptId)).status).toBe('failed')

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ManagedAiError } from './managed-service'
+import { ProviderRequestError } from './provider-request-error'
 import {
   executeManagedVisionQa,
   VISION_QA_MAX_OUTPUT_TOKENS,
@@ -110,5 +111,43 @@ describe('executeManagedVisionQa', () => {
       expect.stringMatching(/^[0-9a-f]{64}$/),
       false,
     )
+  })
+
+  it('preserves a structured provider failure kind when vision transport fails', async () => {
+    const settleUnavailable = vi.fn(async () => undefined)
+    const failure = new ProviderRequestError({
+      providerId: 'gemini',
+      providerLabel: 'Gemini',
+      operation: '视觉质检',
+      funding: 'managed',
+      kind: 'network',
+    })
+    const prepare = vi.fn(async () => ({
+      credential: 'secret',
+      dispatchFunding: 'managed' as const,
+      begin: vi.fn(async () => ({
+        invocationId: 'vision',
+        funding: 'managed' as const,
+        deductsManagedPool: true,
+        credential: 'managed-key',
+        settle: vi.fn(async () => undefined),
+        settleUnavailable,
+        releaseBeforeCall: vi.fn(async () => undefined),
+      })),
+    }))
+
+    await expect(executeManagedVisionQa({
+      attemptId: '00000000-0000-4000-8000-000000000001',
+      invocationIndex: 1,
+      prompt: 'check',
+      images: [],
+    }, {
+      resolveTarget: async () => target,
+      gateway: { prepare },
+      complete: vi.fn(async () => { throw failure }),
+      dispatch: async (_input, invoke) => invoke(),
+    })).rejects.toBe(failure)
+
+    expect(settleUnavailable).toHaveBeenCalledWith(true, 'network')
   })
 })

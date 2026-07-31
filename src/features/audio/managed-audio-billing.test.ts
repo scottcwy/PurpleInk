@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
+import { ProviderRequestError } from '@/features/ai/provider-request-error'
 import { QuotaExhaustedError } from '@/features/billing'
 import type { ManagedAiHandle } from '@/features/ai'
 import {
@@ -175,6 +176,31 @@ describe('managed audio billing adapter', () => {
     })
 
     expect(handle.settleUnavailable).toHaveBeenCalledWith(true, 'unknown')
+  })
+
+  it('preserves a structured provider timeout and its ledger failure kind', async () => {
+    const { dependencies, handle } = createDependencies()
+    const timeout = new ProviderRequestError({
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      operation: '语音合成',
+      funding: 'managed',
+      kind: 'timeout',
+    })
+
+    await expect(runManagedAudioBilling({
+      provider: 'stepfun',
+      model: 'stepaudio-2.5-tts',
+      capability: 'tts',
+      billingContext: { ...CONTEXT, invocationNo: 4 },
+      estimate: { kind: 'tts', characters: 2 },
+      input: '旁白',
+      invoke: vi.fn(async () => { throw timeout }),
+      outputBytes: (bytes: Buffer) => bytes,
+      usageFromResult: () => null,
+    }, dependencies)).rejects.toBe(timeout)
+
+    expect(handle.settleUnavailable).toHaveBeenCalledWith(true, 'timeout')
   })
 
   it('releases the gateway reservation when preparation fails before invocation', async () => {

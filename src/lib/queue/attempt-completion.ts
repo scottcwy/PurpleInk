@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, isNotNull, sql } from 'drizzle-orm'
 import { runInAuthContext, SYSTEM_USER_ID } from '@/lib/auth/workspace-context'
 import type { Db } from '@/lib/db/client'
 import {
+  aiInvocations,
   canvasNodes,
   pipelineRuns,
   projects,
@@ -205,10 +206,18 @@ export async function completeAttempt(
           }
         : null
     }
+    const providerStarted = status === 'failed'
+      ? await hasStartedProviderInvocation(
+          transaction,
+          workspaceId,
+          attemptId,
+        )
+      : false
     const retryable =
       status === 'failed' &&
       failure !== undefined &&
       fault?.code !== 'PROVIDER_RATE_LIMITED' &&
+      !providerStarted &&
       (options?.allowAutoRetry ?? true) &&
       shouldAutoRetry(
         failure,
@@ -310,6 +319,23 @@ async function scheduleRetry(
         eq(pipelineRuns.id, attempt.runId)
       )
     )
+}
+
+async function hasStartedProviderInvocation(
+  transaction: Transaction,
+  workspaceId: string,
+  attemptId: string,
+): Promise<boolean> {
+  const [row] = await transaction
+    .select({ id: aiInvocations.id })
+    .from(aiInvocations)
+    .where(and(
+      eq(aiInvocations.workspaceId, workspaceId),
+      eq(aiInvocations.attemptId, attemptId),
+      isNotNull(aiInvocations.providerStartedAt),
+    ))
+    .limit(1)
+  return Boolean(row)
 }
 
 function workflowFault(failure: unknown, stage: string): WorkflowFault {
