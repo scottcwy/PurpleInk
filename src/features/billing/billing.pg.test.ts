@@ -5,6 +5,9 @@ import {
   redemptionBatches,
   redemptionCodes,
   aiInvocations,
+  billingReservations,
+  entitlementLedgerEntries,
+  officialCostEntries,
   taskAttempts,
   usagePeriods,
   users,
@@ -123,6 +126,31 @@ it('seeds a queryable immutable managed rate card', async () => {
   ]))
 })
 
+it('persists OpenAI cache-write and long-context pricing rules', async () => {
+  const { getCurrentRateCard } = await import('./rate-card-repository')
+  const card = await getCurrentRateCard({
+    provider: 'openai',
+    model: 'gpt-5.6-luna',
+    capability: 'text',
+    now: new Date('2026-08-01T00:00:00.000Z'),
+  })
+  expect(card.prices).toEqual(expect.arrayContaining([
+    expect.objectContaining({
+      unitKind: 'cache_write_token',
+      unitPriceCnyMicros: BigInt(9_000_000),
+    }),
+  ]))
+  expect(card.pricingRules).toEqual({
+    tiers: [{
+      inputTokensAbove: 272_000,
+      inputNumerator: BigInt(2),
+      inputDenominator: BigInt(1),
+      outputNumerator: BigInt(3),
+      outputDenominator: BigInt(2),
+    }],
+  })
+})
+
 it('seeds the website composite workflow rate in the shared managed catalog', async () => {
   const { getCurrentRateCard } = await import('./rate-card-repository')
   const card = await getCurrentRateCard({
@@ -238,7 +266,11 @@ it('allows only one workspace to consume a Max code concurrently', async () => {
 it('atomically creates, reserves and idempotently settles an invocation', async () => {
   await provision()
   await seedAttempt()
-  const { reserveManagedInvocation, settleManagedInvocation } = await import('./ledger')
+  const {
+    reserveManagedInvocation,
+    settleManagedInvocation,
+  } = await import('./ledger')
+  const { markManagedInvocationStarted } = await import('./invocation-lifecycle')
   const reservation = {
     workspaceId: WORKSPACE_ID,
     invocationId: INVOCATION_ID,
@@ -255,6 +287,10 @@ it('atomically creates, reserves and idempotently settles an invocation', async 
   }
   await reserveManagedInvocation(reservation)
   await reserveManagedInvocation(reservation)
+  await markManagedInvocationStarted({
+    workspaceId: WORKSPACE_ID,
+    invocationId: INVOCATION_ID,
+  })
   let [period] = await database.db.select().from(usagePeriods)
   expect(period.reservedCnyMicros).toBe(BigInt(1_000))
 
@@ -284,16 +320,19 @@ it('atomically creates, reserves and idempotently settles an invocation', async 
     billingStatus: 'settled',
     settledCnyMicros: BigInt(600),
     status: 'succeeded',
+    measurementQuality: 'reported',
   })
+  expect(await database.db.select().from(billingReservations)).toHaveLength(1)
+  expect(await database.db.select().from(officialCostEntries)).toHaveLength(1)
+  expect(await database.db.select().from(entitlementLedgerEntries)).toHaveLength(1)
 })
 
 it('settles reserved invocations whose parent attempt is already terminal', async () => {
   await provision()
   await seedAttempt()
-  const {
-    reconcileOrphanedManagedInvocations,
-    reserveManagedInvocation,
-  } = await import('./ledger')
+  const { reserveManagedInvocation } = await import('./ledger')
+  const { reconcileOrphanedManagedInvocations } =
+    await import('./reservation-recovery')
   await reserveManagedInvocation({
     workspaceId: WORKSPACE_ID,
     invocationId: INVOCATION_ID,
@@ -321,16 +360,18 @@ it('settles reserved invocations whose parent attempt is already terminal', asyn
   const [invocation] = await database.db.select().from(aiInvocations)
   expect(invocation).toMatchObject({
     status: 'failed',
-    billingStatus: 'settled',
+    billingStatus: 'released',
     usageStatus: 'unavailable',
+    measurementQuality: 'uncertain',
     reservedCnyMicros: BigInt(1_000),
-    settledCnyMicros: BigInt(1_000),
+    settledCnyMicros: BigInt(0),
   })
   const [period] = await database.db.select().from(usagePeriods)
   expect(period).toMatchObject({
     reservedCnyMicros: BigInt(0),
-    usedCnyMicros: BigInt(1_000),
+    usedCnyMicros: BigInt(0),
   })
+  expect(await database.db.select().from(officialCostEntries)).toEqual([])
 })
 
 it('does not oversell the final quota under concurrent reservations', async () => {

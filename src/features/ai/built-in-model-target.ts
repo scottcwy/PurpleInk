@@ -26,6 +26,7 @@ export interface BuiltInModelTarget {
   deploymentId: string
   channelId: string
   adapterProtocol: AdapterProtocol
+  officialPriceIdentity: string
   providerPoolId: string
   failureDomainId: string
   fallbackDeploymentId?: string
@@ -74,6 +75,7 @@ export async function resolveBuiltInModelTarget(input: {
     deploymentId: binding.deploymentId,
     channelId: binding.channelId,
     adapterProtocol: binding.adapterProtocol,
+    officialPriceIdentity: binding.officialPriceIdentity,
     providerPoolId: funding === 'managed'
       ? binding.providerPoolId
       : `${currentWorkspaceId()}:${input.provider}`,

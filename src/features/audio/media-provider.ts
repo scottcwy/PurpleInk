@@ -28,6 +28,7 @@ import {
   CUSTOM_ASR_PROVIDER,
   CUSTOM_TTS_PROVIDER,
   resolveMediaRouteTarget,
+  type MediaRouteTarget,
   type MediaProviderId,
 } from './media-route-target'
 
@@ -143,6 +144,7 @@ export async function synthesizeRoutedSpeech(
       provider: target.provider,
       model: target.model,
       providerPoolId: target.providerPoolId,
+      execution: executionMetadata(target),
       capability: 'tts',
       billingContext: input.billingContext,
       estimate: { kind: 'tts', characters: Array.from(input.text).length },
@@ -170,6 +172,7 @@ export async function synthesizeRoutedSpeech(
     provider: managedProvider,
     model: target.model,
     providerPoolId: target.providerPoolId,
+    execution: executionMetadata(target),
     capability: 'tts',
     billingContext: input.billingContext,
     estimate: { kind: 'tts', characters: Array.from(input.text).length },
@@ -201,6 +204,7 @@ export async function transcribeRoutedSpeech(
       provider: target.provider,
       model: target.model,
       providerPoolId: target.providerPoolId,
+      execution: executionMetadata(target),
       capability: 'asr',
       billingContext: input.billingContext,
       estimate: { kind: 'asr', audioSeconds },
@@ -259,6 +263,7 @@ export async function transcribeRoutedSpeech(
     provider: managedProvider,
     model: target.model,
     providerPoolId: target.providerPoolId,
+    execution: executionMetadata(target),
     capability: 'asr',
     billingContext: input.billingContext,
     estimate: { kind: 'asr', audioSeconds: audioSeconds! },
@@ -270,6 +275,19 @@ export async function transcribeRoutedSpeech(
       inputAudioSeconds: audioSeconds!,
     }),
   })
+}
+
+function executionMetadata(target: MediaRouteTarget) {
+  return {
+    logicalModelId: target.logicalModelId,
+    outboundModelId: target.model,
+    deploymentId: target.deploymentId,
+    channelId: target.channelId,
+    adapterProtocol: target.adapterProtocol,
+    officialPriceIdentity: target.officialPriceIdentity,
+    providerPoolId: target.providerPoolId,
+    failureDomainId: target.failureDomainId,
+  }
 }
 
 /** 只接受 MP3 / WAV 的供应商共用的收窄：格式不符必须显式失败，不静默转码。 */

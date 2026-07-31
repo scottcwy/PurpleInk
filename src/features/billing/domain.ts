@@ -16,6 +16,14 @@ export interface PlanDefinition {
   managedProviders: readonly BuiltInProviderId[]
 }
 
+export interface UsagePeriodPlanSnapshot {
+  planKey: PlanKey
+  planVersion: string
+  concurrencyLimit: number
+  managedProviders: BuiltInProviderId[]
+  limitCnyMicros: bigint
+}
+
 export const PLAN_DEFINITIONS: Record<PlanKey, PlanDefinition> = {
   free: planDefinition('free'),
   plus: planDefinition('plus'),
@@ -26,6 +34,17 @@ export const PLAN_DEFINITIONS: Record<PlanKey, PlanDefinition> = {
 /** 同一 workspace 下所有项目与成员共享的活跃分镜上限。 */
 export function subscriptionConcurrencyLimit(plan: PlanKey): number {
   return PLAN_DEFINITIONS[plan].concurrency
+}
+
+export function usagePeriodPlanSnapshot(plan: PlanKey): UsagePeriodPlanSnapshot {
+  const definition = PLAN_DEFINITIONS[plan]
+  return {
+    planKey: definition.key,
+    planVersion: definition.version,
+    concurrencyLimit: definition.concurrency,
+    managedProviders: [...definition.managedProviders],
+    limitCnyMicros: definition.limitCnyMicros,
+  }
 }
 
 const ROLLING_PERIOD_MS = 30 * 24 * 60 * 60 * 1_000

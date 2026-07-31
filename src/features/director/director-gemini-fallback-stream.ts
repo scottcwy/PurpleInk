@@ -93,10 +93,14 @@ async function* fallbackEvents(
     ...input.runtime,
     model: fallbackModel,
     modelId: fallbackModel.id,
+    logicalModelId: input.runtime.fallback?.logicalModelId ?? fallbackModel.id,
+    deploymentId: input.runtime.fallback?.deploymentId,
+    officialPriceIdentity: input.runtime.fallback?.officialPriceIdentity,
     routeLabel: `${input.runtime.providerId}/${fallbackModel.id}（同渠道回退）`,
     fallbackModel: undefined,
     fallbackModelId: undefined,
     fallbackDeploymentId: undefined,
+    fallback: undefined,
   }
   yield* attemptEvents(
     input,

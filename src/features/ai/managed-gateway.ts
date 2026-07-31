@@ -78,6 +78,21 @@ const DEFAULT_DEPENDENCIES: ManagedAiGatewayDependencies = {
   releaseUnbilledInvocation,
 }
 
+export interface InvocationExecutionMetadata {
+  operationId?: string
+  attemptGroupId?: string
+  logicalModelId?: string
+  outboundModelId?: string
+  deploymentId?: string
+  channelId?: string
+  adapterProtocol?: string
+  officialPriceIdentity?: string
+  providerPoolId?: string
+  failureDomainId?: string
+  planVersion?: string
+  entitlementRateCardId?: string
+}
+
 interface BeginBase {
   attemptId: string
   invocationNo: number
@@ -87,6 +102,7 @@ interface BeginBase {
   rawInput: string | Uint8Array
   operation?: string
   source?: string
+  execution?: InvocationExecutionMetadata
 }
 
 export type ManagedAiBeginInput = BeginBase & (
@@ -138,6 +154,7 @@ export class ManagedAiGateway {
         throw new RouteContractError('所选供应商尚未配置自己的 API Key')
       }
       const invocationId = invocationUuid(input)
+      const execution = executionMetadata(input, invocationId)
       const ledgerFunding = isManagedProvider(input.provider) ? 'byok' : 'custom'
       return {
         credential,
@@ -155,6 +172,7 @@ export class ManagedAiGateway {
             operation: input.operation ?? 'workflow',
             source: input.source,
             inputHash: sha256(input.rawInput),
+            ...execution,
           })
           return createUnbilledHandle({
             invocationId,
@@ -185,9 +203,11 @@ export class ManagedAiGateway {
     const maximumCostCnyMicros = this.dependencies.estimateMaximumCost(
       rateCard.prices,
       maximumEstimate(input),
+      rateCard.pricingRules,
     )
     const inputHash = sha256(input.rawInput)
     const invocationId = invocationUuid(input)
+    const execution = executionMetadata(input, invocationId)
     return {
       credential,
       dispatchFunding: 'managed',
@@ -213,6 +233,7 @@ export class ManagedAiGateway {
             capability: input.capability,
             operation: input.operation ?? 'workflow',
             source: input.source,
+            ...execution,
           },
         })
         return createManagedHandle({
@@ -220,7 +241,7 @@ export class ManagedAiGateway {
           credential,
           capability: input.capability,
           prices: rateCard.prices,
-          maximumCostCnyMicros,
+          pricingRules: rateCard.pricingRules,
           lifecycle: {
             markStarted: this.dependencies.markProviderInvocationStarted
               ?? markProviderInvocationStarted,
@@ -277,4 +298,24 @@ function invocationUuid(input: ManagedAiBeginInput): string {
     hex.slice(16, 20),
     hex.slice(20),
   ].join('-')
+}
+
+function executionMetadata(
+  input: ManagedAiBeginInput,
+  invocationId: string,
+): InvocationExecutionMetadata {
+  return {
+    operationId: input.execution?.operationId ?? invocationId,
+    attemptGroupId: input.execution?.attemptGroupId ?? input.attemptId,
+    logicalModelId: input.execution?.logicalModelId ?? input.model,
+    outboundModelId: input.execution?.outboundModelId ?? input.model,
+    deploymentId: input.execution?.deploymentId,
+    channelId: input.execution?.channelId,
+    adapterProtocol: input.execution?.adapterProtocol,
+    officialPriceIdentity: input.execution?.officialPriceIdentity,
+    providerPoolId: input.execution?.providerPoolId,
+    failureDomainId: input.execution?.failureDomainId,
+    planVersion: input.execution?.planVersion,
+    entitlementRateCardId: input.execution?.entitlementRateCardId,
+  }
 }

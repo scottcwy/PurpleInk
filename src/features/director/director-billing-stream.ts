@@ -36,6 +36,12 @@ interface DirectorBillingRuntime {
   funding: 'managed' | 'byok'
   apiKey: string
   providerPoolId?: string
+  logicalModelId?: string
+  deploymentId?: string
+  channelId?: string
+  adapterProtocol?: string
+  officialPriceIdentity?: string
+  failureDomainId?: string
 }
 
 /** 单次上游调用的硬上限；队列层负责重试，SDK 内不得再做嵌套重试。 */
@@ -116,7 +122,7 @@ async function* billedEvents(
       deadlineController,
     )) {
       if (event.type === 'done' || event.type === 'error') {
-        await settleTerminal(handle, event)
+        await settleTerminal(handle, event, input)
         settled = true
         dispatchOutcome = event.type === 'done' ? 'success' : 'unknown'
       }
@@ -244,23 +250,44 @@ async function beginInvocation(
     }),
     maxOutputTokens:
       input.options?.maxTokens ?? input.runtime.maxOutputTokens,
+    execution: {
+      attemptGroupId: input.attemptId,
+      logicalModelId: input.runtime.logicalModelId ?? input.runtime.modelId,
+      outboundModelId: input.runtime.modelId,
+      deploymentId: input.runtime.deploymentId,
+      channelId: input.runtime.channelId,
+      adapterProtocol: input.runtime.adapterProtocol,
+      officialPriceIdentity: input.runtime.officialPriceIdentity,
+      providerPoolId: input.runtime.providerPoolId,
+      failureDomainId: input.runtime.failureDomainId,
+    },
   })
 }
 
 async function settleTerminal(
   handle: ManagedAiHandle,
   event: Extract<AssistantMessageEvent, { type: 'done' | 'error' }>,
+  input: Parameters<typeof createDirectorBillingStream>[0],
 ): Promise<void> {
   const message = event.type === 'done' ? event.message : event.error
   const usage = reportedTextUsage(message)
-  if (!usage) {
-    await handle.settleUnavailable(event.type === 'error')
-    return
-  }
   const outputHash = createHash('sha256')
     .update(JSON.stringify(message))
     .digest('hex')
-  await handle.settle(usage, outputHash, event.type === 'error')
+  if (usage) {
+    await handle.settle(usage, outputHash, event.type === 'error')
+    return
+  }
+  if (event.type === 'done') {
+    await handle.settle(
+      estimatedTextUsage(input, message),
+      outputHash,
+      false,
+      'estimated',
+    )
+    return
+  }
+  await handle.settleUnavailable(true)
 }
 
 function safeFailureKind(error: unknown): string {
@@ -280,7 +307,8 @@ function reportedTextUsage(message: AssistantMessage): ManagedUsage | null {
   return {
     kind: 'text',
     inputTokens: usage.input,
-    cachedInputTokens: usage.cacheRead + usage.cacheWrite,
+    cachedInputTokens: usage.cacheRead,
+    cacheWriteInputTokens: usage.cacheWrite,
     outputTokens: usage.output,
   }
 }
@@ -299,4 +327,21 @@ function estimatedTokens(
   }).length
   return Math.ceil(inputCharacters / 4)
     + (input.options?.maxTokens ?? input.runtime.maxOutputTokens)
+}
+
+function estimatedTextUsage(
+  input: Parameters<typeof createDirectorBillingStream>[0],
+  message: AssistantMessage,
+): ManagedUsage {
+  const inputCharacters = JSON.stringify({
+    systemPrompt: input.context.systemPrompt,
+    messages: input.context.messages,
+    tools: input.context.tools ?? [],
+  }).length
+  return {
+    kind: 'text',
+    inputTokens: Math.ceil(inputCharacters / 4),
+    cachedInputTokens: 0,
+    outputTokens: Math.ceil(JSON.stringify(message.content).length / 4),
+  }
 }

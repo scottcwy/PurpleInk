@@ -164,6 +164,18 @@ export const aiInvocations = pgTable(
     status: text('status').default('running').notNull(),
     provider: text('provider').notNull(),
     model: text('model').notNull(),
+    operationId: text('operation_id'),
+    attemptGroupId: uuid('attempt_group_id'),
+    logicalModelId: text('logical_model_id'),
+    outboundModelId: text('outbound_model_id'),
+    deploymentId: text('deployment_id'),
+    channelId: text('channel_id'),
+    adapterProtocol: text('adapter_protocol'),
+    officialPriceIdentity: text('official_price_identity'),
+    providerPoolId: text('provider_pool_id'),
+    failureDomainId: text('failure_domain_id'),
+    planVersion: text('plan_version'),
+    entitlementRateCardId: text('entitlement_rate_card_id'),
     actorUserId: uuid('actor_user_id').references(() => users.id, {
       onDelete: 'restrict',
     }),
@@ -186,6 +198,7 @@ export const aiInvocations = pgTable(
       .notNull(),
     settledCnyMicros: bigint('settled_cny_micros', { mode: 'bigint' }),
     usageStatus: text('usage_status'),
+    measurementQuality: text('measurement_quality'),
     settledAt: timestamp('settled_at', { withTimezone: true }),
     providerStartedAt: timestamp('provider_started_at', { withTimezone: true }),
     providerCompletedAt: timestamp('provider_completed_at', { withTimezone: true }),
@@ -263,6 +276,12 @@ export const aiInvocations = pgTable(
     check(
       'ai_invocations_usage_status_check',
       sql`${table.usageStatus} is null or ${table.usageStatus} in ('reported', 'unavailable')`,
+    ),
+    check(
+      'ai_invocations_measurement_quality_check',
+      sql`${table.measurementQuality} is null or ${table.measurementQuality} in (
+        'reported', 'estimated', 'uncertain', 'legacy_unknown'
+      )`,
     ),
     check(
       'ai_invocations_funding_check',

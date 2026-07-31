@@ -10,7 +10,14 @@ import {
   usagePeriods,
   workspaceEntitlements,
 } from '@/lib/db/schema/billing'
-import { aiInvocations } from '@/lib/db/schema/ai'
+import {
+  aiInvocations,
+} from '@/lib/db/schema/ai'
+import {
+  billingReservations,
+  entitlementLedgerEntries,
+  officialCostEntries,
+} from '@/lib/db/schema/billing-ledger'
 
 describe('billing schema contract', () => {
   it('stores all monetary ledger values as bigint', () => {
@@ -30,6 +37,23 @@ describe('billing schema contract', () => {
     expect(getTableColumns(redemptionAudits)).toHaveProperty('result')
     expect(getTableColumns(redemptionAudits)).toHaveProperty('requestFingerprint')
     expect(getTableColumns(rateCards)).toHaveProperty('fxCnyMicrosPerCurrencyUnit')
+  })
+
+  it('stores versioned reservation, official cost and entitlement ledgers', () => {
+    const period = getTableColumns(usagePeriods)
+    expect(period).toHaveProperty('planVersion')
+    expect(period).toHaveProperty('concurrencyLimit')
+    expect(period).toHaveProperty('managedProviders')
+
+    const invocation = getTableColumns(aiInvocations)
+    expect(invocation).toHaveProperty('attemptGroupId')
+    expect(invocation).toHaveProperty('deploymentId')
+    expect(invocation).toHaveProperty('officialPriceIdentity')
+    expect(invocation).toHaveProperty('measurementQuality')
+
+    expect(getTableColumns(billingReservations)).toHaveProperty('maximumCnyMicros')
+    expect(getTableColumns(officialCostEntries)).toHaveProperty('sourceAmountMicros')
+    expect(getTableColumns(entitlementLedgerEntries)).toHaveProperty('debitCnyMicros')
   })
 
   it('extends invocations with reservation and immutable settlement fields', () => {

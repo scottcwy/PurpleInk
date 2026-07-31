@@ -1,6 +1,7 @@
 import 'server-only'
 import type {
   BillableUsage,
+  RateCardPricingRules,
   settleManagedInvocation,
 } from '@/features/billing'
 import type { ProviderCapability } from './provider-registry'
@@ -18,6 +19,7 @@ export interface ManagedAiHandle {
     usage: ManagedUsage,
     outputHash?: string,
     failed?: boolean,
+    measurementQuality?: 'reported' | 'estimated',
   ) => Promise<void>
   settleUnavailable: (failed?: boolean, failureKind?: string) => Promise<void>
   settleRejected?: (failureKind: string) => Promise<void>
@@ -33,11 +35,12 @@ export function createManagedHandle(input: {
   credential: string
   capability: ProviderCapability
   prices: Parameters<(typeof import('@/features/billing'))['calculateActualCost']>[0]
-  maximumCostCnyMicros: bigint
+  pricingRules?: RateCardPricingRules
   lifecycle: Lifecycle & {
     calculateCost: (
       prices: Parameters<(typeof import('@/features/billing'))['calculateActualCost']>[0],
       usage: BillableUsage,
+      rules?: RateCardPricingRules,
     ) => bigint
     settle: typeof settleManagedInvocation
     release: (input: { invocationId: string }) => Promise<void>
@@ -55,15 +58,22 @@ export function createManagedHandle(input: {
       await input.lifecycle.markStarted(input.invocationId)
       startedAt = performance.now()
     },
-    settle: (usage, outputHash, failed = false) => state.once(async () => {
+    settle: (
+      usage,
+      outputHash,
+      failed = false,
+      measurementQuality = 'reported',
+    ) => state.once(async () => {
       validateOutputHash(outputHash)
       await input.lifecycle.settle({
         invocationId: input.invocationId,
         actualCostCnyMicros: input.lifecycle.calculateCost(
           input.prices,
           billableUsage(input.capability, usage),
+          input.pricingRules,
         ),
         usageStatus: 'reported',
+        measurementQuality,
         invocationStatus: failed ? 'failed' : 'succeeded',
         outputHash,
         usage: {
@@ -77,9 +87,11 @@ export function createManagedHandle(input: {
     settleUnavailable: (failed = false, failureKind) => state.once(() =>
       input.lifecycle.settle({
         invocationId: input.invocationId,
-        actualCostCnyMicros: input.maximumCostCnyMicros,
+        actualCostCnyMicros: BigInt(0),
         usageStatus: 'unavailable',
+        measurementQuality: 'uncertain',
         invocationStatus: failed ? 'failed' : 'succeeded',
+        billingStatus: 'released',
         usage: {
           schemaVersion: 2,
           capability: input.capability,

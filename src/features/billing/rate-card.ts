@@ -1,6 +1,7 @@
 export type RateUnitKind =
   | 'input_token'
   | 'cached_input_token'
+  | 'cache_write_token'
   | 'output_token'
   | 'tts_character'
   | 'audio_second'
@@ -23,11 +24,24 @@ export interface RateCardPrice {
   unitPriceCnyMicros: bigint
 }
 
+export interface ContextPriceTier {
+  inputTokensAbove: number
+  inputNumerator: bigint
+  inputDenominator: bigint
+  outputNumerator: bigint
+  outputDenominator: bigint
+}
+
+export interface RateCardPricingRules {
+  tiers: ContextPriceTier[]
+}
+
 export type BillableUsage =
   | {
       kind: 'text' | 'vision'
       inputTokens: number
       cachedInputTokens?: number
+      cacheWriteInputTokens?: number
       outputTokens: number
       reasoningTokens?: number
     }
@@ -63,6 +77,7 @@ function price(
 export function calculateActualCost(
   prices: RateCardPrice[],
   usage: BillableUsage,
+  rules?: RateCardPricingRules,
 ): bigint {
   if (usage.kind === 'tts') return price(prices, 'tts_character', usage.characters)
   if (usage.kind === 'asr') {
@@ -71,14 +86,24 @@ export function calculateActualCost(
   if (usage.kind === 'workflow') {
     return price(prices, 'video_second', wholeVideoSeconds(usage.videoSeconds))
   }
-  return price(prices, 'input_token', usage.inputTokens)
+  const inputCost = price(prices, 'input_token', usage.inputTokens)
     + price(prices, 'cached_input_token', usage.cachedInputTokens ?? 0)
-    + price(prices, 'output_token', usage.outputTokens)
+    + price(prices, 'cache_write_token', usage.cacheWriteInputTokens ?? 0)
+  const outputCost = price(prices, 'output_token', usage.outputTokens)
+  return applyContextTier(
+    inputCost,
+    outputCost,
+    usage.inputTokens
+      + (usage.cachedInputTokens ?? 0)
+      + (usage.cacheWriteInputTokens ?? 0),
+    rules,
+  )
 }
 
 export function estimateMaximumCost(
   prices: RateCardPrice[],
   estimate: MaximumUsageEstimate,
+  rules?: RateCardPricingRules,
 ): bigint {
   if (estimate.kind === 'tts') {
     return price(prices, 'tts_character', estimate.characters)
@@ -92,8 +117,44 @@ export function estimateMaximumCost(
   const inputBytes = typeof estimate.input === 'string'
     ? Buffer.byteLength(estimate.input, 'utf8')
     : estimate.input.byteLength
-  return price(prices, 'input_token', inputBytes)
-    + price(prices, 'output_token', estimate.maxOutputTokens)
+  return applyContextTier(
+    price(prices, 'input_token', inputBytes),
+    price(prices, 'output_token', estimate.maxOutputTokens),
+    inputBytes,
+    rules,
+  )
+}
+
+function applyContextTier(
+  inputCost: bigint,
+  outputCost: bigint,
+  inputTokens: number,
+  rules?: RateCardPricingRules,
+): bigint {
+  const tier = rules?.tiers
+    .filter((candidate) => inputTokens > candidate.inputTokensAbove)
+    .sort((left, right) => right.inputTokensAbove - left.inputTokensAbove)[0]
+  if (!tier) return inputCost + outputCost
+  return multiplyRoundUp(
+    inputCost,
+    tier.inputNumerator,
+    tier.inputDenominator,
+  ) + multiplyRoundUp(
+    outputCost,
+    tier.outputNumerator,
+    tier.outputDenominator,
+  )
+}
+
+function multiplyRoundUp(
+  amount: bigint,
+  numerator: bigint,
+  denominator: bigint,
+): bigint {
+  if (numerator < BigInt(0) || denominator <= BigInt(0)) {
+    throw new Error('invalid context price tier')
+  }
+  return ceilDiv(amount * numerator, denominator)
 }
 
 /** 视频时长按整秒计费；预留、结算与审计投影复用同一归一化。 */

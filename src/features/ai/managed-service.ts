@@ -153,6 +153,7 @@ export type ManagedUsage =
       kind: 'text'
       inputTokens: number
       cachedInputTokens?: number
+      cacheWriteInputTokens?: number
       outputTokens: number
       reasoningTokens?: number
     }

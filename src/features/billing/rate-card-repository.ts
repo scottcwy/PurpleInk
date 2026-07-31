@@ -7,6 +7,7 @@ import {
 } from '@/lib/db/schema/index'
 import type {
   BillingCapability,
+  RateCardPricingRules,
   RateCardPrice,
   RateUnitKind,
 } from './rate-card'
@@ -17,6 +18,7 @@ export interface CurrentRateCard {
   priceCurrency: 'CNY' | 'USD'
   fxCnyMicrosPerCurrencyUnit: bigint
   prices: RateCardPrice[]
+  pricingRules?: RateCardPricingRules
 }
 
 export async function getCurrentRateCard(input: {
@@ -33,6 +35,7 @@ export async function getCurrentRateCard(input: {
     version: rateCards.version,
     priceCurrency: rateCards.priceCurrency,
     fxCnyMicrosPerCurrencyUnit: rateCards.fxCnyMicrosPerCurrencyUnit,
+    pricingRules: rateCards.pricingRules,
   }).from(rateCards)
     .innerJoin(
       managedModelCatalog,
@@ -58,12 +61,30 @@ export async function getCurrentRateCard(input: {
     unitSize: rateCardUnits.unitSize,
     unitPriceCnyMicros: rateCardUnits.unitPriceCnyMicros,
   }).from(rateCardUnits).where(eq(rateCardUnits.rateCardId, card.id))
+  const { pricingRules, ...cardFields } = card
   return {
-    ...card,
+    ...cardFields,
     priceCurrency: card.priceCurrency as 'CNY' | 'USD',
+    ...(pricingRules
+      ? { pricingRules: deserializePricingRules(pricingRules) }
+      : {}),
     prices: units.map((unit) => ({
       ...unit,
       unitKind: unit.unitKind as RateUnitKind,
+    })),
+  }
+}
+
+function deserializePricingRules(
+  rules: NonNullable<typeof rateCards.$inferSelect.pricingRules>,
+): RateCardPricingRules {
+  return {
+    tiers: rules.tiers.map((tier) => ({
+      inputTokensAbove: tier.inputTokensAbove,
+      inputNumerator: BigInt(tier.inputNumerator),
+      inputDenominator: BigInt(tier.inputDenominator),
+      outputNumerator: BigInt(tier.outputNumerator),
+      outputDenominator: BigInt(tier.outputDenominator),
     })),
   }
 }

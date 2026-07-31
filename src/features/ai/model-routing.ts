@@ -98,6 +98,7 @@ export interface DirectorModelTarget {
   deploymentId?: string
   channelId?: string
   adapterProtocol?: AdapterProtocol
+  officialPriceIdentity?: string
   providerPoolId?: string
   failureDomainId?: string
   fallbackDeploymentId?: string

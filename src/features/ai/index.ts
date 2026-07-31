@@ -40,6 +40,7 @@ export {
   type ManagedAiBeginInput,
   type ManagedAiGatewayDependencies,
   type ManagedAiHandle,
+  type InvocationExecutionMetadata,
 } from './managed-gateway'
 export {
   MANAGED_CREDENTIAL_ENV,

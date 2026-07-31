@@ -28,6 +28,18 @@ export interface InvocationIdentity {
   operation: string
   source?: string
   inputHash?: string
+  operationId?: string
+  attemptGroupId?: string
+  logicalModelId?: string
+  outboundModelId?: string
+  deploymentId?: string
+  channelId?: string
+  adapterProtocol?: string
+  officialPriceIdentity?: string
+  providerPoolId?: string
+  failureDomainId?: string
+  planVersion?: string
+  entitlementRateCardId?: string
 }
 
 export async function createUnbilledInvocation(
@@ -54,6 +66,18 @@ export async function createUnbilledInvocation(
     repairNo: input.repairNo ?? 0,
     provider: input.provider,
     model: input.model,
+    operationId: input.operationId ?? input.invocationId,
+    attemptGroupId: input.attemptGroupId ?? input.attemptId,
+    logicalModelId: input.logicalModelId ?? input.model,
+    outboundModelId: input.outboundModelId ?? input.model,
+    deploymentId: input.deploymentId,
+    channelId: input.channelId,
+    adapterProtocol: input.adapterProtocol,
+    officialPriceIdentity: input.officialPriceIdentity,
+    providerPoolId: input.providerPoolId,
+    failureDomainId: input.failureDomainId,
+    planVersion: input.planVersion,
+    entitlementRateCardId: input.entitlementRateCardId,
     actorUserId,
     funding: input.funding,
     capability: input.capability,
@@ -94,6 +118,9 @@ export async function settleUnbilledInvocation(input: {
   await database.update(aiInvocations).set({
     status: input.status,
     usageStatus: input.usageStatus,
+    measurementQuality: input.usageStatus === 'reported'
+      ? 'reported'
+      : 'uncertain',
     usage: input.usage,
     outputHash: input.outputHash,
     providerCompletedAt: now,

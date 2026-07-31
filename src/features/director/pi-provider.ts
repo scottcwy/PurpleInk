@@ -13,6 +13,7 @@ import {
   resolveDirectorModelTarget,
 } from '@/features/ai/model-routing'
 import type { AiProviderId } from '@/features/ai/provider-registry'
+import type { AdapterProtocol } from '@/features/ai/execution-plan'
 import { RouteContractError } from '@/features/ai/route-contract-error'
 import type { PipelineStage } from './types'
 
@@ -74,10 +75,19 @@ export interface DirectorModelRuntime {
   modelId: string
   logicalModelId?: string
   deploymentId?: string
+  channelId?: string
+  adapterProtocol?: AdapterProtocol
+  officialPriceIdentity?: string
   providerPoolId?: string
+  failureDomainId?: string
   fallbackDeploymentId?: string
   fallbackModel?: Model<Api>
   fallbackModelId?: string
+  fallback?: {
+    deploymentId: string
+    logicalModelId: string
+    officialPriceIdentity: string
+  }
   maxOutputTokens: number
   deductsManagedPool: boolean
 }
@@ -152,12 +162,28 @@ export async function createDirectorModelRuntime(input: {
     modelId: target.modelId,
     ...(target.logicalModelId ? { logicalModelId: target.logicalModelId } : {}),
     ...(target.deploymentId ? { deploymentId: target.deploymentId } : {}),
+    ...(target.channelId ? { channelId: target.channelId } : {}),
+    ...(target.adapterProtocol ? { adapterProtocol: target.adapterProtocol } : {}),
+    ...(target.officialPriceIdentity
+      ? { officialPriceIdentity: target.officialPriceIdentity }
+      : {}),
     ...(target.providerPoolId ? { providerPoolId: target.providerPoolId } : {}),
+    ...(target.failureDomainId ? { failureDomainId: target.failureDomainId } : {}),
     ...(target.fallbackDeploymentId
       ? { fallbackDeploymentId: target.fallbackDeploymentId }
       : {}),
     ...(fallbackModel
-      ? { fallbackModel, fallbackModelId: fallbackModel.id }
+      ? {
+          fallbackModel,
+          fallbackModelId: fallbackModel.id,
+          fallback: target.fallback
+            ? {
+                deploymentId: target.fallback.deploymentId,
+                logicalModelId: target.fallback.logicalModelId,
+                officialPriceIdentity: target.fallback.officialPriceIdentity,
+              }
+            : undefined,
+        }
       : {}),
     maxOutputTokens: requestShape.maxTokens,
     deductsManagedPool: target.deductsManagedPool === true,

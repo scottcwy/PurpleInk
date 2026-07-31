@@ -8,6 +8,7 @@ import {
 const prices: RateCardPrice[] = [
   { unitKind: 'input_token', unitSize: BigInt(1_000_000), unitPriceCnyMicros: BigInt(2_000_000) },
   { unitKind: 'cached_input_token', unitSize: BigInt(1_000_000), unitPriceCnyMicros: BigInt(500_000) },
+  { unitKind: 'cache_write_token', unitSize: BigInt(1_000_000), unitPriceCnyMicros: BigInt(1_250_000) },
   { unitKind: 'output_token', unitSize: BigInt(1_000_000), unitPriceCnyMicros: BigInt(8_000_000) },
   { unitKind: 'tts_character', unitSize: BigInt(1_000), unitPriceCnyMicros: BigInt(10) },
   { unitKind: 'audio_second', unitSize: BigInt(1), unitPriceCnyMicros: BigInt(100) },
@@ -28,6 +29,24 @@ describe('rate card calculation', () => {
     expect(calculateActualCost(prices, { kind: 'tts', characters: 1001 })).toBe(BigInt(11))
     expect(calculateActualCost(prices, { kind: 'asr', audioSeconds: 3 })).toBe(BigInt(300))
     expect(calculateActualCost(prices, { kind: 'asr', audioSeconds: 3.001 })).toBe(BigInt(400))
+  })
+
+  it('prices cache writes separately and applies long-context ratios', () => {
+    expect(calculateActualCost(prices, {
+      kind: 'text',
+      inputTokens: 272_001,
+      cachedInputTokens: 0,
+      cacheWriteInputTokens: 10,
+      outputTokens: 100_000,
+    }, {
+      tiers: [{
+        inputTokensAbove: 272_000,
+        inputNumerator: BigInt(2),
+        inputDenominator: BigInt(1),
+        outputNumerator: BigInt(3),
+        outputDenominator: BigInt(2),
+      }],
+    })).toBe(BigInt(2_288_030))
   })
 
   it('prices website workflow output by whole video seconds', () => {

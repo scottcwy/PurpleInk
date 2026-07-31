@@ -225,13 +225,13 @@ describe('workspace shot concurrency', () => {
       database: database.db,
     })).resolves.toEqual({
       planKey: 'pro',
-      limit: 20,
+      limit: 50,
       active: 1,
       waiting: 0,
     })
   })
 
-  it('admits 50 staggered Max shots across two users and projects with p95 under 20ms', async () => {
+  it('admits 100 staggered Max shots across two users and projects with p95 under 20ms', async () => {
     const {
       registerWorkflowSlotsInTransaction,
       tryAcquireWorkflowSlot,
@@ -241,7 +241,7 @@ describe('workspace shot concurrency', () => {
       .set({ planKey: 'max' })
       .where(eq(workspaceEntitlements.workspaceId, WORKSPACE_ID))
     const workUnitKeys = Array.from(
-      { length: 50 },
+      { length: 100 },
       (_, index) => `max-shot-${String(index).padStart(2, '0')}`,
     )
     await database.db.transaction(async (transaction) => {
@@ -262,7 +262,7 @@ describe('workspace shot concurrency', () => {
     })
     const durations: number[] = []
     const results = []
-    for (let index = 0; index < 50; index += 1) {
+    for (let index = 0; index < 100; index += 1) {
       const startedAt = performance.now()
       results.push(await tryAcquireWorkflowSlot({
         workspaceId: WORKSPACE_ID,
@@ -277,11 +277,11 @@ describe('workspace shot concurrency', () => {
     const sorted = [...durations].sort((left, right) => left - right)
     const p95 = sorted[Math.ceil(sorted.length * 0.95) - 1]!
     expect(results.map((result) => result.status)).toEqual(
-      Array.from({ length: 50 }, () => 'active'),
+      Array.from({ length: 100 }, () => 'active'),
     )
     expect(results.at(-1)).toMatchObject({
-      limit: 50,
-      active: 50,
+      limit: 100,
+      active: 100,
       waiting: 0,
     })
     expect(p95).toBeLessThan(20)

@@ -176,6 +176,20 @@
       "when": 1785470000000,
       "tag": "0024_storage_cleanup_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1785475823740,
+      "tag": "0025_billing_double_ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1785476917409,
+      "tag": "0026_billing_pricing_rules",
+      "breakpoints": true
     }
   ]
 }

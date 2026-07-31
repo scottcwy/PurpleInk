@@ -6,6 +6,7 @@ import {
   type AiConfigDependencies,
 } from '@/features/ai/config'
 import { resolveDeploymentBinding } from '@/features/ai/execution-plan'
+import type { AdapterProtocol } from '@/features/ai/execution-plan'
 
 export const CUSTOM_TTS_PROVIDER = 'openai-compatible-tts' as const
 export const CUSTOM_ASR_PROVIDER = 'openai-compatible-asr' as const
@@ -19,7 +20,13 @@ export type MediaProviderId =
 export interface MediaRouteTarget {
   provider: MediaProviderId
   model: string
+  logicalModelId?: string
+  deploymentId?: string
+  channelId?: string
+  adapterProtocol?: AdapterProtocol
+  officialPriceIdentity?: string
   providerPoolId?: string
+  failureDomainId?: string
 }
 
 const MEDIA_PROVIDERS: readonly MediaProviderId[] = [
@@ -78,8 +85,16 @@ async function builtInTarget(
   return {
     provider,
     model: binding.outboundModelId,
+    logicalModelId: binding.logicalModelId,
+    deploymentId: binding.deploymentId,
+    channelId: binding.channelId,
+    adapterProtocol: binding.adapterProtocol,
+    officialPriceIdentity: binding.officialPriceIdentity,
     providerPoolId: funding === 'managed'
       ? binding.providerPoolId
+      : `${currentWorkspaceId()}:${provider}`,
+    failureDomainId: funding === 'managed'
+      ? binding.failureDomainId
       : `${currentWorkspaceId()}:${provider}`,
   }
 }

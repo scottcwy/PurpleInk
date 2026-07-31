@@ -5,6 +5,7 @@ import {
   nextRollingPeriod,
   resolveRedemptionTransition,
   subscriptionConcurrencyLimit,
+  usagePeriodPlanSnapshot,
 } from './domain'
 
 describe('billing plans', () => {
@@ -26,6 +27,22 @@ describe('billing plans', () => {
     expect(subscriptionConcurrencyLimit('plus')).toBe(20)
     expect(subscriptionConcurrencyLimit('pro')).toBe(50)
     expect(subscriptionConcurrencyLimit('max')).toBe(100)
+  })
+
+  it('freezes the complete plan contract into each usage period', () => {
+    expect(usagePeriodPlanSnapshot('pro')).toEqual({
+      planKey: 'pro',
+      planVersion: PLAN_DEFINITIONS.pro.version,
+      concurrencyLimit: 50,
+      managedProviders: [
+        'stepfun',
+        'mimo',
+        'gemini',
+        'openai',
+        'anthropic',
+      ],
+      limitCnyMicros: BigInt(200_000_000),
+    })
   })
 })
 

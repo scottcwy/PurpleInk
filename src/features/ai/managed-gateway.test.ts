@@ -158,7 +158,7 @@ describe('ManagedAiGateway', () => {
       kind: 'text',
       input: TEXT_INPUT.rawInput,
       maxOutputTokens: 200,
-    })
+    }, undefined)
     expect(deps.reserveManagedInvocation).toHaveBeenCalledWith({
       invocationId: expect.stringMatching(
         /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
@@ -176,6 +176,20 @@ describe('ManagedAiGateway', () => {
         capability: 'text',
         operation: 'workflow',
         source: undefined,
+        operationId: expect.stringMatching(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+        ),
+        attemptGroupId: TEXT_INPUT.attemptId,
+        logicalModelId: 'step-3.5-flash',
+        outboundModelId: 'step-3.5-flash',
+        deploymentId: undefined,
+        channelId: undefined,
+        adapterProtocol: undefined,
+        officialPriceIdentity: undefined,
+        providerPoolId: undefined,
+        failureDomainId: undefined,
+        planVersion: undefined,
+        entitlementRateCardId: undefined,
       },
     })
     const reservation = vi.mocked(deps.reserveManagedInvocation).mock.calls[0]![0]
@@ -215,7 +229,7 @@ describe('ManagedAiGateway', () => {
     expect(ttsDeps.estimateMaximumCost).toHaveBeenCalledWith(CARD.prices, {
       kind: 'tts',
       characters: 6,
-    })
+    }, undefined)
     expect(ttsDeps.reserveManagedInvocation).toHaveBeenCalledWith(
       expect.objectContaining({ maximumCostCnyMicros: BigInt(0) }),
     )
@@ -233,7 +247,7 @@ describe('ManagedAiGateway', () => {
     expect(asrDeps.estimateMaximumCost).toHaveBeenCalledWith(CARD.prices, {
       kind: 'asr',
       audioSeconds: 12.5,
-    })
+    }, undefined)
   })
 
   it('settles reported usage once with schema version and safe hashes', async () => {
@@ -255,12 +269,13 @@ describe('ManagedAiGateway', () => {
     expect(deps.calculateActualCost).toHaveBeenCalledWith(CARD.prices, {
       ...usage,
       kind: 'text',
-    })
+    }, undefined)
     expect(deps.settleManagedInvocation).toHaveBeenCalledTimes(1)
     expect(deps.settleManagedInvocation).toHaveBeenCalledWith({
       invocationId: handle.invocationId,
       actualCostCnyMicros: BigInt(42),
       usageStatus: 'reported',
+      measurementQuality: 'reported',
       invocationStatus: 'succeeded',
       outputHash: 'a'.repeat(64),
       usage: {
@@ -278,7 +293,12 @@ describe('ManagedAiGateway', () => {
     await successful.markProviderStarted?.()
     await successful.settleUnavailable()
     expect(successfulDeps.settleManagedInvocation).toHaveBeenCalledWith(
-      expect.objectContaining({ invocationStatus: 'succeeded' }),
+      expect.objectContaining({
+        actualCostCnyMicros: BigInt(0),
+        billingStatus: 'released',
+        measurementQuality: 'uncertain',
+        invocationStatus: 'succeeded',
+      }),
     )
 
     const failedDeps = dependencies()
@@ -287,9 +307,11 @@ describe('ManagedAiGateway', () => {
     await failed.settleUnavailable(true)
     expect(failedDeps.settleManagedInvocation).toHaveBeenCalledWith({
       invocationId: failed.invocationId,
-      actualCostCnyMicros: BigInt(100),
+      actualCostCnyMicros: BigInt(0),
       usageStatus: 'unavailable',
+      measurementQuality: 'uncertain',
       invocationStatus: 'failed',
+      billingStatus: 'released',
       usage: { schemaVersion: 2, capability: 'text', unavailable: true },
       providerDurationMs: expect.any(Number),
       failureKind: undefined,

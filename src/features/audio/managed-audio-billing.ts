@@ -5,6 +5,7 @@ import {
   managedUpstreamError,
   type ManagedAiBeginInput,
   type ManagedAiHandle,
+  type InvocationExecutionMetadata,
   type AiProviderId,
 } from '@/features/ai'
 import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
@@ -23,6 +24,7 @@ export interface ManagedAudioBillingInput<T> {
   provider: AiProviderId
   model: string
   providerPoolId?: string
+  execution?: InvocationExecutionMetadata
   capability: 'tts' | 'asr'
   billingContext?: AudioBillingContext
   estimate: Extract<MaximumUsageEstimate, { kind: 'tts' | 'asr' }>
@@ -123,6 +125,7 @@ function gatewayInput<T>(
     provider: input.provider,
     model: input.model,
     rawInput: input.input,
+    execution: input.execution,
   }
   return input.capability === 'tts'
     ? {

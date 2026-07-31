@@ -77,6 +77,17 @@ export async function executeManagedVisionQa(
     capability: 'vision',
     rawInput: JSON.stringify(messages),
     maxOutputTokens: VISION_QA_MAX_OUTPUT_TOKENS,
+    execution: {
+      attemptGroupId: input.attemptId,
+      logicalModelId: target.logicalModelId ?? target.modelId,
+      outboundModelId: target.modelId,
+      deploymentId: target.deploymentId,
+      channelId: target.channelId,
+      adapterProtocol: target.adapterProtocol,
+      officialPriceIdentity: target.officialPriceIdentity,
+      providerPoolId: target.providerPoolId,
+      failureDomainId: target.failureDomainId,
+    },
   })
   const apiKey = prepared.credential ?? target.apiKey
   if (!apiKey) {
@@ -108,10 +119,10 @@ export async function executeManagedVisionQa(
       funding,
     })
     if (!completion.content) {
-      await settleVision(handle, completion, true)
+      await settleVision(handle, completion, true, messages)
       throw new Error('Vision 模型未返回报告')
     }
-    await settleVision(handle, completion, false)
+    await settleVision(handle, completion, false, messages)
     return {
       provider: target.provider,
       model: target.modelId,
@@ -258,9 +269,20 @@ async function settleVision(
   handle: ManagedAiHandle,
   completion: VisionCompletion,
   failed: boolean,
+  messages: VisionMessage[],
 ): Promise<void> {
   if (!completion.usage) {
-    await handle.settleUnavailable(failed)
+    if (failed || !completion.content) {
+      await handle.settleUnavailable(failed)
+      return
+    }
+    const outputHash = createHash('sha256').update(completion.content).digest('hex')
+    await handle.settle({
+      kind: 'text',
+      inputTokens: Math.ceil(JSON.stringify(messages).length / 4),
+      cachedInputTokens: 0,
+      outputTokens: Math.ceil(completion.content.length / 4),
+    }, outputHash, false, 'estimated')
     return
   }
   const outputHash = completion.content

@@ -56,6 +56,11 @@ export {
   modelRoutes,
   providerCredentials,
 } from './ai'
+export {
+  billingReservations,
+  entitlementLedgerEntries,
+  officialCostEntries,
+} from './billing-ledger'
 export { telemetryCutovers } from './telemetry'
 export {
   PROVIDER_DISPATCH_STATUSES,
@@ -72,12 +77,14 @@ export {
   BILLING_STATUSES,
   PLAN_KEYS,
   REDEMPTION_RESULTS,
+  billingFxRates,
   managedModelCatalog,
   rateCardUnits,
   rateCards,
   redemptionAudits,
   redemptionBatches,
   redemptionCodes,
+  serviceMultiplierCards,
   usagePeriods,
   workspaceEntitlements,
 } from './billing'

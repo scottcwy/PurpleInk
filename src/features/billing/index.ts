@@ -7,18 +7,25 @@ export {
   PLAN_DEFINITIONS,
   PLAN_KEYS,
   comparePlans,
+  usagePeriodPlanSnapshot,
   type PlanKey,
 } from './domain'
 export {
-  failManagedInvocation,
-  markManagedInvocationStarted,
-  reconcileOrphanedManagedInvocations,
   reserveManagedInvocation,
-  releaseManagedReservation,
   settleManagedInvocation,
-  settleUsageUnavailable,
   type ManagedInvocationReservation,
 } from './ledger'
+export { markManagedInvocationStarted } from './invocation-lifecycle'
+export {
+  applyBillingRatio,
+  divideBillingRoundUp,
+} from './billing-math'
+export {
+  failManagedInvocation,
+  reconcileOrphanedManagedInvocations,
+  releaseManagedReservation,
+  settleUsageUnavailable,
+} from './reservation-recovery'
 export {
   assertBillingAvailable,
   assertBillingCapacity,
@@ -41,6 +48,8 @@ export {
   type BillableUsage,
   type MaximumUsageEstimate,
   type RateCardPrice,
+  type RateCardPricingRules,
+  type ContextPriceTier,
   type RateUnitKind,
 } from './rate-card'
 export {

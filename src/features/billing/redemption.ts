@@ -15,9 +15,9 @@ import {
   type BillingProjection,
 } from './contracts'
 import {
-  PLAN_DEFINITIONS,
   nextRollingPeriod,
   resolveRedemptionTransition,
+  usagePeriodPlanSnapshot,
   type PlanKey,
 } from './domain'
 import { getBillingProjection } from './period-service'
@@ -102,10 +102,9 @@ export async function redeemBillingCode(
       }).returning()
       await tx.insert(usagePeriods).values({
         workspaceId,
-        planKey: 'free',
+        ...usagePeriodPlanSnapshot('free'),
         startsAt: period.startsAt,
         endsAt: period.endsAt,
-        limitCnyMicros: PLAN_DEFINITIONS.free.limitCnyMicros,
       })
     }
 
@@ -168,10 +167,9 @@ export async function redeemBillingCode(
       const period = nextRollingPeriod(now)
       await tx.insert(usagePeriods).values({
         workspaceId,
-        planKey: transition.plan,
+        ...usagePeriodPlanSnapshot(transition.plan),
         startsAt: period.startsAt,
         endsAt: period.endsAt,
-        limitCnyMicros: PLAN_DEFINITIONS[transition.plan].limitCnyMicros,
       })
     }
     await tx.update(workspaceEntitlements).set({

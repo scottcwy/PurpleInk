@@ -13,7 +13,11 @@ import {
   toBillingProjection,
   type BillingProjection,
 } from './contracts'
-import { PLAN_DEFINITIONS, nextRollingPeriod, type PlanKey } from './domain'
+import {
+  nextRollingPeriod,
+  usagePeriodPlanSnapshot,
+  type PlanKey,
+} from './domain'
 
 export async function provisionFreeEntitlement(
   transaction: TransactionContext,
@@ -31,10 +35,9 @@ export async function provisionFreeEntitlement(
   })
   await transaction.insert(usagePeriods).values({
     workspaceId,
-    planKey: 'free',
+    ...usagePeriodPlanSnapshot('free'),
     startsAt: period.startsAt,
     endsAt: period.endsAt,
-    limitCnyMicros: PLAN_DEFINITIONS.free.limitCnyMicros,
   })
 }
 
@@ -87,12 +90,12 @@ async function ensureCurrentPeriod(input: {
         updatedAt: input.now,
       }).where(eq(workspaceEntitlements.workspaceId, input.workspaceId)).returning()
     }
+    const planKey = entitlement.planKey as PlanKey
     ;[period] = await tx.insert(usagePeriods).values({
       workspaceId: input.workspaceId,
-      planKey: entitlement.planKey,
+      ...usagePeriodPlanSnapshot(planKey),
       startsAt: rolling.startsAt,
       endsAt: rolling.endsAt,
-      limitCnyMicros: PLAN_DEFINITIONS[entitlement.planKey as PlanKey].limitCnyMicros,
     }).returning()
     return period
   })
