@@ -23,7 +23,13 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 RUN corepack enable && corepack prepare pnpm@10.30.0 --activate
 WORKDIR /repo
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+# patches/ 是 pnpm.patchedDependencies 的真实输入：install 会先读补丁文件算哈希，
+# 缺文件直接 ENOENT 退出 254（不是警告），整个镜像根本构建不出来。
+COPY patches patches
 COPY server/package.json server/package.json
+# packages/* 是 workspace 成员：根 package.json 依赖 @purpleink/procedural-sfx
+# 为 workspace:*，成员清单缺失时 pnpm 无从解析这条依赖。
+COPY packages/procedural-sfx/package.json packages/procedural-sfx/package.json
 RUN pnpm install --frozen-lockfile
 
 # ---------------------------------------------------------------------------
@@ -67,6 +73,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /repo/node_modules ./node_modules
+# node_modules/@purpleink/procedural-sfx 是指向 packages/procedural-sfx 的相对
+# 符号链接；不把 packages/ 一起搬进来，链接在运行镜像里就是悬空的。
+COPY --from=build /repo/packages ./packages
 COPY --from=build /repo/.next ./.next
 COPY --from=build /repo/public ./public
 # assets/fonts 是硬字幕烧录的字体真值：concat.ts 按 process.cwd() 拼出 assets/fonts

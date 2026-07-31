@@ -22,7 +22,11 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 RUN corepack enable && corepack prepare pnpm@10.30.0 --activate
 WORKDIR /repo
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+# patches/ 与 packages/*/package.json 是 pnpm install 的硬依赖，缺任一份 install
+# 就直接失败；原因见根 Dockerfile 同一处注释。
+COPY patches patches
 COPY server/package.json server/package.json
+COPY packages/procedural-sfx/package.json packages/procedural-sfx/package.json
 RUN pnpm install --frozen-lockfile
 
 # ---------------------------------------------------------------------------
@@ -45,6 +49,8 @@ COPY --from=deps /repo/node_modules ./node_modules
 COPY --from=deps /repo/server/node_modules ./server/node_modules
 COPY --from=deps /repo/package.json ./package.json
 COPY --from=deps /repo/pnpm-workspace.yaml ./pnpm-workspace.yaml
+# 根 node_modules 里指向 packages/procedural-sfx 的符号链接不能悬空。
+COPY packages ./packages
 COPY server ./server
 
 RUN npx --yes playwright@"$(node -p "require('./server/node_modules/playwright/package.json').version")" install-deps chromium
