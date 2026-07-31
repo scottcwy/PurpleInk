@@ -46,6 +46,7 @@ const MAX_INLINE_WAIT_MS = 2_000
 
 export interface ProviderDispatchInput {
   providerId: string
+  poolId?: string
   providerLabel: string
   funding: ProviderFunding
   apiKey: string
@@ -90,6 +91,7 @@ export async function reserveProviderDispatch(
   const workspaceId = currentWorkspaceId()
   const scopeKey = providerScopeKey({
     providerId: input.providerId,
+    poolId: input.poolId,
     funding: input.funding,
     workspaceId,
     apiKey: input.apiKey,
@@ -284,7 +286,7 @@ export async function reserveProviderDispatch(
 function dispatchLimits(input: ProviderDispatchInput): ProviderLimits {
   if (input.limits) return input.limits
   return input.funding === 'managed'
-    ? providerLimits(input.providerId)
+    ? providerLimits(input.poolId ?? input.providerId)
     : byokProviderLimits()
 }
 

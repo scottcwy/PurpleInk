@@ -18,7 +18,7 @@ const CATALOG: ManagedModelDefinition[] = [
   {
     id: 'step-text',
     provider: 'stepfun',
-    modelId: 'step-3.5-flash',
+    modelId: 'step-3.7-flash',
     capabilities: ['text'],
     minimumPlanKey: 'free',
     enabled: true,
@@ -34,9 +34,25 @@ const CATALOG: ManagedModelDefinition[] = [
   {
     id: 'gemini',
     provider: 'gemini',
-    modelId: 'gemini-3.1-flash-lite',
+    modelId: 'gemini-3.6-flash',
     capabilities: ['text', 'vision'],
     minimumPlanKey: 'plus',
+    enabled: true,
+  },
+  {
+    id: 'openai',
+    provider: 'openai',
+    modelId: 'gpt-5.6-luna',
+    capabilities: ['text', 'vision'],
+    minimumPlanKey: 'pro',
+    enabled: true,
+  },
+  {
+    id: 'anthropic',
+    provider: 'anthropic',
+    modelId: 'claude-sonnet-5',
+    capabilities: ['text', 'vision'],
+    minimumPlanKey: 'pro',
     enabled: true,
   },
 ]
@@ -58,7 +74,7 @@ describe('managed model authorization', () => {
     await expect(authorizeManagedRoute({
       plan: 'free',
       provider: 'gemini',
-      modelId: 'gemini-3.1-flash-lite',
+      modelId: 'gemini-3.6-flash',
       capability: 'text',
       funding: 'byok',
     }, catalog)).resolves.toMatchObject({
@@ -71,7 +87,7 @@ describe('managed model authorization', () => {
     await expect(catalog.listEnabled()).resolves.toEqual(expect.arrayContaining([
       expect.objectContaining({
         provider: 'stepfun',
-        modelId: 'step-3.5-flash',
+        modelId: 'step-3.7-flash',
         capabilities: ['text'],
       }),
       expect.objectContaining({
@@ -81,7 +97,7 @@ describe('managed model authorization', () => {
       }),
       expect.objectContaining({
         provider: 'gemini',
-        modelId: 'gemini-3.1-flash-lite',
+        modelId: 'gemini-3.6-flash',
         capabilities: ['text', 'vision'],
       }),
     ]))
@@ -91,7 +107,7 @@ describe('managed model authorization', () => {
     await expect(authorizeManagedRoute({
       plan: 'free',
       provider: 'gemini',
-      modelId: 'gemini-3.1-flash-lite',
+      modelId: 'gemini-3.6-flash',
       capability: 'text',
     }, catalog)).rejects.toMatchObject({
       name: 'ManagedAiError',
@@ -105,7 +121,7 @@ describe('managed model authorization', () => {
     await expect(authorizeManagedRoute({
       plan: 'plus',
       provider: 'gemini',
-      modelId: 'gemini-3.1-flash-lite',
+      modelId: 'gemini-3.6-flash',
       capability: 'text',
     }, catalog)).resolves.toEqual({
       funding: 'managed',
@@ -115,7 +131,7 @@ describe('managed model authorization', () => {
     await expect(authorizeManagedRoute({
       plan: 'plus',
       provider: 'gemini',
-      modelId: 'gemini-3.1-flash-lite',
+      modelId: 'gemini-3.6-flash',
       capability: 'vision',
     }, catalog)).resolves.toEqual({
       funding: 'managed',
@@ -128,7 +144,7 @@ describe('managed model authorization', () => {
     await expect(authorizeManagedRoute({
       plan: 'plus',
       provider: 'gemini',
-      modelId: 'gemini-3.6-flash',
+      modelId: 'gemini-legacy',
       capability: 'vision',
     }, catalog)).rejects.toMatchObject({
       code: 'MANAGED_MODEL_NOT_AUTHORIZED',
@@ -145,6 +161,38 @@ describe('managed model authorization', () => {
     }, catalog)).resolves.toEqual({
       funding: 'byok',
       deductsManagedPool: false,
+    })
+  })
+
+  it('allows all built-in vendors with BYOK but gates managed OpenAI to Pro', async () => {
+    await expect(authorizeManagedRoute({
+      plan: 'free',
+      provider: 'openai',
+      modelId: 'gpt-5.6-luna',
+      capability: 'text',
+      funding: 'byok',
+    }, catalog)).resolves.toMatchObject({
+      funding: 'byok',
+      deductsManagedPool: false,
+    })
+    await expect(authorizeManagedRoute({
+      plan: 'plus',
+      provider: 'openai',
+      modelId: 'gpt-5.6-luna',
+      capability: 'text',
+      funding: 'managed',
+    }, catalog)).rejects.toMatchObject({
+      code: 'MANAGED_MODEL_NOT_AUTHORIZED',
+    })
+    await expect(authorizeManagedRoute({
+      plan: 'pro',
+      provider: 'anthropic',
+      modelId: 'claude-sonnet-5',
+      capability: 'vision',
+      funding: 'managed',
+    }, catalog)).resolves.toMatchObject({
+      funding: 'managed',
+      deductsManagedPool: true,
     })
   })
 

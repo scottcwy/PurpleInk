@@ -19,7 +19,7 @@ import {
 } from './pi-output'
 import { createDirectorModelRuntime } from './pi-provider'
 import { createDirectorRunBridge } from './pi-stream-bridge'
-import { createDirectorBillingStream } from './director-billing-stream'
+import { createDirectorModelStream } from './director-gemini-fallback-stream'
 import { adaptDirectorTools } from './pi-tool-adapter'
 import { DirectorSessionStore } from './session-store'
 import type { PipelineStage } from './types'
@@ -105,14 +105,19 @@ export async function createDirectorSession(
         tools: [],
       },
       streamFn: (model, context, options) => {
-        return createDirectorBillingStream({
+        return createDirectorModelStream({
           model,
           context,
           options,
           runtime,
           attemptId: input.attemptId,
-          invocationIndex: ++invocationIndex,
+          nextInvocationIndex: () => ++invocationIndex,
           gateway,
+          getObservedHttpStatus: () => upstreamFailureResponse?.status,
+          onFallbackStarted: () => {
+            upstreamFailureResponse = null
+            providerFailure = undefined
+          },
           onPreflightFailure: (error) => {
             preflightFailure = error
           },

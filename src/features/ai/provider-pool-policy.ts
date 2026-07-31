@@ -1,6 +1,6 @@
 export interface ProviderLimits {
   concurrency: number
-  rpm: number
+  rpm?: number
   tpm?: number
   minIntervalMs?: number
   jitterMs?: number
@@ -8,9 +8,9 @@ export interface ProviderLimits {
 }
 
 export interface ProviderPoolPolicy {
-  contractRpm: number
-  softRpm: number
-  hardRpm: number
+  contractRpm?: number
+  softRpm?: number
+  hardRpm?: number
   minIntervalMs: number
   jitterMs: number
   initialConcurrency: number
@@ -18,9 +18,16 @@ export interface ProviderPoolPolicy {
 }
 
 const MANAGED_PROVIDER_POLICIES: Record<string, ProviderPoolPolicy> = {
-  gemini: managedPolicy(1_000, 750, 900, 80, 8),
+  gemini: concurrencyOnlyPolicy(200),
+  'gemini.bcai': concurrencyOnlyPolicy(200),
+  openai: concurrencyOnlyPolicy(200),
+  'openai.openrouter': concurrencyOnlyPolicy(200),
+  anthropic: concurrencyOnlyPolicy(200),
+  'anthropic.xhuoai': concurrencyOnlyPolicy(200),
   stepfun: managedPolicy(200, 150, 180, 400, 40),
+  'stepfun.step-plan': managedPolicy(200, 150, 180, 400, 40),
   mimo: managedPolicy(100, 75, 90, 800, 80),
+  'mimo.official-managed': managedPolicy(100, 75, 90, 800, 80),
 }
 
 export function providerPoolPolicy(providerId: string): ProviderPoolPolicy {
@@ -31,13 +38,15 @@ export function providerPoolPolicy(providerId: string): ProviderPoolPolicy {
 export function providerLimits(providerId: string): ProviderLimits {
   const prefix = providerId.replaceAll('-', '_').toUpperCase()
   const policy = providerPoolPolicy(providerId)
+  const rpm = positiveInteger(process.env[`${prefix}_RPM_LIMIT`])
+    ?? policy.hardRpm
   return {
     concurrency: positiveInteger(process.env[`${prefix}_CONCURRENCY_LIMIT`])
       ?? policy.initialConcurrency,
     maxConcurrency: policy.maxConcurrency,
-    rpm: positiveInteger(process.env[`${prefix}_RPM_LIMIT`]) ?? policy.hardRpm,
     minIntervalMs: policy.minIntervalMs,
     jitterMs: policy.jitterMs,
+    ...(rpm === undefined ? {} : { rpm }),
     ...(positiveInteger(process.env[`${prefix}_TPM_LIMIT`]) !== undefined
       ? { tpm: positiveInteger(process.env[`${prefix}_TPM_LIMIT`]) }
       : {}),
@@ -70,6 +79,15 @@ function managedPolicy(
     minIntervalMs,
     jitterMs,
     initialConcurrency,
+    maxConcurrency,
+  }
+}
+
+function concurrencyOnlyPolicy(maxConcurrency: number): ProviderPoolPolicy {
+  return {
+    minIntervalMs: 0,
+    jitterMs: 0,
+    initialConcurrency: maxConcurrency,
     maxConcurrency,
   }
 }

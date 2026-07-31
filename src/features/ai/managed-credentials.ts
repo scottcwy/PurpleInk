@@ -8,6 +8,8 @@ export const MANAGED_CREDENTIAL_ENV = {
   stepfun: 'CVC_MANAGED_STEPFUN_API_KEY',
   mimo: 'CVC_MANAGED_MIMO_API_KEY',
   gemini: 'CVC_MANAGED_GEMINI_API_KEY',
+  openai: 'CVC_MANAGED_OPENAI_API_KEY',
+  anthropic: 'CVC_MANAGED_ANTHROPIC_API_KEY',
 } as const satisfies Record<ManagedProviderId, string>
 
 /**

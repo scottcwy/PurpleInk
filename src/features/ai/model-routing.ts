@@ -8,7 +8,10 @@ import {
   type AiConfigDependencies,
   getAiConfigDependencies,
 } from './config'
+import { resolveBuiltInModelTarget } from './built-in-model-target'
+import type { AdapterProtocol } from './execution-plan'
 import { isProviderAvailable } from './provider-breaker'
+import { ProviderUnavailableError } from './provider-unavailable-error'
 import { providerDefaults } from './route-provider-defaults'
 import {
   authorizeManagedRoute,
@@ -16,10 +19,10 @@ import {
   type ManagedPlanKey,
   type ManagedRouteAuthorization,
 } from './managed-service'
-import { resolveAuthorizedFallback } from './managed-fallback'
 import {
   AI_PROVIDER_IDS,
   assertProviderCapability,
+  defaultModelFor,
   type AiProviderId,
   type ProviderCapability,
 } from './provider-registry'
@@ -91,15 +94,22 @@ export interface DirectorModelTarget {
   provider: AiProviderId
   baseUrl: string
   modelId: string
+  logicalModelId?: string
+  deploymentId?: string
+  channelId?: string
+  adapterProtocol?: AdapterProtocol
+  providerPoolId?: string
+  failureDomainId?: string
+  fallbackDeploymentId?: string
+  fallback?: {
+    deploymentId: string
+    logicalModelId: string
+    modelId: string
+    officialPriceIdentity: string
+  }
   apiKey: string | null
   funding?: ManagedRouteAuthorization['funding']
   deductsManagedPool?: boolean
-  /**
-   * 仅在降级发生时存在：记录被熔断的主选 provider。返回值必须如实反映
-   * 实际执行的备选（provider/modelId 就是备选的），降级事实通过本字段、
-   * routeLabel 与 provider_fallback 日志三处可追溯；设置页展示的仍是配置真值。
-   */
-  degradedFrom?: AiProviderId
 }
 
 interface ResolvedRoute {
@@ -186,20 +196,17 @@ export async function resolveDirectorModelTarget(
   const plan = await currentPlan(deps)
   const configured = await resolveRoute(target, deps)
   const primary = configured?.provider ?? defaultProviderFor(target, plan)
-  if (configured) {
-    const funding = await fundingForProvider(configured.provider, deps)
-    await authorizeManagedRoute({
-      plan,
-      provider: configured.provider,
-      modelId: configured.model,
-      capability,
-      funding,
-    }, deps.managedModelCatalog)
-  }
-  // 熔断检查必须在真正发起调用的解析处：half-open 的试探名额会被本次调用占用。
-  // 健康路径完全旁路降级链：不读备选配置，也不产生 degradedFrom 字段。
   if (!isProviderAvailable(primary)) {
-    return resolveAuthorizedFallback({ primary, target, capability, plan, deps })
+    throw new ProviderUnavailableError()
+  }
+  if (isManagedProvider(primary)) {
+    return resolveBuiltInModelTarget({
+      provider: primary,
+      logicalModelId: configured?.model ?? defaultModelFor(primary, capability),
+      capability,
+      plan,
+      deps,
+    })
   }
   if (configured) {
     const defaults = await providerDefaults(configured.provider, deps)
@@ -222,24 +229,7 @@ export async function resolveDirectorModelTarget(
       ...publicAuthorization,
     }
   }
-  const defaults = await providerDefaults(primary, deps)
-  const modelId = defaults.modelFor(target, capability)
-  const funding = await fundingForProvider(primary, deps)
-  const authorization = await authorizeManagedRoute({
-    plan,
-    provider: primary,
-    modelId,
-    capability,
-    funding,
-  }, deps.managedModelCatalog)
-  const { catalogId: _catalogId, ...publicAuthorization } = authorization
-  return {
-    provider: primary,
-    baseUrl: defaults.baseUrl,
-    modelId,
-    apiKey: defaults.apiKey,
-    ...publicAuthorization,
-  }
+  throw new ProviderUnavailableError()
 }
 
 export async function describeDirectorRoutes(
@@ -319,8 +309,17 @@ async function defaultModel(
   plan: ManagedPlanKey,
   deps: AiConfigDependencies,
 ): Promise<string> {
-  const defaults = await providerDefaults(provider, deps)
   const capability = capabilityForTarget(target)
+  if (isManagedProvider(provider)) {
+    const model = defaultModelFor(provider, capability)
+    const funding = await fundingForProvider(provider, deps)
+    await authorizeManagedRoute(
+      { plan, provider, modelId: model, capability, funding },
+      deps.managedModelCatalog,
+    )
+    return model
+  }
+  const defaults = await providerDefaults(provider, deps)
   const model = defaults.modelFor(target, capability)
   const funding = await fundingForProvider(provider, deps)
   await authorizeManagedRoute(

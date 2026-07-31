@@ -238,7 +238,7 @@ describe('GET /api/settings', () => {
     expect(body.mimoCredential.configured).toBe(false)
     expect(body.routes['shot-codegen'].provider).toBe('gemini')
     expect(body.laneQuotas).toEqual(MOCK_DEFAULT_LANE_VIEW)
-    expect(mocks.describeCredential).toHaveBeenCalledTimes(3)
+    expect(mocks.describeCredential).toHaveBeenCalledTimes(5)
     expect(body.managedProviders).toEqual(expect.arrayContaining([
       expect.objectContaining({
         provider: 'stepfun',

@@ -117,8 +117,8 @@ describe('getStepfunConfig', () => {
 
     await expect(getStepfunConfig(dependencies)).resolves.toEqual({
       apiKey: null,
-      baseUrl: 'https://api.stepfun.com/v1',
-      chatModel: 'step-3.5-flash',
+      baseUrl: 'https://api.stepfun.com/step_plan/v1',
+      chatModel: 'step-3.7-flash',
       ttsModel: 'stepaudio-2.5-tts',
       asrModel: 'stepaudio-2.5-asr',
       visionModel: 'step-3.7-flash',
@@ -134,7 +134,7 @@ describe('getStepfunConfig', () => {
 
     await expect(getStepfunConfig(dependencies)).resolves.toMatchObject({
       apiKey: 'managed-key',
-      chatModel: 'step-3.5-flash',
+      chatModel: 'step-3.7-flash',
       ttsModel: 'stepaudio-2.5-tts',
     })
   })
@@ -169,7 +169,7 @@ describe('getStepfunConfig', () => {
 
     await expect(getStepfunConfig(dependencies)).resolves.toMatchObject({
       apiKey: 'managed-key',
-      chatModel: 'step-3.5-flash',
+      chatModel: 'step-3.7-flash',
       ttsModel: 'stepaudio-2.5-tts',
       visionModel: 'step-3.7-flash',
     })
@@ -192,7 +192,7 @@ describe('describeStepfunConfig', () => {
 
     const view = await describeStepfunConfig(dependencies)
 
-    expect(view.chatModel).toEqual({ value: 'step-3.5-flash', source: 'default' })
+    expect(view.chatModel).toEqual({ value: 'step-3.7-flash', source: 'default' })
     expect(view.asrModel).toEqual({ value: 'stepaudio-2.5-asr', source: 'default' })
     expect(view).not.toHaveProperty('apiKey')
     expect(JSON.stringify(view)).not.toContain('never-exposed')

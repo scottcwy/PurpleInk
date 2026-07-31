@@ -35,6 +35,7 @@ interface DirectorBillingRuntime {
   providerLabel: string
   funding: 'managed' | 'byok'
   apiKey: string
+  providerPoolId?: string
 }
 
 /** 单次上游调用的硬上限；队列层负责重试，SDK 内不得再做嵌套重试。 */
@@ -81,6 +82,9 @@ async function* billedEvents(
       apiKey: input.runtime.apiKey,
       attemptId: input.attemptId,
       tokenEstimate: estimatedTokens(input),
+      ...(input.runtime.providerPoolId
+        ? { poolId: input.runtime.providerPoolId }
+        : {}),
     })
     handle = await beginInvocation(input)
   } catch (error) {

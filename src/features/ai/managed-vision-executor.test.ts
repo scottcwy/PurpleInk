@@ -12,6 +12,8 @@ const target = {
   apiKey: 'route-key',
   baseUrl: 'https://example.invalid/v1',
   modelId: 'gemini-3.1-flash-lite',
+  providerPoolId: 'gemini.bcai',
+  adapterProtocol: 'openai-completions' as const,
   funding: 'managed' as const,
   deductsManagedPool: true,
 }
@@ -95,6 +97,7 @@ describe('executeManagedVisionQa', () => {
       providerId: 'gemini',
       funding: 'managed',
       apiKey: 'secret',
+      poolId: 'gemini.bcai',
       attemptId: '00000000-0000-4000-8000-000000000001',
     }), expect.any(Function))
     expect(settle).toHaveBeenCalledWith(

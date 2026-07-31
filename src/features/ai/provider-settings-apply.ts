@@ -27,6 +27,7 @@ import {
 } from './provider-settings-dependencies'
 import { RouteContractError } from './route-contract-error'
 import type { StepfunSettings } from './schemas'
+import type { ManagedProviderId } from './managed-service'
 
 /**
  * 执行写入。路由先落：`saveDirectorRoutes` 的能力合同错误属于设置面矛盾，
@@ -85,7 +86,7 @@ export async function applyProviderSettings(
     const deps = getAiConfigDependencies()
     for (const [provider, service] of Object.entries(providerServices)) {
       if (!service) continue
-      const providerId = provider as 'stepfun' | 'gemini' | 'mimo'
+      const providerId = provider as ManagedProviderId
       if (service.apiKey) {
         await deps.credentials.save({
           workspaceId: currentWorkspaceId(),

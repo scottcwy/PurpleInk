@@ -2,7 +2,6 @@ import 'server-only'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import {
   getAiConfigDependencies,
-  getStepfunConfig,
   type AiConfigDependencies,
 } from '@/features/ai/config'
 import {
@@ -24,15 +23,15 @@ import {
   type AudioBillingContext,
   type ManagedAudioBillingInput,
 } from './managed-audio-billing'
+import {
+  audioProfiles,
+  CUSTOM_ASR_PROVIDER,
+  CUSTOM_TTS_PROVIDER,
+  resolveMediaRouteTarget,
+  type MediaProviderId,
+} from './media-route-target'
 
-export const CUSTOM_TTS_PROVIDER = 'openai-compatible-tts' as const
-export const CUSTOM_ASR_PROVIDER = 'openai-compatible-asr' as const
-
-type MediaProviderId =
-  | 'stepfun'
-  | 'mimo'
-  | typeof CUSTOM_TTS_PROVIDER
-  | typeof CUSTOM_ASR_PROVIDER
+export { CUSTOM_ASR_PROVIDER, CUSTOM_TTS_PROVIDER }
 
 export interface NarrationEngine {
   provider: MediaProviderId
@@ -107,77 +106,17 @@ function defaultDependencies(): RoutedMediaDependencies {
   }
 }
 
-function audioProfiles(deps: AiConfigDependencies) {
-  const store = deps.openAiCompatibleAudioProfiles
-  if (!store) throw new Error('自定义兼容音频端点配置存储不可用')
-  return store
-}
-
-const MEDIA_PROVIDERS: readonly MediaProviderId[] = [
-  'stepfun',
-  'mimo',
-  CUSTOM_TTS_PROVIDER,
-  CUSTOM_ASR_PROVIDER,
-]
-
-/**
- * 解析该媒体任务的供应商与模型。
- *
- * 自定义端点的模型以 profile 为准而不是 `route.model`：模型是 profile 的字段，
- * 保存 profile 时会同步 re-sync 路由行，这里再读一次 profile 保证 `NarrationEngine`
- * 与 client 实际下发的 model 一致——否则 `narration.ts` 的 `assertEngine`
- * 会以「TTS 模型与配置不一致」失败。
- */
-async function resolveProvider(
-  kind: 'tts' | 'asr',
-  deps: AiConfigDependencies,
-): Promise<{ provider: MediaProviderId; model: string }> {
-  const route = await deps.mediaRoutes.resolve(currentWorkspaceId(), kind)
-  if (!route) {
-    const config = await getStepfunConfig(deps)
-    return {
-      provider: 'stepfun',
-      model: kind === 'tts' ? config.ttsModel : config.asrModel,
-    }
-  }
-  const provider = MEDIA_PROVIDERS.find((candidate) => candidate === route.provider)
-  if (!provider) {
-    throw new Error(`媒体路由供应商不受支持：${route.provider}`)
-  }
-  if (provider === CUSTOM_TTS_PROVIDER || provider === CUSTOM_ASR_PROVIDER) {
-    return { provider, model: await customModel(provider, deps) }
-  }
-  return { provider, model: route.model }
-}
-
-async function customModel(
-  provider: typeof CUSTOM_TTS_PROVIDER | typeof CUSTOM_ASR_PROVIDER,
-  deps: AiConfigDependencies,
-): Promise<string> {
-  const store = audioProfiles(deps)
-  const profile = provider === CUSTOM_TTS_PROVIDER
-    ? await store.findTts(currentWorkspaceId())
-    : await store.findAsr(currentWorkspaceId())
-  if (!profile) {
-    throw new Error(
-      provider === CUSTOM_TTS_PROVIDER
-        ? '自定义兼容 TTS 端点尚未配置'
-        : '自定义兼容 ASR 端点尚未配置',
-    )
-  }
-  return profile.model
-}
-
 export async function resolveNarrationEngine(
   deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<NarrationEngine> {
-  const target = await resolveProvider('tts', deps)
+  const target = await resolveMediaRouteTarget('tts', deps)
+  const engineTarget = { provider: target.provider, model: target.model }
   if (target.provider === CUSTOM_TTS_PROVIDER) {
     // 音色与容器格式由用户 profile 提供，不猜默认值。
     const profile = await audioProfiles(deps).findTts(currentWorkspaceId())
     if (!profile) throw new Error('自定义兼容 TTS 端点尚未配置')
     return {
-      ...target,
+      ...engineTarget,
       voice: profile.voice,
       audioFormat: profile.audioFormat,
     }
@@ -186,8 +125,8 @@ export async function resolveNarrationEngine(
     throw new Error(`媒体路由供应商不支持 TTS：${target.provider}`)
   }
   return target.provider === 'mimo'
-    ? { ...target, voice: 'mimo_default', audioFormat: 'wav' }
-    : { ...target, voice: 'cixingnansheng', audioFormat: 'mp3' }
+    ? { ...engineTarget, voice: 'mimo_default', audioFormat: 'wav' }
+    : { ...engineTarget, voice: 'cixingnansheng', audioFormat: 'mp3' }
 }
 
 export async function synthesizeRoutedSpeech(
@@ -198,11 +137,12 @@ export async function synthesizeRoutedSpeech(
   },
   dependencies: RoutedMediaDependencies = defaultDependencies(),
 ): Promise<SynthesizedSpeech> {
-  const target = await resolveProvider('tts', dependencies.config)
+  const target = await resolveMediaRouteTarget('tts', dependencies.config)
   if (target.provider === CUSTOM_TTS_PROVIDER) {
     return (dependencies.billManaged ?? runManagedAudioBilling)({
       provider: target.provider,
       model: target.model,
+      providerPoolId: target.providerPoolId,
       capability: 'tts',
       billingContext: input.billingContext,
       estimate: { kind: 'tts', characters: Array.from(input.text).length },
@@ -229,6 +169,7 @@ export async function synthesizeRoutedSpeech(
   return (dependencies.billManaged ?? runManagedAudioBilling)({
     provider: managedProvider,
     model: target.model,
+    providerPoolId: target.providerPoolId,
     capability: 'tts',
     billingContext: input.billingContext,
     estimate: { kind: 'tts', characters: Array.from(input.text).length },
@@ -253,12 +194,13 @@ export async function transcribeRoutedSpeech(
   },
   dependencies: RoutedMediaDependencies = defaultDependencies(),
 ): Promise<RoutedTranscribedSpeech> {
-  const target = await resolveProvider('asr', dependencies.config)
+  const target = await resolveMediaRouteTarget('asr', dependencies.config)
   if (target.provider === CUSTOM_ASR_PROVIDER) {
     const audioSeconds = input.audioSeconds ?? 0
     const result = await (dependencies.billManaged ?? runManagedAudioBilling)({
       provider: target.provider,
       model: target.model,
+      providerPoolId: target.providerPoolId,
       capability: 'asr',
       billingContext: input.billingContext,
       estimate: { kind: 'asr', audioSeconds },
@@ -316,6 +258,7 @@ export async function transcribeRoutedSpeech(
   return (dependencies.billManaged ?? runManagedAudioBilling)({
     provider: managedProvider,
     model: target.model,
+    providerPoolId: target.providerPoolId,
     capability: 'asr',
     billingContext: input.billingContext,
     estimate: { kind: 'asr', audioSeconds: audioSeconds! },
@@ -344,7 +287,8 @@ export async function describeMediaProvider(
   kind: 'tts' | 'asr',
   deps: AiConfigDependencies = getAiConfigDependencies(),
 ): Promise<{ provider: MediaProviderId; model: string }> {
-  return resolveProvider(kind, deps)
+  const target = await resolveMediaRouteTarget(kind, deps)
+  return { provider: target.provider, model: target.model }
 }
 
 export type { MediaProviderId, SynthesizedSpeech, TranscribedSpeech }

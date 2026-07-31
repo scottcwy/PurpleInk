@@ -16,8 +16,8 @@ vi.mock('@earendil-works/pi-ai', () => ({
     }),
   })),
 }))
-vi.mock('@earendil-works/pi-ai/api/google-generative-ai.lazy', () => ({
-  googleGenerativeAIApi: vi.fn(() => ({ type: 'google' })),
+vi.mock('@earendil-works/pi-ai/api/anthropic-messages.lazy', () => ({
+  anthropicMessagesApi: vi.fn(() => ({ type: 'anthropic' })),
 }))
 vi.mock('@earendil-works/pi-ai/api/openai-completions.lazy', () => ({
   openAICompletionsApi: vi.fn(() => ({ type: 'openai' })),
@@ -80,5 +80,37 @@ describe('createDirectorModelRuntime', () => {
       id: 'mimo-v2.5',
     })
     expect(runtime.routeLabel).toBe('mimo/mimo-v2.5')
+  })
+
+  it('uses Anthropic Messages only for the official Anthropic BYOK deployment', async () => {
+    resolveDirectorModelTarget.mockResolvedValueOnce({
+      provider: 'anthropic',
+      baseUrl: 'https://api.anthropic.com/v1/',
+      modelId: 'claude-sonnet-5',
+      logicalModelId: 'claude-sonnet-5',
+      deploymentId: 'anthropic.claude-sonnet-5.byok',
+      providerPoolId: 'workspace-1:anthropic',
+      adapterProtocol: 'anthropic-messages',
+      apiKey: 'stored-anthropic-secret',
+      funding: 'byok',
+    })
+
+    const runtime = await createDirectorModelRuntime({
+      nodeType: 'script-import',
+      stage: 'INGEST',
+    })
+
+    expect(runtime.model).toMatchObject({
+      api: 'anthropic-messages',
+      provider: 'anthropic',
+      baseUrl: 'https://api.anthropic.com/v1',
+      id: 'claude-sonnet-5',
+    })
+    expect(runtime).toMatchObject({
+      logicalModelId: 'claude-sonnet-5',
+      deploymentId: 'anthropic.claude-sonnet-5.byok',
+      providerPoolId: 'workspace-1:anthropic',
+      funding: 'byok',
+    })
   })
 })

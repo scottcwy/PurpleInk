@@ -91,14 +91,14 @@ function createDependencies() {
     }),
   }
   const catalog = [
-    ['stepfun', 'step-3.5-flash', ['text'], 'free'],
+    ['stepfun', 'step-3.7-flash', ['text'], 'free'],
     ['stepfun', 'step-3.7-flash', ['vision'], 'free'],
     ['stepfun', 'stepaudio-2.5-tts', ['tts'], 'free'],
     ['stepfun', 'stepaudio-2.5-asr', ['asr'], 'free'],
     ['mimo', 'mimo-v2.5', ['text', 'vision'], 'free'],
     ['mimo', 'mimo-v2.5-tts', ['tts'], 'free'],
     ['mimo', 'mimo-v2.5-asr', ['asr'], 'free'],
-    ['gemini', 'gemini-3.1-flash-lite', ['text', 'vision'], 'plus'],
+    ['gemini', 'gemini-3.6-flash', ['text', 'vision'], 'plus'],
   ].map(([provider, modelId, capabilities, minimumPlanKey], index) => ({
     id: `catalog-${index}`,
     provider,
@@ -176,7 +176,7 @@ describe('Director provider routing', () => {
       workspaceId: 'workspace',
       aiTaskKind: 'project-plan',
       provider: 'gemini',
-      model: 'gemini-3.1-flash-lite',
+      model: 'gemini-3.6-flash',
       revision: 0,
     })
     await expect(resolveDirectorModelTarget(
@@ -215,7 +215,7 @@ describe('Director provider routing', () => {
 
     expect(models.get('fabricate')).toMatchObject({
       provider: 'stepfun',
-      model: 'step-3.5-flash',
+      model: 'step-3.7-flash',
     })
     expect(media.get('tts')).toMatchObject({
       provider: 'mimo',
@@ -312,10 +312,13 @@ describe('Director provider routing', () => {
       'shot-codegen',
       'text',
       dependencies,
-    )).resolves.toEqual({
+    )).resolves.toMatchObject({
       provider: 'mimo',
       baseUrl: 'https://api.xiaomimimo.com/v1',
       modelId: 'mimo-v2.5',
+      logicalModelId: 'mimo-v2.5',
+      deploymentId: 'mimo.v2.5.managed',
+      channelId: 'mimo.official-managed',
       apiKey: 'mimo-key',
       funding: 'managed',
       deductsManagedPool: true,
@@ -331,7 +334,11 @@ describe('Director provider routing', () => {
       dependencies,
     )).resolves.toMatchObject({
       provider: 'gemini',
-      modelId: 'gemini-3.1-flash-lite',
+      logicalModelId: 'gemini-3.6-flash',
+      modelId: 'gemini-3.6-flash-tiered',
+      deploymentId: 'gemini.3.6-flash.managed',
+      channelId: 'gemini.bcai',
+      fallbackDeploymentId: 'gemini.3.1-flash-lite.managed',
       apiKey: 'gemini-key',
     })
     await expect(resolveDirectorModelTarget(
@@ -340,7 +347,8 @@ describe('Director provider routing', () => {
       dependencies,
     )).resolves.toMatchObject({
       provider: 'gemini',
-      modelId: 'gemini-3.1-flash-lite',
+      logicalModelId: 'gemini-3.6-flash',
+      modelId: 'gemini-3.6-flash-tiered',
     })
 
     const routes = await describeDirectorRoutes(dependencies)
@@ -348,7 +356,7 @@ describe('Director provider routing', () => {
     expect(routes['script-import']).toMatchObject({
       provider: 'gemini',
       source: 'default',
-      model: 'gemini-3.1-flash-lite',
+      model: 'gemini-3.6-flash',
     })
   })
 
@@ -377,7 +385,7 @@ describe('Director provider routing', () => {
       workspaceId: 'workspace',
       aiTaskKind: 'project-plan',
       provider: 'gemini',
-      model: 'gemini-3.1-flash-lite',
+      model: 'gemini-3.6-flash',
       revision: 0,
     })
     media.set('tts', {
@@ -393,7 +401,8 @@ describe('Director provider routing', () => {
       resolveDirectorModelTarget('shot-sfx', 'text', dependencies)
     ).resolves.toMatchObject({
       provider: 'gemini',
-      modelId: 'gemini-3.1-flash-lite',
+      logicalModelId: 'gemini-3.6-flash',
+      modelId: 'gemini-3.6-flash-tiered',
       apiKey: 'gemini-key',
     })
     const routes = await describeDirectorRoutes(dependencies)
@@ -417,47 +426,31 @@ describe('Director provider routing', () => {
     for (const nodeType of ['script-import', 'shot-split', 'score', 'export', 'shot-script', 'shot-codegen'] as const) {
       const executed = await resolveDirectorModelTarget(nodeType, 'text', dependencies)
       expect(routes[nodeType]?.model, `${nodeType} 展示值必须等于执行值`).toBe(
-        executed.modelId
+        executed.logicalModelId
       )
     }
   })
 
-  /**
-   * 阶段 4（模式 H）：主 provider 熔断打开且用户显式配置了备选时，执行路径切换到
-   * 备选 provider，并留下 provider_fallback 日志与 degradedFrom 可观测字段——
-   * 返回值必须如实反映实际执行的备选，不得继续宣称在用主选。
-   */
-  it('falls back to the explicitly configured provider when the primary breaker is open', async () => {
+  it('never crosses providers when the primary breaker is open', async () => {
     const { dependencies, secrets } = createDependencies()
     secrets.set('gemini', 'gemini-key')
     secrets.set('stepfun', 'stored-stepfun-key')
+    const find = vi.fn(async () => 'stepfun' as const)
     const deps: AiConfigDependencies = {
       ...dependencies,
       fallbackProviders: {
-        find: vi.fn(async () => 'stepfun' as const),
+        find,
         save: vi.fn(async () => {}),
       },
     }
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     tripBreaker('gemini')
 
     await expect(resolveDirectorModelTarget(
       'script-import',
       'text',
       deps,
-    )).resolves.toEqual({
-      provider: 'stepfun',
-      baseUrl: 'https://api.stepfun.com/v1',
-      modelId: 'step-3.5-flash',
-      apiKey: 'stepfun-key',
-      funding: 'managed',
-      deductsManagedPool: true,
-      degradedFrom: 'gemini',
-    })
-    expect(warn).toHaveBeenCalledWith(
-      '[ai] provider_fallback',
-      { from: 'gemini', to: 'stepfun', stage: 'project-plan', capability: 'text' },
-    )
+    )).rejects.toMatchObject({ name: 'ProviderUnavailableError' })
+    expect(find).not.toHaveBeenCalled()
   })
 
   it('fails as retryable PROVIDER_FAILED when the breaker is open and no fallback is configured', async () => {
@@ -476,29 +469,7 @@ describe('Director provider routing', () => {
     })
   })
 
-  it('fails the same way when both primary and fallback breakers are open', async () => {
-    const { dependencies, secrets } = createDependencies()
-    secrets.set('gemini', 'gemini-key')
-    secrets.set('stepfun', 'stored-stepfun-key')
-    const deps: AiConfigDependencies = {
-      ...dependencies,
-      fallbackProviders: {
-        find: vi.fn(async () => 'stepfun' as const),
-        save: vi.fn(async () => {}),
-      },
-    }
-    tripBreaker('gemini')
-    tripBreaker('stepfun')
-
-    await expect(resolveDirectorModelTarget(
-      'script-import',
-      'text',
-      deps,
-    )).rejects.toMatchObject({ name: 'ProviderUnavailableError' })
-  })
-
-  it('keeps the healthy path untouched even when a fallback is configured', async () => {
-    // 熔断关闭时降级链完全旁路：既不读备选，也不产生 degradedFrom 字段。
+  it('keeps only the same-provider Gemini deployment fallback on a healthy path', async () => {
     const { dependencies, secrets } = createDependencies()
     secrets.set('gemini', 'gemini-key')
     const find = vi.fn(async () => 'stepfun' as const)
@@ -509,7 +480,7 @@ describe('Director provider routing', () => {
 
     const target = await resolveDirectorModelTarget('script-import', 'text', deps)
     expect(target.provider).toBe('gemini')
-    expect(target).not.toHaveProperty('degradedFrom')
+    expect(target.fallbackDeploymentId).toBe('gemini.3.1-flash-lite.managed')
     expect(find).not.toHaveBeenCalled()
   })
 })

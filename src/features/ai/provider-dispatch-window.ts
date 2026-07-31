@@ -27,7 +27,11 @@ export function nextProviderWindow(input: {
       candidates.push({ retryAt, reason: 'pacing' })
     }
   }
-  if (input.rpm >= input.limits.rpm && input.oldest) {
+  if (
+    input.limits.rpm !== undefined
+    && input.rpm >= input.limits.rpm
+    && input.oldest
+  ) {
     candidates.push({
       retryAt: new Date(
         input.oldest.getTime() + PROVIDER_RATE_WINDOW_MS + jitter(),

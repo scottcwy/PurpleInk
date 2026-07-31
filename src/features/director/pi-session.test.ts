@@ -24,7 +24,7 @@ const mocks = vi.hoisted(() => {
   const promptMessages: unknown[][] = []
   const promptModes: Array<'hang'> = []
   const billingProviderFailures: unknown[] = []
-  const createDirectorBillingStream = vi.fn((input: {
+  const createDirectorModelStream = vi.fn((input: {
     onProviderFailure?: (error: unknown) => void
   }) => {
     const failure = billingProviderFailures.shift()
@@ -138,7 +138,7 @@ const mocks = vi.hoisted(() => {
     promptMessages,
     promptModes,
     billingProviderFailures,
-    createDirectorBillingStream,
+    createDirectorModelStream,
     MockAgent,
   }
 })
@@ -154,8 +154,8 @@ vi.mock('@/features/ai/provider-dispatch', () => ({
 }))
 vi.mock('@/lib/stream/stream-bus', () => ({ streamBus: { publish: mocks.publish } }))
 vi.mock('@earendil-works/pi-agent-core', () => ({ Agent: mocks.MockAgent }))
-vi.mock('./director-billing-stream', () => ({
-  createDirectorBillingStream: mocks.createDirectorBillingStream,
+vi.mock('./director-gemini-fallback-stream', () => ({
+  createDirectorModelStream: mocks.createDirectorModelStream,
 }))
 vi.mock('@earendil-works/pi-ai', () => ({
   createModels: () => ({ setProvider: vi.fn(), streamSimple: vi.fn() }),
@@ -165,8 +165,8 @@ vi.mock('@earendil-works/pi-ai', () => ({
 vi.mock('@earendil-works/pi-ai/api/openai-completions.lazy', () => ({
   openAICompletionsApi: vi.fn(() => ({})),
 }))
-vi.mock('@earendil-works/pi-ai/api/google-generative-ai.lazy', () => ({
-  googleGenerativeAIApi: vi.fn(() => ({ nativeGoogle: true })),
+vi.mock('@earendil-works/pi-ai/api/anthropic-messages.lazy', () => ({
+  anthropicMessagesApi: vi.fn(() => ({ anthropicMessages: true })),
 }))
 vi.mock('@/features/ai/model-routing', () => ({
   DIRECTOR_NODE_TYPES: [
@@ -346,14 +346,14 @@ describe('createDirectorSession', () => {
     expect(mocks.createProvider).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'gemini',
-        baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-        api: { nativeGoogle: true },
+        baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+        api: {},
         models: [
           expect.objectContaining({
             id: 'gemini-3.6-flash',
             provider: 'gemini',
-            api: 'google-generative-ai',
-            baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
+            api: 'openai-completions',
+            baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
           }),
         ],
       })

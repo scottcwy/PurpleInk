@@ -22,6 +22,7 @@ export interface AudioBillingContext {
 export interface ManagedAudioBillingInput<T> {
   provider: AiProviderId
   model: string
+  providerPoolId?: string
   capability: 'tts' | 'asr'
   billingContext?: AudioBillingContext
   estimate: Extract<MaximumUsageEstimate, { kind: 'tts' | 'asr' }>
@@ -60,6 +61,7 @@ export async function runManagedAudioBilling<T>(
     funding: prepared.dispatchFunding,
     apiKey: prepared.credential,
     attemptId: context.attemptId,
+    ...(input.providerPoolId ? { poolId: input.providerPoolId } : {}),
     tokenEstimate: input.estimate.kind === 'tts'
       ? input.estimate.characters
       : undefined,

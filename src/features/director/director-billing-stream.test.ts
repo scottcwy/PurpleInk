@@ -12,13 +12,16 @@ import {
   DIRECTOR_PROVIDER_TIMEOUT_MS,
 } from './director-billing-stream'
 
-vi.mock('server-only', () => ({}))
-vi.mock('@/features/ai/provider-dispatch', () => ({
+const { reserveProviderDispatch } = vi.hoisted(() => ({
   reserveProviderDispatch: vi.fn(async () => ({
     id: 'dispatch-1',
     scopeKey: 'a'.repeat(64),
     release: vi.fn(async () => undefined),
   })),
+}))
+vi.mock('server-only', () => ({}))
+vi.mock('@/features/ai/provider-dispatch', () => ({
+  reserveProviderDispatch,
 }))
 
 const model = {
@@ -107,6 +110,7 @@ describe('Director per-provider-call billing stream', () => {
           providerLabel: '阶跃星辰',
           funding: 'managed',
           apiKey: 'test-key',
+          providerPoolId: 'stepfun.step-plan',
           modelId: model.id,
           maxOutputTokens: 4_096,
           deductsManagedPool: true,
@@ -129,6 +133,9 @@ describe('Director per-provider-call billing stream', () => {
         maxRetries: 0,
         signal: expect.any(AbortSignal),
       }),
+    )
+    expect(reserveProviderDispatch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ poolId: 'stepfun.step-plan' }),
     )
     expect(order).toEqual([
       'settled', 'done',

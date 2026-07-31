@@ -36,6 +36,7 @@ import {
   isManagedProvider,
   type ManagedProviderId,
 } from './managed-service'
+import { resolveDeploymentBinding } from './execution-plan'
 import type { AiProviderId } from './provider-registry'
 import { RouteContractError } from './route-contract-error'
 
@@ -101,7 +102,7 @@ const dependencies: AiConfigDependencies = {
 
 const DEFAULTS: Record<StepfunModelField, string> = {
   baseUrl: 'https://api.stepfun.com/v1',
-  chatModel: 'step-3.5-flash',
+  chatModel: 'step-3.7-flash',
   ttsModel: 'stepaudio-2.5-tts',
   asrModel: 'stepaudio-2.5-asr',
   visionModel: 'step-3.7-flash',
@@ -138,10 +139,16 @@ export function resolveStepfunBaseUrl(): string {
 export async function getStepfunConfig(
   deps: AiConfigDependencies = dependencies,
 ): Promise<StepfunConfig> {
+  const fundingSource = await resolveProviderFunding('stepfun', deps)
+  const text = resolveDeploymentBinding({
+    providerId: 'stepfun',
+    fundingSource,
+    capability: 'text',
+  })
   return {
     apiKey: await resolveProviderApiKey('stepfun', deps),
-    baseUrl: resolveStepfunBaseUrl(),
-    chatModel: DEFAULTS.chatModel,
+    baseUrl: text.baseUrl,
+    chatModel: text.logicalModelId,
     ttsModel: DEFAULTS.ttsModel,
     asrModel: DEFAULTS.asrModel,
     visionModel: DEFAULTS.visionModel,

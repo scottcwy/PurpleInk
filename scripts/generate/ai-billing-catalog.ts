@@ -80,7 +80,6 @@ export function renderManifest(sources: Sources): string {
     sources.ai.providers.map((provider) => provider.id),
   )
   return [
-    '/* eslint-disable */',
     '// 此文件由 config/*.yaml 生成；禁止手工修改。',
     `export const BUILT_IN_PROVIDER_IDS = ${providers} as const`,
     '',

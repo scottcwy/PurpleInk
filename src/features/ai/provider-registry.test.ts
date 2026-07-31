@@ -4,16 +4,19 @@ import {
   AI_PROVIDER_IDS,
   PROVIDER_REGISTRY,
   assertProviderCapability,
+  defaultModelFor,
   providerSupports,
   providersFor,
 } from './provider-registry'
 
 describe('provider capability registry', () => {
-  it('keeps six stable provider identities', () => {
+  it('preserves custom identities while adding OpenAI and Anthropic', () => {
     expect(AI_PROVIDER_IDS).toEqual([
       'gemini',
       'stepfun',
       'mimo',
+      'openai',
+      'anthropic',
       'openai-compatible',
       'openai-compatible-tts',
       'openai-compatible-asr',
@@ -37,8 +40,17 @@ describe('provider capability registry', () => {
       'gemini',
       'stepfun',
       'mimo',
+      'openai',
+      'anthropic',
       'openai-compatible',
     ])
+  })
+
+  it('uses the catalog model defaults for all five built-in vendors', () => {
+    expect(defaultModelFor('stepfun', 'text')).toBe('step-3.7-flash')
+    expect(defaultModelFor('gemini', 'text')).toBe('gemini-3.6-flash')
+    expect(defaultModelFor('openai', 'vision')).toBe('gpt-5.6-luna')
+    expect(defaultModelFor('anthropic', 'text')).toBe('claude-sonnet-5')
   })
 
   it('rejects unsupported route assignments at the shared boundary', () => {

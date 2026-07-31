@@ -4,8 +4,10 @@ import {
   type AiConfigDependencies,
   getAiConfigDependencies,
   resolveProviderApiKey,
+  resolveProviderFunding,
   type StepfunConfigFieldView,
 } from './config'
+import { resolveDeploymentBinding } from './execution-plan'
 import { RouteContractError } from './route-contract-error'
 
 export const MIMO_PROVIDER = 'mimo' as const
@@ -75,10 +77,16 @@ export function resolveMimoBaseUrl(): string {
 export async function getMimoConfig(
   deps: AiConfigDependencies = getAiConfigDependencies()
 ): Promise<MimoConfig> {
+  const fundingSource = await resolveProviderFunding(MIMO_PROVIDER, deps)
+  const text = resolveDeploymentBinding({
+    providerId: MIMO_PROVIDER,
+    fundingSource,
+    capability: 'text',
+  })
   return {
     apiKey: await resolveProviderApiKey(MIMO_PROVIDER, deps),
-    baseUrl: resolveMimoBaseUrl(),
-    textModel: DEFAULTS.textModel,
+    baseUrl: text.baseUrl,
+    textModel: text.logicalModelId,
     visionModel: DEFAULTS.visionModel,
     ttsModel: DEFAULTS.ttsModel,
     asrModel: DEFAULTS.asrModel,

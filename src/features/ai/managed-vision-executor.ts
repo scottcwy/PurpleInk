@@ -89,6 +89,7 @@ export async function executeManagedVisionQa(
     providerLabel: PROVIDER_REGISTRY[target.provider].label,
     funding: prepared.dispatchFunding,
     apiKey,
+    ...(target.providerPoolId ? { poolId: target.providerPoolId } : {}),
     attemptId: input.attemptId,
   }, async () => {
   const handle = await prepared.begin()

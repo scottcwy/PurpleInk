@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   validateStepfun: vi.fn(),
   validateGemini: vi.fn(),
   validateMimo: vi.fn(),
+  validateOfficial: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
@@ -32,9 +33,13 @@ vi.mock('./gemini-adapter', () => ({
 vi.mock('./mimo-adapter', () => ({
   validateMimoKey: mocks.validateMimo,
 }))
+vi.mock('./official-provider-validation', () => ({
+  validateOfficialByokKey: mocks.validateOfficial,
+}))
 
 import { applyProviderSettings } from './provider-settings-apply'
 import { validateProviderSettings } from './provider-settings-validation'
+import { stepfunSettingsSchema } from './schemas'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -42,9 +47,22 @@ beforeEach(() => {
   mocks.validateStepfun.mockResolvedValue(true)
   mocks.validateGemini.mockResolvedValue(true)
   mocks.validateMimo.mockResolvedValue({ ok: true })
+  mocks.validateOfficial.mockResolvedValue(true)
 })
 
 describe('built-in provider funding settings', () => {
+  it('accepts OpenAI and Anthropic as built-in service settings', () => {
+    expect(stepfunSettingsSchema.parse({
+      providerServices: {
+        openai: { funding: 'managed' },
+        anthropic: { funding: 'byok', apiKey: 'workspace-key' },
+      },
+    }).providerServices).toMatchObject({
+      openai: { funding: 'managed' },
+      anthropic: { funding: 'byok', apiKey: 'workspace-key' },
+    })
+  })
+
   it('validates then saves a Gemini BYOK key without requiring a paid plan', async () => {
     const input = {
       providerServices: {
@@ -96,4 +114,42 @@ describe('built-in provider funding settings', () => {
       'managed',
     )
   })
+
+  it.each(['openai', 'anthropic'] as const)(
+    'validates and stores an official %s BYOK key',
+    async (provider) => {
+      const input = {
+        providerServices: {
+          [provider]: {
+            funding: 'byok' as const,
+            apiKey: `user-${provider}-key`,
+          },
+        },
+      }
+
+      await expect(validateProviderSettings(input)).resolves.toMatchObject({
+        ok: true,
+      })
+      expect(mocks.validateOfficial).toHaveBeenCalledWith(
+        provider,
+        `user-${provider}-key`,
+        expect.any(Function),
+      )
+
+      await expect(applyProviderSettings(input)).resolves.toMatchObject({
+        ok: true,
+      })
+      expect(mocks.saveCredential).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider,
+          secret: `user-${provider}-key`,
+        }),
+      )
+      expect(mocks.saveFunding).toHaveBeenCalledWith(
+        '00000000-0000-4000-8000-000000000001',
+        provider,
+        'byok',
+      )
+    },
+  )
 })

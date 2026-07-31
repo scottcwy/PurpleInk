@@ -20,6 +20,7 @@ import { validateMimoKey } from './mimo-adapter'
 import { validateKey as validateStepfunKey } from './stepfun-adapter'
 import type { ManagedProviderId } from './managed-service'
 import { createAuditedValidationFetcher } from './validation-fetch'
+import { validateOfficialByokKey } from './official-provider-validation'
 
 /**
  * 先验证后保存的全部闸门（AGENTS §7）。返回 `ok: true` 才允许调用
@@ -149,13 +150,15 @@ async function validateByok(
   })
   if (provider === 'stepfun') return validateStepfunKey(apiKey, fetcher)
   if (provider === 'gemini') return validateGeminiKey(apiKey, {}, fetcher)
-  return (await validateMimoKey(apiKey, {}, fetcher)).ok
+  if (provider === 'mimo') return (await validateMimoKey(apiKey, {}, fetcher)).ok
+  return validateOfficialByokKey(provider, apiKey, fetcher)
 }
 
 function providerLabel(provider: ManagedProviderId): string {
   if (provider === 'stepfun') return 'StepFun'
   if (provider === 'gemini') return 'Gemini'
-  return 'MiMo'
+  if (provider === 'mimo') return 'MiMo'
+  return PROVIDER_REGISTRY[provider].label
 }
 
 function hasManagedModelInput(

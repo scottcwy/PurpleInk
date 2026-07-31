@@ -10,9 +10,13 @@ import {
   type ManagedModelDefinition,
 } from './managed-model-catalog-repository'
 import type { ProviderFunding } from './provider-funding-store'
+import {
+  BUILT_IN_PROVIDER_IDS,
+  type BuiltInProviderId,
+} from '@/lib/config/generated/ai-billing-manifest'
 
-export const MANAGED_PROVIDER_IDS = ['stepfun', 'mimo', 'gemini'] as const
-export type ManagedProviderId = (typeof MANAGED_PROVIDER_IDS)[number]
+export const MANAGED_PROVIDER_IDS = BUILT_IN_PROVIDER_IDS
+export type ManagedProviderId = BuiltInProviderId
 /**
  * 临时 AI 边界类型。billing 合同合并后改为 type-only import，值集合不得分叉。
  */

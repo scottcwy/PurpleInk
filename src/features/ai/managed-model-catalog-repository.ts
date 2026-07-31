@@ -4,10 +4,11 @@ import type { PlanKey } from '@/features/billing'
 import { getDb } from '@/lib/db/client'
 import { managedModelCatalog } from '@/lib/db/schema'
 import type { ProviderCapability } from './provider-registry'
+import type { BuiltInProviderId } from '@/lib/config/generated/ai-billing-manifest'
 
 export interface ManagedModelDefinition {
   id: string
-  provider: 'stepfun' | 'mimo' | 'gemini'
+  provider: BuiltInProviderId
   modelId: string
   capabilities: readonly ProviderCapability[]
   minimumPlanKey: PlanKey

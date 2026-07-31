@@ -4,7 +4,7 @@ import {
   createProvider,
 } from '@earendil-works/pi-ai'
 import type { Api, ApiKeyAuth, Model, MutableModels } from '@earendil-works/pi-ai'
-import { googleGenerativeAIApi } from '@earendil-works/pi-ai/api/google-generative-ai.lazy'
+import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messages.lazy'
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy'
 import type { DirectorCanvasNodeType } from '@/features/canvas'
 import { assertBillingAvailable } from '@/features/billing'
@@ -34,6 +34,8 @@ const PROVIDER_LABEL: Record<AiProviderId, string> = {
   gemini: 'Gemini',
   stepfun: 'StepFun',
   mimo: '小米 MiMo',
+  openai: 'OpenAI',
+  anthropic: 'Anthropic',
   'openai-compatible': 'OpenAI 兼容模型服务',
   'openai-compatible-tts': '自定义兼容 TTS',
   'openai-compatible-asr': '自定义兼容 ASR',
@@ -50,6 +52,8 @@ const REQUEST_SHAPE: Record<
   gemini: { contextWindow: 1_048_576, maxTokens: 65_536 },
   stepfun: { contextWindow: 131_072, maxTokens: 32_768 },
   mimo: { contextWindow: 1_048_576, maxTokens: 131_072 },
+  openai: { contextWindow: 400_000, maxTokens: 128_000 },
+  anthropic: { contextWindow: 1_000_000, maxTokens: 128_000 },
   'openai-compatible': { contextWindow: 131_072, maxTokens: 32_768 },
   // 纯音频端点不承担 Director 文本会话。`null` 是显式表态而不是漏项：编造一份
   // token 预算会让一个不可能成功的会话看起来配置齐全。
@@ -68,6 +72,12 @@ export interface DirectorModelRuntime {
   /** 供失败分类使用的选型描述，不含任何凭据。 */
   routeLabel: string
   modelId: string
+  logicalModelId?: string
+  deploymentId?: string
+  providerPoolId?: string
+  fallbackDeploymentId?: string
+  fallbackModel?: Model<Api>
+  fallbackModelId?: string
   maxOutputTokens: number
   deductsManagedPool: boolean
 }
@@ -96,12 +106,8 @@ export async function createDirectorModelRuntime(input: {
   if (!target.apiKey) {
     throw new Error(`${label} API Key 未配置，无法执行 Director 阶段`)
   }
-  const baseUrl = target.provider === 'gemini'
-    ? nativeGoogleBaseUrl(target.baseUrl)
-    : trimTrailingSlash(target.baseUrl)
-  const api: Api = target.provider === 'gemini'
-    ? 'google-generative-ai'
-    : 'openai-completions'
+  const baseUrl = trimTrailingSlash(target.baseUrl)
+  const api: Api = target.adapterProtocol ?? 'openai-completions'
   const model: Model<Api> = {
     id: target.modelId,
     name: target.modelId,
@@ -115,6 +121,13 @@ export async function createDirectorModelRuntime(input: {
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     ...requestShape,
   }
+  const fallbackModel: Model<Api> | undefined = target.fallback
+    ? {
+        ...model,
+        id: target.fallback.modelId,
+        name: target.fallback.modelId,
+      }
+    : undefined
   const models = createModels()
   models.setProvider(
     createProvider({
@@ -123,10 +136,10 @@ export async function createDirectorModelRuntime(input: {
       auth: {
         apiKey: resolvedRouteApiKeyAuth(`${label} API Key`, target.apiKey),
       },
-      api: target.provider === 'gemini'
-        ? googleGenerativeAIApi()
+      api: api === 'anthropic-messages'
+        ? anthropicMessagesApi()
         : openAICompletionsApi(),
-      models: [model],
+      models: fallbackModel ? [model, fallbackModel] : [model],
     }),
   )
   return {
@@ -137,13 +150,18 @@ export async function createDirectorModelRuntime(input: {
     providerLabel: PROVIDER_LABEL[target.provider],
     funding: target.funding ?? (target.deductsManagedPool === true ? 'managed' : 'byok'),
     modelId: target.modelId,
+    ...(target.logicalModelId ? { logicalModelId: target.logicalModelId } : {}),
+    ...(target.deploymentId ? { deploymentId: target.deploymentId } : {}),
+    ...(target.providerPoolId ? { providerPoolId: target.providerPoolId } : {}),
+    ...(target.fallbackDeploymentId
+      ? { fallbackDeploymentId: target.fallbackDeploymentId }
+      : {}),
+    ...(fallbackModel
+      ? { fallbackModel, fallbackModelId: fallbackModel.id }
+      : {}),
     maxOutputTokens: requestShape.maxTokens,
     deductsManagedPool: target.deductsManagedPool === true,
-    // 降级发生时 routeLabel 如实标注备选身份：该标签随失败落入
-    // attempt.failure 与服务端日志，是降级事实在错误链路上的可追溯出口。
-    routeLabel: target.degradedFrom
-      ? `${target.provider}/${target.modelId}（备选，主选 ${target.degradedFrom} 已熔断）`
-      : `${target.provider}/${target.modelId}`,
+    routeLabel: `${target.provider}/${target.modelId}`,
   }
 }
 
@@ -181,15 +199,6 @@ function resolvedRouteApiKeyAuth(name: string, apiKey: string): ApiKeyAuth {
       source: 'resolved route credential',
     }),
   }
-}
-
-/**
- * Gemini 的项目配置面用的是 OpenAI 兼容端点（`/v1beta/openai/`），
- * 但 Director 走原生 Google API，因此把 `/openai` 后缀剥回 `/v1beta`。
- */
-function nativeGoogleBaseUrl(baseUrl: string): string {
-  const trimmed = trimTrailingSlash(baseUrl)
-  return trimmed.endsWith('/openai') ? trimmed.slice(0, -'/openai'.length) : trimmed
 }
 
 function trimTrailingSlash(value: string): string {

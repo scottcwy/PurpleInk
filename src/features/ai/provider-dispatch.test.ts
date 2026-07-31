@@ -13,11 +13,13 @@ describe('provider dispatch configuration', () => {
     }
     const managedA = providerScopeKey({
       ...base,
+      poolId: 'stepfun.step-plan',
       funding: 'managed',
       workspaceId: 'workspace-a',
     })
     const managedB = providerScopeKey({
       ...base,
+      poolId: 'stepfun.step-plan',
       funding: 'managed',
       workspaceId: 'workspace-b',
     })
@@ -31,12 +33,14 @@ describe('provider dispatch configuration', () => {
   it('does not create a new managed pool when the server credential rotates', () => {
     const first = providerScopeKey({
       providerId: 'gemini',
+      poolId: 'gemini.bcai',
       funding: 'managed',
       workspaceId: 'workspace-a',
       apiKey: 'old-managed-key',
     })
     const rotated = providerScopeKey({
       providerId: 'gemini',
+      poolId: 'gemini.bcai',
       funding: 'managed',
       workspaceId: 'workspace-b',
       apiKey: 'new-managed-key',
@@ -44,15 +48,39 @@ describe('provider dispatch configuration', () => {
     expect(first).toBe(rotated)
   })
 
-  it('defines independent conservative policies for the three managed pools', () => {
+  it('separates managed pools by channel rather than credential or vendor alone', () => {
+    const primary = providerScopeKey({
+      providerId: 'gemini',
+      poolId: 'gemini.bcai',
+      funding: 'managed',
+      workspaceId: 'workspace-a',
+      apiKey: 'shared-key',
+    })
+    const futureChannel = providerScopeKey({
+      providerId: 'gemini',
+      poolId: 'gemini.future-channel',
+      funding: 'managed',
+      workspaceId: 'workspace-a',
+      apiKey: 'shared-key',
+    })
+    expect(primary).not.toBe(futureChannel)
+  })
+
+  it('defines relay concurrency without inventing RPM or TPM contracts', () => {
     expect(providerPoolPolicy('gemini')).toMatchObject({
-      contractRpm: 1_000,
-      softRpm: 750,
-      hardRpm: 900,
-      minIntervalMs: 80,
-      jitterMs: 8,
-      initialConcurrency: 8,
-      maxConcurrency: 50,
+      initialConcurrency: 200,
+      maxConcurrency: 200,
+      minIntervalMs: 0,
+      jitterMs: 0,
+    })
+    expect(providerPoolPolicy('gemini')).not.toHaveProperty('contractRpm')
+    expect(providerPoolPolicy('openai')).toMatchObject({
+      initialConcurrency: 200,
+      maxConcurrency: 200,
+    })
+    expect(providerPoolPolicy('anthropic')).toMatchObject({
+      initialConcurrency: 200,
+      maxConcurrency: 200,
     })
     expect(providerPoolPolicy('stepfun')).toMatchObject({
       contractRpm: 200,

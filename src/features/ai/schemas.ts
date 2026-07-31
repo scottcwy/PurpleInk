@@ -51,6 +51,8 @@ export const stepfunSettingsSchema = z.object({
     stepfun: builtInServiceSchema.optional(),
     gemini: builtInServiceSchema.optional(),
     mimo: builtInServiceSchema.optional(),
+    openai: builtInServiceSchema.optional(),
+    anthropic: builtInServiceSchema.optional(),
   }).strict().optional(),
   gemini: z
     .object({
