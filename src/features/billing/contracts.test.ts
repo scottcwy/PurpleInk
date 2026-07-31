@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { QuotaExhaustedError, toBillingProjection } from './contracts'
+import {
+  QuotaExhaustedError,
+  createProviderCallCounts,
+  isBuiltInProviderId,
+  toBillingProjection,
+} from './contracts'
 
 describe('billing public contracts', () => {
   it('projects usage without exposing internal money values', () => {
@@ -20,11 +25,30 @@ describe('billing public contracts', () => {
       },
       usage: { percent: 30, remainingPercent: 70, invocationCount: 7 },
       tokenUsage: { inputTokens: 0, outputTokens: 0 },
-      providerCalls: { stepfun: 0, mimo: 0, gemini: 0 },
+      providerCalls: {
+        stepfun: 0,
+        mimo: 0,
+        gemini: 0,
+        openai: 0,
+        anthropic: 0,
+      },
       lastInvocationAt: null,
       canRedeem: true,
     })
     expect(JSON.stringify(projection)).not.toMatch(/Cny|micros|limit/i)
+  })
+
+  it('uses exact catalog provider identities instead of string heuristics', () => {
+    expect(createProviderCallCounts()).toEqual({
+      stepfun: 0,
+      mimo: 0,
+      gemini: 0,
+      openai: 0,
+      anthropic: 0,
+    })
+    expect(isBuiltInProviderId('openai')).toBe(true)
+    expect(isBuiltInProviderId('anthropic')).toBe(true)
+    expect(isBuiltInProviderId('stepfun-proxy')).toBe(false)
   })
 
   it('exposes a stable quota exhausted error', () => {

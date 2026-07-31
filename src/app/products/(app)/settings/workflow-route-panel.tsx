@@ -7,19 +7,22 @@ import { SettingsSeparator } from '@/components/ui/settings-group'
 import { SettingsPanel } from '@/components/ui/settings-panel'
 import { SettingsField } from '@/components/ui/settings-field'
 import type { AiProviderId, DirectorRouteView } from '@/features/ai/model-routing'
-import type { PlanKey } from '@/features/billing'
 import {
   PROVIDER_REGISTRY,
   providersFor,
   type ProviderCapability,
 } from '@/features/ai/provider-registry'
 import type { DirectorCanvasNodeType } from '@/features/canvas/types'
-import { ROUTE_ROWS, type RouteDraft } from './model-service-contract'
+import {
+  ROUTE_ROWS,
+  type RouteDraft,
+  type SettingsResponse,
+} from './model-service-contract'
 
 export function WorkflowRoutePanel({
   routes,
   effective,
-  planKey,
+  managedProviders,
   busy,
   onChange,
   onSave,
@@ -28,7 +31,7 @@ export function WorkflowRoutePanel({
 }: {
   routes: RouteDraft
   effective?: Record<DirectorCanvasNodeType, DirectorRouteView>
-  planKey: PlanKey
+  managedProviders?: SettingsResponse['managedProviders']
   busy: boolean
   onChange: (nodeType: DirectorCanvasNodeType, provider: AiProviderId) => void
   onSave: () => void
@@ -49,7 +52,14 @@ export function WorkflowRoutePanel({
       {ROUTE_ROWS.map(([nodeType, label], index) => {
         const capability = capabilityFor(nodeType)
         const options = providersFor(capability)
-          .filter((provider) => planKey !== 'free' || provider !== 'gemini')
+          .filter((provider) => {
+            const builtIn = managedProviders?.find((entry) =>
+              entry.provider === provider)
+            if (!builtIn) return true
+            return builtIn.funding === 'byok'
+              || builtIn.managedAllowed
+              || routes[nodeType] === provider
+          })
           .map((provider) => ({
             value: provider,
             label: PROVIDER_REGISTRY[provider].label,

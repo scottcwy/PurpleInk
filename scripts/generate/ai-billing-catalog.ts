@@ -13,13 +13,20 @@ import {
 } from './ai-billing-catalog-schema'
 
 const ROOT = process.cwd()
-const OUTPUT = path.join(
+const OUTPUT_DIRECTORY = path.join(
   ROOT,
   'src',
   'lib',
   'config',
   'generated',
+)
+const SERVER_OUTPUT = path.join(
+  OUTPUT_DIRECTORY,
   'ai-billing-manifest.ts',
+)
+const PUBLIC_OUTPUT = path.join(
+  OUTPUT_DIRECTORY,
+  'ai-public-catalog.ts',
 )
 
 interface Sources {
@@ -90,25 +97,67 @@ export function renderManifest(sources: Sources): string {
   ].join('\n')
 }
 
+export function renderPublicCatalog(sources: Sources): string {
+  const channels = new Map(
+    sources.ai.channels.map((channel) => [channel.id, channel]),
+  )
+  const publicCatalog = {
+    schemaVersion: 1,
+    catalogVersion: sources.ai.catalogVersion,
+    providers: sources.ai.providers,
+    deployments: sources.ai.deployments.map((deployment) => {
+      const channel = channels.get(deployment.channelId)
+      if (!channel) throw new Error(`missing channel ${deployment.channelId}`)
+      return {
+        id: deployment.id,
+        providerId: channel.providerId,
+        funding: channel.funding,
+        logicalModelId: deployment.logicalModelId,
+        capabilities: deployment.capabilities,
+        verifiedCapabilities: deployment.verifiedCapabilities,
+      }
+    }),
+  }
+  const providers = JSON.stringify(
+    sources.ai.providers.map((provider) => provider.id),
+  )
+  return [
+    '// 此文件由 config/*.yaml 生成；仅包含可安全发送到客户端的目录字段，禁止手工修改。',
+    `export const BUILT_IN_PROVIDER_IDS = ${providers} as const`,
+    '',
+    'export type BuiltInProviderId = (typeof BUILT_IN_PROVIDER_IDS)[number]',
+    '',
+    `export const AI_PUBLIC_CATALOG = ${JSON.stringify(publicCatalog)} as const`,
+    '',
+  ].join('\n')
+}
+
 async function readYaml(file: string): Promise<unknown> {
   return parse(await readFile(file, 'utf8'))
 }
 
 async function main(): Promise<void> {
   const sources = await loadCatalogSources()
-  const rendered = renderManifest(sources)
+  const renderedServer = renderManifest(sources)
+  const renderedPublic = renderPublicCatalog(sources)
   if (process.argv.includes('--check')) {
-    const current = await readFile(OUTPUT, 'utf8').catch(() => '')
-    if (current !== rendered) {
-      throw new Error('AI billing manifest is stale; run pnpm generate:ai-catalog')
+    const [currentServer, currentPublic] = await Promise.all([
+      readFile(SERVER_OUTPUT, 'utf8').catch(() => ''),
+      readFile(PUBLIC_OUTPUT, 'utf8').catch(() => ''),
+    ])
+    if (currentServer !== renderedServer || currentPublic !== renderedPublic) {
+      throw new Error('AI catalog output is stale; run pnpm generate:ai-catalog')
     }
     return
   }
   if (!process.argv.includes('--write')) {
     throw new Error('expected --write or --check')
   }
-  await mkdir(path.dirname(OUTPUT), { recursive: true })
-  await writeFile(OUTPUT, rendered, 'utf8')
+  await mkdir(OUTPUT_DIRECTORY, { recursive: true })
+  await Promise.all([
+    writeFile(SERVER_OUTPUT, renderedServer, 'utf8'),
+    writeFile(PUBLIC_OUTPUT, renderedPublic, 'utf8'),
+  ])
 }
 
 if (

@@ -191,6 +191,8 @@ export function BillingDashboardUsage({
             `StepFun ${numberFormatter.format(projection.providerCalls.stepfun)}`,
             `Mimo ${numberFormatter.format(projection.providerCalls.mimo)}`,
             `Gemini ${numberFormatter.format(projection.providerCalls.gemini)}`,
+            `OpenAI ${numberFormatter.format(projection.providerCalls.openai)}`,
+            `Anthropic ${numberFormatter.format(projection.providerCalls.anthropic)}`,
           ].join(' · ')}
           className="col-span-2"
         />

@@ -1,4 +1,10 @@
 import type { PlanKey } from './domain'
+import {
+  BUILT_IN_PROVIDER_IDS,
+  type BuiltInProviderId,
+} from '@/lib/config/generated/ai-public-catalog'
+
+export type ProviderCallCounts = Record<BuiltInProviderId, number>
 
 export interface BillingProjection {
   planKey: PlanKey
@@ -9,7 +15,7 @@ export interface BillingProjection {
     remainingPercent: number
   }
   tokenUsage: { inputTokens: number; outputTokens: number }
-  providerCalls: { stepfun: number; mimo: number; gemini: number }
+  providerCalls: ProviderCallCounts
   lastInvocationAt: string | null
   canRedeem: boolean
 }
@@ -43,7 +49,7 @@ export function toBillingProjection(input: {
   invocationCount: number
   inputTokens?: number
   outputTokens?: number
-  providerCalls?: { stepfun: number; mimo: number; gemini: number }
+  providerCalls?: ProviderCallCounts
   lastInvocationAt?: Date | null
   canRedeem?: boolean
 }): BillingProjection {
@@ -66,8 +72,18 @@ export function toBillingProjection(input: {
       inputTokens: input.inputTokens ?? 0,
       outputTokens: input.outputTokens ?? 0,
     },
-    providerCalls: input.providerCalls ?? { stepfun: 0, mimo: 0, gemini: 0 },
+    providerCalls: input.providerCalls ?? createProviderCallCounts(),
     lastInvocationAt: input.lastInvocationAt?.toISOString() ?? null,
     canRedeem: input.canRedeem ?? true,
   }
+}
+
+export function createProviderCallCounts(): ProviderCallCounts {
+  return Object.fromEntries(
+    BUILT_IN_PROVIDER_IDS.map((provider) => [provider, 0]),
+  ) as ProviderCallCounts
+}
+
+export function isBuiltInProviderId(value: string): value is BuiltInProviderId {
+  return (BUILT_IN_PROVIDER_IDS as readonly string[]).includes(value)
 }

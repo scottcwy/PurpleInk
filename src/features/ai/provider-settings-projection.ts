@@ -19,6 +19,11 @@ import {
   customOpenAiDependencies,
 } from './provider-settings-dependencies'
 import { subscriptionConcurrencyLimit } from '@/features/billing/domain'
+import {
+  minimumPlanForManagedProvider,
+  planCanUseManagedProvider,
+} from '@/features/billing/domain'
+import { AI_PUBLIC_CATALOG } from '@/lib/config/generated/ai-public-catalog'
 
 /**
  * GET 与 POST 共用的无 secret 投影。
@@ -85,15 +90,17 @@ export async function describeProviderSettings() {
       limit: subscriptionConcurrencyLimit(plan),
     },
     ...stepfunCredential,
-    models,
+    models: hideManagedEndpoint(models),
     geminiConfigured: geminiCredential.configured,
     geminiCredential,
-    gemini,
+    gemini: hideManagedEndpoint(gemini),
     mimoCredential,
-    mimo,
+    mimo: hideManagedEndpoint(mimo),
     managedProviders: MANAGED_PROVIDER_IDS.map((provider) => ({
       provider,
       funding: fundingByProvider[provider],
+      managedAllowed: planCanUseManagedProvider(plan, provider),
+      minimumManagedPlan: minimumPlanForManagedProvider(provider),
       configured: fundingByProvider[provider] === 'managed'
         ? managedCredential(provider).configured
         : byokByProvider[provider].configured,
@@ -104,11 +111,25 @@ export async function describeProviderSettings() {
         && (
           fundingByProvider[provider] === 'byok'
           || planCanUse(plan, model.minimumPlanKey)
-        )),
+        )).map((model) => ({
+          ...model,
+          verifiedCapabilities: verifiedCapabilities(
+            provider,
+            model.modelId,
+            fundingByProvider[provider],
+          ),
+        })),
     })),
     availableCatalog: managedCatalog.filter((model) =>
       fundingByProvider[model.provider] === 'byok'
-      || planCanUse(plan, model.minimumPlanKey)),
+      || planCanUse(plan, model.minimumPlanKey)).map((model) => ({
+      ...model,
+      verifiedCapabilities: verifiedCapabilities(
+        model.provider,
+        model.modelId,
+        fundingByProvider[model.provider],
+      ),
+    })),
     routes,
     // ISSUE-011: 队列并发配额真值。优先级 DB > env > 代码默认，由 `runtime-config.ts` 统一提供。
     // `source = 'settings' | 'env' | 'default'` 让 UI 能透出真值来自哪里。
@@ -118,6 +139,30 @@ export async function describeProviderSettings() {
     customOpenAiAsr,
     fallbackProvider,
   }
+}
+
+function hideManagedEndpoint<T extends {
+  baseUrl: { value: string; source: 'settings' | 'env' | 'default' }
+}>(view: T): T {
+  return {
+    ...view,
+    baseUrl: {
+      value: '',
+      source: 'default',
+    },
+  }
+}
+
+function verifiedCapabilities(
+  provider: ManagedProviderId,
+  logicalModelId: string,
+  funding: 'managed' | 'byok',
+) {
+  const deployment = AI_PUBLIC_CATALOG.deployments.find((candidate) =>
+    candidate.providerId === provider
+    && candidate.logicalModelId === logicalModelId
+    && candidate.funding === funding)
+  return deployment ? [...deployment.verifiedCapabilities] : []
 }
 
 function planCanUse(

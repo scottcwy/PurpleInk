@@ -16,11 +16,9 @@ import type { OpenAiCompatibleProfileView } from '@/features/ai/openai-compatibl
 import type { MimoConfigField, MimoConfigView } from '@/features/ai/mimo-config'
 import type { DirectorCanvasNodeType } from '@/features/canvas/types'
 import type { PlanKey } from '@/features/billing'
-import type {
-  ManagedModelDefinition,
-  ManagedProviderId,
-  ProviderFunding,
-} from '@/features/ai'
+import type { ProviderFunding } from '@/features/ai/provider-funding-store'
+import type { ProviderCapability } from '@/features/ai/provider-registry'
+import type { BuiltInProviderId as ManagedProviderId } from '@/lib/config/generated/ai-public-catalog'
 
 export type StepfunDraft = Record<StepfunModelField, string>
 export type GeminiDraft = Record<GeminiConfigField, string>
@@ -148,14 +146,16 @@ export interface SettingsResponse {
     configured: boolean
     funding: ProviderFunding
     managedConfigured: boolean
+    managedAllowed: boolean
+    minimumManagedPlan: PlanKey
     byokCredential: {
       configured: boolean
       verifiedAt: string | null
       updatedAt: string | null
     }
-    models: readonly ManagedModelDefinition[]
+    models: readonly ProviderModelView[]
   }>
-  availableCatalog?: readonly ManagedModelDefinition[]
+  availableCatalog?: readonly ProviderModelView[]
   configured?: boolean
   models?: StepfunConfigView
   geminiConfigured?: boolean
@@ -171,6 +171,16 @@ export interface SettingsResponse {
   error?: string
   /** 仅 ASR 转写校验被端点拒绝时出现，客户端据此提供「仅校验凭据」。 */
   reason?: 'asr-transcription-rejected'
+}
+
+export interface ProviderModelView {
+  id: string
+  provider: ManagedProviderId
+  modelId: string
+  capabilities: readonly ProviderCapability[]
+  verifiedCapabilities: readonly ProviderCapability[]
+  minimumPlanKey: PlanKey
+  enabled: boolean
 }
 
 export interface ReadyModelSettingsController {

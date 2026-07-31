@@ -34,6 +34,8 @@ export function isBillingUiProjection(value: unknown): value is BillingUiProject
     && typeof (providerCalls as Record<string, unknown>).stepfun === 'number'
     && typeof (providerCalls as Record<string, unknown>).mimo === 'number'
     && typeof (providerCalls as Record<string, unknown>).gemini === 'number'
+    && typeof (providerCalls as Record<string, unknown>).openai === 'number'
+    && typeof (providerCalls as Record<string, unknown>).anthropic === 'number'
     && (projection.lastInvocationAt === null || typeof projection.lastInvocationAt === 'string')
     && typeof projection.canRedeem === 'boolean'
   )

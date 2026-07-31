@@ -33,6 +33,8 @@ const projection: BillingUiProjection = {
     stepfun: 11,
     mimo: 7,
     gemini: 3,
+    openai: 5,
+    anthropic: 2,
   },
   lastInvocationAt: '2026-07-28T06:30:00.000Z',
   canRedeem: true,
@@ -126,6 +128,8 @@ describe('billing usage projections', () => {
     expect(html).toContain('StepFun')
     expect(html).toContain('Mimo')
     expect(html).toContain('Gemini')
+    expect(html).toContain('OpenAI')
+    expect(html).toContain('Anthropic')
     expect(html).toContain('最近调用')
     expect(html).toContain('周期累计额度')
     expect(html).toContain('累计已用 36%')

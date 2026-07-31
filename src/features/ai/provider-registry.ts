@@ -1,8 +1,8 @@
 import { RouteContractError } from './route-contract-error'
 import {
-  AI_BILLING_MANIFEST,
+  AI_PUBLIC_CATALOG,
   type BuiltInProviderId,
-} from '@/lib/config/generated/ai-billing-manifest'
+} from '@/lib/config/generated/ai-public-catalog'
 
 /**
  * 自定义 OpenAI 兼容端点按能力拆成三个身份。
@@ -62,10 +62,10 @@ export const PROVIDER_REGISTRY: Record<AiProviderId, ProviderDefinition> = {
 }
 
 function catalogDefinition(providerId: BuiltInProviderId): ProviderDefinition {
-  const provider = AI_BILLING_MANIFEST.providers.find((candidate) =>
+  const provider = AI_PUBLIC_CATALOG.providers.find((candidate) =>
     candidate.id === providerId)
   if (!provider) throw new Error(`missing provider catalog entry: ${providerId}`)
-  const deployments = AI_BILLING_MANIFEST.deployments.filter((deployment) =>
+  const deployments = AI_PUBLIC_CATALOG.deployments.filter((deployment) =>
     deployment.providerId === providerId && deployment.funding === 'managed')
   const capabilities = [...new Set(deployments.flatMap((deployment) =>
     deployment.capabilities))] as ProviderCapability[]

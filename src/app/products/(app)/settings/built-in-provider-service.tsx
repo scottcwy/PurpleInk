@@ -7,7 +7,7 @@ import { SettingsField } from '@/components/ui/settings-field'
 import { SettingsSeparator } from '@/components/ui/settings-group'
 import { StatusPill } from '@/components/ui/status-pill'
 import { TextField } from '@/components/ui/text-field'
-import type { ManagedProviderId } from '@/features/ai'
+import type { BuiltInProviderId as ManagedProviderId } from '@/lib/config/generated/ai-public-catalog'
 import type { ReadyModelSettingsController } from './model-service-contract'
 import { useSaveFeedback } from './save-feedback'
 
@@ -33,8 +33,8 @@ export function BuiltInProviderService({
   )
   const [apiKey, setApiKey] = useState('')
   const { state, report } = useSaveFeedback()
-  const managedLocked = provider === 'gemini'
-    && controller.data.planKey === 'free'
+  const managedLocked = view?.managedAllowed === false
+  const minimumPlan = planLabel(view?.minimumManagedPlan)
   const activeConfigured = funding === 'managed'
     ? view?.managedConfigured === true && !managedLocked
     : view?.byokCredential.configured === true
@@ -71,7 +71,7 @@ export function BuiltInProviderService({
         hint={
           funding === 'managed'
             ? managedLocked
-              ? 'Free 方案不可使用 Gemini 托管服务；可以改用自己的 Gemini Key'
+              ? `${minimumPlan} 方案解锁托管服务；也可以改用自己的 ${label} Key`
               : '使用平台凭据，调用计入当前会员额度'
             : '密钥加密保存，仅服务端在当前 workspace 的调用中解密'
         }
@@ -81,7 +81,7 @@ export function BuiltInProviderService({
           label={
             activeConfigured
               ? funding === 'managed' ? '平台服务可用' : '自有 Key 已配置'
-              : managedLocked ? 'Plus 解锁' : '未配置'
+              : managedLocked ? `${minimumPlan} 解锁` : '未配置'
           }
         />
       </SettingsField>
@@ -133,4 +133,11 @@ export function BuiltInProviderService({
       </div>
     </div>
   )
+}
+
+function planLabel(plan: 'free' | 'plus' | 'pro' | 'max' | undefined): string {
+  if (plan === 'plus') return 'Plus'
+  if (plan === 'pro') return 'Pro'
+  if (plan === 'max') return 'Max'
+  return 'Free'
 }

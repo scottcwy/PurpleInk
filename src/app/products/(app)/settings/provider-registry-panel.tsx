@@ -12,6 +12,7 @@ import {
   type AiProviderId,
   type ProviderCapability,
 } from '@/features/ai/provider-registry'
+import type { BuiltInProviderId as ManagedProviderId } from '@/lib/config/generated/ai-public-catalog'
 import { cn } from '@/lib/utils'
 import { CustomOpenAiProviderPanel } from './custom-openai-provider-panel'
 import {
@@ -26,12 +27,16 @@ import { BuiltInProviderService } from './built-in-provider-service'
  *
  * `openai-compatible` 家族在 registry 里是三个 id（文本视觉 / TTS / ASR），因为三份
  * 独立凭据必须有三个身份。但配置上它们同属「自定义兼容模型」这一个入口，所以网格
- * 只出四张卡片，三个接入点在卡片展开后的面板里按顺序配置。
+ * 只出一个家族卡片，三个接入点在卡片展开后的面板里按顺序配置。
  */
-const PROVIDER_CARDS: readonly AiProviderId[] = [
+type ProviderCardId = ManagedProviderId | 'openai-compatible'
+
+const PROVIDER_CARDS: readonly ProviderCardId[] = [
   'gemini',
   'stepfun',
   'mimo',
+  'openai',
+  'anthropic',
   'openai-compatible',
 ]
 
@@ -51,7 +56,7 @@ export function ProviderRegistryPanel({
   openPanels: Record<string, boolean>
   onPanelOpenChange: (id: string, open: boolean) => void
 }) {
-  const [selected, setSelected] = useState<AiProviderId>('mimo')
+  const [selected, setSelected] = useState<ProviderCardId>('mimo')
   const detailRef = useRef<HTMLDivElement>(null)
   const isFirstRender = useRef(true)
   useEffect(() => {
@@ -124,41 +129,23 @@ function SelectedProvider({
   provider,
 }: {
   controller: ReadyModelSettingsController
-  provider: AiProviderId
+  provider: ProviderCardId
 }) {
   if (provider === 'openai-compatible') {
     return <CustomOpenAiProviderPanel controller={controller} />
   }
-  if (provider === 'stepfun') {
-    return (
-      <ManagedProviderDetail
-        provider="StepFun"
-        providerId="stepfun"
-        controller={controller}
-      />
-    )
-  }
-  if (provider === 'gemini') {
-    return (
-      <ManagedProviderDetail
-        provider="Gemini"
-        providerId="gemini"
-        controller={controller}
-      />
-    )
-  }
   return (
     <ManagedProviderDetail
-      provider="MiMo"
-      providerId="mimo"
+      provider={PROVIDER_REGISTRY[provider].label}
+      providerId={provider}
       controller={controller}
     />
   )
 }
 
 interface ManagedProviderDetailProps {
-  provider: 'StepFun' | 'Gemini' | 'MiMo'
-  providerId: 'stepfun' | 'gemini' | 'mimo'
+  provider: string
+  providerId: ManagedProviderId
   controller: ReadyModelSettingsController
 }
 
@@ -166,8 +153,9 @@ function ManagedProviderDetail(props: ManagedProviderDetailProps) {
   const view = props.controller.data.managedProviders?.find(
     ({ provider }) => provider === props.providerId,
   )
-  const locked =
-    props.providerId === 'gemini' && props.controller.data.planKey === 'free'
+  const locked = view?.managedAllowed === false
+    && view.funding !== 'byok'
+  const minimumPlan = planLabel(view?.minimumManagedPlan)
   const models = view?.models ?? []
   return (
     <div id={`provider-${props.provider.toLowerCase()}`} className="flex min-w-0 flex-col">
@@ -181,7 +169,7 @@ function ManagedProviderDetail(props: ManagedProviderDetailProps) {
         label="可用模型"
         hint={
           locked && view?.funding !== 'byok'
-            ? '托管模式下当前方案未授权该供应商'
+            ? `托管模式需要 ${minimumPlan} 方案；自己的 Key 不受此限制`
             : '模型目录由服务端统一维护'
         }
       >
@@ -190,11 +178,18 @@ function ManagedProviderDetail(props: ManagedProviderDetailProps) {
             <StatusPill
               key={`${model.modelId}:${model.capabilities.join(',')}`}
               variant="cached"
-              label={`${model.modelId} · ${model.capabilities.join('/')}`}
+              label={`${model.modelId} · ${model.capabilities.map((capability) =>
+                `${capability} ${
+                  model.verifiedCapabilities.includes(capability)
+                    ? '已验证'
+                    : '待验证'
+                }`).join(' / ')}`}
             />
           )) : (
             <span className="text-xs text-ds-text-muted">
-              {locked && view?.funding !== 'byok' ? '升级 Plus 或使用自己的 Key' : '暂无可用模型'}
+              {locked && view?.funding !== 'byok'
+                ? `升级 ${minimumPlan} 或使用自己的 Key`
+                : '暂无可用模型'}
             </span>
           )}
         </div>
@@ -204,7 +199,7 @@ function ManagedProviderDetail(props: ManagedProviderDetailProps) {
 }
 
 /** 家族能力徽章：自定义家族取三个 id 的并集，其余就是自身能力。 */
-function cardCapabilities(provider: AiProviderId): ProviderCapability[] {
+function cardCapabilities(provider: ProviderCardId): ProviderCapability[] {
   if (provider !== 'openai-compatible') {
     return [...PROVIDER_REGISTRY[provider].capabilities]
   }
@@ -221,7 +216,7 @@ function cardCapabilities(provider: AiProviderId): ProviderCapability[] {
  */
 function cardStatus(
   controller: ReadyModelSettingsController,
-  provider: AiProviderId,
+  provider: ProviderCardId,
 ): { variant: 'rendered' | 'pending' | 'stale'; label: string } {
   if (provider === 'openai-compatible') {
     const configured = countConfiguredCustomEndpoints(controller.data)
@@ -233,15 +228,21 @@ function cardStatus(
   const managed = controller.data.managedProviders?.find(
     (entry) => entry.provider === provider,
   )
-  if (
-    provider === 'gemini'
-    && controller.data.planKey === 'free'
-    && managed?.funding !== 'byok'
-  ) {
-    return { variant: 'stale', label: 'Plus 解锁' }
+  if (managed?.managedAllowed === false && managed.funding !== 'byok') {
+    return {
+      variant: 'stale',
+      label: `${planLabel(managed.minimumManagedPlan)} 解锁`,
+    }
   }
   const configured = managed?.configured === true
   return configured
     ? { variant: 'rendered', label: '已连接' }
     : { variant: 'pending', label: '未连接' }
+}
+
+function planLabel(plan: 'free' | 'plus' | 'pro' | 'max' | undefined): string {
+  if (plan === 'plus') return 'Plus'
+  if (plan === 'pro') return 'Pro'
+  if (plan === 'max') return 'Max'
+  return 'Free'
 }

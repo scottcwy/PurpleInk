@@ -63,6 +63,20 @@ describe('built-in provider funding settings', () => {
     })
   })
 
+  it('rejects a custom URL for every built-in BYOK service', () => {
+    const parsed = stepfunSettingsSchema.safeParse({
+      providerServices: {
+        openai: {
+          funding: 'byok',
+          apiKey: 'workspace-key',
+          baseUrl: 'https://proxy.example/v1',
+        },
+      },
+    })
+
+    expect(parsed.success).toBe(false)
+  })
+
   it('validates then saves a Gemini BYOK key without requiring a paid plan', async () => {
     const input = {
       providerServices: {

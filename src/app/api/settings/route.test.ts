@@ -217,15 +217,32 @@ describe('GET /api/settings', () => {
       ttsModel: { value: 'mimo-v2.5-tts', source: 'default' },
       asrModel: { value: 'mimo-v2.5-asr', source: 'default' },
     })
+    mocks.resolveProviderFunding.mockImplementation(async (provider: string) =>
+      provider === 'openai' ? 'byok' : 'managed')
+    mocks.listManagedModels.mockResolvedValue([
+      {
+        id: 'openai-model',
+        provider: 'openai',
+        modelId: 'gpt-5.6-luna',
+        capabilities: ['text', 'vision'],
+        minimumPlanKey: 'pro',
+        enabled: true,
+      },
+    ])
 
     const response = await GET()
     const body = await response.json()
+    mocks.resolveProviderFunding.mockResolvedValue('managed')
+    mocks.listManagedModels.mockResolvedValue([])
 
     expect(body.configured).toBe(false)
     expect(body.verifiedAt).toBeNull()
     expect(body.updatedAt).toBeNull()
     expect(body).not.toHaveProperty('masked')
     expect(body.models.chatModel).toEqual({ value: 'step-3.5-flash', source: 'env' })
+    expect(body.models.baseUrl.value).toBe('')
+    expect(body.gemini.baseUrl.value).toBe('')
+    expect(body.mimo.baseUrl.value).toBe('')
     expect(body.geminiConfigured).toBe(false)
     expect(body.geminiCredential).toEqual({
       configured: false,
@@ -243,10 +260,31 @@ describe('GET /api/settings', () => {
       expect.objectContaining({
         provider: 'stepfun',
         funding: 'managed',
+        managedAllowed: true,
+        minimumManagedPlan: 'free',
         byokCredential: expect.objectContaining({ configured: true }),
+      }),
+      expect.objectContaining({
+        provider: 'openai',
+        managedAllowed: false,
+        minimumManagedPlan: 'pro',
+        funding: 'byok',
+        models: [
+          expect.objectContaining({
+            modelId: 'gpt-5.6-luna',
+            capabilities: ['text', 'vision'],
+            verifiedCapabilities: ['text'],
+          }),
+        ],
+      }),
+      expect.objectContaining({
+        provider: 'anthropic',
+        managedAllowed: false,
+        minimumManagedPlan: 'pro',
       }),
     ]))
     expect(JSON.stringify(body)).not.toContain('workspace-key')
+    expect(JSON.stringify(body)).not.toContain('https://google.test/openai/')
   })
 })
 

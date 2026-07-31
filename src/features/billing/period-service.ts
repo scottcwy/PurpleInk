@@ -4,12 +4,15 @@ import { getDb, type Db } from '@/lib/db/client'
 import type { TransactionContext } from '@/lib/db/transaction'
 import {
   aiInvocations,
+  entitlementLedgerEntries,
   usagePeriods,
   workspaceEntitlements,
   workspaceMembers,
 } from '@/lib/db/schema/index'
 import {
   QuotaExhaustedError,
+  createProviderCallCounts,
+  isBuiltInProviderId,
   toBillingProjection,
   type BillingProjection,
 } from './contracts'
@@ -122,29 +125,35 @@ export async function getBillingProjection(): Promise<BillingProjection> {
     provider: aiInvocations.provider,
     usage: aiInvocations.usage,
     usageStatus: aiInvocations.usageStatus,
+    measurementQuality: aiInvocations.measurementQuality,
     settledAt: aiInvocations.settledAt,
-  }).from(aiInvocations).where(and(
-    eq(aiInvocations.workspaceId, workspaceId),
-    eq(aiInvocations.usagePeriodId, period.id),
-    eq(aiInvocations.billingStatus, 'settled'),
+  }).from(entitlementLedgerEntries).innerJoin(
+    aiInvocations,
+    and(
+      eq(aiInvocations.workspaceId, entitlementLedgerEntries.workspaceId),
+      eq(aiInvocations.id, entitlementLedgerEntries.invocationId),
+    ),
+  ).where(and(
+    eq(entitlementLedgerEntries.workspaceId, workspaceId),
+    eq(entitlementLedgerEntries.usagePeriodId, period.id),
+    eq(entitlementLedgerEntries.entryType, 'debit'),
   )).orderBy(desc(aiInvocations.settledAt))
-  const providerCalls = { stepfun: 0, mimo: 0, gemini: 0 }
+  const providerCalls = createProviderCallCounts()
   let inputTokens = 0
   let outputTokens = 0
   for (const invocation of invocations) {
-    const provider = invocation.provider.toLowerCase()
-    if (provider.includes('step')) providerCalls.stepfun += 1
-    else if (provider.includes('mimo')) providerCalls.mimo += 1
-    else if (provider.includes('gemini')) providerCalls.gemini += 1
+    if (isBuiltInProviderId(invocation.provider)) {
+      providerCalls[invocation.provider] += 1
+    }
     if (
-      invocation.usageStatus === 'reported'
+      hasProjectedUsage(invocation)
       && invocation.usage
       && typeof invocation.usage.inputTokens === 'number'
     ) {
       inputTokens += invocation.usage.inputTokens
     }
     if (
-      invocation.usageStatus === 'reported'
+      hasProjectedUsage(invocation)
       && invocation.usage
       && typeof invocation.usage.outputTokens === 'number'
     ) {
@@ -170,6 +179,18 @@ export async function getBillingProjection(): Promise<BillingProjection> {
     lastInvocationAt: invocations[0]?.settledAt ?? null,
     canRedeem: membership?.role === 'owner',
   })
+}
+
+function hasProjectedUsage(invocation: {
+  usageStatus: string | null
+  measurementQuality: string | null
+}): boolean {
+  return invocation.measurementQuality === 'reported'
+    || invocation.measurementQuality === 'estimated'
+    || (
+      invocation.measurementQuality === null
+      && invocation.usageStatus === 'reported'
+    )
 }
 
 export async function getCurrentPlanKey(workspaceId?: string): Promise<PlanKey> {

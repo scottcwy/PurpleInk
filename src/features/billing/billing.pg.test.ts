@@ -506,7 +506,7 @@ it('keeps concurrent reservation and settlement idempotent for one invocation', 
   expect(await database.db.select().from(aiInvocations)).toHaveLength(1)
 })
 
-it('projects only settled calls and trusts only reported token usage', async () => {
+it('projects only entitlement debits and includes deterministic estimated usage', async () => {
   await provision()
   await seedAttempt()
   const [period] = await database.db.select().from(usagePeriods)
@@ -544,14 +544,15 @@ it('projects only settled calls and trusts only reported token usage', async () 
       attemptId: ATTEMPT_ID,
       taskId: 'cvc.billing.test',
       invocationNo: 2,
-      status: 'failed',
+      status: 'succeeded',
       provider: 'gemini',
       model: 'gemini-3.1-flash-lite',
       inputHash: '3'.repeat(64),
       usagePeriodId: period.id,
       billingStatus: 'settled',
       settledCnyMicros: BigInt(200),
-      usageStatus: 'unavailable',
+      usageStatus: 'reported',
+      measurementQuality: 'estimated',
       usage: {
         schemaVersion: 1,
         kind: 'text',
@@ -586,14 +587,44 @@ it('projects only settled calls and trusts only reported token usage', async () 
       completedAt: new Date('2026-07-29T03:00:00.000Z'),
     },
   ])
+  await database.db.insert(entitlementLedgerEntries).values([
+    {
+      workspaceId: WORKSPACE_ID,
+      invocationId: '30000000-0000-4000-8000-000000000031',
+      usagePeriodId: period.id,
+      serviceMultiplierId: 'ai.text.v1',
+      multiplierNumerator: BigInt(1),
+      multiplierDenominator: BigInt(1),
+      debitCnyMicros: BigInt(100),
+      entryType: 'debit',
+      idempotencyKey: 'projection-debit-1',
+    },
+    {
+      workspaceId: WORKSPACE_ID,
+      invocationId: '30000000-0000-4000-8000-000000000032',
+      usagePeriodId: period.id,
+      serviceMultiplierId: 'ai.text.v1',
+      multiplierNumerator: BigInt(1),
+      multiplierDenominator: BigInt(1),
+      debitCnyMicros: BigInt(200),
+      entryType: 'debit',
+      idempotencyKey: 'projection-debit-2',
+    },
+  ])
   const { getBillingProjection } = await import('./period-service')
   const projection = await runInAuthContext(
     { workspaceId: WORKSPACE_ID, userId: USER_ID },
     () => getBillingProjection(),
   )
   expect(projection.usage.invocationCount).toBe(2)
-  expect(projection.providerCalls).toEqual({ stepfun: 1, mimo: 0, gemini: 1 })
-  expect(projection.tokenUsage).toEqual({ inputTokens: 12, outputTokens: 3 })
+  expect(projection.providerCalls).toEqual({
+    stepfun: 1,
+    mimo: 0,
+    gemini: 1,
+    openai: 0,
+    anthropic: 0,
+  })
+  expect(projection.tokenUsage).toEqual({ inputTokens: 1_011, outputTokens: 1_002 })
   expect(projection.lastInvocationAt).toBe(later.toISOString())
 })
 

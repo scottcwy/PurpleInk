@@ -4,6 +4,7 @@ import {
   AI_BILLING_MANIFEST,
   BUILT_IN_PROVIDER_IDS,
 } from '@/lib/config/generated/ai-billing-manifest'
+import { AI_PUBLIC_CATALOG } from '@/lib/config/generated/ai-public-catalog'
 
 describe('generated AI and billing manifest', () => {
   it('defines the five built-in vendors without embedding credentials', () => {
@@ -20,6 +21,24 @@ describe('generated AI and billing manifest', () => {
         .filter((deployment) => deployment.funding === 'managed')
         .every((deployment) => deployment.secretRef.length > 0),
     ).toBe(true)
+  })
+
+  it('generates a client-safe catalog without channel routing or secret references', () => {
+    const serialized = JSON.stringify(AI_PUBLIC_CATALOG)
+    expect(serialized).not.toMatch(/secretRef|baseUrl|channelId|outboundModelId/)
+    expect(AI_PUBLIC_CATALOG.providers).toHaveLength(5)
+    expect(AI_PUBLIC_CATALOG.deployments).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        providerId: 'openai',
+        logicalModelId: 'gpt-5.6-luna',
+        verifiedCapabilities: ['text'],
+      }),
+      expect.objectContaining({
+        providerId: 'anthropic',
+        logicalModelId: 'claude-sonnet-5',
+        verifiedCapabilities: ['text'],
+      }),
+    ]))
   })
 
   it('locks the requested model and channel identities', () => {

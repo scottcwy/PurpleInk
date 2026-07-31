@@ -36,6 +36,23 @@ export function subscriptionConcurrencyLimit(plan: PlanKey): number {
   return PLAN_DEFINITIONS[plan].concurrency
 }
 
+export function planCanUseManagedProvider(
+  plan: PlanKey,
+  provider: BuiltInProviderId,
+): boolean {
+  return (PLAN_DEFINITIONS[plan].managedProviders as readonly string[])
+    .includes(provider)
+}
+
+export function minimumPlanForManagedProvider(
+  provider: BuiltInProviderId,
+): PlanKey {
+  const plan = PLAN_KEYS.find((candidate) =>
+    planCanUseManagedProvider(candidate, provider))
+  if (!plan) throw new Error(`managed provider has no plan assignment: ${provider}`)
+  return plan
+}
+
 export function usagePeriodPlanSnapshot(plan: PlanKey): UsagePeriodPlanSnapshot {
   const definition = PLAN_DEFINITIONS[plan]
   return {
