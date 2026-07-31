@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: web_app/api_routes/auth_routes
+title: 认证 API 路由（Next.js App Router）
+scope:
+    - src/app/api/auth/
+source_files: []
+depends_on: []
+related_to:
+    - path: tests
+    - path: web_app/app_routes/auth_routes

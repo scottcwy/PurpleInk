@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: web_app/api_routes/render_routes
+title: 渲染任务与导出 API 路由
+scope:
+    - src/app/api/render/
+source_files: []
+depends_on: []
+related_to:
+    - path: web_app/app_routes/products_app
+    - path: web_app/features/director
+    - path: web_app/features/render

@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: web_app/app_routes/playbook_docs
+title: Playbook 组件手册与动效意图对照台
+scope:
+    - src/app/playbook/
+source_files: []
+depends_on: []
+related_to: []

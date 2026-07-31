@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: web_app/app_routes/api_routes
+title: Next.js API 路由层（RESTful 接口）
+scope:
+    - src/app/api/
+source_files: []
+depends_on: []
+related_to: []

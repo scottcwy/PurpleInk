@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: web_app/lib/config
+title: 站点配置与元数据管理
+scope:
+    - src/lib/config/
+    - src/lib/site-config.ts
+    - src/lib/metadata.ts
+source_files: []
+depends_on: []
+related_to:
+    - path: web_app/features/ai

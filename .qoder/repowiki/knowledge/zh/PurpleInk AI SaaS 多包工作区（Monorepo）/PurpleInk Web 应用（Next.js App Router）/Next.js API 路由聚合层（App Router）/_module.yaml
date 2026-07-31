@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: web_app/api_routes
+title: Next.js API 路由聚合层（App Router）
+scope:
+    - src/app/api/
+source_files: []
+depends_on: []
+related_to: []

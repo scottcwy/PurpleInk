@@ -1,0 +1,13 @@
+schema_version: 1
+module_path: web_app/features/render
+title: 分镜渲染与成片导出服务
+scope:
+    - src/features/render/
+source_files: []
+depends_on: []
+related_to:
+    - path: procedural_sfx_lib
+    - path: web_app/api_routes/render_routes
+    - path: web_app/features/director
+    - path: web_app/lib/db
+    - path: web_app/lib/storage

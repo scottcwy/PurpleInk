@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: web_app/lib/motion
+title: Motion 动效配置与变体库
+scope:
+    - src/lib/motion/
+source_files: []
+depends_on: []
+related_to:
+    - path: web_app/components
+    - path: web_app/playbook_design_system

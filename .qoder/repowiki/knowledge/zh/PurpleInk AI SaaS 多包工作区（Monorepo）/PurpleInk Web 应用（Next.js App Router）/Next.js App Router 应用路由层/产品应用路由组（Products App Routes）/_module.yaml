@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: web_app/app_routes/products_app
+title: 产品应用路由组（Products App Routes）
+scope:
+    - src/app/products/
+source_files: []
+depends_on: []
+related_to:
+    - path: web_app/api_routes/billing_routes
+    - path: web_app/api_routes/director_routes
+    - path: web_app/api_routes/projects_routes
+    - path: web_app/api_routes/render_routes

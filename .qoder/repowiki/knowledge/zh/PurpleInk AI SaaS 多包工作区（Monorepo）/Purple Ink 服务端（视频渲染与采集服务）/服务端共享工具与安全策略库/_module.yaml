@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: server_service/shared_lib
+title: 服务端共享工具与安全策略库
+scope:
+    - server/src/lib/
+    - server/src/security/
+source_files: []
+depends_on: []
+related_to:
+    - path: server_service/capture_pipeline
+    - path: server_service/tts_engine

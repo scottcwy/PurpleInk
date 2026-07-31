@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: web_app/api_routes/director_routes
+title: Director 编排 API 路由
+scope:
+    - src/app/api/director/
+source_files: []
+depends_on: []
+related_to:
+    - path: web_app/app_routes/products_app

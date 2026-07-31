@@ -6,34 +6,35 @@ scope:
     - '**'
 source_files:
     - package.json
-    - server/package.json
     - pnpm-workspace.yaml
     - pnpm-lock.yaml
+    - server/package.json
+    - packages/procedural-sfx/package.json
+    - patches/@earendil-works__pi-ai.patch
 ---
 
-本项目采用 **pnpm workspace** 作为统一的依赖管理系统，聚合 Next.js 前端与 server/Worker 两个子包，通过锁文件锁定所有依赖版本，确保构建可重复性。
+本项目采用 pnpm workspace 作为统一的依赖管理系统，通过单仓多包（monorepo）结构组织 Next.js Web 应用、Node 服务端渲染服务与程序化音效库，所有第三方依赖声明集中在各包的 package.json 中，并由根级 pnpm-lock.yaml 锁定版本。
 
-### 系统与工具
-- **包管理器**: pnpm（指定版本 `pnpm@10.30.0`，通过 `packageManager` 字段强制）
-- **Node 引擎要求**: `>=22.11.0`（通过 `engines` 字段声明）
-- **工作区配置**: `pnpm-workspace.yaml` 声明根目录 `.` 和 `server` 两个包
-- **锁文件**: `pnpm-lock.yaml`（lockfileVersion 9.0），记录精确解析后的依赖树与 integrity hash
+**系统与方法**
+- 包管理器：pnpm@10.30.0（通过 packageManager 字段强制），使用 lockfileVersion 9.0 的 pnpm-lock.yaml 作为唯一可信源
+- 工作区配置：pnpm-workspace.yaml 声明三个包路径：根目录（Next.js Web）、server（后端服务）、packages/*（内部库）
+- Node 版本约束：engines.node >= 22.11.0，确保运行时一致性
 
-### 关键文件与职责
-- `package.json`（根）：定义 Next.js 应用依赖、开发脚本（dev/build/test/lint/typecheck）、`onlyBuiltDependencies` 白名单（esbuild、ffmpeg-static、sharp）
-- `server/package.json`：后端 Worker 包，依赖 imapflow、mailparser、playwright、sharp、zod 等
-- `pnpm-workspace.yaml`：声明工作区成员
-- `pnpm-lock.yaml`：完整依赖锁定，包含 importers（根与 server）及 packages 段中每个包的 resolution integrity
+**关键文件与包**
+- 根 package.json：定义 Web 应用依赖（next 16.2.x、react 19.2.x、zod 4.4.3、openai 等）及开发工具链（vitest、eslint、prettier、tsx）
+- server/package.json：后端服务依赖（imapflow、mailparser、sharp、playwright、zod），通过 workspace:* 引用 @purpleink/procedural-sfx
+- packages/procedural-sfx/package.json：内部库，仅声明 vitest 和 typescript 为 devDependencies，无运行时依赖
+- pnpm-lock.yaml：完整锁定所有依赖树，包含 patchedDependencies 映射
 
-### 架构与约定
-- **双包结构**：根包负责前端 Next.js 应用，server 包独立运行 Node 服务，两者通过 pnpm workspace 共享依赖解析
-- **版本策略**：核心依赖使用语义化版本范围（如 `^16.2.0`、`^4.4.3`），部分关键包使用精确版本（如 `next: ^16.2.0`、`postgres: 3.4.9`、`nodemailer: 9.0.3`）
-- **原生依赖优化**：通过 `pnpm.onlyBuiltDependencies` 仅允许 esbuild、ffmpeg-static、sharp 进行原生编译，减少安装体积与构建时间
-- **无私有仓库配置**：未发现 `.npmrc`、`.pnpmrc` 或 registry 自定义配置，依赖均从 npm 官方源获取
-- **无 vendoring**：未使用 `node_modules` 提交或 vendor 策略，依赖通过 pnpm 的硬链接机制在本地安装
+**架构与约定**
+- 工作区内包通过 workspace:* 协议互相引用，避免重复安装，实现零拷贝链接
+- 构建优化：pnpm.onlyBuiltDependencies 仅允许 esbuild、ffmpeg-static、sharp 执行原生构建，减少 CI 构建时间
+- 补丁机制：通过 pnpm.patchedDependencies 对 @earendil-works/pi-ai 进行精确修补，patch 文件存放于 patches/ 目录，lockfile 中记录 patch hash 保证可重现性
+- 依赖版本策略：核心依赖使用精确版本（如 next 16.2.0、react 19.2.x），生态依赖使用语义化范围（如 zod ^4.4.3、playwright ^1.61.1）
 
-### 约束与规范
-- 所有依赖版本由 `pnpm-lock.yaml` 锁定，变更需更新锁文件以保证一致性
-- Node 版本必须满足 `>=22.11.0`，由 `engines` 字段约束
-- 原生模块仅限白名单内三个包，避免意外引入 C++ 扩展导致构建失败
-- 工作区内的脚本通过 `pnpm --filter purpleink-server dev` 等方式跨包调用
+**约定与约束**
+- 所有包必须遵循 pnpm workspace 协议，禁止在子包中创建独立的 node_modules
+- 新增依赖需同时更新 pnpm-lock.yaml，确保锁文件与工作区状态一致
+- 原生模块构建需显式列入 onlyBuiltDependencies，否则安装失败
+- 内部库通过 workspace:* 引用，禁止发布到 npm registry
+- 第三方补丁必须通过 pnpm patch 命令生成并纳入版本控制，禁止直接修改 node_modules

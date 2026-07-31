@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: web_app/features/projects
+title: 项目管理与执行特性模块
+scope:
+    - src/features/projects/
+source_files: []
+depends_on: []
+related_to: []

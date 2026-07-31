@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: server_service/adapter_layer
+title: Capture 适配器（HyperFrames 产物生成）
+scope:
+    - server/src/adapter/
+source_files: []
+depends_on: []
+related_to:
+    - path: server_service/capture_pipeline
+    - path: server_service/compose_orchestration

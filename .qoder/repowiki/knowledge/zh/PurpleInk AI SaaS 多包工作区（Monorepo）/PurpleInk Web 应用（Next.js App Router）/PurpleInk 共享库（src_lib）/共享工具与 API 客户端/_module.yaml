@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: web_app/lib/shared_utils
+title: 共享工具与 API 客户端
+scope:
+    - src/lib/api.ts
+    - src/lib/utils.ts
+    - src/lib/theme-mode.ts
+source_files: []
+depends_on: []
+related_to:
+    - path: docs
+    - path: server_service/server_api

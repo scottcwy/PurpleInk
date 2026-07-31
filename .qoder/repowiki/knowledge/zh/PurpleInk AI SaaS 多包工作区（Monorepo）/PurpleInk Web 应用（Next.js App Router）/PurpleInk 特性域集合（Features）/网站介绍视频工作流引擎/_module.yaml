@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: web_app/features/website
+title: 网站介绍视频工作流引擎
+scope:
+    - src/features/website/
+source_files: []
+depends_on: []
+related_to:
+    - path: server_service/server_api
+    - path: web_app/lib/queue
