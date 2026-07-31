@@ -55,10 +55,16 @@ export function VerificationCodeField({
           disabled={disabled || cooling}
           className="w-[116px] shrink-0"
         >
-          {requesting ? '发送中' : cooling ? `${cooldownSeconds} 秒` : sent ? '重新发送' : '获取验证码'}
+          {/* tabular-nums：倒计时逐秒变化时数字等宽，按钮文案不左右跳动。 */}
+          <span className="tabular-nums transition-colors duration-fast ease-standard">
+            {requesting ? '发送中' : cooling ? `${cooldownSeconds} 秒` : sent ? '重新发送' : '获取验证码'}
+          </span>
         </Button>
       </div>
-      <span aria-live="polite" className="min-h-4 text-xs text-ds-text-muted">
+      <span
+        aria-live="polite"
+        className="min-h-4 text-xs text-ds-text-muted tabular-nums transition-colors duration-fast ease-standard"
+      >
         {cooling
           ? `验证码已发送，${cooldownSeconds} 秒后可重新发送`
           : sent

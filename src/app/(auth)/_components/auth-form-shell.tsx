@@ -1,11 +1,18 @@
+'use client'
+
 import Link from 'next/link'
 import type { ReactNode } from 'react'
+import { motion } from 'motion/react'
 import { HONEYPOT_FIELD_NAME } from '@/features/auth/honeypot'
+import { fadeInUp } from '@/lib/motion/variants'
 
 /**
  * 右栏表单的统一外壳：标题、说明、表单槽、底部换页链接。
  *
  * 三个认证页共用同一份版式，避免复制三套布局（PLAN-002 §4.1 最后一段）。
+ *
+ * 入场用 `fadeInUp` 一次性淡入上浮（不加 exit：换页是整页导航，无离场动画）；
+ * prefers-reduced-motion 由根布局 MotionConfig reducedMotion="user" 自动降级。
  */
 export function AuthFormShell({
   title,
@@ -19,12 +26,17 @@ export function AuthFormShell({
   footer: ReactNode
 }) {
   return (
-    <div className="mx-auto w-full max-w-[420px] py-6">
+    <motion.div
+      variants={fadeInUp}
+      initial="hidden"
+      animate="visible"
+      className="mx-auto w-full max-w-[420px] py-6"
+    >
       <h1 className="text-[32px] leading-none font-bold tracking-[-0.03em]">{title}</h1>
       <p className="mt-3.5 text-sm leading-6 text-ds-text-muted">{description}</p>
       <div className="mt-8">{children}</div>
       <p className="mt-6 text-sm text-ds-text-muted">{footer}</p>
-    </div>
+    </motion.div>
   )
 }
 

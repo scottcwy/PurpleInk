@@ -1,10 +1,11 @@
 'use client'
 
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   Info,
+  LoaderCircle,
   LogOut,
   Settings,
   SunMoon,
@@ -132,6 +133,9 @@ const ACCOUNT_ITEMS = [
   [Info, '帮助与反馈'],
 ] as const
 
+/** 登出失败提示保留时长（业务逻辑常量，非动效 token）：到期自动复位为 idle。 */
+const LOGOUT_FAILED_RESET_MS = 5_000
+
 export function AccountMenu({
   footer,
   settingsHref,
@@ -147,6 +151,13 @@ export function AccountMenu({
   const { mode, setTheme } = useThemeMode()
   const appearanceLabel = `外观 · ${themeModeLabel(mode)}`
   const [logoutState, setLogoutState] = useState<'idle' | 'pending' | 'failed'>('idle')
+
+  // failed 态是瞬时提示：停留 5 秒后自动复位，期间仍可点击立即重试。
+  useEffect(() => {
+    if (logoutState !== 'failed') return
+    const timer = setTimeout(() => setLogoutState('idle'), LOGOUT_FAILED_RESET_MS)
+    return () => clearTimeout(timer)
+  }, [logoutState])
 
   return (
     <div className="w-56 rounded-lg border border-ds-border bg-ds-surface p-1.5 text-ds-text shadow-[var(--ds-shadow)] backdrop-blur-xl">
@@ -228,7 +239,11 @@ export function AccountMenu({
           })
         }}
       >
-        <LogOut aria-hidden className="size-4" />
+        {logoutState === 'pending' ? (
+          <LoaderCircle aria-hidden className="size-4 animate-spin" />
+        ) : (
+          <LogOut aria-hidden className="size-4" />
+        )}
         {logoutState === 'pending'
           ? '正在退出…'
           : logoutState === 'failed'
