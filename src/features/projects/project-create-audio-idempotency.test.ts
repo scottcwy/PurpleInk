@@ -21,6 +21,7 @@ const storage = {
   put: vi.fn(async (key: string) => key),
   delete: vi.fn(async () => undefined),
 }
+const cleanupSourceUpload = vi.fn(async () => undefined)
 const measureAudio = vi.fn(async () => ({
   container: 'wav' as const,
   sampleRateHz: 48_000,
@@ -31,6 +32,8 @@ const measureAudio = vi.fn(async () => ({
 beforeEach(() => {
   storage.put.mockClear()
   storage.delete.mockClear()
+  cleanupSourceUpload.mockReset()
+  cleanupSourceUpload.mockResolvedValue(undefined)
   measureAudio.mockClear()
 })
 
@@ -95,12 +98,65 @@ describe('audio project creation idempotency', () => {
       storage,
       measureAudio,
       createProject,
+      cleanupSourceUpload,
       getWorkspaceId: () => WORKSPACE_ID,
       createId: () => PROJECT_ID,
     })
 
     expect(result.reused).toBe(true)
-    expect(storage.delete).toHaveBeenCalledWith(storage.put.mock.calls[0]![0])
+    expect(storage.delete).not.toHaveBeenCalled()
+    expect(cleanupSourceUpload).toHaveBeenCalledWith({
+      workspaceId: WORKSPACE_ID,
+      storageKey: storage.put.mock.calls[0]![0],
+      reason: 'duplicate-upload',
+    })
+  })
+
+  it('fails closed when duplicate upload cleanup cannot be registered', async () => {
+    const cleanupError = new Error('cleanup unavailable')
+    cleanupSourceUpload.mockRejectedValueOnce(cleanupError)
+    const createProject = vi.fn(
+      async (input: CreateProjectWithSourceInput) => ({
+        ...created(input),
+        reused: true,
+      }),
+    )
+
+    await expect(
+      createProjectFromRequest(audioRequest({}), {
+        storage,
+        measureAudio,
+        createProject,
+        cleanupSourceUpload,
+        getWorkspaceId: () => WORKSPACE_ID,
+        createId: () => PROJECT_ID,
+      }),
+    ).rejects.toBe(cleanupError)
+    expect(storage.delete).not.toHaveBeenCalled()
+  })
+
+  it('persists failed creation cleanup without replacing the original error', async () => {
+    const creationError = new Error('database unavailable')
+    const createProject = vi.fn(async () => {
+      throw creationError
+    })
+
+    await expect(
+      createProjectFromRequest(audioRequest({}), {
+        storage,
+        measureAudio,
+        createProject,
+        cleanupSourceUpload,
+        getWorkspaceId: () => WORKSPACE_ID,
+        createId: () => PROJECT_ID,
+      }),
+    ).rejects.toBe(creationError)
+
+    expect(cleanupSourceUpload).toHaveBeenCalledWith({
+      workspaceId: WORKSPACE_ID,
+      storageKey: storage.put.mock.calls[0]![0],
+      reason: 'creation-failed',
+    })
   })
 
   it('maps a conflicting creation key to a safe 409 error', async () => {
@@ -113,6 +169,7 @@ describe('audio project creation idempotency', () => {
         storage,
         measureAudio,
         createProject,
+        cleanupSourceUpload,
         getWorkspaceId: () => WORKSPACE_ID,
         createId: () => PROJECT_ID,
       }),

@@ -33,6 +33,7 @@ import type {
   AudioTranscriptionState,
 } from './audio-transcription-job'
 import { AudioAttemptArtifactWriter } from './attempt-artifact-writer'
+import { AudioArtifactCleanupService } from './audio-artifact-cleanup'
 
 export async function createAudioTranscriptionDependencies():
 Promise<AudioTranscriptionDependencies> {
@@ -42,6 +43,7 @@ Promise<AudioTranscriptionDependencies> {
     currentWorkspaceId(),
   )
   const writer = new AudioAttemptArtifactWriter(database, storage)
+  const cleanup = new AudioArtifactCleanupService(database, storage)
   return {
     loadSource: async (projectId) => {
       const record = await sourceRepository.get(projectId)
@@ -57,9 +59,9 @@ Promise<AudioTranscriptionDependencies> {
     decode: decodeUserRecording,
     transcribe: transcribeRoutedSpeech,
     persistSource: (input) =>
-      persistUserAudioSourceArtifact(input, { storage, writer }),
+      persistUserAudioSourceArtifact(input, { storage, writer, cleanup }),
     persistArtifacts: (input) =>
-      persistUserAudioArtifacts(input, { storage, writer }),
+      persistUserAudioArtifacts(input, { storage, writer, cleanup }),
     assertActive: assertNodeExecutionActive,
     updateProjectScript: (projectId, transcript, execution) =>
       updateAudioProjectScript(database, projectId, transcript, execution),
@@ -81,7 +83,12 @@ Promise<AudioTranscriptionDependencies> {
         execution ? { nodeId, fence: execution } : undefined,
         database,
       ),
-    advance: (projectId) => resumeProjectPipeline(projectId),
+    advance: (projectId, nodeId, execution) =>
+      resumeProjectPipeline(
+        projectId,
+        undefined,
+        execution ? { nodeId, fence: execution } : undefined,
+      ),
     now: () => new Date(),
   }
 }

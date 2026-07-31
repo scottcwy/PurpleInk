@@ -27,12 +27,17 @@ import type { JobSnapshot } from './query'
 import type { JobHandler } from './types'
 
 const getDbMock = vi.hoisted(() => vi.fn())
+const drainAllStorageCleanupRequestsMock = vi.hoisted(() => vi.fn())
 
 vi.mock('server-only', () => ({}))
 vi.mock('@/lib/db/client', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/db/client')>()
   return { ...original, getDb: getDbMock }
 })
+vi.mock('@/lib/storage/cleanup-outbox', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/storage/cleanup-outbox')>()),
+  drainAllStorageCleanupRequests: drainAllStorageCleanupRequestsMock,
+}))
 
 const database = {} as PgTestDatabase
 const TEST_USER_ID = '00000000-0000-4000-8000-000000000099'
@@ -59,6 +64,12 @@ beforeEach(async () => {
   })
   getDbMock.mockReset()
   getDbMock.mockResolvedValue(database.db)
+  drainAllStorageCleanupRequestsMock.mockReset()
+  drainAllStorageCleanupRequestsMock.mockResolvedValue({
+    claimed: 0,
+    deleted: 0,
+    deferred: 0,
+  })
 })
 
 afterAll(async () => {
@@ -184,6 +195,22 @@ describe('legacy in-process queue PG compatibility', () => {
     releaseSweep()
     await Promise.all([startupSweep, intervalSweep])
     expect(maxActiveSweeps).toBe(1)
+  })
+
+  it('runs one bounded global cleanup batch from the shared startup/periodic sweep', async () => {
+    const { InProcessQueue } = await import('./in-process-queue')
+    const queue = new InProcessQueue()
+    const internal = queue as unknown as {
+      runSweep: () => Promise<void>
+    }
+
+    await internal.runSweep()
+
+    expect(drainAllStorageCleanupRequestsMock).toHaveBeenCalledOnce()
+    expect(drainAllStorageCleanupRequestsMock).toHaveBeenCalledWith(
+      { limit: 25 },
+      expect.objectContaining({ database: database.db }),
+    )
   })
 
   it('has no database side effect until enqueue and persists one run/attempt atomically', async () => {

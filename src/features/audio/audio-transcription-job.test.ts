@@ -282,6 +282,49 @@ describe('runAudioTranscriptionJob', () => {
     )
   })
 
+  it('cannot enqueue after stop closes the latch following the final execution check', async () => {
+    const deps = dependencies()
+    const controller = new AbortController()
+    let continuationEnabled = false
+    let entrySucceeded = false
+    const enqueue = vi.fn()
+    vi.mocked(deps.activateContinuation).mockImplementationOnce(async () => {
+      continuationEnabled = true
+    })
+    vi.mocked(deps.transition).mockImplementation(async (_nodeId, status) => {
+      if (status === 'success') entrySucceeded = true
+    })
+    vi.mocked(deps.assertActive).mockImplementation(async () => {
+      if (entrySucceeded) {
+        // 模拟 final assert 返回后、resume 获取项目锁前到达的 stop。
+        continuationEnabled = false
+      }
+    })
+    vi.mocked(deps.advance).mockImplementation(
+      async (_projectId, _nodeId, execution) => {
+        execution?.signal?.throwIfAborted()
+        if (continuationEnabled) enqueue()
+      },
+    )
+
+    await runAudioTranscriptionJob(JOB, deps, {
+      attemptId: JOB.billingContext.attemptId,
+      signal: controller.signal,
+    })
+
+    expect(deps.advance).toHaveBeenCalledWith(
+      JOB.projectId,
+      JOB.nodeId,
+      {
+        projectId: JOB.projectId,
+        attemptId: JOB.billingContext.attemptId,
+        signal: controller.signal,
+      },
+    )
+    expect(enqueue).not.toHaveBeenCalled()
+    expect(continuationEnabled).toBe(false)
+  })
+
   it('rejects source hash drift before decoding or calling ASR', async () => {
     const deps = dependencies()
     vi.mocked(deps.loadSource).mockResolvedValueOnce({
@@ -456,6 +499,11 @@ describe('persistUserAudioArtifacts', () => {
     }
     const artifactDependencies = {
       storage,
+      cleanup: {
+        discard: vi.fn(async ({ storageKey }) => {
+          await storage.delete(storageKey)
+        }),
+      },
       writer: {
         registerPointer: vi.fn(async (pointer) => {
           const bytes = memory.get(pointer.storageKey)
@@ -497,6 +545,11 @@ describe('persistUserAudioArtifacts', () => {
     ])
     expect(pointers.every(({ storageKey }) => !storageKey.includes('attempt-secret')))
       .toBe(true)
+    expect(
+      pointers
+        .filter(({ kind }) => kind === 'director-ingest' || kind === 'director-ingest-audio')
+        .every(({ storageKey, contentHash }) => storageKey.includes(contentHash)),
+    ).toBe(true)
     expect(result.audioManifest).toEqual(
       expect.objectContaining({
         engine: 'user-recording-asr',
@@ -531,6 +584,80 @@ describe('persistUserAudioArtifacts', () => {
         contentHash: cut?.contentHash,
       })
     }
+  })
+
+  it('removes bytes when Artifact registration rejects the active attempt', async () => {
+    const memory = new Map<string, Buffer>()
+    const storage = memoryStorage(memory)
+    const failure = new Error('STALE_ATTEMPT')
+    const discard = vi.fn(async ({ storageKey }: { storageKey: string }) => {
+      await storage.delete(storageKey)
+    })
+
+    await expect(
+      persistUserAudioSourceArtifact(
+        {
+          projectId: 'project-1',
+          nodeId: 'audio-node-1',
+          attemptId: 'stale-attempt',
+          source: audioSource(),
+          sourceContentHash: SOURCE_HASH,
+          sourceBytes: SOURCE_BYTES,
+        },
+        {
+          storage,
+          cleanup: { discard },
+          writer: {
+            registerPointer: vi.fn(async () => {
+              throw failure
+            }),
+          },
+        },
+      ),
+    ).rejects.toBe(failure)
+
+    expect(discard).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'project-1',
+        nodeId: 'audio-node-1',
+        attemptId: 'stale-attempt',
+        storageKey: expect.stringContaining(SOURCE_HASH),
+      }),
+    )
+    expect(memory.size).toBe(0)
+  })
+
+  it('preserves registration and cleanup failures when storage deletion is deferred', async () => {
+    const registrationFailure = new Error('STALE_ATTEMPT')
+    const cleanupFailure = new Error('storage unavailable')
+
+    await expect(
+      persistUserAudioSourceArtifact(
+        {
+          projectId: 'project-1',
+          nodeId: 'audio-node-1',
+          attemptId: 'stale-attempt',
+          source: audioSource(),
+          sourceContentHash: SOURCE_HASH,
+          sourceBytes: SOURCE_BYTES,
+        },
+        {
+          storage: memoryStorage(new Map()),
+          cleanup: {
+            discard: vi.fn(async () => {
+              throw cleanupFailure
+            }),
+          },
+          writer: {
+            registerPointer: vi.fn(async () => {
+              throw registrationFailure
+            }),
+          },
+        },
+      ),
+    ).rejects.toMatchObject({
+      errors: [registrationFailure, cleanupFailure],
+    })
   })
 })
 

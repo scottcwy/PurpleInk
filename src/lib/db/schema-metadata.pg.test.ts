@@ -13,6 +13,7 @@ const TABLES = [
   'workspace_entitlements', 'usage_periods', 'redemption_batches',
   'redemption_codes', 'redemption_audits', 'telemetry_cutovers',
   'project_sources', 'project_creation_requests',
+  'storage_cleanup_requests',
 ] as const
 const WORKSPACE_TABLES = [
   'projects', 'canvas_nodes', 'canvas_edges', 'pipeline_runs', 'task_attempts',
@@ -20,6 +21,7 @@ const WORKSPACE_TABLES = [
   'provider_credentials', 'ai_invocations', 'workspace_settings',
   'usage_periods', 'workspace_entitlements', 'workflow_concurrency_leases',
   'project_sources', 'project_creation_requests',
+  'storage_cleanup_requests',
 ] as const
 const ENUM_CHECKS = {
   projects_status_check: ['active', 'archived'],
@@ -66,6 +68,9 @@ const ENUM_CHECKS = {
   workflow_concurrency_leases_status_check: [
     'waiting', 'active', 'released', 'cancelled', 'expired',
   ],
+  storage_cleanup_requests_reason_check: [
+    'artifact-registration-failed', 'duplicate-upload', 'creation-failed',
+  ],
   users_status_check: ['active', 'disabled'],
   workspace_members_role_check: ['owner', 'member'],
   email_verification_codes_purpose_check: ['signup', 'password_reset'],
@@ -87,6 +92,8 @@ const NUMERIC_CHECKS = [
   'provider_pool_states_current_concurrency_check',
   'provider_pool_states_max_concurrency_check',
   'email_verification_codes_attempt_check', 'auth_throttle_count_check',
+  'storage_cleanup_requests_generation_check',
+  'storage_cleanup_requests_attempt_count_check',
 ] as const
 const REQUIRED_UNIQUES = [
   'workspaces:slug',
@@ -237,10 +244,12 @@ it('creates the complete schema with scoped primary keys', async () => {
         'workspace_entitlements',
         'workflow_concurrency_leases',
         'project_creation_requests',
+        'storage_cleanup_requests',
       ].includes(table))
       .map((table) => `${table}:workspace_id,id`),
     'project_sources:workspace_id,project_id',
     'project_creation_requests:workspace_id,idempotency_key',
+    'storage_cleanup_requests:workspace_id,storage_key',
     'workspace_settings:workspace_id,key',
     'workspace_entitlements:workspace_id',
     'managed_model_catalog:id',
@@ -265,7 +274,7 @@ it('creates the complete schema with scoped primary keys', async () => {
 
 it('locks the exact workspace and identity foreign keys', async () => {
   const signatures = (await foreignKeys()).map(foreignKeySignature).sort()
-  expect(EXPECTED_FOREIGN_KEYS).toHaveLength(51)
+  expect(EXPECTED_FOREIGN_KEYS).toHaveLength(52)
   expect(signatures).toEqual([...EXPECTED_FOREIGN_KEYS].sort())
 })
 
@@ -321,7 +330,7 @@ it('uses UUID identities, bigint revisions, and timestamptz suffixes', async () 
     SELECT table_name, data_type FROM information_schema.columns
     WHERE table_schema = 'public' AND column_name IN ('id', 'workspace_id')
   `
-  expect(identities).toHaveLength(43)
+  expect(identities).toHaveLength(44)
   expect(identities.every((row) => row.data_type === 'uuid')).toBe(true)
   const revisions = await database.sql<{ table_name: string; data_type: string }[]>`
     SELECT table_name, data_type FROM information_schema.columns
@@ -334,7 +343,7 @@ it('uses UUID identities, bigint revisions, and timestamptz suffixes', async () 
     WHERE table_schema = 'public' AND right(column_name, 3) = '_at'
   `
   // 队列租约、取消、调度与项目创建回执都使用 timestamptz。
-  expect(times).toHaveLength(88)
+  expect(times).toHaveLength(91)
   expect(new Set(times.map((row) => row.table_name))).toEqual(
     new Set(TABLES.filter((table) => table !== 'rate_card_units')),
   )

@@ -27,6 +27,15 @@ export interface AudioArtifactPointerWriter {
   registerPointer(input: AttemptArtifactPointerInput): Promise<string>
 }
 
+export interface AudioArtifactCleanup {
+  discard(input: {
+    projectId: string
+    nodeId: string
+    attemptId: string
+    storageKey: string
+  }): Promise<void>
+}
+
 export interface PersistUserAudioArtifactsInput {
   projectId: string
   nodeId: string
@@ -65,6 +74,7 @@ export interface PersistedUserAudioArtifacts {
 export interface UserAudioArtifactDependencies {
   storage: StorageAdapter
   writer: AudioArtifactPointerWriter
+  cleanup: AudioArtifactCleanup
 }
 
 /** 在任何外部 ASR 调用前登记已校验的用户上传源字节。 */
@@ -129,14 +139,14 @@ export async function persistUserAudioArtifacts(
   const ingest = await writeJsonPointer(
     dependencies,
     input,
-    `${base}/director-ingest.json`,
+    `${base}/director-ingest`,
     USER_AUDIO_ARTIFACT_KINDS.ingest,
     { scriptUnits },
   )
   const ingestAudio = await writeJsonPointer(
     dependencies,
     input,
-    `${base}/director-ingest-audio.json`,
+    `${base}/director-ingest-audio`,
     USER_AUDIO_ARTIFACT_KINDS.ingestAudio,
     contracts,
   )
@@ -168,18 +178,19 @@ async function writeJsonPointer(
     PersistUserAudioArtifactsInput,
     'projectId' | 'nodeId' | 'attemptId'
   >,
-  storageKey: string,
+  storageKeyBase: string,
   kind: string,
   value: unknown,
 ): Promise<StoredPointer> {
   const bytes = Buffer.from(JSON.stringify(value), 'utf8')
+  const contentHash = sha256(bytes)
   return writePointer(
     dependencies,
     aggregate,
-    storageKey,
+    `${storageKeyBase}-${contentHash}.json`,
     bytes,
     kind,
-    sha256(bytes),
+    contentHash,
   )
 }
 
@@ -205,14 +216,32 @@ async function writePointer(
     throw new Error('待登记录音产物的最终字节哈希不一致')
   }
   const storageKey = await dependencies.storage.put(requestedKey, bytes)
-  const artifactId = await dependencies.writer.registerPointer({
-    projectId: aggregate.projectId,
-    nodeId: aggregate.nodeId,
-    attemptId: aggregate.attemptId,
-    kind,
-    storageKey,
-    contentHash,
-  })
+  let artifactId: string
+  try {
+    artifactId = await dependencies.writer.registerPointer({
+      projectId: aggregate.projectId,
+      nodeId: aggregate.nodeId,
+      attemptId: aggregate.attemptId,
+      kind,
+      storageKey,
+      contentHash,
+    })
+  } catch (error) {
+    try {
+      await dependencies.cleanup.discard({
+        projectId: aggregate.projectId,
+        nodeId: aggregate.nodeId,
+        attemptId: aggregate.attemptId,
+        storageKey,
+      })
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        '录音 Artifact 登记失败且未登记字节清理失败',
+      )
+    }
+    throw error
+  }
   return { artifactId, storageKey, contentHash }
 }
 

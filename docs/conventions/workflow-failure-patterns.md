@@ -968,6 +968,44 @@ JavaScript 标识符在运行时都有定义。`openFrameCapture` 又没有监�
 
 ---
 
+## 7.23 模式 AC：对象已写入但 Artifact 登记失败，留下无账本字节
+
+**症状**：录音转写在 `storage.put` 后因 `STALE_ATTEMPT`、数据库中断或 Artifact
+合同冲突而失败；数据库没有对应 Artifact，但对象存储仍保留源音频、切片或 JSON。
+若删除也暂时失败，只抛 `AggregateError` 无法让后续进程定位和恢复这批孤立字节。
+
+**根因**：对象存储与 Postgres 无法组成原子事务；旧实现把“写字节 → 登记指针”
+视为一个不可失败的连续动作，没有先持久化补偿意图。部分 JSON 又使用 attempt 固定
+key，重试时可能覆盖已登记版本，登记失败后也不能安全盲删。
+
+**规则与护栏**：
+
+- 所有在 Artifact 登记前写入的录音产物都必须使用内容寻址 key；固定语义名称只进入
+  Artifact kind，不得作为可覆盖的对象 key。
+- `registerPointer` 失败后，先把当前 workspace、storage key、安全 reason 和可用的
+  project/node/attempt 关联写入公共 `storage_cleanup_requests`，再只领取该 exact key
+  做立即补偿；不得让 backlog/limit 导致当前对象未被处理。
+- 删除失败只持久化 `STORAGE_DELETE_FAILED`、attempt count 和下次重试时间，不得写入
+  storage endpoint、文件内容、原始 provider/数据库错误；批量扫描使用
+  `FOR UPDATE SKIP LOCKED`、有限 claim lease 与指数退避。
+- 清理成功删除 outbox 记录；进程在 claim 后崩溃时，lease 到期后允许另一执行器恢复。
+  Artifact 登记原始错误与清理错误都必须保留在当前调用的 `AggregateError` 中，不能用
+  清理失败覆盖真正的阶段失败。
+- 生产队列必须在启动清扫和周期清扫中消费一个跨 workspace 的有限批次；claim 与结算
+  继续使用 generation、attempt count 和 lease 的 CAS，旧消费者不得删除或延后同 key
+  的新一代请求。单次批量必须有硬上限，不能让 storage backlog 阻塞其他 sweep 职责。
+- 回归测试必须覆盖登记失败后 exact-key 删除、删除失败后的持久安全证据、存储恢复后的
+  drain、跨 workspace 有限批次和队列 sweep 接线，以及 Director JSON key 包含真实内容
+  哈希。
+
+**已落地护栏**：`user-audio-artifacts.ts` 统一内容寻址并接入
+`AudioArtifactCleanupService`；公共 `cleanup-outbox.ts` 提供 enqueue、exact drain 与
+跨 workspace 批量恢复；`InProcessQueue` 的共享 startup/periodic sweep 每次最多消费
+25 条。音频 unit、Artifact seam PG、cleanup outbox PG 与 queue wiring 测试共同锁定
+上述合同。
+
+---
+
 ## 9. 已知未修项
 
 当前无已确认而未修的代码/文档项。
@@ -984,7 +1022,8 @@ JavaScript 标识符在运行时都有定义。`openFrameCapture` 又没有监�
 调用（模式 Q）、产物血缘用 artifactId 强绑定导致旁白重跑即判字幕失效（模式 S）
 、队列执行超时未中止旧阶段并允许迟到写入（模式 Y）、页面脚本异常未拒绝坏
 FABRICATE Artifact（模式 Z）、retryable failed 前沿未被后台恢复（模式 AA）、
-音频源完整性矛盾被误判为可重试（模式 AB）——见各节「已落地护栏」。
+音频源完整性矛盾被误判为可重试（模式 AB）、对象写入后 Artifact 登记失败遗留无账本
+字节（模式 AC）——见各节「已落地护栏」。
 
 ---
 
@@ -1009,8 +1048,9 @@ FABRICATE Artifact（模式 Z）、retryable failed 前沿未被后台恢复（�
   上述两个结构；`server/` 未发现对应但分叉的 zod/schema 副本。
 - **队列与 Director 补偿链**：逐条核对 admission、入队、FABRICATE、render、
   stage run 与 artifact commit 失败路径；均会转入 `failed` 并写对应
-  `directorError` / `renderError`，清理失败通过 `AggregateError` 保留原始错误，
-  未发现会把节点永久留在 `idle` / `running` 的旁路。
+  `directorError` / `renderError`。阶段内临时文件清理失败通过 `AggregateError`
+  保留原始错误；对象存储先写、Artifact 后登记的跨事务窗口另按模式 AC 持久化清理
+  outbox，未发现会把节点永久留在 `idle` / `running` 的旁路。
 - **全集映射**：仓库内 `Record<CanvasNodeType, …>` / `Record<PipelineStage, …>`
   包括 route target、node schema、stage metadata、fallback node type、stage output
   与 UI stage colors。所有生产映射都以类型全集作为键；路由语义另有

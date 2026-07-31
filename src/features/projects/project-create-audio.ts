@@ -24,6 +24,10 @@ import {
   PROJECT_VISUAL_STYLE_FORM_FIELDS,
   readProjectVisualStyleFormData,
 } from './project-visual-style'
+import {
+  cleanupProjectSourceUpload,
+  type ProjectSourceCleanupRequest,
+} from './project-source-cleanup'
 
 const uuidSchema = z.string().uuid()
 const optionalTitleSchema = z.string().trim().min(1).max(200).optional()
@@ -96,10 +100,11 @@ export async function createProjectFromAudioForm(
   const storage = dependencies.storage ?? defaultStorage
 
   let writeAttempted = false
+  let result: CreatedProject
   try {
     writeAttempted = true
     await storage.put(storageKey, bytes)
-    const result = await createFromCanonicalSource(
+    result = await createFromCanonicalSource(
       {
         projectId,
         title,
@@ -120,12 +125,20 @@ export async function createProjectFromAudioForm(
         createId,
       },
     )
-    if (result.reused) {
-      await storage.delete(storageKey).catch(() => undefined)
-    }
-    return result
   } catch (error) {
-    if (writeAttempted) await storage.delete(storageKey).catch(() => undefined)
+    if (writeAttempted) {
+      try {
+        await cleanupUploadedSource(
+          { workspaceId, storageKey, reason: 'creation-failed' },
+          dependencies,
+        )
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [error, cleanupError],
+          '录音项目创建失败且上传清理登记失败',
+        )
+      }
+    }
     if (error instanceof ProjectCreationIdempotencyError) {
       throw new ProjectCreateInputError(
         '同一创建请求标识已用于其他项目参数',
@@ -135,6 +148,27 @@ export async function createProjectFromAudioForm(
     }
     throw error
   }
+  if (result.reused) {
+    await cleanupUploadedSource(
+      { workspaceId, storageKey, reason: 'duplicate-upload' },
+      dependencies,
+    )
+  }
+  return result
+}
+
+async function cleanupUploadedSource(
+  request: ProjectSourceCleanupRequest,
+  dependencies: ProjectCreateRequestDependencies,
+): Promise<void> {
+  const storage = dependencies.storage ?? defaultStorage
+  const cleanup = dependencies.cleanupSourceUpload
+    ?? ((input: ProjectSourceCleanupRequest) =>
+      cleanupProjectSourceUpload(input, {
+        database: dependencies.database,
+        storage,
+      }))
+  await cleanup(request)
 }
 
 async function createFromCanonicalSource(

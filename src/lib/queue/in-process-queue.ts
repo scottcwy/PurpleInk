@@ -12,9 +12,9 @@ import {
   HEARTBEAT_INTERVAL_MS,
   SWEEP_INTERVAL_MS,
   renewLeases,
-  sweepExpiredLeases,
   withExecutionTimeout,
 } from './lease'
+import { runQueueMaintenance } from './queue-maintenance'
 import type { JobHandler, LaneQuotas, QueueAdapter, QueueJob } from './types'
 import type { ClaimFilter } from './queue-claim'
 import { defaultQueueLaneQuotas } from './queue-defaults'
@@ -127,24 +127,7 @@ export class InProcessQueue implements QueueAdapter {
   }
 
   private async sweep(): Promise<void> {
-    try {
-      const database = await getDb()
-      await sweepExpiredLeases(database)
-      const { reconcileStaleExecutionEpochs } = await import(
-        './execution-reconciliation'
-      )
-      await reconcileStaleExecutionEpochs(database)
-      const { reconcileDirectorFrontiers } = await import(
-        '@/features/director/frontier-reconciliation'
-      )
-      await reconcileDirectorFrontiers(database)
-      const { reconcileExpiredProviderTickets } = await import(
-        '@/features/ai/provider-dispatch-ticket'
-      )
-      await reconcileExpiredProviderTickets(database)
-    } catch (error) {
-      console.error('[queue] 僵尸 attempt 回收失败', error)
-    }
+    await runQueueMaintenance(await getDb())
   }
 
   private async tick(): Promise<void> {

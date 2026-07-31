@@ -9,6 +9,10 @@ export type { VersionedPayload } from './core'
 
 export { projectSources } from './project-sources'
 export { projectCreationRequests } from './project-creation'
+export {
+  STORAGE_CLEANUP_REASONS,
+  storageCleanupRequests,
+} from './storage-cleanup'
 
 export {
   USER_STATUSES,

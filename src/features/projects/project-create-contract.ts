@@ -5,6 +5,7 @@ import type {
   CreateProjectWithSourceInput,
   ProjectCreationDependencies,
 } from './project-creation'
+import type { ProjectSourceCleanupRequest } from './project-source-cleanup'
 
 export const MAX_PROJECT_AUDIO_BYTES = 100 * 1024 * 1024
 export const MAX_PROJECT_AUDIO_DURATION_MS = 30 * 60 * 1000
@@ -21,6 +22,9 @@ export interface ProjectCreateRequestDependencies {
   getWorkspaceId?: () => string
   createId?: () => string
   database?: ProjectCreationDependencies['database']
+  cleanupSourceUpload?: (
+    input: ProjectSourceCleanupRequest,
+  ) => Promise<void>
 }
 
 export class ProjectCreateInputError extends Error {

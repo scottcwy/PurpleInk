@@ -18,6 +18,7 @@ import {
 import type { StorageAdapter } from '@/lib/storage'
 import { AudioRuntimeRepository } from './runtime-repository'
 import { AudioAttemptArtifactWriter } from './attempt-artifact-writer'
+import { AudioArtifactCleanupService } from './audio-artifact-cleanup'
 import {
   persistUserAudioArtifacts,
   persistUserAudioSourceArtifact,
@@ -319,6 +320,7 @@ async function seedSeam(db: Db) {
   const artifactDependencies = {
     storage,
     writer: new AudioAttemptArtifactWriter(db, storage),
+    cleanup: new AudioArtifactCleanupService(db, storage),
   }
   const sourceInput = {
     projectId,
