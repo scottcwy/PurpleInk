@@ -2,6 +2,9 @@
 
 import dynamic from 'next/dynamic'
 import { Skeleton } from '@/components/ui/skeleton'
+import { MobileFallbackCard } from '@/features/navigation/mobile-fallback-card'
+import { useMediaQuery } from '@/lib/hooks/use-media-query'
+import { BP_SIDEBAR_HIDDEN } from '@/lib/layout/breakpoints'
 import type { CanvasViewProps } from './canvas-view'
 
 /** 画布加载骨架：与运行态一致，不预留常驻顶栏高度。 */
@@ -29,5 +32,10 @@ const CanvasView = dynamic(
 )
 
 export function CanvasLoader(props: CanvasViewProps) {
+  // SSR / 首帧默认 false（与 app-sidebar-shell 同策略），先出画布骨架，避免水合闪烁。
+  const isMobile = useMediaQuery(`(max-width: ${BP_SIDEBAR_HIDDEN - 1}px)`)
+  if (isMobile) {
+    return <MobileFallbackCard />
+  }
   return <CanvasView {...props} />
 }
