@@ -261,6 +261,22 @@ describe('blocked 状态转移', () => {
       expect(updateSets).toHaveLength(0)
     },
   )
+
+  it('allows an explicitly idempotent cancellation projection', async () => {
+    nodeRows = [{
+      id: 'n1',
+      projectId: 'p1',
+      status: 'cancelled',
+      data: { payload: {} },
+    }]
+
+    await expect(
+      transitionNodeStatus('n1', 'cancelled', { idempotent: true }),
+    ).resolves.toBeUndefined()
+
+    expect(updateSets).toHaveLength(0)
+    expect(publishStatus).not.toHaveBeenCalled()
+  })
 })
 
 describe('skipped 状态转移全组合', () => {

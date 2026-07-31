@@ -658,6 +658,24 @@ describe('legacy in-process queue PG compatibility', () => {
     }
   })
 
+  it('refuses an automatic Director enqueue after stop closes the script latch', async () => {
+    const { InProcessQueue } = await import('./in-process-queue')
+    const projectId = await seedProject()
+    const queue = new InProcessQueue()
+
+    await expect(inLocalWs(() =>
+      queue.enqueue('director-stage', { projectId }, {
+        projectId,
+        requireAutomaticAdvance: true,
+      })
+    )).rejects.toThrow('automatic advance is disabled')
+
+    const attempts = await database.db
+      .select({ id: taskAttempts.id })
+      .from(taskAttempts)
+    expect(attempts).toHaveLength(0)
+  })
+
   it('rejects non-positive or non-integer lane quotas before starting', async () => {
     const { InProcessQueue } = await import('./in-process-queue')
     const queue = new InProcessQueue()

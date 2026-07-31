@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { AutomaticAdvanceDisabledError } from '@/lib/queue'
 import type { PipelineStage } from './types'
 import {
   advancePipeline,
@@ -93,10 +94,13 @@ describe('advancePipeline', () => {
 
     const result = await advancePipeline('project-1', 'shot-script', test.dependencies)
 
-    expect(test.enqueueRenderShot).toHaveBeenCalledWith({
-      projectId: 'project-1',
-      nodeId: 'codegen',
-    })
+    expect(test.enqueueRenderShot).toHaveBeenCalledWith(
+      {
+        projectId: 'project-1',
+        nodeId: 'codegen',
+      },
+      { requireAutomaticAdvance: true },
+    )
     expect(test.enqueueDirectorStage).toHaveBeenCalledWith({
       projectId: 'project-1',
       nodeId: 'subtitle',
@@ -303,6 +307,18 @@ describe('advancePipeline', () => {
 
     expect(result).toEqual({ enqueuedNodeIds: [], failedNodeIds: [] })
     expect(test.enqueueDirectorStage).not.toHaveBeenCalled()
+  })
+
+  it('does not report a stop race as a workflow failure', async () => {
+    const test = harness([candidate({ id: 'stopped', stage: 'SHOT_SPEC' })])
+    test.enqueueDirectorStage.mockRejectedValue(
+      new AutomaticAdvanceDisabledError(),
+    )
+
+    const result = await advancePipeline('project-1', 'node-1', test.dependencies)
+
+    expect(result).toEqual({ enqueuedNodeIds: [], failedNodeIds: [] })
+    expect(test.repository.recordStageError).not.toHaveBeenCalled()
   })
 })
 

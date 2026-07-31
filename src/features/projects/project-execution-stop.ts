@@ -4,7 +4,6 @@ import {
   eq,
   inArray,
   isNull,
-  ne,
   notInArray,
   sql,
 } from 'drizzle-orm'
@@ -84,8 +83,6 @@ export async function stopProjectExecution(
     const attempts = await transaction
       .select({
         id: taskAttempts.id,
-        entityType: taskAttempts.entityType,
-        entityId: taskAttempts.entityId,
         workUnitKey: taskAttempts.workUnitKey,
         status: taskAttempts.status,
         cancelRequestedAt: taskAttempts.cancelRequestedAt,
@@ -243,20 +240,14 @@ export async function stopProjectExecution(
         ))
     }
 
-    const queuedNodeIds = queued
-      .filter(({ entityType }) => entityType === 'node')
-      .map(({ entityId }) => entityId)
-    if (queuedNodeIds.length > 0) {
-      await transaction
-        .update(canvasNodes)
-        .set({ status: 'cancelled', updatedAt: sql`now()` })
-        .where(and(
-          eq(canvasNodes.workspaceId, workspaceId),
-          eq(canvasNodes.projectId, projectId),
-          inArray(canvasNodes.id, queuedNodeIds),
-          ne(canvasNodes.status, 'succeeded'),
-        ))
-    }
+    await transaction
+      .update(canvasNodes)
+      .set({ status: 'cancelled', updatedAt: sql`now()` })
+      .where(and(
+        eq(canvasNodes.workspaceId, workspaceId),
+        eq(canvasNodes.projectId, projectId),
+        eq(canvasNodes.status, 'queued'),
+      ))
 
     return {
       cancelledAttempts: queuedIds.length,

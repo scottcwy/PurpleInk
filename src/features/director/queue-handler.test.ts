@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { JobHandler, QueueAdapter } from '@/lib/queue'
+import {
+  AutomaticAdvanceDisabledError,
+  type JobHandler,
+  type QueueAdapter,
+} from '@/lib/queue'
 import {
   enqueueDirectorStage,
   registerDirectorStageHandler,
@@ -92,8 +96,38 @@ describe('director queue handler', () => {
     expect(harness.queue.enqueue).toHaveBeenCalledWith(
       'director-stage',
       { projectId: 'project-1', nodeId: 'node-1', stage: 'INGEST' },
-      { projectId: 'project-1', nodeId: 'node-1' }
+      {
+        projectId: 'project-1',
+        nodeId: 'node-1',
+        requireAutomaticAdvance: true,
+      }
     )
+  })
+
+  it('projects a stop race as cancellation without recording a workflow failure', async () => {
+    const harness = createQueue()
+    const stopped = new AutomaticAdvanceDisabledError()
+    vi.mocked(harness.queue.enqueue).mockRejectedValue(stopped)
+    const transitionNodeStatus = vi.fn(
+      async (_nodeId: string, _status: string) => {},
+    )
+    const recordStageError = vi.fn(async () => {})
+
+    await expect(enqueueDirectorStage(
+      { projectId: 'project-1', nodeId: 'node-1', stage: 'INGEST' },
+      {
+        queue: harness.queue,
+        assertEnqueueable: vi.fn(async () => {}),
+        transitionNodeStatus,
+        recordStageError,
+      },
+    )).rejects.toBe(stopped)
+
+    expect(transitionNodeStatus.mock.calls.map((call) => call[1])).toEqual([
+      'pending',
+      'cancelled',
+    ])
+    expect(recordStageError).not.toHaveBeenCalled()
   })
 
   it('compensates a failed enqueue instead of leaving pending state', async () => {

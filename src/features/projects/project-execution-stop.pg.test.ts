@@ -138,6 +138,38 @@ describe('stopProjectExecution', () => {
     const [repeated] = await database.db.select().from(projects)
     expect(repeated?.executionEpoch).toBe(1)
   })
+
+  it('cancels an orphan queued node even when no attempt identifies the node', async () => {
+    const projectId = randomUUID()
+    const nodeId = randomUUID()
+    await database.db.insert(projects).values({
+      workspaceId: WORKSPACE_ID,
+      id: projectId,
+      title: '孤立排队节点停止测试',
+      script: '',
+      workflowVersion: 'test',
+      exportSettings: { schemaVersion: 1 },
+      autopilot: true,
+    })
+    await database.db.insert(canvasNodes).values({
+      workspaceId: WORKSPACE_ID,
+      id: nodeId,
+      projectId,
+      logicalKey: 'global:export',
+      type: 'export',
+      stage: 'FINALIZE',
+      status: 'queued',
+      data: { schemaVersion: 1, payload: {} },
+    })
+
+    await inWorkspace(() => stopProjectExecution(projectId, {
+      database: database.db,
+      releaseReservation: vi.fn(async () => undefined),
+    }))
+
+    const [node] = await database.db.select().from(canvasNodes)
+    expect(node?.status).toBe('cancelled')
+  })
 })
 
 async function seedExecution(status: 'queued' | 'running') {

@@ -8,6 +8,7 @@ import { assertProjectWorkflowSupported } from '@/features/projects/project-comp
 import { getDb } from '@/lib/db/client'
 import { storage } from '@/lib/storage'
 import {
+  AutomaticAdvanceDisabledError,
   assertEnqueueRetryBudget,
   queue as defaultQueue,
   type QueueAdapter,
@@ -102,8 +103,17 @@ export async function enqueueDirectorStage(
     return await resolved.queue.enqueue('director-stage', payload, {
       projectId: payload.projectId,
       nodeId: payload.nodeId,
+      requireAutomaticAdvance: true,
     })
   } catch (error) {
+    if (error instanceof AutomaticAdvanceDisabledError) {
+      await resolved.transitionNodeStatus(
+        payload.nodeId,
+        'cancelled',
+        { idempotent: true },
+      )
+      throw error
+    }
     await compensateEnqueueFailure(payload, error, resolved)
     throw error
   }

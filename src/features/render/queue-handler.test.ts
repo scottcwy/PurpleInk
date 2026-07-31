@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { AutomaticAdvanceDisabledError } from '@/lib/queue'
 import type { QueueAdapter } from '@/lib/queue'
 import type { RenderAdmissionContext, RenderJob, RenderResult } from './types'
 import {
@@ -428,6 +429,60 @@ describe('render queue handler', () => {
 
     expect(order).toEqual(['load', 'admission', 'pending', 'enqueue'])
     expect(assertAdmission).toHaveBeenCalledWith(renderJob)
+  })
+
+  it('passes the automatic-advance guard to the real render enqueue', async () => {
+    const harness = createQueue()
+
+    await enqueueRenderShot(
+      { projectId: 'project-1', nodeId: 'node-1' },
+      {
+        queue: harness.queue,
+        loadAdmissionContext: vi.fn(async () => enqueueContext),
+        assertAdmission: vi.fn(async () => {}),
+        transitionNodeStatus: vi.fn(async () => {}),
+        recordRenderError: vi.fn(async () => {}),
+      },
+      { requireAutomaticAdvance: true },
+    )
+
+    expect(harness.queue.enqueue).toHaveBeenCalledWith(
+      'render-shot',
+      { projectId: 'project-1', nodeId: 'node-1' },
+      {
+        projectId: 'project-1',
+        nodeId: 'node-1',
+        requireAutomaticAdvance: true,
+      },
+    )
+  })
+
+  it('projects a stopped automatic render enqueue as cancellation', async () => {
+    const harness = createQueue()
+    const stopped = new AutomaticAdvanceDisabledError()
+    vi.mocked(harness.queue.enqueue).mockRejectedValue(stopped)
+    const transitionNodeStatus = vi.fn(
+      async (_nodeId: string, _status: string) => {},
+    )
+    const recordRenderError = vi.fn(async () => {})
+
+    await expect(enqueueRenderShot(
+      { projectId: 'project-1', nodeId: 'node-1' },
+      {
+        queue: harness.queue,
+        loadAdmissionContext: vi.fn(async () => enqueueContext),
+        assertAdmission: vi.fn(async () => {}),
+        transitionNodeStatus,
+        recordRenderError,
+      },
+      { requireAutomaticAdvance: true },
+    )).rejects.toBe(stopped)
+
+    expect(transitionNodeStatus.mock.calls.map((call) => call[1])).toEqual([
+      'pending',
+      'cancelled',
+    ])
+    expect(recordRenderError).not.toHaveBeenCalled()
   })
 
   it('does not admit the old HTML when it is about to regenerate the source', async () => {

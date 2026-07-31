@@ -1,4 +1,5 @@
 import 'server-only'
+import { AutomaticAdvanceDisabledError } from '@/lib/queue'
 import { getDb } from '@/lib/db/client'
 import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 import {
@@ -57,10 +58,13 @@ type EnqueueDirectorStage = (input: {
   stage: PipelineStage
 }) => Promise<string>
 
-type EnqueueRenderShot = (input: {
-  projectId: string
-  nodeId: string
-}) => Promise<string>
+type EnqueueRenderShot = (
+  input: {
+    projectId: string
+    nodeId: string
+  },
+  options?: { requireAutomaticAdvance?: boolean },
+) => Promise<string>
 
 export interface AdvanceDependencies {
   repository: AdvanceRepository
@@ -162,7 +166,10 @@ export async function advancePipeline(
       await assertExecutionActive()
       if (candidate.type === 'shot-codegen') {
         if (!(await resolved.repository.isMediaReady(projectId))) continue
-        await resolved.enqueueRenderShot({ projectId, nodeId: candidate.id })
+        await resolved.enqueueRenderShot(
+          { projectId, nodeId: candidate.id },
+          { requireAutomaticAdvance: true },
+        )
       } else if (candidate.type === 'export') {
         const finalization = await resolved.requestExportFinalization({
           projectId,
@@ -189,6 +196,7 @@ export async function advancePipeline(
       await assertExecutionActive()
       result.enqueuedNodeIds.push(candidate.id)
     } catch (error) {
+      if (error instanceof AutomaticAdvanceDisabledError) continue
       result.failedNodeIds.push(candidate.id)
       await resolved.repository.recordStageError(
         candidate.id,
@@ -320,7 +328,8 @@ async function createDefaultDependencies(): Promise<AdvanceDependencies> {
   return {
     repository: new AdvanceRepositoryImpl(await getDb()),
     enqueueDirectorStage,
-    enqueueRenderShot,
+    enqueueRenderShot: (input, options) =>
+      enqueueRenderShot(input, undefined, options),
     requestExportFinalization,
   }
 }

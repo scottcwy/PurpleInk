@@ -10,6 +10,7 @@ import {
   type ExportProjectInput,
 } from '@/features/render/export-queue-handler'
 import { getExportReadiness } from '@/features/render/export-readiness'
+import { AutomaticAdvanceDisabledError } from '@/lib/queue'
 
 export type ExportFinalizationTrigger =
   | 'autopilot'
@@ -30,7 +31,10 @@ export interface ExportFinalizationDependencies {
   getGraph(projectId: string): Promise<CanvasGraph>
   getReadiness(projectId: string): Promise<ExportFinalizationReadiness>
   transitionNodeStatus: typeof transitionNodeStatus
-  enqueueProjectExport(input: ExportProjectInput): Promise<string>
+  enqueueProjectExport(
+    input: ExportProjectInput,
+    options?: { requireAutomaticAdvance?: boolean },
+  ): Promise<string>
   now(): Date
   referenceId(): string
 }
@@ -93,15 +97,46 @@ export async function requestExportFinalization(
     return { status: 'queued', nodeId: node.id, jobId, mode: 'degraded' }
   }
 
-  const jobId = await dependencies.enqueueProjectExport({
-    projectId: input.projectId,
-    exportNodeId: node.id,
-    ...(readiness.inputFingerprint
-      ? { inputFingerprint: readiness.inputFingerprint }
-      : {}),
-  })
-  await dependencies.transitionNodeStatus(node.id, 'pending')
+  const automatic = input.trigger === 'autopilot'
+  if (automatic) {
+    await dependencies.transitionNodeStatus(node.id, 'pending')
+  }
+  let jobId: string
+  try {
+    jobId = await dependencies.enqueueProjectExport(
+      {
+        projectId: input.projectId,
+        exportNodeId: node.id,
+        ...(readiness.inputFingerprint
+          ? { inputFingerprint: readiness.inputFingerprint }
+          : {}),
+      },
+      automatic ? { requireAutomaticAdvance: true } : undefined,
+    )
+  } catch (error) {
+    if (automatic && error instanceof AutomaticAdvanceDisabledError) {
+      await projectExportCancellation(
+        node.id,
+        dependencies,
+      )
+    }
+    throw error
+  }
+  if (!automatic) {
+    await dependencies.transitionNodeStatus(node.id, 'pending')
+  }
   return { status: 'queued', nodeId: node.id, jobId, mode: 'complete' }
+}
+
+async function projectExportCancellation(
+  nodeId: string,
+  dependencies: Pick<ExportFinalizationDependencies, 'transitionNodeStatus'>,
+): Promise<void> {
+  await dependencies.transitionNodeStatus(
+    nodeId,
+    'cancelled',
+    { idempotent: true },
+  )
 }
 
 export class StaleDegradedConfirmationError extends Error {
@@ -151,7 +186,8 @@ function defaultDependencies(): ExportFinalizationDependencies {
     getGraph: getCanvasGraph,
     getReadiness: getExportReadiness,
     transitionNodeStatus,
-    enqueueProjectExport,
+    enqueueProjectExport: (input, options) =>
+      enqueueProjectExport(input, undefined, options),
     now: () => new Date(),
     referenceId: () => globalThis.crypto.randomUUID(),
   }

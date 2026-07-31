@@ -39,6 +39,7 @@ export interface QueueAdapter {
       nodeId?: string
       requestedByUserId?: string
       workflowVersion?: string
+      requireAutomaticAdvance?: boolean
     },
   ): Promise<string>
   register(kind: string, handler: JobHandler): void

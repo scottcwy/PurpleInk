@@ -64,6 +64,7 @@ export async function transitionNodeStatus(
     executionNotice?: WorkflowExecutionNotice | null
     workflowBlock?: WorkflowBlock
     execution?: NodeExecutionFence
+    idempotent?: boolean
   }
 ): Promise<void> {
   options?.execution?.signal?.throwIfAborted()
@@ -89,6 +90,7 @@ export async function transitionNodeStatus(
       await assertNodeExecutionFence(tx, node, options.execution)
     }
     const current = fromPersistedStatus(node.status)
+    if (options?.idempotent === true && current === next) return null
     const providerWaitTransition =
       current === 'running'
       && next === 'pending'
@@ -128,10 +130,12 @@ export async function transitionNodeStatus(
     return node.projectId
   })
   // 严格在事务提交之后发布（回滚路径零事件）；发布失败不影响状态迁移。
-  try {
-    statusBus.publishStatus(projectId, nodeId, next)
-  } catch {
-    // 推送是体验增强，不反向阻断状态机。
+  if (projectId !== null) {
+    try {
+      statusBus.publishStatus(projectId, nodeId, next)
+    } catch {
+      // 推送是体验增强，不反向阻断状态机。
+    }
   }
 }
 

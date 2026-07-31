@@ -23,6 +23,16 @@ export interface QueueEnqueueOptions {
   nodeId?: string
   requestedByUserId?: string
   workflowVersion?: string
+  requireAutomaticAdvance?: boolean
+}
+
+export class AutomaticAdvanceDisabledError extends Error {
+  readonly code = 'AUTOMATIC_ADVANCE_DISABLED'
+
+  constructor() {
+    super('automatic advance is disabled')
+    this.name = 'AutomaticAdvanceDisabledError'
+  }
 }
 
 export async function enqueueLegacyJob(
@@ -43,7 +53,12 @@ export async function enqueueLegacyJob(
   const fingerprint = queueFingerprint(kind, payload)
   await database.transaction(async (transaction) => {
     const [project] = await transaction
-      .select({ executionEpoch: projects.executionEpoch })
+      .select({
+        executionEpoch: projects.executionEpoch,
+        workflowKind: projects.workflowKind,
+        autopilot: projects.autopilot,
+        directorContinuationEnabled: projects.directorContinuationEnabled,
+      })
       .from(projects)
       .where(and(
         eq(projects.workspaceId, workspaceId),
@@ -53,6 +68,12 @@ export async function enqueueLegacyJob(
       .for('update')
     if (!project) {
       throw new Error('legacy queue enqueue requires an existing project')
+    }
+    if (
+      opts.requireAutomaticAdvance
+      && !isAutomaticAdvanceEnabled(project)
+    ) {
+      throw new AutomaticAdvanceDisabledError()
     }
     const workUnitKey = opts.nodeId
       ? await readWorkUnitKey(transaction, workspaceId, opts.projectId!, opts.nodeId)
@@ -83,6 +104,18 @@ export async function enqueueLegacyJob(
     })
   })
   return attemptId
+}
+
+function isAutomaticAdvanceEnabled(project: {
+  workflowKind: string
+  autopilot: boolean
+  directorContinuationEnabled: boolean
+}): boolean {
+  if (project.workflowKind === 'script') return project.autopilot
+  if (project.workflowKind === 'audio') {
+    return project.directorContinuationEnabled
+  }
+  return false
 }
 
 type QueueTransaction = Parameters<

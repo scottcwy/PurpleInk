@@ -5,6 +5,7 @@ import {
 } from '@/features/canvas'
 import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 import {
+  AutomaticAdvanceDisabledError,
   assertEnqueueRetryBudget,
   queue as defaultQueue,
   type QueueAdapter,
@@ -131,7 +132,8 @@ export function registerRenderShotHandler(
 
 export async function enqueueRenderShot(
   input: RenderShotInput,
-  dependencies?: EnqueueDependencies
+  dependencies?: EnqueueDependencies,
+  options: { requireAutomaticAdvance?: boolean } = {},
 ): Promise<string> {
   const payload = renderJobPayloadSchema.parse(input)
   if (!dependencies) await assertProjectWorkflowSupported(payload.projectId)
@@ -155,8 +157,19 @@ export async function enqueueRenderShot(
     return await resolved.queue.enqueue('render-shot', payload, {
       projectId: payload.projectId,
       nodeId: payload.nodeId,
+      ...(options.requireAutomaticAdvance
+        ? { requireAutomaticAdvance: true }
+        : {}),
     })
   } catch (error) {
+    if (error instanceof AutomaticAdvanceDisabledError && pendingSet) {
+      await resolved.transitionNodeStatus(
+        payload.nodeId,
+        'cancelled',
+        { idempotent: true },
+      )
+      throw error
+    }
     await compensateEnqueueFailure(
       payload.projectId,
       payload.nodeId,

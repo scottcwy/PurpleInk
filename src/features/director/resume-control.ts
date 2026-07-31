@@ -15,8 +15,8 @@ export interface PipelineResumeExecution {
 }
 
 /**
- * 与 stop 共用 projects 行锁：先二次读取来源专属门闩，再在锁内完成前沿入队。
- * 若 stop 先提交则拒绝续接；若续接先持锁，stop 会在其后取消刚入队的当前代次。
+ * 用短事务读取来源专属门闩与执行围栏，提交后再恢复前沿。
+ * 最终 stop 竞态由各真实入队事务在同一 projects 行锁下再次校验门闩。
  */
 export async function withProjectResumeControl<T>(
   projectId: string,
@@ -26,7 +26,7 @@ export async function withProjectResumeControl<T>(
 ): Promise<T | null> {
   const database = targetDatabase ?? await getDb()
   const workspaceId = currentWorkspaceId()
-  return database.transaction(async (transaction) => {
+  const allowed = await database.transaction(async (transaction) => {
     execution?.fence.signal?.throwIfAborted()
     const [project] = await transaction
       .select({
@@ -55,8 +55,11 @@ export async function withProjectResumeControl<T>(
         execution.fence,
       )
     }
-    return operation()
+    return true
   })
+  if (!allowed) return null
+  execution?.fence.signal?.throwIfAborted()
+  return operation()
 }
 
 export function automaticAdvanceDisabled(

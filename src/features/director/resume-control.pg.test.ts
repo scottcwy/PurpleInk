@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { and, eq, sql } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import {
   runInAuthContext,
@@ -94,6 +95,30 @@ it('rejects audio resume when stop lands after the final execution assertion', a
     directorContinuationEnabled: false,
     executionEpoch: 1,
   })
+})
+
+it('releases the project row before the resume operation opens its enqueue transaction', async () => {
+  const fixture = await seedAudioProject(false)
+
+  await expect(inWorkspace(() =>
+    withProjectResumeControl(
+      fixture.projectId,
+      undefined,
+      () => database.db.transaction(async (transaction) => {
+        await transaction.execute(sql`set local lock_timeout = '100ms'`)
+        const [project] = await transaction
+          .select({ id: projects.id })
+          .from(projects)
+          .where(and(
+            eq(projects.workspaceId, WORKSPACE_ID),
+            eq(projects.id, fixture.projectId),
+          ))
+          .limit(1)
+          .for('update')
+        return project?.id ?? null
+      }),
+      database.db,
+    ))).resolves.toBe(fixture.projectId)
 })
 
 async function seedAudioProject(withRunningAttempt: boolean): Promise<{

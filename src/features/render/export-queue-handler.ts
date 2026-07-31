@@ -198,7 +198,8 @@ export class ExportProjectBlockedError extends Error {
 /** 入队一次项目级导出，返回可用于 `GET /api/jobs/{id}` 轮询的 jobId。 */
 export async function enqueueProjectExport(
   input: ExportProjectInput,
-  targetQueue: QueueAdapter = defaultQueue
+  targetQueue: QueueAdapter = defaultQueue,
+  options: { requireAutomaticAdvance?: boolean } = {},
 ): Promise<string> {
   const payload = exportJobPayloadSchema.parse(input)
   if (targetQueue === defaultQueue) {
@@ -206,13 +207,17 @@ export async function enqueueProjectExport(
     if (payload.inputFingerprint) {
       return enqueueProjectExportOnce(
         { ...payload, inputFingerprint: payload.inputFingerprint },
-        targetQueue
+        targetQueue,
+        options,
       )
     }
   }
   // 不传 nodeId：导出的聚合是项目本身，attempt 必须是 project 级。
   return targetQueue.enqueue(EXPORT_PROJECT_KIND, payload, {
     projectId: payload.projectId,
+    ...(options.requireAutomaticAdvance
+      ? { requireAutomaticAdvance: true }
+      : {}),
   })
 }
 
@@ -256,7 +261,8 @@ export async function runProjectExport(
 
 async function enqueueProjectExportOnce(
   payload: ExportProjectInput & { inputFingerprint: string },
-  targetQueue: QueueAdapter
+  targetQueue: QueueAdapter,
+  options: { requireAutomaticAdvance?: boolean },
 ): Promise<string> {
   const database = await getDb()
   const fingerprint = queueFingerprint(EXPORT_PROJECT_KIND, payload)
@@ -279,6 +285,9 @@ async function enqueueProjectExportOnce(
     if (attempt) return attempt.id
     return targetQueue.enqueue(EXPORT_PROJECT_KIND, payload, {
       projectId: payload.projectId,
+      ...(options.requireAutomaticAdvance
+        ? { requireAutomaticAdvance: true }
+        : {}),
     })
   })
 }

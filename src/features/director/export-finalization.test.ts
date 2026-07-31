@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { AutomaticAdvanceDisabledError } from '@/lib/queue'
 
 vi.mock('server-only', () => ({}))
 
@@ -27,7 +28,9 @@ function harness(overrides: {
   status?: typeof exportNode.status | 'idle' | 'blocked'
 } = {}) {
   const node = { ...exportNode, status: overrides.status ?? exportNode.status }
-  const transitionNodeStatus = vi.fn(async () => {})
+  const transitionNodeStatus = vi.fn(
+    async (_nodeId: string, _status: string) => {},
+  )
   const enqueueProjectExport = vi.fn(async () => 'export-job')
   const dependencies: ExportFinalizationDependencies = {
     getGraph: vi.fn(async () => ({ nodes: [node], edges: [] })),
@@ -133,10 +136,41 @@ describe('requestExportFinalization', () => {
     }, test.dependencies)
 
     expect(test.transitionNodeStatus).toHaveBeenCalledWith('export-node', 'pending')
-    expect(test.enqueueProjectExport).toHaveBeenCalledWith({
+    expect(test.enqueueProjectExport).toHaveBeenCalledWith(
+      {
+        projectId: 'project-1',
+        exportNodeId: 'export-node',
+      },
+      { requireAutomaticAdvance: true },
+    )
+    expect(result.status).toBe('queued')
+  })
+
+  it('cancels the queued export projection when stop wins the enqueue race', async () => {
+    const test = harness({
+      ready: true,
+      degradedReady: false,
+      confirmationFingerprint: null,
+      status: 'idle',
+    })
+    test.enqueueProjectExport.mockRejectedValue(
+      new AutomaticAdvanceDisabledError(),
+    )
+
+    await expect(requestExportFinalization({
       projectId: 'project-1',
       exportNodeId: 'export-node',
-    })
-    expect(result.status).toBe('queued')
+      trigger: 'autopilot',
+    }, test.dependencies)).rejects.toBeInstanceOf(AutomaticAdvanceDisabledError)
+
+    expect(test.transitionNodeStatus.mock.calls.map((call) => call[1])).toEqual([
+      'pending',
+      'cancelled',
+    ])
+    expect(test.transitionNodeStatus).toHaveBeenLastCalledWith(
+      'export-node',
+      'cancelled',
+      { idempotent: true },
+    )
   })
 })

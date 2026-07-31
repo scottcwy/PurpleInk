@@ -55,6 +55,25 @@ describe('enqueueProjectExport', () => {
     expect(enqueue).not.toHaveBeenCalled()
   })
 
+  it('passes the automatic-advance guard to the real queue transaction', async () => {
+    const { adapter, enqueue } = queueStub()
+
+    await enqueueProjectExport(
+      { projectId: 'project-1' },
+      adapter,
+      { requireAutomaticAdvance: true },
+    )
+
+    expect(enqueue).toHaveBeenCalledWith(
+      EXPORT_PROJECT_KIND,
+      { projectId: 'project-1' },
+      {
+        projectId: 'project-1',
+        requireAutomaticAdvance: true,
+      },
+    )
+  })
+
   it('preserves export continuation identity and confirmation fingerprint', async () => {
     const { adapter, enqueue } = queueStub()
 
