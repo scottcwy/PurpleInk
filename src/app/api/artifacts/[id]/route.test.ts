@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 
 const mocks = vi.hoisted(() => ({
   getArtifactDescriptor: vi.fn(),
+  getArtifactDownloadRedirect: vi.fn(),
   getExportReadiness: vi.fn(),
   getProjectExecutionSnapshot: vi.fn(),
   readArtifact: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock('@/features/artifacts', async () => {
   ])
   return {
     getArtifactDescriptor: mocks.getArtifactDescriptor,
+    getArtifactDownloadRedirect: mocks.getArtifactDownloadRedirect,
     readArtifact: mocks.readArtifact,
     artifactContentType: contentType.artifactContentType,
     artifactDownloadFilename: download.artifactDownloadFilename,
@@ -63,6 +65,8 @@ describe('GET /api/artifacts/[id]', () => {
       finalArtifactId: 'artifact-1',
       artifactDownloadable: true,
     })
+    // 默认对齐 local 模式：无预签名 URL，路由走字节流。
+    mocks.getArtifactDownloadRedirect.mockResolvedValue(null)
   })
 
   it('serves the artifact inline by default', async () => {
@@ -205,6 +209,56 @@ describe('GET /api/artifacts/[id]', () => {
     expect(response.headers.get('content-type')).toBe('video/mp4')
     expect(response.headers.get('x-content-sha256')).toBe(contentHash)
     expect(response.headers.get('content-disposition')).toContain('attachment')
+  })
+
+  it('redirects to the presigned URL in s3-mirror mode without reading bytes', async () => {
+    // 门控（readiness）仍须通过；通过后 302，字节不经过 Next 进程。
+    mocks.getArtifactDownloadRedirect.mockResolvedValue(
+      'https://r2.example/p-1/final.mp4?signed=1'
+    )
+
+    const response = await GET(
+      new Request(
+        'https://app.test/api/artifacts/artifact-1?projectId=project-1&download=1'
+      ),
+      { params: Promise.resolve({ id: 'artifact-1' }) }
+    )
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get('location')).toBe(
+      'https://r2.example/p-1/final.mp4?signed=1'
+    )
+    // 预签名 URL 限时可用，绝不允许被中间层缓存。
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    // hash 仍随响应可追溯；字节校验由写穿时的远端确认 + content_hash 保证。
+    expect(response.headers.get('x-content-sha256')).toBe(HASH)
+    expect(mocks.readArtifact).not.toHaveBeenCalled()
+    expect(mocks.getArtifactDownloadRedirect).toHaveBeenCalledWith(
+      'project-1',
+      'artifact-1',
+      { attachment: true }
+    )
+  })
+
+  it('refuses to redirect a final video that lost its content hash', async () => {
+    mocks.getArtifactDescriptor.mockResolvedValue({
+      id: 'artifact-1',
+      projectId: 'project-1',
+      nodeId: null,
+      kind: 'final-mp4',
+      contentHash: null,
+    })
+    mocks.getArtifactDownloadRedirect.mockResolvedValue(
+      'https://r2.example/p-1/final.mp4?signed=1'
+    )
+
+    const response = await GET(
+      new Request('https://app.test/api/artifacts/artifact-1?projectId=project-1'),
+      { params: Promise.resolve({ id: 'artifact-1' }) }
+    )
+
+    expect(response.status).toBe(404)
+    expect(response.headers.get('location')).toBeNull()
   })
 
   it('fails closed when website video bytes no longer match the registered hash', async () => {
