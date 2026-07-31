@@ -173,6 +173,15 @@ top layer 天然位于所有 stacking context 之上，不需要 z-index。
 
 ### 4.2 必须自己实现的部分（不要假设平台全包）
 
+- **closed 态不挂载内容（隐形模态防线）。** `showModal()` 对处于 `display:none`
+  祖先子树里的 `<dialog>` 依然生效——它会照常进入 top layer 成为"最顶层模态"，
+  把整个文档（包括用户正看着的可见弹窗）置为 inert。实测症状（2026-07-31，
+  画布 StageErrorDialog）：可见弹窗按钮全部无法点击、`elementFromPoint` 命中
+  `<html>`，按一次 ESC（关掉隐形模态）即恢复。诱因是内容子树被双份挂载
+  （Inspector 常显列 + 常驻闭合的 DrawerOverlay），两份嵌套弹窗同时 showModal。
+  因此 `OverlayRoot` 两种模式在 `phase === 'closed'` 时都只保留壳、不渲染
+  children（closing 阶段保持挂载播完退出动画）；由 `dialog-layering.test.ts` 与
+  `popover.test.tsx` 断言。业务侧不得依赖"闭合覆盖层里的内容仍在 DOM"。
 - **`<dialog>` 不锁背景滚动。** 本项目 body 本身不滚，锁 body 无效。modal 从触发元素
   查找最近 `[data-overlay-scroll-root]`（可由显式 ref 覆盖），保存/恢复其 overflow；
   滚动根用 `scrollbar-gutter: stable` 避免宽度跳动。

@@ -150,35 +150,40 @@ function ModalOverlaySurface({
       }}
       onKeyDown={(event) => keepTabFocusInside(event, event.currentTarget)}
     >
-      <motion.div
-        data-slot="overlay-scrim"
-        className={cn(
-          'flex min-h-full w-full justify-center bg-[color:var(--ds-scrim)] px-4 backdrop-blur-[20px]',
-          layoutClassName,
-        )}
-        variants={OVERLAY_SCRIM_VARIANTS}
-        initial="hidden"
-        animate={target}
-        onClick={(event) => {
-          if (event.target === event.currentTarget) onOpenChange(false)
-        }}
-      >
+      {/* closed 态不挂载内容：display:none 子树里的嵌套 modal 仍能 showModal()
+          抢占 top layer，把可见弹窗连同全文档置为 inert（按钮全部失效）。
+          closing 阶段保持挂载以播完退出动画。 */}
+      {presented && (
         <motion.div
-          data-slot="overlay-content"
-          className={className}
-          style={style}
-          variants={overlayContentVariants(preset)}
+          data-slot="overlay-scrim"
+          className={cn(
+            'flex min-h-full w-full justify-center bg-[color:var(--ds-scrim)] px-4 backdrop-blur-[20px]',
+            layoutClassName,
+          )}
+          variants={OVERLAY_SCRIM_VARIANTS}
           initial="hidden"
           animate={target}
-          onAnimationComplete={(definition) => {
-            if (definition === 'hidden' || definition === 'visible') {
-              onAnimationComplete(definition)
-            }
+          onClick={(event) => {
+            if (event.target === event.currentTarget) onOpenChange(false)
           }}
         >
-          {children}
+          <motion.div
+            data-slot="overlay-content"
+            className={className}
+            style={style}
+            variants={overlayContentVariants(preset)}
+            initial="hidden"
+            animate={target}
+            onAnimationComplete={(definition) => {
+              if (definition === 'hidden' || definition === 'visible') {
+                onAnimationComplete(definition)
+              }
+            }}
+          >
+            {children}
+          </motion.div>
         </motion.div>
-      </motion.div>
+      )}
     </dialog>
   )
 }
@@ -206,6 +211,7 @@ function PopoverOverlaySurface({
 }: PopoverOverlayRootProps & SurfaceState) {
   const internalPopoverRef = useRef<HTMLDivElement>(null)
   const popoverRef = surfaceRef ?? internalPopoverRef
+  const presented = isOverlayPresented(phase)
   const target = overlayAnimationTarget(phase)
   const handlePlatformClose = useCallback(() => onOpenChange(false), [onOpenChange])
 
@@ -237,7 +243,8 @@ function PopoverOverlaySurface({
         }
       }}
     >
-      {children}
+      {/* 同 modal：closed 态不挂载内容，防止闭合 popover 子树里的嵌套 modal 劫持 top layer。 */}
+      {presented && children}
     </motion.div>
   )
 }

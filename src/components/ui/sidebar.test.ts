@@ -5,6 +5,7 @@ import { LayoutDashboard } from 'lucide-react'
 import { ThemeProvider } from 'next-themes'
 import { describe, expect, it } from 'vitest'
 import { PurpleInkSidebar } from './sidebar'
+import { AccountMenu } from './sidebar-chrome'
 
 const baseItems = [
   {
@@ -67,10 +68,19 @@ describe('PurpleInkSidebar', () => {
 
     expect(html).toContain('href="/"')
     expect(html).toContain('aria-label="PurpleInk 首页"')
-    expect(html).toContain('href="/products/settings"')
-    expect(html).toContain('工作区设置')
     expect(html).toContain('aria-label="收起侧栏"')
-    expect(html).toContain('外观')
+
+    // 账户菜单位于 Popover 内：闭合覆盖层不再挂载内容（overlay-root 不变量，
+    // 见 motion-interaction.md §4.2），SSR 首帧 popover 恒为 closed，
+    // 菜单内容合同改为直接渲染 AccountMenu 断言。
+    const menuHtml = renderToStaticMarkup(
+      createElement(AccountMenu, {
+        settingsHref: '/products/settings',
+      }) as ReactNode,
+    )
+    expect(menuHtml).toContain('href="/products/settings"')
+    expect(menuHtml).toContain('工作区设置')
+    expect(menuHtml).toContain('外观')
   })
 
   it('replaces brand logo with expand toggle when collapsed', () => {
