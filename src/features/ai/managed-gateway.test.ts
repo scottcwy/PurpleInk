@@ -72,6 +72,37 @@ const TEXT_INPUT = {
 } as const
 
 describe('ManagedAiGateway', () => {
+  it('authorizes and prices the logical model while preserving the outbound model', async () => {
+    const deps = dependencies()
+    await new ManagedAiGateway(deps).begin({
+      ...TEXT_INPUT,
+      provider: 'openai',
+      model: 'openai/gpt-5.6-luna',
+      execution: {
+        logicalModelId: 'gpt-5.6-luna',
+        outboundModelId: 'openai/gpt-5.6-luna',
+        deploymentId: 'openai.gpt-5.6-luna.managed',
+        officialPriceIdentity: 'openai.gpt-5.6-luna',
+      },
+    })
+
+    expect(deps.authorizeManagedRoute).toHaveBeenCalledWith(
+      expect.objectContaining({ modelId: 'gpt-5.6-luna' }),
+    )
+    expect(deps.getCurrentRateCard).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gpt-5.6-luna' }),
+    )
+    expect(deps.reserveManagedInvocation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          model: 'openai/gpt-5.6-luna',
+          logicalModelId: 'gpt-5.6-luna',
+          outboundModelId: 'openai/gpt-5.6-luna',
+        }),
+      }),
+    )
+  })
+
   it('returns a BYOK handle without touching managed credentials or billing', async () => {
     const deps = dependencies()
     const gateway = new ManagedAiGateway(deps)

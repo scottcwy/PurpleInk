@@ -19,6 +19,7 @@ export type WorkflowFaultCode =
   | 'INTERNAL_PREFLIGHT_FAILED'
   | 'AUDIO_SOURCE_INTEGRITY_INVALID'
   | 'ROUTE_CONTRACT_INVALID'
+  | 'ROUTE_NOT_AUTHORIZED'
   | 'MEDIA_NOT_READY'
   | 'TASK_INTERRUPTED'
   | 'RETRY_BUDGET_EXHAUSTED'
@@ -214,6 +215,7 @@ function presentationFor(code: WorkflowFaultCode): {
       return { origin: 'user', title: '本周期 AI 额度已用完', recovery: 'upgrade_plan' }
     case 'CONFIGURATION_BLOCKED':
     case 'ROUTE_CONTRACT_INVALID':
+    case 'ROUTE_NOT_AUTHORIZED':
       return { origin: 'user', title: '运行设置需要调整', recovery: 'fix_settings' }
     case 'UPSTREAM_ARTIFACT_MISSING':
     case 'UPSTREAM_ARTIFACT_INVALID':

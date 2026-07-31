@@ -141,10 +141,11 @@ export class ManagedAiGateway {
   async prepare(input: ManagedAiBeginInput): Promise<PreparedManagedAiInvocation> {
     const plan = await this.dependencies.getCurrentPlanKey()
     const funding = await this.dependencies.fundingForProvider(input.provider)
+    const logicalModelId = input.execution?.logicalModelId ?? input.model
     const authorization = await this.dependencies.authorizeManagedRoute({
       plan,
       provider: input.provider,
-      modelId: input.model,
+      modelId: logicalModelId,
       capability: input.capability,
       funding,
     })
@@ -197,7 +198,7 @@ export class ManagedAiGateway {
     const rateCard = await this.dependencies.getCurrentRateCard({
       catalogId: authorization.catalogId,
       provider,
-      model: input.model,
+      model: logicalModelId,
       capability: input.capability,
     })
     const maximumCostCnyMicros = this.dependencies.estimateMaximumCost(

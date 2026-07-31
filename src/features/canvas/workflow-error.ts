@@ -155,6 +155,27 @@ function classifyByType(
   if (error instanceof Error && error.name === 'RetryBudgetExhaustedError') {
     return RETRY_BUDGET_EXHAUSTED_PROJECTION
   }
+  if (isManagedAiError(error)) {
+    if (error.code === 'MANAGED_MODEL_NOT_AUTHORIZED') {
+      return {
+        code: 'ROUTE_NOT_AUTHORIZED',
+        message: '当前套餐或工作区无权使用所选模型，请调整模型设置后重新执行。',
+        retryable: false,
+      }
+    }
+    if (error.code === 'MANAGED_CREDENTIAL_UNAVAILABLE') {
+      return {
+        code: 'CONFIGURATION_BLOCKED',
+        message: '平台模型服务配置暂不可用，请使用参考号联系支持。',
+        retryable: false,
+      }
+    }
+    return {
+      code: 'PROVIDER_FAILED',
+      message: '外部生成服务本次执行失败，可以稍后重试。',
+      retryable: error.retryable,
+    }
+  }
   if (
     error instanceof Error &&
     error.name === 'DegradedExportConfirmationRequiredError'
@@ -171,6 +192,21 @@ function classifyByType(
     return PROVIDER_UNAVAILABLE_PROJECTION
   }
   return undefined
+}
+
+function isManagedAiError(error: unknown): error is Error & {
+  code: 'MANAGED_MODEL_NOT_AUTHORIZED'
+    | 'MANAGED_CREDENTIAL_UNAVAILABLE'
+    | 'MANAGED_UPSTREAM_FAILED'
+  retryable: boolean
+} {
+  if (!(error instanceof Error) || error.name !== 'ManagedAiError') return false
+  const value = error as Error & { code?: unknown; retryable?: unknown }
+  return [
+    'MANAGED_MODEL_NOT_AUTHORIZED',
+    'MANAGED_CREDENTIAL_UNAVAILABLE',
+    'MANAGED_UPSTREAM_FAILED',
+  ].includes(String(value.code)) && typeof value.retryable === 'boolean'
 }
 
 /** 主备 provider 均不可用的统一投影：类型判定与文案判定必须给出同一结果。 */

@@ -24,6 +24,24 @@ function stageInputError(): unknown {
 }
 
 describe('classifyWorkflowError', () => {
+  it('classifies a managed route authorization error by its structured type', () => {
+    const error = Object.assign(new Error('当前套餐不可使用所选托管模型'), {
+      name: 'ManagedAiError',
+      code: 'MANAGED_MODEL_NOT_AUTHORIZED',
+      status: 403,
+      retryable: false,
+    })
+    const projection = classifyWorkflowError(error, { stage: 'SHOT_SPEC' })
+
+    expect(projection).toMatchObject({
+      code: 'ROUTE_NOT_AUTHORIZED',
+      origin: 'user',
+      retryable: false,
+      recovery: 'fix_settings',
+    })
+    expect(projection.message).not.toContain('gpt-5.6-luna')
+  })
+
   it('reuses one safe reference when the same failure crosses node, queue, and log projections', () => {
     const failure = new Error('unexpected')
     const first = classifyWorkflowError(failure, { stage: 'FINALIZE' })
