@@ -307,6 +307,47 @@ describe('advancePipeline', () => {
 })
 
 describe('startProjectPipeline', () => {
+  it('rechecks the persisted control latch under the resume lock before enqueueing', async () => {
+    const test = harness([])
+    const repository = {
+      ...test.repository,
+      setAutopilot: vi.fn(async () => true),
+      getEntryNode: vi.fn(async () =>
+        candidate({
+          id: 'ingest',
+          type: 'script-import',
+          stage: 'INGEST',
+          status: 'success',
+        }),
+      ),
+      listCompletedNodeIds: vi.fn(async () => ['ingest']),
+    }
+    const advance = vi.fn(async () => ({
+      enqueuedNodeIds: ['next'],
+      failedNodeIds: [],
+    }))
+
+    const result = await resumeProjectPipeline('project-1', {
+      repository,
+      enqueueDirectorStage: test.enqueueDirectorStage,
+      advance,
+      withResumeControl: vi.fn(async () => null),
+    })
+
+    expect(advance).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      status: 'blocked',
+      enqueuedNodeIds: [],
+      repairRootNodeIds: [],
+      failedNodeIds: [],
+      blockedNodes: [{
+        nodeId: 'project-1',
+        code: 'AUTOMATIC_ADVANCE_DISABLED',
+        message: '项目自动推进已停止',
+      }],
+    })
+  })
+
   it('resumes an established frontier without mutating the script autopilot latch', async () => {
     const test = harness([])
     const repository = {

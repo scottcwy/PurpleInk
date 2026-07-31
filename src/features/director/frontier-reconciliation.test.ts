@@ -201,6 +201,41 @@ describe('reconcileDirectorFrontiers', () => {
     })
   })
 
+  it('does not resume a stale candidate after stop closes its persisted latch', async () => {
+    let continuationEnabled = true
+    const enqueue = vi.fn()
+    const resume = vi.fn(async () => {
+      if (continuationEnabled) enqueue()
+      return {
+        status: 'blocked' as const,
+        enqueuedNodeIds: [],
+        repairRootNodeIds: [],
+        failedNodeIds: [],
+        blockedNodes: [{
+          nodeId: candidates[0]!.projectId,
+          code: 'AUTOMATIC_ADVANCE_DISABLED',
+          message: '项目自动推进已停止',
+        }],
+      }
+    })
+
+    const result = await reconcileDirectorFrontiers({} as never, {
+      listCandidates: vi.fn(async () => [candidates[0]!]),
+      resume,
+      lockProject: async (_projectId, operation) => {
+        continuationEnabled = false
+        return operation()
+      },
+    })
+
+    expect(enqueue).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      reconciledProjectIds: [],
+      failedProjectIds: [],
+      deferredProjectIds: [candidates[0]!.projectId],
+    })
+  })
+
   it('logs only structured identifiers and never a raw reconciliation error', async () => {
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const resume = vi.fn()

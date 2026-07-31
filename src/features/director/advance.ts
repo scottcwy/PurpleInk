@@ -12,6 +12,11 @@ import type {
   ExportFinalizationResult,
   ExportFinalizationTrigger,
 } from './export-finalization'
+import {
+  automaticAdvanceDisabled,
+  withProjectResumeControl,
+  type PipelineResumeExecution,
+} from './resume-control'
 
 export interface AdvanceCandidate {
   id: string
@@ -106,6 +111,11 @@ interface PipelineControlDependencies {
     handledSuccessfulNodeIds: string[]
     blockedNodes: PipelineBlock[]
   }>
+  withResumeControl?: (
+    projectId: string,
+    execution: PipelineResumeExecution | undefined,
+    operation: () => Promise<PipelineResumeResult>,
+  ) => Promise<PipelineResumeResult | null>
 }
 
 /**
@@ -220,9 +230,21 @@ export async function startProjectPipeline(
 export async function resumeProjectPipeline(
   projectId: string,
   dependencies?: PipelineControlDependencies,
+  execution?: PipelineResumeExecution,
 ): Promise<PipelineResumeResult> {
   if (!dependencies) await assertProjectWorkflowSupported(projectId)
   const resolved = dependencies ?? (await createDefaultControlDependencies())
+  const resume = () => resumeProjectPipelineUnlocked(projectId, resolved)
+  const result = resolved.withResumeControl
+    ? await resolved.withResumeControl(projectId, execution, resume)
+    : await resume()
+  return result ?? automaticAdvanceDisabled(projectId)
+}
+
+async function resumeProjectPipelineUnlocked(
+  projectId: string,
+  resolved: PipelineControlDependencies,
+): Promise<PipelineResumeResult> {
   const entry = await resolved.repository.getEntryNode(projectId)
   const enqueued = new Set<string>()
   const failed = new Set<string>()
@@ -311,6 +333,8 @@ async function createDefaultControlDependencies(): Promise<PipelineControlDepend
     repository,
     enqueueDirectorStage: advanceDependencies.enqueueDirectorStage,
     repairFrontier: repairProjectFrontier,
+    withResumeControl: (projectId, execution, operation) =>
+      withProjectResumeControl(projectId, execution, operation),
     advance: (projectId, completedNodeId) =>
       advancePipeline(projectId, completedNodeId, advanceDependencies),
   }

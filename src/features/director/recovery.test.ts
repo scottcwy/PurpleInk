@@ -206,6 +206,7 @@ describe('repairProjectFrontier', () => {
       'script-s002',
       'repair-upstream'
     )
+    expect(test.dependencies.enableAutomaticAdvance).not.toHaveBeenCalled()
   })
 
   it('does not automatically repair a failed frontier without retryable=true', async () => {

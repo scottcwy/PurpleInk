@@ -61,7 +61,6 @@ export async function repairProjectFrontier(
     handledSuccessfulNodeIds: [],
     blockedNodes: [],
   }
-  await resolved.enableAutomaticAdvance(projectId)
   for (const node of graph.nodes) {
     if (node.status === 'blocked' && node.workflowBlock) {
       result.blockedNodes.push({
