@@ -142,11 +142,13 @@ export function ImageReveal({
 
   return (
     <section className={`-mt-24 overflow-hidden ${className}`}>
-      <div className="columns mx-auto grid max-w-7xl grid-cols-3 gap-4 px-4 sm:px-6 md:gap-6 lg:gap-8 lg:px-8">
+      <div className="columns mx-auto grid max-w-7xl grid-cols-2 gap-4 px-4 sm:px-6 md:grid-cols-3 md:gap-6 lg:gap-8 lg:px-8">
         {columns.map((column, columnIndex) => (
           <div
             key={columnIndex}
-            className="column flex flex-col gap-4 md:gap-6 lg:gap-8"
+            className={`column flex-col gap-4 md:gap-6 lg:gap-8 ${
+              columnIndex === columns.length - 1 ? "hidden md:flex" : "flex"
+            }`}
           >
             {column.map((image) => (
               <RevealTile
