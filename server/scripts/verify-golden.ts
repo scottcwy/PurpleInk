@@ -2,8 +2,7 @@
 // 跑 runCaptureAdapter 写到临时 capture/ 目录，断言 Step1 Gate 的结构 / 格式与金样本对齐。
 //
 // 用法（server/ 下）：
-//   npx tsx scripts/verify-golden.ts            # 纯结构对拍（不打 StepFun）
-//   npx tsx scripts/verify-golden.ts --vision   # 额外用 StepFun 实测一张截图的视觉描述
+//   npx tsx scripts/verify-golden.ts
 //
 // 退出码 0 = 全部通过；非 0 = 有断言失败。
 import { mkdtemp, readFile, rm, readdir } from "node:fs/promises"
@@ -12,7 +11,6 @@ import { tmpdir } from "node:os"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 import { runCaptureAdapter } from "../src/adapter/index"
-import { describeAssets, type AssetToDescribe } from "../src/adapter/describe-assets"
 import type { AdapterInput, PageTokens, StepSnapshot } from "../src/adapter/types"
 import type { CapturedScreenshot } from "../src/types/capture.ts"
 
@@ -111,8 +109,6 @@ function buildSnapshots(tokens: PageTokens): StepSnapshot[] {
 
 async function main(): Promise<void> {
   await loadEnv()
-  const wantVision = process.argv.includes("--vision")
-
   const goldenTokens = await loadGoldenTokens()
   const screenshots = await loadScreenshots()
   const snapshots = buildSnapshots(goldenTokens)
@@ -171,31 +167,7 @@ async function main(): Promise<void> {
   check("manifest.files 含 4 个 gate 文件 + N 张图", manifest.files.length === 4 + screenshots.length, String(manifest.files.length))
   check("manifest.visionUsed == false（本次禁用）", manifest.visionUsed === false)
 
-  // --- 可选：StepFun 视觉实测（证明比金样本弱描述更丰富）---
-  if (wantVision) {
-    console.log("\n[7] StepFun 视觉实测（step-explore）\n")
-    if (!process.env.STEP_API_KEY) {
-      check("STEP_API_KEY 已配置", false, "未在 .env 找到 STEP_API_KEY")
-    } else {
-      const buffer = await readFile(join(PROBE, "assets", "dashboard.jpg"))
-      const one: AssetToDescribe[] = [
-        {
-          path: "assets/00-dashboard.jpg",
-          label: "Dashboard example",
-          metadata: { pageType: "product" },
-          buffer,
-          mediaType: "image/jpeg",
-        },
-      ]
-      const res = await describeAssets(one, true)
-      const desc = res.descriptions.get("assets/00-dashboard.jpg") || ""
-      console.log(`     StepFun 描述: ${desc}`)
-      check("visionUsed == true", res.visionUsed === true)
-      check("描述比金样本弱描述更长（>20 字）", desc.length > 20, `len=${desc.length}`)
-    }
-  } else {
-    console.log("\n[7] StepFun 视觉实测已跳过（加 --vision 开启）\n")
-  }
+  console.log("\n[7] 真实视觉调用由 Products attempt 经内部 AI 网关验收，本脚本只做确定性结构对拍。\n")
 
   await rm(outDir, { recursive: true, force: true })
 

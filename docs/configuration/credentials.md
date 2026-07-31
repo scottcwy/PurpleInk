@@ -1,175 +1,102 @@
 # AI Provider Credentials
 
-PurpleInk has isolated server-side credential paths for the Next application
-and the backend worker. Within Next, platform-managed providers and
-workspace-owned custom providers also remain strictly separated.
+PurpleInk 只允许 Next 持有供应商凭据；在 Next 内部，平台托管凭据与工作区
+BYOK 凭据必须严格隔离。任何边界变化都要先更新本文。
 
-It exists to resolve the truth drift recorded in
-`docs/issues/ISSUE-003-next-ai-credentials.md`. The text here is binding for
-anyone wiring credentials; any change to the boundary must update this file
-first and code second.
+## 1. 两套进程的凭据边界
 
-## 1. Two credential stores, by design
-
-| | Next application (Director canvas pipeline) | Backend worker (server/) |
+| | Next 应用 | Backend worker (`server/`) |
 | --- | --- | --- |
-| Process | `pnpm dev`, `next start` | `pnpm dev:worker`, `node server/src` |
-| Secrets env file (git-ignored) | root `./.env.local` | `./server/.env` |
-| Variable naming | 托管服务使用 `CVC_MANAGED_STEPFUN_API_KEY`、`CVC_MANAGED_MIMO_API_KEY`、`CVC_MANAGED_GEMINI_API_KEY` | `GEMINI_API_KEY`, `STEP_API_KEY`, `STEP_*` |
-| Runtime resolution | 三家内置托管服务只读 server-only env；自定义 OpenAI-compatible 继续使用 DB 加密凭据 | env only |
-| Bootstrap writer | `scripts/setup/bootstrap-credentials.ts` 仅服务历史/自定义凭据，不是内置托管服务主路径 | none (worker reads env at start) |
-| Truth hierarchy | 托管目录 + `CVC_MANAGED_*`；自定义路由 → DB 加密凭据 | env → code default |
-| Cache | none — every call re-reads DB and env (see `config.ts:77-92`, `gemini-config.ts:38-53`) | none |
+| 进程 | `pnpm dev` / `next start` | `pnpm dev:worker` |
+| 本地环境文件 | 根目录 `.env.local` | `server/.env` |
+| Managed 来源 | 五个 `CVC_MANAGED_*_API_KEY` | 禁止持有 |
+| BYOK 来源 | `provider_credentials` 加密表 | 禁止读取 |
+| 模型、URL、协议真值 | `config/ai-catalog.yaml` 生成的 server manifest | 禁止复制；只调用 Next 网关 |
+| 服务间凭据 | `PURPLEINK_ENGINE_INTERNAL_KEY` | 同一 `PURPLEINK_ENGINE_INTERNAL_KEY` |
 
-The worker's legacy names and Next's `CVC_MANAGED_*` names belong to different
-process trees. Do not introduce a shared loader or a unified env file.
+两套进程不得共用 env loader，也不得让 Next 从 `server/.env` 读取密钥。worker
+只额外读取 `PURPLEINK_AI_GATEWAY_ORIGIN`，该地址由部署者固定，用户不可提交。
 
-This boundary mirrors `docs/issues/README.md` §0 and is enforced by:
-`scripts/setup/server-only-stub.js` + the bootstrap script's exclusive use of
-`loadEnvConfig(process.cwd())` (which reads the root `.env.local`, never
-`server/.env`).
+## 2. Managed 凭据
 
-## 2. Next 的托管 Key 与自定义 BYOK 边界
+`src/features/ai/managed-credentials.ts` 是 Next 内置 Managed 凭据的唯一解析器：
 
-`src/features/ai/managed-credentials.ts` 是三家内置服务的唯一平台 Key
-解析器，只接受 `CVC_MANAGED_STEPFUN_API_KEY`、
-`CVC_MANAGED_MIMO_API_KEY` 和 `CVC_MANAGED_GEMINI_API_KEY`。
-`provider_credentials` 同时服务自定义 OpenAI-compatible 与三家内置厂商的
-workspace BYOK。三家内置厂商默认使用托管服务；只有 workspace 显式选择
-`byok` 时才解密对应行，选择 `managed` 时绝不把该行当作平台 Key fallback。
+- `CVC_MANAGED_STEPFUN_API_KEY`
+- `CVC_MANAGED_MIMO_API_KEY`
+- `CVC_MANAGED_GEMINI_API_KEY`
+- `CVC_MANAGED_OPENAI_API_KEY`
+- `CVC_MANAGED_ANTHROPIC_API_KEY`
 
-内置 StepFun、MiMo、Gemini 的托管路径不得回退到旧的 provider env 名称或 workspace
-凭据；自定义 OpenAI-compatible 也不得回退到平台托管 Key。两条凭据链必须保持隔离。
+这些变量只允许进入 server-only 运行时。它们不得写入数据库、YAML、生成物、
+客户端响应、日志、错误、截图或测试 fixture，也不得回退到旧 provider env 名称。
+渠道 URL 与 `secretRef` 来自 `ai-catalog.yaml`；YAML 只保存变量名，不保存值。
 
-## 3. 历史/自定义凭据的 cold-start bootstrap
+部署前运行 `pnpm verify:managed-services`。该检查只输出变量名及
+`configured` / `missing`，不输出值。
 
-`scripts/setup/bootstrap-credentials.ts` is the credential-side sibling of
-`scripts/migration/provision-master-key.ts`. It exists so a freshly cloned
-machine can seed legacy or custom encrypted workspace credentials without
-manually POSTing through `/api/settings`. It does not provision managed
-StepFun、MiMo 或 Gemini platform keys.
+## 3. 工作区 BYOK
 
-Sequence on a clean clone (assuming Postgres is up via
-`docker compose -f docker-compose.dev.yml up -d`):
+设置页允许工作区为五家内置供应商保存自己的 API Key。调用规则如下：
 
-```text
-1. pnpm install
-2. pnpm tsx scripts/migration/provision-master-key.ts --env .env.local
-     # writes CVC_CREDENTIAL_MASTER_KEY (32-byte canonical base64) into .env.local
-3. pnpm db:migrate
-     # applies migrations; creates provider_credentials + workspaces + ...
-4. Manually add to ./.env.local:
-     GEMINI_API_KEY=<copy the value from server/.env line 'GEMINI_API_KEY='>
-     STEPFUN_API_KEY=<copy the value from server/.env line 'STEP_API_KEY='>
-   Note: if server/.env has a different value, you must still copy your own
-   value here — the two files keep separate copies by design.
-5. pnpm tsx scripts/setup/bootstrap-credentials.ts
-     # for each provider: validate via real API -> save encrypted -> clear env
-   Output expected: written=2 skipped=0 failed=0
-6. pnpm dev
-     # Next reads provider_credentials; .env.local GEMINI/STEPFUN_API_KEY
-     # are no longer consulted at runtime.
+1. 客户端只提交 `provider`、`funding: "byok"` 和候选 `apiKey`。
+2. 服务端从目录解析该供应商的固定官方 URL 与协议；客户端不能提交 URL。
+3. 服务端先向官方链路验证候选 Key。
+4. 验证失败返回 422，且不覆盖已有加密凭据。
+5. 验证成功后才写入 `provider_credentials`，并保存 `verifiedAt`。
+6. GET `/api/settings` 只返回配置状态与时间，不返回密文、Key、`secretRef`
+   或内置渠道 URL。
+
+五家 BYOK 官方入口分别由目录固定为 StepFun、MiMo、Google Gemini、OpenAI
+和 Anthropic 官方域名。Anthropic BYOK 使用 Messages 协议；其余内置 BYOK
+使用对应的 OpenAI-compatible 入口。
+
+Managed 与 BYOK 是互斥资金来源：
+
+- `managed` 只读取平台 env，不读取工作区 Key；
+- `byok` 只解密当前工作区的 provider credential，不读取平台 env；
+- 两者不会因鉴权失败、限流或渠道故障相互回退；
+- BYOK 不扣 Managed 套餐权益，但仍受工作区并发、安全与审计约束。
+
+## 4. 自定义 OpenAI-compatible 服务
+
+设置页仍可登记一个工作区级 `openai-compatible` 服务。它的 API Key 使用同一
+加密仓库，端点与默认模型是 `workspace_settings` 中的非秘密 profile 数据。
+POST `/api/settings` 先发最小校验请求，成功后才原子保存 profile 与 credential。
+
+这是用户主动配置的自定义服务，与五家内置 BYOK 不同：五家内置供应商禁止
+自定义 URL；自定义兼容服务仅用于已有的明确工作板块，不参与 Managed 回退。
+
+自定义 TTS / ASR profile 也遵循“先验证后保存、失败不覆盖”的合同。
+
+## 5. 加密主密钥
+
+`CVC_CREDENTIAL_MASTER_KEY` 仅存于未跟踪环境或 Secret Manager，必须是
+32 字节 canonical base64。缺失或格式错误时禁止明文 fallback。
+
+轮换主密钥必须先解密并用新密钥重新加密全部 `provider_credentials` 行。
+直接删除旧主密钥会使现有密文不可恢复。
+
+初始化本地密钥：
+
+```powershell
+pnpm tsx scripts/migration/provision-master-key.ts --env .env.local
 ```
 
-If you skip step 4, bootstrap prints `written=0 skipped=2 failed=0` and
-exits 2. If a key fails real-API validation, bootstrap prints
-`failed=1` and exits 1 **without** overwriting the existing encrypted row
-— the same non-overwrite contract that `POST /api/settings` enforces
-(see §4).
+此命令只写被 Git 忽略的 `.env.local`。
 
-The bootstrap script also installs a `Module._resolveFilename` shim that
-redirects the bare specifier `'server-only'` to an empty stub, so the script
-can directly require Next source modules without booting Next. The shim is
-scoped to that one tsx process and never touches the Next runtime path.
+## 6. 运行与轮换
 
-**Workspace boundary (post PLAN-002 phase B).** Provider credentials are
-per-workspace: `save`/`validate` resolve the target workspace through
-`currentWorkspaceId()`, so bootstrap wraps its work in
-`runInAuthContext({ workspaceId: LOCAL_WORKSPACE_ID, userId: 'system:bootstrap' })`.
-That means **bootstrap only ever writes the first owner workspace** (the
-historical `LOCAL_WORKSPACE_ID` anchor). OpenAI-compatible custom endpoints
-continue to use this per-workspace encrypted path.
+- Managed Key：在环境或 Secret Manager 中更新对应 `CVC_MANAGED_*`，重启 Next。
+- BYOK Key：通过设置页或 `POST /api/settings` 更新，必须通过官方链路验证。
+- 不再提供启动时把 provider env 写入工作区数据库的 bootstrap 服务。
+- 生产容器启动依赖 migration 与可选 demo seed，不依赖任何凭据写库任务。
 
-StepFun, Gemini, and MiMo platform service credentials are a separate,
-explicitly managed path. They resolve only from `CVC_MANAGED_STEPFUN_API_KEY`,
-`CVC_MANAGED_GEMINI_API_KEY`, and `CVC_MANAGED_MIMO_API_KEY`. A workspace may
-instead select BYOK; that source is encrypted in `provider_credentials` and
-does not consume the membership pool. Neither path is a fallback for the
-other, and neither secret is ever returned to the client.
-Membership and usage accounting remain workspace-scoped. See
-`docs/configuration/billing.md`.
+## 7. 安全不变量
 
-## 4. Runtime update path (post-bootstrap)
-
-Once bootstrap has populated `provider_credentials`, the **only** way to
-mutate the stored keys is `POST /api/settings`:
-
-- Submit `apiKey: <candidate>` -> `validateKey(<candidate>)` first.
-- Validation fails (`false`) -> server returns `422` and **does not** overwrite
-  the existing row (`src/app/api/settings/route.ts:67-76`, `105-113`).
-- Validation passes -> server saves encrypted blob with `verifiedAt = now`
-  (`saveGeminiApiKey` in `gemini-config.ts:147`,
-   `saveApiKey` in `stepfun-adapter.ts:20`).
-
-This matches the routing convention §4.1 commit-3 invariant.
-`describeGeminiConfig()` / `describeStepfunConfig()` return only
-`value/source` pairs for model and endpoint fields; they deliberately
-have no `apiKey` key at all (`gemini-config.ts:79-95`, `config.ts:126-146`),
-so GET `/api/settings` cannot leak a secret to a browser.
-
-## 5. OpenAI-compatible text providers
-
-The settings page may register one workspace-scoped `openai-compatible`
-provider. Its API key follows exactly the same encrypted
-`provider_credentials` path as Gemini and StepFun; its endpoint and default
-model are non-secret profile data in `workspace_settings` under
-`ai.openai-compatible`. `POST /api/settings` first makes a minimal
-`/chat/completions` request, then writes both records only after validation.
-
-This provider is available only to Director text and vision routes. It never
-owns narration TTS or subtitle ASR: those media routes can use MiMo or StepFun, so
-that ingress timing, narration artifacts, and subtitle timing share one media
-contract. GET `/api/settings` returns configured state, endpoint, model and
-verification time, never the encrypted key.
-
-## 6. StepFun endpoint and plan scope
-
-The StepFun API key and the configured `baseUrl` are a pair. The ordinary
-Open Platform endpoint is `https://api.stepfun.com/v1`; a Step Plan key must
-use `https://api.stepfun.com/step_plan/v1` for both TTS and ASR. A successful
-chat validation does not prove TTS entitlement, because voice synthesis is a
-separately billed media capability. The settings page shows the Step Plan
-endpoint explicitly so an operator can correct that pairing without changing
-the encrypted key.
-
-## 7. Security invariants (mirror AGENTS.md §7)
-
-1. `.env.local` 可保存 `CVC_MANAGED_*` 平台托管 Key；文件被 Git 忽略且不得提交，
-   Key 不得写入数据库、客户端、日志、错误或截图。
-2. 示例环境文件只能列空变量名，不得包含任何真实平台 Key。
-3. Bootstrap and the runtime resolver refuse to proceed when
-   `CVC_CREDENTIAL_MASTER_KEY` is absent or malformed
-   (`credential-envelope.ts:45-63`).
-4. No client-side code path reaches `getGeminiConfig` / `getStepfunConfig`:
-   every consumer is `'server-only'`-tagged (Director pi-session,
-   `vision-qa.ts`, `model-routing.ts`).
-5. Bootstrap output unconditionally redacts secret values; only
-   `provider name / configured / verifiedAt` summaries are printed.
-6. `CVC_CREDENTIAL_MASTER_KEY` itself lives only in `.env.local`. To rotate
-   it you must decrypt and re-encrypt every `provider_credentials` row, which
-   is currently a manual operation; do not delete it casually — encrypted
-   blobs become unrecoverable.
-
-## 8. What does **not** belong here
-
-- **YAML config files**. The truth ordering (DB > env > default) plus the
-  bootstrap script and the `/api/settings` mutation surface already cover
-  hot-reload of provider settings without introducing a fourth truth layer.
-  See `docs/issues/ISSUE-003-next-ai-credentials.md` §4 for the reasoning.
-- **A unified env loader.** The frontend/worker stores stay separate by §3
-  of the same issue.
-- **Env fallback for `apiKey`** at runtime. AGENTS.md §7 and two contract
-  tests forbid it.
-- **Listing backend-step (`server/.env`) variables in the root `.env.example`.**
-  These create silent drift; `tests/env.test.ts:21-32` enforces the
-  separation.
+1. 示例环境文件只列空变量名。
+2. 客户端代码不得解析 provider credential。
+3. API 不返回 Key、密文、`secretRef`、内部渠道 URL 或原始 provider 错误。
+4. 用户不能把内置 BYOK 改成任意代理 URL。
+5. Managed 和 BYOK 不交叉 fallback。
+6. 设置写入必须先验证；验证失败返回 422 且不覆盖旧 secret。
+7. 对话、日志或历史文件中出现过的 Managed Key 在生产启用前必须轮换。

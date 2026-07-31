@@ -4,11 +4,9 @@ import { describe, expect, it } from "vitest";
 /**
  * 锁定「.env.example 的变量名与 Next 侧代码消费的 ENV_KEYS 逐一对齐」契约。
  *
- * ISSUE-003 修订后，本测试只断言「Next 侧代码确实消费 / bootstrap 中转消费」的变量：
+ * 本测试只断言 Next 侧代码确实消费的变量：
  *   - CVC_CREDENTIAL_MASTER_KEY：credential-envelope.ts:45 强制读取
- *   - GEMINI_API_KEY / STEPFUN_API_KEY：scripts/setup/bootstrap-credentials.ts 读取（写入
- *     DB 加密存储，运行时不读 env；详见 docs/configuration/credentials.md）
- *   - CVC_MANAGED_*：三家内置托管服务的 server-only 平台凭据
+ *   - CVC_MANAGED_*：五家内置托管服务的 server-only 平台凭据
  *   - BACKEND_ORIGIN：next.config.ts:30 rewrites 直接消费（反向代理到 worker）
  *
  * 移除的旧断言（历史漂移，至本 issue 一次性纠正）：
@@ -27,11 +25,11 @@ describe("global environment isolation", () => {
 
     for (const name of [
       "CVC_CREDENTIAL_MASTER_KEY",
-      "GEMINI_API_KEY",
-      "STEPFUN_API_KEY",
       "CVC_MANAGED_STEPFUN_API_KEY",
       "CVC_MANAGED_MIMO_API_KEY",
       "CVC_MANAGED_GEMINI_API_KEY",
+      "CVC_MANAGED_OPENAI_API_KEY",
+      "CVC_MANAGED_ANTHROPIC_API_KEY",
       "BACKEND_ORIGIN",
       "PURPLEINK_ENGINE_INTERNAL_KEY",
       // PLAN-002 §1.5：认证验证码的出站 SMTP 通道，src/features/auth/mailer.ts 消费。
@@ -62,6 +60,8 @@ describe("global environment isolation", () => {
     for (const name of [
       "STEP_API_KEY",
       "LISTENHUB_API_KEY",
+      "GEMINI_API_KEY",
+      "STEPFUN_API_KEY",
       "IMAP_PASSWORD",
       "SIGNUP_PASSWORD",
       "BROWSER_DRIVER",

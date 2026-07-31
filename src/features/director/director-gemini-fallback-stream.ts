@@ -9,6 +9,7 @@ import type {
   SimpleStreamOptions,
 } from '@earendil-works/pi-ai'
 import type { ManagedAiGateway } from '@/features/ai'
+import type { BillingInvocationScope } from '@/features/billing'
 import {
   shouldUseGeminiModelFallback,
   type GeminiFallbackFailureKind,
@@ -30,6 +31,11 @@ interface FallbackStreamInput {
   runtime: DirectorModelRuntime
   attemptId?: string
   nextInvocationIndex: () => number
+  billingScope?: BillingInvocationScope
+  capability?: 'text' | 'vision'
+  operationId?: string
+  operation?: string
+  source?: string
   gateway: ManagedAiGateway
   getObservedHttpStatus: () => number | undefined
   onFallbackStarted: () => void
@@ -123,6 +129,11 @@ function attemptEvents(
     runtime,
     attemptId: input.attemptId,
     invocationIndex: input.nextInvocationIndex(),
+    ...(input.billingScope ? { billingScope: input.billingScope } : {}),
+    ...(input.capability ? { capability: input.capability } : {}),
+    ...(input.operationId ? { operationId: input.operationId } : {}),
+    ...(input.operation ? { operation: input.operation } : {}),
+    ...(input.source ? { source: input.source } : {}),
     gateway: input.gateway,
     onPreflightFailure: input.onPreflightFailure,
     onProviderFailure,

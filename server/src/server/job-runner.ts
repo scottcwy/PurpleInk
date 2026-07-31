@@ -7,6 +7,7 @@ import type { ProceduralSfxMode } from "@purpleink/procedural-sfx"
 import { getJob, updateJob, type Job, type JobPhase } from "./job-store"
 import { logger } from "../lib/logger"
 import { errorMessage } from "../lib/error-message"
+import { runWithWorkerAiContext } from "../ai/job-context"
 
 const controllers = new Map<string, AbortController>()
 
@@ -28,6 +29,8 @@ export interface RenderRequest {
   /** 生成模式：llm / template / auto */
   generation?: "llm" | "template" | "auto"
   soundEffects?: ProceduralSfxMode
+  workspaceId?: string
+  attemptId?: string
 }
 
 /** 在后台跑一个 Job（fire-and-forget），异常吞进任务表不外抛。 */
@@ -62,10 +65,19 @@ export function runJob(job: Job, req: RenderRequest): void {
     signal: controller.signal,
   }
 
-  const promise =
-    job.kind === "url"
-      ? urlToVideo(job.input, options)
-      : renderFromCapture(isAbsolute(job.input) ? job.input : resolve(process.cwd(), job.input), options)
+  const execute = () => job.kind === "url"
+    ? urlToVideo(job.input, options)
+    : renderFromCapture(
+        isAbsolute(job.input) ? job.input : resolve(process.cwd(), job.input),
+        options,
+      )
+  const promise = job.integrated && job.requestId && req.workspaceId && req.attemptId
+    ? runWithWorkerAiContext({
+        workspaceId: req.workspaceId,
+        attemptId: req.attemptId,
+        requestId: job.requestId,
+      }, execute)
+    : execute()
 
   promise
     .then((result) => {

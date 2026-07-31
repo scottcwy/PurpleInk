@@ -19,7 +19,6 @@ import {
   runWebsiteVideo,
   type RunWebsiteVideoInput,
 } from './website-execution'
-import { assertWebsiteBillingCapacity } from './managed-billing'
 import {
   websiteFailureCode,
 } from './website-engine-execution'
@@ -34,14 +33,13 @@ const websiteVideoJobSchema = z
 
 export type WebsiteVideoJobInput = z.infer<typeof websiteVideoJobSchema>
 
-export const WEBSITE_BILLING_INVOCATION_NO = 1
 const WEBSITE_TERMINAL_MESSAGE =
-  '网站介绍视频本次执行已安全终止。为避免重复渲染和重复计费，系统不会隐式新建重试；可从项目重新启动一次新操作。'
+  '网站介绍视频本次执行已安全终止。为避免重复模型调用与重复扣费，系统不会隐式新建重试；可从项目重新启动一次新操作。'
 
 /**
- * 网站复合服务一次失败后，计费账本会按未知用量结算原预留。通用队列若再生成
- * 新 attempt 会启动第二次渲染和第二笔预留，因此这里显式禁止隐式自动重试；
- * worker 丢失已在同 attempt 内用稳定 requestId 恢复，重新生产需显式新建操作。
+ * Worker 内每个真实模型请求已经单独入账。通用队列若隐式生成新 attempt，
+ * 会重新执行已完成的调用，因此这里显式禁止自动重试；重新生产需由用户发起
+ * 一个新的、可审计的操作。
  */
 export class WebsiteVideoAttemptTerminalError extends Error implements WorkflowFault {
   [key: string]: unknown
@@ -77,7 +75,6 @@ export async function runWebsiteVideoQueueJob(
       workspaceId: z.string().uuid().parse(job.workspaceId),
       projectId: payload.projectId,
       attemptId: z.string().uuid().parse(job.id),
-      invocationNo: WEBSITE_BILLING_INVOCATION_NO,
       ...(job.signal ? { signal: job.signal } : {}),
     })
     job.signal?.throwIfAborted()
@@ -168,5 +165,4 @@ async function preflightWebsiteCapacity(
   if (!source || source.sourcePayload.kind !== 'website') {
     throw new Error('WEBSITE_PROJECT_INVALID')
   }
-  await assertWebsiteBillingCapacity(source.sourcePayload.durationSec)
 }

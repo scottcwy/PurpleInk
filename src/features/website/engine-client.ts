@@ -72,6 +72,8 @@ export type WebsiteEnginePhase = z.infer<typeof enginePhaseSchema>
 export type WebsiteEngineJob = z.infer<typeof engineJobSchema>
 
 export interface StartWebsiteEngineInput {
+  workspaceId: string
+  attemptId: string
   requestId: string
   url: string
   name: string
@@ -126,6 +128,8 @@ export class WebsiteEngineClient {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
+        workspaceId: input.workspaceId,
+        attemptId: input.attemptId,
         requestId: input.requestId,
         url: input.url,
         name: input.name,
@@ -166,7 +170,7 @@ export class WebsiteEngineClient {
   private async request(
     path: string,
     init?: RequestInit,
-    missingJobIsRetryable = false,
+    identifyMissingJob = false,
   ): Promise<Response> {
     let response: Response
     try {
@@ -183,8 +187,8 @@ export class WebsiteEngineClient {
       throw new WebsiteEngineError('ENGINE_UNAVAILABLE', true)
     }
     if (response.ok) return response
-    if (response.status === 404 && missingJobIsRetryable) {
-      throw new WebsiteEngineError('ENGINE_JOB_NOT_FOUND', true, 404)
+    if (response.status === 404 && identifyMissingJob) {
+      throw new WebsiteEngineError('ENGINE_JOB_NOT_FOUND', false, 404)
     }
     throw new WebsiteEngineError(
       response.status >= 500 ? 'ENGINE_UNAVAILABLE' : 'ENGINE_RESPONSE_INVALID',

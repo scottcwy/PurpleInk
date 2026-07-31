@@ -3,9 +3,9 @@
 # 对应 docs/issues/ISSUE-015-production-issue.md §7、§9 P-6/P-7，
 # docs/plans/PLAN-001-p2-p6-p7-production-deployment.md §3.6（一起部署 worker）。
 #
-# 重要：与根 Dockerfile 是两套独立系统（AGENTS.md §0 硬边界）——env 加载器、
-# model routing、job 状态机不共用；本文件只是复用同一个 pnpm workspace 的
-# `pnpm install` 结果（这不是"共用配置"，是 monorepo 依赖解析的必然要求：
+# Worker 只负责采集、编排、媒体处理与渲染；模型路由、凭据、并发与计费全部
+# 回调 Next 内部 AI 网关。本文件复用同一个 pnpm workspace 的
+# `pnpm install` 结果（monorepo 依赖解析要求：
 # server/ 的依赖版本落在根 pnpm-lock.yaml 里，必须以仓库根为构建上下文）。
 #
 # 构建命令（在仓库根执行）：
@@ -58,11 +58,9 @@ RUN mkdir -p /ms-playwright /repo/server/out /repo/server/capture \
 USER pwuser
 RUN npx --yes playwright@"$(node -p "require('./server/node_modules/playwright/package.json').version")" install chromium
 
-# server/src/compose/run-pipeline.ts 用相对路径 `../../../src/lib/tts/config`
-# 直接引用根 src/ 的 TTS 配置解析（唯一一处跨目录引用，docs/configuration/tts.md
-# 已说明该模块只依赖 zod、不含 server-only 哨兵），worker 镜像必须带上这份源码。
-# 放在 Chromium 装完之后，避免 src/ 的高频变更让昂贵的浏览器下载层反复失效。
-COPY --chown=pwuser:pwuser src ./src
+# Worker 与 Next 只共享严格、无 secret 的内部请求合同；不复制完整 src/，防止
+# Worker 意外重新引入供应商路由或计费实现。
+COPY --chown=pwuser:pwuser src/features/ai/worker-gateway-contract.ts ./src/features/ai/worker-gateway-contract.ts
 
 ENV NODE_ENV=production
 EXPOSE 8787

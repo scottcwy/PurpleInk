@@ -41,6 +41,8 @@ describe('WebsiteEngineClient', () => {
 
     await expect(
       client.start({
+        workspaceId: '00000000-0000-4000-8000-000000000001',
+        attemptId: '00000000-0000-4000-8000-000000000002',
         requestId: JOB.requestId,
         url: 'https://example.com/product?campaign=private',
         name: '产品介绍',
@@ -59,6 +61,8 @@ describe('WebsiteEngineClient', () => {
     expect(String(init?.body)).not.toContain('server-secret')
     expect(JSON.parse(String(init?.body))).toMatchObject({
       requestId: JOB.requestId,
+      workspaceId: '00000000-0000-4000-8000-000000000001',
+      attemptId: '00000000-0000-4000-8000-000000000002',
       url: 'https://example.com/product?campaign=private',
       duration: 24,
       quality: 'standard',
@@ -133,7 +137,7 @@ describe('WebsiteEngineClient', () => {
     })
   })
 
-  it('classifies missing jobs as a retryable restart boundary', async () => {
+  it('classifies missing jobs as a terminal replay boundary', async () => {
     const fetcher = vi.fn(async () =>
       Response.json({ error: 'job not found' }, { status: 404 }),
     )
@@ -146,7 +150,7 @@ describe('WebsiteEngineClient', () => {
     await expect(client.getJob('lost-job')).rejects.toMatchObject({
       name: 'WebsiteEngineError',
       code: 'ENGINE_JOB_NOT_FOUND',
-      retryable: true,
+      retryable: false,
       status: 404,
     })
   })

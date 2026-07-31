@@ -1,5 +1,5 @@
 import type { VideoModel } from "../compose/model";
-import { callStepMessages } from "../lib/step-client";
+import { callWorkerModel } from "../ai/gateway-client";
 
 export interface NarrationSegment {
   sceneIndex: number;
@@ -12,10 +12,10 @@ export interface NarrationPlan {
 }
 
 interface NarrationCallOptions {
-  system: string;
+  workload: "website-narration-script";
+  systemPrompt: string;
   content: Array<{ type: "text"; text: string }>;
-  maxTokens: number;
-  model: string;
+  maxOutputTokens: number;
 }
 
 type NarrationCaller = (options: NarrationCallOptions) => Promise<string>;
@@ -49,13 +49,13 @@ export function buildNarrationPrompt(model: VideoModel): string {
 
 export async function generateNarrationPlan(
   model: VideoModel,
-  call: NarrationCaller = callStepMessages
+  call: NarrationCaller = callWorkerModel
 ): Promise<NarrationPlan> {
   const response = await call({
-    system: "你是产品视频旁白编剧。旁白必须独立于画面字幕，严格返回 JSON。",
+    workload: "website-narration-script",
+    systemPrompt: "你是产品视频旁白编剧。旁白必须独立于画面字幕，严格返回 JSON。",
     content: [{ type: "text", text: buildNarrationPrompt(model) }],
-    maxTokens: 3000,
-    model: "step-explore",
+    maxOutputTokens: 3000,
   });
   return parseNarrationPlan(response, model.scenes.length);
 }

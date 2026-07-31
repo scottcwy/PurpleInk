@@ -79,7 +79,7 @@ export interface AdapterInput {
 }
 
 export interface AdapterOptions {
-  /** 用 StepFun 多模态给截图生成视觉级描述（默认 true；无 STEP_API_KEY 时自动降级为目录派生描述） */
+  /** 经工作区统一视觉路由生成截图描述（默认 true；调用失败时降级为目录派生描述） */
   useVision?: boolean
   /** 输出目录（默认 <cwd>/capture） */
   outDir?: string

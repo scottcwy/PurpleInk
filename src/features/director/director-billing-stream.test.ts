@@ -7,6 +7,7 @@ import {
   type Model,
 } from '@earendil-works/pi-ai'
 import type { ManagedAiGateway, ManagedAiHandle } from '@/features/ai'
+import { ProviderInvocationAlreadyStartedError } from '@/features/billing'
 import {
   createDirectorBillingStream,
   DIRECTOR_PROVIDER_TIMEOUT_MS,
@@ -264,6 +265,38 @@ describe('Director per-provider-call billing stream', () => {
 
     expect(blocked.at(-1)?.type).toBe('error')
     expect(streamSimple).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not release the live reservation when a duplicate loses the start claim', async () => {
+    const billingHandle = handle([])
+    billingHandle.markProviderStarted = vi.fn(async () => {
+      throw new ProviderInvocationAlreadyStartedError()
+    })
+    const streamSimple = vi.fn(upstream)
+    const events = await consume(createDirectorBillingStream({
+      model,
+      context,
+      runtime: {
+        providerId: 'stepfun',
+        providerLabel: '阶跃星辰',
+        funding: 'managed',
+        apiKey: 'test-key',
+        modelId: model.id,
+        maxOutputTokens: 4_096,
+        deductsManagedPool: true,
+      },
+      attemptId: '00000000-0000-4000-8000-000000000001',
+      invocationIndex: 1,
+      gateway: {
+        begin: vi.fn(async () => billingHandle),
+      } as unknown as ManagedAiGateway,
+      streamSimple,
+    }))
+
+    expect(events.at(-1)?.type).toBe('error')
+    expect(streamSimple).not.toHaveBeenCalled()
+    expect(billingHandle.releaseBeforeCall).not.toHaveBeenCalled()
+    expect(billingHandle.settleUnavailable).not.toHaveBeenCalled()
   })
 
   it('reports a preflight failure before any provider call starts', async () => {

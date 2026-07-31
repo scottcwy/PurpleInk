@@ -18,6 +18,9 @@ export interface AudioBillingContext {
   attemptId: string
   invocationNo: number
   repairNo?: number
+  operationId?: string
+  operation?: string
+  source?: string
 }
 
 export interface ManagedAudioBillingInput<T> {
@@ -121,11 +124,20 @@ function gatewayInput<T>(
   const base = {
     attemptId: context.attemptId,
     invocationNo: context.invocationNo,
-    repairNo: context.repairNo,
+    ...(context.repairNo !== undefined ? { repairNo: context.repairNo } : {}),
     provider: input.provider,
     model: input.model,
     rawInput: input.input,
-    execution: input.execution,
+    ...(context.operation ? { operation: context.operation } : {}),
+    ...(context.source ? { source: context.source } : {}),
+    ...(input.execution || context.operationId
+      ? {
+          execution: {
+            ...input.execution,
+            ...(context.operationId ? { operationId: context.operationId } : {}),
+          },
+        }
+      : {}),
   }
   return input.capability === 'tts'
     ? {

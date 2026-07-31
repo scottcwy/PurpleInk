@@ -13,7 +13,6 @@ import { logger } from "../lib/logger"
 import { buildRootHtml } from "./chapters/root-html"
 import { splitScenesToChapters } from "./chapters/split"
 import { generateChapters, buildComposeContext, summarizeComposeError } from "./chapters/generate"
-import { getTtsEnv } from "../../../src/lib/tts/config"
 import { prepareNarrationAssets } from "../tts/orchestrate"
 import {
   buildNarrationTrack,
@@ -73,7 +72,7 @@ export async function renderFromCapture(
 
   const projectDir = options.projectDir || join(captureDir, "..", `${visualModel.id}-video`)
   const mediaRunner = createMediaRunner(options.ffmpegDir)
-  const narration = await prepareNarrationAssets(visualModel, projectDir, getTtsEnv(), {
+  const narration = await prepareNarrationAssets(visualModel, projectDir, {
     onPhase: (phase) => options.onPhase?.(phase),
     measureDuration: (path) => measureAudioDuration(path, mediaRunner),
     buildTrack: (paths, durations, outputPath, buildOptions) =>
@@ -99,7 +98,6 @@ export async function renderFromCapture(
     // LLM path: generate chapters via LLM with template fallback
     logger.info("pipeline:compose_llm_start", {
       composeMode,
-      envKey: !!process.env.STEP_API_KEY,
       scenesCount: visualModel.scenes.length,
       valueProps: visualModel.valueProps.length,
       logos: visualModel.logos.length,

@@ -6,7 +6,8 @@
 ## 1. 范围与归属
 
 - 覆盖 Director、视觉验收、TTS、ASR、自定义 OpenAI-compatible 端点与设置验证探测。
-- 不覆盖营销页 `/api/engine/render` worker。
+- Products 的网站视频 worker 文本、视觉和 TTS 调用必须经
+  `/api/internal/ai/worker` 覆盖；公开 `/api/engine/render` 已退役，不能产生调用。
 - workflow 调用把 `pipeline_runs.requested_by_user_id` 固化到
   `ai_invocations.actor_user_id`；重试、fallback、自动续接和后台领取不得改写发起人。
 - 设置验证探测直接使用当前会话用户，`operation=credential-validation`。

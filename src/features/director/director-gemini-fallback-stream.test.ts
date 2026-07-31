@@ -56,6 +56,11 @@ describe('Director Gemini same-channel fallback', () => {
       runtime: runtime(),
       attemptId: '00000000-0000-4000-8000-000000000001',
       nextInvocationIndex: () => ++invocationIndex,
+      billingScope: 'worker-text',
+      capability: 'vision',
+      operationId: 'website:job:compose:1',
+      operation: 'website-compose',
+      source: 'worker',
       gateway: { begin } as unknown as ManagedAiGateway,
       getObservedHttpStatus: () => 429,
       onFallbackStarted: fallbackStarted,
@@ -66,7 +71,12 @@ describe('Director Gemini same-channel fallback', () => {
       events.push(event)
     }
 
-    expect(begin.mock.calls.map(([input]) => input.invocationNo)).toEqual([1, 2])
+    expect(begin.mock.calls.map(([input]) => input.invocationNo))
+      .toEqual([50_000, 50_001])
+    expect(begin.mock.calls.map(([input]) => input.capability))
+      .toEqual(['vision', 'vision'])
+    expect(begin.mock.calls.map(([input]) => input.execution?.operationId))
+      .toEqual(['website:job:compose:1', 'website:job:compose:1'])
     expect(streamSimple.mock.calls.map(([nextModel]) => nextModel.id))
       .toEqual([primaryModel.id, fallbackModel.id])
     expect(events.map((event) => event.type)).toEqual(['done'])

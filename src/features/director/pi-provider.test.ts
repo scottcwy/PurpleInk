@@ -41,6 +41,7 @@ describe('createDirectorModelRuntime', () => {
     const runtime = await createDirectorModelRuntime({
       nodeType: 'script-import',
       stage: 'INGEST',
+      capability: 'vision',
     })
 
     expect(runtime.model).toMatchObject({
@@ -49,6 +50,8 @@ describe('createDirectorModelRuntime', () => {
       baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
       id: 'mimo-v2.5-pro',
     })
+    expect(resolveDirectorModelTarget)
+      .toHaveBeenCalledWith('script-import', 'vision')
     expect(runtime.routeLabel).toBe('openai-compatible/mimo-v2.5-pro')
     const provider = models.setProvider.mock.calls.at(-1)?.[0]
     const auth = await provider.auth.apiKey.resolve({

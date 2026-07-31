@@ -19,6 +19,7 @@ export const WEBSITE_POLL_INTERVAL_MS = 2_000
 const uuidSchema = z.string().uuid()
 
 export interface WebsiteEngineExecutionInput {
+  workspaceId: string
   projectId: string
   attemptId: string
   url: string
@@ -68,6 +69,8 @@ export async function executeWebsiteEngine(
   const requestId = createWebsiteEngineRequestId(input.projectId, input.attemptId)
   dependencies.signal?.throwIfAborted()
   const startInput: StartWebsiteEngineInput = {
+    workspaceId: input.workspaceId,
+    attemptId: input.attemptId,
     requestId,
     url: input.url,
     name: input.name,
@@ -81,7 +84,6 @@ export async function executeWebsiteEngine(
   )
   const pollIntervalMs = Math.max(1, dependencies.pollIntervalMs)
   const deadline = dependencies.nowMs() + timeoutMs
-  let restarted = false
   let job = await withinDeadline(
     () => startChecked(dependencies.engine, startInput),
     deadline,
@@ -135,13 +137,7 @@ export async function executeWebsiteEngine(
         assertRequestIdentity(job, requestId)
       } catch (error) {
         if (isTransientEngineOutage(error)) continue
-        if (!isMissingJob(error) || restarted) throw error
-        restarted = true
-        job = await withinDeadline(
-          () => startChecked(dependencies.engine, startInput),
-          deadline,
-          dependencies.nowMs,
-        )
+        throw error
       }
     }
   } finally {
@@ -234,11 +230,6 @@ function assertCompletedJob(job: WebsiteEngineJob): void {
   ) {
     throw new WebsiteExecutionError('WEBSITE_ENGINE_RESPONSE_INVALID')
   }
-}
-
-function isMissingJob(error: unknown): boolean {
-  return error instanceof WebsiteEngineError
-    && error.code === 'ENGINE_JOB_NOT_FOUND'
 }
 
 function isTransientEngineOutage(error: unknown): boolean {

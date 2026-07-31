@@ -19,19 +19,11 @@ describe("TTS orchestration", () => {
     const projectDir = await mkdtemp(join(tmpdir(), "purpleink-tts-"));
     created.push(projectDir);
     const model = makeModel();
-    const config = {
-      TTS_PROVIDER: "listenhub-flowspeech" as const,
-      LISTENHUB_API_KEY: "test-key-never-persist",
-      LISTENHUB_API_BASE_URL: "https://api.marswave.ai/openapi",
-      LISTENHUB_TTS_ENDPOINT: "/v1/tts" as const,
-      LISTENHUB_TTS_VOICE: "nanzhongyin-4897116a",
-      LISTENHUB_TTS_RESPONSE_FORMAT: "mp3" as const,
-    };
     const buildTrack = vi.fn(async (_paths, _durations, outputPath: string) => {
       await writeFile(outputPath, new Uint8Array());
     });
 
-    const result = await prepareNarrationAssets(model, projectDir, config, {
+    const result = await prepareNarrationAssets(model, projectDir, {
       generatePlan: async () => ({
         locale: "zh-CN",
         segments: [
@@ -39,8 +31,12 @@ describe("TTS orchestration", () => {
           { sceneIndex: 1, text: "独立旁白二。" },
         ],
       }),
-      synthesize: async (text) => new TextEncoder().encode(text).buffer,
-      measureDuration: async (path) => (path.endsWith("000.mp3") ? 4 : 2),
+      synthesize: async (text: string) => ({
+        audio: new TextEncoder().encode(text).buffer,
+        audioFormat: "mp3",
+        durationMs: 1_000,
+      }),
+      measureDuration: async (path: string) => (path.endsWith("000.mp3") ? 4 : 2),
       buildTrack,
     });
 
@@ -70,10 +66,9 @@ describe("TTS orchestration", () => {
       join(projectDir, "audio_meta.json"),
       "utf8"
     );
-    expect(metaText).not.toContain("test-key-never-persist");
     expect(JSON.parse(metaText)).toMatchObject({
-      provider: "listenhub-flowspeech",
-      voice: "nanzhongyin-4897116a",
+      provider: "purpleink-ai-gateway",
+      voice: "workspace-route",
       responseFormat: "mp3",
       totalDurationSec: 7,
     });

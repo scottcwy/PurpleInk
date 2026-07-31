@@ -4,8 +4,9 @@ PurpleInk 的媒体能力与文本模型分别路由。旁白 TTS 和字幕 ASR 
 阶跃星辰，或各自独立的 OpenAI 兼容自定义端点；音频失败不会撤销已经提交的文本与
 分镜合同。
 
-Next 应用内的媒体链路与 `server/` 渲染 worker 各自解析配置。worker 不读
-`provider_credentials`；它只接受显式 env 供应商选择，不会在失败时静默换供应商。
+Next 是媒体路由、凭据、并发和计费的唯一执行边界。`server/` 渲染 worker 不读
+`provider_credentials`，也不持有供应商环境变量；它使用当前 Products attempt 的
+身份回调 Next 内部 AI 网关。
 
 ## 供应商
 
@@ -22,36 +23,30 @@ MiMo 还允许显式选择 `mimo-v2.5-tts-voicedesign` 或
 自定义端点没有默认模型：模型、音色与音频格式全部由用户在设置页填写，并在保存时
 经真实调用校验。
 
-## MiMo 凭据边界
+## Next 应用的内置音频凭据边界
 
-业务后端必须使用 MiMo 产品 API 的 `sk-` Key，默认端点为
-`https://api.xiaomimimo.com/v1`。`tp-` Token Plan Key 面向编码工具，
-不得保存为 PurpleInk 的 MiMo 业务凭据；设置 API 会在验证前拒绝它。
+Next 应用的 StepFun/MiMo 音频调用与文本调用使用同一资金来源解析：
 
-本地非密钥覆盖项如下：
+- Managed 从版本化目录解析部署、固定 URL、模型与 `CVC_MANAGED_*` 凭据；
+- BYOK 从同一目录解析官方部署，并读取设置页验证后加密保存的工作区 Key；
+- 客户端不能覆盖内置 URL 或模型部署；
+- Managed 与 BYOK 不相互回退。
 
-```dotenv
-MIMO_BASE_URL=https://api.xiaomimimo.com/v1
-MIMO_TEXT_MODEL=mimo-v2.5
-MIMO_VISION_MODEL=mimo-v2.5
-MIMO_TTS_MODEL=mimo-v2.5-tts
-MIMO_ASR_MODEL=mimo-v2.5-asr
-```
+MiMo BYOK 必须使用产品 API Key；Token Plan Key 不作为 MiMo 官方 BYOK 保存。
+真实 Key 不写入仓库、浏览器状态、产物或日志。
 
-真实 Key 只通过设置页验证后加密保存，不写入仓库、浏览器状态、产物或日志。
+## 渲染 worker 的 TTS 边界
 
-## 渲染 worker 的显式 TTS 路由
+`server/` 不再解析 `TTS_PROVIDER`，也不读取 StepFun、MiMo、ListenHub 或其他供应商
+Key。网站视频旁白调用 `/api/internal/ai/worker` 的 `website-tts` workload，Next
+按工作区原有 TTS 模型选择解析 Managed/BYOK Deployment，并使用 `worker-tts`
+计费分区创建独立 invocation。失败保留为失败，不生成静音、不把错误 JSON 当音频，
+也不跨供应商回退。
 
-`server/` 通过 `TTS_PROVIDER` 选择旁白供应商：
+worker 只需要：
 
-- `listenhub-flowspeech`：使用 `LISTENHUB_API_KEY`、`LISTENHUB_API_BASE_URL`、
-  `LISTENHUB_TTS_ENDPOINT`、`LISTENHUB_TTS_VOICE` 与
-  `LISTENHUB_TTS_RESPONSE_FORMAT`。
-- `mimo`：使用 `CVC_MANAGED_MIMO_API_KEY`、`MIMO_BASE_URL`、
-  `MIMO_TTS_MODEL` 与可选的 `MIMO_TTS_VOICE`（默认 `mimo_default`），输出 WAV。
-
-两条配置是互斥的判别联合：选中哪家就只校验、调用哪家。上游失败会保留为失败，
-不会生成静音、把错误 JSON 当音频，或自动回落到另一家。
+- `PURPLEINK_ENGINE_INTERNAL_KEY`：与 Next 一致的服务间密钥；
+- `PURPLEINK_AI_GATEWAY_ORIGIN`：固定的 Next 内网 origin，不能来自用户输入。
 
 ## 自定义兼容音频端点
 
@@ -97,7 +92,8 @@ WAV fmt chunk，其他容器会让 FABRICATE 失去帧数依据。
 
 ### 设置页归属
 
-供应商网格只有四张卡片，卡片是**家族**而不是 provider id。自定义兼容家族在 registry
+供应商网格包含五家内置供应商与一张自定义兼容卡片。卡片是**家族**而不是
+provider id。自定义兼容家族在 registry
 里是三个 id（三份独立凭据必须有三个身份），但同属「自定义兼容模型」一个入口：选中该
 卡片后，面板里按 文本与视觉 → TTS → ASR 顺序排三个接入点，各自有端点、模型 ID、
 音色/格式、API Key 与独立的「校验并保存」。

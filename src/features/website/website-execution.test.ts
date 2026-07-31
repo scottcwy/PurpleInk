@@ -1,6 +1,4 @@
-import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
-import type { ManagedWebsiteBillingInput } from './managed-billing'
 import {
   runWebsiteVideo,
   type WebsiteExecutionDependencies,
@@ -15,9 +13,8 @@ const ATTEMPT_ID = '00000000-0000-4000-8000-000000000201'
 const SOURCE_HASH = 'a'.repeat(64)
 
 describe('runWebsiteVideo', () => {
-  it('runs the engine inside managed billing and completes with the committed artifact', async () => {
+  it('runs the engine and completes with the committed artifact', async () => {
     const completed = completedJob()
-    const billingInputs: ManagedWebsiteBillingInput<unknown>[] = []
     const stages = stageProjector()
     const start = vi.fn(async () => ({ reused: false, job: completed }))
     const output = {
@@ -45,30 +42,12 @@ describe('runWebsiteVideo', () => {
       },
       stages,
       persistOutput: vi.fn(async () => output),
-      bill: async <T>(input: ManagedWebsiteBillingInput<T>): Promise<T> => {
-        billingInputs.push(input as ManagedWebsiteBillingInput<unknown>)
-        const invoked = await input.invoke()
-        expect(input.completion(invoked)).toEqual({
-          durationSec: 29,
-          durationSource: 'output',
-          outputHash: 'b'.repeat(64),
-        })
-        return invoked
-      },
     }))
 
     expect(result).toEqual(output)
-    expect(billingInputs[0]).toMatchObject({
+    expect(start).toHaveBeenCalledWith(expect.objectContaining({
       workspaceId: WORKSPACE_ID,
       attemptId: ATTEMPT_ID,
-      invocationNo: 1,
-      requestIdentity: createHash('sha256').update(JSON.stringify({
-        sourceFingerprint: SOURCE_HASH,
-        soundEffects: 'procedural',
-      })).digest('hex'),
-      maximumDurationSeconds: 30,
-    })
-    expect(start).toHaveBeenCalledWith(expect.objectContaining({
       url: 'https://example.com/product?campaign=private',
       name: '产品主页',
       soundEffects: 'procedural',
@@ -101,7 +80,7 @@ describe('runWebsiteVideo', () => {
     expect(JSON.stringify(stages.fail.mock.calls)).not.toContain('example.com')
   })
 
-  it('settles real output usage before blocking a degraded delivery', async () => {
+  it('blocks a degraded delivery after persisting its real output', async () => {
     const stages = stageProjector()
     const degraded = {
       ...await dependencies().persistOutput({
@@ -118,43 +97,23 @@ describe('runWebsiteVideo', () => {
         outcome: 'degraded' as const,
       },
     }
-    const completion = vi.fn()
-
     await expect(runWebsiteVideo(runInput(), dependencies({
       stages,
       persistOutput: vi.fn(async () => degraded),
-      bill: async <T>(input: ManagedWebsiteBillingInput<T>): Promise<T> => {
-        const result = await input.invoke()
-        completion(input.completion(result))
-        return result
-      },
     }))).rejects.toMatchObject({ code: 'WEBSITE_VERIFICATION_FAILED' })
 
-    expect(completion).toHaveBeenCalledWith({
-      durationSec: degraded.durationSec,
-      durationSource: 'output',
-      outputHash: degraded.contentHash,
-    })
     expect(stages.block).toHaveBeenCalledWith(PROJECT_ID, degraded)
     expect(stages.complete).not.toHaveBeenCalled()
   })
 
-  it('keeps real usage settled when the terminal projection fails afterwards', async () => {
+  it('projects a safe failure when the terminal projection fails afterwards', async () => {
     const projectionFailure = new Error('projection failed')
     const stages = stageProjector()
     stages.complete.mockRejectedValueOnce(projectionFailure)
-    const settled = vi.fn()
-
     await expect(runWebsiteVideo(runInput(), dependencies({
       stages,
-      bill: async <T>(input: ManagedWebsiteBillingInput<T>): Promise<T> => {
-        const result = await input.invoke()
-        settled(input.completion(result))
-        return result
-      },
     }))).rejects.toBe(projectionFailure)
 
-    expect(settled).toHaveBeenCalledOnce()
     expect(stages.fail).toHaveBeenCalledWith(
       PROJECT_ID,
       'export',
@@ -162,36 +121,6 @@ describe('runWebsiteVideo', () => {
     )
   })
 
-  it('keeps the delivered artifact successful when final ledger settlement is deferred', async () => {
-    const stages = stageProjector()
-    const settlementFailure = new Error('settlement failed')
-    const report = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    const expected = await dependencies().persistOutput({
-      workspaceId: WORKSPACE_ID,
-      projectId: PROJECT_ID,
-      attemptId: ATTEMPT_ID,
-      job: completedJob(),
-      videoBytes: Buffer.from('mp4'),
-    })
-
-    const result = await runWebsiteVideo(runInput(), dependencies({
-      stages,
-      persistOutput: vi.fn(async () => expected),
-      bill: async <T>(input: ManagedWebsiteBillingInput<T>): Promise<T> => {
-        await input.invoke()
-        throw settlementFailure
-      },
-    }))
-
-    expect(result).toEqual(expected)
-    expect(stages.complete).toHaveBeenCalledWith(PROJECT_ID, expected)
-    expect(stages.fail).not.toHaveBeenCalled()
-    expect(report).toHaveBeenCalledWith(
-      '[website-billing]',
-      expect.stringContaining('WEBSITE_BILLING_SETTLEMENT_DEFERRED'),
-    )
-    report.mockRestore()
-  })
 })
 
 function runInput() {
@@ -199,7 +128,6 @@ function runInput() {
     workspaceId: WORKSPACE_ID,
     projectId: PROJECT_ID,
     attemptId: ATTEMPT_ID,
-    invocationNo: 1,
   }
 }
 
@@ -226,7 +154,6 @@ function dependencies(
       downloadVideo: vi.fn(async () => Buffer.from('mp4')),
     },
     stages: stageProjector(),
-    bill: async <T>(input: ManagedWebsiteBillingInput<T>) => input.invoke(),
     persistOutput: vi.fn(async () => ({
       artifactId: 'artifact-1',
       soundEffectsManifestArtifactId: 'manifest-1',

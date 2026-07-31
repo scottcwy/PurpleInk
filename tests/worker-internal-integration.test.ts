@@ -20,6 +20,8 @@ import {
 } from "../server/src/security/public-url-policy";
 
 const publicResolver: PublicDnsResolver = async () => [{ address: "93.184.216.34" }];
+const WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
+const ATTEMPT_ID = "00000000-0000-4000-8000-000000000002";
 
 describe("worker internal integration boundary", () => {
   it("fails closed when the internal key is absent and compares either supported header", () => {
@@ -94,6 +96,8 @@ describe("worker internal integration boundary", () => {
       normalizeInternalRenderRequest(
         {
           requestId: "project:018f",
+          workspaceId: WORKSPACE_ID,
+          attemptId: ATTEMPT_ID,
           url: "https://Example.com/demo?q=1#section",
           duration: 24,
           quality: "standard",
@@ -103,6 +107,8 @@ describe("worker internal integration boundary", () => {
       ),
     ).resolves.toMatchObject({
       requestId: "project:018f",
+      workspaceId: WORKSPACE_ID,
+      attemptId: ATTEMPT_ID,
       url: "https://example.com/demo?q=1",
       duration: 24,
       quality: "standard",
@@ -112,7 +118,12 @@ describe("worker internal integration boundary", () => {
 
     await expect(
       normalizeInternalRenderRequest(
-        { requestId: "project:018f", captureDir: "./capture" },
+        {
+          requestId: "project:018f",
+          workspaceId: WORKSPACE_ID,
+          attemptId: ATTEMPT_ID,
+          captureDir: "./capture",
+        },
         publicResolver,
       ),
     ).rejects.toMatchObject({ code: "INTERNAL_URL_REQUIRED" });
@@ -120,6 +131,8 @@ describe("worker internal integration boundary", () => {
       normalizeInternalRenderRequest(
         {
           requestId: "project:018f",
+          workspaceId: WORKSPACE_ID,
+          attemptId: ATTEMPT_ID,
           url: "https://example.com",
           capture: { testEmail: "secret@example.com" },
         },
@@ -132,6 +145,8 @@ describe("worker internal integration boundary", () => {
     const off = await normalizeInternalRenderRequest(
       {
         requestId: "project:018f:off",
+        workspaceId: WORKSPACE_ID,
+        attemptId: ATTEMPT_ID,
         url: "https://example.com",
         soundEffects: "off",
       },
@@ -140,6 +155,8 @@ describe("worker internal integration boundary", () => {
     const procedural = await normalizeInternalRenderRequest(
       {
         requestId: "project:018f:procedural",
+        workspaceId: WORKSPACE_ID,
+        attemptId: ATTEMPT_ID,
         url: "https://example.com",
         soundEffects: "procedural",
       },

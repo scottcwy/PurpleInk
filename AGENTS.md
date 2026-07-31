@@ -54,6 +54,11 @@ PurpleInk 是一套把产品事实与真实演示证据制作成发布视频的�
 
 未接线的页面必须显式显示未接线状态与未来数据来源，不得接假数据库、假认证或假引擎。
 
+`server/` 只保留采集、编排、媒体处理与渲染职责。它的文本、视觉、TTS、ASR
+模型请求必须通过受服务间认证保护的 Next 内部 AI 网关，复用同一份目录、
+ExecutionPlan、工作区资金来源、两层并发和双账本；禁止在 worker 中再维护
+provider Key、模型 URL、价格、跨供应商回退或第二套调用账本。
+
 ## 3. 目录与公开边界
 
 ```text
@@ -145,6 +150,7 @@ baseline 来掩盖门禁。
 - 不写入源码、测试 fixture、截图、日志、commit 或对话；
 - 禁止创建携带 secret 的 `NEXT_PUBLIC_*` 变量；
 - 客户端不得解析 provider credential；
+- `server/` worker 不得读取或保存 provider credential，只能持有服务间认证 Key；
 - 凭据只存加密内容，master key 只从 server-only 环境读取，不得明文 fallback；
 - 设置类 API 必须先验证再保存；验证失败返回 422 且不覆盖已有 secret。
 

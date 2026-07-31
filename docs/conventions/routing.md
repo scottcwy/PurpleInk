@@ -72,7 +72,7 @@
 | `/products` | `src/app/products/page.tsx` | `redirect` → `/products/dashboard` | 无 | — |
 | `/products/dashboard` | `src/app/products/(app)/dashboard/page.tsx` | `wired` | 无 | 空状态引导新建项目 |
 | `/products/projects` | `src/app/products/(app)/projects/page.tsx` | `wired` | 无 | 代码（文稿）/录音/URL 介绍三板块真实投影，支持网格（横向行式，按数量降序）与列表双布局，首屏每板块分页投影、滚动经 `/api/projects?view=cards` 追加；空分组各保留对应来源创建入口 |
-| `/products/canvas/[projectId]` | `src/app/products/(app)/canvas/[projectId]/page.tsx` | `wired` | `projectId` path | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明 |
+| `/products/canvas/[projectId]` | `src/app/products/(app)/canvas/[projectId]/page.tsx` | `wired` | `projectId` path | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明；<900px 视口显式降级为桌面引导卡（见 `responsive-design.md` §4） |
 | `/products/shots/[shotId]` | `src/app/products/(app)/shots/[shotId]/page.tsx` | `wired` | `shotId` path + `projectId` query（必填） | 缺失项目/镜头 `notFound()`；旧 workflow 显示保留数据说明 |
 | `/products/export/[projectId]` | `src/app/products/(app)/export/[projectId]/page.tsx` | `wired` | `projectId` path + 持久化 `workflowKind` | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明；script/audio 进入镜头时间线导出，website 进入六阶段执行快照与 approved MP4 交付工作区 |
 | `/products/settings` | `src/app/products/(app)/settings/page.tsx` | `wired` | `projectId` query（可选） | 无项目参数渲染账号级设置；旧 workflow 显示保留数据说明 |
@@ -173,11 +173,12 @@
 | `/api/billing` | GET | — | `@/features/billing` | `wired` |
 | `/api/billing/redemptions` | POST | header `Idempotency-Key` + body `{code}` | `@/features/billing` | `wired` |
 | `/api/ai-usage` | GET | query `view=account\|managed-cycle`、`range=7d\|30d\|cycle`、`timeZone=<IANA>`；账号与 workspace 只取当前会话 | `@/features/usage` | `wired` |
+| `/api/internal/ai/worker` | POST | Bearer 服务间密钥；严格 body 携带 `workspaceId`、`attemptId`、`operationId`、固定 workload 与文本/图片/TTS 输入 | `@/features/ai/worker-gateway` | `wired`；仅受信 worker 可用，先校验 attempt 归属，再在该 workspace 上下文解析统一 ExecutionPlan、并发与双账本；不返回凭据、渠道 URL 或原始 provider 错误 |
 
 约定：
 
 1. 写操作一律 POST/PATCH/DELETE + 严格 JSON schema 校验；校验失败返回 400 且**不落任何写入**。
-   `/api/settings` POST 承载字段范围：StepFun/Gemini/MiMo 的显式服务来源 `providerServices.{provider}.{funding,apiKey?}`（`funding` 为 `managed | byok`；只有 BYOK 接受 Key，先验证再加密保存且响应不回传）、平台目录模型 SKU、三个 OpenAI-compatible 自定义端点（文本与视觉 / TTS / ASR，各自独立凭据、端点与模型）、Director 文本/视觉/TTS/ASR 能力路由、`laneQuotas.{renderShotConcurrency}`（只允许用户调整渲染并发；AI 分镜套餐上限为只读，Director 进程并发只允许运维配置）、`fallbackProvider`（熔断降级链的显式备选 provider，可为 `null` 表示清空；必须支持文本会话，纯音频端点回 422；存 `workspace_settings` 的 `ai.fallback-provider`，默认无备选，见 docs/configuration/model-routing.md）。
+   `/api/settings` POST 承载字段范围：五家内置供应商的显式服务来源 `providerServices.{provider}.{funding,apiKey?}`（`funding` 为 `managed | byok`；只有 BYOK 接受 Key，按目录固定官方 URL 先验证再加密保存且响应不回传）、平台目录模型 SKU、三个 OpenAI-compatible 自定义端点（文本与视觉 / TTS / ASR，各自独立凭据、端点与模型）、Director 文本/视觉/TTS/ASR 能力路由、`laneQuotas.{renderShotConcurrency}`。不存在跨供应商 fallback 设置；唯一自动回退是目录声明的 Managed Gemini 同渠道 3.6 → 3.1 部署回退。
    自定义端点家族按能力拆成三个 provider id：`openai-compatible`（text + vision）、`openai-compatible-tts`（tts）、`openai-compatible-asr`（asr）。三者的凭据分别存 `provider_credentials`，配置分别存 `workspace_settings` 的 `ai.openai-compatible` / `ai.openai-compatible.tts` / `ai.openai-compatible.asr`；同一 id 不得跨能力路由。
    Gemini 仍不可用于 TTS/ASR。媒体路由候选为 StepFun、MiMo、`openai-compatible-tts`（配音）、`openai-compatible-asr`（字幕）。
    `openai-compatible` 的视觉模型独立于文本模型；未填写视觉模型时把分镜验收路由到该端点返回 422。
@@ -190,9 +191,9 @@
 3. 凭据类 POST 必须先验证后保存；验证失败返回 422 且不覆盖已有值。
 4. 除 `/api/ping` 外全部 `export const dynamic = 'force-dynamic'`。
 5. `/api/billing` 只返回方案、周期、额度比例和脱敏 usage 汇总，不返回 `limit_cny_micros`、`used_cny_micros`、供应商单价、汇率或平台 Key。`/api/billing/redemptions` 仅 workspace owner 可用；无效、过期、撤销或已消费代码统一返回不可用语义。
-6. 平台托管额度耗尽统一返回 402 `{code:'quota_exhausted',resetAt,billingUrl:'/products/billing'}`；Free 不能通过直接 API、历史路由或 fallback 使用 Gemini 托管服务，越权返回 403 且不得产生外部调用或账本写入。Free 使用已验证的 workspace Gemini BYOK 不受会员门禁且不写平台成本账本。
+6. 平台托管额度耗尽统一返回 402 `{code:'quota_exhausted',resetAt,billingUrl:'/products/billing'}`；Managed 权限完全取 usage period 冻结的套餐目录，越权返回 403 且不得产生外部调用或账本写入。五家已验证 workspace BYOK 不受 Managed provider 权限门禁且不扣平台权益。
 7. `/api/ai-usage` 返回 `AiUsageProjectionV1`。`view=managed-cycle` 只查询当前 workspace、当前会员周期和 `funding=managed`；`view=account` 只查询当前 `actor_user_id`，跨其 workspace 汇总 `managed | byok | custom`。调用数只计 `provider_started_at is not null`；成功率排除 running；Token 只计 `usage_status=reported`；P95 只使用 `provider_duration_ms`。响应禁止包含人民币成本、额度金额、单价、汇率、Prompt、消息正文、凭据、输入输出哈希、内部调用 ID、原始错误或隐藏推理。
-8. `/api/ai-usage` 的 `range=cycle` 只允许 `managed-cycle`；`account` 只允许 `7d | 30d`。`timeZone` 必须是合法 IANA 时区。营销页 `/api/engine/render` worker 不属于 Products 账号调用账本，也不进入该投影。
+8. `/api/ai-usage` 的 `range=cycle` 只允许 `managed-cycle`；`account` 只允许 `7d | 30d`。`timeZone` 必须是合法 IANA 时区。Products 发起的 worker 模型调用必须经 `/api/internal/ai/worker` 入账；worker 不得持有第二套 provider Key 或产生账外模型请求。
 
 ### 4.2 引擎代理
 
@@ -201,15 +202,15 @@
 | 前端路由 | worker 端点 |
 | --- | --- |
 | `GET /api/engine/health` | `GET /health` |
-| `POST /api/engine/render` | `POST /render` → 202 `{jobId, statusUrl}` |
+| `POST /api/engine/render` | `POST /render` → 410；公开直启已退役，防止绕过 workspace、attempt、统一模型路由与计费 |
 | `GET /api/engine/jobs` | `GET /jobs` |
 | `GET /api/engine/jobs/:id` | `GET /jobs/:id` |
 | `GET /api/engine/jobs/:id/video` | `GET /jobs/:id/video`（支持 Range，206/409/416） |
 
 规则：
 
-- 浏览器只打同源 `/api/engine/*`；客户端 base 固定由 `src/lib/api.ts` 的 `API_BASE` 提供，页面与组件不得直连 worker 端口。
-- worker 不对外暴露，生产走内网 `BACKEND_ORIGIN`。worker 当前 `Access-Control-Allow-Origin: *` 且无认证，因此暴露到公网即为未授权渲染入口。
+- 浏览器只打同源 `/api/engine/*`；客户端 base 固定由 `src/lib/api.ts` 的 `API_BASE` 提供，页面与组件不得直连 worker 端口。公开 `POST /render` 已退役，Products 只能由 Next 通过 Bearer 服务密钥调用 `/internal/render`。
+- worker 不对外暴露，生产走内网 `BACKEND_ORIGIN`。即使错误暴露，公开端点也不得创建包含模型调用的任务；真实集成请求必须同时携带服务密钥、workspaceId 与 attemptId。
 - `statusUrl` 是 worker 相对路径（`/jobs/<id>`），前端消费时必须补 `API_BASE` 前缀，不得直接当作 Next 路由使用。
 
 ### 4.3 资源 URL 合同
@@ -390,7 +391,7 @@ Project（可变，L3 内部）
 
 未覆盖（不得声称已做）：
 
-1. **worker 服务间凭据**：`/api/engine/*` 之后的 worker 调用仍无服务间认证，worker 暴露面靠部署层（反代 + 内网）兜底；营销页演示的登录门只在 Next 客户端。
+1. **worker 公开读取面**：`GET /api/engine/jobs*` 仍是旧调试投影，只能在受控部署边界使用；创建 Products 任务只允许 Next 经受鉴权的 `/internal/render`，公开 `/render` 固定返回 410。
 2. **多实例限流**：`auth_throttle` 固定窗口按实例各算，多实例下变宽松（ISSUE-015 P-9 一并处理或明确接受）。
 3. **角色与协作**：首版每人一个 workspace（owner），`workspace_members.role` 的 `member` 为将来预留，未签发未消费。
 

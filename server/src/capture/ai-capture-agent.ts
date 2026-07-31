@@ -1,8 +1,5 @@
-// 从 Firenze frameproof/src/lib/agents/ai-capture-agent.ts 移植。改动仅三处：
-//   1. 导入路径改为相对路径；AiAction/CapturedScreenshot/CaptureResult 复用 ../types/capture。
-//   2. askAI 走视觉模型（STEP_VISION_MODEL||step-3.7-flash + effort:low + 更大 maxTokens），
-//      因为 step-explore 不吃图；推理模型先产 thinking 再产 text，token 需给足。
-//   3. 新增 onSnapshot 回调：每保存一张截图时把对应语义快照回传，供适配器拼 visible-text。
+// 从 Firenze frameproof/src/lib/agents/ai-capture-agent.ts 移植。
+// 模型请求只经 PurpleInk 内部 AI 网关；Worker 不持有供应商、模型或凭据配置。
 import { logger } from "../lib/logger"
 import { parseLlmJson } from "../lib/llm-response-parser"
 import sharp from "sharp"
@@ -15,7 +12,7 @@ import type {
   CaptureResult,
 } from "../types/capture"
 import type { AgentCredentials } from "./credentials"
-import { callStepMessages } from "../lib/step-client"
+import { callWorkerModel } from "../ai/gateway-client"
 
 /** 动作延迟配置常量（毫秒）。轻度削减：每步固定间隔/滚动等待取更小值提速，
  * 导航/点击等待保守以免截到未渲染完的页面。 */
@@ -75,8 +72,6 @@ export interface AiCaptureOptions {
   credentials?: AgentCredentials
   /** 产品一句话介绍，帮助 AI 判断核心功能 */
   description?: string
-  /** 视觉模型（覆盖 STEP_VISION_MODEL / step-3.7-flash） */
-  visionModel?: string
   /** 每保存一张截图时回调（用于实时进度与持久化）；返回后 buffer 仍会收集到结果中 */
   onScreenshot?: (buffer: Buffer, label: string, index: number, metadata: ScreenshotMetadata) => Promise<void>
   /** 每保存一张截图时回传对应的语义快照（供适配器拼 visible-text.txt，index 与 onScreenshot 对齐） */
@@ -131,7 +126,6 @@ export class AiCaptureAgent {
   private authBudget: number
   private credentials?: AgentCredentials
   private description?: string
-  private visionModel: string
   private onScreenshot?: AiCaptureOptions["onScreenshot"]
   private onSnapshot?: AiCaptureOptions["onSnapshot"]
   private onStep?: AiCaptureOptions["onStep"]
@@ -147,9 +141,6 @@ export class AiCaptureAgent {
   private overlayEscapes = 0
 
   constructor(driver: BrowserDriver, options?: AiCaptureOptions) {
-    const apiKey = process.env.STEP_API_KEY
-    if (!apiKey) throw new Error("STEP_API_KEY not configured")
-
     this.driver = driver
     this.maxSteps = options?.maxSteps ?? 14
     this.minScreenshots = options?.minScreenshots ?? 4
@@ -157,7 +148,6 @@ export class AiCaptureAgent {
     this.authBudget = options?.authBudget ?? 10
     if (options?.credentials) this.credentials = options.credentials
     if (options?.description) this.description = options.description
-    this.visionModel = options?.visionModel || process.env.STEP_VISION_MODEL || "step-3.7-flash"
     this.onScreenshot = options?.onScreenshot
     this.onSnapshot = options?.onSnapshot
     this.onStep = options?.onStep
@@ -603,14 +593,11 @@ export class AiCaptureAgent {
     const base64 = screenshot.toString("base64")
     const prompt = this.buildStepPrompt(snapshot, context)
 
-    // 走视觉模型：step-explore 不吃图，需 step-3.7-flash（推理模型，先 thinking 再 text）。
-    // effort:low 收敛思考，maxTokens 给足以免 thinking 吃光正文导致 JSON 缺失。
-    const content = await callStepMessages({
-      model: this.visionModel,
-      effort: "low",
-      system:
+    const content = await callWorkerModel({
+      workload: "website-capture",
+      systemPrompt:
         "你是一个网页浏览 Agent，负责主动登录/注册并采集产品核心功能截图。只返回 JSON，不要其他文字。",
-      maxTokens: 1500,
+      maxOutputTokens: 1500,
       content: [
         { type: "text", text: prompt },
         {

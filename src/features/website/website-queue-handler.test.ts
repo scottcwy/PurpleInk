@@ -6,7 +6,6 @@ import { activeWorkflowVersionFor } from '@/lib/workflow/project-workflow-regist
 import {
   registerWebsiteVideoHandler,
   runWebsiteVideoQueueJob,
-  WEBSITE_BILLING_INVOCATION_NO,
 } from './website-queue-handler'
 
 vi.mock('server-only', () => ({}))
@@ -16,14 +15,13 @@ const PROJECT_ID = '00000000-0000-4000-8000-000000000101'
 const ATTEMPT_ID = '00000000-0000-4000-8000-000000000201'
 
 describe('website video queue handler', () => {
-  it('binds queue workspace and project attempt to the billing context', async () => {
+  it('binds queue workspace and project attempt to the worker gateway context', async () => {
     const run = vi.fn(async () => undefined)
     await runWebsiteVideoQueueJob(job(), run)
     expect(run).toHaveBeenCalledWith({
       workspaceId: WORKSPACE_ID,
       projectId: PROJECT_ID,
       attemptId: ATTEMPT_ID,
-      invocationNo: WEBSITE_BILLING_INVOCATION_NO,
     })
   })
 
@@ -43,7 +41,7 @@ describe('website video queue handler', () => {
     expect(run).toHaveBeenCalledOnce()
   })
 
-  it('marks a billed composite failure as terminal instead of spawning a charged retry', async () => {
+  it('marks a worker failure as terminal instead of replaying child invocations', async () => {
     const run = vi.fn(async () => {
       throw new Error('temporary worker failure')
     })

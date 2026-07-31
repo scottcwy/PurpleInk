@@ -73,15 +73,16 @@
 ## 5. 计费与会员
 
 三类项目共享当前 workspace entitlement、会员档位与 `usage_periods` 总额度。
-新增工作流不得提高或复制套餐总额。每次托管调用必须绑定真实 run / attempt，
-采用现有预留、结算、失败补偿与幂等语义；BYOK 仍按既有资金来源规则执行。
+新增工作流不得提高或复制套餐总额。每次真实模型调用必须绑定真实 run / attempt，
+采用统一 ExecutionPlan、预留、结算、失败补偿与幂等语义；BYOK 仍按既有资金来源
+规则执行。
 
-audio 的 ASR 执行已绑定真实 attempt，按实际 provider 走既有 managed / BYOK 规则。
-website 已登记为 `purpleink-engine / website-video-v1 / workflow` 复合服务，
-v1 费率为每个向上取整的视频秒 `120000 CNY micros`（¥0.12）；
-只有执行适配器真正预留并结算后才能展示扣费。三类来源继续共用同一 `usage_periods`
-额度，不增加套餐总额。网站成熟 worker 内部调用不能把原始凭据、prompt 或供应商错误
-暴露到项目 UI。
+audio 的 ASR 执行已绑定真实 attempt，按实际 provider 走既有 Managed / BYOK 规则。
+website 的 worker 只负责采集、编排与渲染；其文本、视觉和 TTS 请求必须回调 Next
+内部 AI 网关，由当前 workspace 的既有工作板块模型选择解析 ExecutionPlan。worker
+不得持有 provider Key，不再按 `purpleink-engine / website-video-v1` 复合服务额外
+扣费；工作流父记录只聚合子 invocation。内部回调不得把原始凭据、prompt、渠道 URL
+或供应商错误暴露到项目 UI。
 
 ## 6. Artifact 真值
 

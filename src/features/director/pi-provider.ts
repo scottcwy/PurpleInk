@@ -11,6 +11,7 @@ import { assertBillingAvailable } from '@/features/billing'
 import {
   DIRECTOR_NODE_TYPES,
   resolveDirectorModelTarget,
+  type ModelCapability,
 } from '@/features/ai/model-routing'
 import type { AiProviderId } from '@/features/ai/provider-registry'
 import type { AdapterProtocol } from '@/features/ai/execution-plan'
@@ -101,9 +102,13 @@ export interface DirectorModelRuntime {
 export async function createDirectorModelRuntime(input: {
   nodeType?: string | null
   stage: PipelineStage
+  capability?: ModelCapability
 }): Promise<DirectorModelRuntime> {
   const nodeType = trustedNodeType(input.nodeType, input.stage)
-  const target = await resolveDirectorModelTarget(nodeType, 'text')
+  const target = await resolveDirectorModelTarget(
+    nodeType,
+    input.capability ?? 'text',
+  )
   const label = PROVIDER_LABEL[target.provider]
   const requestShape = REQUEST_SHAPE[target.provider]
   // 纯音频端点不可能承担文本会话。这是设置面矛盾而非外部抖动，用
@@ -127,7 +132,7 @@ export async function createDirectorModelRuntime(input: {
     // 本项目不使用隐藏推理：既不请求 thinking，也不持久化 thinking。
     reasoning: false,
     input: ['text', 'image'],
-    // 成本核算不在本项目范围内，保持 0 而不是编造费率。
+    // pi 的 cost 字段不参与结算；真实费用由版本化 rate card 与统一账本计算。
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     ...requestShape,
   }

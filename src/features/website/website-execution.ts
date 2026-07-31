@@ -1,5 +1,4 @@
 import 'server-only'
-import { createHash } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { commitArtifactRecords } from '@/features/artifacts'
@@ -21,10 +20,6 @@ import {
   WebsiteExecutionError,
   websiteFailureCode,
 } from './website-engine-execution'
-import {
-  runManagedWebsiteBilling,
-  type ManagedWebsiteBillingInput,
-} from './managed-billing'
 import {
   persistWebsiteVideoOutput,
   type PersistedWebsiteOutput,
@@ -51,7 +46,6 @@ export interface RunWebsiteVideoInput {
   workspaceId: string
   projectId: string
   attemptId: string
-  invocationNo: number
   signal?: AbortSignal
 }
 
@@ -59,7 +53,6 @@ export interface WebsiteExecutionDependencies {
   loadProject(projectId: string): Promise<WebsiteProjectExecutionInput>
   engine: Pick<WebsiteEngineClient, 'start' | 'getJob' | 'downloadVideo'>
   stages: WebsiteStageProjector
-  bill<T>(input: ManagedWebsiteBillingInput<T>): Promise<T>
   persistOutput(input: {
     workspaceId: string
     projectId: string
@@ -91,7 +84,7 @@ export async function runWebsiteVideo(
       resolved = await createDefaultDependencies(parsed.workspaceId, stages)
     }
     const project = await resolved.loadProject(parsed.projectId)
-    const output = await runBilledWebsiteProject(
+    const output = await produceWebsiteOutput(
       parsed,
       project,
       resolved,
@@ -118,46 +111,6 @@ export async function runWebsiteVideo(
   }
 }
 
-async function runBilledWebsiteProject(
-  input: RunWebsiteVideoInput,
-  project: WebsiteProjectExecutionInput,
-  dependencies: WebsiteExecutionDependencies,
-  cursor: WebsiteExecutionCursor,
-): Promise<PersistedWebsiteOutput> {
-  try {
-    return await dependencies.bill({
-      workspaceId: input.workspaceId,
-      attemptId: input.attemptId,
-      invocationNo: input.invocationNo,
-      requestIdentity: websiteRequestIdentity(project),
-      maximumDurationSeconds: project.source.durationSec,
-      invoke: () => produceWebsiteOutput(input, project, dependencies, cursor),
-      completion: (result) => ({
-        durationSec: result.durationSec,
-        durationSource: result.durationSource,
-        outputHash: result.contentHash,
-      }),
-    })
-  } catch (error) {
-    if (!cursor.persistedOutput) throw error
-    console.error('[website-billing]', JSON.stringify({
-      code: 'WEBSITE_BILLING_SETTLEMENT_DEFERRED',
-      projectId: input.projectId,
-      attemptId: input.attemptId,
-    }))
-    return cursor.persistedOutput
-  }
-}
-
-function websiteRequestIdentity(project: WebsiteProjectExecutionInput): string {
-  return createHash('sha256')
-    .update(JSON.stringify({
-      sourceFingerprint: project.sourceFingerprint,
-      soundEffects: project.soundEffects,
-    }))
-    .digest('hex')
-}
-
 async function produceWebsiteOutput(
   input: RunWebsiteVideoInput,
   project: WebsiteProjectExecutionInput,
@@ -165,6 +118,7 @@ async function produceWebsiteOutput(
   cursor: WebsiteExecutionCursor,
 ): Promise<PersistedWebsiteOutput> {
   const execution = await executeWebsiteEngine({
+    workspaceId: input.workspaceId,
     projectId: input.projectId,
     attemptId: input.attemptId,
     url: project.source.url,
@@ -228,7 +182,6 @@ async function createDefaultDependencies(
     },
     engine: new WebsiteEngineClient(),
     stages,
-    bill: runManagedWebsiteBilling,
     persistOutput: (output) => persistWebsiteVideoOutput(output, {
       storage,
       commitArtifacts: (artifacts) => commitArtifactRecords(database, artifacts),
@@ -275,7 +228,6 @@ function parseRunInput(input: RunWebsiteVideoInput): RunWebsiteVideoInput {
     workspaceId: uuidSchema.parse(input.workspaceId),
     projectId: uuidSchema.parse(input.projectId),
     attemptId: uuidSchema.parse(input.attemptId),
-    invocationNo: z.number().int().positive().parse(input.invocationNo),
     ...(input.signal ? { signal: input.signal } : {}),
   }
 }

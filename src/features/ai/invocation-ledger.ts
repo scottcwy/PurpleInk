@@ -12,6 +12,7 @@ import {
   taskAttempts,
 } from '@/lib/db/schema'
 import type { VersionedPayload } from '@/lib/db/schema/core'
+import { ProviderInvocationAlreadyStartedError } from '@/features/billing'
 import type { ProviderCapability } from './provider-registry'
 
 export type InvocationFunding = 'managed' | 'byok' | 'custom'
@@ -93,7 +94,7 @@ export async function markProviderInvocationStarted(
   invocationId: string,
 ): Promise<void> {
   const database = await getDb()
-  await database.update(aiInvocations).set({
+  const claimed = await database.update(aiInvocations).set({
     providerStartedAt: new Date(),
     updatedAt: new Date(),
   }).where(and(
@@ -101,7 +102,8 @@ export async function markProviderInvocationStarted(
     eq(aiInvocations.id, invocationId),
     eq(aiInvocations.status, 'running'),
     isNull(aiInvocations.providerStartedAt),
-  ))
+  )).returning({ id: aiInvocations.id })
+  if (claimed.length === 0) throw new ProviderInvocationAlreadyStartedError()
 }
 
 export async function settleUnbilledInvocation(input: {

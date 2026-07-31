@@ -291,6 +291,12 @@ it('atomically creates, reserves and idempotently settles an invocation', async 
     workspaceId: WORKSPACE_ID,
     invocationId: INVOCATION_ID,
   })
+  await expect(markManagedInvocationStarted({
+    workspaceId: WORKSPACE_ID,
+    invocationId: INVOCATION_ID,
+  })).rejects.toMatchObject({
+    code: 'provider_invocation_already_started',
+  })
   let [period] = await database.db.select().from(usagePeriods)
   expect(period.reservedCnyMicros).toBe(BigInt(1_000))
 

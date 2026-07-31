@@ -50,45 +50,37 @@ docker compose -f docker-compose.prod.yml build
 | `CVC_MANAGED_STEPFUN_API_KEY` | Next 托管 StepFun 服务凭据；只进入服务端进程 |
 | `CVC_MANAGED_MIMO_API_KEY` | Next 托管 MiMo 服务凭据；只进入服务端进程 |
 | `CVC_MANAGED_GEMINI_API_KEY` | Next 托管 Gemini 服务凭据；只进入服务端进程 |
+| `CVC_MANAGED_OPENAI_API_KEY` | Next 托管 OpenRouter/OpenAI 服务凭据；只进入服务端进程 |
+| `CVC_MANAGED_ANTHROPIC_API_KEY` | Next 托管 XhuoAI/Anthropic 服务凭据；只进入服务端进程 |
 | `CVC_REDEMPTION_CODE_PEPPER` | 一次性兑换码域分离 HMAC pepper；不得轮换后丢失旧值 |
 | `CVC_QUEUE_RENDER_SHOT_CONCURRENCY` | P-4 未落地前的强制项；按目标容器 `--cpus` 上限设置，建议 ≤ `floor(cpus/2)` |
 | `CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY` | 同上 |
 | `CVC_ALLOWED_CIDRS` | 反代 IP 过滤网段，留空默认放行所有（不设防），生产必须收紧 |
-| `STEP_API_KEY` / `GEMINI_API_KEY` / `LISTENHUB_API_KEY` 等 | worker 的 provider 凭据，见 `server/.env.example` |
-| `STEPFUN_API_KEY` | **可选**。Next 侧凭据 bootstrap 用；留空则默认复用 `STEP_API_KEY` 的值 |
+| `PURPLEINK_ENGINE_INTERNAL_KEY` | Next ↔ worker 双向服务鉴权；两端必须一致，禁止进入客户端 |
+| `PURPLEINK_AI_GATEWAY_ORIGIN` | worker 回调 Next 的固定内网 origin；容器默认 `http://next:3000` |
 | `CVC_DEMO_ACCOUNT_EMAIL` / `CVC_DEMO_ACCOUNT_PASSWORD` | **可选**。设置后 `seed-demo-account` 服务自动创建该体验账号；登录页的体验账号提示弹窗已移除，这组变量不再下发到浏览器 |
 | `CVC_DEMO_ACCOUNT_NAME` | 可选，体验账号显示名（仅建号脚本消费） |
 
 ### 3.1 Next 侧平台托管与 BYOK 凭据怎么进去
 
-三家内置托管服务只读取 `CVC_MANAGED_STEPFUN_API_KEY`、
-`CVC_MANAGED_MIMO_API_KEY`、`CVC_MANAGED_GEMINI_API_KEY`。这些变量由 compose
-显式注入 Next 服务，不进入数据库、客户端或日志，也不会回退到旧的
-`STEPFUN_API_KEY` / `GEMINI_API_KEY`。自定义 OpenAI-compatible 的 BYOK 凭据仍走
-`provider_credentials` 加密表，不消耗平台成本池。
+五家内置托管服务只读取各自的 `CVC_MANAGED_*_API_KEY`。这些变量由 compose
+显式注入 Next 服务，不进入数据库、客户端或日志，也不会回退到旧 provider env。
+五家内置 BYOK 凭据经设置页验证后写入 `provider_credentials` 加密表，只走目录
+固定的官方 URL，不消耗 Managed 套餐权益。自定义 OpenAI-compatible 保持独立。
 
 部署前运行 `pnpm verify:managed-services`。输出只包含变量名与
 `configured` / `missing`，不会打印值；任何缺失都会以退出码 1 阻止错误部署。
 
-历史 BYOK 凭据 bootstrap 仍是一个**启动前的一次性任务**，由 compose 的
-`bootstrap-credentials` 服务完成（用 `migrate` target 镜像，它含 `tsx` 与源码）：
+容器启动拓扑为：
 
+```text
+migrate ──────────────┐
+seed-demo-account ────┴→ next
 ```
-migrate → bootstrap-credentials ┐
-       └→ seed-demo-account     ├→ next
-```
 
-两者都是 `next.depends_on` 的 `service_completed_successfully`，所以容器起来时凭据
-已经在库里。三家内置托管服务不依赖这一步，终端用户也不需要填写平台 Key。
-
-- 提供了 Key：脚本先调真实 API 校验，通过才写入；校验失败退出 1，**故意阻断启动**
-  （配置错了必须响）。首次部署要盯这个容器的日志，它需要构建环境能出网。
-- 没提供 Key：`--allow-empty` 让它如实提示并退出 0，不阻断启动。应用没有凭据也能
-  正常起，凭据只在跑管线时才需要；此时用户仍可经设置页自行写入。
-
-轮换 Key 有两条等价路径：改 `.env` 后重跑
-`docker compose -f docker-compose.prod.yml run --rm bootstrap-credentials`，
-或直接在设置页 `POST /api/settings`（真实校验、422 不覆盖已有值）。
+不再用启动任务把 provider env 写入工作区数据库。Managed Key 在 Secret Manager
+或 compose 环境中轮换后重启 Next；BYOK Key 只能经设置页或 `POST /api/settings`
+写入，并保持“真实官方链路验证失败返回 422 且不覆盖旧值”的合同。
 
 ### 3.2 体验账号（路演 / 评审）
 
@@ -185,7 +177,7 @@ Test-NetConnection -ComputerName localhost -Port 5432
   不需要重建镜像。
 - **`CVC_CREDENTIAL_MASTER_KEY`**：目前是手工操作，走 secret 管理（不进
   `.env` 明文长期存放；仅在启动 compose 时注入进程环境）。
-- **平台托管 provider Key（Gemini / StepFun / MiMo）**：更新 secret 管理中的
+- **平台托管 provider Key（StepFun / MiMo / Gemini / OpenAI / Anthropic）**：更新 secret 管理中的
   `CVC_MANAGED_*` 后重启 Next；设置页不得写入或显示这些值。
 - **BYOK provider Key**：走设置页 `POST /api/settings`（真实 API 校验、失败 422
   且不覆盖已有值）。
@@ -196,9 +188,12 @@ Test-NetConnection -ComputerName localhost -Port 5432
 `BACKEND_ORIGIN=http://worker:8787` 内网访问（`next.config.ts` 的
 `/api/engine/:path*` rewrites 消费）。注意事项：
 
-- `worker` 是独立系统，独立 env 模板（`server/.env.example`），独立 job
-  状态机，不与 `next` 共用 env 加载器或 model routing（AGENTS.md §0 硬边界）；
-  compose 里两个服务的 `environment` 块也刻意分开写，不引用同一份变量列表。
+- `worker` 是独立进程和 job 状态机，但不再拥有第二套 model routing。它只负责
+  采集、编排、媒体处理与渲染；文本、视觉和 TTS 通过服务密钥回调 Next 内部 AI
+  网关，统一使用工作区路由、并发和账本。
+- `worker` 不得注入 `CVC_MANAGED_*`、StepFun、Gemini、MiMo、ListenHub 等
+  provider Key；只注入 `PURPLEINK_ENGINE_INTERNAL_KEY` 与固定
+  `PURPLEINK_AI_GATEWAY_ORIGIN`。
 - `worker` 健康检查是 `GET /health`（Node 内置 HTTP 服务自带路由），与 `next`
   的 `GET /api/ping` 互不影响。
 - `worker` 同样需要 CJK 字体与 Chromium（`server/Dockerfile` 已装），因为它的

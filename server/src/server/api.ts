@@ -1,7 +1,7 @@
 // Purple Ink 后端 HTTP API（Node 内置 http，零额外依赖）。
 // 路由：
 //   GET  /health            健康检查
-//   POST /render            起一个渲染 Job，返回 { jobId }
+//   POST /render            已退役（410）；Products 只走受鉴权的 /internal/render
 //   GET  /jobs              列出所有 Job
 //   GET  /jobs/:id          单个 Job 状态/进度
 //   GET  /jobs/:id/video    产物 mp4（支持 Range，可在浏览器直接播放）
@@ -9,8 +9,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 import { createReadStream } from "node:fs"
 import { stat } from "node:fs/promises"
-import { createJob, getJob, listJobs, toPublicJob } from "./job-store"
-import { runJob, type RenderRequest } from "./job-runner"
+import { getJob, listJobs, toPublicJob } from "./job-store"
 import { logger } from "../lib/logger"
 import { errorMessage } from "../lib/error-message"
 import { handleInternalRequest } from "./internal-api"
@@ -22,18 +21,6 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
     "Access-Control-Allow-Origin": "*",
   })
   res.end(data)
-}
-
-function readBody(req: IncomingMessage): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let raw = ""
-    req.on("data", (c) => {
-      raw += c
-      if (raw.length > 1_000_000) reject(new Error("body too large"))
-    })
-    req.on("end", () => resolve(raw))
-    req.on("error", reject)
-  })
 }
 
 /** 串流 mp4，支持 Range（浏览器 <video> 拖动进度条） */
@@ -90,34 +77,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     return
   }
 
-  // POST /render
+  // 公开直启会绕过 workspace/attempt 归属、统一模型路由和计费，固定退役。
   if (method === "POST" && path === "/render") {
-    let body: RenderRequest
-    try {
-      body = JSON.parse((await readBody(req)) || "{}")
-    } catch {
-      sendJson(res, 400, { error: "invalid JSON body" })
-      return
-    }
-    const hasUrl = typeof body.url === "string" && /^https?:\/\//i.test(body.url)
-    const hasCapture = typeof body.captureDir === "string" && body.captureDir.length > 0
-    if (!hasUrl && !hasCapture) {
-      sendJson(res, 400, { error: "need `url`(http/https) or `captureDir`" })
-      return
-    }
-    // 规范化可选字段
-    if (body.fps !== undefined) {
-      const fpsNum = Number(body.fps)
-      if (fpsNum) body.fps = fpsNum
-      else delete body.fps
-    }
-    if (body.generation && !["llm", "template", "auto"].includes(body.generation)) body.generation = "auto"
-    const kind = hasUrl ? "url" : "capture"
-    const input = (hasUrl ? body.url : body.captureDir) as string
-    const job = createJob(kind, input)
-    logger.info("api:render_queued", { id: job.id, kind, input })
-    runJob(job, body)
-    sendJson(res, 202, { jobId: job.id, statusUrl: `/jobs/${job.id}` })
+    sendJson(res, 410, { error: "public render endpoint retired" })
     return
   }
 
@@ -166,7 +128,6 @@ export function startServer(port: number): void {
   server.listen(port, () => {
     logger.info("api:listening", { port })
     console.log(`\n  Purple Ink API  →  http://localhost:${port}`)
-    console.log(`  POST /render    {"url":"https://...","duration":24,"quality":"draft"}`)
-    console.log(`  POST /render    {"captureDir":"./out/demo-cap","quality":"draft"}\n`)
+    console.log("  Products render → authenticated /internal/render\n")
   })
 }

@@ -13,6 +13,7 @@ vi.mock('server-only', () => ({}))
 
 const PROJECT_ID = '00000000-0000-4000-8000-000000000101'
 const ATTEMPT_ID = '00000000-0000-4000-8000-000000000201'
+const WORKSPACE_ID = '00000000-0000-4000-8000-000000000001'
 
 function job(overrides: Partial<WebsiteEngineJob> = {}): WebsiteEngineJob {
   return {
@@ -36,54 +37,9 @@ function job(overrides: Partial<WebsiteEngineJob> = {}): WebsiteEngineJob {
 }
 
 describe('executeWebsiteEngine', () => {
-  it('re-submits a missing in-memory job once with the exact same requestId', async () => {
-    const start = vi
-      .fn()
-      .mockResolvedValueOnce({ reused: false, job: job({ status: 'queued', phase: 'queued' }) })
-      .mockResolvedValueOnce({
-        reused: false,
-        job: job({ id: 'engine-job-2', phase: 'rendering' }),
-      })
-    const getJob = vi
-      .fn()
-      .mockRejectedValueOnce(
-        new WebsiteEngineError('ENGINE_JOB_NOT_FOUND', true, 404),
-      )
-      .mockResolvedValueOnce(job({
-        id: 'engine-job-2',
-        status: 'done',
-        phase: 'done',
-        durationSec: 28.5,
-        durationSource: 'output',
-        elapsedSec: 28.5,
-        checkPassed: true,
-        goldenVerified: true,
-        goldenCheckCount: 2,
-        hasVideo: true,
-        videoUrl: '/internal/video',
-        soundEffects: completedSoundEffects(),
-      }))
-    const progress = vi.fn(async () => undefined)
-
-    const result = await executeWebsiteEngine(input(), dependencies({
-      engine: {
-        start,
-        getJob,
-        downloadVideo: vi.fn(async () => Buffer.from('video')),
-      },
-      onProgress: progress,
-    }))
-
-    expect(start).toHaveBeenCalledTimes(2)
-    expect(start.mock.calls[0]?.[0].requestId).toBe(start.mock.calls[1]?.[0].requestId)
-    expect(result.job.durationSource).toBe('output')
-    expect(JSON.stringify(progress.mock.calls)).not.toContain('private=campaign')
-    expect(JSON.stringify(progress.mock.calls)).not.toContain('/internal/video')
-  })
-
-  it('does not re-submit more than once after consecutive worker 404 responses', async () => {
+  it('does not replay a missing in-memory job inside the same attempt', async () => {
     const start = vi.fn(async () => ({ reused: false, job: job() }))
-    const missing = new WebsiteEngineError('ENGINE_JOB_NOT_FOUND', true, 404)
+    const missing = new WebsiteEngineError('ENGINE_JOB_NOT_FOUND', false, 404)
     const getJob = vi.fn().mockRejectedValue(missing)
 
     await expect(executeWebsiteEngine(input(), dependencies({
@@ -93,8 +49,8 @@ describe('executeWebsiteEngine', () => {
         downloadVideo: vi.fn(),
       },
     }))).rejects.toBe(missing)
-    expect(start).toHaveBeenCalledTimes(2)
-    expect(getJob).toHaveBeenCalledTimes(2)
+    expect(start).toHaveBeenCalledOnce()
+    expect(getJob).toHaveBeenCalledOnce()
   })
 
   it('keeps polling the same job after a transient worker outage', async () => {
@@ -272,6 +228,7 @@ describe('executeWebsiteEngine', () => {
 
 function input() {
   return {
+    workspaceId: WORKSPACE_ID,
     projectId: PROJECT_ID,
     attemptId: ATTEMPT_ID,
     url: 'https://example.com/product?private=campaign',

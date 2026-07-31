@@ -39,6 +39,15 @@ export class BillingIdempotencyConflictError extends Error {
   }
 }
 
+export class ProviderInvocationAlreadyStartedError extends Error {
+  readonly code = 'provider_invocation_already_started' as const
+
+  constructor() {
+    super('Provider invocation was already started')
+    this.name = 'ProviderInvocationAlreadyStartedError'
+  }
+}
+
 export function toBillingProjection(input: {
   planKey: PlanKey
   startsAt: Date

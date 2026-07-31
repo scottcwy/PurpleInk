@@ -4,7 +4,7 @@
 import { readdir } from "node:fs/promises"
 import { join } from "node:path"
 import sharp from "sharp"
-import { callStepMessages } from "../../lib/step-client"
+import { callWorkerModel } from "../../ai/gateway-client"
 import { logger } from "../../lib/logger"
 import type { ChapterId, ChapterHtml, ComposeContext } from "./types"
 import type { VideoModel } from "../model"
@@ -43,14 +43,14 @@ export async function generateChapters(
   // --- Call 1: Batch Ch1 + Ch5 ---
   const batchIds = getBatchableChapterIds()
   try {
-    logger.info("generate:batch_start", { chapters: batchIds, hasApiKey: !!process.env.STEP_API_KEY })
+    logger.info("generate:batch_start", { chapters: batchIds })
     const batchPrompt = buildBatchPrompt(batchIds, ctx)
     logger.info("generate:batch_calling", { chapters: batchIds, promptLen: batchPrompt.length })
-    const response = await callStepMessages({
-      system: systemPrompt,
+    const response = await callWorkerModel({
+      workload: "website-compose",
+      systemPrompt,
       content: [{ type: "text", text: batchPrompt }],
-      maxTokens: 8000,
-      model: "step-explore",
+      maxOutputTokens: 8000,
     })
     logger.info("generate:batch_response", { responseLen: response?.length || 0, hasContent: !!response })
     const parsed = parseBatchResponse(response)
@@ -99,11 +99,11 @@ export async function generateChapters(
       }
     }
 
-    const response = await callStepMessages({
-      system: systemPrompt,
+    const response = await callWorkerModel({
+      workload: "website-compose",
+      systemPrompt,
       content: content2,
-      maxTokens: 8000,
-      model: "step-explore",
+      maxOutputTokens: 8000,
     })
     logger.info("generate:ch2_response", { responseLen: response?.length || 0 })
     const html = extractHtmlFromResponse(response)
@@ -143,11 +143,11 @@ export async function generateChapters(
       }
     }
 
-    const response = await callStepMessages({
-      system: systemPrompt,
+    const response = await callWorkerModel({
+      workload: "website-compose",
+      systemPrompt,
       content,
-      maxTokens: 8000,
-      model: "step-explore",
+      maxOutputTokens: 8000,
     })
     logger.info("generate:ch3_response", { responseLen: response?.length || 0 })
     const html = extractHtmlFromResponse(response)
@@ -168,11 +168,11 @@ export async function generateChapters(
   try {
     logger.info("generate:ch4_start", { hasStats: model.scenes.some((s) => s.stats?.length), hasLogos: model.logos.length > 0 })
     const ch4Prompt = buildChapterPrompt("ch4-proof", ctx)
-    const response = await callStepMessages({
-      system: systemPrompt,
+    const response = await callWorkerModel({
+      workload: "website-compose",
+      systemPrompt,
       content: [{ type: "text", text: ch4Prompt }],
-      maxTokens: 8000,
-      model: "step-explore",
+      maxOutputTokens: 8000,
     })
     logger.info("generate:ch4_response", { responseLen: response?.length || 0 })
     const html = extractHtmlFromResponse(response)
@@ -230,8 +230,8 @@ export function summarizeComposeError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err)
   const httpStatus = msg.match(/^StepFun API (\d{3})/)
   if (httpStatus?.[1]) return `stepfun_http_${httpStatus[1]}`
-  if (msg.includes("STEP_API_KEY not configured")) return "stepfun_key_missing"
-  if (msg.includes("exhausted retries")) return "stepfun_retries_exhausted"
+  if (msg.includes("WORKER_AI_GATEWAY_UNCONFIGURED")) return "ai_gateway_unconfigured"
+  if (msg.includes("WORKER_AI_GATEWAY_UNAVAILABLE")) return "ai_gateway_unavailable"
   return (msg.split("\n")[0] ?? "").slice(0, 120)
 }
 

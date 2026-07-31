@@ -5,7 +5,6 @@ import {
 } from '@earendil-works/pi-ai/api/lazy'
 import type {
   Api,
-  AssistantMessage,
   AssistantMessageEvent,
   AssistantMessageEventStream,
   Context,
@@ -15,7 +14,6 @@ import type {
 import {
   ManagedAiGateway,
   type ManagedAiHandle,
-  type ManagedUsage,
 } from '@/features/ai'
 import {
   reserveProviderDispatch,
@@ -25,7 +23,16 @@ import {
   ProviderRequestError,
   type ProviderFailureKind,
 } from '@/features/ai/provider-request-error'
-import { billingInvocationNo } from '@/features/billing'
+import {
+  estimatedTextUsage,
+  estimatedTokens,
+  reportedTextUsage,
+} from './director-billing-usage'
+import {
+  billingInvocationNo,
+  ProviderInvocationAlreadyStartedError,
+  type BillingInvocationScope,
+} from '@/features/billing'
 
 interface DirectorBillingRuntime {
   providerId: Parameters<ManagedAiGateway['begin']>[0]['provider']
@@ -60,6 +67,11 @@ export function createDirectorBillingStream(input: {
   runtime: DirectorBillingRuntime
   attemptId?: string
   invocationIndex: number
+  billingScope?: BillingInvocationScope
+  capability?: 'text' | 'vision'
+  operationId?: string
+  operation?: string
+  source?: string
   gateway: ManagedAiGateway
   /** 出网前的审计、配额或路由前置失败；调用方据此保留原始类型，不得误计 Provider 熔断。 */
   onPreflightFailure?: (error: unknown) => void
@@ -136,7 +148,11 @@ async function* billedEvents(
         await dispatch?.defer(error.retryAt ? new Date(error.retryAt) : undefined)
       }
     }
-    if (handle && !settled) {
+    if (
+      handle
+      && !settled
+      && !(error instanceof ProviderInvocationAlreadyStartedError)
+    ) {
       if (providerStarted) {
         await handle.settleUnavailable(true, safeFailureKind(error))
       }
@@ -239,18 +255,24 @@ async function beginInvocation(
   }
   return input.gateway.begin({
     attemptId: input.attemptId,
-    invocationNo: billingInvocationNo('director', input.invocationIndex),
+    invocationNo: billingInvocationNo(
+      input.billingScope ?? 'director',
+      input.invocationIndex,
+    ),
     provider: input.runtime.providerId,
     model: input.runtime.modelId,
-    capability: 'text',
+    capability: input.capability ?? 'text',
     rawInput: JSON.stringify({
       systemPrompt: input.context.systemPrompt,
       messages: input.context.messages,
       tools: input.context.tools ?? [],
     }),
+    ...(input.operation ? { operation: input.operation } : {}),
+    ...(input.source ? { source: input.source } : {}),
     maxOutputTokens:
       input.options?.maxTokens ?? input.runtime.maxOutputTokens,
     execution: {
+      ...(input.operationId ? { operationId: input.operationId } : {}),
       attemptGroupId: input.attemptId,
       logicalModelId: input.runtime.logicalModelId ?? input.runtime.modelId,
       outboundModelId: input.runtime.modelId,
@@ -292,56 +314,4 @@ async function settleTerminal(
 
 function safeFailureKind(error: unknown): string {
   return error instanceof ProviderRequestError ? error.kind : 'unknown'
-}
-
-function reportedTextUsage(message: AssistantMessage): ManagedUsage | null {
-  const usage = message.usage
-  const values = [
-    usage.input,
-    usage.output,
-    usage.cacheRead,
-    usage.cacheWrite,
-  ]
-  if (!values.every(isUsageNumber)) return null
-  if (values.every((value) => value === 0)) return null
-  return {
-    kind: 'text',
-    inputTokens: usage.input,
-    cachedInputTokens: usage.cacheRead,
-    cacheWriteInputTokens: usage.cacheWrite,
-    outputTokens: usage.output,
-  }
-}
-
-function isUsageNumber(value: unknown): value is number {
-  return Number.isSafeInteger(value) && Number(value) >= 0
-}
-
-function estimatedTokens(
-  input: Parameters<typeof createDirectorBillingStream>[0]
-): number {
-  const inputCharacters = JSON.stringify({
-    systemPrompt: input.context.systemPrompt,
-    messages: input.context.messages,
-    tools: input.context.tools ?? [],
-  }).length
-  return Math.ceil(inputCharacters / 4)
-    + (input.options?.maxTokens ?? input.runtime.maxOutputTokens)
-}
-
-function estimatedTextUsage(
-  input: Parameters<typeof createDirectorBillingStream>[0],
-  message: AssistantMessage,
-): ManagedUsage {
-  const inputCharacters = JSON.stringify({
-    systemPrompt: input.context.systemPrompt,
-    messages: input.context.messages,
-    tools: input.context.tools ?? [],
-  }).length
-  return {
-    kind: 'text',
-    inputTokens: Math.ceil(inputCharacters / 4),
-    cachedInputTokens: 0,
-    outputTokens: Math.ceil(JSON.stringify(message.content).length / 4),
-  }
 }

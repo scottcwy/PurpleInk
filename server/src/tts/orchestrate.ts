@@ -1,15 +1,16 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import type { VideoModel } from "../compose/model";
-import type { TtsEnv } from "../../../src/lib/tts/config";
+import {
+  synthesizeWorkerSpeech,
+  type WorkerTtsResult,
+} from "../ai/gateway-client";
 import {
   generateNarrationPlan,
   parseNarrationPlan,
   type NarrationPlan,
 } from "./narration";
-import { synthesizeFlowSpeech } from "./listenhub";
 import { buildNarrationTrack, measureAudioDuration } from "./media";
-import { synthesizeMimoSpeech } from "./mimo";
 
 export interface NarrationAssets {
   plan: NarrationPlan;
@@ -21,7 +22,7 @@ const NARRATION_TAIL_HOLD_SEC = 0.5;
 
 interface NarrationDependencies {
   generatePlan?: (model: VideoModel) => Promise<NarrationPlan>;
-  synthesize?: (text: string, config: TtsEnv) => Promise<ArrayBuffer>;
+  synthesize?: (text: string) => Promise<WorkerTtsResult>;
   measureDuration?: (path: string) => Promise<number>;
   buildTrack?: typeof buildNarrationTrack;
   onPhase?: (phase: "scripting" | "synthesizing" | "timing") => void;
@@ -30,11 +31,10 @@ interface NarrationDependencies {
 export async function prepareNarrationAssets(
   model: VideoModel,
   projectDir: string,
-  config: TtsEnv,
   dependencies: NarrationDependencies = {}
 ): Promise<NarrationAssets> {
   const generatePlan = dependencies.generatePlan ?? generateNarrationPlan;
-  const synthesize = dependencies.synthesize ?? synthesizeConfiguredSpeech;
+  const synthesize = dependencies.synthesize ?? synthesizeWorkerSpeech;
   const measureDuration = dependencies.measureDuration ?? measureAudioDuration;
   const buildTrack = dependencies.buildTrack ?? buildNarrationTrack;
   const audioDir = join(projectDir, "audio");
@@ -55,13 +55,19 @@ export async function prepareNarrationAssets(
 
   dependencies.onPhase?.("synthesizing");
   const segmentPaths: string[] = [];
+  let responseFormat: WorkerTtsResult["audioFormat"] | undefined;
   for (const segment of plan.segments) {
-    const filename = `${String(segment.sceneIndex).padStart(3, "0")}.${responseFormat(config)}`;
+    const synthesized = await synthesize(segment.text);
+    responseFormat ??= synthesized.audioFormat;
+    if (synthesized.audioFormat !== responseFormat) {
+      throw new Error("WORKER_TTS_FORMAT_CHANGED");
+    }
+    const filename = `${String(segment.sceneIndex).padStart(3, "0")}.${responseFormat}`;
     const path = join(segmentsDir, filename);
-    const audio = await synthesize(segment.text, config);
-    await writeFile(path, Buffer.from(audio));
+    await writeFile(path, Buffer.from(synthesized.audio));
     segmentPaths.push(path);
   }
+  if (!responseFormat) throw new Error("WORKER_TTS_EMPTY_PLAN");
 
   dependencies.onPhase?.("timing");
   const audioDurations = await Promise.all(
@@ -76,9 +82,9 @@ export async function prepareNarrationAssets(
   });
 
   const metadata = {
-    provider: config.TTS_PROVIDER,
-    voice: voice(config),
-    responseFormat: responseFormat(config),
+    provider: "purpleink-ai-gateway",
+    voice: "workspace-route",
+    responseFormat,
     totalDurationSec: model.durationSec,
     narrationPath: relative(projectDir, narrationPath),
     segments: plan.segments.map((segment, index) => ({
@@ -97,25 +103,4 @@ export async function prepareNarrationAssets(
   );
 
   return { plan, narrationPath };
-}
-
-function synthesizeConfiguredSpeech(
-  text: string,
-  config: TtsEnv
-): Promise<ArrayBuffer> {
-  return config.TTS_PROVIDER === "mimo"
-    ? synthesizeMimoSpeech(text, config)
-    : synthesizeFlowSpeech(text, config);
-}
-
-function responseFormat(config: TtsEnv): string {
-  return config.TTS_PROVIDER === "mimo"
-    ? "wav"
-    : config.LISTENHUB_TTS_RESPONSE_FORMAT;
-}
-
-function voice(config: TtsEnv): string {
-  return config.TTS_PROVIDER === "mimo"
-    ? config.MIMO_TTS_VOICE
-    : config.LISTENHUB_TTS_VOICE;
 }

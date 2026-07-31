@@ -8,6 +8,8 @@ describe('billingInvocationNo', () => {
     expect(billingInvocationNo('subtitle-asr', 1)).toBe(20_000)
     expect(billingInvocationNo('vision-qa', 1)).toBe(30_000)
     expect(billingInvocationNo('source-asr', 1)).toBe(40_000)
+    expect(billingInvocationNo('worker-text', 1)).toBe(50_000)
+    expect(billingInvocationNo('worker-tts', 1)).toBe(60_000)
   })
 
   it('rejects invalid and overflowing indexes before reservation', () => {

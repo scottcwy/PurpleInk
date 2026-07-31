@@ -21,6 +21,8 @@ export class InternalRenderRequestError extends Error {
 
 export interface NormalizedInternalRenderRequest extends RenderRequest {
   requestId: string
+  workspaceId: string
+  attemptId: string
   url: string
   capture: NonNullable<RenderRequest["capture"]> & {
     credentialMode: "none"
@@ -30,6 +32,8 @@ export interface NormalizedInternalRenderRequest extends RenderRequest {
 
 const ALLOWED_FIELDS = new Set([
   "requestId",
+  "workspaceId",
+  "attemptId",
   "url",
   "duration",
   "name",
@@ -47,6 +51,8 @@ export async function normalizeInternalRenderRequest(
   if (!isRecord(input)) throw new InternalRenderRequestError("INTERNAL_BODY_INVALID")
 
   const requestId = normalizeRequestId(input.requestId)
+  const workspaceId = normalizeUuid(input.workspaceId)
+  const attemptId = normalizeUuid(input.attemptId)
   if (typeof input.url !== "string" || input.url.trim().length === 0) {
     throw new InternalRenderRequestError("INTERNAL_URL_REQUIRED")
   }
@@ -67,6 +73,8 @@ export async function normalizeInternalRenderRequest(
 
   return {
     requestId,
+    workspaceId,
+    attemptId,
     url,
     ...(duration !== undefined ? { duration } : {}),
     ...(fps !== undefined ? { fps } : {}),
@@ -91,10 +99,23 @@ export function fingerprintInternalRenderRequest(
     generation: request.generation ?? null,
     refresh: request.refresh ?? null,
     soundEffects: request.soundEffects ?? "off",
+    workspaceId: request.workspaceId,
+    attemptId: request.attemptId,
     credentialMode: "none",
     publicOnly: true,
   }
   return createHash("sha256").update(JSON.stringify(stableInput)).digest("hex")
+}
+
+function normalizeUuid(value: unknown): string {
+  if (
+    typeof value !== "string"
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      .test(value)
+  ) {
+    throw new InternalRenderRequestError("INTERNAL_FIELD_INVALID")
+  }
+  return value
 }
 
 function normalizeRequestId(value: unknown): string {

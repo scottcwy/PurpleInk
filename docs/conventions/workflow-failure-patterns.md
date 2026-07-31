@@ -1038,6 +1038,39 @@ Director 入队；入队事务又必须锁定同一项目行校验自动推进�
 
 ---
 
+## 7.25 模式 AE：Worker 直连供应商形成账外第二调用链
+
+**症状**：网站视频可以成功产出，但设置页选中的工作区模型、用量投影与实际 Worker
+请求不一致；Worker 重启或 job 丢失后，同一 attempt 可能重新执行已经成功的文本、
+视觉或 TTS 请求，账本却无法区分真实 outbound attempt。
+
+**根因**：`server/` 曾独立保存 provider Key、模型 ID、URL、重试与 TTS 选择，并允许
+公开 `/render` 直接启动没有 workspace/attempt 身份的任务。这条链绕过 Next 的
+ExecutionPlan、套餐权限、两层并发、预占结算和 BYOK 官方 URL 规则。
+
+**规则与护栏**：
+
+- Worker 只负责采集、编排、媒体处理与渲染，不得持有 provider Key、模型 ID、渠道
+  URL、价格、供应商回退或计费逻辑。
+- 所有 Worker 文本、视觉和 TTS 请求必须使用服务间密钥回调
+  `/api/internal/ai/worker`，并携带严格的 `workspaceId`、运行中的 `attemptId`、
+  稳定 `operationId` 与单调 `operationIndex`。
+- Next 先核验 attempt 与 run 仍处于 running 且未取消，再进入该 workspace 的统一
+  路由；每个真实 outbound attempt 使用独立 invocation，Gemini 同渠道回退最多再占
+  一个连续槽位。
+- 同一 `operationId` 已存在 invocation 时固定拒绝重放。Worker 内存 job 丢失不得在
+  同 attempt 内静默重新开始；用户显式重启必须产生新 attempt。
+- 公开 `POST /render` 固定返回 410。Products 只能由 Next 经受鉴权的
+  `/internal/render` 创建任务，Worker 回调地址只能来自部署环境，不能由用户提交。
+- API、日志和任务失败只保存安全分类；不得返回 prompt、凭据、内部 URL 或 provider
+  原始错误。
+
+**已落地护栏**：严格 Worker 网关合同、双向服务鉴权、attempt/run 活跃校验、
+`worker-text` / `worker-tts` 计费分区、operation replay 拒绝、公开 render 退役，
+以及 Worker provider env/客户端删除共同锁定上述边界。
+
+---
+
 ## 9. 已知未修项
 
 当前无已确认而未修的代码/文档项。
@@ -1055,7 +1088,8 @@ Director 入队；入队事务又必须锁定同一项目行校验自动推进�
 、队列执行超时未中止旧阶段并允许迟到写入（模式 Y）、页面脚本异常未拒绝坏
 FABRICATE Artifact（模式 Z）、retryable failed 前沿未被后台恢复（模式 AA）、
 音频源完整性矛盾被误判为可重试（模式 AB）、对象写入后 Artifact 登记失败遗留无账本
-字节（模式 AC）——见各节「已落地护栏」。
+字节（模式 AC）、Worker 直连供应商形成账外第二调用链（模式 AE）——见各节
+「已落地护栏」。
 
 ---
 
@@ -1075,9 +1109,9 @@ FABRICATE Artifact（模式 Z）、retryable failed 前沿未被后台恢复（�
   `directorInput`，且 `stage-prompt.test.ts` 已有反向断言锁死「visualTheme 混进
   directorInput 必须失败」。
 - **跨进程渲染合同**：Next 侧 `renderSpecSchema` 只服务当前按节点渲染链；
-  `MediaAssemblyPlan` 是 Next 内部终片装配结构。`server/src/server/api.ts` 的
-  `/render` 是独立的 legacy URL/capture 请求面，字段与消费者职责不同，并不消费
-  上述两个结构；`server/` 未发现对应但分叉的 zod/schema 副本。
+  `MediaAssemblyPlan` 是 Next 内部终片装配结构。Products 的网站工作流只使用
+  `/internal/render` 严格合同；公开 `/render` 已退役，Worker 模型回调另由共享的
+  `worker-gateway-contract.ts` 锁定，未保留 provider/schema 平行副本。
 - **队列与 Director 补偿链**：逐条核对 admission、入队、FABRICATE、render、
   stage run 与 artifact commit 失败路径；均会转入 `failed` 并写对应
   `directorError` / `renderError`。阶段内临时文件清理失败通过 `AggregateError`
