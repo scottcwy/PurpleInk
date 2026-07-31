@@ -208,6 +208,20 @@ Tailwind v4 的 `--transition-duration-*` 命名空间导出为 class。
 JS 镜像在 `src/lib/motion/tokens.ts`，由 `tokens.test.ts` 的同步测试锁定三处一致。
 可交互对照台：`/playbook/motion`（意图标本）与 `/playbook/foundations`（token 对照）。
 
+### 4.8 移动端适配（索引）
+
+`canvas.pen` 目前只有 1440×900 桌面帧，不含移动端像素真值——移动端适配为**代码先行**，
+文字真值是 `docs/conventions/responsive-design.md`，本节只索引，不重复参数。
+
+| 维度 | 值 | 详见 |
+| --- | --- | --- |
+| JS 结构断点 | 900 / 1180 / 1280（`src/lib/layout/breakpoints.ts`） | 该文 §2 |
+| 应用壳三态 | hidden ≤899 / rail 900–1279 / expanded ≥1280 | 该文 §3 |
+| 编辑器降级 | 画布 <900px 显式降级卡；镜头/导出折叠不降级 | 该文 §4 |
+| 触控热区 | 可点元素 ≥40px（`py-N -my-N` 负 margin 技巧） | 该文 §5 |
+| 控件尺寸变形 | `Button` sm/md 在 <lg 取 `min-h-10`；`IconButton` <lg 为 40×40、≥lg 仍 32×32 | 该文 §5 |
+| safe-area | `--safe-area-inset-*` 由贴屏边 fixed 元素消费（当前唯一消费方：应用壳悬浮导航钮） | 该文 §6 |
+
 ---
 
 ## 5. Canonical Reusable Symbols（B0）

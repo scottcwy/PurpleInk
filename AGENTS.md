@@ -191,6 +191,7 @@ git diff --check
 | `docs/conventions/project-workflows.md` | 三来源项目的版本注册、创建/启动、计费、Artifact 与容灾边界 |
 | `docs/conventions/workflow-failure-patterns.md` | Director / 渲染 / 音频 / 模型路由的复发失败模式、诊断顺序与已落地护栏 |
 | `docs/conventions/design-quality-pitfalls.md` | UI 质感失败模式、廉价感根因与视觉交付前自查清单（改控件/页面视觉前必读） |
+| `docs/conventions/responsive-design.md` | 断点体系、应用壳三态、移动端降级决策、触控热区与 safe-area（改移动端表现前必读） |
 | `docs/conventions/motion-interaction.md` | 动效 token、意图表、覆盖层内核与动效禁止事项（改动画/过渡/弹窗前必读） |
 | `docs/designs/canvas.pen` | 视觉像素、token、reusable symbol 的 SSOT |
 | `docs/designs/Design-system-inventory.md` | token、组件、页面与同步规则的文字索引 |
