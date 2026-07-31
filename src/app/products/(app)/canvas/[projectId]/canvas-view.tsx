@@ -41,6 +41,7 @@ import {
   type PipelineFeedback,
 } from './pipeline-feedback'
 import { buildLaneSummaries, toFlowEdge, toFlowNode } from './flow-elements'
+import { deriveQueueCounts, queueBarLabel } from './queue-projection'
 
 const canvasNodeTypes = { pipeline: CanvasFlowNode }
 
@@ -136,15 +137,7 @@ export function CanvasView({
     [edges, hiddenNodeIds]
   )
   const selectedNode = liveNodes.find(({ id }) => id === selectedNodeId)
-  const completed = liveNodes.filter(({ status }) => status === 'success').length
-  const waiting = liveNodes.filter(
-    ({ executionNotice }) => executionNotice != null
-  ).length
-  const active = liveNodes.filter(
-    ({ status, executionNotice }) =>
-      (status === 'pending' || status === 'running') && !executionNotice
-  ).length
-  const failed = liveNodes.filter(({ status }) => status === 'failed').length
+  const queueCounts = deriveQueueCounts(liveNodes)
   const rendererNodeId = liveNodes.find(({ type }) => type === 'shot-codegen')?.id
   const websiteProject = execution.workflowKind === 'website'
   const action = websiteProject
@@ -315,17 +308,13 @@ export function CanvasView({
             collapsedLanes={collapsedLanes}
             onToggle={toggleLane}
           />
+          <QueueStatusBar
+            variant="glass"
+            className="absolute inset-x-3 bottom-3 z-10"
+            {...queueCounts}
+            label={queueBarLabel(execution, concurrency)}
+          />
         </div>
-        <QueueStatusBar
-          completed={completed}
-          active={active}
-          waiting={waiting}
-          failed={failed}
-          total={liveNodes.length}
-          label={websiteProject
-            ? `已完成 ${execution.stages.filter((stage) => stage.state === 'succeeded').length}/6 阶段`
-            : `套餐并发 ${concurrency.active}/${concurrency.limit} · ${concurrency.waiting} 个分镜排队`}
-        />
       </section>
       <CanvasInspector
         projectId={projectId}

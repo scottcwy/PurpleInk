@@ -28,7 +28,7 @@ export function CanvasMiniMap({ onSelectNode }: CanvasMiniMapProps) {
       }
       nodeStrokeWidth={3}
       maskColor="color-mix(in srgb, var(--ds-text-muted) 20%, transparent)"
-      className="!bg-ds-surface !shadow-[var(--ds-shadow)]"
+      className="!mb-16 !bg-ds-surface !shadow-[var(--ds-shadow)]"
       onClick={(_event, position) => {
         setCenter(position.x, position.y, { duration: 200 })
       }}

@@ -14,7 +14,7 @@ export function CanvasViewportToolbar() {
   const maxZoomReached = useStore((state) => state.transform[2] >= state.maxZoom)
 
   return (
-    <Panel position="bottom-center" className="m-3">
+    <Panel position="bottom-center" className="mx-3 mt-3 mb-16">
       <div
         role="toolbar"
         aria-label="画布视口"

@@ -13,6 +13,8 @@ export interface QueueStatusBarProps {
   failed: number
   total: number
   label?: string
+  /** solid：贴边实心条（默认）；glass：悬浮玻璃拟态条（画布 DAG 之上）。 */
+  variant?: 'solid' | 'glass'
   className?: string
 }
 
@@ -52,6 +54,7 @@ export function queueActivityState(input: QueueActivity): QueueActivityState {
 /**
  * 渲染队列状态条（SSOT）。
  * canvas.pen Canonical: ds-surface 底、上边框、高 40px、px-3.5。
+ * glass 变体：半透明 surface + backdrop-blur，悬浮于画布内容之上。
  */
 export function QueueStatusBar({
   completed,
@@ -60,6 +63,7 @@ export function QueueStatusBar({
   failed,
   total,
   label,
+  variant = 'solid',
   className,
 }: QueueStatusBarProps) {
   const boundedCompleted = Math.min(Math.max(completed, 0), total)
@@ -91,7 +95,11 @@ export function QueueStatusBar({
     <div
       data-state={state}
       className={cn(
-        'flex h-10 items-center justify-between border-t border-ds-border bg-ds-surface px-3.5 text-ds-text',
+        'flex h-10 items-center justify-between px-3.5 text-ds-text',
+        variant === 'solid' &&
+          'border-t border-ds-border bg-ds-surface',
+        variant === 'glass' &&
+          'rounded-lg border border-ds-border bg-ds-surface/75 shadow-[var(--ds-shadow)] backdrop-blur-xl',
         className,
       )}
     >
