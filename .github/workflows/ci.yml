@@ -46,6 +46,21 @@ jobs:
       - name: install
         run: pnpm install --frozen-lockfile
 
+      # 不是可选步骤：src/features/render/* 与 director 的 fabricate 探针测试会真的
+      # chromium.launch()，缺浏览器时 13 个用例直接红（首次 CI 已实测）。pnpm install
+      # 时 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD 未设置也不会自动下载——浏览器二进制由
+      # playwright CLI 单独管理，必须显式装。
+      - name: cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      # --with-deps 装的是 Chromium 的系统库（apt，需要 runner 的免密 sudo）；
+      # 缓存命中时浏览器二进制不会重复下载，这条命令是幂等的。
+      - name: install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: lint
         run: pnpm lint
 
@@ -103,6 +118,16 @@ jobs:
 
       - name: install
         run: pnpm install --frozen-lockfile
+
+      # thumbnail.integration.pg.test.ts 走真实 Playwright 抽帧，理由同 quality job。
+      - name: cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       # pg 测试库与 scripts/setup/postgres-init.sql 保持同名。
       - name: create test database
