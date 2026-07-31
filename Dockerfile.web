@@ -1,0 +1,45 @@
+FROM node:24-bookworm-slim AS dependencies
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY server/package.json ./server/package.json
+RUN pnpm install --frozen-lockfile
+
+FROM node:24-bookworm-slim AS builder
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV BACKEND_ORIGIN=http://worker:8787
+WORKDIR /app
+RUN corepack enable
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY --from=dependencies /app/server/node_modules ./server/node_modules
+COPY . .
+RUN pnpm build
+
+FROM node:24-bookworm-slim AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
+
+RUN npx --yes playwright@1.62.0 install --with-deps chromium \
+    && chmod -R a+rX /ms-playwright \
+    && rm -rf /root/.npm /var/lib/apt/lists/* \
+    && groupadd --system --gid 1001 nodejs \
+    && useradd --system --uid 1001 --gid nodejs nextjs
+
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+# The production compose file mounts this directory as the persistent artifact root.
+RUN mkdir -p /app/.data && chown nextjs:nodejs /app/.data
+
+USER nextjs
+EXPOSE 3000
+CMD ["node", "server.js"]

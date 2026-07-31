@@ -59,6 +59,7 @@ server/capture/
 
 # Video files
 *.mp4
+!public/videos/community/*.mp4
 
 # Archive (historical records, not tracked)
 docs/archive/

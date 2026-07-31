@@ -23,8 +23,8 @@ importers:
         specifier: 0.80.10
         version: 0.80.10(patch_hash=febed32413daa9e13f9c2c3c367733aa0be0a0916b64d6ecf6c601a3d05bc14e)(ws@8.21.1)(zod@4.4.3)
       '@next/env':
-        specifier: 16.2.0
-        version: 16.2.0
+        specifier: 16.2.11
+        version: 16.2.11
       '@purpleink/procedural-sfx':
         specifier: workspace:*
         version: link:packages/procedural-sfx
@@ -71,7 +71,10 @@ importers:
         specifier: ^6.48.0
         version: 6.49.0(@aws-sdk/credential-provider-node@3.972.72)(@smithy/signature-v4@5.6.10)(ws@8.21.1)(zod@4.4.3)
       playwright:
-        specifier: ^1.61.1
+        specifier: 1.62.0
+        version: 1.62.0
+      playwright-core:
+        specifier: 1.62.0
         version: 1.62.0
       postgres:
         specifier: 3.4.9
@@ -1375,9 +1378,6 @@ packages:
     peerDependencies:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
-
-  '@next/env@16.2.0':
-    resolution: {integrity: sha512-OZIbODWWAi0epQRCRjNe1VO45LOFBzgiyqmTLzIqWq6u1wrxKnAyz1HH6tgY/Mc81YzIjRPoYsPAEr4QV4l9TA==}
 
   '@next/env@16.2.11':
     resolution: {integrity: sha512-0do5A3BJ2gxWr0ZCMcD6BhW+e595jyxdTl3rXTS6lOtD8ektMiW6CO+EPwt1Eca1DBnm90r/7GdiKWBKxH++DA==}
@@ -5704,8 +5704,6 @@ snapshots:
       '@emnapi/runtime': 1.11.1
       '@tybys/wasm-util': 0.10.3
     optional: true
-
-  '@next/env@16.2.0': {}
 
   '@next/env@16.2.11': {}
 

@@ -28,6 +28,7 @@ next-env.d.ts
 .trigger
 .playwright-cli
 logs
+*.log
 coverage
 
 # secret

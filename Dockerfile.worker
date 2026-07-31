@@ -1,0 +1,30 @@
+FROM node:24-bookworm-slim
+
+USER root
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV HYPERFRAMES_BROWSER_PATH=/usr/local/bin/purpleink-chrome-headless-shell
+WORKDIR /app
+RUN corepack enable \
+    && apt-get -o Acquire::Retries=3 update \
+    && apt-get -o Acquire::Retries=3 install --yes --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY server/package.json ./server/package.json
+RUN pnpm install --frozen-lockfile
+RUN pnpm exec playwright install --with-deps chromium \
+    && chown -R node:node /app /ms-playwright
+RUN headless_shell="$(find /ms-playwright/chromium_headless_shell-* -type f -name chrome-headless-shell -print -quit)" \
+    && test -x "$headless_shell" \
+    && ln -s "$headless_shell" "$HYPERFRAMES_BROWSER_PATH"
+
+COPY --chown=node:node server ./server
+COPY --chown=node:node src/lib/tts ./src/lib/tts
+
+USER node
+ENV NODE_ENV=production
+ENV PORT=8787
+EXPOSE 8787
+CMD ["pnpm", "--filter", "purpleink-server", "start"]

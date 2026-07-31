@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   // 允许取证/端测用独立构建目录，避免与正在运行的 dev server 争用 .next。
   // 不设置时行为与以往完全一致。
   ...(process.env.CVC_NEXT_DIST_DIR
@@ -19,7 +20,17 @@ const nextConfig: NextConfig = {
     "drizzle-orm",
     "@earendil-works/pi-ai",
     "@earendil-works/pi-agent-core",
+    "playwright",
+    "playwright-core",
   ],
+  // Playwright dynamically loads browsers.json and server bundles. Next's
+  // standalone tracer cannot discover all of those files from static imports.
+  outputFileTracingIncludes: {
+    "/*": [
+      "./node_modules/playwright/**/*",
+      "./node_modules/playwright-core/**/*",
+    ],
+  },
   // Disable source maps in production to protect code
   productionBrowserSourceMaps: false,
   // 生产构建移除 console.log，但**必须保留 error / warn**：
