@@ -48,7 +48,7 @@ export function AppSidebarShell({
         <IconButton
           icon={LayoutDashboard}
           aria-label="打开导航"
-          className="fixed left-2 top-2 z-40 shadow-float"
+          className="fixed left-[max(0.5rem,var(--safe-area-inset-left))] top-[max(0.5rem,var(--safe-area-inset-top))] z-40 shadow-float"
           onClick={() => setDrawerRequested(true)}
         />
         <DrawerOverlay
