@@ -7,6 +7,7 @@ import type {
 } from '@/features/canvas'
 import { isDegradable } from './export-degraded'
 import {
+  deliveryForSubtitles,
   deliveryFromSchemaVersion,
   type FinalVideoDelivery,
 } from './final-video-delivery'
@@ -136,6 +137,9 @@ export async function getExportReadiness(
   const artifactSettingsMatch =
     artifactSoundEffects !== null
     && artifactSoundEffects.mode === (plan.soundEffects ?? 'off')
+    && finalArtifact !== null
+    && deliveryFromSchemaVersion(finalArtifact.schemaVersion)
+      === deliveryForSubtitles(plan.subtitles)
   const artifactDownloadable =
     finalArtifact !== null
     && (artifactLifecycle === 'approved' || artifactLifecycle === 'released')
