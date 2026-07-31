@@ -4,8 +4,8 @@ import { useCallback, useRef, useState, type FormEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { TextField } from '@/components/ui/text-field'
-import { Toast } from '@/components/ui/toast'
 import { AuthFooterLink, AuthFormShell } from './auth-form-shell'
+import { FormFeedback } from './form-feedback'
 import { login } from './auth-api'
 
 /**
@@ -91,7 +91,14 @@ export function LoginForm() {
         <div className="flex items-center justify-end">
           <AuthFooterLink href="/password/reset">忘记密码？</AuthFooterLink>
         </div>
-        {error && <Toast variant="error" title="登录失败" body={error} className="w-full" />}
+        {error && (
+          <FormFeedback
+            variant="error"
+            title="登录失败"
+            body={error}
+            onDismiss={() => setError(undefined)}
+          />
+        )}
         <Button type="submit" size="lg" disabled={submitting} className="w-full">
           {submitting ? '登录中' : '登录'}
         </Button>

@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { HumanCheckField } from '@/components/ui/human-check-field'
 import { TextField } from '@/components/ui/text-field'
-import { Toast } from '@/components/ui/toast'
 import { VerificationCodeField } from '@/components/ui/verification-code-field'
 import { AuthFooterLink, AuthFormShell, HoneypotField } from './auth-form-shell'
+import { FormFeedback } from './form-feedback'
 import { resetPassword } from './auth-api'
 import { useVerificationCode } from './use-verification-code'
 
@@ -99,12 +99,29 @@ export function ResetPasswordForm() {
         />
         <p className="text-xs text-ds-text-muted">密码至少 10 位，需同时包含数字与非数字字符。</p>
         {code.notice && !code.error && (
-          <Toast variant="info" title="验证码已发送" body={code.notice} className="w-full" />
+          <FormFeedback
+            variant="info"
+            title="验证码已发送"
+            body={code.notice}
+            onDismiss={code.clearFeedback}
+          />
         )}
         {code.error && (
-          <Toast variant="error" title="验证码发送失败" body={code.error} className="w-full" />
+          <FormFeedback
+            variant="error"
+            title="验证码发送失败"
+            body={code.error}
+            onDismiss={code.clearFeedback}
+          />
         )}
-        {error && <Toast variant="error" title="重置失败" body={error} className="w-full" />}
+        {error && (
+          <FormFeedback
+            variant="error"
+            title="重置失败"
+            body={error}
+            onDismiss={() => setError(undefined)}
+          />
+        )}
         <Button type="submit" size="lg" disabled={submitting} className="w-full">
           {submitting ? '提交中' : '设置新密码并登录'}
         </Button>
