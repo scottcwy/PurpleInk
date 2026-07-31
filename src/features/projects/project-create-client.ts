@@ -50,15 +50,38 @@ export class ProjectStartUnconfirmedError extends Error {
   }
 }
 
+export class ProjectCreationUnconfirmedError extends Error {
+  constructor() {
+    super('项目创建状态未确认，可重试；系统不会重复创建')
+    this.name = 'ProjectCreationUnconfirmedError'
+  }
+}
+
 export async function createProject(
   input: CreateProjectInput,
   fetcher: typeof fetch = fetch,
   creationKey = createProjectCreationKey(),
+  timeoutMs = 15_000,
 ): Promise<string> {
-  const response = await fetcher(
-    '/api/projects',
-    projectRequest(input, creationKey),
-  )
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  let response: Response
+  try {
+    response = await fetcher('/api/projects', {
+      ...projectRequest(input, creationKey),
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (
+      controller.signal.aborted
+      || (error instanceof Error && error.name === 'AbortError')
+    ) {
+      throw new ProjectCreationUnconfirmedError()
+    }
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
   throwIfUnauthenticated(response)
   const result = await readJson(response)
   if (!response.ok) throw new Error(readError(result, '项目创建失败，请稍后重试'))

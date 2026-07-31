@@ -1,6 +1,6 @@
 import 'server-only'
 import { randomUUID } from 'node:crypto'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb, type Db } from '@/lib/db/client'
@@ -91,30 +91,15 @@ export async function createProjectWithSource(
       }
     : undefined
 
-  return withTransaction(database, async (transaction) => {
-    if (idempotency) {
-      await transaction.execute(sql`
-        select pg_advisory_xact_lock(
-          hashtextextended(${`${workspaceId}:${idempotency.key}`}, 0)
-        )
-      `)
-      const existing = await readExistingCreation(
-        transaction,
-        workspaceId,
-        idempotency.key,
-      )
-      if (existing) {
-        if (existing.requestFingerprint !== idempotency.requestFingerprint) {
-          throw new ProjectCreationIdempotencyError()
-        }
-        return {
-          project: existing.project,
-          entryNodeId: existing.entryNodeId,
-          reused: true,
-        }
-      }
+  if (idempotency) {
+    const existing = await readExistingCreation(database, workspaceId, idempotency.key)
+    if (existing) {
+      return reuseExistingCreation(existing, idempotency.requestFingerprint)
     }
+  }
 
+  try {
+    return await withTransaction(database, async (transaction) => {
     const [project] = await transaction
       .insert(projects)
       .values({
@@ -180,11 +165,17 @@ export async function createProjectWithSource(
       })
     }
     return { project, entryNodeId, reused: false }
-  })
+    })
+  } catch (error) {
+    if (!idempotency || !isCreationKeyCollision(error)) throw error
+    const existing = await readExistingCreation(database, workspaceId, idempotency.key)
+    if (!existing) throw error
+    return reuseExistingCreation(existing, idempotency.requestFingerprint)
+  }
 }
 
 async function readExistingCreation(
-  transaction: TransactionContext,
+  transaction: TransactionContext | Db,
   workspaceId: string,
   idempotencyKey: string,
 ) {
@@ -222,6 +213,40 @@ async function readExistingCreation(
       updatedAt: row.updatedAt,
     },
   }
+}
+
+function reuseExistingCreation(
+  existing: NonNullable<Awaited<ReturnType<typeof readExistingCreation>>>,
+  requestFingerprint: string,
+): CreatedProject {
+  if (existing.requestFingerprint !== requestFingerprint) {
+    throw new ProjectCreationIdempotencyError()
+  }
+  return {
+    project: existing.project,
+    entryNodeId: existing.entryNodeId,
+    reused: true,
+  }
+}
+
+function isCreationKeyCollision(error: unknown): boolean {
+  let candidate: unknown = error
+  for (let depth = 0; depth < 3; depth += 1) {
+    if (!candidate || typeof candidate !== 'object') return false
+    const record = candidate as {
+      code?: unknown
+      constraint_name?: unknown
+      cause?: unknown
+    }
+    if (
+      record.code === '23505'
+      && record.constraint_name === 'project_creation_requests_pkey'
+    ) {
+      return true
+    }
+    candidate = record.cause
+  }
+  return false
 }
 
 function requiredNodeId(nodes: ReadonlyMap<string, string>, logicalKey: string): string {

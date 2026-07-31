@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  createProject,
   createProjectAndStart,
+  ProjectCreationUnconfirmedError,
   ProjectStartQuotaError,
   ProjectStartUnconfirmedError,
   startProject,
@@ -155,6 +157,34 @@ describe('createProjectAndStart', () => {
         name: ProjectStartUnconfirmedError.name,
         message: '项目已创建，启动状态未确认，可重试启动',
       }),
+    )
+  })
+
+  it('reports an aborted create as unconfirmed and keeps the idempotent retry safe', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(
+      new DOMException('aborted', 'AbortError'),
+    )
+
+    await expect(
+      createProject(
+        {
+          kind: 'script',
+          title: '创建状态待确认',
+          script: '同一创建标识可安全重试。',
+          visualTheme: 'dark',
+        },
+        fetcher,
+        'ac971f2f-0951-42f8-a516-2235127af325',
+      ),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        name: ProjectCreationUnconfirmedError.name,
+        message: '项目创建状态未确认，可重试；系统不会重复创建',
+      }),
+    )
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/projects',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     )
   })
 })
