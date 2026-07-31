@@ -3,6 +3,10 @@
 import { useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus } from "lucide-react";
+import {
+  SPRING_SPATIAL_DEFAULT,
+  TRANSITION_BASE,
+} from "@/lib/motion/tokens";
 
 interface FAQItem {
   question: string;
@@ -28,7 +32,7 @@ const faqs: FAQItem[] = [
   {
     question: "Which launch formats does PurpleInk support?",
     answer:
-      "A single approved story can produce channel-ready 16:9 and 9:16 video variants while reusing the same verified product evidence and brand rules.",
+      "A single approved story produces a channel-ready 16:9 landscape launch video while reusing the same verified product evidence and brand rules.",
   },
   {
     question: "Does PurpleInk need access to production data?",
@@ -50,7 +54,7 @@ function FAQItemComponent({
     <motion.div
       layout
       className="bg-muted/50 rounded-2xl"
-      transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+      transition={SPRING_SPATIAL_DEFAULT}
     >
       <button
         type="button"
@@ -75,7 +79,10 @@ function FAQItemComponent({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+            transition={{
+              default: SPRING_SPATIAL_DEFAULT,
+              opacity: TRANSITION_BASE,
+            }}
             className="overflow-hidden"
           >
             <p className="text-muted-foreground px-6 pb-5">{item.answer}</p>

@@ -5,6 +5,7 @@ import { readFile, rm } from 'node:fs/promises'
 import { and, eq } from 'drizzle-orm'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { artifacts, canvasNodes } from '@/lib/db/schema/index'
+import { MASTER_HEIGHT, MASTER_WIDTH } from '@/features/canvas/contracts'
 import {
   createPgTestDatabase,
   type PgTestDatabase,
@@ -18,6 +19,14 @@ import {
 import { RenderRepository } from './repository'
 import { captureThumbnails } from './thumbnail'
 import type { ThumbnailContext } from './types'
+
+// 被测模块经 currentWorkspaceId() 取归属（PLAN-002 阶段 B）；单测没有请求入口，
+// 把读取口 mock 成历史单工作区 id，与用例 seed 的数据保持一致。
+vi.mock('@/lib/auth/workspace-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/workspace-context')>()),
+  currentWorkspaceId: () => '00000000-0000-4000-8000-000000000001',
+  currentUserId: () => 'test-user',
+}))
 
 vi.mock('server-only', () => ({}))
 
@@ -51,10 +60,10 @@ beforeEach(async () => {
           laneKey: 'S001',
           laneRole: 'shot-codegen',
           renderSpec: {
-            fps: 24,
+            fps: 30,
             durationInFrames: 12,
-            width: 320,
-            height: 180,
+            width: MASTER_WIDTH,
+            height: MASTER_HEIGHT,
           },
         },
       },

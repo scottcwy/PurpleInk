@@ -2,7 +2,9 @@
 // - renderFromCapture: 已有 capture/ 目录 → video.mp4
 // - urlToVideo:        URL → (M3 采集) → capture/ → video.mp4（端到端）
 import { basename, dirname, extname, join } from "node:path"
+import { createHash } from "node:crypto"
 import { access, readdir, rm } from "node:fs/promises"
+import type { ProceduralSfxMode } from "@purpleink/procedural-sfx"
 import { buildVideoModel } from "./model"
 import { writeProject, writeProjectDirect } from "./project"
 import { renderProject, verifyGolden, type RenderOptions } from "./render"
@@ -10,7 +12,7 @@ import { runCapture, type RunCaptureOptions } from "../capture/run-capture"
 import { logger } from "../lib/logger"
 import { buildRootHtml } from "./chapters/root-html"
 import { splitScenesToChapters } from "./chapters/split"
-import { generateChapters, buildComposeContext } from "./chapters/generate"
+import { generateChapters, buildComposeContext, summarizeComposeError } from "./chapters/generate"
 import { getTtsEnv } from "../../../src/lib/tts/config"
 import { prepareNarrationAssets } from "../tts/orchestrate"
 import {
@@ -20,6 +22,11 @@ import {
   runProcess,
   type ProcessRunner,
 } from "../tts/media"
+import {
+  applyWebsiteProceduralSfx,
+  websiteProceduralSfxNotRun,
+  type WebsiteProceduralSfxResult,
+} from "./procedural-sfx"
 
 export interface PipelineResult {
   captureDir: string
@@ -29,6 +36,7 @@ export interface PipelineResult {
   durationSec: number
   goldenVerified: boolean
   goldenDetails: string[]
+  soundEffects: WebsiteProceduralSfxResult
 }
 
 export interface RenderFromCaptureOptions extends RenderOptions {
@@ -42,6 +50,8 @@ export interface RenderFromCaptureOptions extends RenderOptions {
   onPhase?: (phase: string) => void
   /** 生成模式: llm / template / auto（默认 auto） */
   generation?: "llm" | "template" | "auto"
+  /** 代码生成的边界提示音；默认关闭，不增加新的工作流阶段。 */
+  soundEffects?: ProceduralSfxMode
 }
 
 /** 从一个 capture/ 目录生成 video.mp4 */
@@ -49,10 +59,12 @@ export async function renderFromCapture(
   captureDir: string,
   options: RenderFromCaptureOptions = {}
 ): Promise<PipelineResult> {
+  options.signal?.throwIfAborted()
   const visualModel = await buildVideoModel(captureDir, {
     ...(options.durationSec != null ? { durationSec: options.durationSec } : {}),
     ...(options.name != null ? { name: options.name } : {}),
   })
+  options.signal?.throwIfAborted()
   logger.info("pipeline:model_built", {
     scenes: visualModel.scenes.length,
     durationSec: visualModel.durationSec,
@@ -70,6 +82,7 @@ export async function renderFromCapture(
         runner: mediaRunner,
       }),
   })
+  options.signal?.throwIfAborted()
   logger.info("pipeline:narration_ready", {
     segments: narration.plan.segments.length,
     durationSec: visualModel.durationSec,
@@ -123,7 +136,7 @@ export async function renderFromCapture(
       const errStack = err instanceof Error ? err.stack : undefined
       logger.error("pipeline:compose_llm_failed", { error: errMsg, stack: errStack?.slice(0, 500) })
       // Fall back to template path on catastrophic failure
-      logger.info("pipeline:fallback_template", { reason: errMsg })
+      logger.warn("pipeline:fallback_template", { source: "template", reason: summarizeComposeError(err) })
       written = await writeProject(visualModel, projectDir, captureDir)
     }
   } else {
@@ -136,6 +149,7 @@ export async function renderFromCapture(
 
   options.onPhase?.("rendering")
   const rendered = await renderProject(written.projectDir, options)
+  options.signal?.throwIfAborted()
   if (!rendered.videoPath) {
     logger.error("pipeline:no_video", { renderTail: rendered.renderOutput.slice(-800) })
   }
@@ -149,6 +163,8 @@ export async function renderFromCapture(
   }
 
   let videoPath = rendered.videoPath
+  const soundEffectsMode = options.soundEffects ?? "off"
+  let soundEffects = websiteProceduralSfxNotRun(soundEffectsMode)
   if (videoPath) {
     options.onPhase?.("muxing")
     const extension = extname(videoPath) || ".mp4"
@@ -159,6 +175,26 @@ export async function renderFromCapture(
     await muxNarration(videoPath, narration.narrationPath, narratedPath, mediaRunner)
     videoPath = narratedPath
     logger.info("pipeline:narration_muxed", { videoPath })
+    const fps = options.fps ?? 30
+    const mixed = await applyWebsiteProceduralSfx(
+      {
+        mode: soundEffectsMode,
+        fps,
+        totalFrames: Math.max(1, Math.round(visualModel.durationSec * fps)),
+        boundaries: visualModel.scenes.map((scene) => Math.round(scene.start * fps)),
+        narratedVideoPath: narratedPath,
+        workDirectory: written.projectDir,
+      },
+      mediaRunner,
+    )
+    videoPath = mixed.videoPath
+    soundEffects = mixed.soundEffects
+    logger.info("pipeline:procedural_sfx", {
+      mode: soundEffects.mode,
+      status: soundEffects.status,
+      cueCount: soundEffects.cueCount,
+      generatorVersion: soundEffects.generatorVersion,
+    })
   }
 
   return {
@@ -169,6 +205,7 @@ export async function renderFromCapture(
     durationSec: visualModel.durationSec,
     goldenVerified: golden.passed,
     goldenDetails: golden.details,
+    soundEffects,
   }
 }
 
@@ -187,6 +224,8 @@ export interface UrlToVideoOptions extends RenderFromCaptureOptions {
   cacheRoot?: string
   /** 强制重新采集，忽略缓存（站点更新后用） */
   refresh?: boolean
+  /** Products 集成请求的稳定幂等键；存在时缓存纳入完整 canonical URL。 */
+  integratedRequestId?: string
 }
 
 /**
@@ -195,12 +234,14 @@ export interface UrlToVideoOptions extends RenderFromCaptureOptions {
  * 注意：缓存只省「采集」，画质仍由后续渲染的 quality 决定，不受影响。
  */
 export async function urlToVideo(url: string, options: UrlToVideoOptions = {}): Promise<PipelineResult> {
+  options.signal?.throwIfAborted()
   const cacheRoot = options.cacheRoot || join(process.cwd(), "out", "cache")
-  const cacheDir = join(cacheRoot, slugFromUrl(url))
+  const cacheDir = join(cacheRoot, cacheSlugForUrl(url, options.integratedRequestId))
+  const logTarget = options.integratedRequestId ? new URL(url).origin : url
 
   // 命中缓存：直接复用已采集的 capture/，跳过采集阶段。
   if (!options.refresh && (await isUsableCapture(cacheDir))) {
-    logger.info("pipeline:capture_cache_hit", { url, cacheDir })
+    logger.info("pipeline:capture_cache_hit", { url: logTarget, cacheDir })
     options.onPhase?.("capturing") // 短暂经过该阶段，前端进度提示保持一致
     return renderFromCapture(cacheDir, options)
   }
@@ -208,8 +249,13 @@ export async function urlToVideo(url: string, options: UrlToVideoOptions = {}): 
   // 未命中/强制刷新：清掉旧缓存再重采，避免残留旧资产污染模型。
   await rm(cacheDir, { recursive: true, force: true }).catch(() => {})
   options.onPhase?.("capturing")
-  logger.info("pipeline:capture_start", { url, cacheDir })
-  const manifest = await runCapture(url, { ...options.capture, outDir: options.capture?.outDir ?? cacheDir })
+  logger.info("pipeline:capture_start", { url: logTarget, cacheDir })
+  const manifest = await runCapture(url, {
+    ...options.capture,
+    outDir: options.capture?.outDir ?? cacheDir,
+    ...(options.signal ? { signal: options.signal } : {}),
+  })
+  options.signal?.throwIfAborted()
   logger.info("pipeline:capture_done", { captureDir: manifest.outDir, assets: manifest.assets.length })
   return renderFromCapture(manifest.outDir, options)
 }
@@ -226,7 +272,16 @@ async function isUsableCapture(dir: string): Promise<boolean> {
 }
 
 /** 从 URL 主机名 + 路径派生稳定 slug 作为缓存目录名（区分同站不同页） */
-function slugFromUrl(url: string): string {
+export function cacheSlugForUrl(url: string, integratedRequestId?: string): string {
+  if (integratedRequestId) {
+    const digest = createHash("sha256")
+      .update(integratedRequestId)
+      .update("\0")
+      .update(url)
+      .digest("hex")
+      .slice(0, 32)
+    return `integrated-${digest}`
+  }
   try {
     const u = new URL(url)
     const raw = `${u.hostname.replace(/^www\./, "")}${u.pathname}`

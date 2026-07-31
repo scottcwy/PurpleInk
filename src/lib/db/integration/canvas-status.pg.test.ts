@@ -5,7 +5,9 @@ import type { Db } from '@/lib/db/client'
 import {
   canvasEdges,
   canvasNodes,
+  pipelineRuns,
   projects,
+  taskAttempts,
   workspaces,
 } from '@/lib/db/schema/index'
 import {
@@ -13,10 +15,20 @@ import {
   type PgTestDatabase,
 } from '@/lib/db/test/pg-test-database'
 import {
+  captureNodeInputFingerprint,
   computeContentHash,
+  invalidateNodeForRegeneration,
   isStale,
   transitionNodeStatus,
 } from '@/features/canvas/status'
+
+// 被测模块经 currentWorkspaceId() 取归属（PLAN-002 阶段 B）；单测没有请求入口，
+// 把读取口 mock 成历史单工作区 id，与用例 seed 的数据保持一致。
+vi.mock('@/lib/auth/workspace-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/workspace-context')>()),
+  currentWorkspaceId: () => '00000000-0000-4000-8000-000000000001',
+  currentUserId: () => 'test-user',
+}))
 
 const WORKSPACE_ID = '00000000-0000-4000-8000-000000000001'
 const OTHER_WORKSPACE_ID = '00000000-0000-4000-8000-000000000002'
@@ -74,6 +86,56 @@ describe('canvas node status', () => {
         )
       )
     expect(node?.status).toBe('succeeded')
+  })
+
+  it('rolls back an attempt-scoped transition when abort lands inside its row lock wait', async () => {
+    const nodeId = await insertNode(database.db, WORKSPACE_ID, projectId)
+    await transitionNodeStatus(nodeId, 'pending')
+    const attemptId = await insertRunningAttempt(
+      database.db,
+      projectId,
+      nodeId,
+    )
+    let releaseAttemptLock: () => void = () => undefined
+    let announceAttemptLock: () => void = () => undefined
+    const attemptLocked = new Promise<void>((resolve) => {
+      announceAttemptLock = resolve
+    })
+    const holdAttemptLock = new Promise<void>((resolve) => {
+      releaseAttemptLock = resolve
+    })
+    const lock = database.db.transaction(async (transaction) => {
+      await transaction
+        .select({ id: taskAttempts.id })
+        .from(taskAttempts)
+        .where(eq(taskAttempts.id, attemptId))
+        .for('update')
+      announceAttemptLock()
+      await holdAttemptLock
+    })
+    await attemptLocked
+    const controller = new AbortController()
+    const timeout = Object.assign(new Error('阶段执行超时'), {
+      name: 'ExecutionTimeoutError',
+    })
+    const pending = transitionNodeStatus(nodeId, 'running', {
+      execution: {
+        projectId,
+        attemptId,
+        signal: controller.signal,
+      },
+    })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    controller.abort(timeout)
+    releaseAttemptLock()
+    await lock
+
+    await expect(pending).rejects.toBe(timeout)
+    const [node] = await database.db
+      .select({ status: canvasNodes.status })
+      .from(canvasNodes)
+      .where(eq(canvasNodes.id, nodeId))
+    expect(node?.status).toBe('queued')
   })
 
   it('clears stale stage errors when a retry finally succeeds', async () => {
@@ -147,14 +209,23 @@ describe('canvas node status', () => {
       projectId,
       'hash-a'
     )
-    const fingerprint = computeContentHash([{ id: upstreamId, contentHash: 'hash-a' }])
+    await setPayload(database.db, upstreamId, {
+      outputContentHash: 'hash-a',
+    })
+    const fingerprint = computeContentHash([
+      { id: upstreamId, outputContentHash: 'hash-a' },
+    ])
     const downstreamId = await insertNode(
       database.db,
       WORKSPACE_ID,
       projectId,
-      fingerprint,
+      'downstream-output',
       'succeeded'
     )
+    await setPayload(database.db, downstreamId, {
+      outputContentHash: 'downstream-output',
+      inputFingerprint: fingerprint,
+    })
     await database.db
       .insert(canvasEdges)
       .values({
@@ -168,7 +239,7 @@ describe('canvas node status', () => {
     await expect(isStale(downstreamId)).resolves.toBe(false)
     await database.db
       .update(canvasNodes)
-      .set({ data: versionedData('hash-b') })
+      .set({ data: versionedData(null, { outputContentHash: 'hash-b' }) })
       .where(
         and(
           eq(canvasNodes.workspaceId, WORKSPACE_ID),
@@ -190,6 +261,54 @@ describe('canvas node status', () => {
           )
       )[0]?.status
     ).toBe('stale')
+  })
+
+  it('captures the exact upstream output fingerprint before execution', async () => {
+    const upstreamId = await insertNode(database.db, WORKSPACE_ID, projectId)
+    const downstreamId = await insertNode(database.db, WORKSPACE_ID, projectId)
+    await setPayload(database.db, upstreamId, {
+      outputContentHash: 'a'.repeat(64),
+    })
+    await database.db.insert(canvasEdges).values({
+      workspaceId: WORKSPACE_ID,
+      id: randomUUID(),
+      projectId,
+      source: upstreamId,
+      target: downstreamId,
+    })
+
+    await captureNodeInputFingerprint(downstreamId)
+
+    const [node] = await database.db
+      .select({ data: canvasNodes.data })
+      .from(canvasNodes)
+      .where(eq(canvasNodes.id, downstreamId))
+    expect(node?.data.payload).toMatchObject({
+      inputFingerprint: computeContentHash([
+        { id: upstreamId, outputContentHash: 'a'.repeat(64) },
+      ]),
+    })
+  })
+
+  it('invalidates a successful node for explicit regeneration without faking upstream drift', async () => {
+    const nodeId = await insertNode(
+      database.db,
+      WORKSPACE_ID,
+      projectId,
+      'hash-a',
+      'succeeded'
+    )
+
+    await invalidateNodeForRegeneration(nodeId, 'manual-regenerate')
+
+    const [node] = await database.db
+      .select({ status: canvasNodes.status, data: canvasNodes.data })
+      .from(canvasNodes)
+      .where(eq(canvasNodes.id, nodeId))
+    expect(node?.status).toBe('stale')
+    expect(node?.data.payload).toMatchObject({
+      invalidationReason: 'manual-regenerate',
+    })
   })
 
   it('updates only the trusted workspace when the node id is shared', async () => {
@@ -272,12 +391,57 @@ async function insertNode(
   return id
 }
 
-function versionedData(contentHash: string | null): {
+async function insertRunningAttempt(
+  db: Db,
+  projectId: string,
+  nodeId: string,
+): Promise<string> {
+  const runId = randomUUID()
+  const attemptId = randomUUID()
+  await db.insert(pipelineRuns).values({
+    workspaceId: WORKSPACE_ID,
+    id: runId,
+    projectId,
+    status: 'running',
+    workflowVersion: 'canvas-test-v1',
+    fingerprint: 'a'.repeat(64),
+    executionEpoch: 0,
+  })
+  await db.insert(taskAttempts).values({
+    workspaceId: WORKSPACE_ID,
+    id: attemptId,
+    runId,
+    taskId: 'legacy.director-stage',
+    entityType: 'node',
+    entityId: nodeId,
+    attemptNo: 1,
+    status: 'running',
+    fingerprint: 'b'.repeat(64),
+    checkpoint: { schemaVersion: 1 },
+  })
+  return attemptId
+}
+
+function versionedData(
+  contentHash: string | null,
+  patch: Record<string, unknown> = {}
+): {
   schemaVersion: number
   payload: Record<string, unknown>
 } {
   return {
     schemaVersion: 1,
-    payload: contentHash ? { contentHash } : {},
+    payload: { ...(contentHash ? { contentHash } : {}), ...patch },
   }
+}
+
+async function setPayload(
+  db: Db,
+  nodeId: string,
+  payload: Record<string, unknown>
+): Promise<void> {
+  await db
+    .update(canvasNodes)
+    .set({ data: versionedData(null, payload) })
+    .where(eq(canvasNodes.id, nodeId))
 }

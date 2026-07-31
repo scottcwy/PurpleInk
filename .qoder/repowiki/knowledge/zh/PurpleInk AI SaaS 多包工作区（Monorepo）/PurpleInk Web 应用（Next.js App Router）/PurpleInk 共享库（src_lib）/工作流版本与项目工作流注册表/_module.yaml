@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: web_app/lib/workflow
+title: 工作流版本与项目工作流注册表
+scope:
+    - src/lib/workflow/
+source_files: []
+depends_on: []
+related_to: []

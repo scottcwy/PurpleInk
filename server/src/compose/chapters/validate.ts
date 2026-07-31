@@ -2,6 +2,7 @@
 // Checks structural conformance to the sub-composition spec before writing to disk.
 import { existsSync } from "node:fs"
 import { join } from "node:path"
+import { Script } from "node:vm"
 
 export interface ValidationResult {
   valid: boolean
@@ -93,7 +94,41 @@ export function validateHyperFramesHtml(
     errors.push("Forbidden: CSS @keyframes found (use GSAP timelines only)")
   }
 
-  // 8. data-duration must be in 1-60s range
+  // 8. LLM 偶尔把 JavaScript 赋值写进 CSS（如 `left=0`），会到渲染编译期才失败。
+  const styleBlocks = [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)]
+  if (
+    styleBlocks.some((match) =>
+      /(?:^|[;{])\s*(?:--[a-z0-9_-]+|[a-z-]+)\s*=(?!=)/imu.test(match[1] ?? "")
+    )
+  ) {
+    errors.push("Invalid CSS assignment syntax")
+  }
+
+  // 9. HyperFrames 逐帧 seek 要求动画有限，禁止无限循环。
+  if (/\brepeat\s*:\s*-1\b/u.test(html)) {
+    errors.push("Infinite GSAP repeat is not seek-safe")
+  }
+
+  // 10. 在写盘前编译所有内联脚本；外链 script 没有内联内容，自动跳过。
+  const inlineScripts = [...html.matchAll(/<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)]
+  if (inlineScripts.some((match) => !isValidScript(match[1] ?? ""))) {
+    errors.push("Invalid inline script syntax")
+  }
+
+  // 11. CSS/JS 块注释若落到标签外会作为可见文字渲染。
+  const visibleMarkup = html
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+  if (/\/\*[\s\S]*?\*\//u.test(visibleMarkup)) {
+    errors.push("Visible block comment outside style or script")
+  }
+
+  // 12. SFMono 并非 HyperFrames 可自动解析字体；无显式声明会产生跨机器字形漂移。
+  if (/\bSFMono-Regular\b/iu.test(html) && !/@font-face[\s\S]*SFMono-Regular/iu.test(html)) {
+    errors.push("SFMono-Regular requires an explicit @font-face")
+  }
+
+  // 13. data-duration must be in 1-60s range
   const durations = [...html.matchAll(/data-duration="([^"]+)"/g)].map((m) => parseFloat(m[1]!))
   for (const d of durations) {
     if (isNaN(d) || d < 1 || d > 60) {
@@ -102,4 +137,13 @@ export function validateHyperFramesHtml(
   }
 
   return { valid: errors.length === 0, errors }
+}
+
+function isValidScript(source: string): boolean {
+  try {
+    new Script(source)
+    return true
+  } catch {
+    return false
+  }
 }

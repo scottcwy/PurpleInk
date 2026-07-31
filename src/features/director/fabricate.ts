@@ -8,6 +8,8 @@ import { buildStagePrompt } from './stage-prompt'
 import { prepareStageResult } from './stage-result'
 import { commitStageResult } from './stage-result-committer'
 import { writeValidatedArtifact } from './tools/write-artifact'
+import { appendShotRevisionContext } from './shot-revision-prompt'
+import { loadShotRevisionSource } from './shot-revision-source'
 
 /**
  * 为 shot-codegen 节点生成 HTML + renderSpec，但不改变节点状态。
@@ -15,8 +17,20 @@ import { writeValidatedArtifact } from './tools/write-artifact'
  * 渲染队列会在将节点置为 running 后调用本函数；保持 pending/running 状态不变，
  * 使后续渲染流程仍能使用自己的状态机（idle -> pending -> running -> success）。
  */
-export async function fabricateShot(projectId: string, nodeId: string): Promise<void> {
-  const repository = new DirectorRuntimeRepository(await getDb(), storage)
+export async function fabricateShot(
+  projectId: string,
+  nodeId: string,
+  attemptId: string,
+  revisionBrief?: string,
+): Promise<void> {
+  const database = await getDb()
+  const revision = revisionBrief === undefined
+    ? undefined
+    : {
+        revisionBrief,
+        sourceHtml: await loadShotRevisionSource(database, storage, projectId, nodeId),
+      }
+  const repository = new DirectorRuntimeRepository(database, storage)
   const runner = createStageRunner({
     repository,
     transitionNodeStatus: async () => {
@@ -24,7 +38,11 @@ export async function fabricateShot(projectId: string, nodeId: string): Promise<
       // no-op 避免改变节点 pending/running 状态。
     },
     createSession: createDirectorSession,
-    buildPrompt: buildStagePrompt,
+    buildPrompt: (stage, context) =>
+      appendShotRevisionContext(
+        buildStagePrompt(stage, context),
+        revision,
+      ),
     writeArtifact: writeValidatedArtifact,
     prepareResult: prepareStageResult,
     commitResult: async (context, result, artifact) =>
@@ -36,5 +54,5 @@ export async function fabricateShot(projectId: string, nodeId: string): Promise<
       // shot-codegen 只有 MP4 渲染成功后才能推进；由 render queue handler 挂接。
     },
   })
-  await runner(projectId, nodeId, 'FABRICATE')
+  await runner(projectId, nodeId, 'FABRICATE', attemptId)
 }

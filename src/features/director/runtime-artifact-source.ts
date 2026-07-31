@@ -1,8 +1,14 @@
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
-import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { type Db } from '@/lib/db/client'
 import { artifacts, canvasNodes } from '@/lib/db/schema/index'
 import type { StorageAdapter } from '@/lib/storage'
+import { DIRECTOR_INGEST_SOURCE_NODE_TYPES } from '@/features/canvas'
+import {
+  loadFinalExportDelivery as loadFinalExportDeliveryRecord,
+  type FinalExportDelivery,
+} from './final-export-artifact-source'
 import { readLaneKey } from './runtime-node-data'
 import {
   audioAllocationSchema,
@@ -17,6 +23,10 @@ import {
   type DirectorShot,
   type DirectorShotPlan,
 } from './schemas/director-shot-plan'
+import {
+  resolveVisualPreferences,
+  type VisualPreferences,
+} from './prompts/visual-theme'
 
 const directArtifactSchema = z
   .object({
@@ -25,9 +35,15 @@ const directArtifactSchema = z
   })
   .strict()
 
+const ingestAudioSchema = z.object({
+  audioManifest: audioManifestSchema,
+  audioAllocation: audioAllocationSchema,
+})
+
 interface NodeLane {
   id: string
   laneKey: string | null
+  status: string
 }
 
 export class DirectorArtifactSource {
@@ -38,26 +54,43 @@ export class DirectorArtifactSource {
 
   async loadIngestArtifact(projectId: string): Promise<{
     scriptUnits: ScriptUnit[]
+  }> {
+    const nodeId = await this.findWorkflowSourceNodeId(projectId)
+    const raw = await this.loadArtifactJson(projectId, nodeId, 'director-ingest')
+    const parsed = z.object({ scriptUnits: z.unknown() }).parse(raw)
+    return ingestStageResultSchema.parse({ scriptUnits: parsed.scriptUnits })
+  }
+
+  /**
+   * 读取音频时序合同。
+   *
+   * 配音是异步媒体链：INGEST 成功后才排队合成，`director-ingest-audio` 因此可能
+   * 尚未存在（历史项目把同样的字段写在 `director-ingest` 里，需要继续兼容）。
+   * 两处都拿不到时必须抛出**明确的媒体未就绪**错误，而不是把只含 scriptUnits 的
+   * 文本产物丢给音频 schema——那会让 FABRICATE 显示成 `audioManifest` 合同错误，
+   * 完全指错方向（真实事故）。
+   */
+  async loadIngestAudioArtifact(projectId: string): Promise<{
     audioManifest: AudioManifest
     audioAllocation: AudioAllocation
   }> {
-    const nodeId = await this.findNodeId(projectId, 'script-import')
-    const raw = await this.loadArtifactJson(projectId, nodeId, 'director-ingest')
-    // 音频时序没有回退口径：INGEST 必须已写入实测 manifest/allocation，缺失即失败。
-    const parsed = z
-      .object({
-        scriptUnits: z.unknown(),
-        audioManifest: z.unknown(),
-        audioAllocation: z.unknown(),
-      })
-      .parse(raw)
-    return {
-      scriptUnits: ingestStageResultSchema.parse({
-        scriptUnits: parsed.scriptUnits,
-      }).scriptUnits,
-      audioManifest: audioManifestSchema.parse(parsed.audioManifest),
-      audioAllocation: audioAllocationSchema.parse(parsed.audioAllocation),
+    const nodeId = await this.findWorkflowSourceNodeId(projectId)
+    const kind = (await this.resolveLatestArtifactKey(
+      projectId,
+      nodeId,
+      'director-ingest-audio'
+    ))
+      ? 'director-ingest-audio'
+      : 'director-ingest'
+    const parsed = ingestAudioSchema.safeParse(
+      await this.loadArtifactJson(projectId, nodeId, kind)
+    )
+    if (!parsed.success) {
+      throw new Error(
+        `配音媒体尚未就绪：${kind} 产物不含可用的 audioManifest / audioAllocation。请先完成或重试 INGEST 的配音生成，再执行依赖音频时序的阶段。`
+      )
     }
+    return parsed.data
   }
 
   async loadDirectArtifact(projectId: string) {
@@ -65,6 +98,30 @@ export class DirectorArtifactSource {
     return directArtifactSchema.parse(
       await this.loadArtifactJson(projectId, nodeId, 'director-direct')
     )
+  }
+
+  /** 从来源节点读取提示词视觉偏好；旧项目或非法字段保持默认原样。 */
+  async loadVisualPreferences(projectId: string): Promise<VisualPreferences> {
+    const [row] = await this.db
+      .select({ data: canvasNodes.data })
+      .from(canvasNodes)
+      .where(
+        and(
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
+          eq(canvasNodes.projectId, projectId),
+          inArray(canvasNodes.type, DIRECTOR_INGEST_SOURCE_NODE_TYPES)
+        )
+      )
+      .limit(1)
+    if (!row) return resolveVisualPreferences({})
+    const payload = z
+      .object({
+        schemaVersion: z.number(),
+        payload: z.record(z.string(), z.unknown()),
+      })
+      .safeParse(row.data)
+    if (!payload.success) return resolveVisualPreferences({})
+    return resolveVisualPreferences(payload.data.payload)
   }
 
   async loadShotSpecArtifact(
@@ -111,12 +168,15 @@ export class DirectorArtifactSource {
     return key
   }
 
-  async loadAllRenderedArtifactKeys(
+  async loadRenderedArtifactInventory(
     projectId: string
-  ): Promise<Array<{ laneKey: string; storageKey: string }>> {
+  ): Promise<{
+    rendered: Array<{ laneKey: string; storageKey: string }>
+    skippedLanes: string[]
+  }> {
     const nodes = await this.findNodeIds(projectId, 'shot-codegen')
     const lanes = nodes.filter(
-      (node): node is { id: string; laneKey: string } => node.laneKey !== null
+      (node): node is NodeLane & { laneKey: string } => node.laneKey !== null
     )
     if (lanes.length === 0) throw new Error('项目缺少 shot-codegen 分镜渲染节点')
     const rows = await this.db
@@ -127,7 +187,7 @@ export class DirectorArtifactSource {
       .from(artifacts)
       .where(
         and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(artifacts.workspaceId, currentWorkspaceId()),
           eq(artifacts.projectId, projectId),
           eq(artifacts.aggregateType, 'node'),
           inArray(
@@ -142,32 +202,38 @@ export class DirectorArtifactSource {
     for (const row of rows) {
       if (!latest.has(row.nodeId)) latest.set(row.nodeId, row.storageKey)
     }
-    return lanes
-      .map(({ id, laneKey }) => {
-        const storageKey = latest.get(id)
-        if (!storageKey) throw new Error(`找不到 render-mp4 产物：${laneKey}`)
-        return { laneKey, storageKey }
-      })
-      .sort((left, right) => left.laneKey.localeCompare(right.laneKey))
+    const rendered: Array<{ laneKey: string; storageKey: string }> = []
+    const skippedLanes: string[] = []
+    for (const { id, laneKey, status } of lanes.sort(compareLane)) {
+      if (status === 'skipped') {
+        skippedLanes.push(laneKey)
+        continue
+      }
+      const storageKey = latest.get(id)
+      if (!storageKey) throw new Error(`找不到 render-mp4 产物：${laneKey}`)
+      rendered.push({ laneKey, storageKey })
+    }
+    return { rendered, skippedLanes }
+  }
+
+  async loadAllRenderedArtifactKeys(
+    projectId: string
+  ): Promise<Array<{ laneKey: string; storageKey: string }>> {
+    const inventory = await this.loadRenderedArtifactInventory(projectId)
+    if (inventory.skippedLanes.length > 0) {
+      throw new Error(
+        `分镜已跳过渲染，只能进入降级合成：${inventory.skippedLanes.join('、')}`
+      )
+    }
+    return inventory.rendered
   }
 
   async loadFinalExportArtifact(projectId: string): Promise<string> {
-    const [artifact] = await this.db
-      .select({ storageKey: artifacts.storageKey })
-      .from(artifacts)
-      .where(
-        and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
-          eq(artifacts.projectId, projectId),
-          eq(artifacts.aggregateType, 'project'),
-          eq(artifacts.aggregateId, projectId),
-          eq(artifacts.kind, 'final-mp4')
-        )
-      )
-      .orderBy(desc(artifacts.version), desc(artifacts.id))
-      .limit(1)
-    if (!artifact) throw new Error('请先完成合成导出：项目尚无 final-mp4 产物')
-    return artifact.storageKey
+    return (await this.loadFinalExportDelivery(projectId)).storageKey
+  }
+
+  async loadFinalExportDelivery(projectId: string): Promise<FinalExportDelivery> {
+    return loadFinalExportDeliveryRecord(this.db, this.storage, projectId)
   }
 
   async loadShotQaFindings(projectId: string): Promise<string[]> {
@@ -197,21 +263,41 @@ export class DirectorArtifactSource {
     return node.id
   }
 
+  private async findWorkflowSourceNodeId(projectId: string): Promise<string> {
+    const nodes = (
+      await Promise.all(
+        DIRECTOR_INGEST_SOURCE_NODE_TYPES.map((type) =>
+          this.findNodeIds(projectId, type),
+        ),
+      )
+    ).flat()
+    if (nodes.length !== 1) throw new Error('项目必须且只能包含一个文稿或录音来源节点')
+    return nodes[0]!.id
+  }
+
   private async findNodeIds(
     projectId: string,
     type: string
   ): Promise<NodeLane[]> {
     const rows = await this.db
-      .select({ id: canvasNodes.id, data: canvasNodes.data })
+      .select({
+        id: canvasNodes.id,
+        data: canvasNodes.data,
+        status: canvasNodes.status,
+      })
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.projectId, projectId),
           eq(canvasNodes.type, type)
         )
       )
-    return rows.map((row) => ({ id: row.id, laneKey: readLaneKey(row.data) }))
+    return rows.map((row) => ({
+      id: row.id,
+      laneKey: readLaneKey(row.data),
+      status: row.status,
+    }))
   }
 
   private async resolveLatestArtifactKey(
@@ -224,7 +310,7 @@ export class DirectorArtifactSource {
       .from(artifacts)
       .where(
         and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(artifacts.workspaceId, currentWorkspaceId()),
           eq(artifacts.projectId, projectId),
           eq(artifacts.aggregateType, 'node'),
           eq(artifacts.aggregateId, nodeId),

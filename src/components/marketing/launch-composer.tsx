@@ -1,250 +1,158 @@
-"use client";
+'use client'
 
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { ArrowRight, LoaderCircle, Check, RotateCcw } from "lucide-react";
+import { useRouter } from 'next/navigation'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { ArrowRight, LoaderCircle, RotateCcw } from 'lucide-react'
 import {
   useCallback,
-  useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
-} from "react";
+} from 'react'
 import {
-  startRender,
-  pollUntilDone,
-  downloadVideo,
-  type JobView,
-  type JobPhase,
-} from "@/lib/api";
+  LoginRequiredDialog,
+  useRequireLogin,
+} from '@/features/auth/login-required-dialog'
+import { productCanvasHref } from '@/features/navigation/products-routes'
+import {
+  createProject,
+  createProjectCreationKey,
+  startProject,
+} from '@/features/projects/project-create-client'
+import {
+  ActionCircle,
+  ComposerSettings,
+  friendlyError,
+  normalizedHttpUrl,
+  PILL_BASE,
+  type Quality,
+  type Stage,
+} from './launch-composer-support'
 
-type Stage = "idle" | "input" | "running" | "done" | "error";
-type Quality = "draft" | "standard" | "high";
-
-const PHASE_LABEL: Record<JobPhase, string> = {
-  queued: "排队中…",
-  capturing: "正在采集网站…",
-  scripting: "正在编写旁白…",
-  synthesizing: "正在合成语音…",
-  timing: "正在对齐音画…",
-  composing: "正在合成分镜…",
-  rendering: "正在渲染视频…",
-  verifying: "正在校验金样本…",
-  muxing: "正在混流旁白音轨…",
-  done: "完成",
-  failed: "失败",
-};
-
-/** 各阶段进度带 [起, 止, 时间常数τ(秒)]：τ 越大爬得越慢。采集不稳定所以带最宽、τ 最大 */
-const PHASE_BAND: Record<JobPhase, [number, number, number]> = {
-  queued: [2, 8, 4],
-  capturing: [8, 55, 150],
-  scripting: [55, 60, 10],
-  synthesizing: [60, 68, 20],
-  timing: [68, 72, 8],
-  composing: [72, 78, 8],
-  rendering: [78, 93, 70],
-  verifying: [93, 98, 4],
-  muxing: [98, 99, 3],
-  done: [100, 100, 1],
-  failed: [0, 0, 1],
-};
-
-const QUALITY_OPTS: { value: Quality; label: string }[] = [
-  { value: "draft", label: "草稿" },
-  { value: "standard", label: "标准" },
-  { value: "high", label: "高清" },
-];
-
-const DURATION_OPTS = [15, 24, 40];
-
-const PILL_BASE =
-  "focus-ring group bg-background text-foreground relative isolate inline-flex h-16 w-full max-w-md items-center overflow-hidden rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.12)]";
-
-/** 右侧圆形动作钮（沿用 hero 的规格） */
-function ActionCircle({
-  children,
-  active,
-}: {
-  children: ReactNode;
-  active?: boolean;
-}): ReactNode {
-  return (
-    <span
-      className="relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition-colors"
-      style={{
-        backgroundColor: active ? "#352e82" : "var(--foreground)",
-        color: active ? "#ffffff" : "var(--background)",
-      }}
-    >
-      {children}
-    </span>
-  );
-}
-
-/** 分段选择用的小胶囊 */
-function Chip({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  children: ReactNode;
-  onClick: () => void;
-}): ReactNode {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className="focus-ring rounded-full px-3 py-1 text-xs font-medium transition-colors"
-      style={{
-        backgroundColor: active ? "#352e82" : "color-mix(in oklab, var(--foreground) 8%, transparent)",
-        color: active ? "#ffffff" : "var(--foreground)",
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function fmtElapsed(sec: number): string {
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
+const subscribeToHydration = () => () => {}
 
 export function LaunchComposer(): ReactNode {
-  const [stage, setStage] = useState<Stage>("idle");
-  const [url, setUrl] = useState("");
-  const [phase, setPhase] = useState<JobPhase>("queued");
-  const [message, setMessage] = useState("");
-  const [quality, setQuality] = useState<Quality>("standard");
-  const [duration, setDuration] = useState(24);
-  const [progress, setProgress] = useState(0);
-  const [elapsed, setElapsed] = useState(0);
-
-  const prefersReducedMotion = useReducedMotion();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const startRef = useRef(0);
-  const phaseRef = useRef<JobPhase>("queued");
-  const phaseStartRef = useRef(0);
-
-  // 运行中：本地定时器驱动进度爬升 + 已用时长（不依赖后端在途返回耗时）
-  useEffect(() => {
-    if (stage !== "running") return;
-    const id = setInterval(() => {
-      const now = Date.now();
-      setElapsed(Math.floor((now - startRef.current) / 1000));
-      const [lo, hi, tau] = PHASE_BAND[phaseRef.current];
-      const t = (now - phaseStartRef.current) / 1000;
-      const p = lo + (hi - lo) * (1 - Math.exp(-t / tau));
-      setProgress((prev) => Math.max(prev, Math.min(hi, p)));
-    }, 250);
-    return () => clearInterval(id);
-  }, [stage]);
+  const router = useRouter()
+  const [stage, setStage] = useState<Stage>('idle')
+  const [url, setUrl] = useState('')
+  const [message, setMessage] = useState('')
+  const [quality, setQuality] = useState<Quality>('standard')
+  const [duration, setDuration] = useState(24)
+  const [createdProjectId, setCreatedProjectId] = useState<string>()
+  const prefersReducedMotion = useReducedMotion()
+  const motionReady = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  )
+  const inputRef = useRef<HTMLInputElement>(null)
+  const submittingRef = useRef(false)
+  const creationKeyRef = useRef<string | undefined>(undefined)
+  const {
+    loginRequired,
+    closeLoginDialog,
+    ensureLoggedIn,
+    handleAuthError,
+  } = useRequireLogin()
 
   const reset = useCallback(() => {
-    abortRef.current?.abort();
-    abortRef.current = null;
-    setStage("idle");
-    setUrl("");
-    setMessage("");
-  }, []);
+    setStage('idle')
+    setUrl('')
+    setMessage('')
+    setCreatedProjectId(undefined)
+    creationKeyRef.current = undefined
+  }, [])
 
   const openInput = useCallback(() => {
-    setStage("input");
-    requestAnimationFrame(() => inputRef.current?.focus());
-  }, []);
+    setStage('input')
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }, [])
+
+  const invalidateCreatedProject = useCallback(() => {
+    setCreatedProjectId(undefined)
+    creationKeyRef.current = undefined
+    setMessage('')
+  }, [])
 
   const run = useCallback(async () => {
-    const target = url.trim();
-    if (!/^https?:\/\//i.test(target)) {
-      setMessage("请输入以 http(s):// 开头的网址");
-      inputRef.current?.focus();
-      return;
+    if (submittingRef.current) return
+    const target = normalizedHttpUrl(url)
+    if (!target) {
+      setMessage('请输入以 http(s):// 开头的网址')
+      inputRef.current?.focus()
+      return
     }
+    if (!(await ensureLoggedIn())) return
 
-    const now = Date.now();
-    startRef.current = now;
-    phaseStartRef.current = now;
-    phaseRef.current = "queued";
-    setProgress(0);
-    setElapsed(0);
-    setStage("running");
-    setPhase("queued");
-    setMessage("");
-    const ac = new AbortController();
-    abortRef.current = ac;
-
+    submittingRef.current = true
+    setStage('creating')
+    setMessage('')
+    let projectId = createdProjectId
     try {
-      const { jobId } = await startRender({ url: target, duration, quality });
-      const job: JobView = await pollUntilDone(
-        jobId,
-        (j) => {
-          if (j.phase !== phaseRef.current) {
-            phaseRef.current = j.phase;
-            phaseStartRef.current = Date.now();
-            setPhase(j.phase);
-          }
-        },
-        1500,
-        ac.signal,
-      );
-
-      if (job.status === "failed" || !job.hasVideo) {
-        setStage("error");
-        setMessage(job.error ? firstLine(job.error) : "渲染失败，请查看后端日志");
-        return;
+      if (!projectId) {
+        creationKeyRef.current ??= createProjectCreationKey()
+        projectId = await createProject({
+          kind: 'website',
+          url: target,
+          durationSec: duration,
+          quality,
+          visualTheme: 'dark',
+        }, fetch, creationKeyRef.current)
+        setCreatedProjectId(projectId)
       }
-
-      setProgress(100);
-      const host = safeHost(target);
-      await downloadVideo(job.id, `purpleink-${host}.mp4`);
-      setStage("done");
-      const checkWarn = job.checkPassed === false ? "（check 有告警）" : "";
-      const goldenOk = job.goldenVerified ? " · 金样本校验通过" : "";
-      setMessage(`已生成${checkWarn}${goldenOk}，正在下载`);
-    } catch (err) {
-      if ((err as Error)?.name === "AbortError") return;
-      setStage("error");
-      setMessage(friendlyError(err));
+      await startProject(projectId)
+      router.push(productCanvasHref(projectId))
+    } catch (cause) {
+      if (handleAuthError(cause)) {
+        setMessage(projectId ? '项目已创建，登录后可重试启动' : '')
+        setStage(projectId ? 'error' : 'input')
+        return
+      }
+      setMessage(friendlyError(cause))
+      setStage('error')
+    } finally {
+      submittingRef.current = false
     }
-  }, [url, duration, quality]);
+  }, [
+    createdProjectId,
+    duration,
+    ensureLoggedIn,
+    handleAuthError,
+    quality,
+    router,
+    url,
+  ])
 
-  // exactOptionalPropertyTypes: 用条件展开而非传 undefined
-  const interactive = prefersReducedMotion
+  const reduceMotionAfterHydration = motionReady && prefersReducedMotion
+  const interactive = reduceMotionAfterHydration
     ? {}
-    : { whileHover: { y: -2 }, whileTap: { scale: 0.98, y: 1 } };
-
-  const enter = prefersReducedMotion
+    : { whileHover: { y: -2 }, whileTap: { scale: 0.98, y: 1 } }
+  const enter = reduceMotionAfterHydration
     ? { initial: false as const, animate: { opacity: 1, y: 0 } }
     : {
         initial: { opacity: 0, y: 8 },
         animate: { opacity: 1, y: 0 },
         exit: { opacity: 0, y: -8 },
-      };
-
-  const accessory = prefersReducedMotion
-    ? { initial: false as const, animate: { opacity: 1, height: "auto" as const } }
+      }
+  const accessory = reduceMotionAfterHydration
+    ? { initial: false as const, animate: { opacity: 1, height: 'auto' as const } }
     : {
         initial: { opacity: 0, height: 0 },
-        animate: { opacity: 1, height: "auto" as const },
+        animate: { opacity: 1, height: 'auto' as const },
         exit: { opacity: 0, height: 0 },
-      };
-
-  const spin = prefersReducedMotion
+      }
+  const spin = reduceMotionAfterHydration
     ? {}
     : {
         animate: { rotate: 360 },
-        transition: { duration: 0.8, ease: "linear" as const, repeat: Infinity },
-      };
+        transition: { duration: 0.8, ease: 'linear' as const, repeat: Infinity },
+      }
 
   return (
     <div className="flex w-full max-w-md flex-col">
       <AnimatePresence mode="wait" initial={false}>
-        {/* 待机：沿用原按钮 */}
-        {stage === "idle" && (
+        {stage === 'idle' && (
           <motion.button
             key="idle"
             type="button"
@@ -257,20 +165,17 @@ export function LaunchComposer(): ReactNode {
               创建你的首个 Launch Video
             </span>
             <ActionCircle>
-              <span className="flex transition-transform duration-200 group-hover:translate-x-0.5">
-                <ArrowRight className="h-5 w-5" />
-              </span>
+              <ArrowRight className="h-5 w-5 transition-transform duration-fast group-hover:translate-x-0.5" />
             </ActionCircle>
           </motion.button>
         )}
 
-        {/* 输入：展开 URL 输入框 */}
-        {stage === "input" && (
+        {stage === 'input' && (
           <motion.form
             key="input"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void run();
+            onSubmit={(event) => {
+              event.preventDefault()
+              void run()
             }}
             className={`${PILL_BASE} py-2 pr-2 pl-6`}
             {...enter}
@@ -278,12 +183,12 @@ export function LaunchComposer(): ReactNode {
             <input
               ref={inputRef}
               value={url}
-              onChange={(e) => {
-                setUrl(e.target.value);
-                if (message) setMessage("");
+              onChange={(event) => {
+                invalidateCreatedProject()
+                setUrl(event.target.value)
               }}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") reset();
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') reset()
               }}
               type="url"
               inputMode="url"
@@ -291,11 +196,7 @@ export function LaunchComposer(): ReactNode {
               className="no-focus-ring text-foreground placeholder:text-muted-foreground relative z-10 h-full min-w-0 flex-1 bg-transparent pr-3 text-base font-medium focus:outline-none"
               aria-label="产品网址"
             />
-            <button
-              type="submit"
-              aria-label="开始生成"
-              className="focus-ring rounded-full"
-            >
+            <button type="submit" aria-label="创建网站视频项目" className="focus-ring rounded-full">
               <ActionCircle>
                 <ArrowRight className="h-5 w-5" />
               </ActionCircle>
@@ -303,16 +204,15 @@ export function LaunchComposer(): ReactNode {
           </motion.form>
         )}
 
-        {/* 运行中：阶段文字 + 旋转 */}
-        {stage === "running" && (
+        {stage === 'creating' && (
           <motion.div
-            key="running"
+            key="creating"
             className={`${PILL_BASE} justify-between py-2 pr-2 pl-7 text-base font-medium`}
             {...enter}
             aria-live="polite"
           >
             <span className="relative z-10 whitespace-nowrap">
-              {PHASE_LABEL[phase]}
+              {createdProjectId ? '正在启动项目工作流…' : '正在创建网站项目…'}
             </span>
             <ActionCircle active>
               <motion.span className="flex" {...spin}>
@@ -322,37 +222,17 @@ export function LaunchComposer(): ReactNode {
           </motion.div>
         )}
 
-        {/* 完成：已下载 */}
-        {stage === "done" && (
-          <motion.button
-            key="done"
-            type="button"
-            onClick={openInput}
-            className={`${PILL_BASE} justify-between py-2 pr-2 pl-7 text-base font-medium`}
-            {...interactive}
-            {...enter}
-          >
-            <span className="relative z-10 whitespace-nowrap">
-              {message || "已生成，正在下载"}
-            </span>
-            <ActionCircle active>
-              <Check className="h-5 w-5" />
-            </ActionCircle>
-          </motion.button>
-        )}
-
-        {/* 失败：可重试 */}
-        {stage === "error" && (
+        {stage === 'error' && (
           <motion.button
             key="error"
             type="button"
-            onClick={openInput}
+            onClick={createdProjectId ? () => void run() : openInput}
             className={`${PILL_BASE} justify-between py-2 pr-2 pl-7 text-sm font-medium`}
             {...interactive}
             {...enter}
           >
             <span className="text-muted-foreground relative z-10 line-clamp-2 pr-3 text-left">
-              {message || "生成失败，点此重试"}
+              {message || '项目创建失败，点此重试'}
             </span>
             <ActionCircle>
               <RotateCcw className="h-5 w-5" />
@@ -361,94 +241,34 @@ export function LaunchComposer(): ReactNode {
         )}
       </AnimatePresence>
 
-      {/* 附属区：输入时显示质量/时长；运行时显示进度条 */}
       <AnimatePresence initial={false}>
-        {stage === "input" && (
-          <motion.div
-            key="settings"
-            className="overflow-hidden"
-            {...accessory}
-          >
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-2 pt-4">
-              <div className="flex items-center gap-1.5">
-                <span className="text-muted-foreground mr-0.5 text-xs">质量</span>
-                {QUALITY_OPTS.map((o) => (
-                  <Chip
-                    key={o.value}
-                    active={quality === o.value}
-                    onClick={() => setQuality(o.value)}
-                  >
-                    {o.label}
-                  </Chip>
-                ))}
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-muted-foreground mr-0.5 text-xs">时长</span>
-                {DURATION_OPTS.map((d) => (
-                  <Chip
-                    key={d}
-                    active={duration === d}
-                    onClick={() => setDuration(d)}
-                  >
-                    {d}s
-                  </Chip>
-                ))}
-              </div>
-            </div>
+        {stage === 'input' && (
+          <motion.div key="settings" className="overflow-hidden" {...accessory}>
+            <ComposerSettings
+              quality={quality}
+              duration={duration}
+              onQualityChange={(value) => {
+                invalidateCreatedProject()
+                setQuality(value)
+              }}
+              onDurationChange={(value) => {
+                invalidateCreatedProject()
+                setDuration(value)
+              }}
+            />
           </motion.div>
         )}
-
-        {stage === "running" && (
-          <motion.div
-            key="progress"
-            className="overflow-hidden"
+        {stage === 'creating' && (
+          <motion.p
+            key="handoff"
+            className="text-muted-foreground px-2 pt-4 text-xs"
             {...accessory}
           >
-            <div className="px-2 pt-4">
-              <div
-                className="bg-foreground/10 h-1.5 w-full overflow-hidden rounded-full"
-                role="progressbar"
-                aria-valuenow={Math.round(progress)}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              >
-                <motion.div
-                  className="h-full rounded-full"
-                  style={{ backgroundColor: "#352e82" }}
-                  animate={{ width: `${progress}%` }}
-                  transition={{ ease: "easeOut", duration: 0.4 }}
-                />
-              </div>
-              <div className="text-muted-foreground mt-2 flex items-center justify-between text-xs">
-                <span>已用 {fmtElapsed(elapsed)} · {Math.round(progress)}%</span>
-                <span>通常约 3–7 分钟</span>
-              </div>
-            </div>
-          </motion.div>
+            创建后将在项目画布展示真实阶段、产物与错误状态。
+          </motion.p>
         )}
       </AnimatePresence>
+      <LoginRequiredDialog open={loginRequired} onClose={closeLoginDialog} />
     </div>
-  );
-}
-
-function firstLine(text: string): string {
-  return text.split("\n")[0] ?? text;
-}
-
-function safeHost(url: string): string {
-  try {
-    return new URL(url).hostname
-      .replace(/^www\./, "")
-      .replace(/[^a-z0-9]+/gi, "-");
-  } catch {
-    return "video";
-  }
-}
-
-function friendlyError(err: unknown): string {
-  const msg = err instanceof Error ? err.message : String(err);
-  if (/Failed to fetch|NetworkError|ECONNREFUSED/i.test(msg)) {
-    return "连不上后端，请先启动 server（npm run start）";
-  }
-  return firstLine(msg);
+  )
 }

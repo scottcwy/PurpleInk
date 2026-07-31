@@ -1,6 +1,7 @@
+import { ShieldCheck } from 'lucide-react'
 import { StatusPill } from './status-pill'
 
-/** StatusPill 五态示例（/playbook 展示单元）。 */
+/** StatusPill 五态 + icon 变体示例（/playbook 展示单元）。 */
 export function StatusPillDemo() {
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -10,6 +11,7 @@ export function StatusPillDemo() {
       <StatusPill variant="cached" />
       <StatusPill variant="stale" />
       <StatusPill variant="failed" />
+      <StatusPill variant="rendered" icon={ShieldCheck} label="本地优先" />
     </div>
   )
 }

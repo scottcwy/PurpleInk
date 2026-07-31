@@ -2,6 +2,8 @@
 import { chromium, type Browser, type Page } from "playwright"
 import type { LaunchOptions, SemanticSnapshot } from "../types/capture"
 import type { BrowserDriver } from "./browser-driver"
+import { validatePublicUrl } from "../security/public-url-policy"
+import { installPublicRequestGuard } from "./playwright-public-guard"
 
 const DEFAULT_TIMEOUT = 30_000
 /** 首屏导航单独放宽：重站/慢网下 domcontentloaded 常 >30s（浏览器导航比裸 curl 开销大）。 */
@@ -14,9 +16,11 @@ const NAV_TIMEOUT = 60_000
 export class PlaywrightDriver implements BrowserDriver {
   private browser: Browser | null = null
   private page: Page | null = null
+  private publicOnly = false
 
   async launch(options?: LaunchOptions): Promise<void> {
     try {
+      this.publicOnly = options?.publicOnly === true
       this.browser = await chromium.launch({
         headless: options?.headless ?? true,
       })
@@ -31,6 +35,7 @@ export class PlaywrightDriver implements BrowserDriver {
       await context.addInitScript({
         content: "globalThis.__name = globalThis.__name || function (target) { return target; };",
       })
+      if (this.publicOnly) await installPublicRequestGuard(context)
       this.page = await context.newPage()
       console.log("[PlaywrightDriver] Browser launched")
     } catch (err) {
@@ -41,6 +46,7 @@ export class PlaywrightDriver implements BrowserDriver {
 
   async navigate(url: string): Promise<void> {
     try {
+      if (this.publicOnly) await validatePublicUrl(url)
       await this.getPage().goto(url, {
         waitUntil: "domcontentloaded",
         timeout: NAV_TIMEOUT,

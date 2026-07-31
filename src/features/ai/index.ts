@@ -1,5 +1,26 @@
 export { stepfunSettingsSchema, type StepfunSettings } from './schemas'
 export {
+  AI_PROVIDER_IDS,
+  PROVIDER_REGISTRY,
+  assertProviderCapability,
+  defaultModelFor,
+  providerSupports,
+  providersFor,
+  type AiProviderId,
+  type ProviderCapability,
+} from './provider-registry'
+export {
+  MIMO_PROVIDER,
+  MIMO_TTS_MODELS,
+  describeMimoConfig,
+  getMimoConfig,
+  saveMimoApiKey,
+  saveMimoSettings,
+  type MimoConfig,
+  type MimoConfigView,
+  type MimoSettingsInput,
+} from './mimo-config'
+export {
   getStoredApiKey,
   saveApiKey,
   validateKey,
@@ -14,3 +35,45 @@ export {
   type StepfunModelField,
   type StepfunModelSettingsInput,
 } from './config'
+export {
+  ManagedAiGateway,
+  type ManagedAiBeginInput,
+  type ManagedAiGatewayDependencies,
+  type ManagedAiHandle,
+} from './managed-gateway'
+export {
+  MANAGED_CREDENTIAL_ENV,
+  requireManagedCredential,
+  resolveManagedCredential,
+} from './managed-credentials'
+export {
+  MANAGED_PROVIDER_IDS,
+  ManagedAiError,
+  authorizeManagedRoute,
+  filterAuthorizedFallbacks,
+  isManagedProvider,
+  managedCredentialUnavailableError,
+  managedUpstreamError,
+  type ManagedAiErrorCode,
+  type ManagedPlanKey,
+  type ManagedProviderId,
+  type ManagedModelDefinition,
+  type ManagedRouteAuthorization,
+  type ManagedUsage,
+} from './managed-service'
+export {
+  managedModelCatalogRepository,
+  PostgresManagedModelCatalogRepository,
+  type ManagedModelCatalogRepository,
+} from './managed-model-catalog-repository'
+export {
+  PostgresProviderFundingStore,
+  type ProviderFunding,
+  type ProviderFundingStore,
+} from './provider-funding-store'
+export {
+  executeManagedVisionQa,
+  VISION_QA_MAX_OUTPUT_TOKENS,
+  type ManagedVisionExecutorDependencies,
+  type ManagedVisionInput,
+} from './managed-vision-executor'

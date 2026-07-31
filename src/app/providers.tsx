@@ -2,6 +2,7 @@
 
 import { ThemeProvider } from 'next-themes'
 import type { ReactNode } from 'react'
+import { ToastViewport } from '@/components/ui/toast-viewport'
 
 export function RootProviders({
   children,
@@ -17,6 +18,7 @@ export function RootProviders({
       disableTransitionOnChange
     >
       {children}
+      <ToastViewport />
     </ThemeProvider>
   )
 }

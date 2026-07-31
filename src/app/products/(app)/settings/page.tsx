@@ -1,5 +1,8 @@
 import { notFound } from 'next/navigation'
+import { withPageSession } from '@/features/auth/page-session'
 import { getCanvasGraph, listProjects } from '@/features/canvas'
+import { getProjectRouteState } from '@/features/projects/project-compatibility'
+import { UnsupportedProjectNotice } from '@/features/canvas/unsupported-project-notice'
 import { SettingsForm } from './settings-form'
 
 export const dynamic = 'force-dynamic'
@@ -10,7 +13,17 @@ export default async function SettingsPage({
   searchParams: Promise<{ projectId?: string }>
 }) {
   const { projectId } = await searchParams
+  const currentPath = projectId
+    ? `/products/settings?projectId=${encodeURIComponent(projectId)}`
+    : '/products/settings'
+  return withPageSession(currentPath, () => renderSettings(projectId))
+}
+
+async function renderSettings(projectId: string | undefined) {
   if (projectId) {
+    const routeState = await getProjectRouteState(projectId)
+    if (routeState === 'missing') notFound()
+    if (routeState === 'legacy') return <UnsupportedProjectNotice />
     const projects = await listProjects()
     if (!projects.some((project) => project.id === projectId)) notFound()
   }

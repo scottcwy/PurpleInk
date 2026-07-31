@@ -253,7 +253,7 @@ issue 允许「若 schema 未包含该枚举值，同步扩展」。实际检查
 | 文件 | 动作 |
 | --- | --- |
 | `src/features/audio/mp3-frame-header.ts` | 新增。纯函数解析 MPEG 帧头取原生采样率；带下一帧同步校验，避免把数据里的 `0xFF` 误认为帧头 |
-| `src/features/audio/measure.ts` | 新增。`measureMp3` 用 `ffmpeg-static` 解码为 16-bit 单声道 PCM 并统计采样数，时长 = 采样数 / 采样率。**不读 TTS 自报 duration，不按字数估算** |
+| `src/features/audio/measure.ts` | 新增。`measureAudio` 用 `ffmpeg-static` 解码为 16-bit 单声道 PCM 并统计采样数，时长 = 采样数 / 采样率。**不读 TTS 自报 duration，不按字数估算** |
 | `src/features/audio/narration.ts` | 新增。批量合成（默认并发 4）、按 `sha256(engine\|voice\|text)` 内容寻址复用字节、模型漂移即失败 |
 | `src/features/audio/narration-repository.ts` | 新增。落盘后复核实际字节 SHA-256，再原子登记 artifact；每 unit 独立 kind `narration-audio:U00N`（共用 kind 会让 N 段旁白在版本链上互相 supersede） |
 | `src/features/director/audio-timing.ts` | 新增，取代 `audio-demo.ts`。纯函数由实测结果构造 manifest / allocation，`durationInFrames = ceil(durationMs × fps / 1000)`（向上取整，保证画面覆盖完整旁白） |

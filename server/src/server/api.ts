@@ -5,6 +5,7 @@
 //   GET  /jobs              列出所有 Job
 //   GET  /jobs/:id          单个 Job 状态/进度
 //   GET  /jobs/:id/video    产物 mp4（支持 Range，可在浏览器直接播放）
+//   /internal/*             server-only key 保护的 Products 工作流集成边界
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http"
 import { createReadStream } from "node:fs"
 import { stat } from "node:fs/promises"
@@ -12,6 +13,7 @@ import { createJob, getJob, listJobs, toPublicJob } from "./job-store"
 import { runJob, type RenderRequest } from "./job-runner"
 import { logger } from "../lib/logger"
 import { errorMessage } from "../lib/error-message"
+import { handleInternalRequest } from "./internal-api"
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   const data = JSON.stringify(body)
@@ -68,6 +70,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const method = req.method || "GET"
   const url = new URL(req.url || "/", "http://localhost")
   const path = url.pathname
+
+  if (await handleInternalRequest(req, res, path)) return
 
   // CORS 预检
   if (method === "OPTIONS") {

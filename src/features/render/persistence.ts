@@ -1,6 +1,6 @@
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import type { TransactionContext } from '@/lib/db/transaction'
 import { and, eq } from 'drizzle-orm'
-import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
 import { canvasNodes } from '@/lib/db/schema/index'
 
 export function readPayload(value: unknown): Record<string, unknown> {
@@ -51,7 +51,7 @@ export async function writeNodeProjection(
     .from(canvasNodes)
     .where(
       and(
-        eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(canvasNodes.workspaceId, currentWorkspaceId()),
         eq(canvasNodes.id, nodeId)
       )
     )
@@ -66,7 +66,7 @@ export async function writeNodeProjection(
     })
     .where(
       and(
-        eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(canvasNodes.workspaceId, currentWorkspaceId()),
         eq(canvasNodes.id, nodeId)
       )
     )

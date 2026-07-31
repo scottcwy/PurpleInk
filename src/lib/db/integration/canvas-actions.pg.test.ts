@@ -2,8 +2,6 @@ import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Db } from '@/lib/db/client'
 import {
-  canvasEdges,
-  canvasNodes,
   projects,
   workspaces,
 } from '@/lib/db/schema/index'
@@ -12,14 +10,25 @@ import {
   type PgTestDatabase,
 } from '@/lib/db/test/pg-test-database'
 import {
-  createProject,
   setProjectAutopilot,
   updateExportSettings,
 } from '@/features/canvas/actions'
+import { createProjectWithSource } from '@/features/projects'
+import {
+  UnsupportedProjectWorkflowError,
+} from '@/features/projects/project-compatibility'
 import {
   getExportSettings,
   getProjectAutopilot,
 } from '@/features/canvas/queries'
+
+// 被测模块经 currentWorkspaceId() 取归属（PLAN-002 阶段 B）；单测没有请求入口，
+// 把读取口 mock 成历史单工作区 id，与用例 seed 的数据保持一致。
+vi.mock('@/lib/auth/workspace-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/workspace-context')>()),
+  currentWorkspaceId: () => '00000000-0000-4000-8000-000000000001',
+  currentUserId: () => 'test-user',
+}))
 
 const WORKSPACE_ID = '00000000-0000-4000-8000-000000000001'
 const { getDbMock } = vi.hoisted(() => ({
@@ -41,107 +50,108 @@ beforeAll(async () => {
 beforeEach(async () => {
   await database.reset()
   getDbMock.mockResolvedValue(database.db)
+  // 项目服务不自建 workspace（创建点唯一在注册事务），用例自行 seed 归属行。
+  await database.db
+    .insert(workspaces)
+    .values({ id: WORKSPACE_ID, slug: 'local', name: 'Local Workspace' })
+    .onConflictDoNothing()
 })
 
 afterAll(async () => {
   await database.close()
 })
 
-describe('createProject', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    getDbMock.mockResolvedValue(database.db)
-  })
-
-  it('atomically creates the local workspace, project, and four global nodes', async () => {
-    const result = createProject({ title: 'RAG 十分钟入门', script: '测试稿件' })
-    expect(result).toBeInstanceOf(Promise)
-    const project = await result
-    const nodes = await database.db.select().from(canvasNodes)
-    const edges = await database.db.select().from(canvasEdges)
-
-    expect(project.title).toBe('RAG 十分钟入门')
-    expect(nodes.every((node) => node.workspaceId === WORKSPACE_ID)).toBe(true)
-    expect(nodes.map(({ type, stage }) => [type, stage])).toEqual([
-      ['script-import', 'INGEST'],
-      ['shot-split', 'DIRECT'],
-      ['score', 'ASSEMBLE'],
-      ['export', 'FINALIZE'],
-    ])
-    expect(nodes[0]?.data).toEqual({
-      schemaVersion: 1,
-      payload: { directorInput: { rawScript: '测试稿件' } },
-    })
-    expect(edges.map(({ source, target }) => [source, target])).toEqual([
-      [nodes[0]?.id, nodes[1]?.id],
-      [nodes[2]?.id, nodes[3]?.id],
-    ])
-  })
-
-  it('rolls back workspace and project when initial graph creation fails', async () => {
-    await database.sql`
-      CREATE FUNCTION fail_initial_graph() RETURNS trigger AS $$
-      BEGIN
-        RAISE EXCEPTION 'injected graph failure';
-      END;
-      $$ LANGUAGE plpgsql
-    `
-    await database.sql`
-      CREATE TRIGGER fail_initial_graph
-      BEFORE INSERT ON canvas_nodes
-      FOR EACH ROW EXECUTE FUNCTION fail_initial_graph()
-    `
-
-    await expect(
-      createProject({ title: '失败项目', script: '稿件' })
-    ).rejects.toThrow()
-    expect(await database.db.select().from(projects)).toHaveLength(0)
-    expect(await database.db.select().from(workspaces)).toHaveLength(0)
-  })
-})
-
 describe('export settings', () => {
   let projectId: string
 
   beforeEach(async () => {
-    projectId = (
-      await createProject({ title: '设置项目', script: '' })
-    ).id
+    projectId = (await createScriptProject('设置项目')).id
   })
 
-  it('defaults to the master preset when never set', async () => {
+  it('defaults to the master preset and burned-in subtitles when never set', async () => {
     await expect(getExportSettings(projectId)).resolves.toEqual({
-      resolutionPreset: '1080x1920',
+      resolutionPreset: '1920x1080',
+      subtitles: 'burn-in',
+      soundEffects: 'off',
     })
   })
 
   it('persists a valid versioned preset and reads it back', async () => {
-    await updateExportSettings(projectId, { resolutionPreset: '720x1280' })
+    await updateExportSettings(projectId, { resolutionPreset: '1280x720' })
     await expect(getExportSettings(projectId)).resolves.toEqual({
-      resolutionPreset: '720x1280',
+      resolutionPreset: '1280x720',
+      subtitles: 'burn-in',
+      soundEffects: 'off',
     })
     const [row] = await database.db
       .select({ exportSettings: projects.exportSettings })
       .from(projects)
     expect(row?.exportSettings).toEqual({
       schemaVersion: 1,
-      settings: { resolutionPreset: '720x1280' },
+      settings: {
+        resolutionPreset: '1280x720',
+        subtitles: 'burn-in',
+        soundEffects: 'off',
+      },
     })
   })
 
-  it('rejects an invalid preset without writing', async () => {
+  it('applies a single-field patch without resetting the other fields', async () => {
+    // 这一列是整体覆盖写入的 jsonb：如果「只改分辨率」按完整对象写回，
+    // 用户已选的字幕交付会被顺手抹回默认，反之亦然。
+    await updateExportSettings(projectId, { subtitles: 'off' })
+    await updateExportSettings(projectId, { soundEffects: 'procedural' })
+    await updateExportSettings(projectId, { resolutionPreset: '960x540' })
+    await expect(getExportSettings(projectId)).resolves.toEqual({
+      resolutionPreset: '960x540',
+      subtitles: 'off',
+      soundEffects: 'procedural',
+    })
+    await updateExportSettings(projectId, { subtitles: 'burn-in' })
+    await expect(getExportSettings(projectId)).resolves.toEqual({
+      resolutionPreset: '960x540',
+      subtitles: 'burn-in',
+      soundEffects: 'procedural',
+    })
+  })
+
+  it('rejects an invalid preset, an unknown mode and an empty patch without writing', async () => {
     await expect(
       updateExportSettings(projectId, { resolutionPreset: '9999x9999' })
     ).rejects.toThrow()
+    await expect(
+      updateExportSettings(projectId, { subtitles: 'srt' })
+    ).rejects.toThrow()
+    await expect(updateExportSettings(projectId, {})).rejects.toThrow()
     await expect(getExportSettings(projectId)).resolves.toEqual({
-      resolutionPreset: '1080x1920',
+      resolutionPreset: '1920x1080',
+      subtitles: 'burn-in',
+      soundEffects: 'off',
     })
   })
 
   it('throws when the project does not exist', async () => {
     await expect(
-      updateExportSettings(randomUUID(), { resolutionPreset: '720x1280' })
+      updateExportSettings(randomUUID(), { resolutionPreset: '1280x720' })
     ).rejects.toThrow('项目不存在')
+  })
+
+  it('rejects a legacy workflow before changing export settings', async () => {
+    await database.db
+      .update(projects)
+      .set({ workflowVersion: 'legacy-portrait-workflow' })
+    await expect(
+      updateExportSettings(projectId, { resolutionPreset: '1280x720' })
+    ).rejects.toBeInstanceOf(UnsupportedProjectWorkflowError)
+    const [row] = await database.db.select().from(projects)
+    expect(row?.exportSettings).toEqual({
+      schemaVersion: 1,
+      settings: {
+        resolutionPreset: '1920x1080',
+        subtitles: 'burn-in',
+        soundEffects: 'off',
+      },
+    })
   })
 })
 
@@ -149,9 +159,7 @@ describe('project autopilot', () => {
   let projectId: string
 
   beforeEach(async () => {
-    projectId = (
-      await createProject({ title: '自动推进项目', script: '' })
-    ).id
+    projectId = (await createScriptProject('自动推进项目')).id
   })
 
   it('defaults to disabled and persists explicit changes', async () => {
@@ -171,4 +179,35 @@ describe('project autopilot', () => {
     )
     await expect(getProjectAutopilot(missingId)).rejects.toThrow('项目不存在')
   })
+
+  it('rejects a legacy workflow before changing autopilot', async () => {
+    await database.db
+      .update(projects)
+      .set({ workflowVersion: 'legacy-portrait-workflow' })
+    await expect(setProjectAutopilot(projectId, true)).rejects.toBeInstanceOf(
+      UnsupportedProjectWorkflowError
+    )
+    await expect(getProjectAutopilot(projectId)).resolves.toBe(false)
+  })
 })
+
+async function createScriptProject(title: string) {
+  const result = await createProjectWithSource(
+    {
+      title,
+      source: {
+        schemaVersion: 1,
+        kind: 'script',
+        script: '用于设置测试的文稿',
+        visualTheme: 'dark',
+      },
+      sourceFingerprint: 'b'.repeat(64),
+    },
+    {
+      database: database.db,
+      workspaceId: WORKSPACE_ID,
+      createId: randomUUID,
+    },
+  )
+  return result.project
+}

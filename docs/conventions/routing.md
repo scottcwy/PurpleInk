@@ -20,7 +20,7 @@
 | 层 | 前缀 | 壳 | 认证 | 可索引 | 用途 |
 | --- | --- | --- | --- | --- | --- |
 | L1 公开 | `/`、`/community`、`/artifacts*`、`/share/*`、`/release` | 营销壳 / 只读分享壳 | 匿名 | `/`、`/community`、`/artifacts*` 是；`/share/*` 否 | 获客、案例、对外分享 |
-| L2 认证 | `/login`、`/signup` | 认证壳（无侧栏） | 匿名 | 否 | 进入 L3 |
+| L2 认证 | `/login`、`/signup`、`/password/reset` | 认证壳（无侧栏，左海报 + 右表单） | 匿名 | 否 | 进入 L3 |
 | L3 制作应用 | `/products/*` | `AppShell` + `AppSidebarShell` | 必须登录（见 §9） | 否 | 全部真实制作功能 |
 | L4 内部 | `/playbook/*` | 独立无业务壳 | 仅非生产环境 | 否 | 组件登记与视觉验收 |
 | API | `/api/*` | 无 | 见 §4 | 否（robots 已 disallow） | 数据与引擎 |
@@ -50,16 +50,19 @@
 
 `(public)` 组的壳是 `src/app/(public)/layout.tsx`：无侧栏、无写操作入口。
 
-`/` 右上角 **Try it** 已接线到 `PRODUCTS_ROUTES.projects`（`/products/projects`），是进入 L3 的主 CTA。Header 与 Footer 的 **Community** 均接到 `/community`。该页复用营销壳，只展示随站发布且可实际播放的精选视频文件；它不是 `ShareSnapshot` 社区列表，也不得显示作者、播放量或点赞等无真实来源字段。Contact 与 footer 其余入口仍多为 `#` / 空串；`/login` 入口尚未接线，属已知缺口。
+`/` 右上角 **Try it** 已接线到 `PRODUCTS_ROUTES.projects`（`/products/projects`），是进入 L3 的主 CTA。未登录点击会被 §9 的守卫收敛到 `/login?next=/products/projects`。首页 `LaunchComposer` 接收公开 HTTP(S) URL 后只创建 `website` 项目并调用 `/api/projects/[id]/start`，随后进入项目画布；不得绕过项目工作流直接轮询 `/api/engine/*` 或从营销页下载终片。Header 与 Footer 的 **Community** 均接到 `/community`。该页复用营销壳，只展示随站发布且可实际播放的精选视频文件；它不是 `ShareSnapshot` 社区列表，也不得显示作者、播放量或点赞等无真实来源字段。Contact 与 footer 其余入口仍多为 `#` / 空串。
 
 ### 2.2 L2 认证
 
-| 路由 | 文件 | 状态 |
-| --- | --- | --- |
-| `/login` | `src/app/(auth)/login/page.tsx` | `shell` |
-| `/signup` | `src/app/(auth)/signup/page.tsx` | `shell` |
+| 路由 | 文件 | 状态 | 提交目标 |
+| --- | --- | --- | --- |
+| `/login` | `src/app/(auth)/login/page.tsx` | `wired` | `POST /api/auth/login` |
+| `/signup` | `src/app/(auth)/signup/page.tsx` | `wired` | `POST /api/auth/signup/code` → `POST /api/auth/signup` |
+| `/password/reset` | `src/app/(auth)/password/reset/page.tsx` | `wired` | `POST /api/auth/password/code` → `POST /api/auth/password/reset` |
 
-两页是 `AuthShellForm` 的禁用态占位（无提交、无校验），挂 `src/app/(auth)/layout.tsx` 的无侧栏认证壳。
+三页共用 `src/app/(auth)/layout.tsx` 的无侧栏认证壳：`lg` 及以上左半屏通栏海报（`public/img/login.webp`）+ 右半屏表单栏，移动端单栏、海报折叠。海报走 `next/image` 且 `sizes="(min-width: 1024px) 50vw, 1px"`，移动端落到最小候选档（实测 12,292 B）。视觉归属见 `docs/designs/Design-system-inventory.md` 的登录页条目。
+
+三页均 `noIndex`。`/password/reset` 只接受「邮箱 + 邮件验证码 + 新口令」三件套，不接受任何形式的重置链接 token —— 验证码通道已经存在，再加一套一次性链接就是第二套真值。
 
 ### 2.3 L3 制作应用
 
@@ -69,11 +72,12 @@
 | --- | --- | --- | --- | --- |
 | `/products` | `src/app/products/page.tsx` | `redirect` → `/products/dashboard` | 无 | — |
 | `/products/dashboard` | `src/app/products/(app)/dashboard/page.tsx` | `wired` | 无 | 空状态引导新建项目 |
-| `/products/projects` | `src/app/products/(app)/projects/page.tsx` | `wired` | 无 | 空状态 |
-| `/products/canvas/[projectId]` | `src/app/products/(app)/canvas/[projectId]/page.tsx` | `wired` | `projectId` path | `notFound()` |
-| `/products/shots/[shotId]` | `src/app/products/(app)/shots/[shotId]/page.tsx` | `wired` | `shotId` path + `projectId` query（必填） | `notFound()` |
-| `/products/export/[projectId]` | `src/app/products/(app)/export/[projectId]/page.tsx` | `wired` | `projectId` path | `notFound()` |
-| `/products/settings` | `src/app/products/(app)/settings/page.tsx` | `wired` | `projectId` query（可选） | 渲染账号级设置 |
+| `/products/projects` | `src/app/products/(app)/projects/page.tsx` | `wired` | 无 | 代码（文稿）/录音/URL 介绍三板块真实投影，支持网格（横向行式，按数量降序）与列表双布局，首屏每板块分页投影、滚动经 `/api/projects?view=cards` 追加；空分组各保留对应来源创建入口 |
+| `/products/canvas/[projectId]` | `src/app/products/(app)/canvas/[projectId]/page.tsx` | `wired` | `projectId` path | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明 |
+| `/products/shots/[shotId]` | `src/app/products/(app)/shots/[shotId]/page.tsx` | `wired` | `shotId` path + `projectId` query（必填） | 缺失项目/镜头 `notFound()`；旧 workflow 显示保留数据说明 |
+| `/products/export/[projectId]` | `src/app/products/(app)/export/[projectId]/page.tsx` | `wired` | `projectId` path + 持久化 `workflowKind` | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明；script/audio 进入镜头时间线导出，website 进入六阶段执行快照与 approved MP4 交付工作区 |
+| `/products/settings` | `src/app/products/(app)/settings/page.tsx` | `wired` | `projectId` query（可选） | 无项目参数渲染账号级设置；旧 workflow 显示保留数据说明 |
+| `/products/billing` | `src/app/products/(app)/billing/page.tsx` | `wired` | 当前 workspace 会话 | 展示当前会员、额度比例与兑换入口；不回显内部人民币成本 |
 
 段级约定（已落盘，新增 L3 路由沿用）：
 
@@ -81,17 +85,22 @@
 - `src/app/products/(app)/loading.tsx` 提供段级骨架；骨架不得常驻，必须由真实数据替换。
 - `src/app/products/(app)/template.tsx` 只做内容区入场动画，不得承载状态。
 - 全部 L3 页面 `export const dynamic = 'force-dynamic'`，禁止静态化含项目数据的页面。
+- 当前产品 workflow 的唯一母版合同是 `1920×1080 @ 30fps`。项目列表、工作台统计与最近项目只投影当前 `ACTIVE_WORKFLOW_VERSION`；历史 workflow 项目及其 Artifact 不迁移、不删除，但不进入普通列表。
+- 项目深链必须用持久化 `workflowVersion` 区分 `supported | legacy | missing`，禁止按创建日期、导出设置或 Artifact 尺寸猜测。`legacy` 显示“旧版项目暂不可用，数据已保留”，`missing` 才调用 `notFound()`。
 
 ### 2.4 L4 内部
 
 | 路由 | 文件 | 状态 |
 | --- | --- | --- |
 | `/playbook` | `src/app/playbook/page.tsx` | `wired` |
-| `/playbook/ui` | `src/app/playbook/ui/page.tsx` | `wired`（37 组件族） |
+| `/playbook/ui` | `src/app/playbook/ui/page.tsx` | `wired`（`UI_COMPONENT_FAMILY_COUNT` 个组件族，页面从常量读取，不在文档硬写数字） |
 | `/playbook/icons` | `src/app/playbook/icons/page.tsx` | `wired`（Pencil A4 图标白名单） |
 | `/playbook/foundations` | `src/app/playbook/foundations/page.tsx` | `wired`，但无 registry 分类 |
+| `/playbook/motion` | `src/app/playbook/motion/page.tsx` | `wired`，但无 registry 分类；动效意图对照台，见 `docs/conventions/motion-interaction.md` |
 
-`/playbook/foundations` 是手写 token 展示页，`PlaybookCategory` 只有 `ui | icons`。这是已知不一致：foundations 要么补进 registry，要么在索引页标注它不是组件登记页。
+`/playbook/foundations` 与 `/playbook/motion` 是手写 token / 动效展示页，`PlaybookCategory` 只有 `ui | icons`。这是已知不一致：两者要么补进 registry，要么在索引页标注它们不是组件登记页（当前采取后者）。
+
+`/playbook/motion` 是动效的唯一对照真值面：`docs/conventions/motion-interaction.md` 的 L1 意图表逐条在此有可交互标本。新增 L1 意图必须同批在该页登记，禁止只改文档不落标本。该页的标本必须复用生产组件与 `src/lib/motion/tokens.ts` 的同一份参数，禁止为展示复刻一套近似实现。
 
 `/playbook/patterns` 与 `patterns` 分类已于 2026-07-25（ISSUE-007）整体删除：唯一登记项 `WorkflowCanvas` 是脚手架期硬编码 fixture（`STAGE_B_WORKFLOW_NODES`），未被 `docs/designs/Design-system-inventory.md` 登记为必需组合，且其内联的两个 disabled 按钮与「`ProductFlowVersion`/`FlowNode`」文案引用了 §12 已作废的 Release 六步模型实体。删除后不留空分类占位，见 §2.5。
 
@@ -147,28 +156,44 @@
 | 路由 | 方法 | 上下文参数 | 委托 | 状态 |
 | --- | --- | --- | --- | --- |
 | `/api/ping` | GET | — | 无 | `wired` |
-| `/api/projects` | GET, POST | — | `@/features/canvas` | `wired` |
-| `/api/projects/[id]` | PATCH | `id` path | `@/features/canvas` `updateExportSettings` | `wired` |
+| `/api/projects` | GET, POST | GET 可选 `view=cards` + `kind`、`q`、`offset`、`limit`；website POST 使用 `Idempotency-Key` header | GET：无参数时 `@/features/canvas` `listProjects`；`view=cards` 时 `@/features/projects` 卡片投影；POST：`@/features/projects` | `wired`；`view=cards` 返回分页项目卡片投影 `{items,total,kindCounts}`（镜头数与状态为聚合 SQL，来源摘要为 URL/录音文件名/文稿前 80 字，不下发完整文稿）；`kind` 缺省跨三类混合，`limit` 钳位 1–50；无参数 GET 保持既有全量形状不变；POST 接受判别联合 `kind=script|audio|website`，兼容旧文稿 JSON；audio 仅接受 MP3/WAV multipart，最大 100 MiB / 30 分钟；同一 workspace 的 website 创建 key 只允许绑定同一规范化请求，复用返回原项目，不同请求返回 409 |
+| `/api/projects/[id]/start` | POST, DELETE | `id` path | POST：`@/features/projects` 按已持久化 `workflowKind` 分派 script Director、audio ASR、website video 队列；DELETE：`@/features/projects` `stopProjectExecution` | `wired`；POST 精确校验 kind + active workflowVersion，再由真实来源入口按资金来源预检（managed 进入统一会员额度，BYOK 不检查会员额度）；统一返回数据库派生的 `execution` 快照，兼容 `autopilot` 只能返回持久化真值，不作为 website/audio 执行状态；active attempt 返回 `reused`，website 只有 attempt、六阶段、校验与 approved Artifact 一致时返回 `complete`。DELETE 使用 execution epoch 栅栏旧作业并返回 `stopping|stopped` 与最新 `execution` |
+| `/api/projects/[id]/execution` | GET | `id` path | `@/features/projects` 执行快照仓库 | `wired`；返回当前 workspace 内项目的 `ProjectExecutionSnapshot`：真实 attempt、六阶段安全投影、交付门禁与内容 revision；不返回完整 URL、raw failure、prompt、credential 或 storage key |
+| `/api/projects/[id]` | PATCH, DELETE | `id` path | PATCH：body 含 `exportSettings` → `@/features/canvas` `updateExportSettings`，含 `title` → `@/features/projects` `renameProject`；DELETE：`@/features/projects` `deleteProject` | `wired`；PATCH 两个分支互斥，body 同时缺两者返回 400 且不写库，`title` 取 trim 后 1–200 字；DELETE 是不可恢复的整项目物理删除（口径见 `project-workflows.md` 的项目删除合同），项目不存在 404，项目仍有 queued/running attempt 或未释放并发租约时 409 且一行不删 |
 | `/api/artifacts/[id]` | GET | `id` path + `projectId` query（必填） | `@/features/artifacts` | `wired` |
 | `/api/jobs/[id]` | GET | `id` path + `projectId` query | `@/lib/queue`、`@/features/artifacts` | `wired` |
-| `/api/render` | POST | body `{projectId,nodeId}` | `@/features/render/queue-handler` | `wired` |
-| `/api/render/export` | GET, POST | `projectId` | `@/features/render/export-service` | `wired` |
+| `/api/render` | POST | body `{projectId,nodeId,intent}`；`intent=execute|repair|rerender` | `@/features/director/recovery` | `wired`；`rerender` 只重渲既有 HTML |
+| `/api/render/export` | GET, POST | GET `projectId` query；POST body `{projectId, degraded?, confirmationFingerprint?}`；`degraded=true` 时确认指纹必填 | `@/features/render/export-service`、`@/features/render/export-degraded`、`@/features/director/export-finalization` | `wired` |
 | `/api/render/thumbnails` | GET | `projectId`、`nodeId` | `@/features/render` | `wired` |
-| `/api/director/pipeline` | POST, DELETE | body `{projectId}` | `@/features/director/advance` | `wired` |
-| `/api/director/stage` | POST | body `{projectId,nodeId,stage}` | `@/features/director/queue-handler` | `wired` |
+| `/api/director/pipeline` | POST, DELETE | body `{projectId}`；POST 返回 `started|blocked|complete` 与修复根/阻塞明细 | POST：`@/features/director/advance`；DELETE：委托 `@/features/projects` `stopProjectExecution` | `wired`；仅为既有 script 客户端保留；POST 在队列操作前按持久化 kind 拒绝 audio / website，DELETE 只做代理兼容且与统一停止入口语义完全一致；额度由真实节点按 managed / BYOK 来源预检；新入口统一使用 `/api/projects/[id]/start` |
+| `/api/director/stage` | POST | body `{projectId,nodeId,intent,skipReason?,revisionBrief?}`；`intent=execute|repair|regenerate|skip|cancel-wait`（`skip` 时 `skipReason` 必填 1–200 字；`revisionBrief` 仅允许用于 `shot-codegen + regenerate`，trim 后 1–200 字）；`cancel-wait` 仅取消尚未领取的 Provider 限流等待 attempt | `@/features/director/recovery`、`@/features/director/skip`、`@/features/director/cancel-wait` | `wired`；带 `revisionBrief` 的 `regenerate` 在 worker 执行期读取当前最新、未 rejected 的完整 FABRICATE HTML 作为 AI 编辑底稿，只允许按简报做最小局部修改；输出完整新版 HTML 后继续走原有确定性门禁、Artifact 版本与渲染链路 |
 | `/api/director/stream/[nodeId]` | GET (SSE) | `nodeId` path + `projectId` query | `@/lib/stream/stream-bus` | `wired` |
 | `/api/director/stream/project/[projectId]` | GET (SSE) | `projectId` path | `@/lib/stream/status-bus` | `wired` |
 | `/api/share/[shareId]` | GET | `shareId` path | `@/features/share`（待建） | `planned` |
 | `/api/settings` | GET, POST | — | `@/features/ai/*`、`@/lib/queue/runtime-config` | `wired` |
+| `/api/billing` | GET | — | `@/features/billing` | `wired` |
+| `/api/billing/redemptions` | POST | header `Idempotency-Key` + body `{code}` | `@/features/billing` | `wired` |
+| `/api/ai-usage` | GET | query `view=account\|managed-cycle`、`range=7d\|30d\|cycle`、`timeZone=<IANA>`；账号与 workspace 只取当前会话 | `@/features/usage` | `wired` |
 
 约定：
 
 1. 写操作一律 POST/PATCH/DELETE + 严格 JSON schema 校验；校验失败返回 400 且**不落任何写入**。
-   `/api/settings` POST 承载字段范围：StepFun/Gemini 凭据与模型、Director 节点路由、`laneQuotas.{directorStageConcurrency, renderShotConcurrency}`（ISSUE-011）。
-   `laneQuotas` 子字段做两层校验：schema 静态 max（directorStage≤32、renderShot≤128）+ route 运行时 `os.cpus().length` 上限；任一失败回 400 且不落任何 secret / route / 配额写入。
-2. 状态码语义固定：400 参数非法、404 资源不存在或不属于当前作用域、409 状态冲突（队列已存在、前置未就绪）、422 外部凭据校验失败。
+   `/api/settings` POST 承载字段范围：StepFun/Gemini/MiMo 的显式服务来源 `providerServices.{provider}.{funding,apiKey?}`（`funding` 为 `managed | byok`；只有 BYOK 接受 Key，先验证再加密保存且响应不回传）、平台目录模型 SKU、三个 OpenAI-compatible 自定义端点（文本与视觉 / TTS / ASR，各自独立凭据、端点与模型）、Director 文本/视觉/TTS/ASR 能力路由、`laneQuotas.{renderShotConcurrency}`（只允许用户调整渲染并发；AI 分镜套餐上限为只读，Director 进程并发只允许运维配置）、`fallbackProvider`（熔断降级链的显式备选 provider，可为 `null` 表示清空；必须支持文本会话，纯音频端点回 422；存 `workspace_settings` 的 `ai.fallback-provider`，默认无备选，见 docs/configuration/model-routing.md）。
+   自定义端点家族按能力拆成三个 provider id：`openai-compatible`（text + vision）、`openai-compatible-tts`（tts）、`openai-compatible-asr`（asr）。三者的凭据分别存 `provider_credentials`，配置分别存 `workspace_settings` 的 `ai.openai-compatible` / `ai.openai-compatible.tts` / `ai.openai-compatible.asr`；同一 id 不得跨能力路由。
+   Gemini 仍不可用于 TTS/ASR。媒体路由候选为 StepFun、MiMo、`openai-compatible-tts`（配音）、`openai-compatible-asr`（字幕）。
+   `openai-compatible` 的视觉模型独立于文本模型；未填写视觉模型时把分镜验收路由到该端点返回 422。
+   `openai-compatible-asr` 的转写校验被端点拒绝时返回 422 且带 `reason: 'asr-transcription-rejected'`；客户端可改以 `credentialOnly: true` 重新提交，该路径仍需通过 `GET {baseUrl}/models` 凭据校验，并把 `timestampMode` 保守记为 `none`、`verification` 记为 `credential-only`。
+   `laneQuotas.renderShotConcurrency` 做两层校验：schema 静态 max 128 + route 运行时 `os.cpus().length` 上限；任一失败回 400 且不落任何 secret / route / 配额写入。提交 `directorStageConcurrency` 属于未知字段并回 400。
+2. 状态码语义固定：400 参数非法、404 资源不存在或不属于当前作用域、409 状态冲突（队列已存在、前置未就绪、旧 workflow 暂不支持执行）、422 外部凭据校验失败或跳过请求被业务规则拒绝（节点类型不可跳过 / 节点当前状态不允许跳过）。项目设置、Director、单镜渲染、缩略图与成片导出的写/执行入口必须在任何数据库、Artifact 或队列变更前拒绝旧 workflow。
+   `/api/director/stage` 的跳过合同（`intent=skip`）：仅 `shot-codegen`、`shot-sfx`、`shot-subtitle`、`shot-qa` 四类节点可跳过，且节点当前状态必须是 `failed`、`stale` 或 `cancelled`；其余节点类型或状态返回 422 且不落任何写入。`skipReason` 必填（1-200 字）。成功路径的副作用按序为：登记 `node-skip-marker` JSON 产物（真实字节落盘 + 字节 SHA-256，记录 projectId/nodeId/nodeType/skipKind/reason/skippedAt）→ 节点状态转入一等状态 `skipped`（节点 data 写入 `skipMeta={reason, at, kind}` 并清理旧的阶段错误字段）→ 推进下游（`skipped` 与 `succeeded` 同样满足下游前置）。媒体节点使用 `skipKind=output-degradation`，在成片导出中走既有降级链占位（黑场视频 / 静音旁白 / 字幕缺省为空）；验收节点使用 `skipKind=qa-waiver`，表示用户接受「未验收」风险，绝不映射成 QA 通过。两类跳过均由 `final-mp4-degraded-manifest` 如实记录；`skipped` 节点可随时通过 `intent=execute` 重新执行恢复（状态回 `pending` 并清除 `skipMeta`）。
+   `/api/render/export` 的降级导出合同：GET 响应额外含 `placeholderCandidateLanes: string[]`（当前缺渲染产物、可用占位片段出片的 lane）、`waivedQaLanes: string[]`（当前被人工豁免、未经验收的 lane）、`degradedReady: boolean`（全部阻塞项都可被占位或 QA 豁免覆盖）、`confirmationFingerprint: string | null`（对当前导出输入、占位与豁免范围的规范化摘要）与 `degradedExport: {placeholderLanes: string[], waivedQaLanes: string[]} | null`（最近一次 final-mp4 若为降级产物，列出占位和未验收镜头）。POST body `degraded: true` 是用户显式确认的降级导出，必须回传同一次 GET 的 `confirmationFingerprint`；服务端重新计算后不一致返回 409 且不入队。项目已完整就绪时忽略降级标志走正常导出；单 lane 的渲染/旁白/字幕缺失可被占位覆盖（黑场视频 / 静音旁白 / 跳过字幕），QA 豁免允许未验收镜头进入降级交付，但项目级完整性问题（`laneKey=null` 的 blockingIssue，如 INGEST 音频合同缺失/无效、帧总数不一致）不可占位，`degradedReady=false` 仍返回 409 且不入队。占位片段是真实 ffmpeg 生成的黑场 MP4（时长取 shot-plan 真值、字节 SHA-256 入 artifacts，kind `placeholder-mp4`），成片的降级清单登记为 `final-mp4-degraded-manifest` 产物并绑定 final MP4 的实际哈希、导出输入指纹与 `deliveryMode=degraded`；UI 必须分别显示「N 镜占位」与「M 镜未验收」，不得宣称完全成功。
+   导出终结只有一个应用层入口：自动推进、节点恢复/重新执行、用户确认降级导出都必须调用 `requestExportFinalization`，不得直接对 `global:export` 排队 Director `FINALIZE`。完整就绪时先合成 `final-mp4`，可降级但未确认时把节点置为一等状态 `blocked` 并写入安全的 `workflowBlock`，不创建 Director attempt、不自动重试；用户确认并成功合成后，系统按最终视频哈希幂等排队一次 `FINALIZE`。`FINALIZE` 成功表示最终审阅完成，不得把含占位镜头或 QA 豁免的项目宣称为完整质量通过，项目与导出页必须显示「已完成 · 降级交付」。
 3. 凭据类 POST 必须先验证后保存；验证失败返回 422 且不覆盖已有值。
 4. 除 `/api/ping` 外全部 `export const dynamic = 'force-dynamic'`。
+5. `/api/billing` 只返回方案、周期、额度比例和脱敏 usage 汇总，不返回 `limit_cny_micros`、`used_cny_micros`、供应商单价、汇率或平台 Key。`/api/billing/redemptions` 仅 workspace owner 可用；无效、过期、撤销或已消费代码统一返回不可用语义。
+6. 平台托管额度耗尽统一返回 402 `{code:'quota_exhausted',resetAt,billingUrl:'/products/billing'}`；Free 不能通过直接 API、历史路由或 fallback 使用 Gemini 托管服务，越权返回 403 且不得产生外部调用或账本写入。Free 使用已验证的 workspace Gemini BYOK 不受会员门禁且不写平台成本账本。
+7. `/api/ai-usage` 返回 `AiUsageProjectionV1`。`view=managed-cycle` 只查询当前 workspace、当前会员周期和 `funding=managed`；`view=account` 只查询当前 `actor_user_id`，跨其 workspace 汇总 `managed | byok | custom`。调用数只计 `provider_started_at is not null`；成功率排除 running；Token 只计 `usage_status=reported`；P95 只使用 `provider_duration_ms`。响应禁止包含人民币成本、额度金额、单价、汇率、Prompt、消息正文、凭据、输入输出哈希、内部调用 ID、原始错误或隐藏推理。
+8. `/api/ai-usage` 的 `range=cycle` 只允许 `managed-cycle`；`account` 只允许 `7d | 30d`。`timeZone` 必须是合法 IANA 时区。营销页 `/api/engine/render` worker 不属于 Products 账号调用账本，也不进入该投影。
 
 ### 4.2 引擎代理
 
@@ -233,7 +258,7 @@
 | `AppSection` | URL 段 | 中文标签 | Pencil 屏 |
 | --- | --- | --- | --- |
 | `workbench` | `dashboard` | 工作台 | S1 / S2 |
-| `projects` | `projects` | 项目 | — |
+| `projects` | `projects` | 项目 | Projects Light / Dark 三栏屏 |
 | `canvas` | `canvas` | 画布 | S3 |
 | `renderer` | `shots` | 镜头 | S4 |
 | `export` | `export` | 导出 | S5 |
@@ -252,7 +277,11 @@
 | S5 | `/export/[projectId]` | `/products/export/[projectId]` |
 | S6 | `/settings` | `/products/settings?projectId=` |
 
+S3 画布 DAG 节点 UI 唯一消费 `@/components/ui/pipeline-node`（Canonical `Qsovp`，状态枚举为领域 `NodeStatus`，含 `selected` 实例态）；禁止在 page 内联平行节点壳。`StageNode` / `ShotNode` / `AudioNode` / `ExportNode` 仅作 `/playbook` 标本，不挂载生产 React Flow。
+
 S2 是 S1 的模态状态，**不允许**为它开一条路由。任何「新建 / 编辑 / 确认」类模态默认不进 URL；只有需要分享或刷新保持的模态才允许升级为路由，并须在本文件登记。
+
+S2 在同一模态内提供三来源选择：文稿视频（`script`）、录音转视频（`audio`）和网站介绍视频（`website`）。三类来源共用标题、视觉主题与 `/api/projects` → `/api/projects/[id]/start` 创建合同；选中来源后只展开对应 `CollapsibleCard`。录音仅接受 MP3/WAV（最大 100 MB），网站仅接受公开 HTTP(S) URL。客户端不得提交 workflow version、入口节点或目标 worker。三类项目的版本、Artifact、计费与容灾边界以 `docs/conventions/project-workflows.md` 为唯一真值。
 
 ## 8. `/artifacts` 与 `/share`
 
@@ -321,36 +350,50 @@ Project（可变，L3 内部）
 
 ## 9. 守卫、认证与错误语义
 
-### 9.1 当前实现缺口
+### 9.1 当前实现（分层）
 
-必须先记清事实：**目前仓库没有任何认证。** `src/` 下既无 `proxy.ts` 也无 `middleware.ts`，全部页面与全部 `/api/*` 都不读 cookie/session，workspace 固定为 `LOCAL_WORKSPACE_ID`。因此：
+应用内认证已落地（PLAN-002 阶段 A + 阶段 B），守卫分三层，各层职责不同，不可互相替代：
 
-- `/products/*` 与全部 `/api/*` 在当前状态下是**未授权可访问**的。
-- 所有 API 的作用域只有「调用方自己传的 `projectId`」，没有归属校验。
-- 本节的守卫是目标状态，不是已实现状态。在认证落地前，本应用只能跑在本地或受信网络内，不得直接暴露公网。
+| 层 | 位置 | 职责 | 刻意不做的事 |
+| --- | --- | --- | --- |
+| 入站 proxy | `src/proxy.ts` | 只拦 `/products/*`：无形状合法的会话 cookie → 302 `/login?next=` | **不查库**。只做 cookie 存在性与形状（43 位 base64url）判断；proxy 跑在每个请求上，连库会成为全站延迟与连接数压力。**不拦认证页**：按 cookie 形状把 `/login` 弹回 dashboard 会与页面级 302 `/login` 对残留失效 cookie 形成无限重定向循环（已踩过） |
+| 页面会话 | `withPageSession`（`src/features/auth/page-session.ts`），6 个 `/products/*` page 逐个包 | 查库校验会话（登出/过期/改密踢下线），建立 workspace 归属上下文后执行渲染体 | 不包在 layout 里：RSC 的 children 独立渲染，layout 的 AsyncLocalStorage 不传播到子页面 |
+| API 会话 | `withApiSession`（`src/features/auth/api-session.ts`），13 条业务 API 入口包裹 | 未登录统一 401 同一句文案；已登录则在归属上下文内执行 handler | 不靠 proxy 兜底（API 要 401/404 语义不是 302）；SSE 路由的流回调在 handler 内闭包捕获上下文 |
 
-### 9.2 目标守卫矩阵
+业务查询的 workspace 一律取自 `currentWorkspaceId()`（会话/队列上下文，无上下文即抛错不回落）；队列作业在领到的 attempt 行自身的 workspace 上下文内执行。`LOCAL_WORKSPACE_ID` 已降级为迁移/bootstrap/进程级配置锚点，由 `tests/workspace-context-contract.test.ts` 锁住。公开保留面：`/api/ping`（健康检查）、`/api/auth/*`、营销页与 `/playbook`。
 
-| 情况 | 响应 |
-| --- | --- |
-| 未登录访问 `/products/*` | 302 → `/login`，带回跳目标 |
-| 已登录访问 `/login`、`/signup` | 302 → `/products/dashboard` |
-| `projectId` 不存在或不属于当前 workspace | 404 |
-| `shotId` 不属于该 `projectId`，或节点类型不是 `shot-codegen` | 404 |
-| `shareId` 不存在、已撤销、已被新版本取代 | 404 |
-| `caseSlug` 不存在 | 404 |
-| 上下文缺失但路由本身合法 | 不进入页面；侧栏项禁用并给出原因 |
-| 非生产环境外访问 `/playbook/*` | 404 |
+**入站边界仍未收敛**（ISSUE-015 P-2，`docs/deployment/access.md`）：反代（Caddy）的 IP 过滤 + Basic Auth 保留为纵深防御；应用内认证落地后，P-2 边界形态可降级为纯网络层（只改反代配置，不动 `src/**`），但在 PLAN-001 完成前不得声称已收敛。
+
+### 9.2 守卫矩阵（逐行核销）
+
+| 情况 | 响应 | 状态 |
+| --- | --- | --- |
+| 未登录访问 `/products/*` | 302 → `/login?next=`（proxy 形状拦截 + 页面查库兼校） | 已实现 |
+| 已登录访问 `/login`、`/signup` | 302 → `/products/dashboard`（仅页面级 `redirectIfAuthenticated` 查库判定；proxy 不拦认证页，避免残留失效 cookie 的重定向循环） | 已实现 |
+| 未登录调业务 `/api/*` | 401 + 类别文案，不带用户信息、不回显 projectId | 已实现 |
+| `projectId` 不存在或不属于当前 workspace | 404（查询按会话 workspace 过滤，命中 0 即不存在） | 已实现 |
+| `shotId` 不属于该 `projectId`，或节点类型不是 `shot-codegen` | 404 | 已实现 |
+| `shareId` 不存在、已撤销、已被新版本取代 | 404 | 已实现（与认证无关） |
+| `caseSlug` 不存在 | 404 | 已实现（与认证无关） |
+| 上下文缺失但路由本身合法 | 不进入页面；侧栏项禁用并给出原因 | 已实现 |
+| 非生产环境外访问 `/playbook/*` | 404 | 已实现（与认证无关） |
+| 营销页 AI 演示（LaunchComposer） | 未登录先弹登录引导并中止；登录后创建 `website` 项目、统一启动并进入画布，不直接访问 worker | 已实现 |
 
 一律用 404 掩盖归属错误，不区分「不存在」与「无权限」，避免泄露其他 workspace 中对象是否存在。前端不得为了让页面渲染成功而隐式创建缺失数据。
 
-### 9.3 认证落地的最小要求
+### 9.3 覆盖边界（如实记录，不虚报）
 
-认证接入时必须一次覆盖三处，不允许只做页面跳转：
+已覆盖：
 
-1. `proxy.ts`（Next 16 取代 `middleware.ts`）或等价 layout 守卫：拦 `/products/*`。
-2. 每个 `/api/*` handler：从 session 解析 `workspaceId`，替换 `LOCAL_WORKSPACE_ID`，且 `projectId` 必须与该 workspace 联合校验。
-3. worker：`/api/engine/*` 之后的调用需要服务间凭据，worker 不再对任意来源开放。
+1. `proxy.ts` 拦 `/products/*`（形状判断）+ 6 个 page 的查库级会话校验。
+2. 13 条业务 API handler 从 session 解析 `workspaceId`，业务查询按该 workspace 联合过滤；队列作业按 attempt 行归属执行；跨账户产物请求已有 pg 测试锁 404 语义。
+3. 取证脚本（`e2e-smoke.ts`）经 `CVC_VERIFY_ACCOUNT` 真实登录后携会话 cookie。
+
+未覆盖（不得声称已做）：
+
+1. **worker 服务间凭据**：`/api/engine/*` 之后的 worker 调用仍无服务间认证，worker 暴露面靠部署层（反代 + 内网）兜底；营销页演示的登录门只在 Next 客户端。
+2. **多实例限流**：`auth_throttle` 固定窗口按实例各算，多实例下变宽松（ISSUE-015 P-9 一并处理或明确接受）。
+3. **角色与协作**：首版每人一个 workspace（owner），`workspace_members.role` 的 `member` 为将来预留，未签发未消费。
 
 ## 10. `/release` 占位
 

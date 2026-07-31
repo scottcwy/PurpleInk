@@ -1,22 +1,23 @@
 import 'server-only'
-import { LOCAL_WORKSPACE_ID } from '@/lib/db/client'
-import { getAiConfigDependencies, getStepfunConfig } from './config'
+import { getStepfunConfig } from './config'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getAiConfigDependencies } from './config'
 
-/** 读取加密保存的 StepFun Key（仅服务端；不回退 env）。 */
+/** 兼容旧调用名：读取当前 workspace 的 BYOK 凭据。 */
 export async function getStoredApiKey(): Promise<string | null> {
   return getAiConfigDependencies().credentials.loadSecret(
-    LOCAL_WORKSPACE_ID,
+    currentWorkspaceId(),
     'stepfun',
   )
 }
 
-/** 保存 StepFun Key（仅服务端；永不进前端 bundle）。 */
+/** 保存当前 workspace 的 BYOK 凭据；平台托管 Key 不经过此路径。 */
 export async function saveApiKey(
   apiKey: string,
   verifiedAt = new Date(),
 ): Promise<void> {
   await getAiConfigDependencies().credentials.save({
-    workspaceId: LOCAL_WORKSPACE_ID,
+    workspaceId: currentWorkspaceId(),
     provider: 'stepfun',
     secret: apiKey,
     verifiedAt,

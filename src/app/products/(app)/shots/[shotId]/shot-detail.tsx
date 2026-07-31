@@ -13,6 +13,7 @@ import {
 import { ShotContract, ShotCode } from './shot-detail-panels'
 import { ShotPanelChrome, useShotPanelState } from './shot-panels'
 import { ShotPlayer } from './shot-player'
+import { ShotRevisionDialog } from './shot-revision-dialog'
 import { useShotRuntime } from './use-shot-runtime'
 
 export function ShotDetail({
@@ -74,8 +75,14 @@ export function ShotDetail({
           <>
             <ShotLink label="上一镜" nodeId={previousNodeId} projectId={projectId} />
             <ShotLink label="下一镜" nodeId={nextNodeId} projectId={projectId} />
+            {runtime.canRevise && (
+              <ShotRevisionDialog
+                disabled={runtime.rendering}
+                onConfirm={runtime.revise}
+              />
+            )}
             <Button
-              variant="tinted"
+              variant="destructive"
               size="sm"
               icon={RefreshCw}
               onClick={runtime.render}
@@ -85,7 +92,9 @@ export function ShotDetail({
             </Button>
             {runtime.outputUrl && (
               <a href={runtime.outputUrl} download>
-                <Button size="sm" icon={Download}>导出 MP4</Button>
+                <Button size="sm" icon={Download}>
+                  导出 MP4
+                </Button>
               </a>
             )}
           </>

@@ -23,6 +23,14 @@ import {
 import { DirectorRuntimeRepository } from './runtime-repository'
 import type { ArtifactCommitResult } from './tools/write-artifact'
 
+// 被测模块经 currentWorkspaceId() 取归属（PLAN-002 阶段 B）；单测没有请求入口，
+// 把读取口 mock 成历史单工作区 id，与用例 seed 的数据保持一致。
+vi.mock('@/lib/auth/workspace-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/workspace-context')>()),
+  currentWorkspaceId: () => '00000000-0000-4000-8000-000000000001',
+  currentUserId: () => 'test-user',
+}))
+
 vi.mock('server-only', () => ({}))
 
 const PROJECT_ID = '11000000-0000-4000-8000-000000000001'
@@ -32,8 +40,10 @@ const SPLIT_ID = '13000000-0000-4000-8000-000000000002'
 const SCORE_ID = '13000000-0000-4000-8000-000000000003'
 const SHOT_SCRIPT_ID = '13000000-0000-4000-8000-000000000004'
 const CODEGEN_ID = '13000000-0000-4000-8000-000000000005'
+const SUBTITLE_ID = '13000000-0000-4000-8000-000000000006'
 const ATTEMPTS = new Map<string, string>()
 const HASH = 'a'.repeat(64)
+const OTHER_HASH = 'b'.repeat(64)
 
 function createStorage(files: Map<string, Buffer>): StorageAdapter {
   return {
@@ -130,13 +140,49 @@ describe('DirectorRuntimeRepository Postgres', () => {
       )
   })
 
-  it('commits stream bytes with real hash/size and skips empty text', async () => {
-    await repository.persistStreamLog(
+  it('binds SHOT_SPEC context to the lane audio allocation and source unit', async () => {
+    await db
+      .update(canvasNodes)
+      .set({ status: 'queued' })
+      .where(
+        and(
+          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.id, SHOT_SCRIPT_ID)
+        )
+      )
+
+    const context = await repository.loadStageContext(
       PROJECT_ID,
-      INGEST_ID,
-      'INGEST',
-      '流式全文'
+      SHOT_SCRIPT_ID,
+      'SHOT_SPEC'
     )
+
+    expect(context.directorInput).toMatchObject({
+      target: {
+        laneKey: 'S001',
+        sourceUnitId: 'U001',
+        sourceUnit: { unitId: 'U001', text: '第一句。' },
+      },
+    })
+
+    await db
+      .update(canvasNodes)
+      .set({ status: 'succeeded' })
+      .where(
+        and(
+          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.id, SHOT_SCRIPT_ID)
+        )
+      )
+  })
+
+  it('commits stream bytes with real hash/size and skips empty text', async () => {
+    await repository.persistStreamLog({
+      projectId: PROJECT_ID,
+      nodeId: INGEST_ID,
+      stage: 'INGEST',
+      text: '流式全文',
+    })
     const [row] = await db
       .select()
       .from(artifacts)
@@ -153,8 +199,144 @@ describe('DirectorRuntimeRepository Postgres', () => {
       contentHash: createHash('sha256').update('流式全文').digest('hex'),
     })
 
-    await repository.persistStreamLog(PROJECT_ID, INGEST_ID, 'INGEST', '')
+    await repository.persistStreamLog({
+      projectId: PROJECT_ID,
+      nodeId: INGEST_ID,
+      stage: 'INGEST',
+      text: '',
+    })
     expect(vi.mocked(storage.put)).toHaveBeenCalledTimes(1)
+  })
+
+  it('removes staged stream bytes and commits no row when abort lands inside storage.put', async () => {
+    const attemptId = ATTEMPTS.get(INGEST_ID)!
+    const before = await db
+      .select({ id: artifacts.id })
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.aggregateId, INGEST_ID),
+          eq(artifacts.kind, 'director-stream-log'),
+        ),
+      )
+    let announcePut: () => void = () => undefined
+    let releasePut: () => void = () => undefined
+    const putStarted = new Promise<void>((resolve) => {
+      announcePut = resolve
+    })
+    const putGate = new Promise<void>((resolve) => {
+      releasePut = resolve
+    })
+    storage.put = vi.fn(async (
+      key: string,
+      data: string | Buffer | Uint8Array,
+    ) => {
+      announcePut()
+      await putGate
+      files.set(key, Buffer.from(data))
+      return key
+    })
+    repository = new DirectorRuntimeRepository(db, storage)
+    const controller = new AbortController()
+    const timeout = Object.assign(new Error('阶段执行超时'), {
+      name: 'ExecutionTimeoutError',
+    })
+    const pending = repository.persistStreamLog({
+      projectId: PROJECT_ID,
+      nodeId: INGEST_ID,
+      stage: 'INGEST',
+      text: '不得迟到落库',
+      attemptId,
+      signal: controller.signal,
+    })
+    await putStarted
+    controller.abort(timeout)
+    releasePut()
+
+    await expect(pending).rejects.toBe(timeout)
+    const after = await db
+      .select({ id: artifacts.id })
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.aggregateId, INGEST_ID),
+          eq(artifacts.kind, 'director-stream-log'),
+        ),
+      )
+    expect(after).toHaveLength(before.length)
+    expect([...files.keys()]).not.toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(
+          new RegExp(
+            `^director-stream/${PROJECT_ID}/${INGEST_ID}/${attemptId}/ingest-`,
+          ),
+        ),
+      ]),
+    )
+  })
+
+  it('rolls back a stream artifact when abort lands inside its database lock wait', async () => {
+    const attemptId = ATTEMPTS.get(INGEST_ID)!
+    const text = '数据库锁内不得迟到落库'
+    const contentHash = createHash('sha256').update(text).digest('hex')
+    const storageKey =
+      `director-stream/${PROJECT_ID}/${INGEST_ID}/${attemptId}/ingest-${contentHash}.log`
+    const before = await db
+      .select({ id: artifacts.id })
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.aggregateId, INGEST_ID),
+          eq(artifacts.kind, 'director-stream-log'),
+        ),
+      )
+    let announceNodeLock: () => void = () => undefined
+    let releaseNodeLock: () => void = () => undefined
+    const nodeLocked = new Promise<void>((resolve) => {
+      announceNodeLock = resolve
+    })
+    const holdNodeLock = new Promise<void>((resolve) => {
+      releaseNodeLock = resolve
+    })
+    const lock = db.transaction(async (transaction) => {
+      await transaction
+        .select({ id: canvasNodes.id })
+        .from(canvasNodes)
+        .where(eq(canvasNodes.id, INGEST_ID))
+        .for('update')
+      announceNodeLock()
+      await holdNodeLock
+    })
+    await nodeLocked
+    const controller = new AbortController()
+    const timeout = Object.assign(new Error('阶段执行超时'), {
+      name: 'ExecutionTimeoutError',
+    })
+    const pending = repository.persistStreamLog({
+      projectId: PROJECT_ID,
+      nodeId: INGEST_ID,
+      stage: 'INGEST',
+      text,
+      attemptId,
+      signal: controller.signal,
+    })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    controller.abort(timeout)
+    releaseNodeLock()
+    await lock
+
+    await expect(pending).rejects.toBe(timeout)
+    const after = await db
+      .select({ id: artifacts.id })
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.aggregateId, INGEST_ID),
+          eq(artifacts.kind, 'director-stream-log'),
+        ),
+      )
+    expect(after).toHaveLength(before.length)
+    expect(files.has(storageKey)).toBe(false)
   })
 
   it('commits an actual pointer and rejects unsafe storage keys', async () => {
@@ -209,6 +391,7 @@ describe('DirectorRuntimeRepository Postgres', () => {
     ).payload
     expect(payload).toMatchObject({
       directorArtifactId: staged.id,
+      outputContentHash: staged.contentHash,
       renderSpec: { seed: 42 },
     })
     await expect(
@@ -224,6 +407,111 @@ describe('DirectorRuntimeRepository Postgres', () => {
     ).resolves.toHaveLength(1)
   })
 
+  it('rejects a late artifact from an old attempt after a newer attempt exists', async () => {
+    const nodeId = randomUUID()
+    const oldAttemptId = randomUUID()
+    const newAttemptId = randomUUID()
+    await db.insert(canvasNodes).values({
+      workspaceId: LOCAL_WORKSPACE_ID,
+      id: nodeId,
+      projectId: PROJECT_ID,
+      logicalKey: `late:${nodeId}`,
+      type: 'export',
+      stage: 'FINALIZE',
+      status: 'running',
+      data: { schemaVersion: 1, payload: {} },
+    })
+    await db.insert(taskAttempts).values([
+      {
+        workspaceId: LOCAL_WORKSPACE_ID,
+        id: oldAttemptId,
+        runId: RUN_ID,
+        taskId: 'legacy.director-stage',
+        entityType: 'node',
+        entityId: nodeId,
+        attemptNo: 1,
+        status: 'failed',
+        fingerprint: HASH,
+        checkpoint: { schemaVersion: 1 },
+        completedAt: new Date(),
+      },
+      {
+        workspaceId: LOCAL_WORKSPACE_ID,
+        id: newAttemptId,
+        runId: RUN_ID,
+        taskId: 'legacy.director-stage',
+        entityType: 'node',
+        entityId: nodeId,
+        attemptNo: 2,
+        status: 'running',
+        fingerprint: HASH,
+        checkpoint: { schemaVersion: 1 },
+      },
+    ])
+    const staged = {
+      ...stagedArtifact(nodeId, 'director-ingest'),
+      attemptId: oldAttemptId,
+    }
+    files.set(staged.storageKey, Buffer.from('迟到产物'))
+
+    await expect(
+      repository.recordStageOutput(
+        nodeId,
+        { content: '迟到产物' },
+        staged,
+      ),
+    ).rejects.toThrow('STALE_ATTEMPT')
+
+    await expect(
+      db
+        .select()
+        .from(artifacts)
+        .where(eq(artifacts.id, staged.id)),
+    ).resolves.toHaveLength(0)
+    const [nodeRow] = await db
+      .select({ data: canvasNodes.data })
+      .from(canvasNodes)
+      .where(eq(canvasNodes.id, nodeId))
+    expect(nodeRow?.data).toEqual({ schemaVersion: 1, payload: {} })
+    await db.delete(taskAttempts).where(eq(taskAttempts.entityId, nodeId))
+    await db.delete(canvasNodes).where(eq(canvasNodes.id, nodeId))
+  })
+
+  it('rolls back artifact and node projection when timeout aborts during commit', async () => {
+    const staged = stagedArtifact(SPLIT_ID, 'director-timeout-probe')
+    files.set(staged.storageKey, Buffer.from('超时产物'))
+    const [before] = await db
+      .select({ data: canvasNodes.data })
+      .from(canvasNodes)
+      .where(eq(canvasNodes.id, SPLIT_ID))
+    const controller = new AbortController()
+    const timeout = Object.assign(new Error('阶段执行超时'), {
+      name: 'ExecutionTimeoutError',
+    })
+    controller.abort(timeout)
+
+    await expect(
+      repository.recordStageOutput(
+        SPLIT_ID,
+        { content: '超时产物' },
+        staged,
+        controller.signal,
+      ),
+    ).rejects.toBe(timeout)
+
+    await expect(
+      db
+        .select()
+        .from(artifacts)
+        .where(eq(artifacts.id, staged.id)),
+    ).resolves.toHaveLength(0)
+    const [after] = await db
+      .select({ data: canvasNodes.data })
+      .from(canvasNodes)
+      .where(eq(canvasNodes.id, SPLIT_ID))
+    expect(after?.data).toEqual(before?.data)
+  })
+
   it('assembles score input from versioned lane payload and artifact rows', async () => {
     const context = await repository.loadStageContext(
       PROJECT_ID,
@@ -233,11 +521,121 @@ describe('DirectorRuntimeRepository Postgres', () => {
     const input = context.directorInput as {
       shotPlan: { shots: Array<{ id: string }> }
       renderedArtifactKeys: string[]
+      skippedRenderLanes: string[]
     }
     expect(input.shotPlan.shots.map(({ id }) => id)).toEqual(['S001'])
     expect(input.renderedArtifactKeys).toEqual(['render/S001.mp4'])
+    expect(input.skippedRenderLanes).toEqual([])
+  })
+
+  it('assembles score input with explicit skipped render lanes but rejects no evidence', async () => {
+    await db
+      .update(canvasNodes)
+      .set({ status: 'skipped' })
+      .where(eq(canvasNodes.id, CODEGEN_ID))
+    await db
+      .delete(artifacts)
+      .where(
+        and(
+          eq(artifacts.aggregateId, CODEGEN_ID),
+          eq(artifacts.kind, 'render-mp4')
+        )
+      )
+
+    const context = await repository.loadStageContext(
+      PROJECT_ID,
+      SCORE_ID,
+      'ASSEMBLE'
+    )
+    expect(context.directorInput).toMatchObject({
+      renderedArtifactKeys: [],
+      skippedRenderLanes: ['S001'],
+    })
+
+    await db
+      .update(canvasNodes)
+      .set({ status: 'failed' })
+      .where(eq(canvasNodes.id, CODEGEN_ID))
+    await expect(
+      repository.loadStageContext(PROJECT_ID, SCORE_ID, 'ASSEMBLE')
+    ).rejects.toThrow('找不到 render-mp4 产物：S001')
+  })
+
+  it('resumes a committed subtitle effect even when the attempt carries no provider scope key', async () => {
+    // 429 路径（scheduleProviderRateLimitWait）新建 attempt，checkpoint 里没有
+    // providerScopeKey。只要 Director 文本产物已由本 run 提交且哈希一致，就必须
+    // 判定为续跑副作用，而不是回去重跑一次文本模型。
+    const artifactId = await seedArtifact(
+      db,
+      SUBTITLE_ID,
+      'director-assemble',
+      'input/subtitle.json'
+    )
+    await setSubtitleProjection(db, artifactId, HASH)
+
+    await expect(
+      repository.shouldResumeCommittedEffect(
+        ATTEMPTS.get(SUBTITLE_ID)!,
+        SUBTITLE_ID
+      )
+    ).resolves.toBe(true)
+  })
+
+  it('refuses to resume when the node projection disagrees with the committed artifact', async () => {
+    const [committed] = await db
+      .select({ id: artifacts.id })
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.aggregateId, SUBTITLE_ID),
+          eq(artifacts.kind, 'director-assemble')
+        )
+      )
+      .limit(1)
+    await setSubtitleProjection(db, committed!.id, OTHER_HASH)
+
+    await expect(
+      repository.shouldResumeCommittedEffect(
+        ATTEMPTS.get(SUBTITLE_ID)!,
+        SUBTITLE_ID
+      )
+    ).resolves.toBe(false)
+
+    await setSubtitleProjection(db, undefined, HASH)
+    await expect(
+      repository.shouldResumeCommittedEffect(
+        ATTEMPTS.get(SUBTITLE_ID)!,
+        SUBTITLE_ID
+      )
+    ).resolves.toBe(false)
   })
 })
+
+/** 把字幕节点投影改成指向某个已提交产物与内容哈希；artifactId 省略表示尚未提交。 */
+async function setSubtitleProjection(
+  db: Db,
+  artifactId: string | undefined,
+  outputContentHash: string
+): Promise<void> {
+  await db
+    .update(canvasNodes)
+    .set({
+      data: {
+        schemaVersion: 1,
+        payload: {
+          laneKey: 'S001',
+          outputContentHash,
+          ...(artifactId ? { directorArtifactId: artifactId } : {}),
+        },
+      },
+    })
+    .where(
+      and(
+        eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(canvasNodes.id, SUBTITLE_ID)
+      )
+    )
+}
 
 async function seedGraph(db: Db): Promise<void> {
   await db.insert(workspaces).values({
@@ -263,6 +661,9 @@ async function seedGraph(db: Db): Promise<void> {
       laneKey: 'S001',
     }),
     node(CODEGEN_ID, 'shot-codegen', 'FABRICATE', 'succeeded', {
+      laneKey: 'S001',
+    }),
+    node(SUBTITLE_ID, 'shot-subtitle', 'ASSEMBLE', 'queued', {
       laneKey: 'S001',
     }),
   ]
@@ -304,9 +705,15 @@ async function seedGraph(db: Db): Promise<void> {
 
 function node(
   id: string,
-  type: 'script-import' | 'shot-split' | 'score' | 'shot-script' | 'shot-codegen',
+  type:
+    | 'script-import'
+    | 'shot-split'
+    | 'score'
+    | 'shot-script'
+    | 'shot-codegen'
+    | 'shot-subtitle',
   stage: 'INGEST' | 'DIRECT' | 'ASSEMBLE' | 'SHOT_SPEC' | 'FABRICATE',
-  status: 'queued' | 'succeeded',
+  status: 'queued' | 'succeeded' | 'failed' | 'skipped',
   payload: Record<string, unknown> = {}
 ) {
   return {
@@ -328,10 +735,11 @@ async function seedArtifact(
   nodeId: string,
   kind: string,
   storageKey: string
-): Promise<void> {
+): Promise<string> {
+  const id = randomUUID()
   await db.insert(artifacts).values({
     workspaceId: LOCAL_WORKSPACE_ID,
-    id: randomUUID(),
+    id,
     projectId: PROJECT_ID,
     aggregateType: 'node',
     aggregateId: nodeId,
@@ -344,6 +752,7 @@ async function seedArtifact(
     contentHash: HASH,
     attemptId: ATTEMPTS.get(nodeId)!,
   })
+  return id
 }
 
 const SCRIPT_UNITS = [{ unitId: 'U001', text: '第一句。' }]

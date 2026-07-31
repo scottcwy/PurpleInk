@@ -5,7 +5,8 @@ import {
   commitArtifactRecord,
   resolveCurrentAttemptId,
 } from '@/features/artifacts'
-import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { type Db } from '@/lib/db/client'
 import { canvasNodes } from '@/lib/db/schema/index'
 import type { StorageAdapter } from '@/lib/storage'
 import { patchNodePayload } from './runtime-node-data'
@@ -26,6 +27,8 @@ export interface ArtifactPointerInput {
   kind: string
   storageKey: string
   contentHash?: string
+  attemptId?: string
+  signal?: AbortSignal
 }
 
 export class DirectorArtifactWriter {
@@ -35,17 +38,22 @@ export class DirectorArtifactWriter {
   ) {}
 
   async registerPointer(input: ArtifactPointerInput): Promise<string> {
+    input.signal?.throwIfAborted()
     const storageKey = directorStorageKeySchema.parse(input.storageKey)
     const bytes = await this.storage.get(storageKey)
+    input.signal?.throwIfAborted()
     const contentHash = createHash('sha256').update(bytes).digest('hex')
     if (input.contentHash && input.contentHash !== contentHash) {
       throw new Error('artifact pointer content hash 不匹配')
     }
-    const attemptId = await this.resolveNodeAttempt(input.projectId, input.nodeId)
+    const attemptId = input.attemptId
+      ?? await this.resolveNodeAttempt(input.projectId, input.nodeId)
+    input.signal?.throwIfAborted()
     const id = randomUUID()
-    try {
-      await commitArtifactRecord(this.db, {
-        workspaceId: LOCAL_WORKSPACE_ID,
+    await commitArtifactRecord(
+      this.db,
+      {
+        workspaceId: currentWorkspaceId(),
         projectId: input.projectId,
         aggregateType: 'node',
         aggregateId: input.nodeId,
@@ -56,38 +64,53 @@ export class DirectorArtifactWriter {
         contentHash,
         attemptId,
         id,
-      })
-      return id
-    } catch (error) {
-      return compensateStorage(this.storage, storageKey, error)
-    }
+      },
+      undefined,
+      { signal: input.signal },
+    )
+    return id
   }
 
-  async persistStreamLog(
+  async persistStreamLog(input: {
     projectId: string,
     nodeId: string,
     stage: PipelineStage,
-    text: string
+    text: string,
+    attemptId?: string,
+    signal?: AbortSignal,
+  }
   ): Promise<void> {
-    if (!text) return
-    const attemptId = await this.resolveNodeAttempt(projectId, nodeId)
-    const slug = stage.toLowerCase().replaceAll('_', '-')
-    const storageKey = `director-stream/${projectId}/${nodeId}/${slug}.log`
+    if (!input.text) return
+    input.signal?.throwIfAborted()
+    const attemptId = input.attemptId
+      ?? await this.resolveNodeAttempt(input.projectId, input.nodeId)
+    input.signal?.throwIfAborted()
+    const slug = input.stage.toLowerCase().replaceAll('_', '-')
+    const contentHash = createHash('sha256').update(input.text).digest('hex')
+    const storageKey =
+      `director-stream/${input.projectId}/${input.nodeId}/${attemptId}/${slug}-${contentHash}.log`
     const existed = await this.storage.exists(storageKey)
-    await this.storage.put(storageKey, text)
+    input.signal?.throwIfAborted()
     try {
-      await commitArtifactRecord(this.db, {
-        workspaceId: LOCAL_WORKSPACE_ID,
-        projectId,
-        aggregateType: 'node',
-        aggregateId: nodeId,
-        kind: 'director-stream-log',
-        schemaVersion: 'cvc.director-stream-log/v1',
-        storageKey,
-        sizeBytes: Buffer.byteLength(text),
-        contentHash: createHash('sha256').update(text).digest('hex'),
-        attemptId,
-      })
+      if (!existed) await this.storage.put(storageKey, input.text)
+      input.signal?.throwIfAborted()
+      await commitArtifactRecord(
+        this.db,
+        {
+          workspaceId: currentWorkspaceId(),
+          projectId: input.projectId,
+          aggregateType: 'node',
+          aggregateId: input.nodeId,
+          kind: 'director-stream-log',
+          schemaVersion: 'cvc.director-stream-log/v1',
+          storageKey,
+          sizeBytes: Buffer.byteLength(input.text),
+          contentHash,
+          attemptId,
+        },
+        undefined,
+        { signal: input.signal },
+      )
     } catch (error) {
       if (!existed) return compensateStorage(this.storage, storageKey, error)
       throw error
@@ -97,7 +120,8 @@ export class DirectorArtifactWriter {
   async recordStageOutput(
     nodeId: string,
     result: PreparedStageResult,
-    artifact: ArtifactCommitResult
+    artifact: ArtifactCommitResult,
+    signal?: AbortSignal,
   ): Promise<void> {
     assertArtifactMatchesNode(nodeId, artifact)
     try {
@@ -117,33 +141,37 @@ export class DirectorArtifactWriter {
           id: artifact.id,
         },
         async (transaction, artifactId) => {
+          signal?.throwIfAborted()
           const [node] = await transaction
             .select({ data: canvasNodes.data })
             .from(canvasNodes)
             .where(
               and(
-                eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+                eq(canvasNodes.workspaceId, currentWorkspaceId()),
                 eq(canvasNodes.projectId, artifact.projectId),
                 eq(canvasNodes.id, nodeId)
               )
             )
             .limit(1)
           if (!node) throw new Error(`节点不存在：${nodeId}`)
+          signal?.throwIfAborted()
           await transaction
             .update(canvasNodes)
             .set({
               data: patchNodePayload(node.data, {
                 directorArtifactId: artifactId,
+                outputContentHash: artifact.contentHash,
                 ...(result.renderSpec ? { renderSpec: result.renderSpec } : {}),
               }),
               updatedAt: new Date(),
             })
             .where(
               and(
-                eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+                eq(canvasNodes.workspaceId, currentWorkspaceId()),
                 eq(canvasNodes.id, nodeId)
               )
             )
+          signal?.throwIfAborted()
         }
       )
     } catch (error) {
@@ -159,7 +187,7 @@ export class DirectorArtifactWriter {
     nodeId: string
   ): Promise<string> {
     return resolveCurrentAttemptId(this.db, {
-      workspaceId: LOCAL_WORKSPACE_ID,
+      workspaceId: currentWorkspaceId(),
       projectId,
       aggregateType: 'node',
       aggregateId: nodeId,
@@ -172,7 +200,7 @@ function assertArtifactMatchesNode(
   artifact: ArtifactCommitResult
 ): void {
   if (
-    artifact.workspaceId !== LOCAL_WORKSPACE_ID ||
+    artifact.workspaceId !== currentWorkspaceId() ||
     artifact.aggregateType !== 'node' ||
     artifact.aggregateId !== nodeId
   ) {

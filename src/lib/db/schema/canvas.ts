@@ -23,6 +23,8 @@ export const CANVAS_NODE_TYPES = [
   'shot-sfx',
   'shot-subtitle',
   'shot-qa',
+  'audio-transcribe',
+  'website-stage',
 ] as const
 
 export const CANVAS_NODE_STAGES = [
@@ -42,6 +44,8 @@ export const NODE_STATUSES = [
   'failed',
   'cancelled',
   'stale',
+  'skipped',
+  'blocked',
 ] as const
 
 export const canvasNodes = pgTable(
@@ -85,7 +89,8 @@ export const canvasNodes = pgTable(
       'canvas_nodes_type_check',
       sql`${table.type} in (
         'script-import', 'shot-split', 'score', 'export', 'shot-script',
-        'shot-codegen', 'shot-sfx', 'shot-subtitle', 'shot-qa'
+        'shot-codegen', 'shot-sfx', 'shot-subtitle', 'shot-qa',
+        'audio-transcribe', 'website-stage'
       )`,
     ),
     check(
@@ -97,7 +102,7 @@ export const canvasNodes = pgTable(
     check(
       'canvas_nodes_status_check',
       sql`${table.status} in (
-        'idle', 'queued', 'running', 'succeeded', 'failed', 'cancelled', 'stale'
+        'idle', 'queued', 'running', 'succeeded', 'failed', 'cancelled', 'stale', 'skipped', 'blocked'
       )`,
     ),
     check('canvas_nodes_revision_check', sql`${table.revision} >= 0`),

@@ -11,14 +11,14 @@ export default function AppLoading() {
       aria-busy="true"
     >
       <span className="sr-only">加载中</span>
-      <div className="flex h-16 shrink-0 items-center justify-between border-b border-ds-border bg-ds-surface px-4 sm:px-7">
+      <div className="flex h-12 shrink-0 items-center justify-between border-b border-ds-border bg-ds-surface px-4 sm:px-7">
         <div className="flex items-center gap-2">
           <Skeleton className="h-5 w-24" />
           <Skeleton className="h-3 w-36" />
         </div>
         <Skeleton className="h-8 w-28" />
       </div>
-      <div className="mx-auto flex max-w-[1160px] flex-col gap-6 p-5 sm:p-8">
+      <div className="flex w-full flex-col gap-6 px-4 py-5 sm:px-7 sm:py-6">
         <Skeleton className="h-10 w-full max-w-md" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Skeleton className="h-28 rounded-md" />

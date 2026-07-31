@@ -84,6 +84,54 @@ describe('buildMeasuredAudioManifest', () => {
       })
     ).toThrow('缺少 U002 的实测旁白音频')
   })
+
+  it('promotes ordered native TTS timestamps into script/sample anchors', () => {
+    const withNative = narration()
+    withNative.units[0] = {
+      ...withNative.units[0]!,
+      nativeCaptions: [
+        { text: '十个字', startMs: 0, endMs: 500 },
+        { text: '的短句。', startMs: 500, endMs: 1_500 },
+      ],
+    }
+
+    const manifest = buildMeasuredAudioManifest(scriptUnits, withNative)
+
+    expect(manifest.units[0]).toMatchObject({
+      alignment: { mode: 'tts-native', coverage: 1 },
+      anchors: [
+        {
+          startChar: 0,
+          endChar: 3,
+          startSample: 0,
+          endSample: 12_000,
+          confidence: 1,
+        },
+        {
+          startChar: 3,
+          endChar: 7,
+          startSample: 12_000,
+          endSample: 36_000,
+          confidence: 1,
+        },
+      ],
+    })
+  })
+
+  it('keeps the unit-file fallback when native TTS text is out of order', () => {
+    const drifted = narration()
+    drifted.units[0] = {
+      ...drifted.units[0]!,
+      nativeCaptions: [
+        { text: '短句', startMs: 0, endMs: 500 },
+        { text: '十个字', startMs: 500, endMs: 1_000 },
+      ],
+    }
+
+    const unit = buildMeasuredAudioManifest(scriptUnits, drifted).units[0]!
+    expect(unit).toMatchObject({ alignment: { mode: 'unit-file' } })
+    expect('anchors' in unit).toBe(false)
+  })
 })
 
 describe('buildMeasuredAudioAllocation', () => {

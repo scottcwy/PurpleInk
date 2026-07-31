@@ -3,7 +3,9 @@ import {
   activeThumbIndex,
   fetchThumbnails,
   formatTimecode,
+  generateShotAndWait,
   renderShotAndWait,
+  reviseShotAndWait,
   stepFrame,
 } from './shot-api'
 
@@ -26,7 +28,72 @@ describe('renderShotAndWait', () => {
       status: 'done',
       artifactUrl: '/api/artifacts/a-1?projectId=p-1',
     })
+    expect(fetcher).toHaveBeenNthCalledWith(
+      1,
+      '/api/render',
+      expect.objectContaining({
+        body: JSON.stringify({
+          projectId: 'p-1',
+          nodeId: 'n-1',
+          intent: 'rerender',
+        }),
+      }),
+    )
     expect(wait).toHaveBeenCalledOnce()
+  })
+})
+
+describe('reviseShotAndWait', () => {
+  it('starts a billed regenerate action with the user revision brief', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(json({ ok: true, jobId: 'job-2' }))
+      .mockResolvedValueOnce(json({ ok: true, job: { status: 'done' } }))
+
+    await expect(
+      reviseShotAndWait(
+        'p-1',
+        'n-1',
+        '主视觉改成俯视构图',
+        fetcher,
+        vi.fn(),
+      ),
+    ).resolves.toEqual({ status: 'done' })
+    expect(fetcher).toHaveBeenNthCalledWith(
+      1,
+      '/api/director/stage',
+      expect.objectContaining({
+        body: JSON.stringify({
+          projectId: 'p-1',
+          nodeId: 'n-1',
+          intent: 'regenerate',
+          revisionBrief: '主视觉改成俯视构图',
+        }),
+      }),
+    )
+  })
+})
+
+describe('generateShotAndWait', () => {
+  it('uses the billed Director entrypoint for a first-time FABRICATE', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(json({ ok: true, jobId: 'job-3' }))
+      .mockResolvedValueOnce(json({ ok: true, job: { status: 'done' } }))
+
+    await generateShotAndWait('p-1', 'n-1', fetcher, vi.fn())
+
+    expect(fetcher).toHaveBeenNthCalledWith(
+      1,
+      '/api/director/stage',
+      expect.objectContaining({
+        body: JSON.stringify({
+          projectId: 'p-1',
+          nodeId: 'n-1',
+          intent: 'execute',
+        }),
+      }),
+    )
   })
 })
 

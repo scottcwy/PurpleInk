@@ -1,10 +1,20 @@
 'use client'
 
+import { useEffect, useRef, type KeyboardEvent } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { PurpleInkLogo } from './purple-ink-logo'
-import { AccountMenu, SidebarAccount, SidebarToggle } from './sidebar-chrome'
+import { focusFirstMenuItem, moveMenuFocus } from './menu-focus'
+import { Popover } from './popover'
+import {
+  AccountMenu,
+  SidebarAccount,
+  SidebarToggle,
+  type SidebarAccountInfo,
+} from './sidebar-chrome'
+
+export type { SidebarAccountInfo }
 
 export interface PurpleInkSidebarItem {
   label: string
@@ -20,6 +30,9 @@ export interface PurpleInkSidebarProps {
   onCollapsedChange: (collapsed: boolean) => void
   accountOpen: boolean
   onAccountOpenChange: (open: boolean) => void
+  account?: SidebarAccountInfo | null
+  /** 透传给账户菜单的登出动作；不传则按钮禁用。 */
+  onLogout?: () => Promise<boolean>
   brandHref?: string
   settingsHref?: string
   className?: string
@@ -31,16 +44,32 @@ export function PurpleInkSidebar({
   onCollapsedChange,
   accountOpen,
   onAccountOpenChange,
+  account,
+  onLogout,
   brandHref = '/',
   settingsHref,
   className,
 }: PurpleInkSidebarProps) {
+  const accountMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!accountOpen || collapsed) return
+    const frame = requestAnimationFrame(() => focusFirstMenuItem(accountMenuRef.current))
+    return () => cancelAnimationFrame(frame)
+  }, [accountOpen, collapsed])
+
+  function handleAccountMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    event.preventDefault()
+    moveMenuFocus(accountMenuRef.current, event.key === 'ArrowDown' ? 1 : -1)
+  }
+
   return (
     <aside
       className={cn(
-        'flex h-full shrink-0 flex-col gap-3.5 border-r border-ds-border p-3 transition-[width] duration-200',
+        'flex h-full shrink-0 flex-col border-r border-ds-border',
         'bg-[linear-gradient(180deg,var(--ds-gradient-start),var(--ds-gradient-mid)_52%,var(--ds-gradient-end))]',
-        collapsed ? 'w-[76px]' : 'w-[248px]',
+        collapsed ? 'gap-2.5 p-2' : 'gap-3.5 p-3',
         className,
       )}
     >
@@ -53,7 +82,7 @@ export function PurpleInkSidebar({
         {collapsed ? (
           <SidebarToggle
             collapsed
-            className="size-10"
+            className="size-9"
             onClick={() => onCollapsedChange(false)}
           />
         ) : (
@@ -79,17 +108,28 @@ export function PurpleInkSidebar({
         ))}
       </nav>
 
-      <div className="relative">
-        {accountOpen && !collapsed ? (
-          <div className="absolute bottom-[66px] left-0 z-40">
-            <AccountMenu settingsHref={settingsHref} />
-          </div>
-        ) : null}
-        <SidebarAccount
-          compact={collapsed}
-          onSettings={() => onAccountOpenChange(!accountOpen)}
-        />
-      </div>
+      <Popover
+        open={accountOpen && !collapsed}
+        onOpenChange={onAccountOpenChange}
+        align="start"
+        side="top"
+        role="menu"
+        ariaLabel="账户菜单"
+        className="w-full"
+        contentRef={accountMenuRef}
+        onContentKeyDown={handleAccountMenuKeyDown}
+        contentClassName="w-auto max-w-none border-0 bg-transparent p-0 shadow-none backdrop-blur-none"
+        trigger={
+          <SidebarAccount
+            className="w-full"
+            compact={collapsed}
+            account={account}
+            onSettings={() => onAccountOpenChange(!accountOpen)}
+          />
+        }
+      >
+        <AccountMenu settingsHref={settingsHref} account={account} onLogout={onLogout} />
+      </Popover>
     </aside>
   )
 }
@@ -102,7 +142,7 @@ function SidebarNavigationItem({
   collapsed: boolean
 }) {
   const classes = cn(
-    'flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors',
+    'flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors duration-fast ease-standard',
     collapsed && 'justify-center px-0',
     item.active
       ? 'bg-ds-surface-muted font-semibold text-ds-text'
@@ -110,7 +150,7 @@ function SidebarNavigationItem({
   )
   const content = (
     <>
-      <item.icon aria-hidden className="size-4 shrink-0" />
+      <item.icon aria-hidden className="size-4 shrink-0 translate-y-[-0.5px]" />
       {!collapsed ? item.label : null}
     </>
   )

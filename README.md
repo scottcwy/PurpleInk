@@ -36,7 +36,16 @@ PurpleInk 是一个本地优先的产品发布视频工作区。当前 Stage A �
 | `/login`、`/signup`、`/dashboard` | 路由壳 | 明确标注 Stage B 未接线 |
 | `/products*`、`/releases*` | 路由壳 | Product/Release 新规范与六步导航，不含假数据 |
 
-完整路由、守卫和状态见 [routing.md](docs/conventions/routing.md)，迁移事实与验收证据见 [stage-a-report.md](docs/migration/stage-a-report.md)。
+完整路由、守卫和状态见 [routing.md](docs/conventions/routing.md)，迁移事实与验收证据见 [stage-a-report.md](docs/archive/migration/stage-a-report.md)（历史记录，只供追溯）。
+
+## 工作流排障
+
+Director / 渲染 / 音频 / 模型路由这条链路的复发失败模式、取证顺序与已落地护栏，
+统一记录在 [workflow-failure-patterns.md](docs/conventions/workflow-failure-patterns.md)。
+
+阶段失败时先看那份文件的 §1：画布弹窗里的文案是脱敏投影，原始报文在
+`task_attempts.failure.message`。改动阶段合同、错误分类或节点类型映射前，
+按 §8 的清单逐条自检；新发现的同类失败追加为新模式，不要另建文件。
 
 ## 环境要求
 

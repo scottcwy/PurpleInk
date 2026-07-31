@@ -32,7 +32,7 @@ const tools: Tool[] = [
   {
     title: "Publish",
     description:
-      "Export channel-ready 16:9 and 9:16 Launch Video variants for every release.",
+      "Export channel-ready 16:9 landscape Launch Videos for every release.",
     image: "/img/ship.webp",
   },
 ];
@@ -130,16 +130,16 @@ export function ToolsCarousel(): ReactNode {
           {tools.map((tool, index) => (
             <motion.div
               key={tool.title}
-              className="group bg-muted/50 hover:bg-foreground flex w-80 shrink-0 flex-col rounded-xl px-6 pt-6 transition-colors duration-300 sm:w-96 md:w-105"
+              className="group bg-muted/50 hover:bg-foreground flex w-80 shrink-0 flex-col rounded-xl px-6 pt-6 transition-colors duration-narrative motion-reduce:transform-none! motion-reduce:opacity-100! sm:w-96 md:w-105"
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: index * 0.1 }}
               viewport={{ once: true }}
             >
-              <h3 className="text-foreground group-hover:text-background mb-2 text-2xl tracking-tight transition-colors duration-300">
+              <h3 className="text-foreground group-hover:text-background mb-2 text-2xl tracking-tight transition-colors duration-narrative">
                 {tool.title}
               </h3>
-              <p className="text-muted-foreground group-hover:text-background/70 mt-2 text-lg leading-snug tracking-tight transition-colors duration-300">
+              <p className="text-muted-foreground group-hover:text-background/70 mt-2 text-lg leading-snug tracking-tight transition-colors duration-narrative">
                 {tool.description}
               </p>
 

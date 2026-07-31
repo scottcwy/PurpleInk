@@ -1,6 +1,9 @@
 import { MarkerType, type Edge, type Node } from '@xyflow/react'
-import type { ReactNode } from 'react'
-import { StatusPill, type StatusPillVariant } from '@/components/ui/status-pill'
+import { StatusPill } from '@/components/ui/status-pill'
+import {
+  getNodeStatusLabel,
+  getNodeStatusPresentation,
+} from '@/components/ui/pipeline-node-status'
 import type {
   CanvasGraphEdge,
   CanvasGraphNode,
@@ -8,14 +11,32 @@ import type {
   PositionedCanvasNode,
   ShotLaneNodeType,
 } from '@/features/canvas'
-import { cn } from '@/lib/utils'
+import { NODE_HEIGHT, NODE_WIDTH } from '@/features/canvas/layout'
+import type { CanvasFlowNodeData } from './canvas-flow-node'
 
-type ViewNode = Node<{
-  label: ReactNode
-  type: CanvasGraphNode['type']
-  status: CanvasGraphNode['status']
-  laneKey: string | null
-}>
+export {
+  getNodeStatusLabel,
+  getNodeStatusPresentation,
+} from '@/components/ui/pipeline-node-status'
+
+type ViewNode = Node<CanvasFlowNodeData, 'pipeline'>
+
+/** 与画布节点边框同一套 stage token，驱动 MiniMap 填色。 */
+type StageToken = 'ingest' | 'direct' | 'shot' | 'audio' | 'assemble' | 'finalize'
+
+const STAGE_TOKEN: Record<CanvasGraphNode['type'], StageToken> = {
+  'script-import': 'ingest',
+  'shot-split': 'ingest',
+  score: 'assemble',
+  export: 'finalize',
+  'shot-script': 'shot',
+  'shot-codegen': 'direct',
+  'shot-sfx': 'audio',
+  'shot-subtitle': 'audio',
+  'shot-qa': 'finalize',
+  'audio-transcribe': 'audio',
+  'website-stage': 'direct',
+}
 
 export interface LaneSummaryNode {
   type: ShotLaneNodeType
@@ -81,25 +102,44 @@ export function buildLaneSummaries(nodes: readonly CanvasGraphNode[]): LaneSumma
     })
 }
 
+export function miniMapNodeColor(node: Node): string {
+  const type = node.data.nodeType ?? node.data.type
+  if (!isCanvasNodeType(type)) return 'var(--ds-text-muted)'
+  return `var(--color-stage-${STAGE_TOKEN[type]})`
+}
+
 export function toFlowNode(
   node: PositionedCanvasNode,
   hiddenNodeIds: Set<string>,
-  collapsedLanes: Set<string>
+  collapsedLanes: Set<string>,
+  selected = false,
+  presentation?: { title: string; status: string; borderClass?: string },
 ): ViewNode {
   const collapsed = Boolean(node.laneKey && collapsedLanes.has(node.laneKey))
   return {
     id: node.id,
+    type: 'pipeline',
     position: node.position,
+    width: NODE_WIDTH,
+    height: NODE_HEIGHT,
+    selected,
     hidden: hiddenNodeIds.has(node.id),
-    className: cn(
-      '!w-[220px] !rounded-lg !border !border-ds-border !bg-ds-surface !p-0 !text-ds-text !shadow-[var(--ds-shadow)]',
-      NODE_STAGE_CLASS[node.type]
-    ),
+    // 外壳透明，选中/阶段描边由 PipelineNode 承担，避免与 RF 默认 .selected 叠样式。
+    className: '!bg-transparent !border-0 !p-0 !shadow-none',
     data: {
-      type: node.type,
+      nodeType: node.type,
       status: node.status,
       laneKey: node.laneKey,
-      label: nodeLabel(node, collapsed),
+      collapsed,
+      ...(presentation
+        ? {
+            title: presentation.title,
+            statusLabel: presentation.status,
+            ...(presentation.borderClass
+              ? { borderClass: presentation.borderClass }
+              : {}),
+          }
+        : {}),
     },
   }
 }
@@ -110,56 +150,6 @@ export function toFlowEdge(edge: CanvasGraphEdge, hiddenNodeIds: Set<string>): E
     hidden: hiddenNodeIds.has(edge.source) || hiddenNodeIds.has(edge.target),
     markerEnd: { type: MarkerType.ArrowClosed },
     style: { stroke: 'var(--ds-text-muted)' },
-  }
-}
-
-function nodeLabel(node: CanvasGraphNode, collapsed: boolean): ReactNode {
-  return (
-    <div className="flex min-h-20 flex-col items-start justify-between gap-3 p-3 text-left">
-      <div>
-        <p className="text-[13px] font-semibold text-ds-text">{NODE_LABEL[node.type]}</p>
-        {node.laneKey && (
-          <p className="mt-1 text-[11px] text-ds-text-muted">{node.laneKey}</p>
-        )}
-      </div>
-      <StatusPill
-        variant={getNodeStatusPresentation(node.status).variant}
-        label={
-          collapsed && node.type === 'shot-script'
-            ? '已折叠 · 5 节点'
-            : getNodeStatusPresentation(node.status).label
-        }
-      />
-    </div>
-  )
-}
-
-const STATUS_VARIANT: Record<NodeStatus, StatusPillVariant> = {
-  idle: 'pending',
-  pending: 'pending',
-  running: 'generating',
-  success: 'rendered',
-  failed: 'failed',
-  cancelled: 'failed',
-  stale: 'cached',
-}
-
-const STATUS_LABEL: Record<NodeStatus, string> = {
-  idle: '空闲',
-  pending: '待执行',
-  running: '执行中',
-  success: '已完成',
-  failed: '失败',
-  cancelled: '已取消',
-  stale: '需更新',
-}
-
-export function getNodeStatusPresentation(
-  status: NodeStatus
-): { variant: StatusPillVariant; label: string } {
-  return {
-    variant: STATUS_VARIANT[status],
-    label: STATUS_LABEL[status],
   }
 }
 
@@ -182,7 +172,8 @@ export function LaneSummaryDetails({ summary }: { summary: LaneSummary }) {
             <StatusPill
               key={node.type}
               variant={status.variant}
-              label={`${getLaneNodeLabel(node.type)} · ${status.label}`}
+              icon={status.icon}
+              label={`${getLaneNodeLabel(node.type)} · ${getNodeStatusLabel(node.type, node.status)}`}
             />
           )
         })}
@@ -197,18 +188,6 @@ export function LaneSummaryDetails({ summary }: { summary: LaneSummary }) {
   )
 }
 
-const NODE_LABEL: Record<CanvasGraphNode['type'], string> = {
-  'script-import': '脚本导入',
-  'shot-split': '语义拆分',
-  score: '全局配乐',
-  export: '合并导出',
-  'shot-script': '分镜脚本',
-  'shot-codegen': '代码生成',
-  'shot-sfx': '音效',
-  'shot-subtitle': '字幕',
-  'shot-qa': '验收',
-}
-
 const LANE_NODE_LABEL: Record<ShotLaneNodeType, string> = {
   'shot-script': '脚本',
   'shot-codegen': '代码',
@@ -217,16 +196,8 @@ const LANE_NODE_LABEL: Record<ShotLaneNodeType, string> = {
   'shot-qa': '验收',
 }
 
-const NODE_STAGE_CLASS: Record<CanvasGraphNode['type'], string> = {
-  'script-import': '!border-stage-ingest',
-  'shot-split': '!border-stage-ingest',
-  score: '!border-stage-assemble',
-  export: '!border-stage-finalize',
-  'shot-script': '!border-stage-shot',
-  'shot-codegen': '!border-stage-direct',
-  'shot-sfx': '!border-stage-audio',
-  'shot-subtitle': '!border-stage-audio',
-  'shot-qa': '!border-stage-finalize',
+function isCanvasNodeType(value: unknown): value is CanvasGraphNode['type'] {
+  return typeof value === 'string' && Object.hasOwn(STAGE_TOKEN, value)
 }
 
 function isShotLaneNodeType(type: CanvasGraphNode['type']): type is ShotLaneNodeType {

@@ -1,209 +1,162 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
-import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
+import {
+  motion,
+  useReducedMotion,
+  useScroll,
+  useTransform,
+} from "motion/react";
+import { useRef, useSyncExternalStore, type ReactNode } from "react";
 
-if (typeof window !== "undefined") {
-  gsap.registerPlugin(ScrollTrigger);
+interface RevealImage {
+  src: string;
+  alt: string;
 }
 
 interface ImageRevealProps {
-  images?: {
-    src: string;
-    alt: string;
-  }[];
+  images?: RevealImage[];
   className?: string;
 }
 
-const defaultImages = [
-  // Column 0
-  { src: "/img/mock1_compressed.webp", alt: "PurpleInk launch video 1" },
-  { src: "/img/mock2_compressed.webp", alt: "PurpleInk launch video 2" },
-  { src: "/img/mock3_compressed.webp", alt: "PurpleInk launch video 3" },
-  { src: "/img/mock4_compressed.webp", alt: "PurpleInk launch video 4" },
-  // Column 1
-  { src: "/img/mock5_compressed.webp", alt: "PurpleInk launch video 5" },
-  { src: "/img/mock6_compressed.webp", alt: "PurpleInk launch video 6" },
-  { src: "/img/mock7_compressed.webp", alt: "PurpleInk launch video 7" },
-  { src: "/img/mock8_compressed.webp", alt: "PurpleInk launch video 8" },
-  // Column 2
-  { src: "/img/mock9_compressed.webp", alt: "PurpleInk launch video 9" },
-  { src: "/img/mock10_compressed.webp", alt: "PurpleInk launch video 10" },
-  { src: "/img/mock11_compressed.webp", alt: "PurpleInk launch video 11" },
-  { src: "/img/mock12_compressed.webp", alt: "PurpleInk launch video 12" },
+interface RevealOrigin {
+  xPercent: number;
+  scaleX: number;
+  scaleY: number;
+  transformOrigin: string;
+  blur: number;
+}
+
+const REVEAL_ORIGINS: readonly RevealOrigin[] = [
+  {
+    xPercent: -400,
+    scaleX: 6,
+    scaleY: 0.3,
+    transformOrigin: "0% 50%",
+    blur: 10,
+  },
+  {
+    xPercent: 0,
+    scaleX: 0.7,
+    scaleY: 0.7,
+    transformOrigin: "50% 50%",
+    blur: 5,
+  },
+  {
+    xPercent: 400,
+    scaleX: 6,
+    scaleY: 0.3,
+    transformOrigin: "100% 50%",
+    blur: 10,
+  },
 ];
+
+const defaultImages: RevealImage[] = Array.from({ length: 12 }, (_, index) => ({
+  src: `/img/mock${index + 1}_compressed.webp`,
+  alt: `PurpleInk launch video ${index + 1}`,
+}));
+
+const subscribeToHydration = () => () => {};
+
+function revealProgress(value: number, reduced: boolean): number {
+  return reduced ? 1 : value;
+}
+
+function RevealTile({
+  image,
+  origin,
+}: {
+  image: RevealImage;
+  origin: RevealOrigin;
+}): ReactNode {
+  const itemRef = useRef<HTMLElement>(null);
+  const prefersReducedMotion = useReducedMotion();
+  const motionReady = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  );
+  const { scrollYProgress } = useScroll({
+    target: itemRef,
+    offset: ["start end", "end start"],
+  });
+  const progress = (value: number) =>
+    revealProgress(value, motionReady && Boolean(prefersReducedMotion));
+  const x = useTransform(
+    scrollYProgress,
+    (value) => `${origin.xPercent * (1 - progress(value))}%`,
+  );
+  const opacity = useTransform(scrollYProgress, progress);
+  const scaleX = useTransform(
+    scrollYProgress,
+    (value) => origin.scaleX + (1 - origin.scaleX) * progress(value),
+  );
+  const scaleY = useTransform(
+    scrollYProgress,
+    (value) => origin.scaleY + (1 - origin.scaleY) * progress(value),
+  );
+  const filter = useTransform(
+    scrollYProgress,
+    (value) => `blur(${origin.blur * (1 - progress(value))}px)`,
+  );
+
+  return (
+    <figure ref={itemRef} className="column__item">
+      <motion.div
+        className="column__item-imgwrap relative aspect-3/4 w-full overflow-hidden rounded-xl motion-reduce:transform-none! motion-reduce:opacity-100! motion-reduce:filter-none!"
+        style={{
+          x,
+          opacity,
+          scaleX,
+          scaleY,
+          filter,
+          transformOrigin: origin.transformOrigin,
+          willChange: "filter",
+        }}
+      >
+        <div
+          className="column__item-img h-full w-full bg-cover bg-center"
+          style={{ backgroundImage: `url(${image.src})` }}
+          role="img"
+          aria-label={image.alt}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 mix-blend-color"
+          style={{
+            background: "linear-gradient(135deg, #333DA7 0%, #7388DF 100%)",
+          }}
+          aria-hidden="true"
+        />
+      </motion.div>
+    </figure>
+  );
+}
 
 export function ImageReveal({
   images = defaultImages,
   className = "",
 }: ImageRevealProps): ReactNode {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const columns: [
-    { src: string; alt: string }[],
-    { src: string; alt: string }[],
-    { src: string; alt: string }[],
-  ] = [[], [], []];
+  const columns: [RevealImage[], RevealImage[], RevealImage[]] = [[], [], []];
   images.forEach((image, index) => {
-    columns[index % 3]!.push(image);
+    columns[index % columns.length]!.push(image);
   });
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    const ctx = gsap.context(() => {
-      const columnEls = containerRef.current!.querySelectorAll(".column");
-
-      columnEls.forEach((column, columnIndex) => {
-        const items = column.querySelectorAll(".column__item");
-
-        items.forEach((item) => {
-          const wrapper = item.querySelector(".column__item-imgwrap");
-          if (!wrapper) return;
-
-          let xPercentValue: number;
-          let scaleXValue: number;
-          let scaleYValue: number;
-          let transformOrigin: string;
-          let filterValue: string;
-
-          switch (columnIndex) {
-            case 0:
-              xPercentValue = -400;
-              transformOrigin = "0% 50%";
-              scaleXValue = 6;
-              scaleYValue = 0.3;
-              filterValue = "blur(10px)";
-              break;
-            case 1:
-              xPercentValue = 0;
-              transformOrigin = "50% 50%";
-              scaleXValue = 0.7;
-              scaleYValue = 0.7;
-              filterValue = "blur(5px)";
-              break;
-            case 2:
-              xPercentValue = 400;
-              transformOrigin = "100% 50%";
-              scaleXValue = 6;
-              scaleYValue = 0.3;
-              filterValue = "blur(10px)";
-              break;
-            default:
-              xPercentValue = 0;
-              transformOrigin = "50% 50%";
-              scaleXValue = 1;
-              scaleYValue = 1;
-              filterValue = "blur(0px)";
-          }
-
-          gsap.fromTo(
-            wrapper,
-            {
-              willChange: "filter",
-              xPercent: xPercentValue,
-              opacity: 0,
-              scaleX: scaleXValue,
-              scaleY: scaleYValue,
-              filter: filterValue,
-            },
-            {
-              startAt: { transformOrigin: transformOrigin },
-              scrollTrigger: {
-                trigger: item,
-                start: "clamp(top bottom)",
-                end: "clamp(bottom top)",
-                scrub: true,
-              },
-              xPercent: 0,
-              opacity: 1,
-              scaleX: 1,
-              scaleY: 1,
-              filter: "blur(0px)",
-            }
-          );
-        });
-      });
-    }, containerRef);
-
-    return () => ctx.revert();
-  }, []);
 
   return (
     <section className={`-mt-24 overflow-hidden ${className}`}>
-      <div
-        ref={containerRef}
-        className="columns mx-auto grid max-w-7xl grid-cols-3 gap-4 px-4 sm:px-6 md:gap-6 lg:gap-8 lg:px-8"
-      >
-        <div className="column flex flex-col gap-4 md:gap-6 lg:gap-8">
-          {columns[0].map((image, index) => (
-            <figure key={`col0-${index}`} className="column__item">
-              <div className="column__item-imgwrap relative aspect-3/4 w-full overflow-hidden rounded-xl">
-                <div
-                  className="column__item-img h-full w-full bg-cover bg-center"
-                  style={{ backgroundImage: `url(${image.src})` }}
-                  role="img"
-                  aria-label={image.alt}
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 mix-blend-color"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, #333DA7 0%, #7388DF 100%)",
-                  }}
-                  aria-hidden="true"
-                />
-              </div>
-            </figure>
-          ))}
-        </div>
-
-        <div className="column flex flex-col gap-4 md:gap-6 lg:gap-8">
-          {columns[1].map((image, index) => (
-            <figure key={`col1-${index}`} className="column__item">
-              <div className="column__item-imgwrap relative aspect-3/4 w-full overflow-hidden rounded-xl">
-                <div
-                  className="column__item-img h-full w-full bg-cover bg-center"
-                  style={{ backgroundImage: `url(${image.src})` }}
-                  role="img"
-                  aria-label={image.alt}
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 mix-blend-color"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, #333DA7 0%, #7388DF 100%)",
-                  }}
-                  aria-hidden="true"
-                />
-              </div>
-            </figure>
-          ))}
-        </div>
-
-        <div className="column flex flex-col gap-4 md:gap-6 lg:gap-8">
-          {columns[2].map((image, index) => (
-            <figure key={`col2-${index}`} className="column__item">
-              <div className="column__item-imgwrap relative aspect-3/4 w-full overflow-hidden rounded-xl">
-                <div
-                  className="column__item-img h-full w-full bg-cover bg-center"
-                  style={{ backgroundImage: `url(${image.src})` }}
-                  role="img"
-                  aria-label={image.alt}
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 mix-blend-color"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, #333DA7 0%, #7388DF 100%)",
-                  }}
-                  aria-hidden="true"
-                />
-              </div>
-            </figure>
-          ))}
-        </div>
+      <div className="columns mx-auto grid max-w-7xl grid-cols-3 gap-4 px-4 sm:px-6 md:gap-6 lg:gap-8 lg:px-8">
+        {columns.map((column, columnIndex) => (
+          <div
+            key={columnIndex}
+            className="column flex flex-col gap-4 md:gap-6 lg:gap-8"
+          >
+            {column.map((image) => (
+              <RevealTile
+                key={image.src}
+                image={image}
+                origin={REVEAL_ORIGINS[columnIndex]!}
+              />
+            ))}
+          </div>
+        ))}
       </div>
     </section>
   );

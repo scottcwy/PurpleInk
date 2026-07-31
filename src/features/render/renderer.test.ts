@@ -18,6 +18,10 @@ const job: RenderJob = {
   frames: { fps: 30, durationInFrames: 60, width: 1920, height: 1080 },
   seed: 7,
 }
+const VALID_SOURCE = `<!doctype html><html><head>
+<meta name="viewport" content="width=1920, height=1080"></head>
+<body><main data-composition-id="shot" data-width="1920" data-height="1080"></main></body>
+</html>`
 const directories: string[] = []
 
 describe('HyperframesRenderer', () => {
@@ -32,7 +36,7 @@ describe('HyperframesRenderer', () => {
   it('returns a cache hit without capturing frames', async () => {
     const captureSequence = vi.fn()
     const renderer = new HyperframesRenderer({
-      storage: createStorage('<html>deterministic</html>'),
+      storage: createStorage(VALID_SOURCE),
       lookupCache: vi.fn(async () => ({
         outputKey: 'render/cached.mp4',
         contentHash: 'cached-hash',
@@ -50,6 +54,38 @@ describe('HyperframesRenderer', () => {
     expect(captureSequence).not.toHaveBeenCalled()
   })
 
+  it('bypasses an existing cache entry for an explicit rerender', async () => {
+    const tempRoot = await createTempRoot()
+    const sequence: FrameSequence = {
+      directory: path.join(tempRoot, 'frames'),
+      pattern: path.join(tempRoot, 'frames/frame-%08d.png'),
+      totalFrames: 60,
+      cleanup: vi.fn(async () => {}),
+    }
+    const captureSequence = vi.fn(async () => sequence)
+    const writeCache = vi.fn(async () => 'artifact-rerender')
+    const renderer = new HyperframesRenderer({
+      storage: createStorage(VALID_SOURCE),
+      lookupCache: vi.fn(async () => ({
+        outputKey: 'render/cached.mp4',
+        contentHash: 'cached-hash',
+      })),
+      writeCache,
+      captureSequence,
+      encode: vi.fn(async (_sequence, _fps, outputPath) => {
+        await writeFile(outputPath, Buffer.from('rerendered-mp4'))
+        return outputPath
+      }),
+      tempRoot,
+    })
+
+    const result = await renderer.render({ ...job, forceRender: true })
+
+    expect(captureSequence).toHaveBeenCalledOnce()
+    expect(writeCache).toHaveBeenCalledOnce()
+    expect(result.contentHash).not.toBe('cached-hash')
+  })
+
   it('captures, encodes, commits, indexes, and cleans a cache miss in order', async () => {
     const tempRoot = await createTempRoot()
     const order: string[] = []
@@ -62,7 +98,7 @@ describe('HyperframesRenderer', () => {
       totalFrames: 60,
       cleanup,
     }
-    const storage = createStorage('<html>deterministic</html>')
+    const storage = createStorage(VALID_SOURCE)
     vi.mocked(storage.put).mockImplementation(async (key) => {
       order.push('store')
       return key
@@ -99,7 +135,9 @@ describe('HyperframesRenderer', () => {
     const captureSequence = vi.fn()
     const encode = vi.fn()
     const renderer = new HyperframesRenderer({
-      storage: createStorage('<script>requestAnimationFrame(render)</script>'),
+      storage: createStorage(
+        `${VALID_SOURCE}\n<script>requestAnimationFrame(render)</script>`
+      ),
       lookupCache: vi.fn(),
       writeCache: vi.fn(),
       captureSequence,

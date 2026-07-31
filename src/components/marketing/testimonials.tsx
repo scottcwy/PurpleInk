@@ -65,7 +65,7 @@ const testimonials: Testimonial[] = [
 
 function TestimonialCard({ testimonial, isActive }: { testimonial: Testimonial; isActive: boolean }) {
   return (
-    <div className={`flex h-full w-full flex-col rounded-3xl p-6 sm:p-8 lg:flex-row lg:gap-12 lg:p-12 transition-colors duration-300 ${isActive ? 'bg-accent/20' : 'bg-muted'}`}>
+    <div className={`flex h-full w-full flex-col rounded-3xl p-6 sm:p-8 lg:flex-row lg:gap-12 lg:p-12 transition-colors duration-narrative ${isActive ? 'bg-accent/20' : 'bg-muted'}`}>
       <div className="flex flex-1 flex-col">
         <span className="w-fit rounded-full bg-background px-3 py-1 text-xs font-medium text-muted-foreground sm:px-4 sm:py-1.5 sm:text-sm">
           {testimonial.badge}
@@ -225,7 +225,7 @@ export function Testimonials(): ReactNode {
                 key={index}
                 type="button"
                 onClick={() => goToSlide(index)}
-                className={`h-2 cursor-pointer rounded-full transition-all duration-300 ${
+                className={`h-2 cursor-pointer rounded-full transition-all duration-narrative ${
                   index === currentIndex
                     ? "w-8 bg-foreground"
                     : "w-2 bg-foreground/30 hover:bg-foreground/50"

@@ -11,6 +11,8 @@ export interface LaunchOptions {
   headless?: boolean
   viewport?: { width: number; height: number }
   sessionState?: string
+  /** 受控集成采集：所有 HTTP(S) 请求先过公网 URL 门禁。 */
+  publicOnly?: boolean
 }
 
 /** 截图元数据（采集时由 Agent 附带，用于分镜过滤与叙事增强） */

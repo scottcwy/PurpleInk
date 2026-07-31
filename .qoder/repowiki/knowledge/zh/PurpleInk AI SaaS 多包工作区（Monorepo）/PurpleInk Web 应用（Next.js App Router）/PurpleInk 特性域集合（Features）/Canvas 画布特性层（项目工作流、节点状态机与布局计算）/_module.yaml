@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: web_app/features/canvas
+title: Canvas 画布特性层（项目工作流、节点状态机与布局计算）
+scope:
+    - src/features/canvas/
+source_files: []
+depends_on: []
+related_to:
+    - path: web_app/features/director

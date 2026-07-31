@@ -3,6 +3,7 @@
 import { Cpu, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { SettingsField } from '@/components/ui/settings-field'
 import { SettingsSeparator } from '@/components/ui/settings-group'
 import { SettingsPanel } from '@/components/ui/settings-panel'
 import { SettingsRow } from '@/components/ui/settings-row'
@@ -27,10 +28,14 @@ import {
  */
 export interface RuntimeConcurrencyPanelProps {
   controller: ReadyModelSettingsController
+  openPanels: Record<string, boolean>
+  onPanelOpenChange: (id: string, open: boolean) => void
 }
 
 export function RuntimeConcurrencyPanel({
   controller,
+  openPanels,
+  onPanelOpenChange,
 }: RuntimeConcurrencyPanelProps) {
   const view = controller.data.laneQuotas
   const busy = controller.busy === 'laneQuotas'
@@ -39,59 +44,49 @@ export function RuntimeConcurrencyPanel({
     <SettingsPanel
       id="runtime"
       title="运行与导出"
-      description="本地渲染并发、输出规格"
+      description="套餐分镜并发、本地渲染并发"
       icon={Cpu}
       summary="账号级 · 重启后生效"
+      open={openPanels['runtime'] ?? false}
+      onOpenChange={(open) => onPanelOpenChange('runtime', open)}
     >
-      <SettingsRow
-        label="Director 阶段并发"
-        className="h-auto min-h-11 flex-col items-stretch gap-2 py-2 sm:flex-row sm:items-center"
-      >
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <LaneField
-            ariaLabel="Director 阶段并发"
-            value={controller.laneQuotasDraft.directorStageConcurrency}
-            onChange={(v) =>
-              controller.setLaneQuotaField('directorStageConcurrency', v)
-            }
-            min={LANE_QUOTA_LIMITS.directorStageMin}
-            max={LANE_QUOTA_LIMITS.directorStageMax}
+      <SettingsRow label="AI 分镜并发" chevron={false}>
+        <span className="flex items-center gap-2 text-[13px] text-ds-text-muted">
+          <StatusPill
+            variant="pending"
+            label={`${controller.data.shotConcurrency?.limit ?? 3} 个`}
           />
-          <LaneSourcePill field={view?.directorStage} />
-        </div>
+          套餐上限，只读
+        </span>
       </SettingsRow>
       <SettingsSeparator />
-      <SettingsRow
-        label="渲染并发"
-        className="h-auto min-h-11 flex-col items-stretch gap-2 py-2 sm:flex-row sm:items-center"
-      >
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <LaneField
-            ariaLabel="渲染并发"
-            value={controller.laneQuotasDraft.renderShotConcurrency}
-            onChange={(v) =>
-              controller.setLaneQuotaField('renderShotConcurrency', v)
-            }
-            min={LANE_QUOTA_LIMITS.renderShotMin}
-            max={LANE_QUOTA_LIMITS.renderShotMax}
-          />
-          <LaneSourcePill field={view?.renderShot} />
-        </div>
-      </SettingsRow>
+      <SettingsField label="渲染并发">
+        <LaneField
+          ariaLabel="渲染并发"
+          value={controller.laneQuotasDraft.renderShotConcurrency}
+          onChange={(v) =>
+            controller.setLaneQuotaField('renderShotConcurrency', v)
+          }
+          min={LANE_QUOTA_LIMITS.renderShotMin}
+          max={LANE_QUOTA_LIMITS.renderShotMax}
+        />
+        <LaneSourcePill field={view?.renderShot} />
+      </SettingsField>
       <SettingsSeparator />
       <SettingsRow
         label="生效范围"
         value="账号级（写入 workspace_settings）"
+        chevron={false}
       />
       <SettingsSeparator />
-      <SettingsRow label="应用方式">
-        <span className="flex items-center gap-2 text-[12px] text-ds-text-muted">
+      <SettingsRow label="应用方式" chevron={false}>
+        <span className="flex items-center gap-2 text-[13px] text-ds-text-muted">
           <RefreshCw className="size-3.5" />
           保存后需重启 dev 进程生效
         </span>
       </SettingsRow>
       <SettingsSeparator />
-      <SettingsRow label="导出分辨率">
+      <SettingsRow label="导出分辨率" chevron={false}>
         <span className="text-[13px] text-ds-text-muted">
           按项目在导出页配置
         </span>
@@ -166,17 +161,10 @@ function SaveRow({
   controller: ReadyModelSettingsController
   busy: boolean
 }) {
-  const director = Number(controller.laneQuotasDraft.directorStageConcurrency)
   const render = Number(controller.laneQuotasDraft.renderShotConcurrency)
-  const bothEmpty =
-    controller.laneQuotasDraft.directorStageConcurrency === '' &&
-    controller.laneQuotasDraft.renderShotConcurrency === ''
   const valid =
-    !bothEmpty &&
-    Number.isInteger(director) &&
+    controller.laneQuotasDraft.renderShotConcurrency !== '' &&
     Number.isInteger(render) &&
-    director >= LANE_QUOTA_LIMITS.directorStageMin &&
-    director <= LANE_QUOTA_LIMITS.directorStageMax &&
     render >= LANE_QUOTA_LIMITS.renderShotMin &&
     render <= LANE_QUOTA_LIMITS.renderShotMax
 
@@ -185,7 +173,6 @@ function SaveRow({
     await controller.submit(
       {
         laneQuotas: {
-          directorStageConcurrency: director,
           renderShotConcurrency: render,
         },
       },
@@ -194,13 +181,7 @@ function SaveRow({
   }
 
   return (
-    <SettingsRow
-      label="并发配置"
-      className="h-auto min-h-11 flex-wrap gap-2 py-2"
-    >
-      <span className="text-[12px] text-ds-text-muted">
-        留空回退 env / 内置默认
-      </span>
+    <SettingsField label="并发配置" hint="留空回退 env / 内置默认">
       <Button
         size="sm"
         variant="gray"
@@ -209,6 +190,6 @@ function SaveRow({
       >
         保存
       </Button>
-    </SettingsRow>
+    </SettingsField>
   )
 }

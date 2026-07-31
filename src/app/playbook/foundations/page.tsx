@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MotionTokensSection } from "./motion-tokens-section";
 
 const COLORS = [
   ["Surface", "bg-ds-surface"],
@@ -27,7 +28,16 @@ export default function PlaybookFoundationsPage() {
           Foundations · 设计 token
         </h1>
         <p className="text-ds-text-muted mt-2 text-sm">
-          token 单一真源为 canvas.pen，并在 globals.css 中映射为明暗主题变量。
+          静态 token 单一真源为 canvas.pen，并在 globals.css 中映射为明暗主题变量。
+          动效不从 Pencil 推导，其真源是{" "}
+          <code className="font-mono text-xs">
+            docs/conventions/motion-interaction.md
+          </code>
+          ；按意图组织的可交互标本在{" "}
+          <Link href="/playbook/motion" className="underline">
+            /playbook/motion
+          </Link>
+          。
         </p>
 
         <section className="border-ds-border bg-ds-surface mt-6 rounded-lg border p-6">
@@ -74,6 +84,8 @@ export default function PlaybookFoundationsPage() {
             ))}
           </div>
         </section>
+
+        <MotionTokensSection />
 
         <section className="border-ds-border bg-ds-surface mt-5 rounded-lg border p-6">
           <h2 className="text-ds-text-muted font-mono text-[11px] font-semibold tracking-wide uppercase">

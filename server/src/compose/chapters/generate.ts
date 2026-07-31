@@ -62,20 +62,17 @@ export async function generateChapters(
           results.set(id, { id, html, source: "llm" })
           logger.info("generate:chapter_ok", { chapter: id, source: "llm" })
         } else {
-          logger.warn("generate:chapter_invalid", { chapter: id, errors: validation.errors })
-          results.set(id, fallbackToTemplate(id, model, assetFiles, captureDir))
+          results.set(id, fallbackToTemplate(id, model, assetFiles, captureDir, validationReason(validation.errors)))
         }
       } else {
-        logger.warn("generate:chapter_missing", { chapter: id })
-        results.set(id, fallbackToTemplate(id, model, assetFiles, captureDir))
+        results.set(id, fallbackToTemplate(id, model, assetFiles, captureDir, "batch_response_missing_chapter"))
       }
     }
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err)
     logger.error("generate:batch_failed", { error: errMsg, chapters: batchIds })
     for (const id of batchIds) {
-      logger.warn("generate:batch_fallback", { chapter: id, reason: errMsg })
-      results.set(id, fallbackToTemplate(id, model, assetFiles, captureDir))
+      results.set(id, fallbackToTemplate(id, model, assetFiles, captureDir, summarizeComposeError(err)))
     }
   }
 
@@ -115,14 +112,12 @@ export async function generateChapters(
       results.set("ch2-hero", { id: "ch2-hero", html, source: "llm" })
       logger.info("generate:chapter_ok", { chapter: "ch2-hero", source: "llm" })
     } else {
-      logger.warn("generate:chapter_invalid", { chapter: "ch2-hero", errors: validation.errors })
-      results.set("ch2-hero", fallbackToTemplate("ch2-hero", model, assetFiles, captureDir))
+      results.set("ch2-hero", fallbackToTemplate("ch2-hero", model, assetFiles, captureDir, validationReason(validation.errors)))
     }
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err)
     logger.error("generate:ch2_failed", { error: errMsg })
-    logger.warn("generate:ch2_fallback", { reason: errMsg })
-    results.set("ch2-hero", fallbackToTemplate("ch2-hero", model, assetFiles, captureDir))
+    results.set("ch2-hero", fallbackToTemplate("ch2-hero", model, assetFiles, captureDir, summarizeComposeError(err)))
   }
 
   // --- Call 3: Individual Ch3 (showcase) ---
@@ -161,14 +156,12 @@ export async function generateChapters(
       results.set("ch3-showcase", { id: "ch3-showcase", html, source: "llm" })
       logger.info("generate:chapter_ok", { chapter: "ch3-showcase", source: "llm" })
     } else {
-      logger.warn("generate:chapter_invalid", { chapter: "ch3-showcase", errors: validation.errors })
-      results.set("ch3-showcase", fallbackToTemplate("ch3-showcase", model, assetFiles, captureDir))
+      results.set("ch3-showcase", fallbackToTemplate("ch3-showcase", model, assetFiles, captureDir, validationReason(validation.errors)))
     }
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err)
     logger.error("generate:ch3_failed", { error: errMsg })
-    logger.warn("generate:ch3_fallback", { reason: errMsg })
-    results.set("ch3-showcase", fallbackToTemplate("ch3-showcase", model, assetFiles, captureDir))
+    results.set("ch3-showcase", fallbackToTemplate("ch3-showcase", model, assetFiles, captureDir, summarizeComposeError(err)))
   }
 
   // --- Call 4: Individual Ch4 (proof) ---
@@ -188,14 +181,12 @@ export async function generateChapters(
       results.set("ch4-proof", { id: "ch4-proof", html, source: "llm" })
       logger.info("generate:chapter_ok", { chapter: "ch4-proof", source: "llm" })
     } else {
-      logger.warn("generate:chapter_invalid", { chapter: "ch4-proof", errors: validation.errors })
-      results.set("ch4-proof", fallbackToTemplate("ch4-proof", model, assetFiles, captureDir))
+      results.set("ch4-proof", fallbackToTemplate("ch4-proof", model, assetFiles, captureDir, validationReason(validation.errors)))
     }
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err)
     logger.error("generate:ch4_failed", { error: errMsg })
-    logger.warn("generate:ch4_fallback", { reason: errMsg })
-    results.set("ch4-proof", fallbackToTemplate("ch4-proof", model, assetFiles, captureDir))
+    results.set("ch4-proof", fallbackToTemplate("ch4-proof", model, assetFiles, captureDir, summarizeComposeError(err)))
   }
 
   // Return in canonical order
@@ -204,8 +195,7 @@ export async function generateChapters(
     const ch = results.get(id)
     if (ch) return ch
     // Safety net: should not reach here, but fallback just in case
-    logger.warn("generate:safety_net_fallback", { chapter: id })
-    return fallbackToTemplate(id, model, assetFiles, captureDir)
+    return fallbackToTemplate(id, model, assetFiles, captureDir, "safety_net_chapter_not_produced")
   })
   logger.info("generate:summary", {
     llm: results_.filter((c) => c.source === "llm").length,
@@ -215,15 +205,39 @@ export async function generateChapters(
   return results_
 }
 
-/** Fallback: render a chapter using the template system */
+/**
+ * Fallback: render a chapter using the template system.
+ * Every degradation to template emits exactly one structured warn so the
+ * downgrade is observable instead of silently passing as an LLM artifact.
+ */
 function fallbackToTemplate(
   id: ChapterId,
   model: VideoModel,
   _assetFiles: string[],
   _captureDir: string,
+  reason: string,
 ): ChapterHtml {
-  logger.info("generate:fallback_template", { chapter: id })
+  logger.warn("generate:chapter_fallback", { chapter: id, source: "template", reason })
   return { id, html: renderTemplateChapter(id, model), source: "template" }
+}
+
+/**
+ * Sanitized error summary for fallback logs: a stable category when the
+ * failure shape is known, otherwise the truncated first line of the message.
+ * Never carries full provider payloads, credentials or prompt content.
+ */
+export function summarizeComposeError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err)
+  const httpStatus = msg.match(/^StepFun API (\d{3})/)
+  if (httpStatus?.[1]) return `stepfun_http_${httpStatus[1]}`
+  if (msg.includes("STEP_API_KEY not configured")) return "stepfun_key_missing"
+  if (msg.includes("exhausted retries")) return "stepfun_retries_exhausted"
+  return (msg.split("\n")[0] ?? "").slice(0, 120)
+}
+
+/** Compact reason string for validation-driven fallbacks (own validator output, not provider payloads) */
+function validationReason(errors: string[]): string {
+  return `validation_failed: ${errors.slice(0, 3).join("; ")}`.slice(0, 200)
 }
 
 /** List asset files in capture/assets/ for validation */

@@ -5,6 +5,14 @@ import {
   writeValidatedArtifact,
 } from './write-artifact'
 
+// 被测模块经 currentWorkspaceId() 取归属（PLAN-002 阶段 B）；单测没有请求入口，
+// 把读取口 mock 成历史单工作区 id，与用例 seed 的数据保持一致。
+vi.mock('@/lib/auth/workspace-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/workspace-context')>()),
+  currentWorkspaceId: () => '00000000-0000-4000-8000-000000000001',
+  currentUserId: () => 'test-user',
+}))
+
 vi.mock('server-only', () => ({}))
 
 function createStorage(): StorageAdapter {
@@ -21,6 +29,27 @@ function createStorage(): StorageAdapter {
 }
 
 describe('writeValidatedArtifact', () => {
+  it('keeps the queue attempt binding instead of resolving a newer running attempt', async () => {
+    const storage = createStorage()
+    const resolveAttempt = vi.fn(async () => 'new-attempt')
+
+    const result = await writeValidatedArtifact(
+      {
+        projectId: 'project-1',
+        nodeId: 'node-1',
+        attemptId: 'old-attempt',
+        kind: 'director-output',
+        key: 'project-1/node-1/old-output.json',
+        content: '{"source":"old"}',
+        validation: 'non-empty',
+      },
+      { storage, resolveAttempt },
+    )
+
+    expect(resolveAttempt).not.toHaveBeenCalled()
+    expect(result.attemptId).toBe('old-attempt')
+  })
+
   it('validates and resolves a legal attempt before staging bytes', async () => {
     const order: string[] = []
     const storage = createStorage()
@@ -84,6 +113,60 @@ describe('writeValidatedArtifact', () => {
     await expect(writing).rejects.toBeInstanceOf(ArtifactValidationError)
     expect(storage.put).not.toHaveBeenCalled()
     expect(resolveAttempt).not.toHaveBeenCalled()
+  })
+
+  it('does not stage deterministic HTML with a portrait composition contract', async () => {
+    const storage = createStorage()
+    const resolveAttempt = vi.fn()
+    const portrait = `<!doctype html><html><head>
+<meta name="viewport" content="width=1080, height=1920"></head>
+<body><main data-composition-id="shot" data-width="1080" data-height="1920"></main>
+<script>const timeline = gsap.timeline({ paused: true }); timeline.seek(frame / fps);</script>
+</body></html>`
+
+    await expect(
+      writeValidatedArtifact(
+        {
+          projectId: 'project-1',
+          nodeId: 'node-1',
+          kind: 'director-fabricate',
+          key: 'project-1/node-1/shot.html',
+          content: portrait,
+          validation: 'deterministic-html',
+        },
+        { storage, resolveAttempt }
+      )
+    ).rejects.toThrow('composition-width')
+    expect(resolveAttempt).not.toHaveBeenCalled()
+    expect(storage.put).not.toHaveBeenCalled()
+  })
+
+  it('does not stage deterministic HTML whose inline runtime has a syntax error', async () => {
+    const storage = createStorage()
+    const resolveAttempt = vi.fn()
+    const malformed = `<!doctype html><html><head>
+<meta name="viewport" content="width=1920, height=1080"></head>
+<body><main data-composition-id="shot" data-width="1920" data-height="1080"></main>
+<script>
+const broken = { timeline() { return {}; }, ease: true }:;
+window.__CVC_RENDER__ = { version: 1, seek() {} };
+</script></body></html>`
+
+    await expect(
+      writeValidatedArtifact(
+        {
+          projectId: 'project-1',
+          nodeId: 'node-1',
+          kind: 'director-fabricate',
+          key: 'project-1/node-1/malformed.html',
+          content: malformed,
+          validation: 'deterministic-html',
+        },
+        { storage, resolveAttempt }
+      )
+    ).rejects.toThrow('脚本语法无效')
+    expect(resolveAttempt).not.toHaveBeenCalled()
+    expect(storage.put).not.toHaveBeenCalled()
   })
 
   it('does not write bytes when no legal attempt exists', async () => {

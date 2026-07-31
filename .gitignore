@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+/packages/*/node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -62,3 +63,7 @@ server/capture/
 
 # Archive (historical records, not tracked)
 docs/archive/
+
+# Reverse-proxy Basic Auth 凭据（真实值），示例文件 *.example 保留入库
+deploy/reverse-proxy/secrets/*
+!deploy/reverse-proxy/secrets/*.example

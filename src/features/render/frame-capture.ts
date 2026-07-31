@@ -2,6 +2,7 @@ import 'server-only'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { chromium, type Browser, type BrowserContext, type CDPSession, type Page } from 'playwright'
+import { MASTER_HEIGHT, MASTER_WIDTH } from '@/features/canvas/contracts'
 
 const RUNTIME_VERSION = 1
 
@@ -30,17 +31,57 @@ export async function openFrameCapture(
       deviceScaleFactor: 1,
     })
     const page = await context.newPage()
+    const pageScript = { failed: false }
+    page.on('pageerror', () => {
+      pageScript.failed = true
+    })
     await page.goto(pathToFileURL(path.resolve(htmlPath)).href, { waitUntil: 'load' })
     await page.evaluate(async () => {
       await document.fonts.ready
     })
+    assertPageScript(pageScript)
     await assertRuntime(page)
+    await assertMasterCanvasGeometry(page)
     const cdp = await context.newCDPSession(page)
     await cdp.send('Page.enable')
-    return createSession(browser, context, page, cdp)
+    return createSession(browser, context, page, cdp, pageScript)
   } catch (error) {
     await browser.close()
     throw error
+  }
+}
+
+async function assertMasterCanvasGeometry(page: Page): Promise<void> {
+  const geometry = await page.evaluate(() => {
+    const root = document.querySelector<HTMLElement>('[data-composition-id]')
+    const rect = root?.getBoundingClientRect()
+    return {
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      rootWidth: rect?.width ?? null,
+      rootHeight: rect?.height ?? null,
+      rootLeft: rect?.left ?? null,
+      rootTop: rect?.top ?? null,
+      scrollWidth: document.documentElement.scrollWidth,
+      scrollHeight: document.documentElement.scrollHeight,
+    }
+  })
+  const valid =
+    geometry.viewportWidth === MASTER_WIDTH &&
+    geometry.viewportHeight === MASTER_HEIGHT &&
+    geometry.rootWidth === MASTER_WIDTH &&
+    geometry.rootHeight === MASTER_HEIGHT &&
+    geometry.rootLeft === 0 &&
+    geometry.rootTop === 0 &&
+    geometry.scrollWidth <= MASTER_WIDTH &&
+    geometry.scrollHeight <= MASTER_HEIGHT
+  if (!valid) {
+    throw new Error(
+      `母版画布几何不匹配：viewport=${geometry.viewportWidth}×${geometry.viewportHeight}，` +
+        `root=${String(geometry.rootWidth)}×${String(geometry.rootHeight)}@` +
+        `${String(geometry.rootLeft)},${String(geometry.rootTop)}，` +
+        `scroll=${geometry.scrollWidth}×${geometry.scrollHeight}`
+    )
   }
 }
 
@@ -62,19 +103,23 @@ function createSession(
   browser: Browser,
   context: BrowserContext,
   page: Page,
-  cdp: CDPSession
+  cdp: CDPSession,
+  pageScript: { failed: boolean }
 ): FrameCaptureSession {
   let closed = false
   return {
     async capture(frame, fps) {
       if (closed) throw new Error('FrameCaptureSession 已关闭')
       validateFrame(frame, fps)
-      await seekRuntime(page, frame, fps)
+      assertPageScript(pageScript)
+      await seekFrameRuntime(page, frame, fps)
+      assertPageScript(pageScript)
       const screenshot = await cdp.send('Page.captureScreenshot', {
         format: 'png',
         fromSurface: true,
         captureBeyondViewport: false,
       })
+      assertPageScript(pageScript)
       return Buffer.from(screenshot.data, 'base64')
     },
     async close() {
@@ -85,6 +130,10 @@ function createSession(
       await browser.close()
     },
   }
+}
+
+function assertPageScript(state: { failed: boolean }): void {
+  if (state.failed) throw new Error('shot 页面脚本执行失败')
 }
 
 async function assertRuntime(page: Page): Promise<void> {
@@ -109,8 +158,12 @@ async function assertRuntime(page: Page): Promise<void> {
   if (!runtime.hasSeek) throw new Error('__CVC_RENDER__.seek 必须是函数')
 }
 
-async function seekRuntime(page: Page, frame: number, fps: number): Promise<void> {
-  await page.evaluate(
+export async function seekFrameRuntime(
+  page: Page,
+  frame: number,
+  fps: number
+): Promise<void> {
+  const outcome = await page.evaluate(
     async ({ targetFrame, targetFps }) => {
       const runtime = (
         window as unknown as {
@@ -119,10 +172,18 @@ async function seekRuntime(page: Page, frame: number, fps: number): Promise<void
           }
         }
       ).__CVC_RENDER__
-      await runtime.seek(targetFrame, targetFps)
+      try {
+        await runtime.seek(targetFrame, targetFps)
+        return 'ok'
+      } catch {
+        return 'source-error'
+      }
     },
     { targetFrame: frame, targetFps: fps }
   )
+  if (outcome === 'source-error') {
+    throw new Error('shot 页面脚本执行失败')
+  }
 }
 
 function validateFrame(frame: number, fps: number): void {

@@ -42,7 +42,7 @@ export function buildRootHtml(
     .map((ch) => {
       const start = round(ch.startSec)
       const dur = round(ch.durationSec)
-      return `      <div data-composition-src="compositions/${ch.id}.html" data-start="${start}" data-duration="${dur}" data-width="1920" data-height="1080"></div>`
+      return `      <div data-composition-id="host-${ch.id}" data-composition-src="compositions/${ch.id}.html" data-start="${start}" data-duration="${dur}" data-width="1920" data-height="1080"></div>`
     })
     .join("\n")
 

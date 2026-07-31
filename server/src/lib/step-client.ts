@@ -28,7 +28,11 @@ export interface StepMessageOptions {
 
 const MODEL = process.env.STEP_MODEL || "step-explore"
 const MIN_INTERVAL_MS = Number(process.env.STEP_MIN_INTERVAL_MS) || 7000
-const MAX_RETRIES = Number(process.env.STEP_MAX_RETRIES) || 4
+const MAX_RETRIES = nonNegativeInteger(process.env.STEP_MAX_RETRIES, 4)
+const REQUEST_TIMEOUT_MS = positiveInteger(
+  process.env.STEP_REQUEST_TIMEOUT_MS,
+  90_000,
+)
 
 function getConfig() {
   const apiKey = process.env.STEP_API_KEY
@@ -68,6 +72,7 @@ async function doCall(opts: StepMessageOptions): Promise<string> {
     try {
       res = await fetch(`${baseURL}/messages`, {
         method: "POST",
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
@@ -83,6 +88,7 @@ async function doCall(opts: StepMessageOptions): Promise<string> {
         }),
       })
     } catch (err) {
+      if (isTimeoutError(err)) throw err
       if (attempt < MAX_RETRIES) {
         logger.warn("step_client:network_error_retry", { attempt, error: String(err) })
         await sleep(4000)
@@ -111,4 +117,21 @@ async function doCall(opts: StepMessageOptions): Promise<string> {
   }
 
   throw new Error("StepFun API: exhausted retries")
+}
+
+function positiveInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback
+}
+
+function nonNegativeInteger(
+  value: string | undefined,
+  fallback: number,
+): number {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback
+}
+
+function isTimeoutError(error: unknown): boolean {
+  return error instanceof Error && error.name === "TimeoutError"
 }

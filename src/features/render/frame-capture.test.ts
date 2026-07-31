@@ -1,9 +1,14 @@
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import type { Page } from 'playwright'
 import { describe, expect, it, vi } from 'vitest'
 import { checkSource } from '@/lib/determinism'
-import { captureFrame, openFrameCapture } from './frame-capture'
+import {
+  captureFrame,
+  openFrameCapture,
+  seekFrameRuntime,
+} from './frame-capture'
 
 vi.mock('server-only', () => ({}))
 
@@ -12,6 +17,18 @@ const fixturePath = fileURLToPath(
 )
 const invalidRuntimePath = fileURLToPath(
   new URL('./__fixtures__/invalid-runtime.html', import.meta.url)
+)
+const portraitCanvasPath = fileURLToPath(
+  new URL('./__fixtures__/portrait-canvas.html', import.meta.url)
+)
+const runtimePageErrorPath = fileURLToPath(
+  new URL('./__fixtures__/runtime-page-error.html', import.meta.url)
+)
+const runtimeSeekErrorPath = fileURLToPath(
+  new URL('./__fixtures__/runtime-seek-error.html', import.meta.url)
+)
+const runtimeAsyncSeekErrorPath = fileURLToPath(
+  new URL('./__fixtures__/runtime-async-seek-error.html', import.meta.url)
 )
 
 describe('frame capture', () => {
@@ -39,6 +56,51 @@ describe('frame capture', () => {
       '__CVC_RENDER__ runtime version'
     )
   }, 10_000)
+
+  it('rejects runtime geometry that is not the 1920×1080 master canvas', async () => {
+    await expect(openFrameCapture(portraitCanvasPath)).rejects.toThrow(
+      '母版画布几何不匹配'
+    )
+  }, 10_000)
+
+  it('rejects a page script error even when runtime and geometry exist', async () => {
+    await expect(openFrameCapture(runtimePageErrorPath)).rejects.toThrow(
+      'shot 页面脚本执行失败'
+    )
+  }, 10_000)
+
+  it('rejects a runtime script error raised during seek', async () => {
+    const capture = await openFrameCapture(runtimeSeekErrorPath)
+    try {
+      await expect(capture.capture(1, 30)).rejects.toThrow(
+        'shot 页面脚本执行失败'
+      )
+    } finally {
+      await capture.close()
+    }
+  }, 10_000)
+
+  it('rejects an asynchronous page error raised during seek', async () => {
+    const capture = await openFrameCapture(runtimeAsyncSeekErrorPath)
+    try {
+      await expect(capture.capture(1, 30)).rejects.toThrow(
+        'shot 页面脚本执行失败'
+      )
+    } finally {
+      await capture.close()
+    }
+  }, 10_000)
+
+  it('preserves Playwright infrastructure failures raised during seek', async () => {
+    const failure = new Error('browser process unavailable')
+    const page = {
+      evaluate: vi.fn(async () => {
+        throw failure
+      }),
+    } as unknown as Page
+
+    await expect(seekFrameRuntime(page, 1, 30)).rejects.toBe(failure)
+  })
 
   it('keeps the deterministic fixture free of forbidden sources', async () => {
     const source = await readFile(fixturePath, 'utf8')

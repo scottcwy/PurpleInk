@@ -1,38 +1,43 @@
-import type { ButtonHTMLAttributes, ComponentType } from 'react'
+import type { ComponentType, ReactNode } from 'react'
+import type { HTMLMotionProps } from 'motion/react'
+import { ControlPressButton } from '@/components/ui/control-motion'
 import { cn } from '@/lib/utils'
 
 /**
- * 设计系统 4 变体（见 design-system-inventory §4 B1）：
- * - primary: 主 CTA（accent 底 + on-accent 字）
- * - tinted: 次主操作（accent-fill 底 + accent 字）
- * - gray: 取消 / 次级（fill 底 + label 字）
- * - destructive: 破坏性（danger 底 + on-accent 字）
+ * 设计系统 4 变体（见 design-system-inventory §4.3）：
+ * - primary: 主 CTA（扁平墨色实心，暗色反转为近白；零渐变零投影）— 新建项目、导出
+ * - tinted: 次主操作（blue-soft 底 + blue 字）— 执行此阶段、生成分镜代码
+ * - gray: 取消 / 次级
+ * - destructive: 高代价操作（red）— 重渲此镜、删除
  */
 export type ButtonVariant = 'primary' | 'tinted' | 'gray' | 'destructive'
 export type ButtonSize = 'sm' | 'md' | 'lg'
 
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends Omit<HTMLMotionProps<'button'>, 'children'> {
   variant?: ButtonVariant
   size?: ButtonSize
   icon?: ComponentType<{ className?: string }>
+  children?: ReactNode
 }
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: 'ds-primary-button text-white hover:brightness-105',
-  tinted: 'bg-ds-blue-soft text-ds-blue hover:brightness-95',
+  primary: 'ds-primary-button active:brightness-95',
+  tinted:
+    'bg-ds-blue-soft text-ds-blue hover:bg-[color-mix(in_srgb,var(--ds-blue)_16%,transparent)] active:brightness-95',
   gray:
-    'border border-ds-border bg-ds-surface text-ds-text hover:bg-ds-surface-muted',
-  destructive: 'bg-ds-red text-white hover:brightness-95',
+    'border border-ds-border bg-ds-surface text-ds-text hover:bg-ds-surface-muted active:brightness-95',
+  destructive:
+    'bg-ds-red text-white hover:brightness-95 active:brightness-90',
 }
 
 const SIZES: Record<ButtonSize, string> = {
-  sm: 'h-8 gap-1.5 px-3 text-xs rounded-md',
-  md: 'h-10 gap-2 px-3.5 text-sm rounded-md',
-  lg: 'h-11 gap-2 px-5 text-sm rounded-md',
+  sm: 'h-8 gap-1.5 px-3 text-[13px] rounded-md',
+  md: 'h-9 gap-2 px-3.5 text-sm rounded-md',
+  lg: 'h-10 gap-2 px-4 text-sm rounded-md',
 }
 
 const BASE =
-  'inline-flex items-center justify-center font-medium transition-[background-color,filter,opacity] disabled:pointer-events-none disabled:opacity-50'
+  'inline-flex items-center justify-center font-medium transition-[background-color,box-shadow,filter,opacity,transform] duration-fast active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-ring disabled:pointer-events-none disabled:opacity-45'
 
 /**
  * 按钮外观配方（SSOT）。
@@ -63,12 +68,12 @@ export function Button({
   ...props
 }: ButtonProps) {
   return (
-    <button
+    <ControlPressButton
       className={buttonClassName({ variant, size, className })}
       {...props}
     >
       {Icon && <Icon className="h-4 w-4 shrink-0" />}
       {children}
-    </button>
+    </ControlPressButton>
   )
 }

@@ -1,35 +1,38 @@
-import { createHash, randomUUID } from 'node:crypto'
-import os from 'node:os'
-import { and, asc, eq, like, notInArray } from 'drizzle-orm'
-import { getDb, LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
-import { pipelineRuns, taskAttempts } from '@/lib/db/schema/index'
 import {
-  ACTIVE_WORKFLOW_VERSION,
-  serializeWorkflowVersion,
-} from '@/lib/workflow/version'
+  runInAuthContext,
+  SYSTEM_USER_ID,
+} from '@/lib/auth/workspace-context'
+import { getDb } from '@/lib/db/client'
+import { classifyWorkflowError } from '@/features/canvas/workflow-error'
+import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
+import { releaseTerminalWorkflowSlotForNode } from '@/features/ai/workspace-concurrency-release'
+import { completeAttempt } from './attempt-completion'
+import { safeErrorDetails } from './queue-error-details'
+import {
+  HEARTBEAT_INTERVAL_MS,
+  SWEEP_INTERVAL_MS,
+  renewLeases,
+  sweepExpiredLeases,
+  withExecutionTimeout,
+} from './lease'
 import type { JobHandler, LaneQuotas, QueueAdapter, QueueJob } from './types'
-
-interface LegacyQueueCheckpoint {
-  schemaVersion: number
-  kind: string
-  payload: Record<string, unknown>
-}
+import type { ClaimFilter } from './queue-claim'
+import { defaultQueueLaneQuotas } from './queue-defaults'
+import {
+  registerAttemptController,
+  unregisterAttemptController,
+} from './execution-cancellation'
+import {
+  enqueueLegacyJob,
+  type QueueEnqueueOptions,
+} from './queue-enqueue'
 
 /** 未在 `start(lanes)` 中显式配额的 kind 落入此通道，固定配额 1。 */
 const FALLBACK_LANE = '__fallback__'
 const FALLBACK_LANE_QUOTA = 1
 
-export const DEFAULT_DIRECTOR_STAGE_CONCURRENCY = 12
-
-export function defaultRenderShotConcurrency(): number {
-  return Math.max(1, Math.floor(os.cpus().length / 2))
-}
-
 function defaultLaneQuotas(): Record<string, number> {
-  return {
-    'director-stage': DEFAULT_DIRECTOR_STAGE_CONCURRENCY,
-    'render-shot': defaultRenderShotConcurrency(),
-  }
+  return defaultQueueLaneQuotas()
 }
 
 export function isPositiveInteger(value: number): boolean {
@@ -52,49 +55,26 @@ function resolveLanes(lanes: LaneQuotas): Record<string, number> {
   return resolved
 }
 
-type ClaimFilter = { kind: string } | { excludeKinds: string[] }
-
 export class InProcessQueue implements QueueAdapter {
   private readonly handlers = new Map<string, JobHandler>()
   private timer: ReturnType<typeof setInterval> | null = null
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null
+  private sweepTimer: ReturnType<typeof setInterval> | null = null
   private readonly running = new Map<string, number>()
+  /** 本进程当前持有的 running attempt；心跳只续租这些。 */
+  private readonly heldAttempts = new Set<string>()
+  private readonly activeExecutions = new Set<Promise<void>>()
+  private readonly backgroundOperations = new Set<Promise<void>>()
+  private tickInProgress = false
+  private sweepInProgress = false
   private lanes: Record<string, number> = {}
 
   async enqueue(
     kind: string,
     payload: Record<string, unknown> = {},
-    opts: { projectId?: string; nodeId?: string } = {},
+    opts: QueueEnqueueOptions = {},
   ): Promise<string> {
-    if (!opts.projectId) {
-      throw new Error('legacy queue enqueue requires a trusted projectId')
-    }
-    const database = await getDb()
-    const runId = randomUUID()
-    const attemptId = randomUUID()
-    const fingerprint = queueFingerprint(kind, payload)
-    await database.transaction(async (transaction) => {
-      await transaction.insert(pipelineRuns).values({
-        workspaceId: LOCAL_WORKSPACE_ID,
-        id: runId,
-        projectId: opts.projectId!,
-        status: 'queued',
-        workflowVersion: serializeWorkflowVersion(ACTIVE_WORKFLOW_VERSION),
-        fingerprint,
-      })
-      await transaction.insert(taskAttempts).values({
-        workspaceId: LOCAL_WORKSPACE_ID,
-        id: attemptId,
-        runId,
-        taskId: `legacy.${kind}`,
-        entityType: opts.nodeId ? 'node' : 'project',
-        entityId: opts.nodeId ?? opts.projectId!,
-        attemptNo: 1,
-        status: 'queued',
-        fingerprint,
-        checkpoint: { schemaVersion: 1, kind, payload },
-      })
-    })
-    return attemptId
+    return enqueueLegacyJob(kind, payload, opts)
   }
 
   register(kind: string, handler: JobHandler): void {
@@ -105,7 +85,20 @@ export class InProcessQueue implements QueueAdapter {
     const resolved = resolveLanes(lanes)
     if (this.timer) return
     this.lanes = resolved
-    this.timer = setInterval(() => void this.tick(), 200)
+    this.timer = setInterval(
+      () => this.trackBackground(this.runTick(), '消费循环失败'),
+      200,
+    )
+    this.heartbeatTimer = setInterval(
+      () => this.trackBackground(this.heartbeat(), '租约续期失败'),
+      HEARTBEAT_INTERVAL_MS
+    )
+    this.sweepTimer = setInterval(
+      () => this.trackBackground(this.runSweep(), '僵尸回收失败'),
+      SWEEP_INTERVAL_MS,
+    )
+    // 启动即回收上个进程崩溃遗留的僵尸 attempt，不等首个 sweep 周期。
+    this.trackBackground(this.runSweep(), '启动清扫失败')
   }
 
   stop(): void {
@@ -113,18 +106,55 @@ export class InProcessQueue implements QueueAdapter {
       clearInterval(this.timer)
       this.timer = null
     }
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer)
+      this.heartbeatTimer = null
+    }
+    if (this.sweepTimer) {
+      clearInterval(this.sweepTimer)
+      this.sweepTimer = null
+    }
+  }
+
+  private async heartbeat(): Promise<void> {
+    if (this.heldAttempts.size === 0) return
+    try {
+      await renewLeases(await getDb(), [...this.heldAttempts])
+    } catch (error) {
+      // 续租失败不能打断消费循环；持续失败的后果是租约过期被 sweep 回收。
+      console.error('[queue] 租约续期失败', error)
+    }
+  }
+
+  private async sweep(): Promise<void> {
+    try {
+      const database = await getDb()
+      await sweepExpiredLeases(database)
+      const { reconcileStaleExecutionEpochs } = await import(
+        './execution-reconciliation'
+      )
+      await reconcileStaleExecutionEpochs(database)
+      const { reconcileDirectorFrontiers } = await import(
+        '@/features/director/frontier-reconciliation'
+      )
+      await reconcileDirectorFrontiers(database)
+      const { reconcileExpiredProviderTickets } = await import(
+        '@/features/ai/provider-dispatch-ticket'
+      )
+      await reconcileExpiredProviderTickets(database)
+    } catch (error) {
+      console.error('[queue] 僵尸 attempt 回收失败', error)
+    }
   }
 
   private async tick(): Promise<void> {
     const knownKinds = Object.keys(this.lanes)
-    await Promise.all([
-      ...knownKinds.map((kind) =>
-        this.drainLane(kind, this.lanes[kind]!, { kind })
-      ),
-      this.drainLane(FALLBACK_LANE, FALLBACK_LANE_QUOTA, {
-        excludeKinds: knownKinds,
-      }),
-    ])
+    for (const kind of knownKinds) {
+      await this.drainLane(kind, this.lanes[kind]!, { kind })
+    }
+    await this.drainLane(FALLBACK_LANE, FALLBACK_LANE_QUOTA, {
+      excludeKinds: knownKinds,
+    })
   }
 
   /** 在单个通道内按配额领取作业；`laneKey` 是并发计数的桶，不一定等于作业的真实 kind（兜底通道混装多个未登记 kind）。 */
@@ -133,169 +163,184 @@ export class InProcessQueue implements QueueAdapter {
     quota: number,
     filter: ClaimFilter
   ): Promise<void> {
+    const { claimNextJob } = await import('./queue-claim')
     while ((this.running.get(laneKey) ?? 0) < quota) {
-      const job = await this.claim(filter)
+      const job = await claimNextJob(filter)
       if (!job) return
+      this.heldAttempts.add(job.id)
       this.running.set(laneKey, (this.running.get(laneKey) ?? 0) + 1)
-      void this.run(job).finally(() => {
+      const execution = this.run(job)
+      this.activeExecutions.add(execution)
+      const release = (): void => {
         this.running.set(laneKey, (this.running.get(laneKey) ?? 0) - 1)
+        this.heldAttempts.delete(job.id)
+        this.activeExecutions.delete(execution)
+      }
+      void execution.then(release, (error: unknown) => {
+        release()
+        console.error('[queue] 作业收敛失败', error)
       })
     }
   }
 
-  private async claim(filter: ClaimFilter): Promise<QueueJob | null> {
-    const database = await getDb()
-    return database.transaction(async (transaction) => {
-      const kindCondition =
-        'kind' in filter
-          ? eq(taskAttempts.taskId, `legacy.${filter.kind}`)
-          : and(
-              like(taskAttempts.taskId, 'legacy.%'),
-              notInArray(
-                taskAttempts.taskId,
-                filter.excludeKinds.map((kind) => `legacy.${kind}`)
-              )
-            )
-      const [row] = await transaction
-        .select({
-          id: taskAttempts.id,
-          runId: taskAttempts.runId,
-          taskId: taskAttempts.taskId,
-          checkpoint: taskAttempts.checkpoint,
-          attemptNo: taskAttempts.attemptNo,
-        })
-        .from(taskAttempts)
-        .where(
-          and(
-            eq(taskAttempts.workspaceId, LOCAL_WORKSPACE_ID),
-            eq(taskAttempts.status, 'queued'),
-            kindCondition
-          )
-        )
-        .orderBy(asc(taskAttempts.createdAt), asc(taskAttempts.id))
-        .limit(1)
-        .for('update', { skipLocked: true })
-      if (!row) return null
-      const [claimed] = await transaction
-        .update(taskAttempts)
-        .set({ status: 'running', startedAt: new Date(), updatedAt: new Date() })
-        .where(
-          and(
-            eq(taskAttempts.workspaceId, LOCAL_WORKSPACE_ID),
-            eq(taskAttempts.id, row.id),
-            eq(taskAttempts.status, 'queued')
-          )
-        )
-        .returning({ id: taskAttempts.id })
-      if (!claimed) return null
-      await transaction
-        .update(pipelineRuns)
-        .set({ status: 'running', startedAt: new Date(), updatedAt: new Date() })
-        .where(
-          and(
-            eq(pipelineRuns.workspaceId, LOCAL_WORKSPACE_ID),
-            eq(pipelineRuns.id, row.runId)
-          )
-        )
-      const checkpoint = parseCheckpoint(row.checkpoint)
-      return {
-        id: row.id,
-        kind: checkpoint.kind,
-        status: 'running',
-        payload: checkpoint.payload,
-        attempts: row.attemptNo,
-      }
-    })
-  }
-
+  /**
+   * 执行已领取的作业。handler 在 attempt 行自身的 workspace 上下文内运行：
+   * 队列没有请求上下文，但 run 已固化真实发起账号；历史 run 无法归属时才使用
+   * SYSTEM_USER_ID。重试、fallback 与自动续接因此不会覆盖原始发起人。
+   */
   private async run(job: QueueJob): Promise<void> {
     const database = await getDb()
     const handler = this.handlers.get(job.kind)
     if (!handler) {
-      await completeAttempt(database, job.id, 'failed', `no handler for kind: ${job.kind}`)
-      return
-    }
-    try {
-      await handler(job)
-      await completeAttempt(database, job.id, 'succeeded')
-    } catch (err) {
+      // 未注册 handler 是进程内配置缺口，重试无法自愈，直接终态。
       await completeAttempt(
         database,
+        job.workspaceId,
         job.id,
         'failed',
-        err instanceof Error ? err.message : String(err)
+        `no handler for kind: ${job.kind}`,
+        { allowAutoRetry: false }
       )
+      await releaseTerminalSlot(database, job)
+      return
+    }
+    const startedAt = Date.now()
+    const controller = registerAttemptController(job.id)
+    const cancellableJob = { ...job, signal: controller.signal }
+    try {
+      controller.signal.throwIfAborted()
+      await withExecutionTimeout(
+        job.kind,
+        () =>
+          runInAuthContext(
+            {
+              workspaceId: job.workspaceId,
+              userId: job.requestedByUserId ?? SYSTEM_USER_ID,
+            },
+            () => handler(cancellableJob)
+          ),
+        controller,
+      )
+      controller.signal.throwIfAborted()
+      await completeAttempt(database, job.workspaceId, job.id, 'succeeded')
+    } catch (err) {
+      if (err instanceof ProviderQueueDeferral) {
+        console.info('[provider_queue_deferred]', {
+          provider: err.providerId,
+          attemptId: job.id,
+          kind: job.kind,
+          waitReason: err.waitReason,
+          retryAt: err.retryAt,
+        })
+        await completeAttempt(
+          database,
+          job.workspaceId,
+          job.id,
+          'failed',
+          err,
+        )
+        return
+      }
+      const fault = classifyWorkflowError(err, { stage: 'QUEUE' })
+      console.error('[workflow-attempt]', JSON.stringify({
+        referenceId: fault.referenceId,
+        code: fault.code,
+        origin: fault.origin,
+        provider: fault.provider?.id ?? null,
+        status: fault.provider?.httpStatus ?? null,
+        stage: fault.stage,
+        attemptId: job.id,
+        kind: job.kind,
+        durationMs: Date.now() - startedAt,
+        retryAt: fault.provider?.retryAt ?? null,
+        errorName: err instanceof Error ? err.name : 'NonErrorThrown',
+        errorMessage: err instanceof Error ? err.message?.slice(0, 300) : null,
+        details: safeErrorDetails(err),
+      }))
+      await completeAttempt(
+        database,
+        job.workspaceId,
+        job.id,
+        'failed',
+        err
+      )
+    } finally {
+      unregisterAttemptController(job.id, controller)
+      await releaseTerminalSlot(database, job)
     }
   }
+
+  private async runTick(): Promise<void> {
+    if (this.tickInProgress) return
+    this.tickInProgress = true
+    try {
+      await this.tick()
+    } finally {
+      this.tickInProgress = false
+    }
+  }
+
+  private async runSweep(): Promise<void> {
+    if (this.sweepInProgress) return
+    this.sweepInProgress = true
+    try {
+      await this.sweep()
+    } finally {
+      this.sweepInProgress = false
+    }
+  }
+
+  async stopAndDrain(timeoutMs = 30_000): Promise<void> {
+    this.stop()
+    const deadline = Date.now() + timeoutMs
+    while (this.activeExecutions.size > 0 || this.backgroundOperations.size > 0) {
+      const remainingMs = deadline - Date.now()
+      if (remainingMs <= 0) throw new Error('queue drain timed out')
+      let timeout: ReturnType<typeof setTimeout> | undefined
+      try {
+        await Promise.race([
+          Promise.allSettled([
+            ...this.activeExecutions,
+            ...this.backgroundOperations,
+          ]),
+          new Promise<never>((_, reject) => {
+            timeout = setTimeout(
+              () => reject(new Error('queue drain timed out')),
+              remainingMs,
+            )
+          }),
+        ])
+      } finally {
+        if (timeout) clearTimeout(timeout)
+      }
+    }
+  }
+
+  private trackBackground(operation: Promise<void>, label: string): void {
+    this.backgroundOperations.add(operation)
+    void operation.then(
+      () => this.backgroundOperations.delete(operation),
+      (error: unknown) => {
+        this.backgroundOperations.delete(operation)
+        console.error(`[queue] ${label}`, error)
+      },
+    )
+  }
 }
 
-function queueFingerprint(
-  kind: string,
-  payload: Record<string, unknown>
-): string {
-  return createHash('sha256')
-    .update(kind)
-    .update('\0')
-    .update(JSON.stringify(payload))
-    .digest('hex')
-}
-
-function parseCheckpoint(value: unknown): LegacyQueueCheckpoint {
-  if (!value || typeof value !== 'object') {
-    throw new Error('legacy queue checkpoint is invalid')
-  }
-  const record = value as Record<string, unknown>
-  if (
-    record.schemaVersion !== 1 ||
-    typeof record.kind !== 'string' ||
-    !record.payload ||
-    typeof record.payload !== 'object' ||
-    Array.isArray(record.payload)
-  ) {
-    throw new Error('legacy queue checkpoint is invalid')
-  }
-  return {
-    schemaVersion: 1,
-    kind: record.kind,
-    payload: record.payload as Record<string, unknown>,
-  }
-}
-
-async function completeAttempt(
-  database: Db,
-  attemptId: string,
-  status: 'succeeded' | 'failed',
-  message?: string
+async function releaseTerminalSlot(
+  database: Awaited<ReturnType<typeof getDb>>,
+  job: QueueJob,
 ): Promise<void> {
-  await database.transaction(async (transaction) => {
-    const [attempt] = await transaction
-      .update(taskAttempts)
-      .set({
-        status,
-        failure: message ? { schemaVersion: 1, message } : null,
-        completedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(taskAttempts.workspaceId, LOCAL_WORKSPACE_ID),
-          eq(taskAttempts.id, attemptId)
-        )
-      )
-      .returning({ runId: taskAttempts.runId })
-    if (!attempt) throw new Error(`legacy queue attempt not found: ${attemptId}`)
-    await transaction
-      .update(pipelineRuns)
-      .set({
-        status,
-        completedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(pipelineRuns.workspaceId, LOCAL_WORKSPACE_ID),
-          eq(pipelineRuns.id, attempt.runId)
-        )
-      )
-  })
+  const nodeId = typeof job.payload.nodeId === 'string' ? job.payload.nodeId : null
+  if (!nodeId) return
+  try {
+    await releaseTerminalWorkflowSlotForNode({
+      workspaceId: job.workspaceId,
+      nodeId,
+      database,
+    })
+  } catch (error) {
+    console.error('[queue] 分镜并发租约释放失败', { nodeId, error })
+  }
 }

@@ -2,20 +2,22 @@ import 'server-only'
 import {
   createModels,
   createProvider,
-  envApiKeyAuth,
 } from '@earendil-works/pi-ai'
-import type { Api, Model, MutableModels } from '@earendil-works/pi-ai'
+import type { Api, ApiKeyAuth, Model, MutableModels } from '@earendil-works/pi-ai'
 import { googleGenerativeAIApi } from '@earendil-works/pi-ai/api/google-generative-ai.lazy'
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy'
-import type { CanvasNodeType } from '@/features/canvas'
+import type { DirectorCanvasNodeType } from '@/features/canvas'
+import { assertBillingAvailable } from '@/features/billing'
 import {
   DIRECTOR_NODE_TYPES,
   resolveDirectorModelTarget,
 } from '@/features/ai/model-routing'
+import type { AiProviderId } from '@/features/ai/provider-registry'
+import { RouteContractError } from '@/features/ai/route-contract-error'
 import type { PipelineStage } from './types'
 
 /** 阶段兜底节点类型：仅在节点类型缺失/不可信时使用，与全局泳道播种保持一致。 */
-const STAGE_FALLBACK_NODE_TYPE: Record<PipelineStage, CanvasNodeType> = {
+const STAGE_FALLBACK_NODE_TYPE: Record<PipelineStage, DirectorCanvasNodeType> = {
   INGEST: 'script-import',
   DIRECT: 'shot-split',
   SHOT_SPEC: 'shot-script',
@@ -24,23 +26,50 @@ const STAGE_FALLBACK_NODE_TYPE: Record<PipelineStage, CanvasNodeType> = {
   FINALIZE: 'export',
 }
 
-const PROVIDER_LABEL = { gemini: 'Gemini', stepfun: 'StepFun' } as const
+/**
+ * 显式声明为 `Record<AiProviderId, …>`：注册新供应商时漏补条目会变成编译错误，
+ * 而不是运行期 `undefined` 拼进 routeLabel 或错误文案。
+ */
+const PROVIDER_LABEL: Record<AiProviderId, string> = {
+  gemini: 'Gemini',
+  stepfun: 'StepFun',
+  mimo: '小米 MiMo',
+  'openai-compatible': 'OpenAI 兼容模型服务',
+  'openai-compatible-tts': '自定义兼容 TTS',
+  'openai-compatible-asr': '自定义兼容 ASR',
+}
 
 /**
  * 请求整形上限：只用于本地 maxTokens 裁剪与上下文预算估算，
  * 不是供应商元数据，也不会出现在任何用户可见字段里。
  */
-const REQUEST_SHAPE = {
+const REQUEST_SHAPE: Record<
+  AiProviderId,
+  { contextWindow: number; maxTokens: number } | null
+> = {
   gemini: { contextWindow: 1_048_576, maxTokens: 65_536 },
   stepfun: { contextWindow: 131_072, maxTokens: 32_768 },
-} as const
+  mimo: { contextWindow: 1_048_576, maxTokens: 131_072 },
+  'openai-compatible': { contextWindow: 131_072, maxTokens: 32_768 },
+  // 纯音频端点不承担 Director 文本会话。`null` 是显式表态而不是漏项：编造一份
+  // token 预算会让一个不可能成功的会话看起来配置齐全。
+  'openai-compatible-tts': null,
+  'openai-compatible-asr': null,
+}
 
 export interface DirectorModelRuntime {
   models: MutableModels
   model: Model<Api>
   apiKey: string
+  /** 实际执行的 provider id：熔断记账（pi-session 收敛点）按它计数。 */
+  providerId: AiProviderId
+  providerLabel: string
+  funding: 'managed' | 'byok'
   /** 供失败分类使用的选型描述，不含任何凭据。 */
   routeLabel: string
+  modelId: string
+  maxOutputTokens: number
+  deductsManagedPool: boolean
 }
 
 /**
@@ -56,6 +85,14 @@ export async function createDirectorModelRuntime(input: {
   const nodeType = trustedNodeType(input.nodeType, input.stage)
   const target = await resolveDirectorModelTarget(nodeType, 'text')
   const label = PROVIDER_LABEL[target.provider]
+  const requestShape = REQUEST_SHAPE[target.provider]
+  // 纯音频端点不可能承担文本会话。这是设置面矛盾而非外部抖动，用
+  // RouteContractError 让分类器直接判定不可重试，而不是让画布劝用户反复重试。
+  if (!requestShape) {
+    throw new RouteContractError(
+      `${label} 只提供音频能力，不能承担 Director 文本会话`,
+    )
+  }
   if (!target.apiKey) {
     throw new Error(`${label} API Key 未配置，无法执行 Director 阶段`)
   }
@@ -76,7 +113,7 @@ export async function createDirectorModelRuntime(input: {
     input: ['text', 'image'],
     // 成本核算不在本项目范围内，保持 0 而不是编造费率。
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    ...REQUEST_SHAPE[target.provider],
+    ...requestShape,
   }
   const models = createModels()
   models.setProvider(
@@ -84,10 +121,7 @@ export async function createDirectorModelRuntime(input: {
       id: target.provider,
       baseUrl,
       auth: {
-        apiKey: envApiKeyAuth(
-          `${label} API Key`,
-          target.provider === 'gemini' ? ['GEMINI_API_KEY'] : ['STEP_API_KEY'],
-        ),
+        apiKey: resolvedRouteApiKeyAuth(`${label} API Key`, target.apiKey),
       },
       api: target.provider === 'gemini'
         ? googleGenerativeAIApi()
@@ -99,16 +133,54 @@ export async function createDirectorModelRuntime(input: {
     models,
     model,
     apiKey: target.apiKey,
-    routeLabel: `${target.provider}/${target.modelId}`,
+    providerId: target.provider,
+    providerLabel: PROVIDER_LABEL[target.provider],
+    funding: target.funding ?? (target.deductsManagedPool === true ? 'managed' : 'byok'),
+    modelId: target.modelId,
+    maxOutputTokens: requestShape.maxTokens,
+    deductsManagedPool: target.deductsManagedPool === true,
+    // 降级发生时 routeLabel 如实标注备选身份：该标签随失败落入
+    // attempt.failure 与服务端日志，是降级事实在错误链路上的可追溯出口。
+    routeLabel: target.degradedFrom
+      ? `${target.provider}/${target.modelId}（备选，主选 ${target.degradedFrom} 已熔断）`
+      : `${target.provider}/${target.modelId}`,
+  }
+}
+
+/** 入队前的轻量额度预检；BYOK 路由不受平台成本池影响。 */
+export async function assertDirectorBillingAvailable(input: {
+  nodeType?: string | null
+  stage: PipelineStage
+}): Promise<void> {
+  const target = await resolveDirectorModelTarget(
+    trustedNodeType(input.nodeType, input.stage),
+    'text',
+  )
+  if (target.deductsManagedPool === true) {
+    await assertBillingAvailable()
   }
 }
 
 function trustedNodeType(
   nodeType: string | null | undefined,
   stage: PipelineStage,
-): CanvasNodeType {
+): DirectorCanvasNodeType {
   const trusted = DIRECTOR_NODE_TYPES.find((candidate) => candidate === nodeType)
   return trusted ?? STAGE_FALLBACK_NODE_TYPE[stage]
+}
+
+/**
+ * Director 路由已在服务端解析并完成授权；PI transport 必须消费这个最终值，
+ * 不能再次回退旧环境变量，否则托管凭据与实际请求会发生分叉。
+ */
+function resolvedRouteApiKeyAuth(name: string, apiKey: string): ApiKeyAuth {
+  return {
+    name,
+    resolve: async () => ({
+      auth: { apiKey },
+      source: 'resolved route credential',
+    }),
+  }
 }
 
 /**

@@ -1,15 +1,23 @@
 import { Clapperboard } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import { EmptyState } from '@/components/ui/empty-state'
+import { withPageSession } from '@/features/auth/page-session'
+import { getBillingProjection } from '@/features/billing'
+import { getWorkspaceConcurrencyProjection } from '@/features/ai/workspace-concurrency-projection'
+import type { BillingUiProjection } from '@/features/billing/ui/projection-contract'
 import {
   computeLayout,
   getCanvasGraph,
-  getProjectAutopilot,
   listProjects,
   type PositionedCanvasNode,
 } from '@/features/canvas'
+import {
+  getProjectExecutionSnapshot,
+} from '@/features/projects'
+import { getProjectRouteState } from '@/features/projects/project-compatibility'
 import { PublishNavContext } from '@/features/navigation/nav-context'
 import { CanvasLoader } from './canvas-loader'
+import { UnsupportedProjectNotice } from '@/features/canvas/unsupported-project-notice'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,11 +27,26 @@ interface CanvasPageProps {
 
 export default async function CanvasPage({ params }: CanvasPageProps) {
   const { projectId } = await params
+  return withPageSession(`/products/canvas/${projectId}`, () =>
+    renderCanvas(projectId),
+  )
+}
+
+async function renderCanvas(projectId: string) {
+  const routeState = await getProjectRouteState(projectId)
+  if (routeState === 'missing') notFound()
+  if (routeState === 'legacy') return <UnsupportedProjectNotice />
   const projects = await listProjects()
   const project = projects.find((candidate) => candidate.id === projectId)
   if (!project) notFound()
 
-  const graph = await getCanvasGraph(projectId)
+  const [graph, billing, concurrency, execution] = await Promise.all([
+    getCanvasGraph(projectId),
+    getBillingProjection(),
+    getWorkspaceConcurrencyProjection(),
+    getProjectExecutionSnapshot(projectId),
+  ])
+  const billingProjection: BillingUiProjection = billing
   if (graph.nodes.length === 0) {
     return <CanvasEmptyState projectId={projectId} description="当前项目还没有节点，请先导入并拆分脚本。" />
   }
@@ -39,7 +62,9 @@ export default async function CanvasPage({ params }: CanvasPageProps) {
     <CanvasLoader
       projectId={projectId}
       projectTitle={project.title}
-      autopilot={await getProjectAutopilot(projectId)}
+      initialExecution={execution}
+      billing={billingProjection}
+      concurrency={concurrency}
       nodes={nodes}
       edges={graph.edges}
     />

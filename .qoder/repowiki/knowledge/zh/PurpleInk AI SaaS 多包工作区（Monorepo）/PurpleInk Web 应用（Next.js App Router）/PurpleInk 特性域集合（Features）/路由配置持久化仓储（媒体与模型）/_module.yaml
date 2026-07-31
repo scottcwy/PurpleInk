@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: web_app/features/routing
+title: 路由配置持久化仓储（媒体与模型）
+scope:
+    - src/features/routing/
+source_files: []
+depends_on: []
+related_to:
+    - path: web_app/lib/db

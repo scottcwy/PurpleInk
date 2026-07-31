@@ -16,6 +16,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { loadEnvConfig } from '@next/env'
+import { authHeaders, establishSession } from './smoke-session'
 
 /**
  * `src/lib/db/client.ts` 与 `@/lib/storage` 用 `import 'server-only'` 作为 Next
@@ -59,6 +60,7 @@ interface GraphNode {
 }
 
 const TERMINAL = new Set(['succeeded', 'success', 'failed', 'cancelled'])
+const ACTIVE = new Set(['queued', 'running'])
 
 /** 会话进行中持续 append 的实时日志 kind：登记哈希是开始时刻快照，不做等值断言。 */
 const LIVE_LOG_KINDS = new Set(['pi-session'])
@@ -76,6 +78,8 @@ async function main(): Promise<void> {
     baseUrl: options.baseUrl,
     script: { characters: options.script.length },
   }
+
+  await establishSession(options.baseUrl, report)
 
   const projectId = await createProject(options)
   report.projectId = projectId
@@ -168,6 +172,12 @@ async function waitForTerminalGraph(
       lastSummary = summary
     }
     if (pending.length === 0 && nodes.length > 0) return nodes
+    if (
+      nodes.some((node) => node.status === 'failed')
+      && !nodes.some((node) => ACTIVE.has(node.status))
+    ) {
+      return nodes
+    }
     if (Date.now() > deadline) {
       throw new Error(
         `等待超时（${Math.round(options.timeoutMs / 1000)}s），仍未终态：` +
@@ -190,10 +200,12 @@ function summarize(nodes: readonly GraphNode[]): string {
 }
 
 async function readGraphNodes(projectId: string): Promise<GraphNode[]> {
-  const { getDb, LOCAL_WORKSPACE_ID } = await import('@/lib/db/client')
+  const { getDb } = await import('@/lib/db/client')
   const { canvasNodes } = await import('@/lib/db/schema/index')
-  const { and, eq } = await import('drizzle-orm')
+  const { eq } = await import('drizzle-orm')
   const database = await getDb()
+  // 取证按 projectId 直读（uuid 全局唯一）：登录账号的 workspace 由会话决定，
+  // 不再硬编码历史单工作区（PLAN-002 阶段 B）。
   const rows = await database
     .select({
       id: canvasNodes.id,
@@ -202,12 +214,7 @@ async function readGraphNodes(projectId: string): Promise<GraphNode[]> {
       logicalKey: canvasNodes.logicalKey,
     })
     .from(canvasNodes)
-    .where(
-      and(
-        eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
-        eq(canvasNodes.projectId, projectId)
-      )
-    )
+    .where(eq(canvasNodes.projectId, projectId))
   return rows
 }
 
@@ -223,9 +230,9 @@ interface ArtifactRow {
 
 /** 逐条核对 artifact 的登记哈希与磁盘实际字节 SHA-256。 */
 async function readArtifactInventory(projectId: string): Promise<ArtifactRow[]> {
-  const { getDb, LOCAL_WORKSPACE_ID } = await import('@/lib/db/client')
+  const { getDb } = await import('@/lib/db/client')
   const { artifacts } = await import('@/lib/db/schema/index')
-  const { and, eq } = await import('drizzle-orm')
+  const { eq } = await import('drizzle-orm')
   const { storage } = await import('@/lib/storage')
   const database = await getDb()
   const rows = await database
@@ -238,12 +245,7 @@ async function readArtifactInventory(projectId: string): Promise<ArtifactRow[]> 
       storageKey: artifacts.storageKey,
     })
     .from(artifacts)
-    .where(
-      and(
-        eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
-        eq(artifacts.projectId, projectId)
-      )
-    )
+    .where(eq(artifacts.projectId, projectId))
   const inventory: ArtifactRow[] = []
   for (const row of rows) {
     let actual: Buffer | null = null
@@ -268,6 +270,8 @@ async function readArtifactInventory(projectId: string): Promise<ArtifactRow[]> 
   return inventory
 }
 
+/** 凭据注入（Basic Auth + 应用内会话）收在 `./smoke-session.ts`，唯一出口。 */
+
 async function post(
   baseUrl: string,
   route: string,
@@ -275,7 +279,7 @@ async function post(
 ): Promise<Record<string, unknown>> {
   const response = await fetch(`${baseUrl}${route}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body),
   })
   const parsed: unknown = await response.json().catch(() => null)
@@ -330,7 +334,6 @@ async function writeReport(
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
-
 main().catch((error: unknown) => {
   console.error(
     `[e2e] 中止：${error instanceof Error ? error.message : String(error)}`

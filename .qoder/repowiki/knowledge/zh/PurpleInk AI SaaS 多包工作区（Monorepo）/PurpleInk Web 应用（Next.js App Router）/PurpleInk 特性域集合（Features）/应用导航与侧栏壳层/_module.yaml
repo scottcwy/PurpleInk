@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: web_app/features/navigation
+title: 应用导航与侧栏壳层
+scope:
+    - src/features/navigation/
+source_files: []
+depends_on: []
+related_to: []

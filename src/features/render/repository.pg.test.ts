@@ -20,6 +20,14 @@ import {
 } from './render.pg-fixture'
 import { RenderRepository } from './repository'
 
+// 被测模块经 currentWorkspaceId() 取归属（PLAN-002 阶段 B）；单测没有请求入口，
+// 把读取口 mock 成历史单工作区 id，与用例 seed 的数据保持一致。
+vi.mock('@/lib/auth/workspace-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/workspace-context')>()),
+  currentWorkspaceId: () => '00000000-0000-4000-8000-000000000001',
+  currentUserId: () => 'test-user',
+}))
+
 vi.mock('server-only', () => ({}))
 
 let database: PgTestDatabase
@@ -141,8 +149,8 @@ describe('RenderRepository Postgres', () => {
       },
     ])
     expect(plan.incompleteNodeIds).toEqual([fixture.qaNodeId])
-    expect(plan.resolutionPreset).toBe('720x1280')
-    expect(plan.targetResolution).toEqual({ width: 720, height: 1280 })
+    expect(plan.resolutionPreset).toBe('1280x720')
+    expect(plan.targetResolution).toEqual({ width: 1280, height: 720 })
   })
 
   it('round-trips rule QA inside the versioned node payload', async () => {
@@ -246,6 +254,152 @@ describe('RenderRepository Postgres', () => {
     expect(rows[1]?.supersedesArtifactId).toBe(first)
     expect(rows.every((row) => row.attemptId === fixture.nodeAttemptId)).toBe(
       true
+    )
+  })
+
+  it('rejects only the draft fabricate artifact used by the failed render', async () => {
+    const projectId = randomUUID()
+    const retryable = await seedRenderFixture(database.db, TEST_WORKSPACE_ID, projectId, {
+      codegenStatus: 'failed',
+    })
+    const newerArtifactId = await insertArtifact(database.db, {
+      projectId,
+      aggregateId: retryable.codegenNodeId,
+      attemptId: retryable.nodeAttemptId,
+      kind: 'director-fabricate',
+      storageKey: 'director/S001-v2.html',
+      contentHash: 'd'.repeat(64),
+      version: 2,
+    })
+    const repository = new RenderRepository(database.db)
+
+    await repository.rejectFabricateArtifact(
+      projectId,
+      retryable.codegenNodeId,
+      'director/S001.html',
+    )
+
+    const rows = await database.db
+      .select({
+        id: artifacts.id,
+        lifecycle: artifacts.lifecycle,
+        storageKey: artifacts.storageKey,
+      })
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.aggregateId, retryable.codegenNodeId),
+          eq(artifacts.kind, 'director-fabricate'),
+        ),
+      )
+      .orderBy(artifacts.version)
+    expect(rows).toEqual([
+      expect.objectContaining({
+        storageKey: 'director/S001.html',
+        lifecycle: 'rejected',
+      }),
+      expect.objectContaining({
+        id: newerArtifactId,
+        storageKey: 'director/S001-v2.html',
+        lifecycle: 'draft',
+      }),
+    ])
+    await expect(
+      repository.loadRenderAdmissionContext(projectId, retryable.codegenNodeId)
+    ).resolves.toMatchObject({
+      job: { htmlKey: 'director/S001-v2.html' },
+    })
+  })
+
+  it.each([
+    ['burn-in' as const, 'cvc.final-video/v2'],
+    ['off' as const, 'cvc.final-video/v3'],
+  ])(
+    'records the %s subtitle delivery on the immutable final artifact as %s',
+    async (subtitles, expectedSchemaVersion) => {
+      // 交付形态必须落在产物上：只靠导出时的设置，用户改一次开关，页面就会
+      // 对已存在的成片说谎。
+      const artifactId = await new RenderRepository(database.db).registerFinalArtifact({
+        projectId: fixture.projectId,
+        attemptId: fixture.projectAttemptId,
+        outputKey: `exports/final-${subtitles}.mp4`,
+        contentHash: (subtitles === 'burn-in' ? '9' : '8').repeat(64),
+        sizeBytes: 123,
+        subtitles,
+      })
+      const [row] = await database.db
+        .select({ schemaVersion: artifacts.schemaVersion })
+        .from(artifacts)
+        .where(
+          and(
+            eq(artifacts.workspaceId, TEST_WORKSPACE_ID),
+            eq(artifacts.id, artifactId)
+          )
+        )
+
+      expect(row?.schemaVersion).toBe(expectedSchemaVersion)
+    }
+  )
+
+  it('atomically binds final MP4 and procedural SFX manifest to the supplied attempt', async () => {
+    const repository = new RenderRepository(database.db)
+    const finalContentHash = '6'.repeat(64)
+    const manifestContentHash = '7'.repeat(64)
+
+    const registered = await repository.registerFinalDelivery({
+      projectId: fixture.projectId,
+      attemptId: fixture.projectAttemptId,
+      outputKey: `exports/${fixture.projectId}/final-${finalContentHash}.mp4`,
+      finalContentHash,
+      finalSizeBytes: 123,
+      subtitles: 'off',
+      soundEffectsManifest: {
+        storageKey:
+          `exports/${fixture.projectId}/procedural-sfx/` +
+          `${fixture.projectAttemptId}-${finalContentHash}.json`,
+        contentHash: manifestContentHash,
+        sizeBytes: 456,
+      },
+    })
+    const rows = await database.db
+      .select({
+        id: artifacts.id,
+        kind: artifacts.kind,
+        attemptId: artifacts.attemptId,
+        contentHash: artifacts.contentHash,
+        lifecycle: artifacts.lifecycle,
+      })
+      .from(artifacts)
+      .where(
+        and(
+          eq(artifacts.workspaceId, TEST_WORKSPACE_ID),
+          eq(artifacts.projectId, fixture.projectId),
+          eq(artifacts.aggregateType, 'project')
+        )
+      )
+
+    expect(registered).toEqual({
+      finalArtifactId: expect.any(String),
+      soundEffectsManifestArtifactId: expect.any(String),
+      degradedManifestArtifactId: null,
+    })
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: registered.finalArtifactId,
+          kind: 'final-mp4',
+          attemptId: fixture.projectAttemptId,
+          contentHash: finalContentHash,
+          lifecycle: 'approved',
+        }),
+        expect.objectContaining({
+          id: registered.soundEffectsManifestArtifactId,
+          kind: 'procedural-sfx-manifest',
+          attemptId: fixture.projectAttemptId,
+          contentHash: manifestContentHash,
+          lifecycle: 'approved',
+        }),
+      ])
     )
   })
 

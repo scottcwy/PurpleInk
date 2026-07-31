@@ -137,7 +137,8 @@ export        -> exportProject() -> ffmpeg concat + 配乐 -> 终片 MP4 artifac
 
 | ID | 标题 | 状态 | 主要落点 |
 | --- | --- | --- | --- |
-| [ISSUE-014](./ISSUE-014-e2e-verification.md) | 端到端验证与证据留存（先小后大） | `open` | `scripts/verify/`、`docs/issues/evidence/` |
+| [ISSUE-014](./ISSUE-014-e2e-verification.md) | 端到端验证与证据留存（先小后大） | `in-progress` | 第一轮 G1–G6 全通过（`scripts/verify/e2e-smoke.ts` + 证据 `evidence/issue-014/`）；第二轮待跑 |
+| [ISSUE-015](./ISSUE-015-production-issue.md) | Docker 生产部署前置问题与分批修复清单 | `in-progress` | P-1/P-2/P-3/P-6/P-7 已完成；P-3 已交付 H.264 + AAC 旁白与中文硬字幕的 `final-video/v2`，其余生产运行项继续按清单推进 |
 
 ## 5. 依赖与派发顺序
 

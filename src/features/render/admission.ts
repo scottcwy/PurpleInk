@@ -64,6 +64,10 @@ async function closeRuntime(session: FrameCaptureSession): Promise<void> {
 
 function safeRuntimeMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : ''
+  if (message === 'shot 页面脚本执行失败') return message
+  if (message.startsWith('母版画布几何不匹配：')) {
+    return '母版画布几何不匹配'
+  }
   if (
     message === 'shot 缺少 window.__CVC_RENDER__ runtime' ||
     message === '__CVC_RENDER__.seek 必须是函数' ||
@@ -74,4 +78,27 @@ function safeRuntimeMessage(error: unknown): string {
     return message
   }
   return '渲染 runtime admission 失败'
+}
+
+export function isRenderSourceContractError(error: unknown): boolean {
+  return errorChain(error).some((message) =>
+    message === 'shot 页面脚本执行失败' ||
+    message === '母版画布几何不匹配' ||
+    message.startsWith('母版画布几何不匹配：') ||
+    message === 'shot 缺少 window.__CVC_RENDER__ runtime' ||
+    message === '__CVC_RENDER__.seek 必须是函数' ||
+    /^__CVC_RENDER__ runtime version 不匹配：.+ != 1$/.test(message)
+  )
+}
+
+function errorChain(error: unknown): string[] {
+  const messages: string[] = []
+  const seen = new Set<unknown>()
+  let current = error
+  while (current instanceof Error && !seen.has(current)) {
+    seen.add(current)
+    messages.push(current.message)
+    current = current.cause
+  }
+  return messages
 }

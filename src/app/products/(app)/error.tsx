@@ -26,7 +26,7 @@ export default function ProductsError({
         role="alert"
         icon={CircleX}
         title="页面加载失败"
-        description="这一步没有完成。可以直接重试；若持续失败，请把下面的参考号一起反馈。"
+        description="Ohhhhh！页面崩溃了，请检查网络稍后重试"
         reference={error.digest}
         actions={
           <div className="flex flex-wrap items-center justify-center gap-2">

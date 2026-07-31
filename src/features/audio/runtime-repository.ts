@@ -1,9 +1,11 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import { and, desc, eq } from 'drizzle-orm'
-import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { type Db } from '@/lib/db/client'
 import { artifacts } from '@/lib/db/schema/index'
 import type { StorageAdapter } from '@/lib/storage'
+import { detectAudioContainer, type AudioContainer } from './audio-format'
 import { narrationArtifactKind } from './narration-repository'
 
 export interface LoadedNarration {
@@ -11,7 +13,8 @@ export interface LoadedNarration {
   audioArtifactId: string
   audioKey: string
   audioBytes: Buffer
-  audioFormat: 'mp3'
+  /** 由真实字节判定，不写死为 MP3：TTS 路由切换后旁白可能是 WAV。 */
+  audioFormat: AudioContainer
   contentHash: string
   sizeBytes: number
 }
@@ -38,11 +41,12 @@ export class AudioRuntimeRepository {
         id: artifacts.id,
         storageKey: artifacts.storageKey,
         contentHash: artifacts.contentHash,
+        sizeBytes: artifacts.sizeBytes,
       })
       .from(artifacts)
       .where(
         and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(artifacts.workspaceId, currentWorkspaceId()),
           eq(artifacts.projectId, projectId),
           eq(artifacts.aggregateType, 'node'),
           eq(artifacts.kind, kind)
@@ -58,6 +62,9 @@ export class AudioRuntimeRepository {
       throw new Error(`找不到 ${kind} 产物：INGEST 尚未产出该单元的旁白`)
     }
     const audioBytes = await this.storage.get(artifact.storageKey)
+    if (audioBytes.byteLength !== artifact.sizeBytes) {
+      throw new Error(`旁白音频实体与索引 size 不一致：${artifact.storageKey}`)
+    }
     const actualHash = createHash('sha256').update(audioBytes).digest('hex')
     if (actualHash !== artifact.contentHash) {
       throw new Error(`旁白音频实体与索引 hash 不一致：${artifact.storageKey}`)
@@ -67,7 +74,7 @@ export class AudioRuntimeRepository {
       audioArtifactId: artifact.id,
       audioKey: artifact.storageKey,
       audioBytes,
-      audioFormat: 'mp3',
+      audioFormat: detectAudioContainer(audioBytes),
       contentHash: actualHash,
       sizeBytes: audioBytes.byteLength,
     }

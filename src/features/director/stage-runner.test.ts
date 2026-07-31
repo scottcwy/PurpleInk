@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createStageRunner } from './stage-runner'
 import type { DirectorRunResult } from './pi-session'
 import type { DirectorStageContext } from './runtime-repository'
+import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
 import {
   ArtifactValidationError,
   type ArtifactCommitResult,
@@ -116,16 +117,21 @@ function createHarness(
   const advancePipeline = vi.fn(async () => {
     calls.push('advance')
   })
+  const scheduleMediaNarration = vi.fn(async () => {
+    calls.push('media')
+  })
+  const createSession = vi.fn(async () => session)
   const runner = createStageRunner({
     repository,
     transitionNodeStatus,
-    createSession: vi.fn(async () => session),
+    createSession,
     buildPrompt: vi.fn(() => '类型化阶段提示词'),
     writeArtifact,
     prepareResult,
     commitResult,
     runStageEffect,
     advancePipeline,
+    scheduleMediaNarration,
   })
   return {
     calls,
@@ -137,25 +143,28 @@ function createHarness(
     commitResult,
     runStageEffect,
     advancePipeline,
+    scheduleMediaNarration,
+    createSession,
     runner,
   }
 }
 
 describe('createStageRunner', () => {
-  it('registers the session before the model call and commits the validated output', async () => {
+  it('registers the final session bytes after close and commits the validated output', async () => {
     const harness = createHarness()
 
     await harness.runner('project-1', 'node-1', 'INGEST')
 
     expect(harness.calls).toEqual([
       'running',
-      'pointer',
       'run',
       'artifact',
       'commit',
       'effect',
       'close',
+      'pointer',
       'success',
+      'media',
       'advance',
     ])
     expect(harness.writeArtifact).toHaveBeenCalledWith(
@@ -172,18 +181,190 @@ describe('createStageRunner', () => {
       output: { kind: 'assistant-text' },
     })
     expect(harness.repository.persistStreamLog).toHaveBeenCalledTimes(1)
-    expect(harness.runStageEffect).toHaveBeenCalledWith(
-      context,
-      { content: '业务产物' },
-      artifactResult()
+    expect(harness.runStageEffect).toHaveBeenCalledWith(context, undefined)
+    expect(harness.repository.persistStreamLog).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      stage: 'INGEST',
+      text: '展示完成',
+    })
+    expect(harness.advancePipeline).toHaveBeenCalledWith(
+      'project-1',
+      'node-1',
+      undefined,
     )
-    expect(harness.repository.persistStreamLog).toHaveBeenCalledWith(
+    expect(harness.scheduleMediaNarration).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+    })
+  })
+
+  it('passes the queue attempt id into the Director session', async () => {
+    const harness = createHarness()
+    const controller = new AbortController()
+
+    await harness.runner(
       'project-1',
       'node-1',
       'INGEST',
-      '展示完成'
+      'queue-attempt-1',
+      controller.signal,
     )
-    expect(harness.advancePipeline).toHaveBeenCalledWith('project-1', 'node-1')
+
+    expect(harness.createSession).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      attemptId: 'queue-attempt-1',
+    }))
+    expect(harness.writeArtifact).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      attemptId: 'queue-attempt-1',
+    }))
+    expect(harness.repository.persistStreamLog).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      stage: 'INGEST',
+      text: '展示完成',
+      attemptId: 'queue-attempt-1',
+      signal: controller.signal,
+    })
+    expect(harness.repository.registerArtifactPointer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 'project-1',
+        nodeId: 'node-1',
+        attemptId: 'queue-attempt-1',
+        signal: controller.signal,
+      }),
+    )
+    expect(harness.runStageEffect).toHaveBeenCalledWith(
+      expect.objectContaining({ attemptId: 'queue-attempt-1' }),
+      controller.signal,
+    )
+    expect(harness.scheduleMediaNarration).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      attemptId: 'queue-attempt-1',
+      signal: controller.signal,
+    })
+    expect(harness.advancePipeline).toHaveBeenCalledWith(
+      'project-1',
+      'node-1',
+      {
+        attemptId: 'queue-attempt-1',
+        signal: controller.signal,
+      },
+    )
+    expect(harness.transitionNodeStatus).toHaveBeenCalledWith(
+      'node-1',
+      'success',
+      {
+        execution: {
+          projectId: 'project-1',
+          attemptId: 'queue-attempt-1',
+          signal: controller.signal,
+        },
+      },
+    )
+  })
+
+  it('stops after an abort that lands inside stream-log persistence', async () => {
+    const harness = createHarness()
+    const controller = new AbortController()
+    const timeout = Object.assign(new Error('阶段执行超时'), {
+      name: 'ExecutionTimeoutError',
+    })
+    let releaseLog: () => void = () => undefined
+    const logGate = new Promise<void>((resolve) => {
+      releaseLog = resolve
+    })
+    harness.repository.persistStreamLog.mockImplementationOnce(async () => {
+      await logGate
+    })
+
+    const pending = harness.runner(
+      'project-1',
+      'node-1',
+      'INGEST',
+      'queue-attempt-1',
+      controller.signal,
+    )
+    await vi.waitFor(() => {
+      expect(harness.repository.persistStreamLog).toHaveBeenCalledOnce()
+    })
+    controller.abort(timeout)
+    releaseLog()
+
+    await expect(pending).rejects.toBe(timeout)
+    expect(harness.repository.registerArtifactPointer).not.toHaveBeenCalled()
+    expect(harness.transitionNodeStatus).not.toHaveBeenCalledWith(
+      'node-1',
+      'success',
+      expect.anything(),
+    )
+    expect(harness.scheduleMediaNarration).not.toHaveBeenCalled()
+    expect(harness.advancePipeline).not.toHaveBeenCalled()
+  })
+
+  it('does not let a timed-out attempt write artifacts or node terminal state after its provider returns late', async () => {
+    let releaseProvider: () => void = () => undefined
+    const providerGate = new Promise<void>((resolve) => {
+      releaseProvider = resolve
+    })
+    const harness = createHarness(async () => {
+      await providerGate
+      return directorResult('迟到业务产物')
+    })
+    const controller = new AbortController()
+    const timeout = Object.assign(new Error('阶段执行超时'), {
+      name: 'ExecutionTimeoutError',
+    })
+
+    const pending = harness.runner(
+      'project-1',
+      'node-1',
+      'INGEST',
+      'queue-attempt-1',
+      controller.signal,
+    )
+    await vi.waitFor(() => {
+      expect(harness.session.run).toHaveBeenCalledOnce()
+    })
+    controller.abort(timeout)
+    releaseProvider()
+
+    await expect(pending).rejects.toBe(timeout)
+    expect(harness.session.close).toHaveBeenCalledOnce()
+    expect(harness.writeArtifact).not.toHaveBeenCalled()
+    expect(harness.commitResult).not.toHaveBeenCalled()
+    expect(harness.repository.registerArtifactPointer).not.toHaveBeenCalled()
+    expect(harness.repository.persistStreamLog).not.toHaveBeenCalled()
+    expect(harness.repository.recordStageError).not.toHaveBeenCalled()
+    expect(harness.transitionNodeStatus.mock.calls.map((call) => call[1])).toEqual([
+      'running',
+    ])
+    expect(harness.advancePipeline).not.toHaveBeenCalled()
+  })
+
+  it('keeps INGEST successful when the asynchronous media queue is unavailable', async () => {
+    const harness = createHarness()
+    harness.scheduleMediaNarration.mockRejectedValueOnce(new Error('媒体队列不可用'))
+
+    await expect(
+      harness.runner('project-1', 'node-1', 'INGEST')
+    ).resolves.toBeUndefined()
+
+    expect(harness.transitionNodeStatus).toHaveBeenCalledWith(
+      'node-1',
+      'success',
+      undefined,
+    )
+    expect(harness.advancePipeline).toHaveBeenCalledWith(
+      'project-1',
+      'node-1',
+      undefined,
+    )
+    expect(harness.repository.recordStageError).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -230,9 +411,9 @@ describe('createStageRunner', () => {
     )
     expect(harness.calls).toEqual([
       'running',
-      'pointer',
       'run',
       'close',
+      'pointer',
       'failed',
       'error',
     ])
@@ -266,7 +447,7 @@ describe('createStageRunner', () => {
     ])
   })
 
-  it('does not start the model when repository preconditions reject the node', async () => {
+  it('persists a failed node and stage error when runtime context loading fails', async () => {
     const harness = createHarness()
     const createSession = vi.fn()
     harness.repository.loadStageContext.mockImplementation(() => {
@@ -286,7 +467,15 @@ describe('createStageRunner', () => {
 
     await expect(runner('project-1', 'node-1', 'INGEST')).rejects.toThrow('pending')
     expect(createSession).not.toHaveBeenCalled()
-    expect(harness.transitionNodeStatus).not.toHaveBeenCalled()
+    expect(harness.transitionNodeStatus.mock.calls.map((call) => call[1])).toEqual([
+      'running',
+      'failed',
+    ])
+    expect(harness.repository.recordStageError).toHaveBeenCalledWith(
+      'node-1',
+      'INGEST',
+      expect.any(Error)
+    )
   })
 
   it('fails the stage when an application side effect cannot produce its real artifact', async () => {
@@ -299,16 +488,65 @@ describe('createStageRunner', () => {
 
     expect(harness.calls).toEqual([
       'running',
-      'pointer',
       'run',
       'artifact',
       'commit',
       'close',
+      'pointer',
       'failed',
       'error',
     ])
     expect(harness.transitionNodeStatus).not.toHaveBeenCalledWith('node-1', 'success')
     expect(harness.advancePipeline).not.toHaveBeenCalled()
+  })
+
+  it('projects provider pacing as a queue wait instead of a failed Director stage', async () => {
+    const harness = createHarness()
+    const wait = new ProviderQueueDeferral({
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      retryAt: new Date('2026-07-30T05:02:41.400Z'),
+      scopeKey: 'managed:stepfun',
+      waitReason: 'pacing',
+    })
+    harness.runStageEffect.mockRejectedValueOnce(wait)
+
+    await expect(
+      harness.runner('project-1', 'node-1', 'ASSEMBLE', 'attempt-1')
+    ).rejects.toBe(wait)
+
+    expect(harness.transitionNodeStatus.mock.calls.map((call) => call[1])).toEqual([
+      'running',
+    ])
+    expect(harness.repository.recordStageError).not.toHaveBeenCalled()
+  })
+
+  it('resumes only the committed subtitle side effect after a provider wait', async () => {
+    const harness = createHarness()
+    harness.repository.loadStageContext.mockResolvedValue({
+      ...context,
+      nodeType: 'shot-subtitle',
+      stage: 'ASSEMBLE',
+    })
+    Object.assign(harness.repository, {
+      shouldResumeCommittedEffect: vi.fn(async () => true),
+    })
+
+    await harness.runner('project-1', 'node-1', 'ASSEMBLE', 'attempt-2')
+
+    expect(harness.createSession).not.toHaveBeenCalled()
+    expect(harness.writeArtifact).not.toHaveBeenCalled()
+    expect(harness.commitResult).not.toHaveBeenCalled()
+    expect(harness.runStageEffect).toHaveBeenCalledOnce()
+    expect(harness.transitionNodeStatus.mock.calls.map((call) => call[1])).toEqual([
+      'running',
+      'success',
+    ])
+    expect(harness.advancePipeline).toHaveBeenCalledWith(
+      'project-1',
+      'node-1',
+      { attemptId: 'attempt-2', signal: undefined },
+    )
   })
 
   it('reuses the same FABRICATE session for at most two gate-feedback retries', async () => {
@@ -385,24 +623,24 @@ describe('createStageRunner', () => {
     expect(harness.advancePipeline).not.toHaveBeenCalled()
   })
 
-  it('applies the same bounded feedback mechanism to SHOT_SPEC validation', async () => {
+  it('retries SHOT_SPEC semantic validation before any invalid artifact is written', async () => {
     const harness = createHarness()
     harness.repository.loadStageContext.mockResolvedValue({
       ...context,
       nodeType: 'shot-script',
       stage: 'SHOT_SPEC',
     })
-    harness.writeArtifact.mockImplementationOnce(async () => {
-      harness.calls.push('artifact')
-      throw new ArtifactValidationError(['shots.0.mustShow: Required'])
+    harness.prepareResult.mockImplementationOnce(() => {
+      throw new ArtifactValidationError(['shots.0.id 必须为 S002'])
     })
 
     await harness.runner('project-1', 'node-1', 'SHOT_SPEC')
 
     expect(harness.session.run).toHaveBeenCalledTimes(2)
+    expect(harness.writeArtifact).toHaveBeenCalledTimes(1)
     expect(harness.session.run.mock.calls[1]?.[0]).toEqual(
       expect.objectContaining({
-        prompt: expect.stringContaining('完整 JSON'),
+        prompt: expect.stringContaining('shots.0.id 必须为 S002'),
         output: SHOT_SPEC_OUTPUT,
       })
     )

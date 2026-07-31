@@ -2,57 +2,71 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST } from './route'
 
 const mocks = vi.hoisted(() => ({
-  getCanvasGraph: vi.fn(),
-  enqueueRenderShot: vi.fn(),
+  executeNodeAction: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
-vi.mock('@/features/canvas', () => ({ getCanvasGraph: mocks.getCanvasGraph }))
-vi.mock('@/features/render/queue-handler', () => ({
-  enqueueRenderShot: mocks.enqueueRenderShot,
+// 会话层单独有 pg 测试覆盖；这里只验路由业务分支，直接以假会话放行。
+vi.mock('@/features/auth/api-session', () => ({
+  withApiSession: (handler: (session: unknown) => Promise<Response>) =>
+    handler({
+      userId: 'user-1',
+      workspaceId: 'ws-1',
+      email: 'user@example.com',
+      name: '测试用户',
+      workspaceName: '测试工作区',
+      sessionId: 'session-1',
+    }),
+}))
+vi.mock('@/features/director', () => ({
+  executeNodeAction: mocks.executeNodeAction,
 }))
 
 describe('POST /api/render', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.getCanvasGraph.mockReturnValue({ nodes: [{ id: 'node-1' }], edges: [] })
-    mocks.enqueueRenderShot.mockResolvedValue('job-1')
+    mocks.executeNodeAction.mockResolvedValue({
+      ok: true,
+      action: 'rerender',
+      requestedNodeId: 'node-1',
+      queuedNodeId: 'node-1',
+      jobId: 'job-1',
+      message: '已绕过缓存排队重新渲染',
+    })
   })
 
   it('returns 400 for invalid input', async () => {
     const response = await POST(request({ projectId: '', nodeId: 'node-1' }))
     expect(response.status).toBe(400)
-    expect(mocks.enqueueRenderShot).not.toHaveBeenCalled()
+    expect(mocks.executeNodeAction).not.toHaveBeenCalled()
   })
 
-  it('returns 404 when the node is outside the project', async () => {
-    mocks.getCanvasGraph.mockReturnValue({ nodes: [], edges: [] })
-    const response = await POST(request({ projectId: 'project-1', nodeId: 'missing' }))
-    expect(response.status).toBe(404)
-    expect(mocks.enqueueRenderShot).not.toHaveBeenCalled()
-  })
-
-  it('returns the accepted render job id', async () => {
-    const input = { projectId: 'project-1', nodeId: 'node-1' }
+  it('returns the accepted rerender action', async () => {
+    const input = { projectId: 'project-1', nodeId: 'node-1', intent: 'rerender' }
     const response = await POST(request(input))
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({ ok: true, jobId: 'job-1' })
-    expect(mocks.enqueueRenderShot).toHaveBeenCalledWith(input)
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      action: 'rerender',
+      jobId: 'job-1',
+    })
+    expect(mocks.executeNodeAction).toHaveBeenCalledWith(input)
   })
 
   it('maps asynchronous admission rejection to a conflict response', async () => {
-    mocks.enqueueRenderShot.mockRejectedValueOnce(
+    mocks.executeNodeAction.mockRejectedValueOnce(
       new Error('shot 缺少 window.__CVC_RENDER__ runtime')
     )
 
     const response = await POST(
-      request({ projectId: 'project-1', nodeId: 'node-1' })
+      request({ projectId: 'project-1', nodeId: 'node-1', intent: 'repair' })
     )
 
     expect(response.status).toBe(409)
     await expect(response.json()).resolves.toEqual({
       ok: false,
-      error: 'shot 缺少 window.__CVC_RENDER__ runtime',
+      error: '上游产物缺失或不包含当前镜头，需要先修复上游阶段。',
+      code: 'UPSTREAM_ARTIFACT_MISSING',
     })
   })
 })

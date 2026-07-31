@@ -1,24 +1,36 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
+import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 import { storage as defaultStorage, type StorageAdapter } from '@/lib/storage'
-import type { ResolutionPreset } from '@/features/canvas/contracts'
 import { concatExport } from './concat'
+import { buildSubtitleAss } from './export-subtitles'
 import { runShotQaChecks } from './qa-check'
 import {
   RenderRepository,
-  type FinalArtifactInput,
-  type FinalArtifactRecord,
   type RenderExportPlan,
 } from './repository'
+import type { FinalDeliveryInput } from './render-artifact-repository'
+import { storeProceduralSfxManifest } from './procedural-sfx-manifest'
+import { finalVideoStorageKey } from './final-output-storage'
 
 export type ExportProjectResult =
-  | { ok: false; incompleteNodeIds: string[] }
+  | {
+      ok: false
+      incompleteNodeIds: string[]
+      blockingIssues?: RenderExportPlan['blockingIssues']
+    }
   | { ok: true; artifactId: string; outputKey: string; contentHash: string }
 
 interface ExportRepository {
   getExportPlan(projectId: string): Promise<RenderExportPlan>
-  registerFinalArtifact(input: FinalArtifactInput): Promise<string>
+  registerFinalDelivery(
+    input: FinalDeliveryInput
+  ): Promise<{
+    finalArtifactId: string
+    soundEffectsManifestArtifactId: string
+    degradedManifestArtifactId: string | null
+  }>
 }
 
 interface ExportDependencies {
@@ -27,56 +39,104 @@ interface ExportDependencies {
   concat?: typeof concatExport
 }
 
-interface ExportReadinessRepository {
-  getExportPlan(projectId: string): Promise<RenderExportPlan>
-  findLatestFinalArtifact(projectId: string): Promise<FinalArtifactRecord | null>
-}
-
 export async function exportProject(
   projectId: string,
+  attemptId: string,
   dependencies: ExportDependencies = {}
 ): Promise<ExportProjectResult> {
+  if (!dependencies.repository) {
+    await assertProjectWorkflowSupported(projectId)
+  }
   const repository = dependencies.repository ?? new RenderRepository()
   const storage = dependencies.storage ?? defaultStorage
   const concat = dependencies.concat ?? concatExport
-  const plan = await repository.getExportPlan(projectId)
-  if (plan.incompleteNodeIds.length > 0) {
-    return incomplete(plan.incompleteNodeIds)
-  }
-  const orderedShots = [...plan.shots].sort((left, right) =>
-    left.laneKey.localeCompare(right.laneKey)
+  const exportPlan = await exportPhase('plan', () =>
+    repository.getExportPlan(projectId)
   )
-  const missing = await missingShotIds(orderedShots, storage)
-  if (missing.length > 0) return incomplete(missing)
-  if (plan.musicKey && !(await storage.exists(plan.musicKey))) {
-    throw new Error(`配乐 artifact 文件不存在：${plan.musicKey}`)
+  if (exportPlan.incompleteNodeIds.length > 0) {
+    return incomplete(exportPlan.incompleteNodeIds)
   }
-
-  const workDirectory = await storage.tempDir('cvc-export-')
+  if (exportPlan.blockingIssues.length > 0 || !exportPlan.mediaAssemblyPlan) {
+    return {
+      ok: false,
+      incompleteNodeIds: [],
+      blockingIssues: exportPlan.blockingIssues,
+    }
+  }
+  const assembly = exportPlan.mediaAssemblyPlan
+  // 字幕关闭时连 .ass 都不生成：降级占位镜头的「占位」提示 cue 也不该出现。
+  const subtitleAss =
+    assembly.subtitles === 'burn-in'
+      ? await exportPhase('subtitle', () => buildSubtitleAss(assembly, storage))
+      : null
+  const workDirectory = await exportPhase('workspace', () =>
+    storage.tempDir('cvc-export-')
+  )
   try {
     const temporaryOutput = path.join(workDirectory, 'final.mp4')
-    await concat(
-      orderedShots.map((shot) => storage.localPath(shot.outputKey)),
-      plan.musicKey ? storage.localPath(plan.musicKey) : null,
-      temporaryOutput,
-      plan.targetResolution
+    const concatResult = await exportPhase('concat', () =>
+      concat(
+        assembly,
+        {
+          videoPaths: assembly.shots.map((shot) =>
+            storage.localPath(shot.video.storageKey)
+          ),
+          narrationPaths: assembly.shots.map((shot) =>
+            storage.localPath(shot.narration.artifact.storageKey)
+          ),
+          musicPath: assembly.musicKey
+            ? storage.localPath(assembly.musicKey)
+            : null,
+        },
+        subtitleAss,
+        temporaryOutput
+      )
     )
-    const bytes = await storage.readLocalFile(temporaryOutput)
+    const bytes = await exportPhase('read-output', () =>
+      storage.readLocalFile(temporaryOutput)
+    )
     const contentHash = createHash('sha256').update(bytes).digest('hex')
-    const outputKey = await storage.put(
-      `exports/${projectId}/final-${contentHash}.mp4`,
-      bytes
+    const outputKey = await exportPhase('store-output', () =>
+      storage.put(
+        finalVideoStorageKey({ projectId, attemptId, contentHash }),
+        bytes
+      )
     )
+    let soundEffectsManifest: Awaited<
+      ReturnType<typeof storeProceduralSfxManifest>
+    > | null = null
     try {
-      const artifactId = await repository.registerFinalArtifact({
-        projectId,
+      const storedManifest = await exportPhase('store-sfx-manifest', () =>
+        storeProceduralSfxManifest(storage, {
+          projectId,
+          attemptId,
+          finalContentHash: contentHash,
+          soundEffects: concatResult.soundEffects,
+        })
+      )
+      soundEffectsManifest = storedManifest
+      const registered = await exportPhase('register-artifacts', () =>
+        repository.registerFinalDelivery({
+          projectId,
+          attemptId,
+          outputKey,
+          finalContentHash: contentHash,
+          finalSizeBytes: bytes.byteLength,
+          subtitles: assembly.subtitles,
+          soundEffectsManifest: storedManifest,
+        })
+      )
+      return {
+        ok: true,
+        artifactId: registered.finalArtifactId,
         outputKey,
         contentHash,
-        sizeBytes: bytes.byteLength,
-      })
-      return { ok: true, artifactId, outputKey, contentHash }
+      }
     } catch (error) {
       await storage.delete(outputKey)
+      if (soundEffectsManifest) {
+        await storage.delete(soundEffectsManifest.storageKey)
+      }
       throw error
     }
   } finally {
@@ -84,50 +144,41 @@ export async function exportProject(
   }
 }
 
-export async function getExportReadiness(
-  projectId: string,
-  repository: ExportReadinessRepository = new RenderRepository()
-): Promise<{
-  ready: boolean
-  incompleteNodeIds: string[]
-  shotCount: number
-  shotQa: Record<string, boolean | null>
-  resolutionPreset: ResolutionPreset
-  finalArtifactId: string | null
-}> {
-  const plan = await repository.getExportPlan(projectId)
-  const finalArtifact = await repository.findLatestFinalArtifact(projectId)
-  return {
-    ready: plan.incompleteNodeIds.length === 0,
-    incompleteNodeIds: plan.incompleteNodeIds,
-    shotCount: plan.shots.length,
-    shotQa: plan.shotQa,
-    resolutionPreset: plan.resolutionPreset,
-    finalArtifactId: finalArtifact?.artifactId ?? null,
+export class ExportExecutionError extends Error {
+  override readonly name = 'ExportExecutionError'
+
+  constructor(
+    readonly safeDetails: {
+      phase: string
+      causeName: string
+    }
+  ) {
+    super('终片导出在平台执行阶段失败')
   }
 }
 
-/**
- * 幂等触发分镜 Final QA 检测并写回 shot-qa 节点（内部逐 shot 已容错、
- * contentHash 未变自动跳过）。供 readiness 路由在返回前调用，使 shotQa 反映真实结果。
- */
-export async function ensureShotQaChecked(projectId: string): Promise<void> {
-  await runShotQaChecks(projectId)
+async function exportPhase<T>(
+  phase: string,
+  run: () => Promise<T>
+): Promise<T> {
+  try {
+    return await run()
+  } catch (error) {
+    if (error instanceof ExportExecutionError) throw error
+    throw new ExportExecutionError({
+      phase,
+      causeName: error instanceof Error ? error.name : 'NonErrorThrown',
+    })
+  }
 }
 
-async function missingShotIds(
-  shots: RenderExportPlan['shots'],
-  storage: StorageAdapter
-): Promise<string[]> {
-  const checks = await Promise.all(
-    shots.map(async (shot) => ({
-      nodeId: shot.nodeId,
-      exists: await storage.exists(shot.outputKey),
-    }))
-  )
-  return checks.filter((item) => !item.exists).map((item) => item.nodeId).sort()
+/** 幂等触发分镜 Final QA 检测并写回 shot-qa 节点。 */
+export async function ensureShotQaChecked(projectId: string): Promise<void> {
+  await assertProjectWorkflowSupported(projectId)
+  await runShotQaChecks(projectId)
 }
 
 function incomplete(nodeIds: string[]): ExportProjectResult {
   return { ok: false, incompleteNodeIds: [...new Set(nodeIds)].sort() }
 }
+

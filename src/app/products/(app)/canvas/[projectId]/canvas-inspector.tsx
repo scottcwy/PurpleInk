@@ -2,8 +2,7 @@
 
 import Link from 'next/link'
 import { ChevronRight, FileCode, RefreshCw } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { ArtifactChip } from '@/components/ui/artifact-chip'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
 import { ResizeHandle } from '@/components/ui/resize-handle'
@@ -11,40 +10,50 @@ import { SettingsGroup, SettingsSeparator } from '@/components/ui/settings-group
 import { SettingsRow } from '@/components/ui/settings-row'
 import { StatusPill } from '@/components/ui/status-pill'
 import { Toast } from '@/components/ui/toast'
-import { AnimatedAside, DrawerOverlay } from '@/features/navigation/collapsible-panel'
-import { productShotHref } from '@/features/navigation/products-routes'
 import type { CanvasGraphNode } from '@/features/canvas'
+import type { ProjectExecutionSnapshot } from '@/features/projects'
+import { ArtifactHoverChip } from '@/features/canvas/artifact-hover-chip'
+import { AnimatedAside, DrawerOverlay } from '@/features/navigation/collapsible-panel'
+import {
+  productExportHref,
+  productShotHref,
+} from '@/features/navigation/products-routes'
 import { useMediaQuery } from '@/lib/hooks/use-media-query'
 import { usePersistentToggle } from '@/lib/hooks/use-persistent-toggle'
 import { useResizablePanel } from '@/lib/hooks/use-resizable-panel'
-import {
-  BP_SECONDARY_PANEL_COLLAPSE,
-  INSPECTOR_DEFAULT_WIDTH,
-  INSPECTOR_MAX_WIDTH,
-  INSPECTOR_MIN_WIDTH,
-} from '@/lib/layout/breakpoints'
+import { BP_SECONDARY_PANEL_COLLAPSE, INSPECTOR_DEFAULT_WIDTH, INSPECTOR_MAX_WIDTH, INSPECTOR_MIN_WIDTH } from '@/lib/layout/breakpoints'
 import { cn } from '@/lib/utils'
-import { triggerNodeAction } from './canvas-action-api'
-import { getNodeStatusPresentation } from './flow-elements'
+import {
+  BillingQuotaExhaustedError,
+  triggerCancelProviderWait,
+  triggerNodeAction,
+  triggerNodeSkip,
+  type NodeActionResult,
+} from './canvas-action-api'
+import { ARTIFACT_FILENAME, NODE_LABEL } from './canvas-inspector-labels'
+import { getNodeStatusLabel, getNodeStatusPresentation } from './flow-elements'
+import { isNodeActionBlocked, nodeActionLabel } from './node-action-presentation'
 import { StreamingLogCard } from './streaming-log-card'
+import { WebsiteStageInspector } from './website-stage-inspector'
+import { websiteStagePresentation } from '@/features/projects/website-execution-presentation'
+import { skipKindForNodeType } from '@/features/director/skip-policy'
 
 export function CanvasInspector({
   projectId,
   node,
+  execution,
   onQueued,
+  onQuotaExhausted,
 }: {
   projectId: string
   node?: CanvasGraphNode
+  execution: ProjectExecutionSnapshot
   onQueued: (jobId: string) => void
+  onQuotaExhausted: () => void
 }) {
-  const [error, setError] = useState<{
-    nodeId: string
-    message: string
-  }>()
-  const [queuedJob, setQueuedJob] = useState<{
-    nodeId: string
-    jobId: string
-  }>()
+  const [error, setError] = useState<{ nodeId: string; message: string }>()
+  const [queuedJob, setQueuedJob] =
+    useState<{ nodeId: string; jobId: string; message: string }>()
   const [submitting, setSubmitting] = useState(false)
   const autoCollapse = useMediaQuery(`(max-width: ${BP_SECONDARY_PANEL_COLLAPSE - 1}px)`)
   const [manualCollapsed, setManualCollapsed] = usePersistentToggle(
@@ -63,25 +72,23 @@ export function CanvasInspector({
   const collapsed = autoCollapse || manualCollapsed
   const overlayOpen = collapsed && overlayRequested
 
-  useEffect(() => {
-    if (!overlayOpen) return
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOverlayRequested(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [overlayOpen])
-
-  async function execute() {
+  async function run(task: (target: CanvasGraphNode) => Promise<NodeActionResult>) {
     if (!node) return
     setSubmitting(true)
     setError(undefined)
     setQueuedJob(undefined)
     try {
-      const jobId = await triggerNodeAction(projectId, node)
-      setQueuedJob({ nodeId: node.id, jobId })
-      onQueued(jobId)
+      const result = await task(node)
+      setQueuedJob({
+        nodeId: node.id,
+        jobId: result.jobId,
+        message: result.message,
+      })
+      onQueued(result.jobId)
     } catch (cause) {
+      if (cause instanceof BillingQuotaExhaustedError) {
+        onQuotaExhausted()
+      }
       setError({
         nodeId: node.id,
         message: cause instanceof Error ? cause.message : '作业入队失败',
@@ -91,22 +98,20 @@ export function CanvasInspector({
     }
   }
 
-  const queuedJobId =
-    node &&
-    queuedJob?.nodeId === node.id &&
-    node.status !== 'success' &&
-    node.status !== 'failed'
-      ? queuedJob.jobId
-      : undefined
+  const queuedFeedback =
+    node && queuedJob?.nodeId === node.id ? queuedJob : undefined
 
   const body = node ? (
     <InspectorBody
       node={node}
       projectId={projectId}
+      execution={execution}
       submitting={submitting}
       error={error?.nodeId === node.id ? error.message : undefined}
-      queuedJobId={queuedJobId}
-      onExecute={execute}
+      queuedFeedback={queuedFeedback}
+      onExecute={() => run((target) => triggerNodeAction(projectId, target))}
+      onSkip={(reason) => run((target) => triggerNodeSkip(projectId, target, reason))}
+      onCancelWait={() => run((target) => triggerCancelProviderWait(projectId, target))}
       onCollapse={() => {
         setManualCollapsed(true)
         setOverlayRequested(false)
@@ -204,31 +209,50 @@ function EmptyInspector({
 function InspectorBody({
   node,
   projectId,
+  execution,
   submitting,
   error,
-  queuedJobId,
+  queuedFeedback,
   onExecute,
+  onSkip,
+  onCancelWait,
   onCollapse,
   showCollapse,
 }: {
   node: CanvasGraphNode
   projectId: string
+  execution: ProjectExecutionSnapshot
   submitting: boolean
   error?: string
-  queuedJobId?: string
+  queuedFeedback?: { jobId: string; message: string }
   onExecute: () => void
+  onSkip: (reason: string) => void
+  onCancelWait: () => void
   onCollapse: () => void
   showCollapse: boolean
 }) {
   const status = getNodeStatusPresentation(node.status)
+  const websiteStageIndex = execution.stages.findIndex(
+    (stage) => stage.nodeId === node.id,
+  )
+  const websiteStage = websiteStageIndex >= 0
+    ? execution.stages[websiteStageIndex]
+    : undefined
+  const websitePresentation = websiteStage
+    ? websiteStagePresentation(execution, websiteStage, websiteStageIndex)
+    : undefined
   return (
     <div className={cn('flex h-full flex-col gap-4 overflow-auto p-4')}>
       <div className="flex items-center justify-between gap-2">
         <h2 className="min-w-0 truncate text-[17px] font-semibold">
-          {node.laneKey ?? NODE_LABEL[node.type]}
+          {websitePresentation?.title ?? node.laneKey ?? NODE_LABEL[node.type]}
         </h2>
         <div className="flex shrink-0 items-center gap-1">
-          <StatusPill variant={status.variant} label={status.label} />
+          <StatusPill
+            variant={status.variant}
+            label={websitePresentation?.status
+              ?? getNodeStatusLabel(node.type, node.status)}
+          />
           {showCollapse && (
             <IconButton
               icon={ChevronRight}
@@ -238,9 +262,13 @@ function InspectorBody({
           )}
         </div>
       </div>
-      <div className="flex h-40 items-center justify-center rounded-md bg-ds-surface-muted">
-        <FileCode className="size-10 text-ds-text-muted" />
-      </div>
+      {node.type === 'website-stage' ? (
+        <WebsiteStageInspector node={node} execution={execution} />
+      ) : (
+        <div className="flex h-40 items-center justify-center rounded-md bg-ds-surface-muted">
+          <FileCode className="size-10 text-ds-text-muted" />
+        </div>
+      )}
       <SettingsGroup>
         <SettingsRow label="节点类型" value={node.type} />
         <SettingsSeparator />
@@ -256,11 +284,12 @@ function InspectorBody({
         {node.artifacts.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {node.artifacts.map((artifact) => (
-              <ArtifactChip
+              <ArtifactHoverChip
                 key={artifact.id}
-                icon={FileCode}
+                artifactId={artifact.id}
+                kind={artifact.kind}
                 filename={ARTIFACT_FILENAME[artifact.kind] ?? artifact.filename}
-                href={`/api/artifacts/${encodeURIComponent(artifact.id)}?projectId=${encodeURIComponent(projectId)}`}
+                projectId={projectId}
               />
             ))}
           </div>
@@ -275,54 +304,41 @@ function InspectorBody({
         stage={node.stage}
         directorError={node.directorError}
         renderError={node.renderError}
+        executionNotice={node.executionNotice}
         onRetry={onExecute}
         retrying={submitting}
+        skipKind={skipKindForNodeType(node.type) ?? undefined}
+        onSkip={onSkip}
+        onCancelWait={onCancelWait}
       />
-      <Button variant="tinted" icon={RefreshCw} onClick={onExecute} disabled={submitting}>
-        {node.type === 'shot-codegen' ? '重渲此镜' : '执行此阶段'}
-      </Button>
+      {node.type === 'export' && node.status === 'blocked' ? (
+        <Link href={productExportHref(projectId)}>
+          <Button variant="tinted">{nodeActionLabel(node)}</Button>
+        </Link>
+      ) : (
+        <Button
+          variant={node.type === 'shot-codegen' ? 'destructive' : 'tinted'}
+          icon={RefreshCw}
+          onClick={onExecute}
+          disabled={submitting || isNodeActionBlocked(node)}
+        >
+          {nodeActionLabel(node)}
+        </Button>
+      )}
       {node.type === 'shot-codegen' && (
         <Link href={productShotHref(node.id, projectId)}>
           <Button variant="gray">查看代码</Button>
         </Link>
       )}
-      {queuedJobId && (
+      {queuedFeedback && (
         <Toast
           variant="info"
           title="已入队"
-          body={`作业 ${queuedJobId} 已提交，最终状态以服务端为准。`}
+          body={`${queuedFeedback.message}（作业 ${queuedFeedback.jobId}）`}
           className="w-full"
         />
       )}
       {error && <Toast variant="error" title="失败" body={error} className="w-full" />}
     </div>
   )
-}
-
-/** 已知产物 kind 的展示层友好文件名；真实 key 内含内容哈希，直接展示会破坏布局。 */
-const ARTIFACT_FILENAME: Record<string, string> = {
-  'director-ingest': 'script-units.json',
-  'director-direct': 'style-bible.md',
-  'director-shot-spec': 'shot-plan.json',
-  'director-fabricate': 'shot.html',
-  'director-assemble': 'assemble-plan.json',
-  'director-finalize': 'finalize-report.json',
-  'voiceover-audio': 'voiceover.mp3',
-  'voiceover-metadata': 'voiceover-metadata.json',
-  'subtitle-track': 'subtitle-track.json',
-  'qa-vision-report': 'vision-qa-report.json',
-  'render-mp4': 'render.mp4',
-  'final-mp4': 'final.mp4',
-}
-
-const NODE_LABEL: Record<CanvasGraphNode['type'], string> = {
-  'script-import': 'Ingest 语义分镜',
-  'shot-split': 'Direct 风格圣经',
-  score: 'Assemble 合成',
-  export: 'Finalize 导出',
-  'shot-script': 'Shot-Spec 分镜合同',
-  'shot-codegen': 'Shot 分镜节点',
-  'shot-sfx': 'Audio 配音字幕',
-  'shot-subtitle': 'Audio 配音字幕',
-  'shot-qa': 'Finalize 验收',
 }

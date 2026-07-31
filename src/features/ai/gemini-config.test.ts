@@ -7,6 +7,14 @@ import {
   saveGeminiSettings,
 } from './gemini-config'
 
+// 被测模块经 currentWorkspaceId() 取归属（PLAN-002 阶段 B）；单测没有请求入口，
+// 把读取口 mock 成历史单工作区 id，与用例 seed 的数据保持一致。
+vi.mock('@/lib/auth/workspace-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/workspace-context')>()),
+  currentWorkspaceId: () => '00000000-0000-4000-8000-000000000001',
+  currentUserId: () => 'test-user',
+}))
+
 vi.mock('server-only', () => ({}))
 
 const originalEnv = { ...process.env }
@@ -67,6 +75,7 @@ beforeEach(() => {
   process.env = { ...originalEnv }
   for (const key of [
     'GEMINI_API_KEY',
+    'CVC_MANAGED_GEMINI_API_KEY',
     'GEMINI_BASE_URL',
     'GEMINI_PRIMARY_MODEL',
     'GEMINI_FAST_MODEL',
@@ -85,14 +94,15 @@ describe('Gemini config', () => {
     await expect(getGeminiConfig(dependencies)).resolves.toEqual({
       apiKey: null,
       baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
-      primaryModel: 'gemini-3.6-flash',
+      primaryModel: 'gemini-3.1-flash-lite',
       fastModel: 'gemini-3.1-flash-lite',
     })
   })
 
-  it('resolves encrypted credential/routes over env without exposing the key', async () => {
+  it('uses the managed credential and ignores workspace routes and legacy env', async () => {
     const { dependencies, models, secrets } = createDependencies()
     process.env.GEMINI_API_KEY = 'env-key'
+    process.env.CVC_MANAGED_GEMINI_API_KEY = 'managed-key'
     process.env.GEMINI_FAST_MODEL = 'env-fast'
     secrets.set('gemini', 'stored-key')
     models.set('fabricate', {
@@ -104,44 +114,39 @@ describe('Gemini config', () => {
     })
 
     await expect(getGeminiConfig(dependencies)).resolves.toMatchObject({
-      apiKey: 'stored-key',
-      primaryModel: 'stored-primary',
-      fastModel: 'env-fast',
+      apiKey: 'managed-key',
+      primaryModel: 'gemini-3.1-flash-lite',
+      fastModel: 'gemini-3.1-flash-lite',
     })
     const view = await describeGeminiConfig(dependencies)
     expect(view.primaryModel).toEqual({
-      value: 'stored-primary',
-      source: 'settings',
+      value: 'gemini-3.1-flash-lite',
+      source: 'default',
     })
     expect(view).not.toHaveProperty('apiKey')
     expect(JSON.stringify(view)).not.toContain('stored-key')
+    expect(dependencies.credentials.loadSecret).not.toHaveBeenCalled()
   })
 
-  it('saves model groups, clears empty overrides, and persists keys via the store', async () => {
+  it('rejects managed model writes but stores workspace BYOK credentials', async () => {
     const { dependencies, models, secrets } = createDependencies()
-    await saveGeminiSettings({
+    await expect(saveGeminiSettings({
       primaryModel: 'custom-primary',
       fastModel: 'custom-fast',
-    }, dependencies)
-    expect(models.get('project-plan')?.model).toBe('custom-fast')
-    for (const kind of ['shot-spec', 'fabricate', 'vision-qa'] as const) {
-      expect(models.get(kind)?.model).toBe('custom-primary')
-    }
-
-    await saveGeminiSettings({ fastModel: '' }, dependencies)
-    expect(models.has('project-plan')).toBe(false)
-    await saveGeminiApiKey(
+    }, dependencies)).rejects.toThrow('托管模型')
+    expect(models.size).toBe(0)
+    await expect(saveGeminiApiKey(
       'gemini-secret',
       new Date('2026-07-25T00:00:00.000Z'),
       dependencies,
-    )
+    )).resolves.toBeUndefined()
     expect(secrets.get('gemini')).toBe('gemini-secret')
-    expect(dependencies.credentials.save).toHaveBeenCalledWith(
-      expect.objectContaining({
-        provider: 'gemini',
-        verifiedAt: new Date('2026-07-25T00:00:00.000Z'),
-      }),
-    )
+    expect(dependencies.credentials.save).toHaveBeenCalledWith({
+      workspaceId: '00000000-0000-4000-8000-000000000001',
+      provider: 'gemini',
+      secret: 'gemini-secret',
+      verifiedAt: new Date('2026-07-25T00:00:00.000Z'),
+    })
   })
 
   it('accepts canonical base URL but rejects custom persistence', async () => {

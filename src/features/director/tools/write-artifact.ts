@@ -1,19 +1,22 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { resolveCurrentAttemptId } from '@/features/artifacts'
-import {
-  getDb,
-  LOCAL_WORKSPACE_ID,
-} from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb } from '@/lib/db/client'
 import { storage as defaultStorage, type StorageAdapter } from '@/lib/storage'
-import { inspectDeterminism } from './check-determinism'
+import { inspectFabricateSource } from '@/features/canvas/contracts'
+import { ArtifactValidationError } from '../artifact-validation-error'
+import { inspectFabricateRuntime } from '../fabricate-runtime-contract'
 import { validateShotPlanValue } from './validate-shot-plan'
+
+export { ArtifactValidationError } from '../artifact-validation-error'
 
 const validationSchema = z.enum(['non-empty', 'shot-plan', 'deterministic-html'])
 const inputSchema = z
   .object({
     projectId: z.string().min(1),
     nodeId: z.string().min(1).optional(),
+    attemptId: z.string().min(1).optional(),
     kind: z.string().min(1),
     key: z
       .string()
@@ -55,13 +58,6 @@ export interface ArtifactCommitResult {
   storageKeyAlreadyExisted: boolean
 }
 
-export class ArtifactValidationError extends Error {
-  constructor(readonly errors: string[]) {
-    super(`产物校验失败：${errors.join('；')}`)
-    this.name = 'ArtifactValidationError'
-  }
-}
-
 /**
  * 校验并写入未提交对象。artifact row 与 node 投影由 Director repository 在同一
  * Postgres 事务提交；事务失败后 repository 负责补偿本次新写对象。
@@ -87,10 +83,12 @@ export async function writeValidatedArtifact(
 
   const aggregateType = parsed.data.nodeId ? 'node' : 'project'
   const aggregateId = parsed.data.nodeId ?? parsed.data.projectId
-  const attemptId = await (dependencies.resolveAttempt ?? defaultAttemptResolver)({
-    projectId: parsed.data.projectId,
-    nodeId: parsed.data.nodeId,
-  })
+  const attemptId =
+    parsed.data.attemptId ??
+    await (dependencies.resolveAttempt ?? defaultAttemptResolver)({
+      projectId: parsed.data.projectId,
+      nodeId: parsed.data.nodeId,
+    })
   const contentHash = createHash('sha256')
     .update(parsed.data.content)
     .digest('hex')
@@ -101,7 +99,7 @@ export async function writeValidatedArtifact(
   )
   return {
     id: (dependencies.createId ?? randomUUID)(),
-    workspaceId: LOCAL_WORKSPACE_ID,
+    workspaceId: currentWorkspaceId(),
     projectId: parsed.data.projectId,
     aggregateType,
     aggregateId,
@@ -121,7 +119,7 @@ async function defaultAttemptResolver(input: {
 }): Promise<string> {
   const database = await getDb()
   return resolveCurrentAttemptId(database, {
-    workspaceId: LOCAL_WORKSPACE_ID,
+    workspaceId: currentWorkspaceId(),
     projectId: input.projectId,
     aggregateType: input.nodeId ? 'node' : 'project',
     aggregateId: input.nodeId ?? input.projectId,
@@ -135,15 +133,19 @@ function validateArtifact(input: WriteArtifactInput): ArtifactPrevalidation {
       : { ok: false, errors: ['产物内容不能为空'] }
   }
   if (input.validation === 'deterministic-html') {
-    const inspection = inspectDeterminism(input.content)
-    return inspection.ok
+    const inspection = inspectFabricateSource(input.content)
+    const runtime = inspectFabricateRuntime(input.content)
+    return inspection.ok && runtime.ok
       ? { ok: true }
       : {
           ok: false,
-          errors: inspection.violations.map(
-            (violation) =>
-              `${violation.ruleId}@${violation.line}: ${violation.message}`
-          ),
+          errors: [
+            ...inspection.violations.map(
+              (violation) =>
+                `${violation.ruleId}@${violation.line}: ${violation.message}`
+            ),
+            ...runtime.errors,
+          ],
         }
   }
   try {

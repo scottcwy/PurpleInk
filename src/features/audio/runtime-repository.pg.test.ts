@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
 import {
@@ -13,7 +14,16 @@ import {
   type PgTestDatabase,
 } from '@/lib/db/test/pg-test-database'
 import type { StorageAdapter } from '@/lib/storage'
+import { mp3Frames } from './mp3.fixture'
 import { AudioRuntimeRepository } from './runtime-repository'
+
+// 被测模块经 currentWorkspaceId() 取归属（PLAN-002 阶段 B）；单测没有请求入口，
+// 把读取口 mock 成历史单工作区 id，与用例 seed 的数据保持一致。
+vi.mock('@/lib/auth/workspace-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/workspace-context')>()),
+  currentWorkspaceId: () => '00000000-0000-4000-8000-000000000001',
+  currentUserId: () => 'test-user',
+}))
 
 vi.mock('server-only', () => ({}))
 
@@ -24,7 +34,7 @@ const RUN_ID = '30000000-0000-4000-8000-000000000001'
 const ATTEMPT_ID = '40000000-0000-4000-8000-000000000001'
 const AUDIO_ID = '50000000-0000-4000-8000-000000000001'
 const AUDIO_KEY = `narration/${PROJECT_ID}/u001.mp3`
-const AUDIO_BYTES = Buffer.from([1, 2, 3])
+const AUDIO_BYTES = mp3Frames(2)
 const AUDIO_HASH = createHash('sha256').update(AUDIO_BYTES).digest('hex')
 const FINGERPRINT = 'a'.repeat(64)
 
@@ -76,18 +86,37 @@ describe('AudioRuntimeRepository', () => {
       audioBytes: AUDIO_BYTES,
       audioFormat: 'mp3',
       contentHash: AUDIO_HASH,
-      sizeBytes: 3,
+      sizeBytes: AUDIO_BYTES.byteLength,
     })
     expect(storage.get).not.toHaveBeenCalledWith(expect.stringContaining('other/'))
   })
 
   it('rejects audio bytes that do not match the indexed content hash', async () => {
-    vi.mocked(storage.get).mockImplementationOnce(async () => Buffer.from([9, 9]))
+    vi.mocked(storage.get).mockImplementationOnce(async () =>
+      Buffer.alloc(AUDIO_BYTES.byteLength, 9)
+    )
     const repository = new AudioRuntimeRepository(db, storage)
 
     await expect(repository.loadNarration(PROJECT_ID, 'U001')).rejects.toThrow(
       'hash 不一致'
     )
+  })
+
+  it('rejects audio bytes whose actual size does not match the indexed size', async () => {
+    await db
+      .update(artifacts)
+      .set({ sizeBytes: AUDIO_BYTES.byteLength + 1 })
+      .where(eq(artifacts.id, AUDIO_ID))
+    const repository = new AudioRuntimeRepository(db, storage)
+
+    await expect(repository.loadNarration(PROJECT_ID, 'U001')).rejects.toThrow(
+      'size 不一致'
+    )
+
+    await db
+      .update(artifacts)
+      .set({ sizeBytes: AUDIO_BYTES.byteLength })
+      .where(eq(artifacts.id, AUDIO_ID))
   })
 
   it('fails instead of inventing audio when INGEST produced none', async () => {
@@ -150,7 +179,7 @@ async function seedWorkspace(
     lifecycle: 'draft',
     schemaVersion: 'cvc.narration-audio/v1',
     storageKey: `${storagePrefix}${AUDIO_KEY}`,
-    sizeBytes: 3,
+    sizeBytes: AUDIO_BYTES.byteLength,
     contentHash: AUDIO_HASH,
     attemptId: ATTEMPT_ID,
   })

@@ -1,6 +1,13 @@
 import { notFound } from 'next/navigation'
 import { getLatestArtifact } from '@/features/artifacts'
-import { getCanvasGraph, listProjects, type CanvasGraphNode } from '@/features/canvas'
+import { withPageSession } from '@/features/auth/page-session'
+import {
+  getCanvasGraph,
+  listProjects,
+  type CanvasGraphNode,
+} from '@/features/canvas'
+import { getProjectRouteState } from '@/features/projects/project-compatibility'
+import { UnsupportedProjectNotice } from '@/features/canvas/unsupported-project-notice'
 import { ShotDetail } from './shot-detail'
 import { resolveCompositionMode, resolveRenderSpec } from './shot-server-data'
 
@@ -14,7 +21,17 @@ export default async function ShotDetailPage({
   searchParams: Promise<{ projectId?: string }>
 }) {
   const [{ shotId }, { projectId }] = await Promise.all([params, searchParams])
+  const currentPath = projectId
+    ? `/products/shots/${shotId}?projectId=${encodeURIComponent(projectId)}`
+    : `/products/shots/${shotId}`
+  return withPageSession(currentPath, () => renderShotDetail(shotId, projectId))
+}
+
+async function renderShotDetail(shotId: string, projectId: string | undefined) {
   if (!projectId) notFound()
+  const routeState = await getProjectRouteState(projectId)
+  if (routeState === 'missing') notFound()
+  if (routeState === 'legacy') return <UnsupportedProjectNotice />
   const project = (await listProjects()).find(
     (candidate) => candidate.id === projectId,
   )

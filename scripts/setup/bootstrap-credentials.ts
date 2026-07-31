@@ -48,20 +48,22 @@ async function loadBusiness(): Promise<{
   readonly validateGeminiKey: typeof import('@/features/ai/gemini-adapter')['validateGeminiKey']
   readonly getDb: typeof import('@/lib/db/client')['getDb']
   readonly LOCAL_WORKSPACE_ID: typeof import('@/lib/db/client')['LOCAL_WORKSPACE_ID']
+  readonly runInAuthContext: typeof import('@/lib/auth/workspace-context')['runInAuthContext']
   readonly workspaces: typeof import('@/lib/db/schema/index')['workspaces']
   readonly sql: typeof import('drizzle-orm')['sql']
 }> {
-  const [{ loadEnvConfig }, { sql }, { getDb, LOCAL_WORKSPACE_ID }, { workspaces }, { saveApiKey, validateKey }, { saveGeminiApiKey }, { validateGeminiKey }] = await Promise.all([
+  const [{ loadEnvConfig }, { sql }, { getDb, LOCAL_WORKSPACE_ID }, { runInAuthContext }, { workspaces }, { saveApiKey, validateKey }, { saveGeminiApiKey }, { validateGeminiKey }] = await Promise.all([
     import('@next/env'),
     import('drizzle-orm'),
     import('@/lib/db/client'),
+    import('@/lib/auth/workspace-context'),
     import('@/lib/db/schema/index'),
     import('@/features/ai/stepfun-adapter'),
     import('@/features/ai/gemini-config'),
     import('@/features/ai/gemini-adapter'),
   ])
   return {
-    loadEnvConfig, sql, getDb, LOCAL_WORKSPACE_ID, workspaces,
+    loadEnvConfig, sql, getDb, LOCAL_WORKSPACE_ID, runInAuthContext, workspaces,
     saveApiKey, validateKey,
     saveGeminiApiKey, validateGeminiKey,
   }
@@ -84,6 +86,8 @@ const PROVIDERS: readonly ProviderPlan[] = [
 
 let business: Awaited<ReturnType<typeof loadBusiness>>
 
+const allowEmpty = process.argv.includes('--allow-empty')
+
 async function main(): Promise<void> {
   business = await loadBusiness()
   business.loadEnvConfig(process.cwd())
@@ -93,21 +97,38 @@ async function main(): Promise<void> {
   let written = 0
   let skipped = 0
   let failed = 0
-  for (const provider of PROVIDERS) {
-    const result = await processProvider(provider)
-    if (result === 'written') written += 1
-    else if (result === 'skipped') skipped += 1
-    else failed += 1
-  }
+  // 业务侧 save/validate 经 `currentWorkspaceId()` 取归属（PLAN-002 阶段 B）；
+  // bootstrap 是单 workspace 冷启动脚本，只写首个 owner workspace（历史锚点），
+  // 其余用户经设置页自行写入（docs/configuration/credentials.md §3）。
+  await business.runInAuthContext(
+    { workspaceId: business.LOCAL_WORKSPACE_ID, userId: 'system:bootstrap' },
+    async () => {
+      for (const provider of PROVIDERS) {
+        const result = await processProvider(provider)
+        if (result === 'written') written += 1
+        else if (result === 'skipped') skipped += 1
+        else failed += 1
+      }
+    },
+  )
 
   process.stdout.write(
     `\n[bootstrap-credentials] written=${written} skipped=${skipped} failed=${failed}\n`,
   )
   if (written === 0 && failed === 0) {
-    process.stderr.write(
-      '[bootstrap-credentials] no key was written; fill GEMINI_API_KEY and/or '
-        + 'STEPFUN_API_KEY in .env.local before rerunning\n',
-    )
+    // `--allow-empty` 供容器编排使用：生产 compose 把本脚本作为 `next` 的
+    // `service_completed_successfully` 前置，若「没提供 Key」也算失败退出，
+    // 整个栈就起不来了。而应用本身没有凭据也能正常启动（凭据只在跑管线时才
+    // 需要），因此这种情况应当放行并如实提示，而不是阻断部署。
+    // 校验失败（failed > 0）仍然退出 1：那是配置错了，必须响。
+    const message =
+      '[bootstrap-credentials] no key was written; set GEMINI_API_KEY and/or '
+      + 'STEPFUN_API_KEY before rerunning\n'
+    if (allowEmpty) {
+      process.stdout.write(message)
+      return
+    }
+    process.stderr.write(message)
     process.exitCode = 2
     return
   }
@@ -165,8 +186,20 @@ async function ensureLocalWorkspace(database: Awaited<ReturnType<typeof business
     .onConflictDoNothing()
 }
 
-void main().catch((error) => {
+/**
+ * 显式退出。`getDb()` 的连接锚在 globalThis 上、由 Next 进程长期复用，脚本侧
+ * 没有关闭出口，不退出会让进程一直挂着（实测 300s 未结束）。
+ *
+ * 这在容器编排里是**阻断级**的：生产 compose 把本脚本作为 `next` 的
+ * `service_completed_successfully` 前置，进程不退出就等于该条件永远不满足，
+ * 整个栈起不来。
+ */
+function exitWithCurrentCode(): never {
+  process.exit(process.exitCode ?? 0)
+}
+
+void main().then(exitWithCurrentCode).catch((error) => {
   const message = error instanceof Error ? error.message : String(error)
   process.stderr.write(`[bootstrap-credentials] fatal: ${message}\n`)
-  process.exitCode = 1
+  process.exit(1)
 })

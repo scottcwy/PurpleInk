@@ -58,7 +58,7 @@ function LogoCell({ logoA, logoB, index }: { logoA: Logo; logoB: Logo; index: nu
   return (
     <Link
       href={activeLogo.href}
-      className="relative flex h-24 items-center justify-center rounded-xl bg-muted/50 px-6 transition-colors hover:bg-muted focus-ring overflow-hidden"
+      className="relative flex h-24 items-center justify-center rounded-xl bg-muted/50 px-6 transition-colors duration-fast ease-standard hover:bg-muted focus-ring overflow-hidden"
     >
       <AnimatePresence mode="wait">
         <motion.div
@@ -74,7 +74,7 @@ function LogoCell({ logoA, logoB, index }: { logoA: Logo; logoB: Logo; index: nu
             alt={activeLogo.name}
             width={120}
             height={40}
-            className="h-8 w-auto object-contain opacity-70 grayscale transition-all hover:opacity-100 hover:grayscale-0 dark:invert"
+            className="h-8 w-auto object-contain opacity-70 grayscale transition-[filter,opacity] duration-fast ease-standard hover:opacity-100 hover:grayscale-0 dark:invert"
           />
         </motion.div>
       </AnimatePresence>
@@ -92,10 +92,10 @@ export function TrustedBy(): ReactNode {
           </h2>
           <Link
             href="#"
-            className="group flex shrink-0 items-center leading-0 gap-2 text-xl font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="group flex shrink-0 items-center leading-0 gap-2 text-xl font-medium text-muted-foreground transition-colors duration-fast ease-standard hover:text-foreground"
           >
             See all
-            <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5" />
+            <ArrowRight className="h-5 w-5 transition-transform duration-fast ease-standard group-hover:translate-x-0.5" />
           </Link>
         </div>
 

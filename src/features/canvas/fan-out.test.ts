@@ -3,6 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('server-only', () => ({}))
 
 const publishTopology = vi.fn()
+const { registerWorkflowSlotsInTransaction } = vi.hoisted(() => ({
+  registerWorkflowSlotsInTransaction: vi.fn(async () => undefined),
+}))
+vi.mock('@/features/ai/workspace-concurrency', () => ({
+  registerWorkflowSlotsInTransaction,
+}))
 vi.mock('@/lib/stream/status-bus', () => ({
   statusBus: {
     publishStatus: vi.fn(),
@@ -48,6 +54,14 @@ function currentTx(): unknown {
 
 import { materializeShotLanes } from './fan-out'
 
+// 被测模块经 currentWorkspaceId() 取归属（PLAN-002 阶段 B）；单测没有请求入口，
+// 把读取口 mock 成历史单工作区 id，与用例 seed 的数据保持一致。
+vi.mock('@/lib/auth/workspace-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/workspace-context')>()),
+  currentWorkspaceId: () => '00000000-0000-4000-8000-000000000001',
+  currentUserId: () => 'test-user',
+}))
+
 const ANCHORS = [
   { id: 'anchor-split', type: 'shot-split' },
   { id: 'anchor-score', type: 'score' },
@@ -64,6 +78,7 @@ const LANE_ROLES = [
 describe('materializeShotLanes 拓扑事件发布', () => {
   beforeEach(() => {
     publishTopology.mockReset()
+    registerWorkflowSlotsInTransaction.mockClear()
     transactionState.committed = false
     selectResults = []
   })
@@ -79,6 +94,10 @@ describe('materializeShotLanes 拓扑事件发布', () => {
 
     expect(publishTopology).toHaveBeenCalledTimes(1)
     expect(publishTopology).toHaveBeenCalledWith('p1')
+    expect(registerWorkflowSlotsInTransaction).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ projectId: 'p1', workUnitKeys: ['S001', 'S002'] }),
+    )
     expect(committedAtPublish).toBe(true)
   })
 

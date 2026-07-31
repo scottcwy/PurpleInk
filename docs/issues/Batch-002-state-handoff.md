@@ -65,7 +65,7 @@ issue §4.1 第 5 条允许「若 schema 未包含该枚举值，同步扩展」
 **新增**
 
 - `src/features/audio/mp3-frame-header.ts`（127 行）—— 纯函数解析 MPEG 帧头取**原生采样率**；带「下一帧必须仍同步」校验，避免把数据里的 `0xFF` 误认成帧头。刻意**不**从帧计数推算时长（会把编码器 delay/padding 算进去）
-- `src/features/audio/measure.ts`（92 行）—— `measureMp3` 用 `ffmpeg-static` 把真实字节解码成 16-bit 单声道 PCM 并统计采样数，`durationMs = sampleCount / sampleRateHz × 1000`。**不读 TTS 自报 `duration`，不按字数估算**
+- `src/features/audio/measure.ts`（92 行）—— `measureAudio` 用 `ffmpeg-static` 把真实字节解码成 16-bit 单声道 PCM 并统计采样数，`durationMs = sampleCount / sampleRateHz × 1000`。**不读 TTS 自报 `duration`，不按字数估算**
 - `src/features/audio/narration.ts`（229 行）—— 批量合成（默认并发 4，与 ISSUE-004 通道语义一致，未因 TTS 慢写死成 1）；按 `sha256(engine|voice|text)` 内容寻址复用字节；运行中模型路由漂移即失败
 - `src/features/audio/narration-repository.ts`（93 行）—— 落盘后**复核实际字节 SHA-256** 再原子登记 artifact；每 unit 独立 kind `narration-audio:U00N`
 - `src/features/director/audio-timing.ts`（143 行）—— 取代 `audio-demo.ts`，纯函数由实测结果构造 manifest / allocation，`durationInFrames = ceil(durationMs × fps / 1000)`（**向上取整**，宁可多一帧也不截断语音）；`MASTER_FPS = 30` 落在此处作为母版时间轴常量
@@ -188,7 +188,7 @@ schema 改动必须与 migration 同批提交，否则会横向阻塞所有其�
    自己的第一个单镜 MP4，以及 ISSUE-005 剩下的两项运行时观测。
    打通后请回到 `docs/issues/evidence/issue-005/README.md` §6 补齐，并把该文件 §6 改成已完成。
 2. **音频时长真值链已定型，不要另开第二条**：
-   - 时长只能来自 `measureMp3()`（解码采样数）。**禁止**改回 TTS 自报 `duration` 或
+   - 时长只能来自 `measureAudio()`（解码采样数）。**禁止**改回 TTS 自报 `duration` 或
      `text.length * k` 估算 —— 这是 issue §6 明文禁区。
    - `audio-demo.ts` 已删且不得以「可选 fallback」名义复活；
      `runtime-artifact-source.loadIngestArtifact` 缺 manifest 必须失败，不得再加回退构造。

@@ -1,7 +1,8 @@
 import 'server-only'
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, ne } from 'drizzle-orm'
 import { z } from 'zod'
-import { getDb, LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb, type Db } from '@/lib/db/client'
 import { artifacts, canvasNodes } from '@/lib/db/schema/index'
 import {
   laneKeyOf,
@@ -15,6 +16,7 @@ import type {
   RenderJob,
   ThumbnailContext,
 } from './types'
+import { classifyWorkflowError } from '@/features/canvas/workflow-error'
 
 const renderSpecSchema = z
   .object({
@@ -26,7 +28,8 @@ const renderSpecSchema = z
   })
   .strict()
 
-const ENQUEUEABLE_STATUSES = new Set(['idle', 'failed', 'stale'])
+// 'skipped' 在列：已跳过的 shot-codegen 允许通过 intent=execute 重新入队恢复（见 routing.md 跳过合同）。
+const ENQUEUEABLE_STATUSES = new Set(['idle', 'failed', 'stale', 'skipped'])
 type RenderContextMode = 'running' | 'completed'
 type RenderStatusMode = RenderContextMode | 'enqueueable'
 
@@ -79,11 +82,54 @@ export class RenderShotRepository {
     return (await this.findFabricateArtifact(projectId, nodeId)) !== null
   }
 
+  /** runtime admission 证明 source 无效后只拒绝本次使用的 draft。 */
+  async rejectFabricateArtifact(
+    projectId: string,
+    nodeId: string,
+    sourceKey: string,
+  ): Promise<void> {
+    const database = await this.database()
+    await database.transaction(async (transaction) => {
+      await transaction
+        .update(artifacts)
+        .set({ lifecycle: 'rejected', updatedAt: new Date() })
+        .where(
+          and(
+            eq(artifacts.workspaceId, currentWorkspaceId()),
+            eq(artifacts.projectId, projectId),
+            eq(artifacts.aggregateType, 'node'),
+            eq(artifacts.aggregateId, nodeId),
+            eq(artifacts.kind, 'director-fabricate'),
+            eq(artifacts.storageKey, sourceKey),
+            eq(artifacts.lifecycle, 'draft'),
+          ),
+        )
+    })
+  }
+
   loadRenderContext(projectId: string, nodeId: string): Promise<RenderJob> {
     return this.buildRenderJob(projectId, nodeId, 'running')
   }
 
   async recordRenderError(nodeId: string, error: unknown): Promise<void> {
+    return this.recordErrorProjection(nodeId, {
+      renderError: classifyWorkflowError(error, { stage: 'RENDER' }),
+      directorError: undefined,
+    })
+  }
+
+  async recordStageError(
+    nodeId: string,
+    stage: 'FABRICATE',
+    error: unknown
+  ): Promise<void> {
+    return this.recordErrorProjection(nodeId, {
+      directorError: classifyWorkflowError(error, { stage }),
+      renderError: undefined,
+    })
+  }
+
+  async recordOutputHash(nodeId: string, contentHash: string): Promise<void> {
     const database = await this.database()
     await database.transaction(async (transaction) => {
       const [node] = await transaction
@@ -91,7 +137,7 @@ export class RenderShotRepository {
         .from(canvasNodes)
         .where(
           and(
-            eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+            eq(canvasNodes.workspaceId, currentWorkspaceId()),
             eq(canvasNodes.id, nodeId)
           )
         )
@@ -104,20 +150,60 @@ export class RenderShotRepository {
           data: {
             schemaVersion: 1,
             payload: {
-              // 清掉可能残留的 directorError：本次失败发生在渲染阶段（HTML 已
-              // 存在），任何更早一次 FABRICATE 失败已经过时，不应与本次渲染
-              // 失败同时展示在 Inspector 里。
-              ...withoutPayloadKeys(readPayload(node.data), ['directorError']),
-              renderError: {
-                message: error instanceof Error ? error.message : String(error),
-              },
+              ...readPayload(node.data),
+              outputContentHash: contentHash,
             },
           },
           updatedAt: new Date(),
         })
         .where(
           and(
-            eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+            eq(canvasNodes.workspaceId, currentWorkspaceId()),
+            eq(canvasNodes.id, nodeId)
+          )
+        )
+    })
+  }
+
+  private async recordErrorProjection(
+    nodeId: string,
+    projection: {
+      directorError?: unknown
+      renderError?: unknown
+    }
+  ): Promise<void> {
+    const database = await this.database()
+    await database.transaction(async (transaction) => {
+      const [node] = await transaction
+        .select({ data: canvasNodes.data })
+        .from(canvasNodes)
+        .where(
+          and(
+            eq(canvasNodes.workspaceId, currentWorkspaceId()),
+            eq(canvasNodes.id, nodeId)
+          )
+        )
+        .limit(1)
+        .for('update')
+      if (!node) throw new Error(`节点不存在：${nodeId}`)
+      await transaction
+        .update(canvasNodes)
+        .set({
+          data: {
+            schemaVersion: 1,
+            payload: {
+              ...withoutPayloadKeys(readPayload(node.data), [
+                'directorError',
+                'renderError',
+              ]),
+              ...projection,
+            },
+          },
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(canvasNodes.workspaceId, currentWorkspaceId()),
             eq(canvasNodes.id, nodeId)
           )
         )
@@ -172,7 +258,7 @@ export class RenderShotRepository {
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.id, nodeId),
           eq(canvasNodes.projectId, projectId)
         )
@@ -207,11 +293,12 @@ export class RenderShotRepository {
       .from(artifacts)
       .where(
         and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(artifacts.workspaceId, currentWorkspaceId()),
           eq(artifacts.projectId, projectId),
           eq(artifacts.aggregateType, 'node'),
           eq(artifacts.aggregateId, nodeId),
-          eq(artifacts.kind, 'director-fabricate')
+          eq(artifacts.kind, 'director-fabricate'),
+          ne(artifacts.lifecycle, 'rejected'),
         )
       )
       .orderBy(desc(artifacts.version), desc(artifacts.createdAt))

@@ -1,50 +1,132 @@
-'use client'
+"use client";
 
-import { useState, type FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
-import { AudioLines, Plus, Sparkles, Timer, Upload } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Dialog } from '@/components/ui/dialog'
-import { TextArea } from '@/components/ui/text-area'
-import { TextField } from '@/components/ui/text-field'
-import { Toast } from '@/components/ui/toast'
-import { productCanvasHref } from '@/features/navigation/products-routes'
-import { createProjectAndStartIngest } from './new-project-api'
+import { useId, useRef, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { Plus, Sparkles } from "lucide-react";
+import { Button, type ButtonSize } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { TextField } from "@/components/ui/text-field";
+import { TextArea } from "@/components/ui/text-area";
+import { Toast } from "@/components/ui/toast";
+import {
+  LoginRequiredDialog,
+  useRequireLogin,
+} from "@/features/auth/login-required-dialog";
+import { productCanvasHref } from "@/features/navigation/products-routes";
+import {
+  createProject,
+  createProjectCreationKey,
+  startProject,
+  type ProjectVisualTheme,
+} from "@/features/projects/project-create-client";
+import type { ProjectVisualStyle } from "@/features/projects/project-visual-style";
+import type { ProjectWorkflowKind } from "@/lib/workflow/project-workflow-registry";
+import {
+  buildNewProjectInput,
+  isProjectKind,
+  validateNewProjectInput,
+} from "./new-project-form";
+import { NewProjectSourceCard } from "./new-project-source-card";
 
-const SCRIPT_PLACEHOLDER =
-  '你有没有想过，为什么大语言模型总是一本正经地胡说八道？这背后不是它"想骗人"，而是它的训练目标决定的——它只学会了"下一个词最可能是什么"。今天这支视频，我们用十分钟讲清楚 RAG：给模型配一本可以翻阅的参考书……'
+const SOURCE_OPTIONS = [
+  { value: "script", label: "文稿视频" },
+  { value: "audio", label: "录音转视频" },
+  { value: "website", label: "网站介绍" },
+] as const;
+
+const VISUAL_THEME_OPTIONS = [
+  { value: "dark", label: "深色系" },
+  { value: "light", label: "浅色系" },
+] as const;
+
+const VISUAL_STYLE_OPTIONS = [
+  { value: "default", label: "默认" },
+  { value: "flat", label: "平面" },
+  { value: "dimensional", label: "立体" },
+  { value: "custom", label: "自定义" },
+] as const;
 
 export interface NewProjectDialogProps {
-  featured?: boolean
+  featured?: boolean;
+  initialKind?: ProjectWorkflowKind;
+  /** 非 featured 触发按钮的尺寸；顶栏入口用 sm，空态入口保持默认。 */
+  triggerSize?: ButtonSize;
 }
 
-export function NewProjectDialog({ featured = false }: NewProjectDialogProps) {
-  const router = useRouter()
-  const [open, setOpen] = useState(false)
-  const [title, setTitle] = useState('')
-  const [script, setScript] = useState('')
-  const [error, setError] = useState<string>()
-  const [submitting, setSubmitting] = useState(false)
+export function NewProjectDialog({
+  featured = false,
+  initialKind = "script",
+  triggerSize = "md",
+}: NewProjectDialogProps) {
+  const router = useRouter();
+  const formId = `new-project-form-${useId()}`;
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<ProjectWorkflowKind>(initialKind);
+  const [title, setTitle] = useState("");
+  const [script, setScript] = useState("");
+  const [audioFile, setAudioFile] = useState<File>();
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [visualTheme, setVisualTheme] = useState<ProjectVisualTheme>("dark");
+  const [visualStyle, setVisualStyle] = useState<ProjectVisualStyle>("default");
+  const [customVisualStyle, setCustomVisualStyle] = useState("");
+  const [createdProjectId, setCreatedProjectId] = useState<string>();
+  const [error, setError] = useState<string>();
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const creationKeyRef = useRef<string | undefined>(undefined);
+  const { loginRequired, closeLoginDialog, handleAuthError } =
+    useRequireLogin();
+
+  function invalidateCreatedProject() {
+    setCreatedProjectId(undefined);
+    creationKeyRef.current = undefined;
+    setError(undefined);
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const validationError = !title.trim()
-      ? '项目名称不能为空'
-      : !script.trim()
-        ? '请粘贴文字稿'
-        : undefined
+    event.preventDefault();
+    const values = {
+      kind,
+      title,
+      script,
+      audioFile,
+      websiteUrl,
+      visualTheme,
+      visualStyle,
+      customVisualStyle,
+    };
+    const validationError = validateNewProjectInput(values);
     if (validationError) {
-      setError(validationError)
-      return
+      setError(validationError);
+      return;
     }
-    setSubmitting(true)
-    setError(undefined)
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    setError(undefined);
     try {
-      const { projectId } = await createProjectAndStartIngest({ title, script })
-      router.push(productCanvasHref(projectId))
+      const projectInput = buildNewProjectInput(values);
+      if (projectInput.kind === "website" && !creationKeyRef.current) {
+        creationKeyRef.current = createProjectCreationKey();
+      }
+      const projectId =
+        createdProjectId ??
+        (await createProject(
+          projectInput,
+          fetch,
+          creationKeyRef.current,
+        ));
+      if (!createdProjectId) setCreatedProjectId(projectId);
+      await startProject(projectId);
+      router.push(productCanvasHref(projectId));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '请稍后重试')
-      setSubmitting(false)
+      if (!handleAuthError(cause)) {
+        setError(cause instanceof Error ? cause.message : "请稍后重试");
+      }
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   }
 
@@ -56,14 +138,16 @@ export function NewProjectDialog({ featured = false }: NewProjectDialogProps) {
           className="h-24 w-full flex-col gap-2 rounded-lg"
           onClick={() => setOpen(true)}
         >
-          <Plus className="size-7 text-ds-blue" />
-          <span className="text-[17px] text-ds-text">粘贴一段文字稿，开始创作</span>
-          <span className="text-xs font-normal text-ds-text-muted">
-            支持导入 .txt / .md，可选上传配音作为时间地基
+          <Plus className="text-ds-blue size-7" />
+          <span className="text-ds-text text-[17px]">
+            选择一种来源，开始创作
+          </span>
+          <span className="text-ds-text-muted text-xs font-normal">
+            文稿、原录音与网站 URL 共用项目工作流
           </span>
         </Button>
       ) : (
-        <Button icon={Plus} onClick={() => setOpen(true)}>
+        <Button icon={Plus} size={triggerSize} onClick={() => setOpen(true)}>
           新建项目
         </Button>
       )}
@@ -71,59 +155,142 @@ export function NewProjectDialog({ featured = false }: NewProjectDialogProps) {
         open={open}
         onClose={() => !submitting && setOpen(false)}
         title="创建项目"
-        description="规划开始前，源文本会先保存为版本化项目 Snapshot。"
+        description="来源会先保存为版本化项目，再由服务端选择并启动对应工作流。"
         actions={
           <>
-            <Button variant="gray" onClick={() => setOpen(false)} disabled={submitting}>
+            <Button
+              variant="gray"
+              onClick={() => setOpen(false)}
+              disabled={submitting}
+            >
               取消
             </Button>
-            <Button form="new-project-form" type="submit" icon={Sparkles} disabled={submitting}>
-              生成分镜
+            <Button
+              form={formId}
+              type="submit"
+              icon={Sparkles}
+              disabled={submitting}
+            >
+              {submitting
+                ? "正在启动"
+                : createdProjectId
+                  ? "重试启动"
+                  : "创建并开始"}
             </Button>
           </>
         }
       >
-        <form id="new-project-form" className="flex flex-col gap-3.5" onSubmit={handleSubmit}>
+        <form
+          id={formId}
+          className="flex flex-col gap-3.5"
+          onSubmit={handleSubmit}
+        >
+          <SegmentedControl
+            options={[...SOURCE_OPTIONS]}
+            value={kind}
+            onChange={(value) => {
+              if (isProjectKind(value) && value !== kind) {
+                invalidateCreatedProject();
+                setKind(value);
+              }
+            }}
+            className="w-full justify-stretch [&>button]:flex-1"
+          />
           <TextField
             label="项目名称"
-            placeholder="例如：RAG 十分钟入门"
+            placeholder="例如：新品发布介绍"
             value={title}
-            onChange={(event) => setTitle(event.target.value)}
+            maxLength={200}
+            onChange={(event) => {
+              invalidateCreatedProject();
+              setTitle(event.target.value);
+            }}
             className="w-full"
           />
-          <TextArea
-            label="源文本"
-            placeholder={SCRIPT_PLACEHOLDER}
-            value={script}
-            onChange={(event) => setScript(event.target.value)}
-            className="w-full [&>textarea]:min-h-[220px]"
-          />
-          <div className="rounded-md bg-ds-surface-muted p-3.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-[13px] text-ds-text">
-                <AudioLines className="size-4 text-ds-blue" />
-              <span>配音（可选）</span>
-                <span className="text-xs text-ds-text-muted">作为全片时间地基</span>
-              </div>
-              <Button
-                type="button"
-                variant="gray"
-                size="sm"
-                icon={Upload}
-                disabled
-                title="音频上传尚未接线"
-              >
-                上传音频
-              </Button>
-            </div>
-            <p className="mt-3 flex items-center gap-1.5 text-[11px] text-ds-text-muted">
-              <Timer className="size-3" />
-              预计规划：6–8 个镜头 · ProjectSourceSnapshotV1
-            </p>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-ds-text text-[13px] font-medium">
+              视频色调
+            </span>
+            <SegmentedControl
+              options={[...VISUAL_THEME_OPTIONS]}
+              value={visualTheme}
+              onChange={(value) => {
+                if (
+                  (value === "dark" || value === "light") &&
+                  value !== visualTheme
+                ) {
+                  invalidateCreatedProject();
+                  setVisualTheme(value);
+                }
+              }}
+              className="w-full justify-stretch [&>button]:flex-1"
+            />
           </div>
-          {error && <Toast variant="error" title="创建失败" body={error} className="w-full" />}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-ds-text text-[13px] font-medium">
+              视频风格
+            </span>
+            <SegmentedControl
+              options={[...VISUAL_STYLE_OPTIONS]}
+              value={visualStyle}
+              onChange={(value) => {
+                if (
+                  (value === "default" ||
+                    value === "flat" ||
+                    value === "dimensional" ||
+                    value === "custom") &&
+                  value !== visualStyle
+                ) {
+                  invalidateCreatedProject();
+                  setVisualStyle(value);
+                }
+              }}
+              className="w-full justify-stretch [&>button]:flex-1"
+            />
+          </div>
+          {visualStyle === "custom" && (
+            <TextArea
+              label="自定义风格要求"
+              placeholder="例如：使用杂志拼贴、粗线条插画与高密度排版"
+              value={customVisualStyle}
+              maxLength={500}
+              rows={3}
+              onChange={(event) => {
+                invalidateCreatedProject();
+                setCustomVisualStyle(event.target.value);
+              }}
+              className="w-full [&>textarea]:min-h-20"
+            />
+          )}
+          <NewProjectSourceCard
+            kind={kind}
+            script={script}
+            audioFile={audioFile}
+            websiteUrl={websiteUrl}
+            onScriptChange={(value) => {
+              invalidateCreatedProject();
+              setScript(value);
+            }}
+            onAudioFileChange={(file) => {
+              invalidateCreatedProject();
+              setAudioFile(file);
+            }}
+            onWebsiteUrlChange={(value) => {
+              invalidateCreatedProject();
+              setWebsiteUrl(value);
+            }}
+          />
+          {error && (
+            <Toast
+              variant="error"
+              title="创建失败"
+              body={error}
+              className="w-full"
+            />
+          )}
         </form>
       </Dialog>
+      <LoginRequiredDialog open={loginRequired} onClose={closeLoginDialog} />
     </>
-  )
+  );
 }

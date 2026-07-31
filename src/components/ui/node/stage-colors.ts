@@ -11,8 +11,17 @@ export function nodeTypeColorToken(nodeType: CanvasNodeType): string {
     'shot-sfx': 'text-stage-audio border-stage-audio',
     'shot-subtitle': 'text-stage-audio border-stage-audio',
     'shot-qa': 'text-stage-finalize border-stage-finalize',
+    'audio-transcribe': 'text-stage-audio border-stage-audio',
+    'website-stage': 'text-stage-direct border-stage-direct',
   }
   return map[nodeType]
+}
+
+/** 仅阶段色描边，避免 text-stage-* 污染整卡正文。 */
+export function nodeTypeBorderClass(nodeType: CanvasNodeType): string {
+  return nodeTypeColorToken(nodeType)
+    .split(/\s+/)
+    .find((token) => token.startsWith('border-')) ?? 'border-ds-border'
 }
 
 export function nodeTypeFillClass(nodeType: CanvasNodeType): string {
@@ -26,6 +35,8 @@ export function nodeTypeFillClass(nodeType: CanvasNodeType): string {
     'shot-sfx': 'bg-stage-audio',
     'shot-subtitle': 'bg-stage-audio',
     'shot-qa': 'bg-stage-finalize',
+    'audio-transcribe': 'bg-stage-audio',
+    'website-stage': 'bg-stage-direct',
   }
   return map[nodeType]
 }

@@ -31,24 +31,32 @@ function harness(
     areAllUpstreamsSuccessful: vi.fn(
       async (_projectId, nodeId) => ready[nodeId] ?? true
     ),
+    isNodeStale: vi.fn(async () => false),
+    markNodeStale: vi.fn(async () => {}),
+    isMediaReady: vi.fn(async () => true),
     recordStageError: vi.fn(async () => {}),
   }
   const enqueueDirectorStage =
     vi.fn<AdvanceDependencies['enqueueDirectorStage']>(async () => 'director-job')
   const enqueueRenderShot =
     vi.fn<AdvanceDependencies['enqueueRenderShot']>(async () => 'render-job')
-  const prepareFinalExport =
-    vi.fn<AdvanceDependencies['prepareFinalExport']>(async () => {})
+  const requestExportFinalization =
+    vi.fn<AdvanceDependencies['requestExportFinalization']>(async (input) => ({
+      status: 'queued',
+      nodeId: input.exportNodeId,
+      jobId: 'export-job',
+      mode: 'complete',
+    }))
   return {
     repository,
     enqueueDirectorStage,
     enqueueRenderShot,
-    prepareFinalExport,
+    requestExportFinalization,
     dependencies: {
       repository,
       enqueueDirectorStage,
       enqueueRenderShot,
-      prepareFinalExport,
+      requestExportFinalization,
     } satisfies AdvanceDependencies,
   }
 }
@@ -96,26 +104,65 @@ describe('advancePipeline', () => {
     expect(result.enqueuedNodeIds).toEqual(['codegen', 'subtitle'])
   })
 
-  it('creates the trusted final MP4 before enqueuing export FINALIZE', async () => {
+  it('keeps codegen idle while asynchronous narration is not ready', async () => {
+    const test = harness([
+      candidate({ id: 'codegen', type: 'shot-codegen', stage: 'FABRICATE' }),
+    ])
+    vi.mocked(test.repository.isMediaReady).mockResolvedValue(false)
+
+    const result = await advancePipeline('project-1', 'shot-script', test.dependencies)
+
+    expect(result).toEqual({ enqueuedNodeIds: [], failedNodeIds: [] })
+    expect(test.enqueueRenderShot).not.toHaveBeenCalled()
+    expect(test.repository.recordStageError).not.toHaveBeenCalled()
+  })
+
+  it('routes export through the single finalization coordinator', async () => {
     const test = harness([
       candidate({ id: 'export', type: 'export', stage: 'FINALIZE' }),
     ])
 
     const result = await advancePipeline('project-1', 'score', test.dependencies)
 
-    expect(test.prepareFinalExport).toHaveBeenCalledWith('project-1')
-    expect(test.enqueueDirectorStage).toHaveBeenCalledWith({
+    expect(test.requestExportFinalization).toHaveBeenCalledWith({
       projectId: 'project-1',
-      nodeId: 'export',
-      stage: 'FINALIZE',
+      exportNodeId: 'export',
+      trigger: 'autopilot',
     })
-    expect(test.prepareFinalExport.mock.invocationCallOrder[0]).toBeLessThan(
-      test.enqueueDirectorStage.mock.invocationCallOrder[0]!
-    )
+    expect(test.enqueueDirectorStage).not.toHaveBeenCalled()
     expect(result.enqueuedNodeIds).toEqual(['export'])
   })
 
-  it.each(['pending', 'running', 'success', 'failed', 'stale'] as const)(
+  it('returns an explicit confirmation block without recording a stage failure', async () => {
+    const test = harness([
+      candidate({ id: 'export', type: 'export', stage: 'FINALIZE' }),
+    ])
+    test.requestExportFinalization.mockResolvedValue({
+      status: 'blocked',
+      nodeId: 'export',
+      block: {
+        code: 'DEGRADED_EXPORT_CONFIRMATION_REQUIRED',
+        message: '当前终片需要使用占位镜头，请确认降级交付。',
+        recovery: 'confirm_degraded_export',
+        referenceId: 'ref-1',
+        blockedAt: '2026-07-29T06:25:05.000Z',
+        confirmationFingerprint: 'sha256:current',
+      },
+    })
+
+    const result = await advancePipeline('project-1', 'score', test.dependencies)
+
+    expect(result.enqueuedNodeIds).toEqual([])
+    expect(result.failedNodeIds).toEqual([])
+    expect(result.blockedNodes).toEqual([{
+      nodeId: 'export',
+      code: 'DEGRADED_EXPORT_CONFIRMATION_REQUIRED',
+      message: '当前终片需要使用占位镜头，请确认降级交付。',
+    }])
+    expect(test.repository.recordStageError).not.toHaveBeenCalled()
+  })
+
+  it.each(['pending', 'running', 'success'] as const)(
     'does not enqueue a %s target',
     async (status) => {
       const test = harness([candidate({ status })])
@@ -126,6 +173,68 @@ describe('advancePipeline', () => {
       expect(test.enqueueRenderShot).not.toHaveBeenCalled()
     }
   )
+
+  it('re-enqueues a ready stale target exactly once when autopilot advances', async () => {
+    const test = harness([candidate({ status: 'stale' })])
+
+    const result = await advancePipeline('project-1', 'node-1', test.dependencies)
+
+    expect(result.enqueuedNodeIds).toEqual(['node-2'])
+    expect(test.enqueueDirectorStage).toHaveBeenCalledOnce()
+  })
+
+  it('re-enqueues a ready failed target only when retryable is explicitly true', async () => {
+    const test = harness([
+      candidate({ status: 'failed', retryable: true }),
+    ])
+
+    const result = await advancePipeline('project-1', 'node-1', test.dependencies)
+
+    expect(result.enqueuedNodeIds).toEqual(['node-2'])
+    expect(test.enqueueDirectorStage).toHaveBeenCalledOnce()
+  })
+
+  it.each([false, undefined])(
+    'does not automatically retry a failed target with retryable=%s',
+    async (retryable) => {
+      const test = harness([
+        candidate({ status: 'failed', retryable }),
+      ])
+
+      const result = await advancePipeline('project-1', 'node-1', test.dependencies)
+
+      expect(result).toEqual({ enqueuedNodeIds: [], failedNodeIds: [] })
+      expect(test.enqueueDirectorStage).not.toHaveBeenCalled()
+      expect(test.enqueueRenderShot).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not let a ready sibling branch re-enqueue a failed target without retryable=true', async () => {
+    const test = harness([
+      candidate({ id: 'blocked', status: 'failed', retryable: undefined }),
+      candidate({ id: 'ready', status: 'idle' }),
+    ])
+
+    const result = await advancePipeline('project-1', 'node-1', test.dependencies)
+
+    expect(result.enqueuedNodeIds).toEqual(['ready'])
+    expect(test.enqueueDirectorStage).toHaveBeenCalledOnce()
+    expect(test.enqueueDirectorStage).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      nodeId: 'ready',
+      stage: 'SHOT_SPEC',
+    })
+  })
+
+  it('marks a succeeded target stale and re-enqueues it when its inputs changed', async () => {
+    const test = harness([candidate({ status: 'success' })])
+    vi.mocked(test.repository.isNodeStale).mockResolvedValue(true)
+
+    const result = await advancePipeline('project-1', 'node-1', test.dependencies)
+
+    expect(test.repository.markNodeStale).toHaveBeenCalledWith('node-2')
+    expect(result.enqueuedNodeIds).toEqual(['node-2'])
+  })
 
   it('records one enqueue failure and continues other ready branches', async () => {
     const test = harness([
@@ -197,7 +306,7 @@ describe('advancePipeline', () => {
 })
 
 describe('startProjectPipeline', () => {
-  it.each(['idle', 'failed', 'stale'] as const)(
+  it.each(['idle', 'stale'] as const)(
     'enqueues the trusted INGEST entry when it is %s',
     async (status) => {
       const test = harness([])
@@ -212,7 +321,7 @@ describe('startProjectPipeline', () => {
             status,
           })
         ),
-        listSuccessfulNodeIds: vi.fn(async () => []),
+        listCompletedNodeIds: vi.fn(async () => []),
       }
 
       const result = await startProjectPipeline('project-1', {
@@ -229,9 +338,77 @@ describe('startProjectPipeline', () => {
       })
       expect(result).toEqual({
         autopilot: true,
+        status: 'started',
         enqueuedNodeIds: ['ingest'],
+        repairRootNodeIds: [],
         failedNodeIds: [],
+        blockedNodes: [],
       })
+    }
+  )
+
+  it('re-enqueues a failed INGEST entry when retryable is explicitly true', async () => {
+    const test = harness([])
+    const repository = {
+      ...test.repository,
+      setAutopilot: vi.fn(async () => true),
+      getEntryNode: vi.fn(async () =>
+        candidate({
+          id: 'ingest',
+          type: 'script-import',
+          stage: 'INGEST',
+          status: 'failed',
+          retryable: true,
+        })
+      ),
+      listCompletedNodeIds: vi.fn(async () => []),
+    }
+
+    const result = await startProjectPipeline('project-1', {
+      repository,
+      enqueueDirectorStage: test.enqueueDirectorStage,
+      advance: vi.fn(),
+    })
+
+    expect(test.enqueueDirectorStage).toHaveBeenCalledOnce()
+    expect(result.status).toBe('started')
+    expect(result.enqueuedNodeIds).toEqual(['ingest'])
+  })
+
+  it.each([false, undefined])(
+    'keeps a failed INGEST entry blocked with retryable=%s',
+    async (retryable) => {
+      const test = harness([])
+      const repository = {
+        ...test.repository,
+        setAutopilot: vi.fn(async () => true),
+        getEntryNode: vi.fn(async () =>
+          candidate({
+            id: 'ingest',
+            type: 'script-import',
+            stage: 'INGEST',
+            status: 'failed',
+            retryable,
+          })
+        ),
+        listCompletedNodeIds: vi.fn(async () => []),
+      }
+
+      const result = await startProjectPipeline('project-1', {
+        repository,
+        enqueueDirectorStage: test.enqueueDirectorStage,
+        advance: vi.fn(),
+      })
+
+      expect(test.enqueueDirectorStage).not.toHaveBeenCalled()
+      expect(result.status).toBe('blocked')
+      expect(result.blockedNodes).toEqual([
+        {
+          nodeId: 'ingest',
+          code: 'QUEUE_FAILED',
+          message: '项目尚未完成，但当前没有可入队节点',
+        },
+      ])
     }
   )
 
@@ -258,7 +435,7 @@ describe('startProjectPipeline', () => {
           status: 'success',
         })
       ),
-      listSuccessfulNodeIds: vi.fn(async () => ['ingest', 'direct']),
+      listCompletedNodeIds: vi.fn(async () => ['ingest', 'direct']),
     }
 
     const result = await startProjectPipeline('project-1', {
@@ -273,8 +450,11 @@ describe('startProjectPipeline', () => {
     ])
     expect(result).toEqual({
       autopilot: true,
+      status: 'started',
       enqueuedNodeIds: ['shot-2', 'shot-3'],
+      repairRootNodeIds: [],
       failedNodeIds: ['bad'],
+      blockedNodes: [],
     })
   })
 
@@ -291,7 +471,7 @@ describe('startProjectPipeline', () => {
           status: 'pending',
         })
       ),
-      listSuccessfulNodeIds: vi.fn(async () => []),
+      listCompletedNodeIds: vi.fn(async () => []),
     }
 
     const result = await startProjectPipeline('project-1', {
@@ -302,5 +482,38 @@ describe('startProjectPipeline', () => {
 
     expect(test.enqueueDirectorStage).not.toHaveBeenCalled()
     expect(result.enqueuedNodeIds).toEqual([])
+    expect(result.status).toBe('blocked')
+    expect(result.blockedNodes).toEqual([
+      {
+        nodeId: 'ingest',
+        code: 'QUEUE_FAILED',
+        message: '项目尚未完成，但当前没有可入队节点',
+      },
+    ])
+  })
+
+  it('reports complete instead of a false start when every node succeeded', async () => {
+    const test = harness([])
+    const repository = {
+      ...test.repository,
+      setAutopilot: vi.fn(async () => true),
+      getEntryNode: vi.fn(async () =>
+        candidate({
+          id: 'ingest',
+          type: 'script-import',
+          stage: 'INGEST',
+          status: 'success',
+        })
+      ),
+      listCompletedNodeIds: vi.fn(async () => ['ingest']),
+      isProjectComplete: vi.fn(async () => true),
+    }
+    const result = await startProjectPipeline('project-1', {
+      repository,
+      enqueueDirectorStage: test.enqueueDirectorStage,
+      advance: vi.fn(async () => ({ enqueuedNodeIds: [], failedNodeIds: [] })),
+    })
+    expect(result.status).toBe('complete')
+    expect(result.blockedNodes).toEqual([])
   })
 })

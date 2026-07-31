@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { LayoutDashboard } from 'lucide-react'
@@ -43,6 +44,19 @@ function renderSidebar(props: {
 }
 
 describe('PurpleInkSidebar', () => {
+  it('leaves width and width motion ownership to its container', () => {
+    const sidebarSource = readFileSync('src/components/ui/sidebar.tsx', 'utf8')
+    const demoSource = readFileSync('src/components/ui/sidebar.demo.tsx', 'utf8')
+
+    expect(sidebarSource).not.toContain('transition-[width]')
+    expect(sidebarSource).not.toContain(['duration', '200'].join('-'))
+    expect(sidebarSource).not.toContain("w-[60px]")
+    expect(sidebarSource).not.toContain("w-[248px]")
+    expect(demoSource).toContain('<AnimatedAside')
+    expect(demoSource).toContain('SIDEBAR_RAIL_WIDTH')
+    expect(demoSource).toContain('SIDEBAR_DEFAULT_WIDTH')
+  })
+
   it('uses caller-owned brand and settings routes when expanded', () => {
     const html = renderSidebar({
       collapsed: false,

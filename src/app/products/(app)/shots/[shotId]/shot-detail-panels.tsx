@@ -42,7 +42,12 @@ export function ShotCode({
           {sourceCode}
         </pre>
       )}
-      <Button variant="tinted" icon={RefreshCw} onClick={onRender} disabled={rendering}>
+      <Button
+        variant={hasCode ? 'destructive' : 'tinted'}
+        icon={RefreshCw}
+        onClick={onRender}
+        disabled={rendering}
+      >
         {hasCode ? '重渲此镜' : '生成分镜代码'}
       </Button>
     </div>

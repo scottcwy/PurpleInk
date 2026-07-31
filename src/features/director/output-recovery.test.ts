@@ -79,6 +79,30 @@ describe('recoverDeterministicSourceArgument', () => {
     ).toBe('<html>\r\n</html>')
   })
 
+  it('unwraps an OpenAI-compatible textual check_determinism call', () => {
+    const wrapped = [
+      '<tool_call>',
+      '<function=check_determinism>',
+      '<parameter=source>',
+      '<!doctype html><html><body>镜头</body></html>',
+      '</parameter>',
+      '</function>',
+      '</tool_call>',
+    ].join('\n')
+
+    expect(recoverDeterministicSourceArgument(wrapped)).toBe(
+      '<!doctype html><html><body>镜头</body></html>'
+    )
+  })
+
+  it('rejects a truncated textual tool call', () => {
+    expect(
+      recoverDeterministicSourceArgument(
+        '<tool_call><function=check_determinism><parameter=source><html>'
+      )
+    ).toBeNull()
+  })
+
   it.each([
     ['prose', '这是一段说明文字'],
     ['an empty payload', '   '],

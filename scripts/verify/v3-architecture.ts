@@ -2,9 +2,10 @@ import { existsSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSyn
 import { basename, dirname, extname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
+import { CODE_EXTENSIONS, countLines, productionHardLimit } from './architecture-file-limits'
+import { findMotionLiterals, type MotionLiteralFinding } from './motion-literal-rule'
 const ROOT = resolve(import.meta.dirname, '../..')
 const DEFAULT_BASELINE = resolve(ROOT, 'scripts/verify/v3-architecture-baseline.json')
-const CODE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'])
 const EXCLUDED_DIRECTORIES = new Set([
   '.agents', '.codex', '.data', '.git', '.next', '.qoder', '.trigger',
   'coverage', 'dist', 'node_modules', 'out', 'output',
@@ -12,6 +13,7 @@ const EXCLUDED_DIRECTORIES = new Set([
 const SCAN_DIRECTORIES = new Set(['docs', 'packages', 'scripts', 'src', 'trigger'])
 const DEBT_CATEGORIES = [
   'directOpenAiClientImports', 'canvasForbiddenImports', 'triggerTaskForbiddenImports',
+  'motionLiterals',
 ] as const
 type DebtCategory = (typeof DEBT_CATEGORIES)[number]
 type ImportRule =
@@ -31,6 +33,7 @@ export interface V3ArchitectureReport {
   agentsSdkPackages: ArchitectureFinding[]; agentsSdkImports: ArchitectureFinding[]
   directOpenAiClientImports: ArchitectureFinding[]; canvasForbiddenImports: ArchitectureFinding[]
   triggerTaskForbiddenImports: ArchitectureFinding[]
+  motionLiterals: MotionLiteralFinding[]
   replacementCharacters: ReplacementCharacterFinding[]; oversizedFiles: Record<string, OversizedFile>
 }
 export interface V3ArchitectureBaseline {
@@ -38,7 +41,7 @@ export interface V3ArchitectureBaseline {
   oversizedFiles: Record<string, OversizedFile>
 }
 type V3ArchitectureViolation =
-  | ArchitectureFinding | ReplacementCharacterFinding
+  | ArchitectureFinding | MotionLiteralFinding | ReplacementCharacterFinding
   | { ruleId: 'DEBT_CAP_EXCEEDED'; category: DebtCategory; cap: number; actual: number }
   | { ruleId: 'OVERSIZED_NEW_FILE'; path: string; actualLines: number; hardLimit: 300 | 350 | 400 }
   | { ruleId: 'OVERSIZED_FILE_GROWTH'; path: string; baselineLines: number
@@ -60,6 +63,7 @@ export function scanV3Architecture(options: ScanV3ArchitectureOptions): V3Archit
     report.replacementCharacters.push(...findReplacementCharacters(path, text))
     if (!CODE_EXTENSIONS.has(extname(path).toLowerCase())) continue
     inspectModules(report, path, text)
+    report.motionLiterals.push(...findMotionLiterals(path, text))
     const hardLimit = productionHardLimit(path)
     const lineCount = countLines(text)
     if (hardLimit && lineCount > hardLimit) {
@@ -76,6 +80,7 @@ export function createV3ArchitectureBaseline(report: V3ArchitectureReport): V3Ar
       directOpenAiClientImports: report.directOpenAiClientImports.length,
       canvasForbiddenImports: report.canvasForbiddenImports.length,
       triggerTaskForbiddenImports: report.triggerTaskForbiddenImports.length,
+      motionLiterals: report.motionLiterals.length,
     },
     oversizedFiles: Object.fromEntries(
       Object.entries(report.oversizedFiles).map(([path, value]) => [
@@ -135,6 +140,7 @@ function emptyReport(): V3ArchitectureReport {
     schemaVersion: 1, scannedFiles: 0, agentsSdkPackages: [],
     agentsSdkImports: [], directOpenAiClientImports: [],
     canvasForbiddenImports: [], triggerTaskForbiddenImports: [],
+    motionLiterals: [],
     replacementCharacters: [], oversizedFiles: {},
   }
 }
@@ -271,25 +277,10 @@ function findReplacementCharacters(
   }
   return findings
 }
-function productionHardLimit(path: string): 300 | 350 | 400 | undefined {
-  if (!CODE_EXTENSIONS.has(extname(path).toLowerCase()) ||
-      /(?:^|\.)(?:test|spec|demo)\.[^.]+$/i.test(path) ||
-      path.endsWith('.d.ts') || path.startsWith('docs/')) return undefined
-  if (basename(path).toLowerCase() === 'page.tsx') return 300
-  if (/(?:^|[./-])(?:schema|schemas|repository|repositories)(?:[./-]|$)/i
-    .test(path)) return 400
-  return 350
-}
-function countLines(text: string): number {
-  if (text.length === 0) return 0
-  const normalized = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n')
-  return normalized.endsWith('\n')
-    ? normalized.slice(0, -1).split('\n').length : normalized.split('\n').length
-}
 function sortReport(report: V3ArchitectureReport): void {
   const compare = (
-    left: ArchitectureFinding | ReplacementCharacterFinding,
-    right: ArchitectureFinding | ReplacementCharacterFinding
+    left: ArchitectureFinding | MotionLiteralFinding | ReplacementCharacterFinding,
+    right: ArchitectureFinding | MotionLiteralFinding | ReplacementCharacterFinding
   ): number => left.path.localeCompare(right.path, 'en') ||
     (left.line ?? 0) - (right.line ?? 0) ||
     ('specifier' in left ? left.specifier : '').localeCompare(
@@ -300,6 +291,7 @@ function sortReport(report: V3ArchitectureReport): void {
   report.directOpenAiClientImports.sort(compare)
   report.canvasForbiddenImports.sort(compare)
   report.triggerTaskForbiddenImports.sort(compare)
+  report.motionLiterals.sort(compare)
   report.replacementCharacters.sort(compare)
 }
 function isRecord(value: unknown): value is Record<string, unknown> {

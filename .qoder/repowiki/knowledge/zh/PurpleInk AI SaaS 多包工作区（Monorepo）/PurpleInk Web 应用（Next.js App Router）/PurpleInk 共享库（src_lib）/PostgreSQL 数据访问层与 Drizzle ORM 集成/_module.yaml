@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: web_app/lib/db
+title: PostgreSQL 数据访问层与 Drizzle ORM 集成
+scope:
+    - src/lib/db/
+source_files: []
+depends_on: []
+related_to:
+    - path: scripts_and_tools
+    - path: web_app/features/credentials
+    - path: web_app/features/render
+    - path: web_app/features/routing

@@ -1,72 +1,75 @@
 import type { LucideIcon } from 'lucide-react'
 import { FileCode, Sparkles } from 'lucide-react'
+import { StatusPill } from '@/components/ui/status-pill'
+import { nodeTypeBorderClass } from '@/components/ui/node/stage-colors'
+import {
+  getNodeStatusLabel,
+  getNodeStatusPresentation,
+} from '@/components/ui/pipeline-node-status'
+import type { CanvasNodeType, NodeStatus } from '@/features/canvas/types'
 import { cn } from '@/lib/utils'
-
-export type PipelineNodeStatus =
-  | 'unwired'
-  | 'ready'
-  | 'running'
-  | 'completed'
-  | 'blocked'
-
-const STATUS_STYLES: Record<
-  PipelineNodeStatus,
-  { label: string; className: string }
-> = {
-  unwired: { label: '未接线', className: 'bg-ds-surface-muted text-ds-text-muted' },
-  ready: { label: '就绪', className: 'bg-ds-blue-soft text-ds-blue' },
-  running: { label: '运行中', className: 'bg-ds-blue-soft text-ds-blue' },
-  completed: { label: '已完成', className: 'bg-ds-green-soft text-ds-green' },
-  blocked: { label: '已阻塞', className: 'bg-ds-red-soft text-ds-red' },
-}
 
 export interface PipelineNodeProps {
   title: string
-  meta: string
-  status?: PipelineNodeStatus
+  meta?: string
+  nodeType: CanvasNodeType
+  status?: NodeStatus
+  /** 覆盖默认状态文案（如泳道折叠：「已折叠 · 5 节点」）。 */
+  statusLabel?: string
+  selected?: boolean
   artifact?: string
   icon?: LucideIcon
   className?: string
 }
 
+/**
+ * DAG 节点壳（Canonical / Qsovp）。
+ * 尺寸对齐画布布局 220×100；状态用领域 NodeStatus；选中态用 ds-blue ring。
+ */
 export function PipelineNode({
   title,
   meta,
-  status = 'unwired',
+  nodeType,
+  status = 'idle',
+  statusLabel,
+  selected = false,
   artifact,
   icon: Icon = Sparkles,
   className,
 }: PipelineNodeProps) {
-  const statusStyle = STATUS_STYLES[status]
+  const presentation = getNodeStatusPresentation(status)
+  const stageBorder = nodeTypeBorderClass(nodeType)
 
   return (
     <article
+      data-selected={selected ? 'true' : undefined}
       className={cn(
-        'w-[190px] rounded-lg border border-ds-border bg-ds-surface p-3.5 text-ds-text shadow-[0_1px_2px_#25305a0d] backdrop-blur-xl',
+        'box-border flex h-[100px] w-[220px] flex-col justify-between rounded-lg border bg-ds-surface p-3 text-ds-text shadow-[var(--ds-shadow)] backdrop-blur-xl',
+        selected
+          ? 'border-ds-blue ring-2 ring-ds-blue/35'
+          : cn('border-ds-border', stageBorder),
         className,
       )}
     >
-      <header className="flex items-center gap-2.5">
+      <header className="flex min-w-0 items-center gap-2.5">
         <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-ds-blue-soft text-ds-blue">
           <Icon aria-hidden className="size-[15px]" />
         </span>
         <span className="min-w-0">
           <strong className="block truncate text-sm font-semibold">{title}</strong>
-          <span className="block truncate font-mono text-[11px] text-ds-text-muted">
-            {meta}
-          </span>
+          {meta ? (
+            <span className="block truncate font-mono text-[11px] text-ds-text-muted">
+              {meta}
+            </span>
+          ) : null}
         </span>
       </header>
-      <div className="mt-3 flex min-w-0 gap-2">
-        <span
-          className={cn(
-            'inline-flex shrink-0 items-center gap-1.5 rounded-full border border-ds-border px-2 py-1 text-[11px] font-semibold',
-            statusStyle.className,
-          )}
-        >
-          <span className="size-1.5 rounded-full bg-current" />
-          {statusStyle.label}
-        </span>
+      <div className="flex min-w-0 gap-2">
+        <StatusPill
+          variant={presentation.variant}
+          icon={presentation.icon}
+          label={statusLabel ?? getNodeStatusLabel(nodeType, status)}
+        />
         {artifact ? (
           <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md border border-ds-border bg-ds-surface-muted px-2 py-1 font-mono text-[10px]">
             <FileCode aria-hidden className="size-3 shrink-0 text-ds-text-muted" />

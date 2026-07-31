@@ -6,6 +6,10 @@ const TERMINAL_STATUSES: ReadonlySet<NodeStatusValue> = new Set([
   'success',
   'failed',
   'cancelled',
+  // skipped 产生 marker 产物与 skipMeta，同样需 refresh 同步给 inspector。
+  'skipped',
+  // blocked 需要 refresh 同步 workflowBlock 与确认指纹。
+  'blocked',
 ])
 
 export interface StatusOverlayResult {

@@ -12,6 +12,8 @@ export type NodeStatusValue =
   | 'failed'
   | 'cancelled'
   | 'stale'
+  | 'skipped'
+  | 'blocked'
 
 /**
  * 订阅者收到的事件：订阅时先原子回放 snapshot（每节点最新状态 + 当前 seq 水位），

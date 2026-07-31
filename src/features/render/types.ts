@@ -1,3 +1,5 @@
+import type { AiProviderId } from '@/features/ai/provider-registry'
+
 export interface FrameSpec {
   fps: number
   durationInFrames: number
@@ -12,6 +14,7 @@ export interface RenderJob {
   htmlKey: string
   frames: FrameSpec
   seed?: number
+  forceRender?: boolean
 }
 
 /**
@@ -122,7 +125,12 @@ export interface VisionRequirementResult {
 export interface VisionQaReport {
   version: 1
   shotId: string
-  provider: 'stepfun' | 'gemini'
+  /**
+   * 引用 `AiProviderId` 而不是本地字面量联合：视觉 QA 的 provider 只能来自
+   * `resolveDirectorModelTarget`，本地窄定义每次注册新供应商都要手工同步，
+   * 漏同步就是编译期通过、运行期投影缺值（workflow-failure-patterns.md 模式 A）。
+   */
+  provider: AiProviderId
   model: string
   passed: boolean
   summary: string
@@ -137,7 +145,7 @@ export interface ShotQaVisionData {
   passed: boolean
   checkedAt: number
   thumbnailContentHash: string
-  provider: 'stepfun' | 'gemini'
+  provider: AiProviderId
   model: string
   summary: string
   reportArtifactId: string

@@ -152,3 +152,13 @@ render-shot    : max(1, floor(cpus / 2))
 ### 仍待补的端到端证据（依赖 ISSUE-001 + ISSUE-002 + ISSUE-003）
 
 §7 第 5 项的「起 >= 6 个 unit 项目跑通真链路 + SQL 查询同时 running 不超过 4」需要 P0 全部落地后才能取证；本 issue 已完成代码与契约的全部接线，证据窗口归 ISSUE-014 端到端批次补齐。
+
+
+## 多用户登录落地后的复核（2026-07-28 追加，不改写上方已核销内容）
+
+- 原结论「配额改动需重启进程才生效，UI 如实标注」仍然有效。
+- 并发配额语义已拍板为**进程级**（PLAN-002 §5.3 / ISSUE-015 §12 P-4）：`queue.laneQuotas`
+  约束的是本机 CPU，与登录用户无关；其存储锚点保留在 LOCAL workspace 行
+  （`src/lib/queue/runtime-config.ts` 头注释已声明，不读请求上下文的 workspace）。
+- 后续（P-4 落地时）设置页对该项的展示应标注「进程级，影响全部用户」，避免
+  UI 可见字段与真值脱钩（AGENTS.md §6）；本轮未改设置页 UI。

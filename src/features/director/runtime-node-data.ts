@@ -36,7 +36,8 @@ export function fromPersistedNodeStatus(status: string): NodeStatus {
     status === 'running' ||
     status === 'failed' ||
     status === 'cancelled' ||
-    status === 'stale'
+    status === 'stale' ||
+    status === 'skipped'
   ) {
     return status
   }

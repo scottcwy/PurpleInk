@@ -1,6 +1,7 @@
 'use client'
 
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import {
   Info,
@@ -9,13 +10,8 @@ import {
   SunMoon,
   UserRound,
 } from 'lucide-react'
-import { useTheme } from 'next-themes'
-import {
-  isThemeMode,
-  nextThemeMode,
-  themeModeLabel,
-  type ThemeMode,
-} from '@/lib/theme-mode'
+import { useThemeMode } from '@/lib/hooks/use-theme-mode'
+import { nextThemeMode, themeModeLabel } from '@/lib/theme-mode'
 import { cn } from '@/lib/utils'
 
 export function SidebarToggle({
@@ -27,7 +23,7 @@ export function SidebarToggle({
     <button
       type="button"
       className={cn(
-        'flex size-8 shrink-0 items-center justify-center rounded-sm border border-ds-border text-ds-text transition-colors hover:bg-ds-surface-muted',
+        'flex size-8 shrink-0 items-center justify-center rounded-sm border border-ds-border text-ds-text transition-colors duration-fast ease-standard hover:bg-ds-surface-muted',
         className,
       )}
       aria-label={collapsed ? '展开侧栏' : '收起侧栏'}
@@ -68,43 +64,63 @@ export function DefaultAvatar({ className }: { className?: string }) {
   )
 }
 
+/** 侧栏账户区展示的会话投影；由 features 侧从 SessionOwner 映射，null = 未登录边缘态。 */
+export interface SidebarAccountInfo {
+  name: string
+  email: string
+  workspaceName: string
+}
+
 export function SidebarAccount({
   compact = false,
+  className,
   onSettings,
+  account,
 }: {
   compact?: boolean
+  className?: string
   onSettings?: () => void
+  account?: SidebarAccountInfo | null
 }) {
+  if (compact) {
+    return (
+      <div
+        className={cn(
+          'flex items-center justify-center border-t border-ds-border pt-2.5',
+          className,
+        )}
+      >
+        <DefaultAvatar />
+      </div>
+    )
+  }
+
   return (
     <div
       className={cn(
         'flex h-14 items-center justify-between gap-2 border-t border-ds-border pt-2.5',
-        compact && 'justify-center',
+        className,
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2.5">
         <DefaultAvatar />
-        {!compact ? (
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-xs font-semibold text-ds-text">
-              本地用户
-            </span>
-            <span className="block truncate text-[10px] text-ds-text-muted">
-              PurpleInk Free
-            </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-xs font-semibold text-ds-text">
+            {account?.name ?? '未登录'}
           </span>
-        ) : null}
+          <span className="block truncate text-[10px] text-ds-text-muted">
+            {account?.email ?? '—'}
+          </span>
+        </span>
       </div>
-      {!compact ? (
-        <button
-          type="button"
-          className="flex size-[34px] shrink-0 items-center justify-center rounded text-ds-text transition-colors hover:bg-ds-surface-muted"
-          aria-label="打开账户菜单"
-          onClick={onSettings}
-        >
-          <Settings aria-hidden className="size-[18px]" />
-        </button>
-      ) : null}
+      <button
+        type="button"
+        className="flex size-[34px] shrink-0 items-center justify-center rounded text-ds-text transition-colors duration-fast ease-standard hover:bg-ds-surface-muted"
+        aria-label="打开账户菜单"
+        onClick={onSettings}
+      >
+        <Settings aria-hidden className="size-[18px]" />
+      </button>
     </div>
   )
 }
@@ -119,22 +135,29 @@ const ACCOUNT_ITEMS = [
 export function AccountMenu({
   footer,
   settingsHref,
+  account,
+  onLogout,
 }: {
   footer?: ReactNode
   settingsHref?: string
+  account?: SidebarAccountInfo | null
+  /** 返回 false 表示登出失败（成功时整页跳转，不会回到这里）。 */
+  onLogout?: () => Promise<boolean>
 }) {
-  const { theme, setTheme } = useTheme()
-  const mode: ThemeMode = isThemeMode(theme) ? theme : 'system'
+  const { mode, setTheme } = useThemeMode()
   const appearanceLabel = `外观 · ${themeModeLabel(mode)}`
+  const [logoutState, setLogoutState] = useState<'idle' | 'pending' | 'failed'>('idle')
 
   return (
     <div className="w-56 rounded-lg border border-ds-border bg-ds-surface p-1.5 text-ds-text shadow-[var(--ds-shadow)] backdrop-blur-xl">
       <div className="flex items-center gap-2.5 p-2">
         <DefaultAvatar />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-semibold">本地用户</span>
+          <span className="block truncate text-[13px] font-semibold">
+            {account?.name ?? '未登录'}
+          </span>
           <span className="block truncate font-mono text-[10px] text-ds-text-muted">
-            workspace.local
+            {account?.workspaceName ?? '—'}
           </span>
         </span>
       </div>
@@ -145,7 +168,9 @@ export function AccountMenu({
             <Link
               key={label}
               href={settingsHref}
-              className="flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-xs text-ds-text hover:bg-ds-surface-muted"
+              role="menuitem"
+              data-menu-item
+              className="flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-xs text-ds-text transition-colors duration-fast ease-standard hover:bg-ds-surface-muted"
             >
               <Icon aria-hidden className="size-4 text-ds-text-muted" />
               {label}
@@ -158,10 +183,12 @@ export function AccountMenu({
             <button
               key={label}
               type="button"
+              role="menuitem"
+              data-menu-item
               aria-label={`${appearanceLabel}，点击切换`}
               title={appearanceLabel}
-              className="flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-xs text-ds-text hover:bg-ds-surface-muted"
-              onClick={() => setTheme(nextThemeMode(theme))}
+              className="flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-xs text-ds-text transition-colors duration-fast ease-standard hover:bg-ds-surface-muted"
+              onClick={() => setTheme(nextThemeMode(mode))}
             >
               <Icon aria-hidden className="size-4 text-ds-text-muted" />
               {appearanceLabel}
@@ -173,6 +200,8 @@ export function AccountMenu({
           <button
             key={label}
             type="button"
+            role="menuitem"
+            data-menu-item
             disabled
             title="该操作将在 Stage B 接线"
             className="flex h-9 w-full items-center gap-2.5 px-2.5 text-left text-xs text-ds-text opacity-70"
@@ -185,12 +214,26 @@ export function AccountMenu({
       <div className="my-0.5 h-px bg-ds-border" />
       <button
         type="button"
-        disabled
-        title="认证将在 Stage B 接线"
-        className="flex h-9 w-full items-center gap-2.5 px-2.5 text-left text-xs text-ds-red opacity-70"
+        role="menuitem"
+        data-menu-item
+        disabled={!onLogout || logoutState === 'pending'}
+        className="flex h-9 w-full items-center gap-2.5 rounded px-2.5 text-left text-xs text-ds-red transition-colors duration-fast ease-standard hover:bg-ds-surface-muted disabled:opacity-70 disabled:hover:bg-transparent"
+        onClick={() => {
+          if (!onLogout || logoutState === 'pending') return
+          setLogoutState('pending')
+          // 成功路径由 performLogout 整页跳转 /login，不需要复位；
+          // 失败时用文本态提示重试（状态不能只靠颜色，AGENTS §6）。
+          void onLogout().then((ok) => {
+            if (!ok) setLogoutState('failed')
+          })
+        }}
       >
         <LogOut aria-hidden className="size-4" />
-        退出登录
+        {logoutState === 'pending'
+          ? '正在退出…'
+          : logoutState === 'failed'
+            ? '退出失败，点击重试'
+            : '退出登录'}
       </button>
       {footer}
     </div>

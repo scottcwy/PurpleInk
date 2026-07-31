@@ -1,13 +1,17 @@
 import 'server-only'
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import {
   commitArtifactRecord,
+  commitArtifactRecords,
   commitDerivedArtifact,
   resolveCurrentAttemptId,
   resolveDerivedSourceAttemptId,
 } from '@/features/artifacts'
-import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
-import { artifacts } from '@/lib/db/schema/index'
+import type { SubtitleDeliveryMode } from '@/features/canvas/export-settings'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { type Db } from '@/lib/db/client'
+import { artifacts, taskAttempts } from '@/lib/db/schema/index'
+import { finalVideoSchemaVersion } from './final-video-delivery'
 import { writeNodeProjection } from './persistence'
 import { RenderShotRepository } from './render-shot-repository'
 import { FRAME_THUMBNAIL_KIND, thumbnailOutputPath } from './types'
@@ -18,15 +22,51 @@ import type {
 
 export interface FinalArtifactInput {
   projectId: string
+  attemptId: string
   outputKey: string
+  contentHash: string
+  sizeBytes: number
+  /** 本次成片的字幕交付形态，决定写入的 schemaVersion。 */
+  subtitles: SubtitleDeliveryMode
+}
+
+/** 降级导出的占位/未验收清单（JSON 字节）：与 final-mp4 同一 project attempt 提交。 */
+export interface DegradedManifestInput {
+  projectId: string
+  attemptId: string
+  storageKey: string
   contentHash: string
   sizeBytes: number
 }
 
+export interface FinalDeliveryInput {
+  projectId: string
+  attemptId: string
+  outputKey: string
+  finalContentHash: string
+  finalSizeBytes: number
+  subtitles: SubtitleDeliveryMode
+  soundEffectsManifest: {
+    storageKey: string
+    contentHash: string
+    sizeBytes: number
+  }
+  degradedManifest?: {
+    storageKey: string
+    contentHash: string
+    sizeBytes: number
+  }
+}
+
 export interface FinalArtifactRecord {
   artifactId: string
+  attemptId: string
   path: string
   contentHash: string
+  schemaVersion: string
+  sizeBytes: number
+  lifecycle?: string
+  attemptStatus?: string
 }
 
 export interface ThumbnailRegistration {
@@ -44,25 +84,85 @@ export interface VisionReportRegistration extends ThumbnailRegistration {
 export class RenderArtifactRepository extends RenderShotRepository {
   async registerFinalArtifact(input: FinalArtifactInput): Promise<string> {
     const database = await this.database()
-    const attemptId = await resolveCurrentAttemptId(database, {
-      workspaceId: LOCAL_WORKSPACE_ID,
-      projectId: input.projectId,
-      aggregateType: 'project',
-      aggregateId: input.projectId,
-    })
     const committed = await commitArtifactRecord(database, {
-      workspaceId: LOCAL_WORKSPACE_ID,
+      workspaceId: currentWorkspaceId(),
       projectId: input.projectId,
       aggregateType: 'project',
       aggregateId: input.projectId,
       kind: 'final-mp4',
-      schemaVersion: 'cvc.final-video/v1',
+      schemaVersion: finalVideoSchemaVersion(input.subtitles),
       storageKey: input.outputKey,
       sizeBytes: input.sizeBytes,
       contentHash: input.contentHash,
-      attemptId,
+      attemptId: input.attemptId,
     })
     return committed.artifactId
+  }
+
+  async registerFinalDelivery(
+    input: FinalDeliveryInput
+  ): Promise<{
+    finalArtifactId: string
+    soundEffectsManifestArtifactId: string
+    degradedManifestArtifactId: string | null
+  }> {
+    const workspaceId = currentWorkspaceId()
+    const shared = {
+      workspaceId,
+      projectId: input.projectId,
+      aggregateType: 'project' as const,
+      aggregateId: input.projectId,
+      attemptId: input.attemptId,
+    }
+    const committed = await commitArtifactRecords(await this.database(), [
+      {
+        ...shared,
+        kind: 'final-mp4',
+        schemaVersion: finalVideoSchemaVersion(input.subtitles),
+        storageKey: input.outputKey,
+        sizeBytes: input.finalSizeBytes,
+        contentHash: input.finalContentHash,
+      },
+      {
+        ...shared,
+        kind: 'procedural-sfx-manifest',
+        schemaVersion: 'cvc.procedural-sfx-manifest/v1',
+        ...input.soundEffectsManifest,
+      },
+      ...(input.degradedManifest
+        ? [
+            {
+              ...shared,
+              kind: 'final-mp4-degraded-manifest',
+              schemaVersion: 'cvc.final-degraded-manifest/v3',
+              ...input.degradedManifest,
+            },
+          ]
+        : []),
+    ])
+    const final = committed[0]
+    const soundEffects = committed[1]
+    if (!final || !soundEffects) throw new Error('终片 Artifact 批量提交不完整')
+    const artifactIds = committed.map((artifact) => artifact.artifactId)
+    const approved = await (await this.database())
+      .update(artifacts)
+      .set({ lifecycle: 'approved', updatedAt: new Date() })
+      .where(and(
+        eq(artifacts.workspaceId, workspaceId),
+        eq(artifacts.projectId, input.projectId),
+        eq(artifacts.attemptId, input.attemptId),
+        eq(artifacts.lifecycle, 'draft'),
+        inArray(artifacts.id, artifactIds),
+      ))
+      .returning({ id: artifacts.id })
+    if (approved.length !== artifactIds.length) {
+      throw new Error('终片 Artifact 批量批准不完整')
+    }
+    return {
+      finalArtifactId: final.artifactId,
+      soundEffectsManifestArtifactId: soundEffects.artifactId,
+      degradedManifestArtifactId: committed[2]?.artifactId ?? null,
+    }
   }
 
   async findLatestFinalArtifact(
@@ -72,13 +172,25 @@ export class RenderArtifactRepository extends RenderShotRepository {
     const [row] = await database
       .select({
         id: artifacts.id,
+        attemptId: artifacts.attemptId,
         storageKey: artifacts.storageKey,
         contentHash: artifacts.contentHash,
+        schemaVersion: artifacts.schemaVersion,
+        sizeBytes: artifacts.sizeBytes,
+        lifecycle: artifacts.lifecycle,
+        attemptStatus: taskAttempts.status,
       })
       .from(artifacts)
+      .innerJoin(
+        taskAttempts,
+        and(
+          eq(taskAttempts.workspaceId, artifacts.workspaceId),
+          eq(taskAttempts.id, artifacts.attemptId),
+        ),
+      )
       .where(
         and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(artifacts.workspaceId, currentWorkspaceId()),
           eq(artifacts.projectId, projectId),
           eq(artifacts.aggregateType, 'project'),
           eq(artifacts.aggregateId, projectId),
@@ -90,10 +202,38 @@ export class RenderArtifactRepository extends RenderShotRepository {
     return row
       ? {
           artifactId: row.id,
+          attemptId: row.attemptId,
           path: row.storageKey,
           contentHash: row.contentHash,
+          schemaVersion: row.schemaVersion,
+          sizeBytes: row.sizeBytes,
+          lifecycle: row.lifecycle,
+          attemptStatus: row.attemptStatus,
         }
       : null
+  }
+
+  /**
+   * 登记降级导出的交付清单（真实 JSON 字节已落盘）。内容含 `finalContentHash`
+   * 与当次 final-mp4 精确对应，读取时据此判定“最新成片是否为降级产物”。
+   */
+  async registerDegradedManifest(
+    input: DegradedManifestInput
+  ): Promise<string> {
+    const database = await this.database()
+    const committed = await commitArtifactRecord(database, {
+      workspaceId: currentWorkspaceId(),
+      projectId: input.projectId,
+      aggregateType: 'project',
+      aggregateId: input.projectId,
+      kind: 'final-mp4-degraded-manifest',
+      schemaVersion: 'cvc.final-degraded-manifest/v3',
+      storageKey: input.storageKey,
+      sizeBytes: input.sizeBytes,
+      contentHash: input.contentHash,
+      attemptId: input.attemptId,
+    })
+    return committed.artifactId
   }
 
   async findThumbnail(
@@ -114,7 +254,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
       .from(artifacts)
       .where(
         and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(artifacts.workspaceId, currentWorkspaceId()),
           eq(artifacts.projectId, projectId),
           eq(artifacts.aggregateType, 'node'),
           eq(artifacts.aggregateId, nodeId),
@@ -138,14 +278,14 @@ export class RenderArtifactRepository extends RenderShotRepository {
   async registerThumbnail(input: ThumbnailRegistration): Promise<string> {
     const database = await this.database()
     const attemptId = await resolveDerivedSourceAttemptId(database, {
-      workspaceId: LOCAL_WORKSPACE_ID,
+      workspaceId: currentWorkspaceId(),
       projectId: input.projectId,
       aggregateType: 'node',
       aggregateId: input.nodeId,
       sourceKind: 'director-fabricate',
     })
     const committed = await commitDerivedArtifact(database, {
-      workspaceId: LOCAL_WORKSPACE_ID,
+      workspaceId: currentWorkspaceId(),
       projectId: input.projectId,
       aggregateType: 'node',
       aggregateId: input.nodeId,
@@ -167,7 +307,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
     const committed = await commitArtifactRecord(
       database,
       {
-        workspaceId: LOCAL_WORKSPACE_ID,
+        workspaceId: currentWorkspaceId(),
         projectId: input.projectId,
         aggregateType: 'node',
         aggregateId: input.nodeId,
@@ -203,7 +343,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
       .from(artifacts)
       .where(
         and(
-          eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(artifacts.workspaceId, currentWorkspaceId()),
           eq(artifacts.projectId, projectId),
           eq(artifacts.kind, 'score-audio')
         )
@@ -218,7 +358,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
     input: { projectId: string; nodeId: string }
   ): Promise<string> {
     return resolveCurrentAttemptId(database, {
-      workspaceId: LOCAL_WORKSPACE_ID,
+      workspaceId: currentWorkspaceId(),
       projectId: input.projectId,
       aggregateType: 'node',
       aggregateId: input.nodeId,

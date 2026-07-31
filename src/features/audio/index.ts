@@ -1,4 +1,15 @@
-export { measureMp3, type MeasuredAudio } from './measure'
+export {
+  decodeMonoPcm,
+  measureAudio,
+  type DecodeMonoPcm,
+  type MeasuredAudio,
+} from './measure'
+export {
+  detectAudioContainer,
+  readAudioStreamInfo,
+  type AudioContainer,
+  type AudioStreamInfo,
+} from './audio-format'
 export {
   NARRATION_CONCURRENCY,
   NARRATION_VOICE_ID,
@@ -13,9 +24,44 @@ export { generateScore } from './score'
 export { generateSfx } from './sfx'
 export { generateSubtitle } from './subtitle'
 export {
+  describeMediaProvider,
+  resolveNarrationEngine,
+  synthesizeRoutedSpeech,
+  transcribeRoutedSpeech,
+  type NarrationEngine,
+  type RoutedTranscribedSpeech,
+  type SubtitleAlignmentSource,
+} from './media-provider'
+export {
   AudioRuntimeRepository,
   type LoadedNarration,
 } from './runtime-repository'
+export {
+  buildUserAudioTimeline,
+  type UserAudioSlicePlan,
+  type UserAudioTimeline,
+  type UserAudioTimelineInput,
+  type UserRecordingScriptUnit,
+} from './user-audio-timeline'
+export {
+  decodeUserRecording,
+  sliceDecodedUserRecording,
+  type DecodedUserRecording,
+  type UserRecordingAudioSlice,
+} from './user-audio-slicer'
+export {
+  runAudioTranscriptionJob,
+  type AudioTranscriptionDependencies,
+  type AudioTranscriptionJobInput,
+  type AudioTranscriptionState,
+} from './audio-transcription-job'
+export {
+  enqueueAudioTranscription,
+  registerAudioTranscriptionHandler,
+  runAudioTranscriptionQueueJob,
+  type AudioTranscriptionEnqueueDependencies,
+  type AudioTranscriptionQueueInput,
+} from './audio-transcription-queue-handler'
 export type {
   BgmPlan,
   Caption,

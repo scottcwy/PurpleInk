@@ -24,6 +24,10 @@ export interface SubtitleInput {
   audioKey: string
   audioBytes: Buffer
   audioFormat: 'mp3' | 'wav' | 'ogg' | 'pcm'
+  billingContext?: {
+    attemptId: string
+    invocationNo: number
+  }
 }
 
 export interface SfxInput {
@@ -49,7 +53,11 @@ export interface SubtitleResult {
   captions: Caption[]
   transcript: string
   model: string
-  alignmentSource: 'stepfun-asr'
+  alignmentSource:
+    | 'stepfun-asr'
+    | 'mimo-asr-segment'
+    | 'openai-compatible-asr-segment'
+    | 'openai-compatible-asr-whole'
   trackArtifactId: string
   trackKey: string
 }

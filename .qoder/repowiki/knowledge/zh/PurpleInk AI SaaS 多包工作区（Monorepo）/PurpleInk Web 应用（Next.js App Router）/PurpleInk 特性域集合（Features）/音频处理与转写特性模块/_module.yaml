@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: web_app/features/audio
+title: 音频处理与转写特性模块
+scope:
+    - src/features/audio/
+source_files: []
+depends_on: []
+related_to:
+    - path: procedural_sfx_lib
+    - path: server_service/tts_engine

@@ -1,5 +1,11 @@
-import { Activity, BarChart3 } from 'lucide-react'
+'use client'
+
+import { Activity, BarChart3, LineChart } from 'lucide-react'
+import Link from 'next/link'
+import { useState } from 'react'
+import type { AiUsageProjectionV1 } from '@/features/usage/client'
 import { cn } from '@/lib/utils'
+import { ProjectStatisticsApiView } from './project-statistics-api-view'
 
 export interface ProjectMetric {
   label: string
@@ -19,8 +25,11 @@ export interface ProjectStatisticsPanelProps {
   statusDistribution?: ProjectStatusDistribution
   trendUnavailableLabel?: string
   updatedLabel?: string
+  apiUsage: AiUsageProjectionV1 | null
   className?: string
 }
+
+const PLAYBOOK_HREF = '/playbook/ui#project-statistics-panel'
 
 const EMPTY_METRICS: readonly ProjectMetric[] = [
   { label: '项目总数', source: 'projects.total' },
@@ -36,13 +45,19 @@ const EMPTY_STATUS: ProjectStatusDistribution = {
   idle: 0,
 }
 
+type StatsView = 'project' | 'api'
+
 export function ProjectStatisticsPanel({
   metrics = EMPTY_METRICS,
   statusDistribution = EMPTY_STATUS,
-  trendUnavailableLabel = '暂无可用历史快照',
-  updatedLabel = '等待 WorkspaceStatisticsSnapshotV1',
+  trendUnavailableLabel = '尚无历史快照可绘制',
+  updatedLabel = '等待项目快照',
+  apiUsage,
   className,
 }: ProjectStatisticsPanelProps) {
+  const [view, setView] = useState<StatsView>('project')
+  const isProject = view === 'project'
+
   return (
     <section
       className={cn(
@@ -52,67 +67,151 @@ export function ProjectStatisticsPanel({
     >
       <aside className="flex flex-col gap-1.5 border-b border-ds-border bg-ds-surface-muted p-3.5 md:border-b-0 md:border-r">
         <p className="text-[10px] font-semibold text-ds-text-muted">统计视图</p>
-        <div className="flex h-[34px] items-center gap-2 rounded-md bg-ds-blue-soft px-2.5 text-xs font-semibold">
-          <BarChart3 aria-hidden className="size-4 text-ds-primary" />
-          项目统计
-        </div>
-        <div className="flex h-[34px] items-center gap-2 px-2.5 text-xs text-ds-text-muted">
-          <Activity aria-hidden className="size-4" />
-          API 调用统计
-        </div>
-        <div className="mt-auto hidden md:block">
-          <p className="font-mono text-[8px] font-semibold text-ds-text-muted">
-            DATA SOURCE
-          </p>
-          <p className="mt-0.5 break-all font-mono text-[8px]">
-            WorkspaceStatisticsSnapshotV1
-          </p>
+        <StatsTab
+          active={isProject}
+          icon={BarChart3}
+          label="项目统计"
+          onClick={() => setView('project')}
+        />
+        <StatsTab
+          active={!isProject}
+          icon={Activity}
+          label="API 调用统计"
+          onClick={() => setView('api')}
+        />
+        <div className="mt-auto hidden space-y-2 md:block">
+          <div>
+            <p className="font-mono text-[10px] font-semibold text-ds-text-muted">
+              DATA SOURCE
+            </p>
+            <p className="mt-0.5 break-all font-mono text-[10px]">
+              {isProject ? 'WorkspaceStatisticsSnapshotV1' : 'AiUsageProjectionV1'}
+            </p>
+          </div>
+          <Link
+            href={PLAYBOOK_HREF}
+            className="inline-flex text-[10px] font-semibold text-ds-primary hover:underline"
+          >
+            在 Playbook 查看
+          </Link>
         </div>
       </aside>
+
       <div className="flex min-w-0 flex-col gap-2.5 p-3.5">
-        <header className="flex flex-wrap items-center justify-between gap-2">
-          <span>
-            <h2 className="text-base font-bold">项目统计</h2>
-            <p className="text-[10px] text-ds-text-muted">
-              项目吞吐、执行状态与交付产物的持久快照。
-            </p>
-          </span>
-          <span className="font-mono text-[9px] text-ds-text-muted">{updatedLabel}</span>
-        </header>
-        <div className="grid min-h-14 grid-cols-2 border-y border-ds-border lg:grid-cols-4">
-          {metrics.map((metric) => (
-            <div
-              key={metric.source}
-              className="flex min-w-0 flex-col justify-center border-r border-ds-border px-2.5 py-1.5 last:border-r-0"
-            >
-              <span className="text-[9px] text-ds-text-muted">{metric.label}</span>
-              <strong className="font-mono text-base">{metric.value ?? '—'}</strong>
-              <span className="truncate font-mono text-[7px] text-ds-text-muted">
-                {metric.source}
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
-          <EmptyTrend label={trendUnavailableLabel} />
-          <StatusDistribution distribution={statusDistribution} />
+        {isProject ? (
+          <ProjectStatisticsView
+            metrics={metrics}
+            statusDistribution={statusDistribution}
+            trendUnavailableLabel={trendUnavailableLabel}
+            updatedLabel={updatedLabel}
+          />
+        ) : (
+          <ProjectStatisticsApiView initialProjection={apiUsage} />
+        )}
+        <div className="flex justify-end md:hidden">
+          <Link
+            href={PLAYBOOK_HREF}
+            className="text-[10px] font-semibold text-ds-primary hover:underline"
+          >
+            在 Playbook 查看
+          </Link>
         </div>
       </div>
     </section>
   )
 }
 
+function StatsTab({
+  active,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active: boolean
+  icon: typeof BarChart3
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        'flex h-[34px] w-full items-center gap-2 rounded-md px-2.5 text-left text-xs transition-colors duration-fast ease-standard',
+        active
+          ? 'bg-ds-blue-soft font-semibold text-ds-text'
+          : 'text-ds-text-muted hover:bg-ds-surface hover:text-ds-text',
+      )}
+    >
+      <Icon
+        aria-hidden
+        className={cn('size-4', active && 'text-ds-primary')}
+      />
+      {label}
+    </button>
+  )
+}
+
+function ProjectStatisticsView({
+  metrics,
+  statusDistribution,
+  trendUnavailableLabel,
+  updatedLabel,
+}: {
+  metrics: readonly ProjectMetric[]
+  statusDistribution: ProjectStatusDistribution
+  trendUnavailableLabel: string
+  updatedLabel: string
+}) {
+  return (
+    <>
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <span>
+          <h2 className="text-sm font-semibold">项目统计</h2>
+          <p className="text-xs text-ds-text-muted">
+            项目吞吐、执行状态与交付产物的持久快照。
+          </p>
+        </span>
+        <span className="font-mono text-[10px] text-ds-text-muted">
+          {updatedLabel}
+        </span>
+      </header>
+      <div className="grid min-h-14 grid-cols-2 border-y border-ds-border lg:grid-cols-4">
+        {metrics.map((metric) => (
+          <div
+            key={metric.source}
+            className="flex min-w-0 flex-col justify-center border-r border-ds-border px-2.5 py-2 last:border-r-0"
+          >
+            <span className="text-[10px] text-ds-text-muted">{metric.label}</span>
+            <strong className="font-mono text-lg">{metric.value ?? '—'}</strong>
+            <span className="truncate font-mono text-[10px] text-ds-text-muted">
+              {metric.source}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
+        <EmptyTrend label={trendUnavailableLabel} />
+        <StatusDistribution distribution={statusDistribution} />
+      </div>
+    </>
+  )
+}
+
 function EmptyTrend({ label }: { label: string }) {
   return (
-    <div className="flex min-h-40 flex-col gap-1.5">
+    <div className="flex min-h-40 flex-col gap-2">
       <div>
-        <h3 className="text-xs font-semibold">项目完成趋势</h3>
-        <p className="text-[8px] text-ds-text-muted">最近 7 天完成与发布的项目</p>
+        <h3 className="text-sm font-semibold">项目完成趋势</h3>
+        <p className="text-[10px] text-ds-text-muted">最近 7 天完成与发布的项目</p>
       </div>
-      <div className="ds-dot-grid flex flex-1 items-center justify-center rounded-md border border-ds-border">
-        <span className="rounded-full bg-ds-surface px-3 py-1.5 text-[10px] text-ds-text-muted">
-          {label}
-        </span>
+      <div className="ds-dot-grid flex flex-1 flex-col items-center justify-center gap-2 rounded-md border border-ds-border px-4 py-6 text-center">
+        <LineChart aria-hidden className="size-7 text-ds-text-muted" />
+        <p className="text-sm font-semibold text-ds-text">{label}</p>
+        <p className="max-w-xs text-xs leading-5 text-ds-text-muted">
+          历史时间序列尚未接入；此处不展示估算曲线或假百分比。
+        </p>
       </div>
     </div>
   )
@@ -136,21 +235,21 @@ function StatusDistribution({
   return (
     <div className="flex min-h-40 flex-col rounded-md bg-ds-surface-muted p-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-[11px] font-semibold">状态分布</h3>
-        <span className="text-[8px] text-ds-text-muted">当前快照</span>
+        <h3 className="text-sm font-semibold">状态分布</h3>
+        <span className="text-[10px] text-ds-text-muted">当前快照</span>
       </div>
       <div className="grid flex-1 content-center gap-2 py-3">
         {STATUS_ROWS.map(([key, label]) => (
           <div
             key={key}
-            className="flex items-center justify-between border-b border-ds-border pb-1 text-[10px] last:border-b-0"
+            className="flex items-center justify-between border-b border-ds-border pb-1 text-xs last:border-b-0"
           >
             <span className="text-ds-text-muted">{label}</span>
             <strong className="font-mono text-ds-text">{distribution[key]}</strong>
           </div>
         ))}
       </div>
-      <code className="text-[7px] text-ds-text-muted">pipeline.currentStatus</code>
+      <code className="text-[10px] text-ds-text-muted">pipeline.currentStatus</code>
     </div>
   )
 }

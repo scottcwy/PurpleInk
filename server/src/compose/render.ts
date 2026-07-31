@@ -3,7 +3,7 @@
 import { spawn } from "node:child_process"
 import { readdir, stat, readFile } from "node:fs/promises"
 import { existsSync } from "node:fs"
-import { delimiter, dirname, join } from "node:path"
+import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { logger } from "../lib/logger"
 
@@ -26,6 +26,7 @@ export interface RenderOptions {
   timeoutMs?: number
   /** 渲染帧率（可选，追加 --fps 参数） */
   fps?: number
+  signal?: AbortSignal
 }
 
 export interface RenderResult {
@@ -71,7 +72,8 @@ function runCommand(
   command: string,
   cwd: string,
   env: NodeJS.ProcessEnv,
-  timeoutMs: number
+  timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<{ code: number; output: string }> {
   return new Promise((resolve) => {
     const child = spawn(command, { cwd, env, shell: true })
@@ -85,12 +87,19 @@ function runCommand(
       child.kill("SIGKILL")
       output += "\n[purpleink] timed out\n"
     }, timeoutMs)
+    const abort = () => {
+      child.kill("SIGKILL")
+      output += "\n[purpleink] cancelled\n"
+    }
+    signal?.addEventListener("abort", abort, { once: true })
     child.on("close", (code) => {
       clearTimeout(timer)
+      signal?.removeEventListener("abort", abort)
       resolve({ code: code ?? -1, output })
     })
     child.on("error", (err) => {
       clearTimeout(timer)
+      signal?.removeEventListener("abort", abort)
       resolve({ code: -1, output: output + "\n[spawn error] " + String(err) })
     })
   })
@@ -127,6 +136,7 @@ function prependToPath(env: NodeJS.ProcessEnv, dir: string): void {
  * @param projectDir 项目目录（含 index.html）
  */
 export async function renderProject(projectDir: string, options: RenderOptions = {}): Promise<RenderResult> {
+  options.signal?.throwIfAborted()
   const timeoutMs = options.timeoutMs ?? 20 * 60 * 1000
   const ffmpegDir = await resolveFfmpegDir(options.ffmpegDir)
   const env: NodeJS.ProcessEnv = { ...process.env }
@@ -142,7 +152,14 @@ export async function renderProject(projectDir: string, options: RenderOptions =
   if (!options.skipCheck) {
     logger.info("render:check_start", { projectDir })
     const hyperframesCli = `"${getHyperframesCliPath()}"`
-    const check = await runCommand(`${hyperframesCli} check`, projectDir, env, timeoutMs)
+    const check = await runCommand(
+      `${hyperframesCli} check`,
+      projectDir,
+      env,
+      timeoutMs,
+      options.signal,
+    )
+    options.signal?.throwIfAborted()
     checkPassed = check.code === 0
     checkOutput = check.output
     logger.info("render:check_done", { checkPassed })
@@ -152,7 +169,14 @@ export async function renderProject(projectDir: string, options: RenderOptions =
   logger.info("render:render_start", { projectDir, quality, fps: options.fps })
   let renderCmd = `"${getHyperframesCliPath()}" render --quality ${quality}`
   if (options.fps) renderCmd += ` --fps ${options.fps}`
-  const render = await runCommand(renderCmd, projectDir, env, timeoutMs)
+  const render = await runCommand(
+    renderCmd,
+    projectDir,
+    env,
+    timeoutMs,
+    options.signal,
+  )
+  options.signal?.throwIfAborted()
   const videoPath = await findNewestMp4(projectDir)
   logger.info("render:render_done", { code: render.code, videoPath })
 
@@ -160,7 +184,7 @@ export async function renderProject(projectDir: string, options: RenderOptions =
 }
 
 /**
- * 渲染后金样本校验：验证生成的 index.html 结构与金样本对齐。
+ * 渲染后金样本校验：验证根页面及其实际引用的章节结构与金样本对齐。
  * 采用与 verify-golden.ts 相同的 check() 断言风格：计数 passed/failed，逐条打印。
  */
 export async function verifyGolden(projectDir: string): Promise<{ passed: boolean; details: string[]; passedCount: number; failedCount: number }> {
@@ -184,7 +208,16 @@ export async function verifyGolden(projectDir: string): Promise<{ passed: boolea
     return { passed: false, details, passedCount, failedCount }
   }
 
-  const html = await readFile(htmlPath, "utf8")
+  const rootHtml = await readFile(htmlPath, "utf8")
+  const referencedHtml: string[] = []
+  const compositionPattern = /data-composition-src=["']([^"']+\.html)["']/g
+  for (const match of rootHtml.matchAll(compositionPattern)) {
+    const compositionPath = resolve(projectDir, match[1])
+    const relativePath = relative(projectDir, compositionPath)
+    if (relativePath.startsWith("..") || isAbsolute(relativePath) || !existsSync(compositionPath)) continue
+    referencedHtml.push(await readFile(compositionPath, "utf8"))
+  }
+  const html = [rootHtml, ...referencedHtml].join("\n")
 
   // 基础结构
   check("包含 GSAP CDN", html.includes("gsap@3"))
@@ -206,7 +239,10 @@ export async function verifyGolden(projectDir: string): Promise<{ passed: boolea
   // Ken Burns: x/y 偏移
   check("Ken Burns x 偏移", /x:\s*-?\d+/.test(html), "shot timeline should have x offset")
   check("Ken Burns y 偏移", /y:\s*-?\d+/.test(html), "shot timeline should have y offset")
-  check("Ken Burns power1.inOut 缓动", html.includes("power1.inOut"))
+  check(
+    "Ken Burns 使用受支持缓动",
+    /ease:\s*["'](?:power[1-4]\.(?:inOut|out)|expo\.out)["']/u.test(html),
+  )
 
   // 分层入场: shot-visual opacity 动画
   check("分层入场 shot-visual 淡入", html.includes(".shot-visual") && html.includes("opacity"))

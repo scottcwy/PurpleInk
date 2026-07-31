@@ -5,6 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "dev:worker": "pnpm --filter purpleink-server dev",
+    "dev:all": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/start-dev.ps1",
+    "dev:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/start-dev.ps1 -Status",
+    "dev:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/start-dev.ps1 -Stop",
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx,.mjs",
@@ -16,21 +19,27 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/setup/db-migrate.ts",
     "verify:v3": "tsx scripts/verify/v3-architecture.ts --check",
+    "verify:managed-services": "node scripts/verify/managed-service-readiness.mjs",
     "verify:e2e": "tsx scripts/verify/e2e-smoke.ts",
+    "verify:motion": "tsx scripts/verify/motion-baseline.mjs",
+    "verify:motion:update": "tsx scripts/verify/motion-baseline.mjs --update",
     "report:v3": "tsx scripts/verify/v3-architecture.ts --report",
     "typecheck": "tsc --noEmit",
     "typecheck:web": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1100.0",
+    "@aws-sdk/s3-request-presigner": "^3.1100.0",
     "@dagrejs/dagre": "^3.0.0",
     "@earendil-works/pi-agent-core": "0.80.10",
     "@earendil-works/pi-ai": "0.80.10",
     "@next/env": "16.2.11",
+    "@purpleink/procedural-sfx": "workspace:*",
     "@xyflow/react": "^12.11.2",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
     "ffmpeg-static": "^5.3.0",
-    "gsap": "^3.15.0",
+    "geist": "1.7.2",
     "hyperframes": "0.7.70",
     "jimp": "^1.6.1",
     "lenis": "^1.3.3",
@@ -38,6 +47,7 @@
     "motion": "^12.42.2",
     "next": "^16.2.0",
     "next-themes": "^0.4.6",
+    "nodemailer": "9.0.3",
     "openai": "^6.48.0",
     "playwright": "1.62.0",
     "playwright-core": "1.62.0",
@@ -50,6 +60,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^22.11.0",
+    "@types/nodemailer": "8.0.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.31.10",
@@ -63,11 +74,17 @@
     "vitest": "^4.1.10"
   },
   "packageManager": "pnpm@10.30.0",
+  "engines": {
+    "node": ">=22.11.0"
+  },
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",
       "ffmpeg-static",
       "sharp"
-    ]
+    ],
+    "patchedDependencies": {
+      "@earendil-works/pi-ai": "patches/@earendil-works__pi-ai.patch"
+    }
   }
 }

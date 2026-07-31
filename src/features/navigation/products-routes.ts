@@ -4,6 +4,7 @@ export const PRODUCTS_ROUTES = {
   root: '/products',
   dashboard: '/products/dashboard',
   projects: '/products/projects',
+  billing: '/products/billing',
   settings: '/products/settings',
 } as const
 
@@ -33,6 +34,7 @@ export function resolveProductsSection(pathname: string): AppSection {
   if (pathname.startsWith('/products/export/')) return 'export'
   if (pathname.startsWith('/products/canvas/')) return 'canvas'
   if (pathname.startsWith(PRODUCTS_ROUTES.projects)) return 'projects'
+  if (pathname.startsWith(PRODUCTS_ROUTES.billing)) return 'billing'
   if (pathname.startsWith(PRODUCTS_ROUTES.settings)) return 'settings'
   return 'workbench'
 }

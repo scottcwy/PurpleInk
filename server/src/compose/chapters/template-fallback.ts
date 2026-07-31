@@ -353,7 +353,6 @@ function renderTimeline(m: VideoModel): string {
         lines.push(`      tl.from("${sel} .window", { opacity: 0, y: 56, scale: 0.96, duration: 0.9, ease: "power3.out" }, ${at(0.2)});`)
         lines.push(`      tl.from("${sel} .shot-visual", { opacity: 0, duration: 0.6, ease: "power2.out" }, ${at(0.5)});`)
         lines.push(`      tl.from("${sel} .cap", { opacity: 0, y: 20, duration: 0.7, ease: "power2.out" }, ${at(0.8)});`)
-        lines.push(camW.css)
         lines.push(camW.gsap)
         break
       }
@@ -366,7 +365,6 @@ function renderTimeline(m: VideoModel): string {
         const camT = buildPageCamAnimation(keysT, `${sel} .tilt-img`, easeT)
         lines.push(`      tl.from("${sel} .tilt-card", { opacity: 0, rotationY: -22, rotationX: 8, y: 70, transformPerspective: 1600, duration: 1.1, ease: "power3.out" }, ${at(0.2)});`)
         lines.push(`      tl.from("${sel} .tilt-img", { opacity: 0, duration: 0.6, ease: "power2.out" }, ${at(0.5)});`)
-        lines.push(camT.css)
         lines.push(camT.gsap)
         break
       }
@@ -379,7 +377,6 @@ function renderTimeline(m: VideoModel): string {
         const camZ = buildPageCamAnimation(keysZ, `${sel} .zoom-img`, easeZ)
         lines.push(`      tl.from("${sel} .window", { opacity: 0, scale: 0.94, duration: 0.9, ease: "power3.out" }, ${at(0.2)});`)
         lines.push(`      tl.from("${sel} .shot-visual", { opacity: 0, duration: 0.6, ease: "power2.out" }, ${at(0.5)});`)
-        lines.push(camZ.css)
         lines.push(camZ.gsap)
         break
       }

@@ -3,6 +3,7 @@ import {
   bigint,
   check,
   foreignKey,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -13,6 +14,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 import { projects, type VersionedPayload, workspaces } from './core'
+import { users } from './auth'
 
 export const RUN_STATUSES = [
   'triggering',
@@ -46,11 +48,15 @@ export const pipelineRuns = pgTable(
       .references(() => workspaces.id, { onDelete: 'cascade' }),
     id: uuid('id').defaultRandom().notNull(),
     projectId: uuid('project_id').notNull(),
+    requestedByUserId: uuid('requested_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
     triggerRunId: text('trigger_run_id'),
     status: text('status').default('triggering').notNull(),
     workflowVersion: text('workflow_version').notNull(),
     fingerprint: text('fingerprint').notNull(),
     revision: bigint('revision', { mode: 'number' }).default(0).notNull(),
+    executionEpoch: bigint('execution_epoch', { mode: 'number' }).default(0).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
     startedAt: timestamp('started_at', { withTimezone: true }),
@@ -77,6 +83,13 @@ export const pipelineRuns = pgTable(
       )`,
     ),
     check('pipeline_runs_revision_check', sql`${table.revision} >= 0`),
+    check('pipeline_runs_execution_epoch_check', sql`${table.executionEpoch} >= 0`),
+    index('pipeline_runs_project_epoch_status_idx').on(
+      table.workspaceId,
+      table.projectId,
+      table.executionEpoch,
+      table.status,
+    ),
     check(
       'pipeline_runs_fingerprint_check',
       sql`length(${table.fingerprint}) = 64`,
@@ -99,7 +112,13 @@ export const taskAttempts = pgTable(
     status: text('status').default('queued').notNull(),
     fingerprint: text('fingerprint').notNull(),
     checkpoint: jsonb('checkpoint').$type<VersionedPayload>().notNull(),
+    workUnitKey: text('work_unit_key'),
     failure: jsonb('failure').$type<VersionedPayload>(),
+    // 租约到期时间：running attempt 由持有进程心跳续期；过期即视为僵尸，由 sweep 回收。
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }),
+    cancelRequestedAt: timestamp('cancel_requested_at', { withTimezone: true }),
+    // 可见时间：claim 只领取 visible_at <= now() 的 attempt（退避重排属阶段 2，本阶段只消费列）。
+    visibleAt: timestamp('visible_at', { withTimezone: true }).defaultNow().notNull(),
     revision: bigint('revision', { mode: 'number' }).default(0).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -132,6 +151,13 @@ export const taskAttempts = pgTable(
     ),
     check('task_attempts_attempt_no_check', sql`${table.attemptNo} > 0`),
     check('task_attempts_revision_check', sql`${table.revision} >= 0`),
+    index('task_attempts_queue_lane_idx').on(
+      table.workspaceId,
+      table.status,
+      table.visibleAt,
+      table.workUnitKey,
+      table.createdAt,
+    ),
     check(
       'task_attempts_fingerprint_check',
       sql`length(${table.fingerprint}) = 64`,

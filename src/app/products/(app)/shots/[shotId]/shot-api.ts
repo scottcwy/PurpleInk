@@ -1,3 +1,5 @@
+import { throwIfUnauthenticated } from '@/features/auth/unauthenticated-error'
+
 export interface ShotJobResult {
   status: 'done' | 'failed'
   artifactUrl?: string
@@ -10,7 +12,56 @@ export async function renderShotAndWait(
   fetcher: typeof fetch = fetch,
   wait: (milliseconds: number) => Promise<void> = delay
 ): Promise<ShotJobResult> {
-  const started = await fetcher('/api/render', request({ projectId, nodeId }))
+  return runShotJobAndWait(
+    '/api/render',
+    { projectId, nodeId, intent: 'rerender' },
+    projectId,
+    fetcher,
+    wait,
+  )
+}
+
+export async function generateShotAndWait(
+  projectId: string,
+  nodeId: string,
+  fetcher: typeof fetch = fetch,
+  wait: (milliseconds: number) => Promise<void> = delay,
+): Promise<ShotJobResult> {
+  return runShotJobAndWait(
+    '/api/director/stage',
+    { projectId, nodeId, intent: 'execute' },
+    projectId,
+    fetcher,
+    wait,
+  )
+}
+
+export async function reviseShotAndWait(
+  projectId: string,
+  nodeId: string,
+  revisionBrief: string,
+  fetcher: typeof fetch = fetch,
+  wait: (milliseconds: number) => Promise<void> = delay,
+): Promise<ShotJobResult> {
+  return runShotJobAndWait(
+    '/api/director/stage',
+    { projectId, nodeId, intent: 'regenerate', revisionBrief },
+    projectId,
+    fetcher,
+    wait,
+  )
+}
+
+async function runShotJobAndWait(
+  endpoint: string,
+  body: Record<string, string>,
+  projectId: string,
+  fetcher: typeof fetch,
+  wait: (milliseconds: number) => Promise<void>,
+): Promise<ShotJobResult> {
+  const started = await fetcher(endpoint, request(body))
+  // 401 统一映射成可识别错误类型，由 useRequireLogin 接管（PLAN-002 §4.4）。
+  throwIfUnauthenticated(started)
   const startBody = await objectBody(started)
   if (!started.ok) throw new Error(errorOf(startBody, '渲染作业入队失败'))
   const jobId = stringOf(startBody, 'jobId')
@@ -19,6 +70,7 @@ export async function renderShotAndWait(
     const response = await fetcher(
       `/api/jobs/${encodeURIComponent(jobId)}?projectId=${encodeURIComponent(projectId)}`
     )
+    throwIfUnauthenticated(response)
     const body = await objectBody(response)
     if (!response.ok) throw new Error(errorOf(body, '作业状态读取失败'))
     const job = body.job
@@ -57,6 +109,7 @@ export async function fetchThumbnails(
   const response = await fetcher(
     `/api/render/thumbnails?projectId=${encodeURIComponent(projectId)}&nodeId=${encodeURIComponent(nodeId)}`
   )
+  throwIfUnauthenticated(response)
   const body = await objectBody(response)
   if (!response.ok) throw new Error(errorOf(body, '缩略图读取失败'))
   const thumbnails = body.thumbnails

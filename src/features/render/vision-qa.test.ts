@@ -81,6 +81,7 @@ describe('runShotVisionQa', () => {
       {
         projectId: 'project-1',
         qaNodeId: 'qa-1',
+        attemptId: '00000000-0000-4000-8000-000000000001',
         shot: {
           id: 'S001',
           mustShow: ['主标题'],
@@ -100,7 +101,8 @@ describe('runShotVisionQa', () => {
           { label: '60%', bytes: Buffer.from('png:thumb-2') },
           { label: '95%', bytes: Buffer.from('png:thumb-3') },
         ],
-      })
+      }),
+      '00000000-0000-4000-8000-000000000001',
     )
     expect(target.storeReport).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -143,6 +145,7 @@ describe('runShotVisionQa', () => {
         {
           projectId: 'project-1',
           qaNodeId: 'qa-1',
+          attemptId: '00000000-0000-4000-8000-000000000001',
           shot: { id: 'S001', mustShow: ['主标题'], mustAvoid: ['水印'] },
         },
         target.deps
@@ -159,6 +162,7 @@ describe('runShotVisionQa', () => {
         {
           projectId: 'project-1',
           qaNodeId: 'missing',
+          attemptId: '00000000-0000-4000-8000-000000000001',
           shot: { id: 'S001', mustShow: [], mustAvoid: [] },
         },
         target.deps
@@ -176,9 +180,12 @@ describe('routed Vision client and report storage', () => {
   }
 
   it('uses the resolved vision model and sends PNG data URLs through the compatible API', async () => {
-    const complete = vi.fn(async () =>
-      '```json\n{"summary":"通过","mustShow":[],"mustAvoid":[],"findings":[]}\n```'
-    )
+    const complete = vi.fn(async () => ({
+      content:
+        '```json\n{"summary":"通过","mustShow":[],"mustAvoid":[],"findings":[]}\n```',
+      usage: { inputTokens: 10, cachedInputTokens: 0, outputTokens: 5 },
+    }))
+    const settle = vi.fn(async () => undefined)
 
     const result = await analyzeVision(
       {
@@ -187,7 +194,27 @@ describe('routed Vision client and report storage', () => {
         mustAvoid: [],
         images: [{ label: '25%', bytes: Buffer.from([1, 2, 3]) }],
       },
-      { resolveTarget: () => target, complete }
+      '00000000-0000-4000-8000-000000000001',
+      {
+        resolveTarget: async () => target,
+        gateway: {
+          prepare: vi.fn(async () => ({
+            credential: 'managed-key',
+            dispatchFunding: 'managed' as const,
+            begin: vi.fn(async () => ({
+              invocationId: 'vision',
+              funding: 'managed' as const,
+              deductsManagedPool: true,
+              credential: 'managed-key',
+              settle,
+              settleUnavailable: vi.fn(async () => undefined),
+              releaseBeforeCall: vi.fn(async () => undefined),
+            })),
+          })),
+        },
+        dispatch: async (_input, invoke) => invoke(),
+        complete,
+      },
     )
 
     expect(result).toMatchObject({
@@ -195,36 +222,47 @@ describe('routed Vision client and report storage', () => {
       model: 'gemini-3.6-flash',
     })
     expect(complete).toHaveBeenCalledWith(
-      target,
-      expect.arrayContaining([
-        expect.objectContaining({
-          role: 'user',
-          content: expect.arrayContaining([
-            expect.objectContaining({
-              type: 'image_url',
-              image_url: expect.objectContaining({
-                url: 'data:image/png;base64,AQID',
+      expect.objectContaining({
+        model: target.modelId,
+        maxOutputTokens: 4_096,
+        messages: expect.arrayContaining([
+          expect.objectContaining({
+            role: 'user',
+            content: expect.arrayContaining([
+              expect.objectContaining({
+                type: 'image_url',
+                image_url: expect.objectContaining({
+                  url: 'data:image/png;base64,AQID',
+                }),
               }),
-            }),
-          ]),
-        }),
-      ])
+            ]),
+          }),
+        ]),
+      }),
     )
   })
 
   it('refuses Vision calls before transport when the StepFun key is absent', async () => {
     const complete = vi.fn()
+    const releaseBeforeCall = vi.fn(async () => undefined)
 
     await expect(
       analyzeVision(
         { shotId: 'S001', mustShow: [], mustAvoid: [], images: [] },
+        '00000000-0000-4000-8000-000000000001',
         {
-          resolveTarget: () => ({ ...target, apiKey: null }),
+          resolveTarget: async () => ({ ...target, apiKey: null }),
+          gateway: {
+            prepare: vi.fn(async () => {
+              throw new Error('StepFun API Key 未配置')
+            }),
+          },
           complete,
         }
       )
     ).rejects.toThrow('API Key 未配置')
     expect(complete).not.toHaveBeenCalled()
+    expect(releaseBeforeCall).not.toHaveBeenCalled()
   })
 
   it('deletes report bytes when artifact registration fails', async () => {

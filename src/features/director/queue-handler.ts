@@ -1,10 +1,19 @@
 import 'server-only'
 import { z } from 'zod'
-import { transitionNodeStatus } from '@/features/canvas'
+import {
+  captureNodeInputFingerprint,
+  transitionNodeStatus,
+} from '@/features/canvas'
+import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 import { getDb } from '@/lib/db/client'
 import { storage } from '@/lib/storage'
-import { queue as defaultQueue, type QueueAdapter } from '@/lib/queue'
+import {
+  assertEnqueueRetryBudget,
+  queue as defaultQueue,
+  type QueueAdapter,
+} from '@/lib/queue'
 import { DirectorRuntimeRepository } from './runtime-repository'
+import { assertDirectorBillingAvailable } from './pi-provider'
 import { runStage as defaultRunStage } from './stage-runner'
 import { PIPELINE_STAGES, type PipelineStage } from './types'
 
@@ -13,6 +22,7 @@ const directorStageJobSchema = z
     projectId: z.string().min(1),
     nodeId: z.string().min(1),
     stage: z.enum(PIPELINE_STAGES),
+    finalArtifactHash: z.string().length(64).optional(),
   })
   .strict()
 
@@ -21,13 +31,22 @@ export type DirectorStageJobInput = z.infer<typeof directorStageJobSchema>
 type RunStage = (
   projectId: string,
   nodeId: string,
-  stage: PipelineStage
+  stage: PipelineStage,
+  attemptId?: string,
+  signal?: AbortSignal,
 ) => Promise<void>
 
 interface EnqueueDependencies {
   queue: QueueAdapter
-  assertEnqueueable(input: DirectorStageJobInput): Promise<void>
+  assertEnqueueable(
+    input: DirectorStageJobInput,
+    options?: { allowPending?: boolean }
+  ): Promise<void>
+  captureInputFingerprint?(nodeId: string): Promise<unknown>
   transitionNodeStatus: typeof transitionNodeStatus
+  /** 毒任务闸门（可选）：重试预算耗尽时拒绝再次入队。 */
+  assertRetryBudget?(kind: string, payload: Record<string, unknown>): Promise<void>
+  assertBillingAvailable?(input: DirectorStageJobInput): Promise<void>
   recordStageError(
     nodeId: string,
     stage: PipelineStage,
@@ -41,7 +60,15 @@ export function registerDirectorStageHandler(
 ): void {
   targetQueue.register('director-stage', async (job) => {
     const payload = directorStageJobSchema.parse(job.payload)
-    await runStage(payload.projectId, payload.nodeId, payload.stage)
+    job.signal?.throwIfAborted()
+    await runStage(
+      payload.projectId,
+      payload.nodeId,
+      payload.stage,
+      job.id,
+      job.signal,
+    )
+    job.signal?.throwIfAborted()
   })
 }
 
@@ -55,13 +82,23 @@ export function startDirectorQueue(
 
 export async function enqueueDirectorStage(
   input: DirectorStageJobInput,
-  dependencies?: EnqueueDependencies
+  dependencies?: EnqueueDependencies,
+  options: { preservePending?: boolean } = {}
 ): Promise<string> {
-  const resolved = dependencies ?? (await createDefaultEnqueueDependencies())
   const payload = directorStageJobSchema.parse(input)
-  await resolved.assertEnqueueable(payload)
-  await resolved.transitionNodeStatus(payload.nodeId, 'pending')
+  if (!dependencies) await assertProjectWorkflowSupported(payload.projectId)
+  const resolved = dependencies ?? (await createDefaultEnqueueDependencies())
+  await resolved.assertEnqueueable(payload, {
+    allowPending: options.preservePending === true,
+  })
+  await resolved.captureInputFingerprint?.(payload.nodeId)
+  if (!options.preservePending) {
+    await resolved.transitionNodeStatus(payload.nodeId, 'pending')
+  }
   try {
+    // 闸门在 try 内：预算耗尽走既有补偿链，落节点 failed + directorError 投影。
+    await resolved.assertRetryBudget?.('director-stage', payload)
+    await resolved.assertBillingAvailable?.(payload)
     return await resolved.queue.enqueue('director-stage', payload, {
       projectId: payload.projectId,
       nodeId: payload.nodeId,
@@ -76,9 +113,21 @@ async function createDefaultEnqueueDependencies(): Promise<EnqueueDependencies> 
   const repository = new DirectorRuntimeRepository(await getDb(), storage)
   return {
     queue: defaultQueue,
-    assertEnqueueable: (input) =>
-      repository.assertEnqueueable(input.projectId, input.nodeId, input.stage),
+    assertEnqueueable: (input, options) =>
+      repository.assertEnqueueable(
+        input.projectId,
+        input.nodeId,
+        input.stage,
+        options?.allowPending
+      ),
+    captureInputFingerprint: captureNodeInputFingerprint,
     transitionNodeStatus,
+    assertRetryBudget: assertEnqueueRetryBudget,
+    assertBillingAvailable: async (input) =>
+      assertDirectorBillingAvailable({
+        nodeType: await repository.loadNodeType(input.projectId, input.nodeId),
+        stage: input.stage,
+      }),
     recordStageError: (nodeId, stage, error) =>
       repository.recordStageError(nodeId, stage, error),
   }

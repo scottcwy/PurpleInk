@@ -1,6 +1,11 @@
 import 'server-only'
 import { z } from 'zod'
 import { getStepfunConfig, type StepfunConfig } from '@/features/ai/config'
+import {
+  providerErrorFromResponse,
+  providerNetworkError,
+  ProviderRequestError,
+} from '@/features/ai/provider-request-error'
 import type { Caption } from './types'
 
 const speechInputSchema = z
@@ -41,7 +46,8 @@ const ttsResponseSchema = z
               })
               .passthrough()
           )
-          .min(1),
+          .optional()
+          .default([]),
       })
       .passthrough(),
   })
@@ -77,7 +83,7 @@ export interface StepfunAudioDependencies {
 
 export interface SynthesizedSpeech {
   audioBytes: Buffer
-  audioFormat: 'mp3'
+  audioFormat: 'mp3' | 'wav'
   durationMs: number
   model: string
   nativeCaptions: Caption[]
@@ -90,6 +96,7 @@ export interface TranscribedSpeech {
 }
 
 const DEFAULT_VOICE_ID = 'cixingnansheng'
+const PROVIDER_TIMEOUT_MS = 45_000
 
 export async function synthesizeSpeech(
   input: z.input<typeof speechInputSchema>,
@@ -97,7 +104,8 @@ export async function synthesizeSpeech(
 ): Promise<SynthesizedSpeech> {
   const parsed = speechInputSchema.parse(input)
   const config = requireKey(await dependencies.getConfig())
-  const response = await dependencies.fetcher(
+  const response = await request(
+    dependencies.fetcher,
     endpoint(config.baseUrl, 'audio/speech'),
     {
       method: 'POST',
@@ -111,12 +119,27 @@ export async function synthesizeSpeech(
         input: parsed.text,
         response_format: 'mp3',
         return_url: true,
-        timestamp: true,
       }),
-    }
+    },
+    'StepFun TTS',
   )
   if (!response.ok) {
-    throw new Error(`StepFun TTS 请求失败（HTTP ${response.status}）`)
+    throw providerErrorFromResponse({
+      response,
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      operation: '配音',
+      funding: 'managed',
+    })
+  }
+  if (response.headers.get('content-type')?.startsWith('audio/')) {
+    return {
+      audioBytes: Buffer.from(await response.arrayBuffer()),
+      audioFormat: 'mp3',
+      durationMs: 0,
+      model: config.ttsModel,
+      nativeCaptions: [],
+    }
   }
   const body = ttsResponseSchema.parse(await response.json())
   const nativeCaptions = body.data.subtitles.flatMap(({ items }) =>
@@ -126,17 +149,27 @@ export async function synthesizeSpeech(
       endMs: end_time,
     }))
   )
-  if (nativeCaptions.length === 0) {
-    throw new Error('StepFun TTS 未返回可用的词级时间戳')
-  }
-  const audioResponse = await dependencies.fetcher(body.data.url)
+  const audioResponse = await request(
+    dependencies.fetcher,
+    body.data.url,
+    undefined,
+    'StepFun TTS 音频下载',
+  )
   if (!audioResponse.ok) {
-    throw new Error(`StepFun TTS 音频下载失败（HTTP ${audioResponse.status}）`)
+    throw providerErrorFromResponse({
+      response: audioResponse,
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      operation: '音频下载',
+      funding: 'managed',
+    })
   }
   return {
     audioBytes: Buffer.from(await audioResponse.arrayBuffer()),
     audioFormat: 'mp3',
-    durationMs: Math.max(...nativeCaptions.map(({ endMs }) => endMs)),
+    durationMs: nativeCaptions.length > 0
+      ? Math.max(...nativeCaptions.map(({ endMs }) => endMs))
+      : 0,
     model: config.ttsModel,
     nativeCaptions,
   }
@@ -148,7 +181,8 @@ export async function transcribeSpeech(
 ): Promise<TranscribedSpeech> {
   const parsed = transcriptionInputSchema.parse(input)
   const config = requireKey(await dependencies.getConfig())
-  const response = await dependencies.fetcher(
+  const response = await request(
+    dependencies.fetcher,
     endpoint(config.baseUrl, 'audio/asr/sse'),
     {
       method: 'POST',
@@ -171,17 +205,32 @@ export async function transcribeSpeech(
           },
         },
       }),
-    }
+    },
+    'StepFun ASR',
   )
   if (!response.ok) {
-    throw new Error(`StepFun ASR 请求失败（HTTP ${response.status}）`)
+    throw providerErrorFromResponse({
+      response,
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      operation: '语音识别',
+      funding: 'managed',
+    })
   }
   const events = parseSse(await response.text())
   const captions: Caption[] = []
   let transcript: string | undefined
   for (const event of events) {
     const errorEvent = asrErrorSchema.safeParse(event)
-    if (errorEvent.success) throw new Error(`StepFun ASR 失败：${errorEvent.data.message}`)
+    if (errorEvent.success) {
+      throw new ProviderRequestError({
+        providerId: 'stepfun',
+        providerLabel: '阶跃星辰',
+        operation: '语音识别',
+        funding: 'managed',
+        kind: 'unknown',
+      })
+    }
     const doneEvent = asrDoneSchema.safeParse(event)
     if (doneEvent.success) {
       transcript = doneEvent.data.text
@@ -230,6 +279,35 @@ function requireKey(config: StepfunConfig): StepfunConfig & { apiKey: string } {
 
 function endpoint(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/+$/, '')}/${path}`
+}
+
+async function request(
+  fetcher: typeof fetch,
+  url: string,
+  init: RequestInit | undefined,
+  operation: string,
+): Promise<Response> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  try {
+    const signal = AbortSignal.timeout(PROVIDER_TIMEOUT_MS)
+    const response = fetcher(url, { ...init, signal })
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(Object.assign(new Error('request timeout'), { name: 'TimeoutError' }))
+      }, PROVIDER_TIMEOUT_MS)
+    })
+    return await Promise.race([response, timeout])
+  } catch (error) {
+    throw providerNetworkError({
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      operation,
+      funding: 'managed',
+      cause: error,
+    })
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+  }
 }
 
 function defaultDependencies(): StepfunAudioDependencies {

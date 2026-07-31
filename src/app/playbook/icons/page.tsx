@@ -12,7 +12,7 @@ export default function PlaybookIconsPage() {
         <h1 className="mt-3 text-3xl font-bold tracking-[-0.03em]">Icons</h1>
         <div className="mt-6 space-y-8">
           {entries.map(({ id, name, Demo }) => (
-            <section key={id}>
+            <section key={id} id={id}>
               <h2 className="text-ds-text-muted mb-3 font-mono text-[11px] font-semibold tracking-wide uppercase">
                 {name}
               </h2>

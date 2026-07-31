@@ -12,6 +12,7 @@ describe('products routes', () => {
   it('builds canonical routes with encoded dynamic identifiers', () => {
     expect(PRODUCTS_ROUTES.dashboard).toBe('/products/dashboard')
     expect(PRODUCTS_ROUTES.projects).toBe('/products/projects')
+    expect(PRODUCTS_ROUTES.billing).toBe('/products/billing')
     expect(productCanvasHref('project/1')).toBe(
       '/products/canvas/project%2F1',
     )
@@ -33,5 +34,6 @@ describe('products routes', () => {
     expect(resolveProductsSection('/products/shots/shot-1')).toBe('renderer')
     expect(resolveProductsSection('/products/export/project-1')).toBe('export')
     expect(resolveProductsSection('/products/settings')).toBe('settings')
+    expect(resolveProductsSection('/products/billing')).toBe('billing')
   })
 })

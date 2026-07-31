@@ -8,7 +8,8 @@ export interface StageResultRepository {
   recordStageOutput(
     nodeId: string,
     result: PreparedStageResult,
-    artifact: ArtifactCommitResult
+    artifact: ArtifactCommitResult,
+    signal?: AbortSignal,
   ): Promise<void>
 }
 
@@ -21,9 +22,12 @@ export async function commitStageResult(
   repository: StageResultRepository,
   context: DirectorStageContext,
   result: PreparedStageResult,
-  artifact: ArtifactCommitResult
+  artifact: ArtifactCommitResult,
+  signal?: AbortSignal,
 ): Promise<void> {
-  await repository.recordStageOutput(context.nodeId, result, artifact)
+  signal?.throwIfAborted()
+  await repository.recordStageOutput(context.nodeId, result, artifact, signal)
+  signal?.throwIfAborted()
   if (result.ingestShots) {
     await materializeShotLanes(context.projectId, result.ingestShots)
   }

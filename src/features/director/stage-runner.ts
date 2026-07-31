@@ -1,6 +1,9 @@
 import 'server-only'
 import { getDb } from '@/lib/db/client'
-import { transitionNodeStatus } from '@/features/canvas'
+import {
+  assertNodeExecutionActive,
+  transitionNodeStatus,
+} from '@/features/canvas'
 import { createDirectorSession, type DirectorSession } from './pi-session'
 import { DirectorRuntimeRepository, type DirectorStageContext } from './runtime-repository'
 import { buildStagePrompt } from './stage-prompt'
@@ -8,88 +11,39 @@ import { generateValidatedArtifact } from './stage-artifact-gate'
 import { commitStageResult } from './stage-result-committer'
 import {
   prepareStageResult,
-  type PreparedStageResult,
 } from './stage-result'
 import { storage } from '@/lib/storage'
 import { streamBus } from '@/lib/stream/stream-bus'
-import {
-  writeValidatedArtifact,
-  type ArtifactCommitResult,
-  type WriteArtifactInput,
-} from './tools/write-artifact'
-import type { PipelineStage } from './types'
+import { writeValidatedArtifact } from './tools/write-artifact'
+import { classifyWorkflowError } from '@/features/canvas/workflow-error'
 import { advancePipeline } from './advance'
+import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
 
 export { MAX_GATE_RETRIES } from './stage-artifact-gate'
 
-interface StageRepository {
-  loadStageContext(
-    projectId: string,
-    nodeId: string,
-    stage: PipelineStage
-  ): Promise<DirectorStageContext>
-  registerArtifactPointer(input: {
-    projectId: string
-    nodeId: string
-    kind: string
-    storageKey: string
-  }): Promise<string>
-  recordStageError(
-    nodeId: string,
-    stage: PipelineStage,
-    error: unknown
-  ): Promise<void>
-  recordStageOutput(
-    nodeId: string,
-    result: PreparedStageResult,
-    artifact: ArtifactCommitResult
-  ): Promise<void>
-  persistStreamLog(
-    projectId: string,
-    nodeId: string,
-    stage: PipelineStage,
-    text: string
-  ): Promise<void>
-}
-
-interface StageRunnerDependencies {
-  repository: StageRepository
-  transitionNodeStatus: typeof transitionNodeStatus
-  createSession: typeof createDirectorSession
-  buildPrompt: typeof buildStagePrompt
-  writeArtifact: (input: WriteArtifactInput) => Promise<ArtifactCommitResult>
-  prepareResult: (
-    context: DirectorStageContext,
-    rawContent: string
-  ) => PreparedStageResult | Promise<PreparedStageResult>
-  commitResult: (
-    context: DirectorStageContext,
-    result: PreparedStageResult,
-    artifact: ArtifactCommitResult
-  ) => Promise<void>
-  runStageEffect: (
-    context: DirectorStageContext,
-    result: PreparedStageResult,
-    artifact: ArtifactCommitResult
-  ) => Promise<void>
-  advancePipeline: (
-    projectId: string,
-    completedNodeId: string
-  ) => Promise<unknown>
-}
-
-type StageRunner = (
-  projectId: string,
-  nodeId: string,
-  stage: PipelineStage
-) => Promise<void>
+import type {
+  StageRunner,
+  StageRunnerDependencies,
+} from './stage-runner-contract'
+import {
+  advanceWithoutMasking,
+  closeWithoutMasking,
+  scheduleMediaWithoutMasking,
+  transitionStageNode,
+} from './stage-runner-guards'
 
 let defaultRunner: Promise<StageRunner> | undefined
 
 /** 首次真正执行作业时才打开 Postgres，模块导入保持无副作用。 */
-export const runStage: StageRunner = async (projectId, nodeId, stage) => {
+export const runStage: StageRunner = async (
+  projectId,
+  nodeId,
+  stage,
+  attemptId,
+  signal,
+) => {
   defaultRunner ??= createDefaultRunner()
-  return (await defaultRunner)(projectId, nodeId, stage)
+  return (await defaultRunner)(projectId, nodeId, stage, attemptId, signal)
 }
 
 async function createDefaultRunner(): Promise<StageRunner> {
@@ -101,9 +55,9 @@ async function createDefaultRunner(): Promise<StageRunner> {
     buildPrompt: buildStagePrompt,
     writeArtifact: writeValidatedArtifact,
     prepareResult: prepareStageResult,
-    commitResult: async (context, result, artifact) =>
-      commitStageResult(repository, context, result, artifact),
-    runStageEffect: async (context) => {
+    commitResult: async (context, result, artifact, signal) =>
+      commitStageResult(repository, context, result, artifact, signal),
+    runStageEffect: async (context, signal) => {
       if (
         context.nodeType !== 'shot-sfx' &&
         context.nodeType !== 'shot-subtitle' &&
@@ -112,66 +66,208 @@ async function createDefaultRunner(): Promise<StageRunner> {
         return
       }
       const { runDirectorStageEffect } = await import('./stage-effects')
-      await runDirectorStageEffect(context)
+      await runDirectorStageEffect(context, signal)
     },
-    advancePipeline,
+    advancePipeline: (projectId, nodeId, execution) =>
+      advancePipeline(projectId, nodeId, undefined, execution),
+    scheduleMediaNarration: async (input) => {
+      input.signal?.throwIfAborted()
+      if (input.attemptId) {
+        await assertNodeExecutionActive(input.nodeId, {
+          projectId: input.projectId,
+          attemptId: input.attemptId,
+          signal: input.signal,
+        })
+      }
+      const { enqueueMediaNarration } = await import(
+        '@/features/audio/narration-queue-handler'
+      )
+      const jobId = await enqueueMediaNarration({
+        projectId: input.projectId,
+        nodeId: input.nodeId,
+      })
+      input.signal?.throwIfAborted()
+      return jobId
+    },
   })
 }
 
 export function createStageRunner(
   dependencies: StageRunnerDependencies
 ): StageRunner {
-  return async (projectId, nodeId, stage) => {
-    const context = await dependencies.repository.loadStageContext(projectId, nodeId, stage)
+  return async (projectId, nodeId, stage, attemptId, signal) => {
     const streamKey = `${projectId}:${nodeId}`
-    await dependencies.transitionNodeStatus(nodeId, 'running')
     let session: DirectorSession | undefined
     let closed = false
+    let sessionPointerAttempted = false
     try {
+      signal?.throwIfAborted()
+      await transitionStageNode(
+        dependencies.transitionNodeStatus,
+        projectId,
+        nodeId,
+        'running',
+        attemptId,
+        signal,
+      )
+      const context = await dependencies.repository.loadStageContext(
+        projectId,
+        nodeId,
+        stage
+      )
+      signal?.throwIfAborted()
+      const executionContext: DirectorStageContext = attemptId
+        ? { ...context, attemptId }
+        : context
+      if (
+        context.nodeType === 'shot-subtitle'
+        && attemptId
+        && await dependencies.repository.shouldResumeCommittedEffect?.(
+          attemptId,
+          nodeId,
+        )
+      ) {
+        await dependencies.runStageEffect(executionContext, signal)
+        signal?.throwIfAborted()
+        await transitionStageNode(
+          dependencies.transitionNodeStatus,
+          projectId,
+          nodeId,
+          'success',
+          attemptId,
+          signal,
+        )
+        await advanceWithoutMasking(
+          dependencies.advancePipeline,
+          projectId,
+          nodeId,
+          attemptId,
+          signal,
+        )
+        return
+      }
       const prompt = dependencies.buildPrompt(stage, context)
       session = await dependencies.createSession({
         projectId,
         nodeId,
+        ...(attemptId ? { attemptId } : {}),
         nodeType: context.nodeType,
         stage,
         resumeSessionKey: context.resumeSessionKey,
       })
+      const { displayText, prepared, artifact } = await generateValidatedArtifact({
+        stage,
+        context: executionContext,
+        session,
+        initialPrompt: prompt,
+        prepareResult: dependencies.prepareResult,
+        writeArtifact: dependencies.writeArtifact,
+        signal,
+      })
+      signal?.throwIfAborted()
+      await dependencies.commitResult(executionContext, prepared, artifact, signal)
+      signal?.throwIfAborted()
+      await dependencies.runStageEffect(executionContext, signal)
+      signal?.throwIfAborted()
+      await dependencies.repository.persistStreamLog({
+        projectId,
+        nodeId,
+        stage,
+        text: displayText,
+        ...(attemptId ? { attemptId } : {}),
+        ...(signal ? { signal } : {}),
+      })
+      signal?.throwIfAborted()
+      streamBus.markDone(streamKey)
+      await session.close()
+      closed = true
+      signal?.throwIfAborted()
+      sessionPointerAttempted = true
       await dependencies.repository.registerArtifactPointer({
         projectId,
         nodeId,
         kind: 'pi-session',
         storageKey: session.storageKey,
+        ...(attemptId ? { attemptId } : {}),
+        ...(signal ? { signal } : {}),
       })
-      const { displayText, prepared, artifact } = await generateValidatedArtifact({
-        stage,
-        context,
-        session,
-        initialPrompt: prompt,
-        prepareResult: dependencies.prepareResult,
-        writeArtifact: dependencies.writeArtifact,
-      })
-      await dependencies.commitResult(context, prepared, artifact)
-      await dependencies.runStageEffect(context, prepared, artifact)
-      await dependencies.repository.persistStreamLog(
+      signal?.throwIfAborted()
+      await transitionStageNode(
+        dependencies.transitionNodeStatus,
         projectId,
         nodeId,
-        stage,
-        displayText
+        'success',
+        attemptId,
+        signal,
       )
-      streamBus.markDone(streamKey)
-      await session.close()
-      closed = true
-      await dependencies.transitionNodeStatus(nodeId, 'success')
+      signal?.throwIfAborted()
+      if (stage === 'INGEST' && dependencies.scheduleMediaNarration) {
+        await scheduleMediaWithoutMasking(dependencies.scheduleMediaNarration, {
+          projectId,
+          nodeId,
+          ...(attemptId ? { attemptId } : {}),
+          ...(signal ? { signal } : {}),
+        })
+      }
       await advanceWithoutMasking(
         dependencies.advancePipeline,
         projectId,
-        nodeId
+        nodeId,
+        attemptId,
+        signal,
       )
     } catch (error) {
       if (session && !closed) await closeWithoutMasking(session)
+      if (signal?.aborted) {
+        throw signal.reason ?? error
+      }
       const cleanupErrors: unknown[] = []
+      if (session && !sessionPointerAttempted) {
+        try {
+          sessionPointerAttempted = true
+          await dependencies.repository.registerArtifactPointer({
+            projectId,
+            nodeId,
+            kind: 'pi-session',
+            storageKey: session.storageKey,
+            ...(attemptId ? { attemptId } : {}),
+            ...(signal ? { signal } : {}),
+          })
+        } catch (cleanupError) {
+          cleanupErrors.push(cleanupError)
+        }
+      }
+      if (error instanceof ProviderQueueDeferral) {
+        try {
+          await dependencies.repository.persistStreamLog({
+            projectId,
+            nodeId,
+            stage,
+            text: streamBus.getSnapshot(streamKey).text,
+            ...(attemptId ? { attemptId } : {}),
+            ...(signal ? { signal } : {}),
+          })
+        } catch (cleanupError) {
+          cleanupErrors.push(cleanupError)
+        }
+        streamBus.markDone(streamKey)
+        if (cleanupErrors.length > 0) {
+          throw new AggregateError(
+            [error, ...cleanupErrors],
+            `Provider 等待已排队但阶段清理不完整：${stage}`,
+          )
+        }
+        throw error
+      }
       try {
-        await dependencies.transitionNodeStatus(nodeId, 'failed')
+        await transitionStageNode(
+          dependencies.transitionNodeStatus,
+          projectId,
+          nodeId,
+          'failed',
+          attemptId,
+          signal,
+        )
       } catch (cleanupError) {
         cleanupErrors.push(cleanupError)
       }
@@ -182,18 +278,21 @@ export function createStageRunner(
       }
       // 落已流出的部分文本（可能为空）；持久化失败不掩盖主错误，并入清理链。
       try {
-        await dependencies.repository.persistStreamLog(
+        await dependencies.repository.persistStreamLog({
           projectId,
           nodeId,
           stage,
-          streamBus.getSnapshot(streamKey).text
-        )
+          text: streamBus.getSnapshot(streamKey).text,
+          ...(attemptId ? { attemptId } : {}),
+          ...(signal ? { signal } : {}),
+        })
       } catch (cleanupError) {
         cleanupErrors.push(cleanupError)
       }
+      const projected = classifyWorkflowError(error, { stage })
       streamBus.markError(streamKey, {
         stage,
-        message: error instanceof Error ? error.message : String(error),
+        message: projected.message,
       })
       if (cleanupErrors.length > 0) {
         throw new AggregateError(
@@ -203,29 +302,5 @@ export function createStageRunner(
       }
       throw error
     }
-  }
-}
-
-async function advanceWithoutMasking(
-  advance: StageRunnerDependencies['advancePipeline'],
-  projectId: string,
-  nodeId: string
-): Promise<void> {
-  try {
-    await advance(projectId, nodeId)
-  } catch (error) {
-    console.error('[director] 下游自动推进失败', {
-      projectId,
-      nodeId,
-      message: error instanceof Error ? error.message : String(error),
-    })
-  }
-}
-
-async function closeWithoutMasking(session: DirectorSession): Promise<void> {
-  try {
-    await session.close()
-  } catch {
-    // 主失败原因已由 stage runner 捕获；close 错误不覆盖它。
   }
 }

@@ -88,13 +88,13 @@ function FilmCard({
                   : "(min-width: 1024px) 33vw, 100vw"
             }
             className={cn(
-              "object-cover transition duration-500 group-hover:scale-[1.015]",
+              "object-cover transition duration-slow ease-standard group-hover:scale-[1.015]",
               previewing && "opacity-0"
             )}
           />
           <video
             className={cn(
-              "pointer-events-none absolute inset-0 size-full object-cover opacity-0 transition-opacity duration-300",
+              "pointer-events-none absolute inset-0 size-full object-cover opacity-0 transition-opacity duration-narrative ease-standard",
               previewing && "opacity-100"
             )}
             src={film.videoSrc}
@@ -108,7 +108,7 @@ function FilmCard({
           <span className="absolute top-4 left-4 rounded-sm border border-white/20 bg-black/45 px-2 py-1 font-mono text-[10px] text-white backdrop-blur-md">
             {film.category}
           </span>
-          <span className="absolute top-4 right-4 flex size-10 items-center justify-center rounded-full bg-white text-black transition-transform duration-300 group-hover:scale-110">
+          <span className="absolute top-4 right-4 flex size-10 items-center justify-center rounded-full bg-white text-black transition-transform duration-narrative ease-standard group-hover:scale-110">
             <Play className="size-4 fill-current" aria-hidden="true" />
           </span>
         </span>

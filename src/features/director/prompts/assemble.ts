@@ -16,7 +16,8 @@ export const scoreAssemblePromptInputSchema = z
     styleBible: z.string().min(1),
     shotPlan: directorShotPlanSchema,
     audioAllocation: audioAllocationSchema,
-    renderedArtifactKeys: z.array(z.string().min(1)).min(1),
+    renderedArtifactKeys: z.array(z.string().min(1)),
+    skippedRenderLanes: z.array(z.string().regex(/^S\d{3}$/)),
   })
   .strict()
 
@@ -33,6 +34,7 @@ export function buildScoreAssemblePrompt(input: ScoreAssemblePromptInput): strin
 3. 配乐基调、情绪与色彩必须对齐 style bible。
 4. 默认使用硬切；只有合同明确要求时使用转场或 J/L cut。
 5. 生成草稿成片与可追踪的合成清单；任一缺失产物必须结构化失败。
+6. skipped render lanes 是用户已确认的降级泳道，只登记为占位候选，不虚构产物路径。
 
 style bible：
 ${parsed.styleBible}
@@ -42,6 +44,8 @@ audio allocation：
 ${JSON.stringify(parsed.audioAllocation)}
 rendered artifact keys：
 ${JSON.stringify(parsed.renderedArtifactKeys)}
+skipped render lanes：
+${JSON.stringify(parsed.skippedRenderLanes)}
 
 返回合成清单，不虚构不存在的本地路径。`
 }

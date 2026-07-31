@@ -20,6 +20,21 @@ import {
   getNodeStreamContext,
   listProjects,
 } from '@/features/canvas/queries'
+import {
+  getProjectRouteState,
+} from '@/features/projects/project-compatibility'
+import {
+  activeWorkflowVersionFor,
+  type ProjectWorkflowKind,
+} from '@/lib/workflow/project-workflow-registry'
+
+// 被测模块经 currentWorkspaceId() 取归属（PLAN-002 阶段 B）；单测没有请求入口，
+// 把读取口 mock 成历史单工作区 id，与用例 seed 的数据保持一致。
+vi.mock('@/lib/auth/workspace-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/workspace-context')>()),
+  currentWorkspaceId: () => '00000000-0000-4000-8000-000000000001',
+  currentUserId: () => 'test-user',
+}))
 
 const WORKSPACE_ID = '00000000-0000-4000-8000-000000000001'
 const OTHER_WORKSPACE_ID = '00000000-0000-4000-8000-000000000002'
@@ -202,17 +217,97 @@ describe('artifact and stream projections', () => {
   })
 })
 
-it('listProjects excludes projects from other workspaces', async () => {
-  await seedProject(database.db, WORKSPACE_ID, '本地项目')
-  await seedProject(database.db, OTHER_WORKSPACE_ID, '其他项目')
-  await expect(listProjects()).resolves.toMatchObject([{ title: '本地项目' }])
+it('listProjects matches every kind to its own active version', async () => {
+  await seedProject(
+    database.db,
+    WORKSPACE_ID,
+    '文稿项目',
+    randomUUID(),
+    activeWorkflowVersionFor('script')
+  )
+  await seedProject(
+    database.db,
+    WORKSPACE_ID,
+    '录音项目',
+    randomUUID(),
+    activeWorkflowVersionFor('audio'),
+    'audio'
+  )
+  await seedProject(
+    database.db,
+    WORKSPACE_ID,
+    '网站项目',
+    randomUUID(),
+    activeWorkflowVersionFor('website'),
+    'website'
+  )
+  await seedProject(database.db, WORKSPACE_ID, '旧版竖屏项目')
+  await seedProject(
+    database.db,
+    WORKSPACE_ID,
+    '错配版本项目',
+    randomUUID(),
+    activeWorkflowVersionFor('audio'),
+    'website'
+  )
+  await seedProject(
+    database.db,
+    OTHER_WORKSPACE_ID,
+    '其他项目',
+    randomUUID(),
+    activeWorkflowVersionFor('website'),
+    'website'
+  )
+  await expect(listProjects()).resolves.toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ title: '文稿项目', kind: 'script' }),
+      expect.objectContaining({ title: '录音项目', kind: 'audio' }),
+      expect.objectContaining({ title: '网站项目', kind: 'website' }),
+    ])
+  )
+  await expect(listProjects()).resolves.toHaveLength(3)
+})
+
+it('getProjectRouteState evaluates compatibility by the project row kind', async () => {
+  const supportedId = await seedProject(
+    database.db,
+    WORKSPACE_ID,
+    '横屏项目',
+    randomUUID(),
+    activeWorkflowVersionFor('script')
+  )
+  const supportedAudioId = await seedProject(
+    database.db,
+    WORKSPACE_ID,
+    '录音项目',
+    randomUUID(),
+    activeWorkflowVersionFor('audio'),
+    'audio'
+  )
+  const mismatchedId = await seedProject(
+    database.db,
+    WORKSPACE_ID,
+    '错配项目',
+    randomUUID(),
+    activeWorkflowVersionFor('audio'),
+    'website'
+  )
+  const legacyId = await seedProject(database.db, WORKSPACE_ID, '旧版项目')
+
+  await expect(getProjectRouteState(supportedId)).resolves.toBe('supported')
+  await expect(getProjectRouteState(supportedAudioId)).resolves.toBe('supported')
+  await expect(getProjectRouteState(mismatchedId)).resolves.toBe('legacy')
+  await expect(getProjectRouteState(legacyId)).resolves.toBe('legacy')
+  await expect(getProjectRouteState(randomUUID())).resolves.toBe('missing')
 })
 
 async function seedProject(
   db: Db,
   workspaceId: string,
   title: string,
-  id = randomUUID()
+  id = randomUUID(),
+  workflowVersion = 'canvas-test-v1',
+  workflowKind: ProjectWorkflowKind = 'script'
 ): Promise<string> {
   await db
     .insert(workspaces)
@@ -227,7 +322,8 @@ async function seedProject(
     id,
     title,
     script: '',
-    workflowVersion: 'canvas-test-v1',
+    workflowKind,
+    workflowVersion,
     exportSettings: { schemaVersion: 1, settings: {} },
   })
   return id

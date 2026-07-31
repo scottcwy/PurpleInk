@@ -1,0 +1,700 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: zh-CN
+branch: yusheng/two-part-merge
+nodes_managed: true
+exported_at: "2026-07-31T04:30:23Z"
+modules:
+    "":
+        dir_name: PurpleInk AI SaaS 多包工作区（Monorepo）
+        title: PurpleInk AI SaaS 多包工作区（Monorepo）
+        scope:
+            - .gitignore
+            - package.json
+            - pnpm-workspace.yaml
+            - next.config.ts
+            - tsconfig.json
+            - vitest.config.ts
+            - drizzle.config.ts
+            - eslint.config.mjs
+            - .prettierrc
+            - .dockerignore
+            - .env.example
+            - .gitattributes
+            - .prettierignore
+            - AGENTS.md
+            - Agent采集设计.md
+            - Dockerfile
+            - LICENSE
+            - PRD_PurpleInk.md
+            - README.md
+            - docker-compose.dev.yml
+            - docker-compose.prod.yml
+            - pnpm-lock.yaml
+            - postcss.config.mjs
+            - vitest.pg.config.ts
+        source_files: []
+        children:
+            - deploy_infra
+            - docs
+            - procedural_sfx_lib
+            - scripts_and_tools
+            - server_service
+            - tests
+            - web_app
+        depends_on: []
+        related_to: []
+    deploy_infra:
+        dir_name: 反向代理与部署配置
+        title: 反向代理与部署配置
+        scope:
+            - deploy/
+            - config/
+            - .claude/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: server_service/server_api
+            - path: server_service/tts_engine
+    docs:
+        dir_name: 项目文档与问题追踪体系
+        title: 项目文档与问题追踪体系
+        scope:
+            - docs/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: server_service/server_api
+            - path: web_app/lib/shared_utils
+    procedural_sfx_lib:
+        dir_name: 程序化音效生成库 (@purpleink_procedural-sfx)
+        title: 程序化音效生成库 (@purpleink/procedural-sfx)
+        scope:
+            - packages/procedural-sfx/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: server_service/compose_orchestration
+            - path: web_app/features/audio
+            - path: web_app/features/render
+    scripts_and_tools:
+        dir_name: 运维脚本与工具集（开发、迁移、恢复、验证）
+        title: 运维脚本与工具集（开发、迁移、恢复、验证）
+        scope:
+            - scripts/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/lib/db
+    server_service:
+        dir_name: Purple Ink 服务端（视频渲染与采集服务）
+        title: Purple Ink 服务端（视频渲染与采集服务）
+        scope:
+            - server/
+        source_files: []
+        children:
+            - server_service/adapter_layer
+            - server_service/capture_pipeline
+            - server_service/compose_orchestration
+            - server_service/server_api
+            - server_service/shared_lib
+            - server_service/tts_engine
+        depends_on: []
+        related_to: []
+    server_service/adapter_layer:
+        dir_name: Capture 适配器（HyperFrames 产物生成）
+        title: Capture 适配器（HyperFrames 产物生成）
+        scope:
+            - server/src/adapter/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: server_service/capture_pipeline
+            - path: server_service/compose_orchestration
+    server_service/capture_pipeline:
+        dir_name: AI 驱动的网站采集流水线
+        title: AI 驱动的网站采集流水线
+        scope:
+            - server/src/capture/
+            - server/src/types/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: server_service/adapter_layer
+            - path: server_service/compose_orchestration
+            - path: server_service/shared_lib
+    server_service/compose_orchestration:
+        dir_name: Compose 视频编排管线
+        title: Compose 视频编排管线
+        scope:
+            - server/src/compose/
+        source_files: []
+        children:
+            - server_service/compose_orchestration/chapters_pipeline
+            - server_service/compose_orchestration/render_and_pipeline
+        depends_on: []
+        related_to:
+            - path: procedural_sfx_lib
+            - path: server_service/adapter_layer
+            - path: server_service/capture_pipeline
+            - path: server_service/tts_engine
+    server_service/compose_orchestration/chapters_pipeline:
+        dir_name: 五章节 HyperFrames 子编排管线
+        title: 五章节 HyperFrames 子编排管线
+        scope:
+            - server/src/compose/chapters/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    server_service/compose_orchestration/render_and_pipeline:
+        dir_name: Compose 渲染与管线编排
+        title: Compose 渲染与管线编排
+        scope:
+            - server/src/compose/render.ts
+            - server/src/compose/run-pipeline.ts
+            - server/src/compose/project.ts
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    server_service/server_api:
+        dir_name: HTTP API 服务与渲染任务调度
+        title: HTTP API 服务与渲染任务调度
+        scope:
+            - server/src/server/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: deploy_infra
+            - path: docs
+            - path: tests
+            - path: web_app/features/website
+            - path: web_app/lib/shared_utils
+    server_service/shared_lib:
+        dir_name: 服务端共享工具与安全策略库
+        title: 服务端共享工具与安全策略库
+        scope:
+            - server/src/lib/
+            - server/src/security/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: server_service/capture_pipeline
+            - path: server_service/tts_engine
+    server_service/tts_engine:
+        dir_name: TTS 语音合成与旁白编排引擎
+        title: TTS 语音合成与旁白编排引擎
+        scope:
+            - server/src/tts/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: deploy_infra
+            - path: server_service/compose_orchestration
+            - path: server_service/shared_lib
+            - path: tests
+            - path: web_app/features/audio
+    tests:
+        dir_name: Vitest 测试套件（契约、集成与 UI 烟测）
+        title: Vitest 测试套件（契约、集成与 UI 烟测）
+        scope:
+            - tests/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: server_service/server_api
+            - path: server_service/tts_engine
+            - path: web_app/api_routes/auth_routes
+    web_app:
+        dir_name: PurpleInk Web 应用（Next.js App Router）
+        title: PurpleInk Web 应用（Next.js App Router）
+        scope:
+            - src/
+            - public/
+        source_files: []
+        children:
+            - web_app/api_routes
+            - web_app/app_routes
+            - web_app/components
+            - web_app/features
+            - web_app/lib
+            - web_app/playbook_design_system
+        depends_on: []
+        related_to: []
+    web_app/api_routes:
+        dir_name: Next.js API 路由聚合层（App Router）
+        title: Next.js API 路由聚合层（App Router）
+        scope:
+            - src/app/api/
+        source_files: []
+        children:
+            - web_app/api_routes/auth_routes
+            - web_app/api_routes/billing_routes
+            - web_app/api_routes/director_routes
+            - web_app/api_routes/projects_routes
+            - web_app/api_routes/render_routes
+        depends_on: []
+        related_to: []
+    web_app/api_routes/auth_routes:
+        dir_name: 认证 API 路由（Next.js App Router）
+        title: 认证 API 路由（Next.js App Router）
+        scope:
+            - src/app/api/auth/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: tests
+            - path: web_app/app_routes/auth_routes
+    web_app/api_routes/billing_routes:
+        dir_name: 计费与兑换码 API 路由
+        title: 计费与兑换码 API 路由
+        scope:
+            - src/app/api/billing/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/app_routes/products_app
+    web_app/api_routes/director_routes:
+        dir_name: Director 编排 API 路由
+        title: Director 编排 API 路由
+        scope:
+            - src/app/api/director/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/app_routes/products_app
+    web_app/api_routes/projects_routes:
+        dir_name: 项目资源 API 路由
+        title: 项目资源 API 路由
+        scope:
+            - src/app/api/projects/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/app_routes/products_app
+    web_app/api_routes/render_routes:
+        dir_name: 渲染任务与导出 API 路由
+        title: 渲染任务与导出 API 路由
+        scope:
+            - src/app/api/render/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/app_routes/products_app
+            - path: web_app/features/director
+            - path: web_app/features/render
+    web_app/app_routes:
+        dir_name: Next.js App Router 应用路由层
+        title: Next.js App Router 应用路由层
+        scope:
+            - src/app/
+        source_files: []
+        children:
+            - web_app/app_routes/api_routes
+            - web_app/app_routes/app_shell
+            - web_app/app_routes/auth_routes
+            - web_app/app_routes/playbook_docs
+            - web_app/app_routes/products_app
+        depends_on: []
+        related_to: []
+    web_app/app_routes/api_routes:
+        dir_name: Next.js API 路由层（RESTful 接口）
+        title: Next.js API 路由层（RESTful 接口）
+        scope:
+            - src/app/api/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    web_app/app_routes/app_shell:
+        dir_name: 应用根布局与未接线路由壳组件
+        title: 应用根布局与未接线路由壳组件
+        scope:
+            - src/app/layout.tsx
+            - src/app/providers.tsx
+            - src/app/_components/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    web_app/app_routes/auth_routes:
+        dir_name: 认证页面与表单（登录_注册_重置密码）
+        title: 认证页面与表单（登录/注册/重置密码）
+        scope:
+            - src/app/(auth)/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/api_routes/auth_routes
+    web_app/app_routes/playbook_docs:
+        dir_name: Playbook 组件手册与动效意图对照台
+        title: Playbook 组件手册与动效意图对照台
+        scope:
+            - src/app/playbook/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    web_app/app_routes/products_app:
+        dir_name: 产品应用路由组（Products App Routes）
+        title: 产品应用路由组（Products App Routes）
+        scope:
+            - src/app/products/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/api_routes/billing_routes
+            - path: web_app/api_routes/director_routes
+            - path: web_app/api_routes/projects_routes
+            - path: web_app/api_routes/render_routes
+    web_app/components:
+        dir_name: UI 组件库与营销页面组件
+        title: UI 组件库与营销页面组件
+        scope:
+            - src/components/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/lib/hooks
+            - path: web_app/lib/motion
+            - path: web_app/playbook_design_system
+    web_app/features:
+        dir_name: PurpleInk 特性域集合（Features）
+        title: PurpleInk 特性域集合（Features）
+        scope:
+            - src/features/
+        source_files: []
+        children:
+            - web_app/features/ai
+            - web_app/features/artifacts
+            - web_app/features/audio
+            - web_app/features/auth
+            - web_app/features/billing
+            - web_app/features/canvas
+            - web_app/features/credentials
+            - web_app/features/director
+            - web_app/features/navigation
+            - web_app/features/projects
+            - web_app/features/render
+            - web_app/features/routing
+            - web_app/features/usage
+            - web_app/features/website
+        depends_on: []
+        related_to: []
+    web_app/features/ai:
+        dir_name: AI 提供商网关与调度子系统
+        title: AI 提供商网关与调度子系统
+        scope:
+            - src/features/ai/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/features/billing
+            - path: web_app/lib/config
+    web_app/features/artifacts:
+        dir_name: 产物（Artifacts）版本管理与下载预览
+        title: 产物（Artifacts）版本管理与下载预览
+        scope:
+            - src/features/artifacts/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/features/director
+    web_app/features/audio:
+        dir_name: 音频处理与转写特性模块
+        title: 音频处理与转写特性模块
+        scope:
+            - src/features/audio/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: procedural_sfx_lib
+            - path: server_service/tts_engine
+    web_app/features/auth:
+        dir_name: 认证域（登录、注册、验证码与会话管理）
+        title: 认证域（登录、注册、验证码与会话管理）
+        scope:
+            - src/features/auth/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/lib/auth
+    web_app/features/billing:
+        dir_name: 计费与额度管理（Billing & Quota）
+        title: 计费与额度管理（Billing & Quota）
+        scope:
+            - src/features/billing/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/features/ai
+            - path: web_app/features/usage
+    web_app/features/canvas:
+        dir_name: Canvas 画布特性层（项目工作流、节点状态机与布局计算）
+        title: Canvas 画布特性层（项目工作流、节点状态机与布局计算）
+        scope:
+            - src/features/canvas/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/features/director
+    web_app/features/credentials:
+        dir_name: 凭据信封加密与提供者凭据存储
+        title: 凭据信封加密与提供者凭据存储
+        scope:
+            - src/features/credentials/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/lib/db
+    web_app/features/director:
+        dir_name: Director 视频导演流水线与阶段执行器
+        title: Director 视频导演流水线与阶段执行器
+        scope:
+            - src/features/director/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/api_routes/render_routes
+            - path: web_app/features/artifacts
+            - path: web_app/features/canvas
+            - path: web_app/features/render
+            - path: web_app/lib/queue
+    web_app/features/navigation:
+        dir_name: 应用导航与侧栏壳层
+        title: 应用导航与侧栏壳层
+        scope:
+            - src/features/navigation/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    web_app/features/projects:
+        dir_name: 项目管理与执行特性模块
+        title: 项目管理与执行特性模块
+        scope:
+            - src/features/projects/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    web_app/features/render:
+        dir_name: 分镜渲染与成片导出服务
+        title: 分镜渲染与成片导出服务
+        scope:
+            - src/features/render/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: procedural_sfx_lib
+            - path: web_app/api_routes/render_routes
+            - path: web_app/features/director
+            - path: web_app/lib/db
+            - path: web_app/lib/storage
+    web_app/features/routing:
+        dir_name: 路由配置持久化仓储（媒体与模型）
+        title: 路由配置持久化仓储（媒体与模型）
+        scope:
+            - src/features/routing/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/lib/db
+    web_app/features/usage:
+        dir_name: AI 用量统计与投影服务
+        title: AI 用量统计与投影服务
+        scope:
+            - src/features/usage/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/features/billing
+    web_app/features/website:
+        dir_name: 网站介绍视频工作流引擎
+        title: 网站介绍视频工作流引擎
+        scope:
+            - src/features/website/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: server_service/server_api
+            - path: web_app/lib/queue
+    web_app/lib:
+        dir_name: PurpleInk 共享库（src_lib）
+        title: PurpleInk 共享库（src/lib）
+        scope:
+            - src/lib/
+        source_files: []
+        children:
+            - web_app/lib/auth
+            - web_app/lib/config
+            - web_app/lib/db
+            - web_app/lib/determinism
+            - web_app/lib/hooks
+            - web_app/lib/motion
+            - web_app/lib/queue
+            - web_app/lib/shared_utils
+            - web_app/lib/storage
+            - web_app/lib/stream
+            - web_app/lib/workflow
+        depends_on: []
+        related_to: []
+    web_app/lib/auth:
+        dir_name: 会话 Cookie 与异步工作区上下文
+        title: 会话 Cookie 与异步工作区上下文
+        scope:
+            - src/lib/auth/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/features/auth
+    web_app/lib/config:
+        dir_name: 站点配置与元数据管理
+        title: 站点配置与元数据管理
+        scope:
+            - src/lib/config/
+            - src/lib/site-config.ts
+            - src/lib/metadata.ts
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/features/ai
+    web_app/lib/db:
+        dir_name: PostgreSQL 数据访问层与 Drizzle ORM 集成
+        title: PostgreSQL 数据访问层与 Drizzle ORM 集成
+        scope:
+            - src/lib/db/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: scripts_and_tools
+            - path: web_app/features/credentials
+            - path: web_app/features/render
+            - path: web_app/features/routing
+    web_app/lib/determinism:
+        dir_name: Shot 渲染确定性违规检测
+        title: Shot 渲染确定性违规检测
+        scope:
+            - src/lib/determinism/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    web_app/lib/hooks:
+        dir_name: React 自定义 Hooks 库
+        title: React 自定义 Hooks 库
+        scope:
+            - src/lib/hooks/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/components
+    web_app/lib/motion:
+        dir_name: Motion 动效配置与变体库
+        title: Motion 动效配置与变体库
+        scope:
+            - src/lib/motion/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/components
+            - path: web_app/playbook_design_system
+    web_app/lib/queue:
+        dir_name: 进程内任务队列与执行调度
+        title: 进程内任务队列与执行调度
+        scope:
+            - src/lib/queue/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/features/director
+            - path: web_app/features/website
+    web_app/lib/shared_utils:
+        dir_name: 共享工具与 API 客户端
+        title: 共享工具与 API 客户端
+        scope:
+            - src/lib/api.ts
+            - src/lib/utils.ts
+            - src/lib/theme-mode.ts
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: docs
+            - path: server_service/server_api
+    web_app/lib/storage:
+        dir_name: 二进制产物存储适配器（本地文件系统实现）
+        title: 二进制产物存储适配器（本地文件系统实现）
+        scope:
+            - src/lib/storage/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/features/render
+    web_app/lib/stream:
+        dir_name: 进程内流式与状态总线（StreamBus & StatusBus）
+        title: 进程内流式与状态总线（StreamBus & StatusBus）
+        scope:
+            - src/lib/stream/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    web_app/lib/workflow:
+        dir_name: 工作流版本与项目工作流注册表
+        title: 工作流版本与项目工作流注册表
+        scope:
+            - src/lib/workflow/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    web_app/playbook_design_system:
+        dir_name: 组件手册 Playbook（设计系统展示与动效意图对照台）
+        title: 组件手册 Playbook（设计系统展示与动效意图对照台）
+        scope:
+            - src/app/playbook/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: web_app/components
+            - path: web_app/lib/motion

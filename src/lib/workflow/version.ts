@@ -9,8 +9,8 @@ export interface WorkflowVersionV1 {
 export const ACTIVE_WORKFLOW_VERSION = Object.freeze({
   workflow: 'cvc-v3-foundation',
   contracts: 'cvc-arch-v3.0.0',
-  compiler: 'legacy-html-v1',
-  hyperframes: 'legacy-cvc-render-v1',
+  compiler: 'fabricate-landscape-1920x1080-v1',
+  hyperframes: 'landscape-render-1920x1080-v1',
   renderImage: 'node22-playwright1.61.1-ffmpeg-static5.3.0',
 } satisfies WorkflowVersionV1)
 

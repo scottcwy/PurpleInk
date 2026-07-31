@@ -5,16 +5,15 @@ import {
   resolutionForPreset,
   type ShotLaneSeed,
 } from '@/features/canvas/contracts'
-import type { NarrationInput, NarrationResult } from '@/features/audio'
 import { fabricatePromptInputSchema } from './prompts/fabricate'
 import {
-  buildMeasuredAudioAllocation,
-  buildMeasuredAudioManifest,
   shotIdFor,
 } from './audio-timing'
 import { ingestStageResultSchema, type ScriptUnit } from './schemas/ingest'
 import { directorShotPlanSchema } from './schemas/director-shot-plan'
 import type { DirectorStageContext } from './runtime-repository'
+import { ArtifactValidationError } from './artifact-validation-error'
+import { shotSpecTargetSchema } from './prompts/shot-spec'
 
 const renderSpecSchema = z
   .object({
@@ -32,25 +31,19 @@ export type PreparedStageResult = {
   renderSpec?: z.infer<typeof renderSpecSchema>
 }
 
-export interface StageResultDependencies {
-  synthesizeNarration: (input: NarrationInput) => Promise<NarrationResult>
-}
-
 /**
  * 将不可信模型文本归一化为可提交的阶段结果。
  *
- * INGEST 是异步的：音频时长必须先由真实 TTS 合成并实测，
- * 才能派生出 allocation 与后续 FABRICATE 的帧数。合成失败即整个阶段失败，
- * 不产出任何占位产物。
+ * INGEST 只提交文本与镜头来源绑定；真实 TTS 由独立媒体任务生成，
+ * 依赖真实帧数的 FABRICATE 会在媒体产物就绪后再领取。
  */
 export async function prepareStageResult(
   context: DirectorStageContext,
-  rawContent: string,
-  dependencies: StageResultDependencies = defaultDependencies()
+  rawContent: string
 ): Promise<PreparedStageResult> {
   if (context.stage === 'INGEST') {
     const parsed = ingestStageResultSchema.parse(parseJsonObject(rawContent))
-    return prepareIngestResult(context, parsed.scriptUnits, dependencies)
+    return prepareIngestResult(parsed.scriptUnits)
   }
 
   if (context.stage === 'FABRICATE') {
@@ -80,40 +73,67 @@ export async function prepareStageResult(
 
   if (context.stage === 'SHOT_SPEC') {
     const parsed = directorShotPlanSchema.parse(parseJsonObject(rawContent))
+    const { target } = z
+      .object({ target: shotSpecTargetSchema })
+      .passthrough()
+      .parse(context.directorInput)
+    const errors = validateShotSpecTarget(parsed.shots, target)
+    if (errors.length > 0) throw new ArtifactValidationError(errors)
     return { content: JSON.stringify(parsed) }
   }
 
   return { content: rawContent }
 }
 
+function validateShotSpecTarget(
+  shots: Array<{
+    id: string
+    sourceUnitIds?: unknown
+    audioBinding?: unknown
+  }>,
+  target: {
+    laneKey: string
+    sourceUnitId: string
+  }
+): string[] {
+  const errors: string[] = []
+  if (shots.length !== 1) {
+    errors.push(`shots 必须且只能包含当前镜头 ${target.laneKey}`)
+    return errors
+  }
+  const [shot] = shots
+  if (!shot || shot.id !== target.laneKey) {
+    errors.push(`shots.0.id 必须为 ${target.laneKey}`)
+    return errors
+  }
+  if (
+    !Array.isArray(shot.sourceUnitIds) ||
+    shot.sourceUnitIds.length !== 1 ||
+    shot.sourceUnitIds[0] !== target.sourceUnitId
+  ) {
+    errors.push(`shots.0.sourceUnitIds 必须且只能包含 ${target.sourceUnitId}`)
+  }
+  const binding =
+    shot.audioBinding &&
+    typeof shot.audioBinding === 'object' &&
+    !Array.isArray(shot.audioBinding)
+      ? shot.audioBinding as Record<string, unknown>
+      : null
+  if (binding?.unitId !== target.sourceUnitId) {
+    errors.push(`shots.0.audioBinding.unitId 必须为 ${target.sourceUnitId}`)
+  }
+  return errors
+}
+
 async function prepareIngestResult(
-  context: DirectorStageContext,
-  scriptUnits: ScriptUnit[],
-  dependencies: StageResultDependencies
+  scriptUnits: ScriptUnit[]
 ): Promise<PreparedStageResult> {
-  const narration = await dependencies.synthesizeNarration({
-    projectId: context.projectId,
-    nodeId: context.nodeId,
-    units: scriptUnits.map(({ unitId, text }) => ({ unitId, text })),
-  })
-  const audioManifest = buildMeasuredAudioManifest(scriptUnits, narration)
-  const audioAllocation = buildMeasuredAudioAllocation(scriptUnits, audioManifest)
   return {
-    content: JSON.stringify({ scriptUnits, audioManifest, audioAllocation }),
+    content: JSON.stringify({ scriptUnits }),
     ingestShots: scriptUnits.map((unit, index) => ({
       shotId: shotIdFor(index),
       sourceUnit: unit,
     })),
-  }
-}
-
-/** 真实 TTS 只在服务端可用；动态导入避免把 server-only 拉进纯归一化路径。 */
-function defaultDependencies(): StageResultDependencies {
-  return {
-    synthesizeNarration: async (input) => {
-      const { synthesizeNarration } = await import('@/features/audio/narration')
-      return synthesizeNarration(input)
-    },
   }
 }
 

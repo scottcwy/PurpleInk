@@ -1,0 +1,205 @@
+name: CI
+
+# 本仓库的开发机是 Windows，CI 跑 ubuntu-latest：任何依赖 path.sep、盘符或
+# PowerShell 的测试都必须写成跨平台的，否则这里恒红（已修的两例见
+# src/features/render/media-ffmpeg.test.ts 与 src/lib/storage/local-fs.test.ts）。
+#
+# 门禁顺序对齐 AGENTS.md §8：lint → typecheck → test → verify:v3 → build。
+# 刻意不跑 `pnpm format:check`：当前仓库有 428 个文件不符合 Prettier 配置，
+# 接进来只会得到一个恒红的 job；要开这一项得先做一次全仓格式化并单独提交。
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  quality:
+    name: lint / typecheck / test / verify / build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm 版本取自 package.json 的 packageManager 字段（pnpm@10.30.0），
+      # 不在这里重复写死；必须排在 setup-node 之前，cache: pnpm 才找得到 store。
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: install
+        run: pnpm install --frozen-lockfile
+
+      # 不是可选步骤：src/features/render/* 与 director 的 fabricate 探针测试会真的
+      # chromium.launch()，缺浏览器时 13 个用例直接红（首次 CI 已实测）。pnpm install
+      # 时 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD 未设置也不会自动下载——浏览器二进制由
+      # playwright CLI 单独管理，必须显式装。
+      - name: cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      # --with-deps 装的是 Chromium 的系统库（apt，需要 runner 的免密 sudo）；
+      # 缓存命中时浏览器二进制不会重复下载，这条命令是幂等的。
+      - name: install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: lint
+        run: pnpm lint
+
+      - name: typecheck (web)
+        run: pnpm typecheck
+
+      - name: typecheck (server)
+        run: pnpm --filter purpleink-server typecheck
+
+      - name: typecheck (procedural-sfx)
+        run: pnpm --filter @purpleink/procedural-sfx typecheck
+
+      # 根 vitest 的 include 只覆盖 src/** 与 tests/**，packages/* 要单独跑。
+      - name: test (web)
+        run: pnpm test
+
+      - name: test (procedural-sfx)
+        run: pnpm --filter @purpleink/procedural-sfx test
+
+      - name: verify:v3 (architecture gate)
+        run: pnpm verify:v3
+
+      # 字体已改为 geist 包自托管（next/font/local），构建期不再访问
+      # fonts.googleapis.com；这一步同时守住那条依赖不被改回去。
+      - name: build
+        run: pnpm build
+
+  postgres:
+    name: postgres migrations + pg tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17.5-alpine
+        env:
+          POSTGRES_DB: cvc
+          POSTGRES_USER: cvc
+          POSTGRES_PASSWORD: cvc_ci_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cvc -d cvc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: install
+        run: pnpm install --frozen-lockfile
+
+      # thumbnail.integration.pg.test.ts 走真实 Playwright 抽帧，理由同 quality job。
+      - name: cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # pg 测试库与 scripts/setup/postgres-init.sql 保持同名。
+      - name: create test database
+        env:
+          PGPASSWORD: cvc_ci_only
+        run: psql -h 127.0.0.1 -U cvc -d cvc -c 'CREATE DATABASE cvc_test OWNER cvc'
+
+      # vitest.pg.config.ts 顶层调用 process.loadEnvFile('.env.local')，文件缺失
+      # 会直接抛错，所以必须先落盘。这里只有 CI 一次性数据库口令，没有任何真实
+      # secret；.env* 已在 .gitignore 内，不会被提交。
+      - name: write .env.local
+        run: |
+          {
+            echo 'DATABASE_URL=postgres://cvc:cvc_ci_only@127.0.0.1:5432/cvc'
+            echo 'TEST_DATABASE_URL=postgres://cvc:cvc_ci_only@127.0.0.1:5432/cvc_test'
+          } > .env.local
+
+      # AGENTS.md §8：涉及数据库时 migration 必须连续执行两次，第二次必须幂等通过。
+      - name: db:migrate (first pass)
+        run: pnpm db:migrate
+
+      - name: db:migrate (second pass, idempotency)
+        run: pnpm db:migrate
+
+      - name: test:pg
+        run: pnpm test:pg
+
+  images:
+    name: container images build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # 三个镜像都只构建、不推送：docker-compose.prod.yml 走宿主机本地 build，
+      # 没有 registry 环节，这个 job 的价值是提前暴露构建期断裂（缺依赖、
+      # 构建阶段需要出网等），而不是产出可分发产物。
+      - name: build next image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: runtime
+          push: false
+          cache-from: type=gha,scope=next
+          cache-to: type=gha,mode=max,scope=next
+
+      - name: build migrate image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: migrate
+          push: false
+          cache-from: type=gha,scope=migrate
+          cache-to: type=gha,mode=max,scope=migrate
+
+      - name: build worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./server/Dockerfile
+          push: false
+          cache-from: type=gha,scope=worker
+          cache-to: type=gha,mode=max,scope=worker
+
+      - name: build reverse-proxy image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./deploy/reverse-proxy
+          push: false
+          cache-from: type=gha,scope=reverse-proxy
+          cache-to: type=gha,mode=max,scope=reverse-proxy

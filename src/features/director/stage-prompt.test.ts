@@ -36,6 +36,34 @@ describe('buildStagePrompt', () => {
     expect(prompt).toContain('INGEST')
   })
 
+  it('keeps INGEST parseable when visualTheme stays outside directorInput', () => {
+    // 项目创建服务把 visualTheme 存在 payload 旁路；INGEST 只吃 directorInput。
+    expect(() =>
+      buildStagePrompt('INGEST', {
+        projectTitle: '演示项目',
+        projectScript: '原稿',
+        nodeType: 'script-import',
+        directorInput: { rawScript: '原稿' },
+      })
+    ).not.toThrow()
+    expect(() =>
+      buildStagePrompt('INGEST', {
+        projectTitle: '演示项目',
+        projectScript: '原稿',
+        nodeType: 'script-import',
+        directorInput: { rawScript: '原稿', visualTheme: 'dark' },
+      })
+    ).toThrow()
+    expect(() =>
+      buildStagePrompt('INGEST', {
+        projectTitle: '演示项目',
+        projectScript: '原稿',
+        nodeType: 'script-import',
+        directorInput: { rawScript: '原稿', visualStyle: 'flat' },
+      })
+    ).toThrow()
+  })
+
   it('rejects missing typed input for downstream stages', () => {
     expect(() =>
       buildStagePrompt('DIRECT', {
@@ -45,6 +73,44 @@ describe('buildStagePrompt', () => {
         directorInput: undefined,
       })
     ).toThrow()
+  })
+
+  it('binds SHOT_SPEC generation to one explicit lane and source unit', () => {
+    const prompt = buildStagePrompt('SHOT_SPEC', {
+      projectTitle: '演示项目',
+      projectScript: '原稿',
+      nodeType: 'shot-script',
+      directorInput: {
+        target: {
+          laneKey: 'S002',
+          sourceUnitId: 'U002',
+          sourceUnit: { unitId: 'U002', text: '第二句。' },
+        },
+        scriptUnits: [
+          { unitId: 'U001', text: '第一句。' },
+          { unitId: 'U002', text: '第二句。' },
+        ],
+        audioAllocation: {
+          ...audioAllocation,
+          shots: [
+            shotAllocation,
+            {
+              ...shotAllocation,
+              id: 'S002',
+              audioUnitId: 'U002',
+              substring: '第二句。',
+            },
+          ],
+          totalFrames: 60,
+        },
+        masterPlan: '导演总纲',
+        styleBible: '风格圣经',
+      },
+    })
+
+    expect(prompt).toContain('当前唯一目标镜头：S002')
+    expect(prompt).toContain('当前唯一来源单元：U002')
+    expect(prompt).toContain('只允许包含 S002')
   })
 
   it('routes ASSEMBLE to the builder that matches the node role', () => {
@@ -57,6 +123,7 @@ describe('buildStagePrompt', () => {
         shotPlan,
         audioAllocation,
         renderedArtifactKeys: ['shots/S001.mp4'],
+        skippedRenderLanes: [],
       },
     })
     expect(score).toContain('score 全局节点')

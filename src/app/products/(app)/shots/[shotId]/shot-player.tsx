@@ -3,6 +3,7 @@
 import { Pause, Play, SkipBack, SkipForward } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { IconButton } from '@/components/ui/icon-button'
+import { MediaViewport } from '@/components/ui/media-viewport'
 import { ProgressBar } from '@/components/ui/progress-bar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Toast } from '@/components/ui/toast'
@@ -14,6 +15,7 @@ import {
   stepFrame,
   type ShotThumbnail,
 } from './shot-api'
+import { FixedCanvasIframe } from './fixed-canvas-iframe'
 
 /** 缩略图轨道格数，与服务端等距取帧数保持一致。 */
 const THUMBNAIL_COUNT = 8
@@ -75,12 +77,12 @@ export function ShotPlayer({
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <div className="flex h-[480px] items-center justify-center overflow-hidden rounded-lg bg-player-bg">
+      <MediaViewport>
         {outputUrl ? (
           <video
             ref={videoRef}
             src={outputUrl}
-            className="h-full w-full"
+            className="absolute inset-0 h-full w-full object-contain"
             onLoadedMetadata={(event) => {
               const value = event.currentTarget.duration
               setDuration(Number.isFinite(value) ? value : 0)
@@ -90,16 +92,11 @@ export function ShotPlayer({
             onPause={() => setIsPlaying(false)}
           />
         ) : previewUrl ? (
-          <iframe
-            title="确定性分镜预览"
-            src={previewUrl}
-            sandbox="allow-scripts"
-            className="h-full w-full border-0"
-          />
+          <FixedCanvasIframe src={previewUrl} />
         ) : (
           <Play className="h-10 w-10 text-text-inverse" />
         )}
-      </div>
+      </MediaViewport>
       {hasVideo && (
         <>
           <div className="flex h-12 items-center gap-3">
@@ -155,22 +152,22 @@ function ThumbnailTrack({
 }) {
   if (error) {
     return (
-      <p className="flex h-18 items-center justify-center rounded-md bg-ds-surface-muted text-xs text-ds-text-muted">
+      <p className="flex aspect-video items-center justify-center rounded-md bg-ds-surface-muted text-xs text-ds-text-muted">
         缩略图生成失败
       </p>
     )
   }
   if (!thumbnails) {
     return (
-      <div className="grid h-18 grid-cols-8 gap-1">
+      <div className="grid grid-cols-4 gap-1 lg:grid-cols-8">
         {Array.from({ length: THUMBNAIL_COUNT }, (_, index) => (
-          <Skeleton key={index} className="h-full w-full" />
+          <Skeleton key={index} className="aspect-video w-full rounded-sm" />
         ))}
       </div>
     )
   }
   return (
-    <div className="grid h-18 grid-cols-8 gap-1">
+    <div className="grid grid-cols-4 gap-1 lg:grid-cols-8">
       {thumbnails.map((thumb, index) => (
         // eslint-disable-next-line @next/next/no-img-element -- 动态 API 帧图，本地优先无需 next/image 优化
         <img
@@ -178,8 +175,8 @@ function ThumbnailTrack({
           src={thumb.url}
           alt={`第 ${index + 1} 帧`}
           className={cn(
-            'h-full w-full rounded-sm object-cover',
-            index === activeIndex && 'border border-accent',
+            'aspect-video w-full rounded-sm object-contain',
+            index === activeIndex && 'ring-2 ring-inset ring-accent',
           )}
         />
       ))}

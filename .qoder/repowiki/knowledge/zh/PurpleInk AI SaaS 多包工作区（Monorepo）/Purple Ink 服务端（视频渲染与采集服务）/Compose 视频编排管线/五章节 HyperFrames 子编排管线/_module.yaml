@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: server_service/compose_orchestration/chapters_pipeline
+title: 五章节 HyperFrames 子编排管线
+scope:
+    - server/src/compose/chapters/
+source_files: []
+depends_on: []
+related_to: []

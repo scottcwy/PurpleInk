@@ -1,6 +1,7 @@
 import 'server-only'
-import { and, desc, eq } from 'drizzle-orm'
-import { getDb, LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import { and, desc, eq, or } from 'drizzle-orm'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb } from '@/lib/db/client'
 import {
   artifacts,
   canvasEdges,
@@ -11,23 +12,22 @@ import type { NodePosition } from './layout'
 import { canvasNodeTypeSchema } from './schemas'
 import { resolveExportSettings, type ExportSettings } from './export-settings'
 import type { CanvasNodeType, NodeStatus, Project } from './types'
+import { activeWorkflowVersionFor } from '@/lib/workflow/project-workflow-registry'
+import {
+  parseDirectorError,
+  parseExecutionNotice,
+  parseRenderError,
+  parseWorkflowBlock,
+  type DirectorNodeError,
+  type RenderNodeError,
+} from './node-error-projection'
+import type { WorkflowBlock, WorkflowExecutionNotice } from './workflow-fault'
+export type { DirectorNodeError, RenderNodeError } from './node-error-projection'
 
 export interface CanvasNodeArtifact {
   id: string
   kind: string
   filename: string
-}
-
-/** 可展示的 Director 阶段失败信息（源自 canvas_nodes.data.directorError）。 */
-export interface DirectorNodeError {
-  stage: string
-  message: string
-}
-
-/** 可展示的渲染阶段失败信息（源自 canvas_nodes.data.renderError）；与 `directorError`
- *  互斥存在——render handler 与 fabricate 各自成功时会清掉对方残留的失败标记。 */
-export interface RenderNodeError {
-  message: string
 }
 
 export interface CanvasGraphNode {
@@ -42,6 +42,8 @@ export interface CanvasGraphNode {
   artifacts: CanvasNodeArtifact[]
   directorError?: DirectorNodeError
   renderError?: RenderNodeError
+  executionNotice?: WorkflowExecutionNotice
+  workflowBlock?: WorkflowBlock
 }
 
 /** 挂了渲染坐标的画布节点；坐标只来自 `computeLayout`，不是持久化字段。 */
@@ -57,19 +59,38 @@ export interface CanvasGraph {
   nodes: CanvasGraphNode[]
   edges: CanvasGraphEdge[]
 }
-/** 列出全部项目（按更新时间倒序）。 */
+/** 只列出当前横屏 workflow 项目（按更新时间倒序）。 */
 export async function listProjects(): Promise<Project[]> {
   const database = await getDb()
   return database
     .select({
       id: projects.id,
+      kind: projects.workflowKind,
       title: projects.title,
       script: projects.script,
       createdAt: projects.createdAt,
       updatedAt: projects.updatedAt,
     })
     .from(projects)
-    .where(eq(projects.workspaceId, LOCAL_WORKSPACE_ID))
+    .where(
+      and(
+        eq(projects.workspaceId, currentWorkspaceId()),
+        or(
+          and(
+            eq(projects.workflowKind, 'script'),
+            eq(projects.workflowVersion, activeWorkflowVersionFor('script'))
+          ),
+          and(
+            eq(projects.workflowKind, 'audio'),
+            eq(projects.workflowVersion, activeWorkflowVersionFor('audio'))
+          ),
+          and(
+            eq(projects.workflowKind, 'website'),
+            eq(projects.workflowVersion, activeWorkflowVersionFor('website'))
+          )
+        )
+      )
+    )
     .orderBy(desc(projects.updatedAt))
 }
 /** 读取项目导出设置；null/缺省时回退 DEFAULT_EXPORT_SETTINGS。项目不存在抛错。 */
@@ -80,7 +101,7 @@ export async function getExportSettings(projectId: string): Promise<ExportSettin
     .from(projects)
     .where(
       and(
-        eq(projects.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(projects.workspaceId, currentWorkspaceId()),
         eq(projects.id, projectId)
       )
     )
@@ -95,7 +116,7 @@ export async function getProjectAutopilot(projectId: string): Promise<boolean> {
     .from(projects)
     .where(
       and(
-        eq(projects.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(projects.workspaceId, currentWorkspaceId()),
         eq(projects.id, projectId)
       )
     )
@@ -116,7 +137,7 @@ export async function getCanvasGraph(projectId: string): Promise<CanvasGraph> {
     .from(canvasNodes)
     .where(
       and(
-        eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(canvasNodes.workspaceId, currentWorkspaceId()),
         eq(canvasNodes.projectId, projectId)
       )
     )
@@ -129,13 +150,19 @@ export async function getCanvasGraph(projectId: string): Promise<CanvasGraph> {
         status: fromPersistedStatus(node.status),
         stage: node.stage,
         contentHash:
-          typeof data.contentHash === 'string' ? data.contentHash : null,
+          typeof data.outputContentHash === 'string'
+            ? data.outputContentHash
+            : typeof data.contentHash === 'string'
+              ? data.contentHash
+              : null,
         data,
         laneKey: typeof data.laneKey === 'string' ? data.laneKey : null,
         laneRole: typeof data.laneRole === 'string' ? data.laneRole : null,
         artifacts: await getNodeArtifacts(projectId, node.id),
         directorError: parseDirectorError(data),
         renderError: parseRenderError(data),
+        executionNotice: parseExecutionNotice(data.executionNotice),
+        workflowBlock: parseWorkflowBlock(data.workflowBlock),
       }
     })
   )
@@ -148,7 +175,7 @@ export async function getCanvasGraph(projectId: string): Promise<CanvasGraph> {
     .from(canvasEdges)
     .where(
       and(
-        eq(canvasEdges.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(canvasEdges.workspaceId, currentWorkspaceId()),
         eq(canvasEdges.projectId, projectId)
       )
     )
@@ -169,7 +196,7 @@ export async function getNodeArtifacts(
     .from(artifacts)
     .where(
       and(
-        eq(artifacts.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(artifacts.workspaceId, currentWorkspaceId()),
         eq(artifacts.projectId, projectId),
         eq(artifacts.aggregateType, 'node'),
         eq(artifacts.aggregateId, nodeId)
@@ -185,30 +212,6 @@ export async function getNodeArtifacts(
       kind: row.kind,
       filename: basenameOf(row.storageKey),
     }))
-}
-
-/** 从节点 data 收窄出可展示的 Director 失败信息（无 / 形状不符时返回 undefined）。 */
-export function parseDirectorError(
-  data: Record<string, unknown>
-): DirectorNodeError | undefined {
-  const raw = data.directorError
-  if (!raw || typeof raw !== 'object') return undefined
-  const record = raw as Record<string, unknown>
-  if (typeof record.stage !== 'string' || typeof record.message !== 'string') {
-    return undefined
-  }
-  return { stage: record.stage, message: record.message }
-}
-
-/** 从节点 data 收窄出可展示的渲染失败信息（无 / 形状不符时返回 undefined）。 */
-export function parseRenderError(
-  data: Record<string, unknown>
-): RenderNodeError | undefined {
-  const raw = data.renderError
-  if (!raw || typeof raw !== 'object') return undefined
-  const record = raw as Record<string, unknown>
-  if (typeof record.message !== 'string') return undefined
-  return { message: record.message }
 }
 
 export interface NodeStreamContext {
@@ -227,7 +230,7 @@ export async function getNodeStreamContext(
     .from(canvasNodes)
     .where(
       and(
-        eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(canvasNodes.workspaceId, currentWorkspaceId()),
         eq(canvasNodes.id, nodeId),
         eq(canvasNodes.projectId, projectId)
       )
@@ -261,7 +264,9 @@ function fromPersistedStatus(status: string): NodeStatus {
     status === 'running' ||
     status === 'failed' ||
     status === 'cancelled' ||
-    status === 'stale'
+    status === 'stale' ||
+    status === 'skipped' ||
+    status === 'blocked'
   ) {
     return status
   }

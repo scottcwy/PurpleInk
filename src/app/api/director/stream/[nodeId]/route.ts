@@ -1,5 +1,10 @@
 import { getLatestArtifact, readArtifact } from '@/features/artifacts'
+import { withApiSession } from '@/features/auth/api-session'
 import { getNodeStreamContext } from '@/features/canvas'
+import {
+  runInAuthContext,
+  type AuthContext,
+} from '@/lib/auth/workspace-context'
 import { streamBus, type StreamError } from '@/lib/stream/stream-bus'
 
 export const dynamic = 'force-dynamic'
@@ -26,10 +31,27 @@ async function readPersistedLog(projectId: string, nodeId: string): Promise<stri
  * 节点阶段流式日志 SSE 通道（按 projectId:nodeId 隔离）。
  * - 有内存活跃流 / 节点运行中 → 订阅事件总线，转发 snapshot / delta / done / error。
  * - 否则（阶段已结束、刷新后）→ 回放持久化日志 + 失败时的 directorError，随即关闭。
+ *
+ * 会话：`runInAuthContext` 只覆盖 handler 的 await 执行期，`ReadableStream`
+ * 回调发生在其之后——因此在 handler 内把归属上下文闭包捕获，回调里的
+ * `readPersistedLog` 用它重新建立上下文（api-session.ts 已声明此约束）。
  */
-export async function GET(
+export function GET(
   request: Request,
   { params }: { params: Promise<{ nodeId: string }> }
+): Promise<Response> {
+  return withApiSession((session) =>
+    handleGet(request, params, {
+      userId: session.userId,
+      workspaceId: session.workspaceId,
+    }),
+  )
+}
+
+async function handleGet(
+  request: Request,
+  params: Promise<{ nodeId: string }>,
+  authContext: AuthContext
 ): Promise<Response> {
   const projectId = new URL(request.url).searchParams.get('projectId')
   if (!projectId) {
@@ -88,7 +110,9 @@ export async function GET(
             // 服务端合并回放持久化日志全文替代空文本下发，前端无感知。
             if (event.text === '' && !event.done && nodeSettled) {
               settledReplay = true
-              void readPersistedLog(projectId, nodeId).then((text) => {
+              void runInAuthContext(authContext, () =>
+                readPersistedLog(projectId, nodeId),
+              ).then((text) => {
                 send('snapshot', {
                   text,
                   done: true,
@@ -128,7 +152,9 @@ export async function GET(
       }
 
       // 回放路径：读持久化日志，一次性发出快照 + 终态，随即关闭。
-      void readPersistedLog(projectId, nodeId).then((text) => {
+      void runInAuthContext(authContext, () =>
+        readPersistedLog(projectId, nodeId),
+      ).then((text) => {
         send('snapshot', {
           text,
           done: true,

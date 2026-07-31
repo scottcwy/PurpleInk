@@ -1742,7 +1742,6 @@
       "compositePrimaryKeys": {
         "workspace_settings_pkey": {
           "name": "workspace_settings_pkey",
-          "nullsNotDistinct": false,
           "columns": [
             "workspace_id",
             "key"
@@ -1754,8 +1753,7 @@
       "checkConstraints": {
         "workspace_settings_key_shape_check": {
           "name": "workspace_settings_key_shape_check",
-          "expression": "\"workspace_settings\".\"key\" ~ '^[a-z][a-z0-9._-]{0,63}$'",
-          "column": "key"
+          "value": "\"workspace_settings\".\"key\" ~ '^[a-z][a-z0-9._-]{0,63}$'"
         }
       },
       "isRLSEnabled": false

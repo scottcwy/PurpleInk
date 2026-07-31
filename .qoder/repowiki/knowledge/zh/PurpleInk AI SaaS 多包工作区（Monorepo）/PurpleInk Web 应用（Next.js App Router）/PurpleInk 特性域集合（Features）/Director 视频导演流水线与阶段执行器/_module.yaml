@@ -1,0 +1,13 @@
+schema_version: 1
+module_path: web_app/features/director
+title: Director 视频导演流水线与阶段执行器
+scope:
+    - src/features/director/
+source_files: []
+depends_on: []
+related_to:
+    - path: web_app/api_routes/render_routes
+    - path: web_app/features/artifacts
+    - path: web_app/features/canvas
+    - path: web_app/features/render
+    - path: web_app/lib/queue

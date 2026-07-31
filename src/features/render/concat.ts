@@ -4,21 +4,69 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { mkdir, mkdtemp, rename, rm, stat, writeFile } from 'node:fs/promises'
 import ffmpegPath from 'ffmpeg-static'
-import { MASTER_HEIGHT, MASTER_WIDTH } from '@/features/canvas/contracts'
+import {
+  SUBTITLE_FONT_FILE,
+  SUBTITLE_FONTS_DIRECTORY,
+} from '@/features/audio/subtitle-style'
+import {
+  subtitleFontFile,
+  subtitleFontsDirectory,
+} from './media-ffmpeg-args'
+import type { MediaAssemblyPlan } from './media-assembly'
+import {
+  prepareProceduralSfx,
+  runMediaAssemblyWithSfxFallback,
+  type ProceduralSfxMixResult,
+} from './procedural-sfx-mix'
 
-/** 按序流拷贝分镜视频；配乐可选且不会触发视频重编码。 */
+export { subtitleFontsDirectory }
+
+export interface LocalMediaPaths {
+  videoPaths: string[]
+  narrationPaths: string[]
+  musicPath: string | null
+}
+
+export interface ConcatExportResult {
+  outputPath: string
+  soundEffects: ProceduralSfxMixResult
+}
+
+async function assertSubtitleFont(directory: string): Promise<void> {
+  try {
+    await stat(subtitleFontFile(directory))
+  } catch (error) {
+    throw new Error(
+      `字幕字体缺失：${SUBTITLE_FONTS_DIRECTORY}/${SUBTITLE_FONT_FILE}`,
+      { cause: error }
+    )
+  }
+}
+
+/**
+ * 一次 ffmpeg 调用完成分镜拼接、旁白裁剪、硬字幕和最终编码。
+ *
+ * `subtitleAss` 为 null 表示本次交付不烧字幕：既不写 .ass，也不校验字体，
+ * 视频滤镜只做缩放。字体缺失的显式失败只约束真正要烧字幕的那条路径。
+ */
 export async function concatExport(
-  mp4Paths: string[],
-  musicPath: string | null,
-  outputPath: string,
-  targetResolution: { width: number; height: number } | null = null
-): Promise<string> {
+  plan: MediaAssemblyPlan,
+  paths: LocalMediaPaths,
+  subtitleAss: string | null,
+  outputPath: string
+): Promise<ConcatExportResult> {
   if (!ffmpegPath) throw new Error('ffmpeg-static 未提供当前平台二进制')
-  if (mp4Paths.length === 0) throw new Error('concat 至少需要一个分镜 mp4')
-  await assertInputs(mp4Paths, musicPath)
+  assertPathCounts(plan, paths)
+  await assertInputs(paths)
+  const fontsDirectory = subtitleFontsDirectory()
+  if (subtitleAss !== null) await assertSubtitleFont(fontsDirectory)
   await mkdir(path.dirname(outputPath), { recursive: true })
-  const workDirectory = await mkdtemp(path.join(path.dirname(outputPath), '.cvc-concat-'))
+  const workDirectory = await mkdtemp(
+    path.join(path.dirname(outputPath), '.cvc-assembly-')
+  )
   const listPath = path.join(workDirectory, 'shots.ffconcat')
+  const subtitlePath =
+    subtitleAss === null ? null : path.join(workDirectory, 'subtitles.ass')
   const temporaryPath = path.join(
     path.dirname(outputPath),
     `.${path.basename(outputPath)}.tmp-${randomUUID()}.mp4`
@@ -26,12 +74,32 @@ export async function concatExport(
   try {
     const list = [
       'ffconcat version 1.0',
-      ...mp4Paths.map((file) => `file '${escapeConcatPath(file)}'`),
+      ...paths.videoPaths.map(
+        (file) => `file '${escapeConcatPath(file)}'`
+      ),
     ].join('\n')
-    await writeFile(listPath, `${list}\n`, 'utf8')
-    await runFfmpeg(buildArgs(listPath, musicPath, temporaryPath, targetResolution))
+    await Promise.all([
+      writeFile(listPath, `${list}\n`, 'utf8'),
+      ...(subtitlePath === null
+        ? []
+        : [writeFile(subtitlePath, subtitleAss ?? '', 'utf8')]),
+    ])
+    const preparedSoundEffects = await prepareProceduralSfx(plan, workDirectory)
+    const soundEffects = await runMediaAssemblyWithSfxFallback({
+      baseInput: {
+        plan,
+        concatListPath: listPath,
+        narrationPaths: paths.narrationPaths,
+        subtitlePath,
+        fontsDirectory,
+        musicPath: paths.musicPath,
+        outputPath: temporaryPath,
+      },
+      prepared: preparedSoundEffects,
+      runner: runFfmpeg,
+    })
     await rename(temporaryPath, outputPath)
-    return outputPath
+    return { outputPath, soundEffects }
   } catch (error) {
     await rm(temporaryPath, { force: true })
     throw error
@@ -40,76 +108,37 @@ export async function concatExport(
   }
 }
 
-async function assertInputs(
-  mp4Paths: string[],
-  musicPath: string | null
-): Promise<void> {
-  for (const [index, file] of mp4Paths.entries()) {
-    try {
-      await stat(file)
-    } catch (error) {
-      throw new Error(`concat 分镜索引 ${index} 的文件不存在：${file}`, {
-        cause: error,
-      })
-    }
-  }
-  if (musicPath) {
-    try {
-      await stat(musicPath)
-    } catch (error) {
-      throw new Error(`concat 配乐文件不存在：${musicPath}`, { cause: error })
-    }
+function assertPathCounts(
+  plan: MediaAssemblyPlan,
+  paths: LocalMediaPaths
+): void {
+  if (
+    paths.videoPaths.length !== plan.shots.length ||
+    paths.narrationPaths.length !== plan.shots.length
+  ) {
+    throw new Error('媒体文件数量与装配计划不一致')
   }
 }
 
-function buildArgs(
-  listPath: string,
-  musicPath: string | null,
-  outputPath: string,
-  targetResolution: { width: number; height: number } | null
-): string[] {
-  // 仅当目标分辨率 ≠ 母版时才重编码；默认/母版分辨率保持 -c:v copy 无损快路径（零回归）。
-  const needsScale =
-    targetResolution !== null &&
-    (targetResolution.width !== MASTER_WIDTH || targetResolution.height !== MASTER_HEIGHT)
-
-  const args = [
-    '-hide_banner',
-    '-loglevel',
-    'error',
-    '-nostdin',
-    '-f',
-    'concat',
-    '-safe',
-    '0',
-    '-i',
-    listPath,
+async function assertInputs(paths: LocalMediaPaths): Promise<void> {
+  const files = [
+    ...paths.videoPaths.map((file, index) => ({
+      file,
+      label: `分镜索引 ${index}`,
+    })),
+    ...paths.narrationPaths.map((file, index) => ({
+      file,
+      label: `旁白索引 ${index}`,
+    })),
+    ...(paths.musicPath ? [{ file: paths.musicPath, label: '配乐' }] : []),
   ]
-  if (musicPath) args.push('-stream_loop', '-1', '-i', musicPath)
-
-  args.push('-map', '0:v:0')
-  if (musicPath) args.push('-map', '1:a:0')
-
-  if (needsScale && targetResolution) {
-    args.push(
-      '-vf',
-      `scale=${targetResolution.width}:${targetResolution.height}`,
-      '-c:v',
-      'libx264',
-      '-preset',
-      'veryfast',
-      '-crf',
-      '20'
-    )
-  } else {
-    args.push('-c:v', 'copy')
+  for (const item of files) {
+    try {
+      await stat(item.file)
+    } catch (error) {
+      throw new Error(`${item.label}的文件不存在`, { cause: error })
+    }
   }
-
-  if (musicPath) args.push('-c:a', 'aac', '-shortest')
-  else args.push('-an')
-
-  args.push('-map_metadata', '-1', '-movflags', '+faststart', '-y', outputPath)
-  return args
 }
 
 function runFfmpeg(args: string[]): Promise<void> {
@@ -124,11 +153,15 @@ function runFfmpeg(args: string[]): Promise<void> {
       stderr += chunk
     })
     child.once('error', (error) => {
-      reject(new Error(`ffmpeg concat 启动失败：${error.message}`, { cause: error }))
+      reject(new Error(`ffmpeg 媒体装配启动失败：${error.message}`, { cause: error }))
     })
     child.once('close', (code) => {
       if (code === 0) resolve()
-      else reject(new Error(`ffmpeg concat 失败（exit ${String(code)}）：${stderr.trim()}`))
+      else {
+        reject(
+          new Error(`ffmpeg 媒体装配失败（exit ${String(code)}）：${stderr.trim()}`)
+        )
+      }
     })
   })
 }

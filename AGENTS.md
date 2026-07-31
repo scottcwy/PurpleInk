@@ -127,6 +127,9 @@ baseline 来掩盖门禁。
 
 - Postgres 是唯一结构化业务数据源；不得新增 SQLite 运行依赖或双写路径。
 - approved / released Artifact 不可原地更新或删除；新版本使用新记录并保留 lineage。
+  该规则约束存续项目内的版本演进；用户显式二次确认的**整项目删除**是另一类
+  授权操作，按 `docs/conventions/project-workflows.md` §9 的删除合同执行：
+  只豁免产物的 DELETE、不豁免 UPDATE，且范围严格锁定单个项目。
 - `content_hash` 必须来自实际字节的 SHA-256；文件大小、状态、版本与来源不能伪造。
 - UI 可见字段必须可追溯到 API、数据库投影、Artifact，或明确标注的未接线占位。
 - 禁止固定假百分比、恒真成功 / QA、无 Artifact 的下载链接、可点击但无行为的业务按钮、永久 Skeleton。
@@ -168,11 +171,21 @@ git diff --check
 
 无法运行某项验证时必须说明原因，不得声称已验证。
 
+改动 Director / 渲染 / 音频 / 模型路由或任何阶段合同前，先读
+`docs/conventions/workflow-failure-patterns.md`，并按其 §8 清单补做检查。
+排查阶段失败时按其 §1 的顺序取服务端真值：UI 文案只是脱敏投影，原始报文在
+`task_attempts.failure.message`。新发现的复发型失败追加为该文件的新模式，
+不要另开文件。
+
 ## 9. 权威文档
 
 | 文档 | 责任 |
 | --- | --- |
 | `docs/conventions/routing.md` | 全部路由、上下文参数、守卫与状态口径 |
+| `docs/conventions/project-workflows.md` | 三来源项目的版本注册、创建/启动、计费、Artifact 与容灾边界 |
+| `docs/conventions/workflow-failure-patterns.md` | Director / 渲染 / 音频 / 模型路由的复发失败模式、诊断顺序与已落地护栏 |
+| `docs/conventions/design-quality-pitfalls.md` | UI 质感失败模式、廉价感根因与视觉交付前自查清单（改控件/页面视觉前必读） |
+| `docs/conventions/motion-interaction.md` | 动效 token、意图表、覆盖层内核与动效禁止事项（改动画/过渡/弹窗前必读） |
 | `docs/designs/canvas.pen` | 视觉像素、token、reusable symbol 的 SSOT |
 | `docs/designs/Design-system-inventory.md` | token、组件、页面与同步规则的文字索引 |
 | `docs/designs/README.md` | `docs/designs` 内部权威关系 |

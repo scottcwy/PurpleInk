@@ -16,6 +16,7 @@ const ROUTE_FILES = [
   "src/app/(auth)/layout.tsx",
   "src/app/(auth)/login/page.tsx",
   "src/app/(auth)/signup/page.tsx",
+  "src/app/(auth)/password/reset/page.tsx",
   // L3 制作应用
   "src/app/products/page.tsx",
   "src/app/products/(app)/layout.tsx",
@@ -77,7 +78,8 @@ describe("src/app 路由契约", () => {
     );
 
     expect(shellSource).toContain("ds-app-gradient");
-    expect(layoutSource).toContain("<AppShell>");
+    // 合同不变：制作应用只有这一处挂 AppShell；允许带 props（如 account 会话投影）。
+    expect(layoutSource).toMatch(/<AppShell[\s>]/);
     expect(sidebarSource).toContain("@/components/ui/sidebar");
     expect(sidebarSource).toContain("<PurpleInkSidebar");
     expect(sidebarSource).not.toContain("LegacySidebar");

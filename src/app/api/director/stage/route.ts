@@ -1,8 +1,21 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getCanvasGraph } from '@/features/canvas'
-import { PIPELINE_STAGES } from '@/features/director'
-import { enqueueDirectorStage } from '@/features/director/queue-handler'
+import { withApiSession } from '@/features/auth/api-session'
+import {
+  assertBillingAvailable,
+  QuotaExhaustedError,
+} from '@/features/billing'
+import { classifyWorkflowError } from '@/features/canvas'
+import { shotRevisionBriefSchema } from '@/features/canvas/contracts'
+import {
+  cancelProviderWaitAction,
+  executeNodeAction,
+  skipNodeAction,
+} from '@/features/director'
+import {
+  SKIP_REASON_MAX_LENGTH,
+  SKIP_REASON_MIN_LENGTH,
+} from '@/features/director/skip-policy'
 import { initQueue } from '@/lib/queue/init'
 
 export const dynamic = 'force-dynamic'
@@ -11,12 +24,33 @@ const requestSchema = z
   .object({
     projectId: z.string().min(1),
     nodeId: z.string().min(1),
-    stage: z.enum(PIPELINE_STAGES),
+    intent: z.enum(['execute', 'repair', 'regenerate', 'skip', 'cancel-wait']),
+    revisionBrief: shotRevisionBriefSchema.optional(),
+    skipReason: z
+      .string()
+      .trim()
+      .min(SKIP_REASON_MIN_LENGTH)
+      .max(SKIP_REASON_MAX_LENGTH)
+      .optional(),
   })
   .strict()
+  // skip 是携带用户决策的写操作，原因必填（1-200 字）；其余 intent 不接受该字段。
+  .refine((data) => data.intent !== 'skip' || data.skipReason !== undefined, {
+    message: '跳过时必须填写原因（1-200 字）',
+  })
+  .refine((data) => data.intent === 'skip' || data.skipReason === undefined, {
+    message: '仅 intent=skip 允许携带 skipReason',
+  })
+  .refine(
+    (data) => data.intent === 'regenerate' || data.revisionBrief === undefined,
+    { message: '仅 intent=regenerate 允许携带 revisionBrief' },
+  )
 
-export async function POST(request: Request) {
-  await initQueue()
+export function POST(request: Request): Promise<Response> {
+  return withApiSession(() => handlePost(request))
+}
+
+async function handlePost(request: Request) {
   const body: unknown = await request.json().catch(() => null)
   const parsed = requestSchema.safeParse(body)
   if (!parsed.success) {
@@ -25,19 +59,47 @@ export async function POST(request: Request) {
       { status: 400 }
     )
   }
-  const graph = await getCanvasGraph(parsed.data.projectId)
-  if (!graph.nodes.some((node) => node.id === parsed.data.nodeId)) {
-    return NextResponse.json(
-      { ok: false, error: '节点不存在或不属于该项目' },
-      { status: 404 }
-    )
-  }
+  const { projectId, nodeId, intent, revisionBrief, skipReason } = parsed.data
   try {
-    const jobId = await enqueueDirectorStage(parsed.data)
-    return NextResponse.json({ ok: true, jobId })
-  } catch (error) {
+    if (intent === 'skip') {
+      return NextResponse.json(
+        await skipNodeAction({ projectId, nodeId, reason: skipReason! })
+      )
+    }
+    if (intent === 'cancel-wait') {
+      return NextResponse.json(await cancelProviderWaitAction({ projectId, nodeId }))
+    }
+    await assertBillingAvailable()
+    await initQueue()
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : '作业入队失败' },
+      await executeNodeAction({
+        projectId,
+        nodeId,
+        intent,
+        ...(revisionBrief ? { revisionBrief } : {}),
+      })
+    )
+  } catch (error) {
+    if (error instanceof QuotaExhaustedError) {
+      return NextResponse.json(
+        {
+          code: error.code,
+          resetAt: error.resetAt,
+          billingUrl: error.billingUrl,
+        },
+        { status: 402 },
+      )
+    }
+    // 跳过被业务规则拒绝属于「请求语义不可满足」而非状态冲突：422，只回类别文案。
+    if (error instanceof Error && error.name === 'SkipRejectedError') {
+      return NextResponse.json(
+        { ok: false, error: error.message, code: 'SKIP_REJECTED' },
+        { status: 422 }
+      )
+    }
+    const projected = classifyWorkflowError(error, { stage: 'QUEUE' })
+    return NextResponse.json(
+      { ok: false, error: projected.message, code: projected.code },
       { status: 409 }
     )
   }

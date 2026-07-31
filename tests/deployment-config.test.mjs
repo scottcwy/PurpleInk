@@ -135,3 +135,29 @@ test("keeps credentials and generated media out of image build contexts", async 
   assert.match(dockerignore, /^server\/out$/m);
   assert.match(dockerignore, /^\.git$/m);
 });
+
+test("threads the S3 mirror storage variables through Web templates and compose", async () => {
+  const compose = await read("deploy/compose.yaml");
+  const deployEnv = await read("deploy/env.example");
+  const rootEnv = await read(".env.example");
+
+  // 同一组变量在三处保持一致：根模板（本地开发）、deploy 模板、compose 透传。
+  const names = [
+    "STORAGE_MODE",
+    "S3_ENDPOINT",
+    "S3_BUCKET",
+    "S3_REGION",
+    "S3_ACCESS_KEY_ID",
+    "S3_SECRET_ACCESS_KEY",
+    "S3_PRESIGN_TTL_SECONDS",
+  ];
+  for (const name of names) {
+    assert.match(rootEnv, new RegExp(`^${name}=$`, "m"));
+    assert.match(deployEnv, new RegExp(`^${name}=$`, "m"));
+    // 可选变量用 :- 缺省为空，未设置时 compose 不得报错（local 模式零配置）。
+    assert.match(compose, new RegExp(`${name}: \\$\\{${name}:-\\}`));
+  }
+  // 模板里 secret 类变量值必须留空，不得预填任何占位密钥。
+  assert.doesNotMatch(rootEnv, /^S3_SECRET_ACCESS_KEY=.+$/m);
+  assert.doesNotMatch(deployEnv, /^S3_SECRET_ACCESS_KEY=.+$/m);
+});

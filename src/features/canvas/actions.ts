@@ -1,125 +1,73 @@
 import 'server-only'
-import { randomUUID } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
-import { getDb, LOCAL_WORKSPACE_ID } from '@/lib/db/client'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { getDb } from '@/lib/db/client'
+import { projects } from '@/lib/db/schema/index'
 import {
-  canvasEdges,
-  canvasNodes,
-  projects,
-  workspaces,
-} from '@/lib/db/schema/index'
-import { withTransaction } from '@/lib/db/transaction'
-import {
-  ACTIVE_WORKFLOW_VERSION,
-  serializeWorkflowVersion,
-} from '@/lib/workflow/version'
-import { DEFAULT_EXPORT_SETTINGS } from './export-settings'
-import { createProjectSchema, exportSettingsSchema, type ExportSettings } from './schemas'
-import type { Project } from './types'
-
-const GLOBAL_NODE_DEFINITIONS = [
-  { type: 'script-import', stage: 'INGEST', logicalKey: 'global:script-import' },
-  { type: 'shot-split', stage: 'DIRECT', logicalKey: 'global:shot-split' },
-  { type: 'score', stage: 'ASSEMBLE', logicalKey: 'global:score' },
-  { type: 'export', stage: 'FINALIZE', logicalKey: 'global:export' },
-] as const
-
-/** 单事务创建项目与初始全局 DAG，避免出现无入口节点的半成品项目。 */
-export async function createProject(input: unknown): Promise<Project> {
-  const { title, script } = createProjectSchema.parse(input)
-  const database = await getDb()
-  return withTransaction(database, async (tx) => {
-    await tx
-      .insert(workspaces)
-      .values({
-        id: LOCAL_WORKSPACE_ID,
-        slug: 'local',
-        name: 'Local Workspace',
-      })
-      .onConflictDoNothing()
-    const [project] = await tx
-      .insert(projects)
-      .values({
-        workspaceId: LOCAL_WORKSPACE_ID,
-        id: randomUUID(),
-        title,
-        script,
-        workflowVersion: serializeWorkflowVersion(ACTIVE_WORKFLOW_VERSION),
-        exportSettings: {
-          schemaVersion: 1,
-          settings: DEFAULT_EXPORT_SETTINGS,
-        },
-      })
-      .returning({
-        id: projects.id,
-        title: projects.title,
-        script: projects.script,
-        createdAt: projects.createdAt,
-        updatedAt: projects.updatedAt,
-      })
-    if (!project) throw new Error('项目创建失败')
-
-    const nodes = GLOBAL_NODE_DEFINITIONS.map((definition) => ({
-      workspaceId: LOCAL_WORKSPACE_ID,
-      id: randomUUID(),
-      projectId: project.id,
-      ...definition,
-      data: {
-        schemaVersion: 1,
-        payload:
-          definition.type === 'script-import'
-            ? { directorInput: { rawScript: script } }
-            : {},
-      },
-    }))
-    await tx.insert(canvasNodes).values(nodes)
-    await tx
-      .insert(canvasEdges)
-      .values([
-        {
-          workspaceId: LOCAL_WORKSPACE_ID,
-          id: randomUUID(),
-          projectId: project.id,
-          source: nodes[0]!.id,
-          target: nodes[1]!.id,
-        },
-        {
-          workspaceId: LOCAL_WORKSPACE_ID,
-          id: randomUUID(),
-          projectId: project.id,
-          source: nodes[2]!.id,
-          target: nodes[3]!.id,
-        },
-      ])
-    return project
-  })
-}
+  exportSettingsPatchSchema,
+  mergeExportSettings,
+  resolveExportSettings,
+  type ExportSettings,
+} from './export-settings'
+import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 
 /**
- * 更新项目导出设置（当前仅分辨率预设）。非法输入由 zod 抛错，不写库；
- * 项目不存在抛可读错误。返回已持久化的设置供调用方回显。
+ * 局部更新项目导出设置（分辨率预设、字幕交付模式）。
+ *
+ * 读改写放在同一个事务里并对项目行加锁：这一列是整体覆盖写入的 jsonb，如果先读
+ * 后写不加锁，两个并发的单字段 PATCH 会互相抹掉对方的字段。非法输入由 zod 抛错，
+ * 不写库；项目不存在抛可读错误。返回已持久化的完整设置供调用方回显。
+ *
+ * 直接用 `database.transaction` 而不是 `@/lib/db/transaction` 的包装：后者的
+ * 特化路径会给 features/canvas 增加一条新的 db 导入，而 verify:v3 的
+ * canvasForbiddenImports 债务上限正是在盯这类耦合增长；这里也不存在它要划定的
+ * 跨 repository 边界，只是单表读改写。
  */
 export async function updateExportSettings(
   projectId: string,
   input: unknown
 ): Promise<ExportSettings> {
-  const exportSettings = exportSettingsSchema.parse(input)
+  const patch = exportSettingsPatchSchema.parse(input)
+  await assertProjectWorkflowSupported(projectId)
   const database = await getDb()
-  const [updated] = await database
-    .update(projects)
-    .set({
-      exportSettings: { schemaVersion: 1, settings: exportSettings },
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(projects.workspaceId, LOCAL_WORKSPACE_ID),
-        eq(projects.id, projectId)
+  return database.transaction(async (transaction) => {
+    const [row] = await transaction
+      .select({ exportSettings: projects.exportSettings })
+      .from(projects)
+      .where(
+        and(
+          eq(projects.workspaceId, currentWorkspaceId()),
+          eq(projects.id, projectId)
+        )
       )
+      .limit(1)
+      .for('update')
+    if (!row) throw new Error(`项目不存在：${projectId}`)
+    const exportSettings = mergeExportSettings(
+      resolveExportSettings(readSettings(row.exportSettings)),
+      patch
     )
-    .returning({ id: projects.id })
-  if (!updated) throw new Error(`项目不存在：${projectId}`)
-  return exportSettings
+    await transaction
+      .update(projects)
+      .set({
+        exportSettings: { schemaVersion: 1, settings: exportSettings },
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(projects.workspaceId, currentWorkspaceId()),
+          eq(projects.id, projectId)
+        )
+      )
+    return exportSettings
+  })
+}
+
+function readSettings(payload: unknown): unknown {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return undefined
+  }
+  return (payload as Record<string, unknown>).settings
 }
 
 /** 开启或关闭项目级自动推进；项目不存在时不静默创建状态。 */
@@ -127,13 +75,14 @@ export async function setProjectAutopilot(
   projectId: string,
   enabled: boolean
 ): Promise<boolean> {
+  await assertProjectWorkflowSupported(projectId)
   const database = await getDb()
   const [updated] = await database
     .update(projects)
     .set({ autopilot: enabled, updatedAt: new Date() })
     .where(
       and(
-        eq(projects.workspaceId, LOCAL_WORKSPACE_ID),
+        eq(projects.workspaceId, currentWorkspaceId()),
         eq(projects.id, projectId)
       )
     )

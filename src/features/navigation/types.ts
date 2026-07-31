@@ -4,4 +4,5 @@ export type AppSection =
   | 'canvas'
   | 'renderer'
   | 'export'
+  | 'billing'
   | 'settings'

@@ -5,19 +5,37 @@ const TABLES = [
   'workspaces', 'projects', 'canvas_nodes', 'canvas_edges', 'pipeline_runs',
   'task_attempts', 'artifacts', 'command_receipts', 'model_routes',
   'media_routes', 'provider_credentials', 'ai_invocations', 'workspace_settings',
+  'provider_dispatches',
+  'provider_dispatch_cooldowns',
+  'provider_pool_states', 'workflow_concurrency_leases',
+  'users', 'workspace_members', 'sessions', 'email_verification_codes',
+  'auth_throttle', 'managed_model_catalog', 'rate_cards', 'rate_card_units',
+  'workspace_entitlements', 'usage_periods', 'redemption_batches',
+  'redemption_codes', 'redemption_audits', 'telemetry_cutovers',
+  'project_sources', 'project_creation_requests',
 ] as const
-const BUSINESS_TABLES = TABLES.filter((table) => table !== 'workspaces')
+const WORKSPACE_TABLES = [
+  'projects', 'canvas_nodes', 'canvas_edges', 'pipeline_runs', 'task_attempts',
+  'artifacts', 'command_receipts', 'model_routes', 'media_routes',
+  'provider_credentials', 'ai_invocations', 'workspace_settings',
+  'usage_periods', 'workspace_entitlements', 'workflow_concurrency_leases',
+  'project_sources', 'project_creation_requests',
+] as const
 const ENUM_CHECKS = {
   projects_status_check: ['active', 'archived'],
+  projects_workflow_kind_check: ['script', 'audio', 'website'],
+  project_sources_kind_check: ['script', 'audio', 'website'],
   canvas_nodes_type_check: [
     'script-import', 'shot-split', 'score', 'export', 'shot-script',
     'shot-codegen', 'shot-sfx', 'shot-subtitle', 'shot-qa',
+    'audio-transcribe', 'website-stage',
   ],
   canvas_nodes_stage_check: [
     'INGEST', 'DIRECT', 'SHOT_SPEC', 'FABRICATE', 'ASSEMBLE', 'FINALIZE',
   ],
   canvas_nodes_status_check: [
     'idle', 'queued', 'running', 'succeeded', 'failed', 'cancelled', 'stale',
+    'skipped', 'blocked',
   ],
   pipeline_runs_status_check: [
     'triggering', 'queued', 'running', 'succeeded', 'failed', 'cancelled',
@@ -32,9 +50,30 @@ const ENUM_CHECKS = {
   ],
   media_routes_media_task_kind_check: ['tts', 'asr'],
   ai_invocations_status_check: ['running', 'succeeded', 'failed', 'cancelled'],
+  ai_invocations_funding_check: ['managed', 'byok', 'custom'],
+  ai_invocations_capability_check: ['text', 'vision', 'tts', 'asr', 'workflow'],
+  ai_invocations_billing_status_check: [
+    'unreserved', 'reserved', 'settled', 'released', 'not_applicable',
+  ],
+  rate_card_units_kind_check: [
+    'input_token', 'cached_input_token', 'output_token',
+    'tts_character', 'audio_second', 'video_second',
+  ],
+  provider_dispatches_funding_check: ['managed', 'byok'],
+  provider_dispatches_status_check: [
+    'scheduled', 'in_flight', 'released', 'cancelled',
+  ],
+  workflow_concurrency_leases_status_check: [
+    'waiting', 'active', 'released', 'cancelled', 'expired',
+  ],
+  users_status_check: ['active', 'disabled'],
+  workspace_members_role_check: ['owner', 'member'],
+  email_verification_codes_purpose_check: ['signup', 'password_reset'],
 } as const
 const NUMERIC_CHECKS = [
-  'projects_revision_check', 'canvas_nodes_revision_check',
+  'projects_revision_check', 'projects_execution_epoch_check',
+  'canvas_nodes_revision_check',
+  'pipeline_runs_execution_epoch_check',
   'pipeline_runs_revision_check', 'task_attempts_attempt_no_check',
   'task_attempts_revision_check', 'artifacts_version_check',
   'artifacts_size_bytes_check', 'model_routes_revision_check',
@@ -42,9 +81,16 @@ const NUMERIC_CHECKS = [
   'provider_credentials_nonce_length_check',
   'provider_credentials_auth_tag_length_check',
   'ai_invocations_invocation_no_check', 'ai_invocations_repair_no_check',
+  'ai_invocations_telemetry_version_check',
+  'ai_invocations_provider_duration_check',
+  'provider_dispatches_token_estimate_check',
+  'provider_pool_states_current_concurrency_check',
+  'provider_pool_states_max_concurrency_check',
+  'email_verification_codes_attempt_check', 'auth_throttle_count_check',
 ] as const
 const REQUIRED_UNIQUES = [
   'workspaces:slug',
+  'projects:workspace_id,id,workflow_kind',
   'canvas_nodes:workspace_id,project_id,logical_key',
   'canvas_nodes:workspace_id,project_id,id',
   'canvas_edges:workspace_id,project_id,source,target',
@@ -57,9 +103,22 @@ const REQUIRED_UNIQUES = [
   'media_routes:workspace_id,media_task_kind',
   'provider_credentials:workspace_id,provider',
   'ai_invocations:workspace_id,attempt_id,invocation_no,repair_no',
+  'ai_invocations:workspace_id,billing_idempotency_key',
+  'managed_model_catalog:provider,model,capability',
+  'rate_cards:catalog_id,version',
+  'redemption_audits:workspace_id,idempotency_key',
+  'redemption_codes:code_hash',
+  'usage_periods:workspace_id,starts_at',
+  'sessions:token_hash',
 ] as const
 const EXPECTED_FOREIGN_KEYS = [
-  ...BUSINESS_TABLES.map((table) => `${table}->workspaces:workspace_id=>id`),
+  ...WORKSPACE_TABLES.map((table) => `${table}->workspaces:workspace_id=>id`),
+  'provider_dispatches->workspaces:workspace_id=>id',
+  'workflow_concurrency_leases->projects:workspace_id,project_id=>workspace_id,id',
+  'project_sources->projects:workspace_id,project_id,kind=>workspace_id,id,workflow_kind',
+  'project_creation_requests->projects:workspace_id,project_id=>workspace_id,id',
+  'project_creation_requests->canvas_nodes:workspace_id,project_id,entry_node_id=>workspace_id,project_id,id',
+  'workflow_concurrency_leases->users:actor_user_id=>id',
   'canvas_nodes->projects:workspace_id,project_id=>workspace_id,id',
   'canvas_edges->projects:workspace_id,project_id=>workspace_id,id',
   'canvas_edges->canvas_nodes:workspace_id,project_id,source=>workspace_id,project_id,id',
@@ -72,6 +131,22 @@ const EXPECTED_FOREIGN_KEYS = [
   'ai_invocations->pipeline_runs:workspace_id,run_id=>workspace_id,id',
   'ai_invocations->task_attempts:workspace_id,attempt_id=>workspace_id,id',
   'ai_invocations->artifacts:workspace_id,trace_artifact_id=>workspace_id,id',
+  'ai_invocations->rate_cards:rate_card_id=>id',
+  'ai_invocations->usage_periods:workspace_id,usage_period_id=>workspace_id,id',
+  'ai_invocations->users:actor_user_id=>id',
+  'pipeline_runs->users:requested_by_user_id=>id',
+  'rate_card_units->rate_cards:rate_card_id=>id',
+  'rate_cards->managed_model_catalog:catalog_id=>id',
+  'redemption_audits->redemption_codes:code_id=>id',
+  'redemption_audits->users:actor_user_id=>id',
+  'redemption_audits->workspaces:workspace_id=>id',
+  'redemption_batches->users:created_by_user_id=>id',
+  'redemption_codes->redemption_batches:batch_id=>id',
+  'redemption_codes->workspaces:consumed_by_workspace_id=>id',
+  'workspace_members->workspaces:workspace_id=>id',
+  'workspace_members->users:user_id=>id',
+  'sessions->workspaces:workspace_id=>id',
+  'sessions->users:user_id=>id',
 ] as const
 
 interface ConstraintRow {
@@ -145,7 +220,7 @@ beforeAll(async () => Object.assign(database, await createPgTestDatabase()))
 beforeEach(async () => database.reset())
 afterAll(async () => database.close())
 
-it('creates exactly thirteen tables with workspace-scoped primary keys', async () => {
+it('creates the complete schema with scoped primary keys', async () => {
   const rows = await database.sql<{ table_name: string }[]>`
     SELECT table_name FROM information_schema.tables
     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
@@ -155,17 +230,42 @@ it('creates exactly thirteen tables with workspace-scoped primary keys', async (
   const signatures = (await constraints('p')).map(constraintSignature).sort()
   const expected = [
     'workspaces:id',
-    ...BUSINESS_TABLES
-      .filter((table) => table !== 'workspace_settings')
+    ...WORKSPACE_TABLES
+      .filter((table) => ![
+        'project_sources',
+        'workspace_settings',
+        'workspace_entitlements',
+        'workflow_concurrency_leases',
+        'project_creation_requests',
+      ].includes(table))
       .map((table) => `${table}:workspace_id,id`),
+    'project_sources:workspace_id,project_id',
+    'project_creation_requests:workspace_id,idempotency_key',
     'workspace_settings:workspace_id,key',
+    'workspace_entitlements:workspace_id',
+    'managed_model_catalog:id',
+    'provider_dispatches:id',
+    'provider_dispatch_cooldowns:scope_key',
+    'provider_pool_states:scope_key',
+    'workflow_concurrency_leases:workspace_id,project_id,work_unit_key',
+    'rate_cards:id',
+    'rate_card_units:rate_card_id,unit_kind',
+    'redemption_batches:id',
+    'redemption_codes:id',
+    'redemption_audits:id',
+    'users:id',
+    'workspace_members:workspace_id,user_id',
+    'sessions:id',
+    'email_verification_codes:id',
+    'auth_throttle:key',
+    'telemetry_cutovers:key',
   ].sort()
   expect(signatures).toEqual(expected)
 })
 
-it('locks the exact set of twenty-four workspace-safe foreign keys', async () => {
+it('locks the exact workspace and identity foreign keys', async () => {
   const signatures = (await foreignKeys()).map(foreignKeySignature).sort()
-  expect(EXPECTED_FOREIGN_KEYS).toHaveLength(24)
+  expect(EXPECTED_FOREIGN_KEYS).toHaveLength(51)
   expect(signatures).toEqual([...EXPECTED_FOREIGN_KEYS].sort())
 })
 
@@ -221,19 +321,22 @@ it('uses UUID identities, bigint revisions, and timestamptz suffixes', async () 
     SELECT table_name, data_type FROM information_schema.columns
     WHERE table_schema = 'public' AND column_name IN ('id', 'workspace_id')
   `
-  expect(identities).toHaveLength(24)
+  expect(identities).toHaveLength(43)
   expect(identities.every((row) => row.data_type === 'uuid')).toBe(true)
   const revisions = await database.sql<{ table_name: string; data_type: string }[]>`
     SELECT table_name, data_type FROM information_schema.columns
     WHERE table_schema = 'public' AND column_name = 'revision'
   `
-  expect(revisions).toHaveLength(6)
+  expect(revisions).toHaveLength(7)
   expect(revisions.every((row) => row.data_type === 'bigint')).toBe(true)
   const times = await database.sql<{ table_name: string; data_type: string }[]>`
     SELECT table_name, data_type FROM information_schema.columns
     WHERE table_schema = 'public' AND right(column_name, 3) = '_at'
   `
-  expect(times).toHaveLength(32)
-  expect(new Set(times.map((row) => row.table_name))).toEqual(new Set(TABLES))
+  // 队列租约、取消、调度与项目创建回执都使用 timestamptz。
+  expect(times).toHaveLength(88)
+  expect(new Set(times.map((row) => row.table_name))).toEqual(
+    new Set(TABLES.filter((table) => table !== 'rate_card_units')),
+  )
   expect(times.every((row) => row.data_type === 'timestamp with time zone')).toBe(true)
 })

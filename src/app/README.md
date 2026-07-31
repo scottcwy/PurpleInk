@@ -32,10 +32,11 @@ src/app/
 │   └── release/page.tsx        → /release（占位）
 │
 ├── (auth)/                     L2 认证
-│   ├── layout.tsx              认证壳，无侧栏
-│   ├── _components/auth-shell-form.tsx
-│   ├── login/page.tsx          → /login（未接线）
-│   └── signup/page.tsx         → /signup（未接线）
+│   ├── layout.tsx              认证壳，无侧栏；lg 左半屏海报 + 右半屏表单
+│   ├── _components/            海报、表单外壳、三个表单、客户端出口
+│   ├── login/page.tsx          → /login
+│   ├── signup/page.tsx         → /signup
+│   └── password/reset/page.tsx → /password/reset
 │
 ├── products/                   L3 制作应用
 │   ├── page.tsx                → /products，308 到 /products/dashboard
@@ -101,7 +102,7 @@ L3 的壳只有一处实现：`src/features/navigation/app-shell.tsx`。`(auth)`
 | `/products/shots/[shotId]` | `wired` | 真实镜头合同与产物；`projectId` 缺失即 404 |
 | `/products/export/[projectId]` | `wired` | 真实导出就绪度与成片 Artifact |
 | `/products/settings` | `wired` | 凭据先验证后保存，失败返回 422 不覆盖 |
-| `/playbook/*` | `wired` | 37 个 UI 组件族 + 1 icons（`patterns` 分类已于 ISSUE-007 移除） |
+| `/playbook/*` | `wired` | 40 个 UI 组件族 + 1 icons（`patterns` 分类已于 ISSUE-007 移除；计数以 `UI_COMPONENT_FAMILY_COUNT` 为准） |
 | `/login`、`/signup` | `shell` | 表单外观，输入与提交全部 disabled |
 | `/release` | `shell` | 单页占位，禁止提前落子路由 |
 | `/artifacts`、`/artifacts/[caseSlug]`、`/share/[shareId]` | `planned` | 依赖尚未建立的 `ShareSnapshot` 模型，见规范 §8 |
@@ -141,7 +142,7 @@ L3 的壳只有一处实现：`src/features/navigation/app-shell.tsx`。`(auth)`
 
 ## 8. 当前已知问题
 
-1. **无认证。** 没有 `proxy.ts`，全部页面与 API 都不读 session，workspace 固定 `LOCAL_WORKSPACE_ID`。`/products/*` 与 `/api/*` 目前未授权可访问，只能跑在本地或受信网络内。
+1. ~~无认证~~ 已落地：`src/proxy.ts` 拦 `/products/*`（cookie 形状），页面经 `withPageSession` 查库校验，业务 API 经 `withApiSession` 回 401；业务查询的 workspace 取自会话上下文（`currentWorkspaceId()`），`LOCAL_WORKSPACE_ID` 仅作迁移/bootstrap/进程级配置锚点。
 2. ~~`robots.ts` 缺 `/share/` disallow~~ 已修复（ISSUE-009）。
 3. `sitemap.ts` 只有 `/` 一条；`/artifacts` 与 featured 案例待 `ShareSnapshot` 落盘后接入（见 `sitemap.ts` 注释）。
 4. ~~`canvas-inspector.tsx` 拼 artifact href 时 `projectId` 未 `encodeURIComponent`~~ 已修复（ISSUE-009）。

@@ -6,7 +6,7 @@ export function SettingsGroupDemo() {
   return (
     <div className="w-120">
       <SettingsGroup>
-        <SettingsRow label="分辨率" value="1080×1920 · 竖屏" />
+        <SettingsRow label="分辨率" value="1920×1080 · 横屏" />
         <SettingsSeparator />
         <SettingsRow label="帧率" value="30 fps" />
       </SettingsGroup>

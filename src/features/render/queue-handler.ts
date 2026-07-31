@@ -1,36 +1,49 @@
 import 'server-only'
-import { z } from 'zod'
-import { transitionNodeStatus } from '@/features/canvas'
-import { queue as defaultQueue, type QueueAdapter } from '@/lib/queue'
+import {
+  captureNodeInputFingerprint,
+  transitionNodeStatus,
+} from '@/features/canvas'
+import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
+import {
+  assertEnqueueRetryBudget,
+  queue as defaultQueue,
+  type QueueAdapter,
+} from '@/lib/queue'
 import { storage } from '@/lib/storage'
 import { assertRenderAdmission } from './admission'
 import { openFrameCapture } from './frame-capture'
+import {
+  compensateEnqueueFailure,
+  failFabricate,
+  failRender,
+  type RenderFailureRepository,
+} from './queue-failure-compensation'
 import { RenderRepository } from './repository'
 import { HyperframesRenderer, type Renderer } from './renderer'
+import {
+  renderJobPayloadSchema,
+  type RenderShotInput,
+} from './render-job-payload'
 import type { RenderAdmissionContext, RenderJob } from './types'
 import { advancePipeline } from '@/features/director/advance'
 import { fabricateShot } from '@/features/director/fabricate'
 
-const renderJobPayloadSchema = z
-  .object({
-    projectId: z.string().min(1),
-    nodeId: z.string().min(1),
-  })
-  .strict()
-
-export type RenderShotInput = z.infer<typeof renderJobPayloadSchema>
-
-interface HandlerRepository {
+interface HandlerRepository extends RenderFailureRepository {
   hasFabricateArtifact(projectId: string, nodeId: string): Promise<boolean>
   loadRenderContext(projectId: string, nodeId: string): Promise<RenderJob>
-  recordRenderError(nodeId: string, error: unknown): Promise<void>
+  recordOutputHash?(nodeId: string, contentHash: string): Promise<void>
 }
 
 interface HandlerDependencies {
   repository: HandlerRepository
   transitionNodeStatus: typeof transitionNodeStatus
   renderer: Renderer
-  fabricateShot: (projectId: string, nodeId: string) => Promise<void>
+  fabricateShot: (
+    projectId: string,
+    nodeId: string,
+    attemptId: string,
+    revisionBrief?: string,
+  ) => Promise<void>
   advancePipeline: (
     projectId: string,
     completedNodeId: string
@@ -44,8 +57,16 @@ interface EnqueueDependencies {
     nodeId: string
   ): RenderAdmissionContext | Promise<RenderAdmissionContext>
   assertAdmission(job: RenderJob): Promise<void>
+  captureInputFingerprint?(nodeId: string): Promise<unknown>
   transitionNodeStatus: typeof transitionNodeStatus
+  /** 毒任务闸门（可选）：重试预算耗尽时拒绝再次入队。 */
+  assertRetryBudget?(kind: string, payload: Record<string, unknown>): Promise<void>
   recordRenderError(nodeId: string, error: unknown): Promise<void>
+  rejectFabricateArtifact?(
+    projectId: string,
+    nodeId: string,
+    sourceKey: string,
+  ): Promise<void>
 }
 
 export function registerRenderShotHandler(
@@ -55,21 +76,40 @@ export function registerRenderShotHandler(
   targetQueue.register('render-shot', async (job) => {
     const resolved = dependencies ?? createHandlerDependencies()
     const payload = renderJobPayloadSchema.parse(job.payload)
+    job.signal?.throwIfAborted()
     await resolved.transitionNodeStatus(payload.nodeId, 'running')
     try {
-      if (!(await resolved.repository.hasFabricateArtifact(payload.projectId, payload.nodeId))) {
-        await resolved.fabricateShot(payload.projectId, payload.nodeId)
+      if (
+        payload.regenerateSource
+        || !(await resolved.repository.hasFabricateArtifact(payload.projectId, payload.nodeId))
+      ) {
+        const args = [payload.projectId, payload.nodeId, job.id] as const
+        await (payload.revisionBrief
+          ? resolved.fabricateShot(...args, payload.revisionBrief)
+          : resolved.fabricateShot(...args))
       }
+      job.signal?.throwIfAborted()
     } catch (error) {
       await failFabricate(payload.nodeId, error, resolved)
       throw error
     }
+    let sourceKey: string | undefined
     try {
       const context = await resolved.repository.loadRenderContext(
         payload.projectId,
         payload.nodeId
       )
-      await resolved.renderer.render(context)
+      sourceKey = context.htmlKey
+      const result = await resolved.renderer.render({
+        ...context,
+        ...(payload.forceRender ? { forceRender: true } : {}),
+      })
+      job.signal?.throwIfAborted()
+      await resolved.repository.recordOutputHash?.(
+        payload.nodeId,
+        result.contentHash
+      )
+      job.signal?.throwIfAborted()
       await resolved.transitionNodeStatus(payload.nodeId, 'success')
       await advanceWithoutMasking(
         resolved.advancePipeline,
@@ -77,7 +117,13 @@ export function registerRenderShotHandler(
         payload.nodeId
       )
     } catch (error) {
-      await failRender(payload.nodeId, error, resolved)
+      await failRender(
+        payload.projectId,
+        payload.nodeId,
+        sourceKey,
+        error,
+        resolved,
+      )
       throw error
     }
   })
@@ -87,25 +133,38 @@ export async function enqueueRenderShot(
   input: RenderShotInput,
   dependencies?: EnqueueDependencies
 ): Promise<string> {
-  const resolved = dependencies ?? createEnqueueDependencies()
   const payload = renderJobPayloadSchema.parse(input)
+  if (!dependencies) await assertProjectWorkflowSupported(payload.projectId)
+  const resolved = dependencies ?? createEnqueueDependencies()
   let pendingSet = false
+  let sourceKey: string | undefined
   try {
     const admission = await resolved.loadAdmissionContext(
       payload.projectId,
       payload.nodeId
     )
-    if (admission.job) {
+    if (admission.job && !payload.regenerateSource) {
+      sourceKey = admission.job.htmlKey
       await resolved.assertAdmission(admission.job)
     }
+    await resolved.captureInputFingerprint?.(payload.nodeId)
     await resolved.transitionNodeStatus(payload.nodeId, 'pending')
     pendingSet = true
+    // 闸门在 try 内：预算耗尽走既有补偿链，落节点 failed + renderError 投影。
+    await resolved.assertRetryBudget?.('render-shot', payload)
     return await resolved.queue.enqueue('render-shot', payload, {
       projectId: payload.projectId,
       nodeId: payload.nodeId,
     })
   } catch (error) {
-    await compensateEnqueueFailure(payload.nodeId, pendingSet, error, resolved)
+    await compensateEnqueueFailure(
+      payload.projectId,
+      payload.nodeId,
+      sourceKey,
+      pendingSet,
+      error,
+      resolved,
+    )
     throw error
   }
 }
@@ -144,106 +203,12 @@ function createEnqueueDependencies(): EnqueueDependencies {
       repository.loadRenderAdmissionContext(projectId, nodeId),
     assertAdmission: (job) =>
       assertRenderAdmission(job, { storage, openFrameCapture }),
+    captureInputFingerprint: captureNodeInputFingerprint,
     transitionNodeStatus,
+    assertRetryBudget: assertEnqueueRetryBudget,
     recordRenderError: (nodeId, error) =>
       repository.recordRenderError(nodeId, error),
-  }
-}
-
-function failRender(
-  nodeId: string,
-  error: unknown,
-  dependencies: Pick<HandlerDependencies, 'transitionNodeStatus' | 'repository'>
-): Promise<void> {
-  return compensateFailure(nodeId, error, dependencies)
-}
-
-/**
- * FABRICATE 阶段失败的补偿只转 failed，不再调 `recordRenderError`：
- * `fabricateShot` 内部已经通过 director 的 `recordStageError` 把
- * `directorError` 写进节点 payload，这里重复写 `renderError` 会制造
- * 两条互相独立又描述同一次失败的噪音信号，让 Inspector 无法干净地
- * 区分「HTML 生成失败」与「渲染失败」。
- */
-async function failFabricate(
-  nodeId: string,
-  error: unknown,
-  dependencies: Pick<HandlerDependencies, 'transitionNodeStatus'>
-): Promise<void> {
-  try {
-    await dependencies.transitionNodeStatus(nodeId, 'failed')
-  } catch (cleanupError) {
-    throw new AggregateError([error, cleanupError], 'HTML 生成失败补偿不完整')
-  }
-}
-
-async function compensateFailure(
-  nodeId: string,
-  error: unknown,
-  dependencies: Pick<HandlerDependencies, 'transitionNodeStatus' | 'repository'>
-): Promise<void> {
-  const cleanupErrors: unknown[] = []
-  try {
-    await dependencies.transitionNodeStatus(nodeId, 'failed')
-  } catch (cleanupError) {
-    cleanupErrors.push(cleanupError)
-  }
-  try {
-    await dependencies.repository.recordRenderError(nodeId, error)
-  } catch (cleanupError) {
-    cleanupErrors.push(cleanupError)
-  }
-  if (cleanupErrors.length > 0) {
-    throw new AggregateError([error, ...cleanupErrors], '渲染失败补偿不完整')
-  }
-}
-
-function compensateEnqueueFailure(
-  nodeId: string,
-  pendingSet: boolean,
-  error: unknown,
-  dependencies: EnqueueDependencies
-): Promise<void> {
-  return compensateEnqueueFailureAsync(nodeId, pendingSet, error, dependencies)
-}
-
-/**
- * 把一次入队失败落成节点 `failed` + `renderError`，不留给 `advance.ts` 的通用
- * `recordStageError` 兜底（那条路径只写 `directorError`、不转 `failed`，会让节点
- * 永久停在 `idle` 且 Inspector 因 `STREAMABLE` 只含 running/success/failed 而
- * 完全不展示任何错误信息）。
- *
- * 补偿路径必须匹配失败发生时节点的真实状态：若失败在 `pending` 转换之前
- * （admission 加载或预检阶段），节点仍是 `idle`，只能走 `idle -> pending ->
- * running -> failed`；若失败发生在队列写入阶段，节点已是 `pending`，走
- * `pending -> running -> failed`（原有行为，不变）。
- */
-async function compensateEnqueueFailureAsync(
-  nodeId: string,
-  pendingSet: boolean,
-  error: unknown,
-  dependencies: EnqueueDependencies
-): Promise<void> {
-  const cleanupErrors: unknown[] = []
-  const transitions = pendingSet
-    ? (['running', 'failed'] as const)
-    : (['pending', 'running', 'failed'] as const)
-  for (const status of transitions) {
-    try {
-      await dependencies.transitionNodeStatus(nodeId, status)
-    } catch (cleanupError) {
-      cleanupErrors.push(cleanupError)
-    }
-  }
-  try {
-    await dependencies.recordRenderError(nodeId, error)
-  } catch (cleanupError) {
-    cleanupErrors.push(cleanupError)
-  }
-  if (cleanupErrors.length > 0) {
-    throw new AggregateError(
-      [error, ...cleanupErrors],
-      '渲染作业入队失败且补偿不完整'
-    )
+    rejectFabricateArtifact: (projectId, nodeId, sourceKey) =>
+      repository.rejectFabricateArtifact(projectId, nodeId, sourceKey),
   }
 }

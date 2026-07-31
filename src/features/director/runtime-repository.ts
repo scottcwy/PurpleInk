@@ -1,7 +1,13 @@
 import 'server-only'
 import { and, eq } from 'drizzle-orm'
-import { LOCAL_WORKSPACE_ID, type Db } from '@/lib/db/client'
-import { canvasNodes, projects } from '@/lib/db/schema/index'
+import { currentWorkspaceId } from '@/lib/auth/workspace-context'
+import { type Db } from '@/lib/db/client'
+import {
+  artifacts,
+  canvasNodes,
+  projects,
+  taskAttempts,
+} from '@/lib/db/schema/index'
 import { withTransaction } from '@/lib/db/transaction'
 import type { StorageAdapter } from '@/lib/storage'
 import {
@@ -22,10 +28,13 @@ import {
 import type { PreparedStageResult } from './stage-result'
 import type { ArtifactCommitResult } from './tools/write-artifact'
 import type { PipelineStage } from './types'
+import { classifyWorkflowError } from '@/features/canvas/workflow-error'
 
 export type { ArtifactPointerInput } from './runtime-artifact-writer'
 
 export interface DirectorStageContext {
+  /** 当前队列 attempt；只在执行期注入，不属于持久化阶段输入。 */
+  attemptId?: string
   projectId: string
   nodeId: string
   nodeType: string | null
@@ -53,7 +62,8 @@ export class DirectorRuntimeRepository {
   async assertEnqueueable(
     projectId: string,
     nodeId: string,
-    stage: PipelineStage
+    stage: PipelineStage,
+    allowPending = false
   ): Promise<void> {
     const [node] = await this.db
       .select({
@@ -63,7 +73,7 @@ export class DirectorRuntimeRepository {
       .from(canvasNodes)
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.id, nodeId),
           eq(canvasNodes.projectId, projectId)
         )
@@ -74,9 +84,28 @@ export class DirectorRuntimeRepository {
       throw new Error(`Director 节点阶段不匹配：${node.stage} != ${stage}`)
     }
     const status = fromPersistedNodeStatus(node.status)
-    if (!['idle', 'failed', 'stale'].includes(status)) {
+    // 'skipped' 在列：已跳过节点允许通过 intent=execute 重新入队恢复（见 routing.md 跳过合同）。
+    const enqueueable = ['idle', 'failed', 'stale', 'skipped']
+    if (allowPending) enqueueable.push('pending')
+    if (!enqueueable.includes(status)) {
       throw new Error(`Director 节点当前不可入队：${status}`)
     }
+  }
+
+  async loadNodeType(projectId: string, nodeId: string): Promise<string | null> {
+    const [node] = await this.db
+      .select({ type: canvasNodes.type })
+      .from(canvasNodes)
+      .where(
+        and(
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
+          eq(canvasNodes.projectId, projectId),
+          eq(canvasNodes.id, nodeId),
+        ),
+      )
+      .limit(1)
+    if (!node) throw new Error(`Director 节点不存在或不属于项目：${nodeId}`)
+    return node.type
   }
 
   async loadStageContext(
@@ -104,7 +133,7 @@ export class DirectorRuntimeRepository {
       )
       .where(
         and(
-          eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+          eq(canvasNodes.workspaceId, currentWorkspaceId()),
           eq(canvasNodes.id, nodeId),
           eq(projects.id, projectId)
         )
@@ -115,9 +144,9 @@ export class DirectorRuntimeRepository {
       throw new Error(`Director 节点阶段不匹配：${row.nodeStage} != ${stage}`)
     }
     const status = fromPersistedNodeStatus(row.status)
-    if (status !== 'pending' && !(status === 'running' && stage === 'FABRICATE')) {
+    if (status !== 'pending' && status !== 'running') {
       throw new Error(
-        `Director 节点必须为 pending 或 FABRICATE 运行中，当前为：${status}`
+        `Director 节点必须为 pending 或 running，当前为：${status}`
       )
     }
     const contextRow: StageContextRow = {
@@ -141,13 +170,88 @@ export class DirectorRuntimeRepository {
     return this.writer.registerPointer(input)
   }
 
-  persistStreamLog(
-    projectId: string,
-    nodeId: string,
-    stage: PipelineStage,
+  persistStreamLog(input: {
+    projectId: string
+    nodeId: string
+    stage: PipelineStage
     text: string
-  ): Promise<void> {
-    return this.writer.persistStreamLog(projectId, nodeId, stage, text)
+    attemptId?: string
+    signal?: AbortSignal
+  }): Promise<void> {
+    return this.writer.persistStreamLog(input)
+  }
+
+  /**
+   * 复合阶段（当前只有 shot-subtitle）的续跑判定：文本产物已在本 run 提交、
+   * 媒体副作用未完成时，恢复的 attempt 只重跑副作用，不再调用文本模型。
+   *
+   * 判定只依据「节点 payload 指向的 Director 产物确实由本 run 的某个 attempt
+   * 提交，且内容哈希一致」。曾经额外要求 checkpoint 里存在 providerScopeKey，
+   * 但票据重构后只有 deferProviderAttempt（原地延迟、复用同一 attemptId）会写
+   * 该字段；scheduleProviderRateLimitWait（provider 真返回 429）新建 attempt 时
+   * 只是继承旧 queueMeta。于是「是否重复调用文本模型」取决于此前是否恰好发生过
+   * 一次无关的调度延迟。该字段不提供任何额外安全性，去掉后 429 路径同样受保护。
+   */
+  async shouldResumeCommittedEffect(
+    attemptId: string,
+    nodeId: string,
+  ): Promise<boolean> {
+    const [row] = await this.db
+      .select({
+        runId: taskAttempts.runId,
+        nodeData: canvasNodes.data,
+      })
+      .from(taskAttempts)
+      .innerJoin(
+        canvasNodes,
+        and(
+          eq(canvasNodes.workspaceId, taskAttempts.workspaceId),
+          eq(canvasNodes.id, taskAttempts.entityId),
+        ),
+      )
+      .where(
+        and(
+          eq(taskAttempts.workspaceId, currentWorkspaceId()),
+          eq(taskAttempts.id, attemptId),
+          eq(taskAttempts.entityType, 'node'),
+          eq(taskAttempts.entityId, nodeId),
+        ),
+      )
+      .limit(1)
+    if (!row) return false
+    const payload = readNodePayload(row.nodeData)
+    if (
+      typeof payload.directorArtifactId !== 'string'
+      || typeof payload.outputContentHash !== 'string'
+    ) {
+      return false
+    }
+    const [committed] = await this.db
+      .select({
+        contentHash: artifacts.contentHash,
+        runId: taskAttempts.runId,
+      })
+      .from(artifacts)
+      .innerJoin(
+        taskAttempts,
+        and(
+          eq(taskAttempts.workspaceId, artifacts.workspaceId),
+          eq(taskAttempts.id, artifacts.attemptId),
+        ),
+      )
+      .where(
+        and(
+          eq(artifacts.workspaceId, currentWorkspaceId()),
+          eq(artifacts.id, payload.directorArtifactId),
+          eq(artifacts.aggregateType, 'node'),
+          eq(artifacts.aggregateId, nodeId),
+        ),
+      )
+      .limit(1)
+    return (
+      committed?.runId === row.runId
+      && committed.contentHash === payload.outputContentHash
+    )
   }
 
   async recordStageError(
@@ -155,12 +259,12 @@ export class DirectorRuntimeRepository {
     stage: PipelineStage,
     error: unknown
   ): Promise<void> {
-    const message = error instanceof Error ? error.message : String(error)
+    const projected = classifyWorkflowError(error, { stage })
     // 清掉可能残留的 renderError：本次失败发生在 director 阶段（含 render
     // handler 内的 fabricate 子步骤），任何更早一次渲染失败已经过时，
     // 不应与本次失败同时展示在 Inspector 里。
     await this.updateNodePayload(nodeId, {
-      directorError: { stage, message },
+      directorError: projected,
       renderError: undefined,
     })
   }
@@ -168,9 +272,10 @@ export class DirectorRuntimeRepository {
   recordStageOutput(
     nodeId: string,
     result: PreparedStageResult,
-    artifact: ArtifactCommitResult
+    artifact: ArtifactCommitResult,
+    signal?: AbortSignal,
   ): Promise<void> {
-    return this.writer.recordStageOutput(nodeId, result, artifact)
+    return this.writer.recordStageOutput(nodeId, result, artifact, signal)
   }
 
   private async updateNodePayload(
@@ -183,7 +288,7 @@ export class DirectorRuntimeRepository {
         .from(canvasNodes)
         .where(
           and(
-            eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+            eq(canvasNodes.workspaceId, currentWorkspaceId()),
             eq(canvasNodes.id, nodeId)
           )
         )
@@ -198,7 +303,7 @@ export class DirectorRuntimeRepository {
         })
         .where(
           and(
-            eq(canvasNodes.workspaceId, LOCAL_WORKSPACE_ID),
+            eq(canvasNodes.workspaceId, currentWorkspaceId()),
             eq(canvasNodes.id, nodeId)
           )
         )

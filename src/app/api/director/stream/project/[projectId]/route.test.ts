@@ -7,6 +7,18 @@ const { listProjects } = vi.hoisted(() => ({
 }))
 
 vi.mock('server-only', () => ({}))
+// 会话层单独有 pg 测试覆盖；这里只验路由业务分支，直接以假会话放行。
+vi.mock('@/features/auth/api-session', () => ({
+  withApiSession: (handler: (session: unknown) => Promise<Response>) =>
+    handler({
+      userId: 'user-1',
+      workspaceId: 'ws-1',
+      email: 'user@example.com',
+      name: '测试用户',
+      workspaceName: '测试工作区',
+      sessionId: 'session-1',
+    }),
+}))
 vi.mock('@/features/canvas', () => ({ listProjects }))
 
 /** 读取到累计文本满足断言条件即止；项目流不会自行关闭，由调用方 abort。 */

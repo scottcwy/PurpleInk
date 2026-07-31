@@ -2,12 +2,13 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=1920, height=1080, initial-scale=1" />
     <style>
       html,
-      body {
-        width: 100%;
-        height: 100%;
+      body,
+      main {
+        width: 1920px;
+        height: 1080px;
         margin: 0;
         overflow: hidden;
         background: #0f0f0f;
@@ -26,7 +27,13 @@
     </style>
   </head>
   <body>
-    <div id="hero">CodeVideoCanvas</div>
+    <main
+      data-composition-id="deterministic-shot"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div id="hero">CodeVideoCanvas</div>
+    </main>
     <script>
       const hero = document.querySelector('#hero')
       window.__CVC_RENDER__ = {
@@ -41,5 +48,6 @@
         },
       }
     </script>
+    </main>
   </body>
 </html>

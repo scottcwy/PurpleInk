@@ -9,6 +9,7 @@ import {
 } from '@/features/audio'
 import { runShotQaCheck } from '@/features/render/qa-check'
 import { runShotVisionQa } from '@/features/render/vision-qa'
+import { billingInvocationNo } from '@/features/billing'
 import type { DirectorStageContext } from './runtime-repository'
 import {
   shotSfxPromptInputSchema,
@@ -26,12 +27,14 @@ interface StageEffectDependencies {
   runVisionQa: (input: {
     projectId: string
     qaNodeId: string
+    attemptId: string
     shot: Record<string, unknown> & { id: string }
   }) => Promise<unknown>
 }
 
 export type DirectorStageEffect = (
-  context: DirectorStageContext
+  context: DirectorStageContext,
+  signal?: AbortSignal,
 ) => Promise<void>
 
 /**
@@ -43,13 +46,15 @@ export type DirectorStageEffect = (
 export function createDirectorStageEffect(
   dependencies: StageEffectDependencies
 ): DirectorStageEffect {
-  return async (context) => {
+  return async (context, signal) => {
+    signal?.throwIfAborted()
     if (context.nodeType === 'shot-sfx') {
       const input = shotSfxPromptInputSchema.parse(context.directorInput)
       await dependencies.loadNarration(
         context.projectId,
         input.shotAllocation.audioUnitId
       )
+      signal?.throwIfAborted()
       return
     }
     if (context.nodeType === 'shot-subtitle') {
@@ -58,6 +63,7 @@ export function createDirectorStageEffect(
         context.projectId,
         input.shotAllocation.audioUnitId
       )
+      signal?.throwIfAborted()
       await dependencies.generateSubtitle({
         projectId: context.projectId,
         nodeId: context.nodeId,
@@ -67,17 +73,34 @@ export function createDirectorStageEffect(
         audioKey: source.audioKey,
         audioBytes: source.audioBytes,
         audioFormat: source.audioFormat,
+        // Director 文本调用占用低位 invocationNo；100 是 ASR 副作用的保留槽，
+        // 避免工具循环、修复调用与字幕计费记录发生唯一键冲突。
+        ...(context.attemptId
+          ? {
+              billingContext: {
+                attemptId: context.attemptId,
+                invocationNo: billingInvocationNo('subtitle-asr', 1),
+              },
+            }
+          : {}),
       })
+      signal?.throwIfAborted()
       return
     }
     if (context.nodeType === 'shot-qa') {
+      if (!context.attemptId) {
+        throw new Error('Vision QA 缺少可审计的 attemptId')
+      }
       const input = shotQaPromptInputSchema.parse(context.directorInput)
       await dependencies.runRuleQa(context.projectId, context.nodeId)
+      signal?.throwIfAborted()
       await dependencies.runVisionQa({
         projectId: context.projectId,
         qaNodeId: context.nodeId,
+        attemptId: context.attemptId,
         shot: input.shot,
       })
+      signal?.throwIfAborted()
     }
   }
 }

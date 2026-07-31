@@ -1,5 +1,10 @@
 import type { Variants } from 'motion/react'
-import { TRANSITION_BASE, TRANSITION_ENTER, TRANSITION_EXIT } from './tokens'
+import {
+  SPRING_SPATIAL_DEFAULT,
+  TRANSITION_BASE,
+  TRANSITION_ENTER,
+  TRANSITION_EXIT,
+} from './tokens'
 
 /** 右侧内容进入：轻微上浮淡入（页面切换 template 使用）。 */
 export const fadeInUp: Variants = {
@@ -30,6 +35,20 @@ export const slideInRight: Variants = {
 
 /** 内容区高度收起/展开（可折叠卡片：CollapsibleCard 的展开/收起）。 */
 export const collapse: Variants = {
-  hidden: { height: 0, opacity: 0, transition: TRANSITION_EXIT },
-  visible: { height: 'auto', opacity: 1, transition: TRANSITION_BASE },
+  hidden: {
+    height: 0,
+    opacity: 0,
+    transition: {
+      default: SPRING_SPATIAL_DEFAULT,
+      opacity: TRANSITION_EXIT,
+    },
+  },
+  visible: {
+    height: 'auto',
+    opacity: 1,
+    transition: {
+      default: SPRING_SPATIAL_DEFAULT,
+      opacity: TRANSITION_BASE,
+    },
+  },
 }

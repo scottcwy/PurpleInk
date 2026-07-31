@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from 'react'
-import Link from 'next/link'
+import { ControlPressLink } from '@/components/ui/control-motion'
 import { Tooltip } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
@@ -54,16 +54,20 @@ export function NavItem({
   )
 
   const classes = cn(
-    'flex h-8 items-center rounded-sm transition-colors duration-150 ease-out',
+    'flex h-8 items-center rounded-sm transition-colors duration-fast ease-standard',
     compact ? 'w-8 justify-center px-0' : 'gap-2 px-2.5 py-1.5',
     active ? 'bg-ds-surface-muted' : 'bg-transparent',
     className,
   )
 
   const node = href ? (
-    <Link href={href} aria-current={active ? 'page' : undefined} className={classes}>
+    <ControlPressLink
+      href={href}
+      aria-current={active ? 'page' : undefined}
+      className={classes}
+    >
       {content}
-    </Link>
+    </ControlPressLink>
   ) : (
     <div className={classes}>{content}</div>
   )

@@ -4,6 +4,7 @@ import {
   check,
   customType,
   foreignKey,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -16,6 +17,8 @@ import {
 import { artifacts } from './artifacts'
 import { type VersionedPayload, workspaces } from './core'
 import { pipelineRuns, taskAttempts } from './execution'
+import { rateCards, usagePeriods } from './billing'
+import { users } from './auth'
 
 export const AI_TASK_KINDS = [
   'project-plan',
@@ -32,6 +35,8 @@ export const AI_INVOCATION_STATUSES = [
   'failed',
   'cancelled',
 ] as const
+
+export const AI_INVOCATION_FUNDING = ['managed', 'byok', 'custom'] as const
 
 const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({
   dataType() {
@@ -151,17 +156,41 @@ export const aiInvocations = pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: 'cascade' }),
     id: uuid('id').defaultRandom().notNull(),
-    runId: uuid('run_id').notNull(),
-    attemptId: uuid('attempt_id').notNull(),
-    taskId: text('task_id').notNull(),
+    runId: uuid('run_id'),
+    attemptId: uuid('attempt_id'),
+    taskId: text('task_id'),
     invocationNo: integer('invocation_no').notNull(),
     repairNo: integer('repair_no').default(0).notNull(),
     status: text('status').default('running').notNull(),
     provider: text('provider').notNull(),
     model: text('model').notNull(),
-    inputHash: text('input_hash').notNull(),
+    actorUserId: uuid('actor_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    funding: text('funding').default('managed').notNull(),
+    capability: text('capability'),
+    operation: text('operation').default('workflow').notNull(),
+    source: text('source').default('products').notNull(),
+    telemetryVersion: integer('telemetry_version').default(1).notNull(),
+    inputHash: text('input_hash'),
     outputHash: text('output_hash'),
     usage: jsonb('usage').$type<VersionedPayload>(),
+    usagePeriodId: uuid('usage_period_id'),
+    rateCardId: uuid('rate_card_id').references(() => rateCards.id, {
+      onDelete: 'restrict',
+    }),
+    billingIdempotencyKey: text('billing_idempotency_key'),
+    billingStatus: text('billing_status').default('unreserved').notNull(),
+    reservedCnyMicros: bigint('reserved_cny_micros', { mode: 'bigint' })
+      .default(sql`0`)
+      .notNull(),
+    settledCnyMicros: bigint('settled_cny_micros', { mode: 'bigint' }),
+    usageStatus: text('usage_status'),
+    settledAt: timestamp('settled_at', { withTimezone: true }),
+    providerStartedAt: timestamp('provider_started_at', { withTimezone: true }),
+    providerCompletedAt: timestamp('provider_completed_at', { withTimezone: true }),
+    providerDurationMs: integer('provider_duration_ms'),
+    failureKind: text('failure_kind'),
     traceArtifactId: uuid('trace_artifact_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -172,6 +201,11 @@ export const aiInvocations = pgTable(
       name: 'ai_invocations_pkey',
       columns: [table.workspaceId, table.id],
     }),
+    foreignKey({
+      name: 'ai_invocations_usage_period_fk',
+      columns: [table.workspaceId, table.usagePeriodId],
+      foreignColumns: [usagePeriods.workspaceId, usagePeriods.id],
+    }).onDelete('restrict'),
     foreignKey({
       name: 'ai_invocations_run_fk',
       columns: [table.workspaceId, table.runId],
@@ -193,6 +227,10 @@ export const aiInvocations = pgTable(
       table.invocationNo,
       table.repairNo,
     ),
+    unique('ai_invocations_billing_idempotency_unique').on(
+      table.workspaceId,
+      table.billingIdempotencyKey,
+    ),
     check(
       'ai_invocations_status_check',
       sql`${table.status} in ('running', 'succeeded', 'failed', 'cancelled')`,
@@ -207,11 +245,52 @@ export const aiInvocations = pgTable(
     ),
     check(
       'ai_invocations_input_hash_check',
-      sql`length(${table.inputHash}) = 64`,
+      sql`${table.inputHash} is null or length(${table.inputHash}) = 64`,
     ),
     check(
       'ai_invocations_output_hash_check',
       sql`${table.outputHash} is null or length(${table.outputHash}) = 64`,
+    ),
+    check(
+      'ai_invocations_billing_status_check',
+      sql`${table.billingStatus} in ('unreserved', 'reserved', 'settled', 'released', 'not_applicable')`,
+    ),
+    check(
+      'ai_invocations_billing_amounts_check',
+      sql`${table.reservedCnyMicros} >= 0
+        and (${table.settledCnyMicros} is null or ${table.settledCnyMicros} >= 0)`,
+    ),
+    check(
+      'ai_invocations_usage_status_check',
+      sql`${table.usageStatus} is null or ${table.usageStatus} in ('reported', 'unavailable')`,
+    ),
+    check(
+      'ai_invocations_funding_check',
+      sql`${table.funding} in ('managed', 'byok', 'custom')`,
+    ),
+    check(
+      'ai_invocations_capability_check',
+      sql`${table.capability} is null or ${table.capability} in (
+        'text', 'vision', 'tts', 'asr', 'workflow'
+      )`,
+    ),
+    check(
+      'ai_invocations_telemetry_version_check',
+      sql`${table.telemetryVersion} in (1, 2)`,
+    ),
+    check(
+      'ai_invocations_provider_duration_check',
+      sql`${table.providerDurationMs} is null or ${table.providerDurationMs} >= 0`,
+    ),
+    index('ai_invocations_actor_time_idx').on(
+      table.actorUserId,
+      table.providerStartedAt,
+    ),
+    index('ai_invocations_workspace_managed_period_idx').on(
+      table.workspaceId,
+      table.funding,
+      table.usagePeriodId,
+      table.providerStartedAt,
     ),
   ],
 )

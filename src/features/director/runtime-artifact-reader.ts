@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { Db } from '@/lib/db/client'
 import type { StorageAdapter } from '@/lib/storage'
 import { DirectorArtifactSource } from './runtime-artifact-source'
+import { styleBibleToneExcerpt } from './style-bible-excerpt'
 import type { AudioAllocation, ShotAllocation } from './schemas/ingest'
 import type { DirectorShot } from './schemas/director-shot-plan'
 import type { PipelineStage } from './types'
@@ -33,12 +34,14 @@ export class DirectorArtifactReader {
       return payload.directorInput ?? { rawScript: row.projectScript }
     }
     if (stage === 'DIRECT') {
-      const ingest = await this.source.loadIngestArtifact(row.nodeProjectId)
+      const [ingest, visualPreferences] = await Promise.all([
+        this.source.loadIngestArtifact(row.nodeProjectId),
+        this.source.loadVisualPreferences(row.nodeProjectId),
+      ])
       return {
         projectTitle: row.projectTitle,
         scriptUnits: ingest.scriptUnits,
-        audioManifest: ingest.audioManifest,
-        audioAllocation: ingest.audioAllocation,
+        ...visualPreferences,
       }
     }
     if (stage === 'SHOT_SPEC') return this.resolveShotSpecInput(row)
@@ -49,57 +52,87 @@ export class DirectorArtifactReader {
   }
 
   private async resolveShotSpecInput(row: StageContextRow): Promise<unknown> {
+    if (!row.laneKey) throw new Error('SHOT_SPEC 节点缺少 laneKey')
     const [ingest, direct] = await Promise.all([
       this.source.loadIngestArtifact(row.nodeProjectId),
       this.source.loadDirectArtifact(row.nodeProjectId),
     ])
+    const payload = readPayload(row.data)
+    const sourceUnitId = await this.resolveSourceUnitId(
+      row.nodeProjectId,
+      row.laneKey,
+      payload.sourceUnitId
+    )
+    const sourceUnit = ingest.scriptUnits.find((unit) => unit.unitId === sourceUnitId)
+    if (!sourceUnit) {
+      throw new Error(`script units 中找不到 ${sourceUnitId}`)
+    }
     return {
+      target: {
+        laneKey: row.laneKey,
+        sourceUnitId: sourceUnit.unitId,
+        sourceUnit,
+      },
       scriptUnits: ingest.scriptUnits,
-      audioAllocation: ingest.audioAllocation,
       masterPlan: direct.masterPlan,
       styleBible: direct.styleBible,
     }
   }
 
+  private async resolveSourceUnitId(
+    projectId: string,
+    laneKey: string,
+    persisted: unknown
+  ): Promise<string> {
+    const parsed = z.string().regex(/^U\d{3}$/).safeParse(persisted)
+    if (parsed.success) return parsed.data
+    const ingestAudio = await this.source.loadIngestAudioArtifact(projectId)
+    return requireShotAllocation(ingestAudio.audioAllocation, laneKey).audioUnitId
+  }
+
   private async resolveFabricateInput(row: StageContextRow): Promise<unknown> {
     if (!row.laneKey) throw new Error('FABRICATE 节点缺少 laneKey')
-    const [ingest, direct, shot] = await Promise.all([
-      this.source.loadIngestArtifact(row.nodeProjectId),
+    const [ingestAudio, direct, shot, visualPreferences] = await Promise.all([
+      this.source.loadIngestAudioArtifact(row.nodeProjectId),
       this.source.loadDirectArtifact(row.nodeProjectId),
       this.loadShot(row.nodeProjectId, row.laneKey),
+      this.source.loadVisualPreferences(row.nodeProjectId),
     ])
     return {
       shot,
-      audioAllocation: ingest.audioAllocation,
+      audioAllocation: ingestAudio.audioAllocation,
       styleBible: direct.styleBible,
+      ...visualPreferences,
     }
   }
 
   private async resolveAssembleInput(row: StageContextRow): Promise<unknown> {
     const direct = await this.source.loadDirectArtifact(row.nodeProjectId)
     if (row.nodeType === 'score') {
-      const [ingest, shotPlan, rendered] = await Promise.all([
-        this.source.loadIngestArtifact(row.nodeProjectId),
+      const [ingestAudio, shotPlan, rendered] = await Promise.all([
+        this.source.loadIngestAudioArtifact(row.nodeProjectId),
         this.source.loadAllShotSpecs(row.nodeProjectId),
-        this.source.loadAllRenderedArtifactKeys(row.nodeProjectId),
+        this.source.loadRenderedArtifactInventory(row.nodeProjectId),
       ])
       return {
-        styleBible: direct.styleBible,
+        styleBible: styleBibleToneExcerpt(direct.styleBible),
         shotPlan,
-        audioAllocation: ingest.audioAllocation,
-        renderedArtifactKeys: rendered.map((item) => item.storageKey),
+        audioAllocation: ingestAudio.audioAllocation,
+        renderedArtifactKeys: rendered.rendered.map((item) => item.storageKey),
+        skippedRenderLanes: rendered.skippedLanes,
       }
     }
     if (row.nodeType !== 'shot-sfx' && row.nodeType !== 'shot-subtitle') {
       throw new Error(`未知 ASSEMBLE 节点类型：${row.nodeType}`)
     }
     if (!row.laneKey) throw new Error(`${row.nodeType} 节点缺少 laneKey`)
-    const [ingest, shot] = await Promise.all([
+    const [ingest, ingestAudio, shot] = await Promise.all([
       this.source.loadIngestArtifact(row.nodeProjectId),
+      this.source.loadIngestAudioArtifact(row.nodeProjectId),
       this.loadShot(row.nodeProjectId, row.laneKey),
     ])
     const shotAllocation = requireShotAllocation(
-      ingest.audioAllocation,
+      ingestAudio.audioAllocation,
       row.laneKey
     )
     const scriptUnit = ingest.scriptUnits.find(
@@ -117,7 +150,7 @@ export class DirectorArtifactReader {
           row.nodeProjectId,
           row.laneKey
         ),
-        styleBible: direct.styleBible,
+        styleBible: styleBibleToneExcerpt(direct.styleBible),
       }
     }
     return { shot, scriptUnit, shotAllocation }
@@ -125,26 +158,31 @@ export class DirectorArtifactReader {
 
   private async resolveFinalizeInput(row: StageContextRow): Promise<unknown> {
     if (row.nodeType === 'export') {
-      const [shotPlan, draftArtifactKey, qaFindings] = await Promise.all([
+      const [shotPlan, finalExport, qaFindings] = await Promise.all([
         this.source.loadAllShotSpecs(row.nodeProjectId),
-        this.source.loadFinalExportArtifact(row.nodeProjectId),
+        this.source.loadFinalExportDelivery(row.nodeProjectId),
         this.source.loadShotQaFindings(row.nodeProjectId),
       ])
-      return { shotPlan, draftArtifactKey, qaFindings }
+      return {
+        shotPlan,
+        draftArtifactKey: finalExport.storageKey,
+        qaFindings,
+        delivery: finalExport.delivery,
+      }
     }
     if (row.nodeType !== 'shot-qa') {
       throw new Error(`未知 FINALIZE 节点类型：${row.nodeType}`)
     }
     if (!row.laneKey) throw new Error('shot-qa 节点缺少 laneKey')
-    const [ingest, shot, renderedArtifactKey] = await Promise.all([
-      this.source.loadIngestArtifact(row.nodeProjectId),
+    const [ingestAudio, shot, renderedArtifactKey] = await Promise.all([
+      this.source.loadIngestAudioArtifact(row.nodeProjectId),
       this.loadShot(row.nodeProjectId, row.laneKey),
       this.source.loadRenderedArtifactKey(row.nodeProjectId, row.laneKey),
     ])
     return {
       shot,
       renderedArtifactKey,
-      shotAllocation: requireShotAllocation(ingest.audioAllocation, row.laneKey),
+      shotAllocation: requireShotAllocation(ingestAudio.audioAllocation, row.laneKey),
     }
   }
 

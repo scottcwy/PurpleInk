@@ -69,15 +69,19 @@ describe('synthesizeSpeech', () => {
         'content-type': 'application/json',
       }),
     })
+    expect(request?.[1]?.signal).toBeInstanceOf(AbortSignal)
     expect(JSON.parse(String(request?.[1]?.body))).toEqual({
       model: 'stepaudio-2.5-tts',
       voice: 'cixingnansheng',
       input: '你好世界',
       response_format: 'mp3',
       return_url: true,
-      timestamp: true,
     })
-    expect(fetcher).toHaveBeenNthCalledWith(2, 'https://audio.stepfun.test/voice.mp3')
+    expect(fetcher).toHaveBeenNthCalledWith(
+      2,
+      'https://audio.stepfun.test/voice.mp3',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
     expect(result).toEqual({
       audioBytes: Buffer.from([1, 2, 3]),
       audioFormat: 'mp3',
@@ -105,19 +109,43 @@ describe('synthesizeSpeech', () => {
     expect(fetcher).not.toHaveBeenCalled()
   })
 
-  it('rejects a TTS response without usable native timestamps', async () => {
+  it('accepts an official URL response without legacy timestamp metadata', async () => {
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ data: { url: 'https://audio.stepfun.test/voice.mp3' } }))
+      .mockResolvedValueOnce(new Response(new Uint8Array([1, 2, 3])))
+
+    await expect(
+      synthesizeSpeech({ text: '你好' }, dependencies(fetcher))
+    ).resolves.toMatchObject({ durationMs: 0, nativeCaptions: [] })
+  })
+
+  it('accepts the official direct binary audio response', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-      Response.json({
-        data: {
-          url: 'https://audio.stepfun.test/voice.mp3',
-          subtitles: [{ text: '你好', request_id: 'request-1', items: [] }],
-        },
+      new Response(new Uint8Array([1, 2, 3]), {
+        headers: { 'content-type': 'audio/mpeg' },
       })
     )
 
     await expect(
       synthesizeSpeech({ text: '你好' }, dependencies(fetcher))
-    ).rejects.toThrow('词级时间戳')
+    ).resolves.toMatchObject({
+      audioBytes: Buffer.from([1, 2, 3]),
+      durationMs: 0,
+      nativeCaptions: [],
+    })
+  })
+
+  it('turns an upstream TTS timeout into an actionable failure', async () => {
+    const timeout = Object.assign(new Error('aborted'), { name: 'TimeoutError' })
+    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(timeout)
+
+    await expect(
+      synthesizeSpeech({ text: '你好' }, dependencies(fetcher))
+    ).rejects.toMatchObject({
+      name: 'ProviderRequestError',
+      kind: 'timeout',
+      providerId: 'stepfun',
+    })
   })
 })
 
@@ -190,7 +218,11 @@ describe('transcribeSpeech', () => {
         { audioBytes: Buffer.from([1]), audioFormat: 'mp3' },
         dependencies(fetcher)
       )
-    ).rejects.toThrow('音频格式不支持')
+    ).rejects.toMatchObject({
+      name: 'ProviderRequestError',
+      kind: 'unknown',
+      providerId: 'stepfun',
+    })
   })
 
   it('rejects malformed SSE JSON and a missing done event', async () => {

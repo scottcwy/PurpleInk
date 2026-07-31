@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getStoredApiKey, saveApiKey, validateKey } from './stepfun-adapter'
 
+// 被测模块经 currentWorkspaceId() 取归属（PLAN-002 阶段 B）；单测没有请求入口，
+// 把读取口 mock 成历史单工作区 id，与用例 seed 的数据保持一致。
+vi.mock('@/lib/auth/workspace-context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/workspace-context')>()),
+  currentWorkspaceId: () => '00000000-0000-4000-8000-000000000001',
+  currentUserId: () => 'test-user',
+}))
+
 const mocks = vi.hoisted(() => ({
   getConfig: vi.fn(),
   loadSecret: vi.fn(),
@@ -31,11 +39,11 @@ beforeEach(() => {
 })
 
 describe('credentials', () => {
-  it('reads and writes credentials only through the encrypted store', async () => {
-    mocks.loadSecret.mockResolvedValue('stored-key')
-    await expect(getStoredApiKey()).resolves.toBe('stored-key')
+  it('reads and writes only the current workspace BYOK credential', async () => {
+    mocks.loadSecret.mockResolvedValue('workspace-key')
+    await expect(getStoredApiKey()).resolves.toBe('workspace-key')
     const verifiedAt = new Date('2026-07-25T00:00:00.000Z')
-    await saveApiKey('new-key', verifiedAt)
+    await expect(saveApiKey('new-key', verifiedAt)).resolves.toBeUndefined()
 
     expect(mocks.loadSecret).toHaveBeenCalledWith(
       '00000000-0000-4000-8000-000000000001',

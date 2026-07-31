@@ -41,7 +41,12 @@ export function recoverShotPlanArgument(text: string): string | null {
  * 只判定「是完整 HTML 文档」，确定性检测仍由下游可信门禁负责。
  */
 export function recoverDeterministicSourceArgument(text: string): string | null {
-  const html = stripCodeFences(text)
+  const stripped = stripCodeFences(text)
+  const textualToolCall = stripped.match(
+    /^<tool_call>\s*<function=check_determinism>\s*<parameter=source>\s*([\s\S]*?)\s*<\/parameter>\s*<\/function>\s*<\/tool_call>$/u
+  )
+  if (stripped.startsWith('<tool_call>') && !textualToolCall) return null
+  const html = textualToolCall?.[1]?.trim() ?? stripped
   if (!html.startsWith('<') || !html.endsWith('>')) return null
   return html
 }

@@ -1,0 +1,2 @@
+ALTER TABLE "task_attempts" ADD COLUMN "lease_expires_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "task_attempts" ADD COLUMN "visible_at" timestamp with time zone DEFAULT now() NOT NULL;
