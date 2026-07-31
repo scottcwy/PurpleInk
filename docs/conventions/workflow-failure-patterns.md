@@ -988,6 +988,8 @@ key，重试时可能覆盖已登记版本，登记失败后也不能安全盲�
 - 删除失败只持久化 `STORAGE_DELETE_FAILED`、attempt count 和下次重试时间，不得写入
   storage endpoint、文件内容、原始 provider/数据库错误；批量扫描使用
   `FOR UPDATE SKIP LOCKED`、有限 claim lease 与指数退避。
+- due 判断、claim lease 和重试退避统一使用 PostgreSQL `now()`；不得用应用进程
+  `new Date()` 与数据库默认时间比较，否则容器时钟偏差会让刚登记的补偿任务无法领取。
 - 清理成功删除 outbox 记录；进程在 claim 后崩溃时，lease 到期后允许另一执行器恢复。
   Artifact 登记原始错误与清理错误都必须保留在当前调用的 `AggregateError` 中，不能用
   清理失败覆盖真正的阶段失败。

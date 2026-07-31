@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, asc, eq, lte, or, sql } from 'drizzle-orm'
+import { and, asc, eq, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { getDb, type Db } from '@/lib/db/client'
 import {
@@ -201,7 +201,7 @@ async function claimDueRequests(
         input.workspaceId
           ? eq(storageCleanupRequests.workspaceId, input.workspaceId)
           : undefined,
-        lte(storageCleanupRequests.nextAttemptAt, new Date()),
+        sql`${storageCleanupRequests.nextAttemptAt} <= now()`,
         input.storageKey
           ? eq(storageCleanupRequests.storageKey, input.storageKey)
           : undefined,
@@ -215,13 +215,12 @@ async function claimDueRequests(
       .limit(input.limit)
       .for('update', { skipLocked: true })
     if (due.length === 0) return []
-    const leaseUntil = new Date(Date.now() + 5 * 60_000)
     await transaction
       .update(storageCleanupRequests)
       .set({
         attemptCount: sql`${storageCleanupRequests.attemptCount} + 1`,
         failureCode: null,
-        nextAttemptAt: leaseUntil,
+        nextAttemptAt: sql`now() + interval '5 minutes'`,
         updatedAt: new Date(),
       })
       .where(or(...due.map((item) => and(
@@ -237,7 +236,7 @@ async function claimDueRequests(
   })
 }
 
-function retryAt(attemptCount: number): Date {
+function retryAt(attemptCount: number) {
   const delayMs = Math.min(30 * 60_000, 2 ** Math.min(attemptCount, 10) * 1_000)
-  return new Date(Date.now() + delayMs)
+  return sql`now() + (${delayMs} * interval '1 millisecond')`
 }

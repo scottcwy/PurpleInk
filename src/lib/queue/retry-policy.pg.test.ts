@@ -167,6 +167,7 @@ async function seedProject(): Promise<string> {
     script: '',
     workflowVersion: 'test',
     exportSettings: { schemaVersion: 1, settings: {} },
+    autopilot: true,
   })
   return projectId
 }
