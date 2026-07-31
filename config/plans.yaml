@@ -1,0 +1,27 @@
+version: 1
+catalogVersion: 2026-07-31.1
+plans:
+  free:
+    displayName: Free
+    limitCnyMicros: 10000000
+    rank: 0
+    concurrency: 3
+    managedProviders: [stepfun, mimo]
+  plus:
+    displayName: Plus
+    limitCnyMicros: 50000000
+    rank: 1
+    concurrency: 20
+    managedProviders: [stepfun, mimo, gemini]
+  pro:
+    displayName: Pro
+    limitCnyMicros: 200000000
+    rank: 2
+    concurrency: 50
+    managedProviders: [stepfun, mimo, gemini, openai, anthropic]
+  max:
+    displayName: Max
+    limitCnyMicros: 2000000000
+    rank: 3
+    concurrency: 100
+    managedProviders: [stepfun, mimo, gemini, openai, anthropic]

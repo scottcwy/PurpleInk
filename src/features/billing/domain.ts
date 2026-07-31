@@ -1,30 +1,31 @@
+import {
+  AI_BILLING_MANIFEST,
+  type BuiltInProviderId,
+} from '@/lib/config/generated/ai-billing-manifest'
+
 export const PLAN_KEYS = ['free', 'plus', 'pro', 'max'] as const
 export type PlanKey = (typeof PLAN_KEYS)[number]
 
 export interface PlanDefinition {
   key: PlanKey
+  version: string
   displayName: string
   limitCnyMicros: bigint
   rank: number
+  concurrency: number
+  managedProviders: readonly BuiltInProviderId[]
 }
 
 export const PLAN_DEFINITIONS: Record<PlanKey, PlanDefinition> = {
-  free: { key: 'free', displayName: 'Free', limitCnyMicros: BigInt(10_000_000), rank: 0 },
-  plus: { key: 'plus', displayName: 'Plus', limitCnyMicros: BigInt(50_000_000), rank: 1 },
-  pro: { key: 'pro', displayName: 'Pro', limitCnyMicros: BigInt(200_000_000), rank: 2 },
-  max: { key: 'max', displayName: 'Max', limitCnyMicros: BigInt(2_000_000_000), rank: 3 },
-}
-
-const SUBSCRIPTION_CONCURRENCY_LIMITS: Record<PlanKey, number> = {
-  free: 3,
-  plus: 20,
-  pro: 20,
-  max: 50,
+  free: planDefinition('free'),
+  plus: planDefinition('plus'),
+  pro: planDefinition('pro'),
+  max: planDefinition('max'),
 }
 
 /** 同一 workspace 下所有项目与成员共享的活跃分镜上限。 */
 export function subscriptionConcurrencyLimit(plan: PlanKey): number {
-  return SUBSCRIPTION_CONCURRENCY_LIMITS[plan]
+  return PLAN_DEFINITIONS[plan].concurrency
 }
 
 const ROLLING_PERIOD_MS = 30 * 24 * 60 * 60 * 1_000
@@ -75,5 +76,18 @@ export function resolveRedemptionTransition(input: {
     plan: input.redeemedPlan,
     startsAt: period.startsAt,
     entitlementExpiresAt: period.endsAt,
+  }
+}
+
+function planDefinition(key: PlanKey): PlanDefinition {
+  const plan = AI_BILLING_MANIFEST.plans[key]
+  return {
+    key,
+    version: AI_BILLING_MANIFEST.catalogVersions.plans,
+    displayName: plan.displayName,
+    limitCnyMicros: BigInt(plan.limitCnyMicros),
+    rank: plan.rank,
+    concurrency: plan.concurrency,
+    managedProviders: plan.managedProviders,
   }
 }

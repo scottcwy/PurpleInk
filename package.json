@@ -18,6 +18,8 @@
     "test:pg": "vitest run --config vitest.pg.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/setup/db-migrate.ts",
+    "generate:ai-catalog": "tsx scripts/generate/ai-billing-catalog.ts --write",
+    "verify:ai-catalog": "tsx scripts/generate/ai-billing-catalog.ts --check",
     "verify:v3": "tsx scripts/verify/v3-architecture.ts --check",
     "verify:managed-services": "node scripts/verify/managed-service-readiness.mjs",
     "verify:e2e": "tsx scripts/verify/e2e-smoke.ts",
@@ -67,7 +69,8 @@
     "tailwindcss": "^4",
     "tsx": "^4.23.1",
     "typescript": "^5",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "yaml": "2.9.0"
   },
   "packageManager": "pnpm@10.30.0",
   "engines": {

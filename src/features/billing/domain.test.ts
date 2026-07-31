@@ -24,8 +24,8 @@ describe('billing plans', () => {
   it('locks one workspace-wide shot concurrency cap per subscription plan', () => {
     expect(subscriptionConcurrencyLimit('free')).toBe(3)
     expect(subscriptionConcurrencyLimit('plus')).toBe(20)
-    expect(subscriptionConcurrencyLimit('pro')).toBe(20)
-    expect(subscriptionConcurrencyLimit('max')).toBe(50)
+    expect(subscriptionConcurrencyLimit('pro')).toBe(50)
+    expect(subscriptionConcurrencyLimit('max')).toBe(100)
   })
 })
 

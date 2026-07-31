@@ -17,7 +17,7 @@ const catalog: ManagedModelCatalogRepository = {
     provider: provider as 'stepfun' | 'mimo' | 'gemini',
     modelId,
     capabilities: [capability],
-    minimumPlanKey: 'free',
+    minimumPlanKey: 'free' as const,
     enabled: true,
   })),
   listEnabled: vi.fn(async () => []),

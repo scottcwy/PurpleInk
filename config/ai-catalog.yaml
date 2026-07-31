@@ -1,0 +1,97 @@
+version: 1
+catalogVersion: 2026-07-31.1
+providers:
+  - { id: stepfun, label: 阶跃星辰 }
+  - { id: mimo, label: 小米 MiMo }
+  - { id: gemini, label: Google Gemini }
+  - { id: openai, label: OpenAI }
+  - { id: anthropic, label: Anthropic }
+
+channels:
+  - id: stepfun.step-plan
+    providerId: stepfun
+    funding: managed
+    adapter: openai-completions
+    baseUrl: https://api.stepfun.com/step_plan/v1
+    secretRef: CVC_MANAGED_STEPFUN_API_KEY
+    pool: { maxInFlight: 50, failureDomain: stepfun.step-plan }
+  - id: stepfun.official-byok
+    providerId: stepfun
+    funding: byok
+    adapter: openai-completions
+    baseUrl: https://api.stepfun.com/v1
+    secretRef: workspace-credential
+    pool: { maxInFlight: 100, failureDomain: workspace.stepfun }
+  - id: mimo.official-managed
+    providerId: mimo
+    funding: managed
+    adapter: openai-completions
+    baseUrl: https://api.xiaomimimo.com/v1
+    secretRef: CVC_MANAGED_MIMO_API_KEY
+    pool: { maxInFlight: 50, failureDomain: mimo.official-managed }
+  - id: mimo.official-byok
+    providerId: mimo
+    funding: byok
+    adapter: openai-completions
+    baseUrl: https://api.xiaomimimo.com/v1
+    secretRef: workspace-credential
+    pool: { maxInFlight: 100, failureDomain: workspace.mimo }
+  - id: gemini.bcai
+    providerId: gemini
+    funding: managed
+    adapter: openai-completions
+    baseUrl: https://bcai.online/v1
+    secretRef: CVC_MANAGED_GEMINI_API_KEY
+    pool: { maxInFlight: 200, failureDomain: gemini.bcai }
+  - id: gemini.official-byok
+    providerId: gemini
+    funding: byok
+    adapter: openai-completions
+    baseUrl: https://generativelanguage.googleapis.com/v1beta/openai
+    secretRef: workspace-credential
+    pool: { maxInFlight: 100, failureDomain: workspace.gemini }
+  - id: openai.openrouter
+    providerId: openai
+    funding: managed
+    adapter: openai-completions
+    baseUrl: https://openrouter.ai/api/v1
+    secretRef: CVC_MANAGED_OPENAI_API_KEY
+    pool: { maxInFlight: 200, failureDomain: openai.openrouter }
+  - id: openai.official-byok
+    providerId: openai
+    funding: byok
+    adapter: openai-completions
+    baseUrl: https://api.openai.com/v1
+    secretRef: workspace-credential
+    pool: { maxInFlight: 100, failureDomain: workspace.openai }
+  - id: anthropic.xhuoai
+    providerId: anthropic
+    funding: managed
+    adapter: openai-completions
+    baseUrl: https://api.xhuoai.com/v1
+    secretRef: CVC_MANAGED_ANTHROPIC_API_KEY
+    pool: { maxInFlight: 200, failureDomain: anthropic.xhuoai }
+  - id: anthropic.official-byok
+    providerId: anthropic
+    funding: byok
+    adapter: anthropic-messages
+    baseUrl: https://api.anthropic.com/v1
+    secretRef: workspace-credential
+    pool: { maxInFlight: 100, failureDomain: workspace.anthropic }
+
+deployments:
+  - { id: stepfun.step-3.7-flash.managed, channelId: stepfun.step-plan, logicalModelId: step-3.7-flash, outboundModelId: step-3.7-flash, officialPriceIdentity: stepfun.step-3.7-flash, capabilities: [text, vision], verifiedCapabilities: [text, vision] }
+  - { id: stepfun.step-3.7-flash.byok, channelId: stepfun.official-byok, logicalModelId: step-3.7-flash, outboundModelId: step-3.7-flash, officialPriceIdentity: stepfun.step-3.7-flash, capabilities: [text, vision], verifiedCapabilities: [text, vision] }
+  - { id: stepfun.stepaudio-2.5-tts.managed, channelId: stepfun.step-plan, logicalModelId: stepaudio-2.5-tts, outboundModelId: stepaudio-2.5-tts, officialPriceIdentity: stepfun.stepaudio-2.5-tts, capabilities: [tts], verifiedCapabilities: [tts] }
+  - { id: stepfun.stepaudio-2.5-asr.managed, channelId: stepfun.step-plan, logicalModelId: stepaudio-2.5-asr, outboundModelId: stepaudio-2.5-asr, officialPriceIdentity: stepfun.stepaudio-2.5-asr, capabilities: [asr], verifiedCapabilities: [asr] }
+  - { id: mimo.v2.5.managed, channelId: mimo.official-managed, logicalModelId: mimo-v2.5, outboundModelId: mimo-v2.5, officialPriceIdentity: xiaomi.mimo-v2.5, capabilities: [text, vision], verifiedCapabilities: [text, vision] }
+  - { id: mimo.v2.5.byok, channelId: mimo.official-byok, logicalModelId: mimo-v2.5, outboundModelId: mimo-v2.5, officialPriceIdentity: xiaomi.mimo-v2.5, capabilities: [text, vision], verifiedCapabilities: [text, vision] }
+  - { id: mimo.v2.5-tts.managed, channelId: mimo.official-managed, logicalModelId: mimo-v2.5-tts, outboundModelId: mimo-v2.5-tts, officialPriceIdentity: xiaomi.mimo-v2.5-tts, capabilities: [tts], verifiedCapabilities: [tts] }
+  - { id: mimo.v2.5-asr.managed, channelId: mimo.official-managed, logicalModelId: mimo-v2.5-asr, outboundModelId: mimo-v2.5-asr, officialPriceIdentity: xiaomi.mimo-v2.5-asr, capabilities: [asr], verifiedCapabilities: [asr] }
+  - { id: gemini.3.6-flash.managed, channelId: gemini.bcai, logicalModelId: gemini-3.6-flash, outboundModelId: gemini-3.6-flash-tiered, officialPriceIdentity: google.gemini-3.6-flash, capabilities: [text, vision], verifiedCapabilities: [text], fallbackDeploymentId: gemini.3.1-flash-lite.managed }
+  - { id: gemini.3.1-flash-lite.managed, channelId: gemini.bcai, logicalModelId: gemini-3.1-flash-lite, outboundModelId: gemini-3.1-flash-lite, officialPriceIdentity: google.gemini-3.1-flash-lite, capabilities: [text, vision], verifiedCapabilities: [text, vision] }
+  - { id: gemini.3.6-flash.byok, channelId: gemini.official-byok, logicalModelId: gemini-3.6-flash, outboundModelId: gemini-3.6-flash, officialPriceIdentity: google.gemini-3.6-flash, capabilities: [text, vision], verifiedCapabilities: [text] }
+  - { id: openai.gpt-5.6-luna.managed, channelId: openai.openrouter, logicalModelId: gpt-5.6-luna, outboundModelId: openai/gpt-5.6-luna, officialPriceIdentity: openai.gpt-5.6-luna, capabilities: [text, vision], verifiedCapabilities: [text] }
+  - { id: openai.gpt-5.6-luna.byok, channelId: openai.official-byok, logicalModelId: gpt-5.6-luna, outboundModelId: gpt-5.6-luna, officialPriceIdentity: openai.gpt-5.6-luna, capabilities: [text, vision], verifiedCapabilities: [text] }
+  - { id: anthropic.claude-sonnet-5.managed, channelId: anthropic.xhuoai, logicalModelId: claude-sonnet-5, outboundModelId: claude-sonnet-5, officialPriceIdentity: anthropic.claude-sonnet-5, capabilities: [text, vision], verifiedCapabilities: [text] }
+  - { id: anthropic.claude-sonnet-5.byok, channelId: anthropic.official-byok, logicalModelId: claude-sonnet-5, outboundModelId: claude-sonnet-5, officialPriceIdentity: anthropic.claude-sonnet-5, capabilities: [text, vision], verifiedCapabilities: [text] }
