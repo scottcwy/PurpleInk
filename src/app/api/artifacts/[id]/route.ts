@@ -4,6 +4,7 @@ import {
   attachmentDisposition,
   artifactDownloadFilename,
   getArtifactDescriptor,
+  getArtifactDownloadRedirect,
   readArtifact,
   wantsAttachment,
 } from '@/features/artifacts'
@@ -49,6 +50,32 @@ async function handleGet(request: Request, params: Promise<{ id: string }>) {
         throw new Error('final delivery unavailable')
       }
     }
+    // 不带 download 时保持内联：画布检查器与成片预览都靠内联播放。
+    const attachment = wantsAttachment(query.get('download'))
+    const verifiedVideo =
+      candidate.kind === 'website-video-mp4' || candidate.kind === 'final-mp4'
+    // 两种成片无论走哪条路径都必须有可追溯的 content_hash。
+    if (verifiedVideo && !candidate.contentHash) {
+      throw new Error('website delivery hash missing')
+    }
+    // s3-mirror 模式：门控通过后 302 到远端预签名 URL，字节不经过 Next 进程。
+    // 完整性由写穿时的远端确认 + 提交时按实际字节算出的 content_hash 保证；
+    // local 模式返回 null，走下方原字节流路径（含全字节 SHA-256 校验）。
+    const redirectUrl = await getArtifactDownloadRedirect(projectId, artifactId, {
+      attachment,
+    })
+    if (redirectUrl) {
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: redirectUrl,
+          'cache-control': 'private, no-store',
+          ...(verifiedVideo
+            ? { 'x-content-sha256': candidate.contentHash ?? '' }
+            : {}),
+        },
+      })
+    }
     const { descriptor, bytes } = await readArtifact(projectId, artifactId)
     if (
       (descriptor.kind === 'website-video-mp4' || descriptor.kind === 'final-mp4')
@@ -60,8 +87,6 @@ async function handleGet(request: Request, params: Promise<{ id: string }>) {
     ) {
       throw new Error('website delivery hash mismatch')
     }
-    // 不带 download 时保持内联：画布检查器与成片预览都靠内联播放。
-    const attachment = wantsAttachment(query.get('download'))
     return new Response(new Uint8Array(bytes), {
       headers: {
         'content-type': artifactContentType(descriptor.kind),

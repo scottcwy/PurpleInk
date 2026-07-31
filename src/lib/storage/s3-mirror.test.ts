@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { LocalFsStorage } from './local-fs'
-import type { RemoteObjectStore } from './remote-store'
+import type { PresignGetOverrides, RemoteObjectStore } from './remote-store'
 import { S3MirrorStorage } from './s3-mirror'
 
 /** 内存版远端对象存储：记录调用次数，供断言写穿/回填行为。 */
@@ -31,8 +31,14 @@ class FakeRemoteStore implements RemoteObjectStore {
     this.objects.delete(key)
   }
 
-  async presignGetUrl(key: string, ttlSeconds: number): Promise<string> {
+  async presignGetUrl(
+    key: string,
+    ttlSeconds: number,
+    response?: PresignGetOverrides
+  ): Promise<string> {
+    const disposition = response?.contentDisposition ?? ''
     return `https://fake-remote.example/${key}?ttl=${ttlSeconds}`
+      + `&rct=${response?.contentType ?? ''}&rcd=${disposition}`
   }
 }
 
@@ -120,8 +126,14 @@ describe('S3MirrorStorage', () => {
     }
   })
 
-  it('presignDownloadUrl 透传远端并携带 TTL', async () => {
-    const url = await mirror.presignDownloadUrl('a.mp4', 300)
-    expect(url).toBe('https://fake-remote.example/a.mp4?ttl=300')
+  it('presignDownloadUrl 透传远端并携带 TTL 与响应头覆盖', async () => {
+    const url = await mirror.presignDownloadUrl('a.mp4', 300, {
+      contentType: 'video/mp4',
+      contentDisposition: 'attachment; filename="a.mp4"',
+    })
+    expect(url).toBe(
+      'https://fake-remote.example/a.mp4?ttl=300'
+      + '&rct=video/mp4&rcd=attachment; filename="a.mp4"'
+    )
   })
 })

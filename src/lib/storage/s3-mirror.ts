@@ -1,5 +1,5 @@
 import type { LocalFsStorage } from './local-fs'
-import type { RemoteObjectStore } from './remote-store'
+import type { PresignGetOverrides, RemoteObjectStore } from './remote-store'
 import type { StorageAdapter } from './types'
 
 /**
@@ -51,9 +51,13 @@ export class S3MirrorStorage implements StorageAdapter {
     return this.local.localPath(key)
   }
 
-  /** 生成远端限时下载 URL，供产物下载 302 使用。 */
-  async presignDownloadUrl(key: string, ttlSeconds: number): Promise<string> {
-    return this.remote.presignGetUrl(key, ttlSeconds)
+  /** 生成远端限时下载 URL，供产物下载 302 使用；可选覆盖响应头。 */
+  async presignDownloadUrl(
+    key: string,
+    ttlSeconds: number,
+    response?: PresignGetOverrides
+  ): Promise<string> {
+    return this.remote.presignGetUrl(key, ttlSeconds, response)
   }
 
   async delete(key: string): Promise<void> {

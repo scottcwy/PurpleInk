@@ -6,7 +6,7 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import type { RemoteObjectStore } from './remote-store'
+import type { PresignGetOverrides, RemoteObjectStore } from './remote-store'
 
 /** S3 兼容端配置；R2 / Supabase Storage / MinIO 只是 endpoint 与密钥不同。 */
 export interface S3RemoteStoreConfig {
@@ -82,10 +82,19 @@ export class S3RemoteStore implements RemoteObjectStore {
     )
   }
 
-  async presignGetUrl(key: string, ttlSeconds: number): Promise<string> {
+  async presignGetUrl(
+    key: string,
+    ttlSeconds: number,
+    response?: PresignGetOverrides
+  ): Promise<string> {
     return getSignedUrl(
       this.client,
-      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ResponseContentType: response?.contentType,
+        ResponseContentDisposition: response?.contentDisposition,
+      }),
       { expiresIn: ttlSeconds }
     )
   }
