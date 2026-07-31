@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { commitArtifactRecord } from '@/features/artifacts'
-import { artifacts, taskAttempts } from '@/lib/db/schema/index'
+import { artifacts, projects, taskAttempts } from '@/lib/db/schema/index'
 import type { StorageAdapter } from '@/lib/storage'
 import {
   createPgTestDatabase,
@@ -11,6 +11,7 @@ import {
 import {
   insertArtifact,
   seedRenderFixture,
+  TEST_WORKSPACE_ID,
   type RenderFixture,
 } from './render.pg-fixture'
 import { lookupCache, renderOutputKey, writeCache } from './cache'
@@ -148,6 +149,33 @@ describe('render cache Postgres', () => {
           eq(artifacts.kind, 'stale-render')
         )
       )
+    expect(rows).toHaveLength(0)
+  })
+
+  it('rejects a late artifact publish after the project execution epoch advances', async () => {
+    await database.db.update(projects)
+      .set({ executionEpoch: 1 })
+      .where(eq(projects.id, fixture.projectId))
+
+    await expect(
+      commitArtifactRecord(database.db, {
+        workspaceId: TEST_WORKSPACE_ID,
+        projectId: fixture.projectId,
+        aggregateType: 'node',
+        aggregateId: fixture.codegenNodeId,
+        kind: 'late-epoch-render',
+        schemaVersion: 'cvc.render-cache/v1',
+        storageKey: 'render/late-epoch.mp4',
+        sizeBytes: 5,
+        contentHash: 'e'.repeat(64),
+        attemptId: fixture.nodeAttemptId,
+      }),
+    ).rejects.toThrow('STALE_ATTEMPT')
+    const rows = await database.db.select({ id: artifacts.id }).from(artifacts)
+      .where(and(
+        eq(artifacts.projectId, fixture.projectId),
+        eq(artifacts.kind, 'late-epoch-render'),
+      ))
     expect(rows).toHaveLength(0)
   })
 })

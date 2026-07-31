@@ -3,16 +3,13 @@ import {
   and,
   eq,
   inArray,
-  isNull,
-  notInArray,
   sql,
 } from 'drizzle-orm'
-import { releaseManagedReservation } from '@/features/billing'
+import { finalizeStoppedAiInvocations } from '@/features/ai'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb, type Db } from '@/lib/db/client'
 import { abortAttempts } from '@/lib/queue/execution-cancellation'
 import {
-  aiInvocations,
   canvasNodes,
   pipelineRuns,
   projects,
@@ -51,7 +48,7 @@ export class ProjectExecutionStopError extends Error {
 
 export interface ProjectExecutionStopDependencies {
   database?: Db
-  releaseReservation?: typeof releaseManagedReservation
+  finalizeInvocations?: typeof finalizeStoppedAiInvocations
 }
 
 /**
@@ -83,7 +80,6 @@ export async function stopProjectExecution(
     const attempts = await transaction
       .select({
         id: taskAttempts.id,
-        workUnitKey: taskAttempts.workUnitKey,
         status: taskAttempts.status,
         cancelRequestedAt: taskAttempts.cancelRequestedAt,
       })
@@ -162,46 +158,24 @@ export async function stopProjectExecution(
       ))
       .returning({ id: pipelineRuns.id })
 
-    const activeWorkUnits = new Set(
-      running.map(({ workUnitKey }) => workUnitKey).filter((value): value is string => !!value),
-    )
-    const cancellableLeases = await transaction
-      .select({
-        projectId: workflowConcurrencyLeases.projectId,
-        workUnitKey: workflowConcurrencyLeases.workUnitKey,
+    const released = await transaction
+      .update(workflowConcurrencyLeases)
+      .set({
+        status: 'cancelled',
+        leaseExpiresAt: null,
+        releasedAt: sql`now()`,
+        updatedAt: sql`now()`,
       })
-      .from(workflowConcurrencyLeases)
       .where(and(
         eq(workflowConcurrencyLeases.workspaceId, workspaceId),
         eq(workflowConcurrencyLeases.projectId, projectId),
         inArray(workflowConcurrencyLeases.status, ['waiting', 'active']),
       ))
-    const leaseKeys = cancellableLeases
-      .filter(({ workUnitKey }) => !activeWorkUnits.has(workUnitKey))
-      .map(({ workUnitKey }) => workUnitKey)
-    let cancelledLeases = 0
-    if (leaseKeys.length > 0) {
-      const released = await transaction
-        .update(workflowConcurrencyLeases)
-        .set({
-          status: 'cancelled',
-          leaseExpiresAt: null,
-          releasedAt: sql`now()`,
-          updatedAt: sql`now()`,
-        })
-        .where(and(
-          eq(workflowConcurrencyLeases.workspaceId, workspaceId),
-          eq(workflowConcurrencyLeases.projectId, projectId),
-          inArray(workflowConcurrencyLeases.workUnitKey, leaseKeys),
-          inArray(workflowConcurrencyLeases.status, ['waiting', 'active']),
-        ))
-        .returning({ workUnitKey: workflowConcurrencyLeases.workUnitKey })
-      cancelledLeases = released.length
-    }
+      .returning({ workUnitKey: workflowConcurrencyLeases.workUnitKey })
+    const cancelledLeases = released.length
 
     const affectedAttemptIds = [...queuedIds, ...runningIds]
     let cancelledTickets = 0
-    let reservationIds: string[] = []
     if (affectedAttemptIds.length > 0) {
       const tickets = await transaction
         .update(providerDispatches)
@@ -212,32 +186,11 @@ export async function stopProjectExecution(
         .where(and(
           eq(providerDispatches.workspaceId, workspaceId),
           inArray(providerDispatches.attemptId, affectedAttemptIds),
-          eq(providerDispatches.status, 'scheduled'),
+          inArray(providerDispatches.status, ['scheduled', 'in_flight']),
         ))
         .returning({ id: providerDispatches.id })
       cancelledTickets = tickets.length
 
-      const reservations = await transaction
-        .select({ id: aiInvocations.id })
-        .from(aiInvocations)
-        .where(and(
-          eq(aiInvocations.workspaceId, workspaceId),
-          inArray(aiInvocations.attemptId, affectedAttemptIds),
-          eq(aiInvocations.status, 'running'),
-          eq(aiInvocations.billingStatus, 'reserved'),
-          isNull(aiInvocations.providerStartedAt),
-        ))
-      reservationIds = reservations.map(({ id }) => id)
-      await transaction
-        .update(aiInvocations)
-        .set({ status: 'cancelled', completedAt: sql`now()`, updatedAt: sql`now()` })
-        .where(and(
-          eq(aiInvocations.workspaceId, workspaceId),
-          inArray(aiInvocations.attemptId, affectedAttemptIds),
-          eq(aiInvocations.status, 'running'),
-          notInArray(aiInvocations.billingStatus, ['reserved', 'settled']),
-          isNull(aiInvocations.providerStartedAt),
-        ))
     }
 
     await transaction
@@ -256,15 +209,13 @@ export async function stopProjectExecution(
       cancelledLeases,
       remainingRunning: runningIds.length,
       runningIds,
-      reservationIds,
+      affectedAttemptIds,
     }
   })
 
   abortAttempts(snapshot.runningIds)
-  const release = dependencies.releaseReservation ?? releaseManagedReservation
-  for (const invocationId of snapshot.reservationIds) {
-    await release({ workspaceId, invocationId })
-  }
+  const finalize = dependencies.finalizeInvocations ?? finalizeStoppedAiInvocations
+  await finalize(snapshot.affectedAttemptIds, database)
   const status = snapshot.remainingRunning > 0 ? 'stopping' : 'stopped'
   console.info(status === 'stopping' ? '[project_stop_requested]' : '[project_stop_completed]', {
     projectId,

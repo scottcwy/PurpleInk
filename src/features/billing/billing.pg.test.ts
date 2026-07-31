@@ -361,7 +361,7 @@ it('reports shadow differences instead of silently accepting them', async () => 
   })
 })
 
-it('settles reserved invocations whose parent attempt is already terminal', async () => {
+it('releases a reserved invocation when its parent ends before Provider starts', async () => {
   await provision()
   await seedAttempt()
   const { reserveManagedInvocation } = await import('./ledger')
@@ -393,10 +393,10 @@ it('settles reserved invocations whose parent attempt is already terminal', asyn
 
   const [invocation] = await database.db.select().from(aiInvocations)
   expect(invocation).toMatchObject({
-    status: 'failed',
+    status: 'cancelled',
     billingStatus: 'released',
-    usageStatus: 'unavailable',
-    measurementQuality: 'uncertain',
+    usageStatus: 'reported',
+    measurementQuality: 'reported',
     reservedCnyMicros: BigInt(1_000),
     settledCnyMicros: BigInt(0),
   })
@@ -406,6 +406,60 @@ it('settles reserved invocations whose parent attempt is already terminal', asyn
     usedCnyMicros: BigInt(0),
   })
   expect(await database.db.select().from(officialCostEntries)).toEqual([])
+})
+
+it('settles the maximum reservation when an orphaned managed call already started', async () => {
+  await provision()
+  await seedAttempt()
+  const { reserveManagedInvocation } = await import('./ledger')
+  const { markManagedInvocationStarted } = await import('./invocation-lifecycle')
+  const { reconcileOrphanedManagedInvocations } =
+    await import('./reservation-recovery')
+  await reserveManagedInvocation({
+    workspaceId: WORKSPACE_ID,
+    invocationId: INVOCATION_ID,
+    idempotencyKey: 'orphaned-started-managed-invocation-1',
+    rateCardId: '20000000-0000-4000-8000-000000000001',
+    maximumCostCnyMicros: BigInt(1_000),
+    create: {
+      attemptId: ATTEMPT_ID,
+      invocationNo: 1,
+      provider: 'mimo',
+      model: 'mimo-v2.5',
+      inputHash: '8'.repeat(64),
+    },
+  })
+  await markManagedInvocationStarted({
+    workspaceId: WORKSPACE_ID,
+    invocationId: INVOCATION_ID,
+  })
+  await database.db.update(taskAttempts)
+    .set({ status: 'failed', completedAt: new Date() })
+    .where(eq(taskAttempts.id, ATTEMPT_ID))
+
+  await expect(reconcileOrphanedManagedInvocations()).resolves.toEqual([
+    INVOCATION_ID,
+  ])
+  const [invocation] = await database.db.select().from(aiInvocations)
+  expect(invocation).toMatchObject({
+    status: 'failed',
+    billingStatus: 'settled',
+    usageStatus: 'unavailable',
+    measurementQuality: 'estimated',
+    reservedCnyMicros: BigInt(1_000),
+    settledCnyMicros: BigInt(1_000),
+    failureKind: 'orphaned_after_provider_start',
+  })
+  const [period] = await database.db.select().from(usagePeriods)
+  expect(period).toMatchObject({
+    reservedCnyMicros: BigInt(0),
+    usedCnyMicros: BigInt(1_000),
+  })
+  const [cost] = await database.db.select().from(officialCostEntries)
+  expect(cost).toMatchObject({
+    cnyMicros: null,
+    measurementQuality: 'estimated',
+  })
 })
 
 it('does not oversell the final quota under concurrent reservations', async () => {

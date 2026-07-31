@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, eq, isNull } from 'drizzle-orm'
+import { and, eq, isNull, sql } from 'drizzle-orm'
 import {
   currentUserId,
   currentWorkspaceId,
@@ -96,8 +96,8 @@ export async function markProviderInvocationStarted(
 ): Promise<void> {
   const database = await getDb()
   const claimed = await database.update(aiInvocations).set({
-    providerStartedAt: new Date(),
-    updatedAt: new Date(),
+    providerStartedAt: sql`now()`,
+    updatedAt: sql`now()`,
   }).where(and(
     eq(aiInvocations.workspaceId, currentWorkspaceId()),
     eq(aiInvocations.id, invocationId),
@@ -108,16 +108,16 @@ export async function markProviderInvocationStarted(
 }
 
 export async function settleUnbilledInvocation(input: {
+  workspaceId?: string
   invocationId: string
   status: 'succeeded' | 'failed'
   usageStatus: 'reported' | 'unavailable'
   usage: VersionedPayload
   outputHash?: string
-  providerDurationMs: number
+  providerDurationMs?: number
   failureKind?: string
 }): Promise<void> {
   const database = await getDb()
-  const now = new Date()
   await database.update(aiInvocations).set({
     status: input.status,
     usageStatus: input.usageStatus,
@@ -126,13 +126,13 @@ export async function settleUnbilledInvocation(input: {
       : 'uncertain',
     usage: input.usage,
     outputHash: input.outputHash,
-    providerCompletedAt: now,
+    providerCompletedAt: sql`now()`,
     providerDurationMs: input.providerDurationMs,
     failureKind: input.failureKind,
-    completedAt: now,
-    updatedAt: now,
+    completedAt: sql`now()`,
+    updatedAt: sql`now()`,
   }).where(and(
-    eq(aiInvocations.workspaceId, currentWorkspaceId()),
+    eq(aiInvocations.workspaceId, input.workspaceId ?? currentWorkspaceId()),
     eq(aiInvocations.id, input.invocationId),
     eq(aiInvocations.billingStatus, 'not_applicable'),
     eq(aiInvocations.status, 'running'),
@@ -141,15 +141,15 @@ export async function settleUnbilledInvocation(input: {
 
 export async function releaseUnbilledInvocation(
   invocationId: string,
+  workspaceId: string = currentWorkspaceId(),
 ): Promise<void> {
   const database = await getDb()
-  const now = new Date()
   await database.update(aiInvocations).set({
     status: 'cancelled',
-    completedAt: now,
-    updatedAt: now,
+    completedAt: sql`now()`,
+    updatedAt: sql`now()`,
   }).where(and(
-    eq(aiInvocations.workspaceId, currentWorkspaceId()),
+    eq(aiInvocations.workspaceId, workspaceId),
     eq(aiInvocations.id, invocationId),
     eq(aiInvocations.billingStatus, 'not_applicable'),
     eq(aiInvocations.status, 'running'),

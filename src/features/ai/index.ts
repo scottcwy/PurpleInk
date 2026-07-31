@@ -51,3 +51,4 @@ export {
   type ManagedVisionExecutorDependencies,
   type ManagedVisionInput,
 } from './managed-vision-executor'
+export { finalizeStoppedAiInvocations } from './invocation-recovery'

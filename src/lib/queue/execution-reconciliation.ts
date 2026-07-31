@@ -116,3 +116,43 @@ export async function reconcileStaleExecutionEpochs(db: Db): Promise<string[]> {
   }
   return rows.map(({ id }) => id)
 }
+
+export async function reconcileOrphanedWorkflowLeases(db: Db): Promise<number> {
+  const rows = await db.update(workflowConcurrencyLeases).set({
+    status: 'cancelled',
+    leaseExpiresAt: null,
+    releasedAt: sql`now()`,
+    updatedAt: sql`now()`,
+  }).where(and(
+    inArray(workflowConcurrencyLeases.status, ['waiting', 'active']),
+    sql`not exists (
+      select 1
+      from task_attempts parent_attempt
+      join pipeline_runs parent_run
+        on parent_run.workspace_id = parent_attempt.workspace_id
+       and parent_run.id = parent_attempt.run_id
+      join projects parent_project
+        on parent_project.workspace_id = parent_run.workspace_id
+       and parent_project.id = parent_run.project_id
+      where parent_attempt.workspace_id = ${workflowConcurrencyLeases.workspaceId}
+        and parent_run.project_id = ${workflowConcurrencyLeases.projectId}
+        and parent_attempt.work_unit_key = ${workflowConcurrencyLeases.workUnitKey}
+        and parent_attempt.status in ('queued', 'running')
+        and parent_run.execution_epoch = parent_project.execution_epoch
+    )`,
+  )).returning({ workUnitKey: workflowConcurrencyLeases.workUnitKey })
+  if (rows.length > 0) {
+    console.info('[workflow_lease_reconciled]', { count: rows.length })
+  }
+  return rows.length
+}
+
+export async function reconcileExecutionResources(db: Db) {
+  const staleAttemptIds = await reconcileStaleExecutionEpochs(db)
+  const orphanedLeases = await reconcileOrphanedWorkflowLeases(db)
+  const { reconcileOrphanedAiInvocations } = await import(
+    '@/features/ai/invocation-recovery'
+  )
+  const orphanedInvocationIds = await reconcileOrphanedAiInvocations(db)
+  return { staleAttemptIds, orphanedLeases, orphanedInvocationIds }
+}

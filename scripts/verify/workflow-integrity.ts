@@ -21,10 +21,19 @@ async function main(): Promise<void> {
       select 'terminal_attempt_running_invocation' as "check",
         count(*)::int as count, true as blocking
       from ai_invocations i
-      join task_attempts a
+      left join task_attempts a
         on a.workspace_id = i.workspace_id and a.id = i.attempt_id
+      left join pipeline_runs r
+        on r.workspace_id = a.workspace_id and r.id = a.run_id
+      left join projects p
+        on p.workspace_id = r.workspace_id and p.id = r.project_id
       where i.status = 'running'
-        and a.status in ('succeeded', 'failed', 'cancelled', 'superseded')
+        and i.attempt_id is not null
+        and (
+          a.id is null or a.status not in ('queued', 'running')
+          or r.id is null or p.id is null
+          or r.execution_epoch <> p.execution_epoch
+        )
       union all
       select 'orphan_active_workflow_lease', count(*)::int, true
       from workflow_concurrency_leases l
@@ -44,8 +53,16 @@ async function main(): Promise<void> {
       from provider_dispatches d
       left join task_attempts a
         on a.workspace_id = d.workspace_id and a.id = d.attempt_id
+      left join pipeline_runs r
+        on r.workspace_id = a.workspace_id and r.id = a.run_id
+      left join projects p
+        on p.workspace_id = r.workspace_id and p.id = r.project_id
       where d.status in ('scheduled', 'in_flight')
-        and (a.id is null or a.status not in ('queued', 'running'))
+        and (
+          a.id is null or a.status not in ('queued', 'running')
+          or r.id is null or p.id is null
+          or r.execution_epoch <> p.execution_epoch
+        )
       union all
       select 'telemetry_v3_identity_missing', count(*)::int, true
       from ai_invocations i

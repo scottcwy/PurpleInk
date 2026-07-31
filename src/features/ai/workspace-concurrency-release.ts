@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import type { Db } from '@/lib/db/client'
 import { canvasNodes, workflowConcurrencyLeases } from '@/lib/db/schema'
 
@@ -11,7 +11,7 @@ export async function releaseWorkflowSlot(input: {
   database: Db
   now?: Date
 }): Promise<void> {
-  const now = input.now ?? new Date()
+  const now = input.now ?? sql`now()`
   await input.database
     .update(workflowConcurrencyLeases)
     .set({

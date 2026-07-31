@@ -13,7 +13,11 @@ import {
   createPgTestDatabase,
   type PgTestDatabase,
 } from '@/lib/db/test/pg-test-database'
-import { reconcileStaleExecutionEpochs } from './execution-reconciliation'
+import {
+  reconcileOrphanedWorkflowLeases,
+  reconcileStaleExecutionEpochs,
+} from './execution-reconciliation'
+import { reconcileExpiredProviderTickets } from '@/features/ai/provider-dispatch-ticket'
 
 vi.mock('server-only', () => ({}))
 
@@ -105,6 +109,105 @@ it('cancels queued attempts fenced by a newer project execution epoch', async ()
   expect((await database.db.select().from(taskAttempts))[0]?.status).toBe('cancelled')
   expect((await database.db.select().from(pipelineRuns))[0]?.status).toBe('cancelled')
   expect((await database.db.select().from(canvasNodes))[0]?.status).toBe('cancelled')
+  expect((await database.db.select().from(workflowConcurrencyLeases))[0]?.status)
+    .toBe('cancelled')
+  expect((await database.db.select().from(providerDispatches))[0]?.status)
+    .toBe('cancelled')
+})
+
+it('cancels waiting and active workflow leases without an active parent attempt', async () => {
+  const projectId = randomUUID()
+  await database.db.insert(projects).values({
+    workspaceId: WORKSPACE_ID,
+    id: projectId,
+    title: '孤儿租约',
+    script: '',
+    workflowVersion: 'test',
+    exportSettings: { schemaVersion: 1 },
+  })
+  await database.db.insert(workflowConcurrencyLeases).values([
+    {
+      workspaceId: WORKSPACE_ID,
+      projectId,
+      workUnitKey: 'waiting-orphan',
+      planKey: 'free',
+      status: 'waiting',
+    },
+    {
+      workspaceId: WORKSPACE_ID,
+      projectId,
+      workUnitKey: 'active-orphan',
+      planKey: 'free',
+      status: 'active',
+      leaseExpiresAt: new Date('2099-01-01T00:00:00.000Z'),
+    },
+  ])
+
+  await expect(reconcileOrphanedWorkflowLeases(database.db)).resolves.toBe(2)
+  await expect(reconcileOrphanedWorkflowLeases(database.db)).resolves.toBe(0)
+  const leases = await database.db.select().from(workflowConcurrencyLeases)
+  expect(leases.map(({ status }) => status)).toEqual(['cancelled', 'cancelled'])
+})
+
+it('keeps current-epoch leases and cancels leases owned only by an old epoch', async () => {
+  const projectId = randomUUID()
+  const runId = randomUUID()
+  const attemptId = randomUUID()
+  await database.db.insert(projects).values({
+    workspaceId: WORKSPACE_ID,
+    id: projectId,
+    title: '租约代次隔离',
+    script: '',
+    workflowVersion: 'test',
+    executionEpoch: 1,
+    exportSettings: { schemaVersion: 1 },
+  })
+  await database.db.insert(pipelineRuns).values({
+    workspaceId: WORKSPACE_ID,
+    id: runId,
+    projectId,
+    executionEpoch: 1,
+    status: 'running',
+    workflowVersion: 'test',
+    fingerprint: '7'.repeat(64),
+  })
+  await database.db.insert(taskAttempts).values({
+    workspaceId: WORKSPACE_ID,
+    id: attemptId,
+    runId,
+    taskId: 'legacy.director-stage',
+    entityType: 'project',
+    entityId: projectId,
+    attemptNo: 1,
+    status: 'running',
+    fingerprint: '8'.repeat(64),
+    checkpoint: { schemaVersion: 1 },
+    workUnitKey: 'S001',
+  })
+  await database.db.insert(workflowConcurrencyLeases).values({
+    workspaceId: WORKSPACE_ID,
+    projectId,
+    workUnitKey: 'S001',
+    planKey: 'free',
+    status: 'active',
+    leaseExpiresAt: new Date('2099-01-01T00:00:00.000Z'),
+  })
+  await database.db.insert(providerDispatches).values({
+    id: randomUUID(),
+    scopeKey: '9'.repeat(64),
+    workspaceId: WORKSPACE_ID,
+    attemptId,
+    provider: 'stepfun',
+    funding: 'managed',
+    status: 'in_flight',
+    leaseExpiresAt: new Date('2099-01-01T00:00:00.000Z'),
+  })
+
+  await expect(reconcileOrphanedWorkflowLeases(database.db)).resolves.toBe(0)
+  await expect(reconcileExpiredProviderTickets(database.db)).resolves.toBe(0)
+  await database.db.update(projects).set({ executionEpoch: 2 })
+  await expect(reconcileOrphanedWorkflowLeases(database.db)).resolves.toBe(1)
+  await expect(reconcileExpiredProviderTickets(database.db)).resolves.toBe(1)
   expect((await database.db.select().from(workflowConcurrencyLeases))[0]?.status)
     .toBe('cancelled')
   expect((await database.db.select().from(providerDispatches))[0]?.status)

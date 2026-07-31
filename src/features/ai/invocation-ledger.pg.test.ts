@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { runInAuthContext } from '@/lib/auth/workspace-context'
 import {
@@ -20,6 +20,10 @@ import {
   releaseUnbilledInvocation,
   settleUnbilledInvocation,
 } from './invocation-ledger'
+import {
+  finalizeStoppedAiInvocations,
+  reconcileOrphanedAiInvocations,
+} from './invocation-recovery'
 
 const getDbMock = vi.hoisted(() => vi.fn())
 vi.mock('server-only', () => ({}))
@@ -122,6 +126,120 @@ it('keeps a preflight release out of actual provider calls', async () => {
   })
 })
 
+it('separates stopped BYOK calls by whether Provider already started', async () => {
+  const execution = await seedExecution()
+  const queuedId = randomUUID()
+  const startedId = randomUUID()
+  await inContext(async () => {
+    for (const [invocationId, invocationNo] of [
+      [queuedId, 1],
+      [startedId, 2],
+    ] as const) {
+      await createUnbilledInvocation({
+        invocationId,
+        attemptId: execution.attemptId,
+        invocationNo,
+        provider: 'gemini',
+        model: 'gemini-test',
+        funding: 'byok',
+        capability: 'text',
+        operation: 'workflow',
+      })
+    }
+    await markProviderInvocationStarted(startedId)
+  })
+
+  await expect(finalizeStoppedAiInvocations(
+    [execution.attemptId],
+    database.db,
+  )).resolves.toEqual([queuedId, startedId])
+  const rows = await database.db.select().from(aiInvocations)
+  const queued = rows.find(({ id }) => id === queuedId)
+  const started = rows.find(({ id }) => id === startedId)
+  expect(queued).toMatchObject({
+    status: 'cancelled',
+    providerStartedAt: null,
+  })
+  expect(started).toMatchObject({
+    status: 'failed',
+    usageStatus: 'unavailable',
+    measurementQuality: 'uncertain',
+    failureKind: 'stopped_after_provider_start',
+  })
+})
+
+it('keeps current-epoch invocations and fences them after the project epoch advances', async () => {
+  const execution = await seedExecution()
+  const invocationId = randomUUID()
+  await inContext(() => createUnbilledInvocation({
+    invocationId,
+    attemptId: execution.attemptId,
+    invocationNo: 1,
+    provider: 'gemini',
+    model: 'gemini-test',
+    funding: 'byok',
+    capability: 'text',
+    operation: 'workflow',
+  }))
+
+  await expect(reconcileOrphanedAiInvocations(database.db)).resolves.toEqual([])
+  await database.db.update(projects)
+    .set({ executionEpoch: 1 })
+    .where(eq(projects.id, execution.projectId))
+  await expect(reconcileOrphanedAiInvocations(database.db)).resolves.toEqual([
+    invocationId,
+  ])
+  expect((await database.db.select().from(aiInvocations))[0]?.status).toBe('cancelled')
+})
+
+it.each([-90, 90])(
+  'persists provider lifecycle from the database clock under a %i second host skew',
+  async (offsetSeconds) => {
+    const execution = await seedExecution()
+    const invocationId = randomUUID()
+    const [before] = await database.db.execute<{ now: Date | string }>(sql`select now() as now`)
+    const beforeMs = new Date(before.now).getTime()
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(beforeMs + offsetSeconds * 1_000))
+    try {
+      await inContext(async () => {
+        await createUnbilledInvocation({
+          invocationId,
+          attemptId: execution.attemptId,
+          invocationNo: 1,
+          provider: 'gemini',
+          model: 'gemini-test',
+          funding: 'byok',
+          capability: 'text',
+          operation: 'workflow',
+        })
+        await markProviderInvocationStarted(invocationId)
+        await settleUnbilledInvocation({
+          invocationId,
+          status: 'succeeded',
+          usageStatus: 'reported',
+          usage: { schemaVersion: 3, capability: 'text' },
+        })
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+    const [after] = await database.db.execute<{ now: Date | string }>(sql`select now() as now`)
+    const afterMs = new Date(after.now).getTime()
+    const [row] = await database.db.select().from(aiInvocations)
+      .where(eq(aiInvocations.id, invocationId))
+    for (const timestamp of [
+      row?.createdAt,
+      row?.providerStartedAt,
+      row?.providerCompletedAt,
+      row?.completedAt,
+    ]) {
+      expect(timestamp?.getTime()).toBeGreaterThanOrEqual(beforeMs)
+      expect(timestamp?.getTime()).toBeLessThanOrEqual(afterMs)
+    }
+  },
+)
+
 async function seedExecution() {
   const projectId = randomUUID()
   const runId = randomUUID()
@@ -155,7 +273,7 @@ async function seedExecution() {
     fingerprint: 'b'.repeat(64),
     checkpoint: { schemaVersion: 1 },
   })
-  return { attemptId }
+  return { attemptId, projectId }
 }
 
 function inContext<T>(operation: () => Promise<T>): Promise<T> {

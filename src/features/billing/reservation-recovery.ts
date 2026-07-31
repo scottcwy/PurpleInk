@@ -1,8 +1,7 @@
 import 'server-only'
-import { and, eq, ne } from 'drizzle-orm'
 import { getDb } from '@/lib/db/client'
-import { aiInvocations, taskAttempts } from '@/lib/db/schema/index'
 import { settleManagedInvocation } from './ledger'
+import { reconcileOrphanedManagedInvocationsInDatabase } from './reservation-recovery-core'
 
 export async function failManagedInvocation(input: {
   workspaceId?: string
@@ -20,38 +19,12 @@ export async function failManagedInvocation(input: {
 export const settleUsageUnavailable = failManagedInvocation
 
 /**
- * 父 attempt 已终态但调用仍在运行时，上游执行结果已不可证明。
- * 新合同记录 uncertain 并释放预留，不得把最大预留静默当作实际消费。
+ * 父 attempt 已终态但调用仍在运行时，按 Provider 是否已经开始分流：
+ * 未出网释放预留；已出网但拿不到用量时，按最大预留合同结算。
  */
 export async function reconcileOrphanedManagedInvocations(): Promise<string[]> {
   const database = await getDb()
-  const rows = await database
-    .select({
-      workspaceId: aiInvocations.workspaceId,
-      invocationId: aiInvocations.id,
-    })
-    .from(aiInvocations)
-    .innerJoin(
-      taskAttempts,
-      and(
-        eq(taskAttempts.workspaceId, aiInvocations.workspaceId),
-        eq(taskAttempts.id, aiInvocations.attemptId),
-      ),
-    )
-    .where(
-      and(
-        eq(aiInvocations.status, 'running'),
-        eq(aiInvocations.billingStatus, 'reserved'),
-        ne(taskAttempts.status, 'running'),
-      ),
-    )
-  for (const row of rows) {
-    await failManagedInvocation({
-      workspaceId: row.workspaceId,
-      invocationId: row.invocationId,
-    })
-  }
-  return rows.map((row) => row.invocationId)
+  return reconcileOrphanedManagedInvocationsInDatabase(database)
 }
 
 export async function releaseManagedReservation(input: {

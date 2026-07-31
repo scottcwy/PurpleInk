@@ -20,10 +20,10 @@ type QueueMaintenanceLabel =
 const defaultDependencies: QueueMaintenanceDependencies = {
   sweepAttempts: sweepExpiredLeases,
   reconcileExecutions: async (database) => {
-    const { reconcileStaleExecutionEpochs } = await import(
+    const { reconcileExecutionResources } = await import(
       './execution-reconciliation'
     )
-    return reconcileStaleExecutionEpochs(database)
+    return reconcileExecutionResources(database)
   },
   reconcileFrontiers: async (database) => {
     const { reconcileDirectorFrontiers } = await import(

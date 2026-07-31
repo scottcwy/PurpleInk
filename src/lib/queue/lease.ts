@@ -263,16 +263,7 @@ export async function sweepExpiredLeases(db: Db): Promise<string[]> {
     db,
     expired.filter((row) => row.entityType === 'node')
   )
-  await reconcileOrphanedInvocations()
   return expired.map((row) => row.id)
-}
-
-/** 每轮清扫都补偿 terminal attempt 遗留的托管调用，覆盖进程重启前已产生的孤儿预留。 */
-async function reconcileOrphanedInvocations(): Promise<void> {
-  const { reconcileOrphanedManagedInvocations } = await import(
-    '@/features/billing'
-  )
-  await reconcileOrphanedManagedInvocations()
 }
 
 /**

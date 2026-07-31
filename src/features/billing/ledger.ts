@@ -1,13 +1,12 @@
 import { and, eq, gt, lte, sql } from 'drizzle-orm'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
-import { getDb } from '@/lib/db/client'
+import { getDb, type Db } from '@/lib/db/client'
+import { readDatabaseClock } from '@/lib/db/database-clock'
 import type { VersionedPayload } from '@/lib/db/schema/core'
 import {
   aiInvocations,
   billingReservations,
-  entitlementLedgerEntries,
   managedModelCatalog,
-  officialCostEntries,
   pipelineRuns,
   rateCards,
   serviceMultiplierCards,
@@ -15,7 +14,8 @@ import {
   usagePeriods,
 } from '@/lib/db/schema/index'
 import { QuotaExhaustedError } from './contracts'
-import { applyBillingRatio, divideBillingRoundUp } from './billing-math'
+import { applyBillingRatio } from './billing-math'
+import { settleManagedInvocationInDatabase } from './managed-settlement-core'
 import type { BillingCapability } from './rate-card'
 import { aiInvocationTelemetryVersion } from '@/lib/ai-invocation-telemetry'
 
@@ -130,7 +130,7 @@ export async function reserveManagedInvocation(
         reservedCnyMicros: invocation.reservedCnyMicros,
       }
     }
-    const now = new Date()
+    const now = await readDatabaseClock(tx)
     const [period] = await tx.select().from(usagePeriods).where(and(
       eq(usagePeriods.workspaceId, workspaceId),
       eq(usagePeriods.status, 'active'),
@@ -151,7 +151,7 @@ export async function reserveManagedInvocation(
     )
     const [updated] = await tx.update(usagePeriods).set({
       reservedCnyMicros: sql`${usagePeriods.reservedCnyMicros} + ${entitlementMaximum}`,
-      updatedAt: now,
+      updatedAt: sql`now()`,
     }).where(and(
       eq(usagePeriods.workspaceId, workspaceId),
       eq(usagePeriods.id, period.id),
@@ -181,7 +181,7 @@ export async function reserveManagedInvocation(
       billingIdempotencyKey: input.idempotencyKey,
       billingStatus: 'reserved',
       reservedCnyMicros: entitlementMaximum,
-      updatedAt: now,
+      updatedAt: sql`now()`,
     }).where(and(
       eq(aiInvocations.workspaceId, workspaceId),
       eq(aiInvocations.id, input.invocationId),
@@ -209,128 +209,11 @@ export async function settleManagedInvocation(input: {
   billingStatus?: 'settled' | 'released'
   providerDurationMs?: number
   failureKind?: string
-}): Promise<void> {
-  const database = await getDb()
+  settleReservedMaximum?: boolean
+}, providedDatabase?: Db): Promise<void> {
+  const database = providedDatabase ?? await getDb()
   const workspaceId = scopedWorkspace(input.workspaceId)
-  await database.transaction(async (tx) => {
-    const [invocation] = await tx.select().from(aiInvocations).where(and(
-      eq(aiInvocations.workspaceId, workspaceId),
-      eq(aiInvocations.id, input.invocationId),
-    )).for('update')
-    if (!invocation) throw new Error('AI invocation does not exist')
-    if (['settled', 'released'].includes(invocation.billingStatus)) return
-    if (invocation.billingStatus !== 'reserved' || !invocation.usagePeriodId) {
-      throw new Error('AI invocation is not reserved')
-    }
-    const measurementQuality = input.measurementQuality
-      ?? (input.usageStatus === 'reported' ? 'reported' : 'uncertain')
-    const billingStatus = measurementQuality === 'uncertain'
-      ? 'released'
-      : input.billingStatus ?? 'settled'
-    const now = new Date()
-    const [card] = invocation.rateCardId
-      ? await tx.select({
-          priceCurrency: rateCards.priceCurrency,
-          fxCnyMicrosPerCurrencyUnit: rateCards.fxCnyMicrosPerCurrencyUnit,
-          fxRateVersion: rateCards.fxRateVersion,
-          officialPriceIdentity: rateCards.officialPriceIdentity,
-          provider: managedModelCatalog.provider,
-          model: managedModelCatalog.model,
-        }).from(rateCards).innerJoin(
-          managedModelCatalog,
-          eq(rateCards.catalogId, managedModelCatalog.id),
-        ).where(eq(rateCards.id, invocation.rateCardId)).limit(1)
-      : []
-    const serviceMultiplierId = invocation.entitlementRateCardId
-      ?? multiplierId(invocation.capability ?? 'text')
-    const [multiplier] = await tx.select().from(serviceMultiplierCards)
-      .where(eq(serviceMultiplierCards.id, serviceMultiplierId))
-      .limit(1)
-    if (!card || !multiplier) throw new Error('immutable billing snapshot is missing')
-    const settled = billingStatus === 'released'
-      ? BigInt(0)
-      : applyBillingRatio(
-          input.actualCostCnyMicros,
-          multiplier.numerator,
-          multiplier.denominator,
-        )
-    if (settled < BigInt(0) || settled > invocation.reservedCnyMicros) {
-      throw new Error('settled entitlement debit exceeds reservation')
-    }
-    await tx.update(usagePeriods).set({
-      reservedCnyMicros: sql`${usagePeriods.reservedCnyMicros} - ${invocation.reservedCnyMicros}`,
-      usedCnyMicros: sql`${usagePeriods.usedCnyMicros} + ${settled}`,
-      updatedAt: now,
-    }).where(and(
-      eq(usagePeriods.workspaceId, workspaceId),
-      eq(usagePeriods.id, invocation.usagePeriodId),
-    ))
-    if (invocation.providerStartedAt) {
-      const cnyMicros = measurementQuality === 'uncertain'
-        ? null
-        : input.actualCostCnyMicros
-      await tx.insert(officialCostEntries).values({
-        workspaceId,
-        invocationId: invocation.id,
-        rateCardId: invocation.rateCardId!,
-        officialPriceIdentity: invocation.officialPriceIdentity
-          ?? card.officialPriceIdentity
-          ?? `${card.provider}.${card.model}`,
-        currency: card.priceCurrency,
-        sourceAmountMicros: cnyMicros === null
-          ? null
-          : divideBillingRoundUp(
-              cnyMicros * BigInt(1_000_000),
-              card.fxCnyMicrosPerCurrencyUnit,
-            ),
-        fxRateVersion: card.fxRateVersion,
-        cnyMicros,
-        measurementQuality,
-        usage: input.usage,
-      }).onConflictDoNothing()
-    }
-    await tx.insert(entitlementLedgerEntries).values({
-      workspaceId,
-      invocationId: invocation.id,
-      usagePeriodId: invocation.usagePeriodId,
-      serviceMultiplierId,
-      multiplierNumerator: multiplier.numerator,
-      multiplierDenominator: multiplier.denominator,
-      debitCnyMicros: settled,
-      entryType: measurementQuality === 'uncertain'
-        ? 'uncertain'
-        : billingStatus === 'released' ? 'release' : 'debit',
-      idempotencyKey: `${invocation.billingIdempotencyKey}:terminal`,
-    }).onConflictDoNothing()
-    await tx.update(billingReservations).set({
-      status: measurementQuality === 'uncertain'
-        ? 'uncertain'
-        : billingStatus === 'released' ? 'released' : 'settled',
-      finalizedAt: now,
-    }).where(and(
-      eq(billingReservations.workspaceId, workspaceId),
-      eq(billingReservations.invocationId, invocation.id),
-      eq(billingReservations.status, 'reserved'),
-    ))
-    await tx.update(aiInvocations).set({
-      billingStatus,
-      status: input.invocationStatus ?? 'succeeded',
-      settledCnyMicros: settled,
-      usage: input.usage,
-      usageStatus: input.usageStatus,
-      measurementQuality,
-      outputHash: input.outputHash,
-      settledAt: now,
-      providerCompletedAt: invocation.providerStartedAt ? now : undefined,
-      providerDurationMs: input.providerDurationMs,
-      failureKind: input.failureKind,
-      completedAt: now,
-      updatedAt: now,
-    }).where(and(
-      eq(aiInvocations.workspaceId, workspaceId),
-      eq(aiInvocations.id, input.invocationId),
-    ))
-  })
+  await settleManagedInvocationInDatabase(database, { ...input, workspaceId })
 }
 
 function multiplierId(capability: string): string {

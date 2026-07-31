@@ -181,7 +181,7 @@ async function seedAudioProject(withRunningAttempt: boolean): Promise<{
 function stop(projectId: string): Promise<unknown> {
   return inWorkspace(() => stopProjectExecution(projectId, {
     database: database.db,
-    releaseReservation: vi.fn(async () => undefined),
+    finalizeInvocations: vi.fn(async () => []),
   }))
 }
 

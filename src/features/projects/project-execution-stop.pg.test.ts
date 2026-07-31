@@ -43,7 +43,7 @@ describe('stopProjectExecution', () => {
     const fixture = await seedExecution('queued')
     const result = await inWorkspace(() => stopProjectExecution(fixture.projectId, {
       database: database.db,
-      releaseReservation: vi.fn(async () => undefined),
+      finalizeInvocations: vi.fn(async () => []),
     }))
 
     expect(result).toEqual({
@@ -71,7 +71,7 @@ describe('stopProjectExecution', () => {
 
     const repeated = await inWorkspace(() => stopProjectExecution(fixture.projectId, {
       database: database.db,
-      releaseReservation: vi.fn(async () => undefined),
+      finalizeInvocations: vi.fn(async () => []),
     }))
     expect(repeated).toMatchObject({
       status: 'stopped',
@@ -83,18 +83,18 @@ describe('stopProjectExecution', () => {
     expect(sameProject?.executionEpoch).toBe(1)
   })
 
-  it('requests cooperative cancellation while preserving in-flight ownership', async () => {
+  it('requests cooperative cancellation and revokes in-flight resource leases', async () => {
     const fixture = await seedExecution('running')
     const result = await inWorkspace(() => stopProjectExecution(fixture.projectId, {
       database: database.db,
-      releaseReservation: vi.fn(async () => undefined),
+      finalizeInvocations: vi.fn(async () => []),
     }))
 
     expect(result).toMatchObject({
       status: 'stopping',
       cancelledAttempts: 0,
-      cancelledTickets: 0,
-      cancelledLeases: 0,
+      cancelledTickets: 1,
+      cancelledLeases: 1,
       remainingRunning: 1,
     })
     const [attempt] = await database.db.select().from(taskAttempts)
@@ -102,8 +102,8 @@ describe('stopProjectExecution', () => {
     const [ticket] = await database.db.select().from(providerDispatches)
     expect(attempt).toMatchObject({ status: 'running' })
     expect(attempt?.cancelRequestedAt).toBeInstanceOf(Date)
-    expect(lease?.status).toBe('active')
-    expect(ticket?.status).toBe('in_flight')
+    expect(lease?.status).toBe('cancelled')
+    expect(ticket?.status).toBe('cancelled')
   })
 
   it('clears an audio crash-gap continuation latch exactly once', async () => {
@@ -122,7 +122,7 @@ describe('stopProjectExecution', () => {
 
     await inWorkspace(() => stopProjectExecution(projectId, {
       database: database.db,
-      releaseReservation: vi.fn(async () => undefined),
+      finalizeInvocations: vi.fn(async () => []),
     }))
     const [stopped] = await database.db.select().from(projects)
     expect(stopped).toMatchObject({
@@ -133,7 +133,7 @@ describe('stopProjectExecution', () => {
 
     await inWorkspace(() => stopProjectExecution(projectId, {
       database: database.db,
-      releaseReservation: vi.fn(async () => undefined),
+      finalizeInvocations: vi.fn(async () => []),
     }))
     const [repeated] = await database.db.select().from(projects)
     expect(repeated?.executionEpoch).toBe(1)
@@ -164,7 +164,7 @@ describe('stopProjectExecution', () => {
 
     await inWorkspace(() => stopProjectExecution(projectId, {
       database: database.db,
-      releaseReservation: vi.fn(async () => undefined),
+      finalizeInvocations: vi.fn(async () => []),
     }))
 
     const [node] = await database.db.select().from(canvasNodes)

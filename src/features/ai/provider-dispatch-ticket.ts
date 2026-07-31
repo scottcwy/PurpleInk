@@ -106,12 +106,19 @@ export async function reconcileExpiredProviderTickets(
         ${providerDispatches.leaseExpiresAt} <= now()
         or (
           ${providerDispatches.attemptId} is not null
-          and exists (
+          and not exists (
             select 1
             from task_attempts parent_attempt
+            join pipeline_runs parent_run
+              on parent_run.workspace_id = parent_attempt.workspace_id
+             and parent_run.id = parent_attempt.run_id
+            join projects parent_project
+              on parent_project.workspace_id = parent_run.workspace_id
+             and parent_project.id = parent_run.project_id
             where parent_attempt.workspace_id = ${providerDispatches.workspaceId}
               and parent_attempt.id = ${providerDispatches.attemptId}
-              and parent_attempt.status <> 'running'
+              and parent_attempt.status in ('queued', 'running')
+              and parent_run.execution_epoch = parent_project.execution_epoch
           )
         )
       )`,

@@ -100,7 +100,7 @@ export async function reserveProviderDispatch(
   const id = randomUUID()
   const mode = providerPoolMode()
   let shadowWaitReason: ProviderDispatchWaitReason | undefined
-  let notBefore = new Date()
+  let notBefore: Date | undefined
   await database.transaction(async (transaction) => {
     await transaction.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${scopeKey}, 0))`
@@ -233,6 +233,9 @@ export async function reserveProviderDispatch(
       actorUserId,
     )
   })
+  if (!notBefore) {
+    throw new Error('provider dispatch scheduling did not resolve database time')
+  }
   console.info('[provider_ticket_scheduled]', {
     provider: input.providerId,
     attemptId: input.attemptId ?? null,

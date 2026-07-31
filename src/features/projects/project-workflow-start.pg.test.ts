@@ -206,7 +206,7 @@ describe('script start persistence', () => {
       { workspaceId: WORKSPACE_ID, userId: USER_ID },
       () => stopProjectExecution(created.project.id, {
         database: database.db,
-        releaseReservation: vi.fn(async () => undefined),
+        finalizeInvocations: vi.fn(async () => []),
       }),
     )
 
