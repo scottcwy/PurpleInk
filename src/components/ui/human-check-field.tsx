@@ -12,6 +12,8 @@ export interface HumanCheckFieldProps
   svg?: string
   onRefresh: () => void
   refreshing?: boolean
+  /** 取题失败时置真：底部提示切为红色重试引导（文本+颜色双通道）。 */
+  failed?: boolean
 }
 
 /**
@@ -32,6 +34,7 @@ export function HumanCheckField({
   svg,
   onRefresh,
   refreshing = false,
+  failed = false,
   className,
   disabled,
   ...props
@@ -52,7 +55,7 @@ export function HumanCheckField({
         )}
         <IconButton
           type="button"
-          icon={RefreshCw}
+          icon={refreshing ? SpinningRefreshIcon : RefreshCw}
           aria-label="换一道验证题"
           title="换一道验证题"
           onClick={onRefresh}
@@ -68,9 +71,19 @@ export function HumanCheckField({
           {...props}
         />
       </div>
-      <span className="text-xs text-ds-text-muted">
-        {question ? `请计算：${question}` : '正在获取验证题'}
+      {/* 三态提示：失败 > 加载中 > 题面。失败用文本+红色双通道，状态不只靠颜色。 */}
+      <span className={cn('text-xs', failed ? 'text-ds-red' : 'text-ds-text-muted')}>
+        {failed
+          ? '验证题获取失败，点右侧按钮重试'
+          : question
+            ? `请计算：${question}`
+            : '正在获取验证题'}
       </span>
     </div>
   )
+}
+
+/** IconButton 固定图标类名为 16px，refreshing 的旋转只能以变体图标叠加。 */
+function SpinningRefreshIcon({ className }: { className?: string }) {
+  return <RefreshCw className={cn('animate-spin', className)} />
 }

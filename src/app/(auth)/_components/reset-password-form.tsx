@@ -82,6 +82,7 @@ export function ResetPasswordForm() {
           onChange={(event) => code.setAnswer(event.target.value)}
           onRefresh={code.refreshChallenge}
           refreshing={code.challengeLoading}
+          failed={Boolean(code.challengeError)}
           disabled={submitting}
         />
         <VerificationCodeField

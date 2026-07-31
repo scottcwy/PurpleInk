@@ -146,6 +146,7 @@ export function SignupForm() {
           onChange={(event) => code.setAnswer(event.target.value)}
           onRefresh={code.refreshChallenge}
           refreshing={code.challengeLoading}
+          failed={Boolean(code.challengeError)}
           disabled={submitting}
         />
         {/* 取码成功后本按钮收起，重发走阶段 2 里 VerificationCodeField 自带的

@@ -24,6 +24,8 @@ export interface VerificationCodeController {
   sent: boolean
   notice?: string
   error?: string
+  /** 取题（初始或换题）失败的提示；与 `error`（要码失败）分开，成功重取后清除。 */
+  challengeError?: string
   requestCode: (email: string) => Promise<void>
   clearFeedback: () => void
 }
@@ -47,6 +49,7 @@ export function useVerificationCode(
   const [sent, setSent] = useState(false)
   const [notice, setNotice] = useState<string>()
   const [error, setError] = useState<string>()
+  const [challengeError, setChallengeError] = useState<string>()
   const mounted = useRef(true)
 
   useEffect(() => {
@@ -63,8 +66,11 @@ export function useVerificationCode(
       if (!mounted.current) return
       setChallenge(next)
       setAnswer('')
+      setChallengeError(undefined)
     } catch (cause) {
-      if (mounted.current) setError(messageOf(cause))
+      // 取题失败走 challengeError（字段旁提示），不占用 `error`——后者语义是
+      // 「要码失败」，弹在 FormFeedback 上会造成双重提示。
+      if (mounted.current) setChallengeError(messageOf(cause))
     } finally {
       if (mounted.current) setChallengeLoading(false)
     }
@@ -127,6 +133,7 @@ export function useVerificationCode(
     sent,
     notice,
     error,
+    challengeError,
     requestCode,
     clearFeedback: () => {
       setError(undefined)
