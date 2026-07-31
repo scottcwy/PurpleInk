@@ -172,6 +172,28 @@ describe('侧栏登出反馈', () => {
   })
 })
 
+describe('新增 opt-in 状态已在 /playbook 登记', () => {
+  it('Button loading 有 demo', () => {
+    expect(read(`${UI}/button.demo.tsx`)).toContain('loading')
+  })
+
+  it('TextField 的 error 与 hint 都有 demo', () => {
+    const demo = read(`${UI}/text-field.demo.tsx`)
+    expect(demo).toContain('error=')
+    expect(demo).toContain('hint=')
+  })
+
+  it('HumanCheckField 的 failed 与 refreshing 都有 demo', () => {
+    const demo = read(`${UI}/human-check-field.demo.tsx`)
+    expect(demo).toContain('failed')
+    expect(demo).toContain('refreshing')
+  })
+
+  it('VerificationCodeField 的冷却态有 demo（倒计时等宽可验收）', () => {
+    expect(read(`${UI}/verification-code-field.demo.tsx`)).toContain('cooldownSeconds')
+  })
+})
+
 describe('认证壳入场', () => {
   const source = read(`${AUTH}/auth-form-shell.tsx`)
 

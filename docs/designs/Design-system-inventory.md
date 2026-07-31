@@ -321,6 +321,22 @@ C 只负责稳定布局与业务组合，不定义新颜色。任何可复用的
 两者都提供非视觉替代：验证题以文本同时呈现并带 `aria-label`，倒计时带
 `aria-live="polite"` 文本，不只靠禁用态的视觉变化表达状态（§8）。
 
+微交互（动效参数一律见 `motion-interaction.md`，此处只登记能力与纪律）：
+
+| 能力 | 归属 | 纪律 |
+|---|---|---|
+| `Button` 的 `loading` | `components/ui/button.tsx` | opt-in 默认关闭；spinner 占图标槽，强制 `disabled` + `aria-busy`，不传时与历史渲染完全一致 |
+| `TextField` 的 `error` / `hint` | `components/ui/text-field.tsx` | opt-in；`error` 优先于 `hint`，带 `aria-invalid` + `aria-describedby` |
+| `FormFeedback` 行内反馈条 | `(auth)/_components/form-feedback.tsx` | 组合 `Toast` 原语而非另造；`info`/`success` 自动消失（时长取 toast store），`error`/`warning` 常驻待处理 |
+| `PasswordStrengthMeter` | `(auth)/_components/password-strength-meter.tsx` | 档位与 `credential-policy.ts` 的 `passwordSchema` 同源；色条 + 文字 + `aria-live` 三重通道 |
+| 注册两阶段渐进披露 | `(auth)/_components/signup-form.tsx` | 字段始终挂载（输入值与倒计时不丢），折叠态 `aria-hidden` + `inert` 隔离 Tab 与读屏 |
+| 人机验证失败态 | `components/ui/human-check-field.tsx` | `failed` 给出重试引导文本 + 红色双通道；刷新中图标旋转且按钮禁用 |
+| 侧栏登出反馈 | `components/ui/sidebar-chrome.tsx` | `pending` spinner 与文案并行；`failed` 5 秒自动复位，期间可立即重试 |
+| 认证壳入场 | `(auth)/_components/auth-form-shell.tsx` | 复用共享 `fadeInUp`，不本地写变体；整页导航故无 `exit`；reduced-motion 由根布局 `MotionConfig` 降级 |
+
+客户端实时校验不复制规则：`features/auth/credential-policy.ts` 是邮箱与口令的唯一
+Zod 真值，服务端 `schemas.ts` 与认证页的 blur 校验、强度条都从它取同一份定义。
+
 共同约束：
 
 - 每屏 1440×900、`clip:true`，Light/Dark 同构。

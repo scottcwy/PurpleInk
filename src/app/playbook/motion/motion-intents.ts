@@ -58,7 +58,7 @@ export const MOTION_INTENTS: MotionIntent[] = [
     no: 4,
     title: '折叠展开 / 收起',
     category: 'spatial',
-    params: 'SPRING_SPATIAL_DEFAULT',
+    params: 'SPRING_SPATIAL_DEFAULT；CSS grid-template-rows 实现退化为 base+emphasized（注册页渐进披露）',
     status: 'unified',
   },
   {
@@ -106,7 +106,7 @@ export const MOTION_INTENTS: MotionIntent[] = [
     no: 10,
     title: 'Toast 进 / 出',
     category: 'spatial',
-    params: '进 SPRING_SPATIAL_DEFAULT / 出 fast+exit',
+    params: '进 SPRING_SPATIAL_DEFAULT / 出 fast+exit；行内 FormFeedback 进场用 base+standard tween 不弹',
     status: 'unified',
   },
   {

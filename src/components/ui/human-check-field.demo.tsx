@@ -29,6 +29,20 @@ export function HumanCheckFieldDemo() {
         placeholder="答案"
         onRefresh={() => undefined}
       />
+      <HumanCheckField
+        label="人机验证（取题中）"
+        question=""
+        placeholder="答案"
+        refreshing
+        onRefresh={() => undefined}
+      />
+      <HumanCheckField
+        label="人机验证（取题失败，可恢复）"
+        question=""
+        placeholder="答案"
+        failed
+        onRefresh={() => undefined}
+      />
     </div>
   )
 }

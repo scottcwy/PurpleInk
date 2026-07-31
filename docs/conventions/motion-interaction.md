@@ -122,13 +122,13 @@ Tailwind v4 从 `@theme` 读取的 duration 命名空间是 **`--transition-dura
 | 1 | hover 换底色 | effects | `duration-fast` + `ease-standard` |
 | 2 | active 按压 | spatial | 按下 0ms 立即下压，松开 `SPRING_SPATIAL_FAST` |
 | 3 | focus-visible ring | effects | `duration-fast` + `ease-standard` |
-| 4 | 折叠展开 / 收起 | spatial | `SPRING_SPATIAL_DEFAULT` |
+| 4 | 折叠展开 / 收起 | spatial | `SPRING_SPATIAL_DEFAULT`；CSS `grid-template-rows` 实现无 spring 能力，退化为 `base`+`emphasized`（注册页渐进披露） |
 | 5 | 抽屉进 | spatial | `SPRING_SPATIAL_DEFAULT` |
 | 6 | 抽屉出 | effects | `duration-base` + `ease-exit`（**退出不弹**，见 §5.3） |
 | 7 | 遮罩 scrim 进 / 出 | effects | 进 `base`+`emphasized` / 出 `fast`+`exit` |
 | 8 | Popover / 菜单进 | spatial+effects | scale .96→1 `SPRING_SPATIAL_FAST` + opacity `fast` |
 | 9 | Tooltip | effects | 延迟 300ms 进 / 0ms 出，淡入 `fast` |
-| 10 | Toast 进 / 出 | spatial | 进 `SPRING_SPATIAL_DEFAULT` / 出 `fast`+`exit` |
+| 10 | Toast 进 / 出 | spatial | 进 `SPRING_SPATIAL_DEFAULT` / 出 `fast`+`exit`；行内表单反馈（`FormFeedback`）幅面小，进场用 `base`+`standard` tween 不弹 |
 | 11 | 列表 stagger | — | 40ms/项，**上限 6 项**（超出不再递增延迟） |
 | 12 | 路由转场 | spatial | `fadeInUp`（y: 8）+ `base`+`emphasized` |
 | 13 | 侧栏 / 面板宽度变化 | spatial | `SPRING_SPATIAL_DEFAULT` |

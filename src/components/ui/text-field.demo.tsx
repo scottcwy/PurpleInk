@@ -12,6 +12,16 @@ export function TextFieldDemo() {
         variant="ghost"
         placeholder="输入 API Key"
       />
+      <TextField
+        label="邮箱（hint）"
+        placeholder="you@example.com"
+        hint="用于接收验证码与渲染完成通知"
+      />
+      <TextField
+        label="邮箱（error）"
+        defaultValue="not-an-email"
+        error="邮箱格式不正确"
+      />
     </div>
   )
 }
