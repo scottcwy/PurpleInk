@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import { and, eq, isNotNull, sql } from 'drizzle-orm'
-import { runInAuthContext, SYSTEM_USER_ID } from '@/lib/auth/workspace-context'
 import type { Db } from '@/lib/db/client'
 import {
   aiInvocations,
@@ -14,8 +13,9 @@ import { backoffMs, shouldAutoRetry } from './retry-policy'
 import { classifyWorkflowError } from '@/features/canvas/workflow-error'
 import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
 import { databaseNow } from '@/features/ai/workspace-concurrency-context'
-import type { WorkflowExecutionNotice, WorkflowFault } from '@/features/canvas/workflow-fault'
+import type { WorkflowFault } from '@/features/canvas/workflow-fault'
 import { resolveCheckpointStage } from './attempt-checkpoint'
+import { resetNodeForRetry } from './attempt-retry-node'
 import {
   boundedProviderResumeAt,
   MAX_PROVIDER_WAIT_MS,
@@ -344,26 +344,3 @@ function workflowFault(failure: unknown, stage: string): WorkflowFault {
     { stage }
   )
 }
-
-/**
- * 自动重试前把节点复位到 pending：两个 handler 开场都走 pending -> running，
- * 而首次失败的补偿已把节点置 failed（failed -> running 非法）。features 依赖
- * 按 lease.ts 的先例动态加载；复位失败只记日志，不阻断重试排队本身。
- */
-async function resetNodeForRetry(
-  workspaceId: string,
-  nodeId: string,
-  notice?: WorkflowExecutionNotice,
-): Promise<void> {
-  try {
-    const { transitionNodeStatus } = await import('@/features/canvas/status')
-    await runInAuthContext({ workspaceId, userId: SYSTEM_USER_ID }, () =>
-      transitionNodeStatus(nodeId, 'pending', notice ? { executionNotice: notice } : undefined)
-    )
-  } catch (error) {
-    // 节点可能已被用户/其他路径改走（如仍在 running），容错不阻断。
-    console.error('[queue] 自动重试的节点复位失败', { nodeId, error })
-  }
-}
-
-/** shouldAutoRetry 的兜底 stage：director 作业取 payload.stage，渲染作业归 RENDER。 */

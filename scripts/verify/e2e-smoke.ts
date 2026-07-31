@@ -11,11 +11,12 @@
  * 退出码：0 全部通过；1 任一断言失败或超时。失败时如实报出卡在哪个节点/阶段，
  * 不回显 prompt、凭据或 provider 原始错误。
  */
-import { createHash } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { loadEnvConfig } from '@next/env'
+import { readArtifactInventory } from './e2e-artifact-inventory'
 import { authHeaders, establishSession } from './smoke-session'
 
 /**
@@ -48,6 +49,7 @@ interface Options {
   baseUrl: string
   title: string
   script: string
+  projectId?: string
   timeoutMs: number
   reportPath: string
 }
@@ -79,15 +81,9 @@ async function main(): Promise<void> {
     script: { characters: options.script.length },
   }
 
-  await establishSession(options.baseUrl, report)
-
-  const projectId = await createProject(options)
+  const projectId = options.projectId ?? await createAndStartProject(options, report)
   report.projectId = projectId
-  console.log(`[e2e] 项目已创建 ${projectId}`)
-
-  const start = await post(options.baseUrl, '/api/director/pipeline', { projectId })
-  report.pipelineStart = start
-  console.log('[e2e] autopilot 已启动，开始轮询画布')
+  if (options.projectId) console.log(`[e2e] 继续核验现有项目 ${projectId}`)
 
   const nodes = await waitForTerminalGraph(options, projectId)
   report.nodes = nodes.map(({ id, type, status, logicalKey }) => ({
@@ -131,21 +127,36 @@ async function main(): Promise<void> {
     `[e2e] 不可变产物 ${immutable.length} 条哈希全部核对；实时会话日志 ${liveLogs.length} 条单列`
   )
   console.log(`[e2e] 报告已写入 ${options.reportPath}`)
-  if (!report.ok) {
-    console.error(
-      `[e2e] 失败：failed 节点 ${failed.length} 个，` +
-        `哈希不一致 ${hashMismatches.length} 条，字节缺失 ${missingBytes.length} 条`
-    )
-    process.exit(1)
-  }
+  if (!report.ok) throw new Error(
+    `failed 节点 ${failed.length} 个，` +
+      `哈希不一致 ${hashMismatches.length} 条，字节缺失 ${missingBytes.length} 条`,
+  )
   console.log('[e2e] 通过')
 }
 
+async function createAndStartProject(
+  options: Options,
+  report: Record<string, unknown>,
+): Promise<string> {
+  await establishSession(options.baseUrl, report)
+  const projectId = await createProject(options)
+  console.log(`[e2e] 项目已创建 ${projectId}`)
+  report.pipelineStart = await post(
+    options.baseUrl,
+    '/api/director/pipeline',
+    { projectId },
+  )
+  console.log('[e2e] autopilot 已启动，开始轮询画布')
+  return projectId
+}
+
 async function createProject(options: Options): Promise<string> {
-  const body = await post(options.baseUrl, '/api/projects', {
-    title: options.title,
-    script: options.script,
-  })
+  const body = await post(
+    options.baseUrl,
+    '/api/projects',
+    { title: options.title, script: options.script },
+    { 'idempotency-key': randomUUID() },
+  )
   const projectId =
     typeof body.id === 'string'
       ? body.id
@@ -218,68 +229,21 @@ async function readGraphNodes(projectId: string): Promise<GraphNode[]> {
   return rows
 }
 
-interface ArtifactRow {
-  id: string
-  kind: string
-  version: number
-  sizeBytes: number
-  contentHash: string
-  hashMatches: boolean
-  actualSize: number | null
-}
-
-/** 逐条核对 artifact 的登记哈希与磁盘实际字节 SHA-256。 */
-async function readArtifactInventory(projectId: string): Promise<ArtifactRow[]> {
-  const { getDb } = await import('@/lib/db/client')
-  const { artifacts } = await import('@/lib/db/schema/index')
-  const { eq } = await import('drizzle-orm')
-  const { storage } = await import('@/lib/storage')
-  const database = await getDb()
-  const rows = await database
-    .select({
-      id: artifacts.id,
-      kind: artifacts.kind,
-      version: artifacts.version,
-      sizeBytes: artifacts.sizeBytes,
-      contentHash: artifacts.contentHash,
-      storageKey: artifacts.storageKey,
-    })
-    .from(artifacts)
-    .where(eq(artifacts.projectId, projectId))
-  const inventory: ArtifactRow[] = []
-  for (const row of rows) {
-    let actual: Buffer | null = null
-    try {
-      actual = await storage.get(row.storageKey)
-    } catch {
-      actual = null
-    }
-    const digest = actual
-      ? createHash('sha256').update(actual).digest('hex')
-      : null
-    inventory.push({
-      id: row.id,
-      kind: row.kind,
-      version: row.version,
-      sizeBytes: row.sizeBytes,
-      contentHash: row.contentHash,
-      hashMatches: digest === row.contentHash,
-      actualSize: actual?.byteLength ?? null,
-    })
-  }
-  return inventory
-}
-
 /** 凭据注入（Basic Auth + 应用内会话）收在 `./smoke-session.ts`，唯一出口。 */
 
 async function post(
   baseUrl: string,
   route: string,
-  body: unknown
+  body: unknown,
+  extraHeaders: Record<string, string> = {},
 ): Promise<Record<string, unknown>> {
   const response = await fetch(`${baseUrl}${route}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...authHeaders() },
+    headers: {
+      'content-type': 'application/json',
+      ...authHeaders(),
+      ...extraHeaders,
+    },
     body: JSON.stringify(body),
   })
   const parsed: unknown = await response.json().catch(() => null)
@@ -309,13 +273,15 @@ async function parseOptions(argv: readonly string[]): Promise<Options> {
   const script = scriptPath
     ? (await readFile(scriptPath, 'utf8')).trim()
     : (inline ?? '').trim()
-  if (script.length === 0) {
+  const projectId = flags.get('project-id')
+  if (script.length === 0 && !projectId) {
     throw new Error('必须提供 --script <文件> 或 --text <稿件文本>')
   }
   return {
     baseUrl: flags.get('base-url') ?? 'http://localhost:3000',
     title: flags.get('title') ?? `E2E 冒烟 ${new Date().toISOString()}`,
     script,
+    ...(projectId ? { projectId } : {}),
     timeoutMs: Number(flags.get('timeout') ?? 900) * 1000,
     reportPath:
       flags.get('report') ??
@@ -334,9 +300,22 @@ async function writeReport(
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
-main().catch((error: unknown) => {
-  console.error(
-    `[e2e] 中止：${error instanceof Error ? error.message : String(error)}`
-  )
-  process.exit(1)
-})
+void main()
+  .catch((error: unknown) => {
+    console.error(
+      `[e2e] 中止：${error instanceof Error ? error.message : String(error)}`
+    )
+    process.exitCode = 1
+  })
+  .finally(closeReadOnlyDatabase)
+
+async function closeReadOnlyDatabase(): Promise<void> {
+  const store = globalThis as unknown as {
+    __cvcPostgresClient?: { end(options?: { timeout?: number }): Promise<void> }
+    __cvcDbPromise?: Promise<unknown>
+  }
+  const client = store.__cvcPostgresClient
+  delete store.__cvcPostgresClient
+  delete store.__cvcDbPromise
+  if (client) await client.end({ timeout: 5 }).catch(() => undefined)
+}
