@@ -390,6 +390,19 @@ describe('classifyWorkflowError', () => {
     expect(projection.message).not.toContain('attemptId')
   })
 
+  it('stops retrying when uploaded audio no longer matches its source evidence', () => {
+    const error = Object.assign(
+      new Error('录音源文件与创建项目时登记的字节证据不一致'),
+      { name: 'AudioSourceIntegrityError' },
+    )
+
+    expect(classifyWorkflowError(error, { stage: 'INGEST' })).toMatchObject({
+      code: 'AUDIO_SOURCE_INTEGRITY_INVALID',
+      message: '上传的录音文件未通过来源完整性校验，请重新上传原始音频创建项目。',
+      retryable: false,
+    })
+  })
+
   it('classifies the persisted outage message without hitting broader rules', () => {
     // 文案持久化到 attempt.failure 后只剩字符串：「AI 服务暂时不可用」含「不可用」，
     // 不得被「配置/凭据不可用」误判成不可重试的 CONFIGURATION_BLOCKED。

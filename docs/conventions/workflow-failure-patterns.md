@@ -948,6 +948,26 @@ JavaScript 标识符在运行时都有定义。`openFrameCapture` 又没有监�
 
 ---
 
+## 7.22 模式 AB：上传音频完整性矛盾被当成瞬时失败反复重试
+
+**症状**：音频项目在 INGEST 阶段持续失败，界面仍提供重试；每次重试都读取同一个
+已经与创建时登记的 SHA-256、字节数或解码元数据不一致的源文件，因此不会自行恢复。
+
+**规则**：
+
+- 音频源字节或实测媒体元数据与项目来源证据不一致时，必须抛出有稳定类型名的
+  `AudioSourceIntegrityError`，不能依赖错误文案关键词。
+- `classifyWorkflowError` 将该类型投影为
+  `AUDIO_SOURCE_INTEGRITY_INVALID / retryable=false`，普通界面只提示重新上传原始音频，
+  不回显 storage key、哈希、文件路径或底层解码报文。
+- 此错误不应进入后台 retryable failed 前沿；恢复动作是重新创建音频项目，不是重复
+  调用 ASR。
+
+**已落地护栏**：`workflow-error.test.ts` 锁定类型优先、安全文案和不可重试语义；
+`audio-transcription-job.test.ts` 继续覆盖源证据校验发生在 ASR 调用之前。
+
+---
+
 ## 9. 已知未修项
 
 当前无已确认而未修的代码/文档项。
@@ -963,8 +983,8 @@ JavaScript 标识符在运行时都有定义。`openFrameCapture` 又没有监�
 配音永久失败（模式 P）、数据库与应用时钟混用导致 Provider 等待风暴和字幕文本重复
 调用（模式 Q）、产物血缘用 artifactId 强绑定导致旁白重跑即判字幕失效（模式 S）
 、队列执行超时未中止旧阶段并允许迟到写入（模式 Y）、页面脚本异常未拒绝坏
-FABRICATE Artifact（模式 Z）、retryable failed 前沿未被后台恢复（模式 AA）——见
-各节「已落地护栏」。
+FABRICATE Artifact（模式 Z）、retryable failed 前沿未被后台恢复（模式 AA）、
+音频源完整性矛盾被误判为可重试（模式 AB）——见各节「已落地护栏」。
 
 ---
 

@@ -17,6 +17,7 @@ export type WorkflowFaultCode =
   | 'UPSTREAM_ARTIFACT_INVALID'
   | 'STAGE_INPUT_INVALID'
   | 'INTERNAL_PREFLIGHT_FAILED'
+  | 'AUDIO_SOURCE_INTEGRITY_INVALID'
   | 'ROUTE_CONTRACT_INVALID'
   | 'MEDIA_NOT_READY'
   | 'TASK_INTERRUPTED'
@@ -221,6 +222,8 @@ function presentationFor(code: WorkflowFaultCode): {
       return { origin: 'platform', title: '终片尚未生成', recovery: 'confirm_degraded_export' }
     case 'STAGE_INPUT_INVALID':
       return { origin: 'content', title: '上游内容或素材需要修复', recovery: 'edit_input' }
+    case 'AUDIO_SOURCE_INTEGRITY_INVALID':
+      return { origin: 'content', title: '上传音频需要重新提交', recovery: 'edit_input' }
     case 'TASK_INTERRUPTED':
     case 'MEDIA_NOT_READY':
       return { origin: 'platform', title: '任务暂时等待恢复', recovery: 'manual_retry' }

@@ -14,13 +14,11 @@ export type {
   WorkflowExecutionNotice,
   WorkflowBlock,
 } from './workflow-fault'
-
 /** 分类结果：只含类别本身，stage 与来源节点由调用上下文补齐。 */
 type ClassifiedError = Pick<
   WorkflowErrorProjection,
   'code' | 'message' | 'retryable'
 >
-
 /** 把任意阶段异常投影成可展示、可判定是否值得重试的业务错误。
  * 判定顺序是三段，且**类型优先于文案**：
  * 1. `classifyByType`：能靠类型确定的结构性错误（zod 合同、语义门禁）。
@@ -107,6 +105,11 @@ function classifyByType(
       retryable: false,
     }
   }
+  if (error instanceof Error && error.name === 'AudioSourceIntegrityError') return {
+    code: 'AUDIO_SOURCE_INTEGRITY_INVALID',
+    message: '上传的录音文件未通过来源完整性校验，请重新上传原始音频创建项目。',
+    retryable: false,
+  }
   // 语义门禁错误来自 director 领域；此处只按类型名判定，避免 canvas 反向依赖
   // director 造成跨域循环。
   if (error instanceof Error && error.name === 'ArtifactValidationError') {
@@ -176,7 +179,6 @@ const PROVIDER_UNAVAILABLE_PROJECTION: ClassifiedError = {
   message: 'AI 服务暂时不可用，可稍后重试或选择跳过',
   retryable: true,
 }
-
 /** 重试预算耗尽的统一投影：类型判定与文案判定必须给出同一结果。 */
 const RETRY_BUDGET_EXHAUSTED_PROJECTION: ClassifiedError = {
   code: 'RETRY_BUDGET_EXHAUSTED',
@@ -184,13 +186,11 @@ const RETRY_BUDGET_EXHAUSTED_PROJECTION: ClassifiedError = {
     '该环节在 30 分钟内已失败 5 次，已暂停重试；可稍后再试、修复配置或选择跳过',
   retryable: false,
 }
-
 const QUOTA_EXHAUSTED_PROJECTION: ClassifiedError = {
   code: 'QUOTA_EXHAUSTED',
   message: '本周期 AI 额度已用完，请升级套餐或等待下个周期重置。',
   retryable: false,
 }
-
 /** 有序文案规则：先具体后笼统，命中即返回。 */
 const MESSAGE_RULES: ReadonlyArray<readonly [RegExp, ClassifiedError]> = [
   [
