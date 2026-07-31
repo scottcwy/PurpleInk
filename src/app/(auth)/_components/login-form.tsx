@@ -7,6 +7,7 @@ import { TextField } from '@/components/ui/text-field'
 import { AuthFooterLink, AuthFormShell } from './auth-form-shell'
 import { FormFeedback } from './form-feedback'
 import { login } from './auth-api'
+import { useAuthValidation } from './use-auth-validation'
 
 /**
  * 登录表单。
@@ -22,6 +23,8 @@ export function LoginForm() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string>()
   const [submitting, setSubmitting] = useState(false)
+  // 登录页只校验邮箱格式：密码规则不适用于存量账号（loginSchema 也不复检强度）。
+  const validation = useAuthValidation()
   // 防重入：`submitting` 是异步生效的，快速双击会在同一渲染里进两次 submit。
   const submittingRef = useRef(false)
 
@@ -76,7 +79,12 @@ export function LoginForm() {
           autoComplete="email"
           required
           value={email}
-          onChange={(event) => setEmail(event.target.value)}
+          error={validation.errors.email}
+          onChange={(event) => {
+            setEmail(event.target.value)
+            validation.onChange('email')
+          }}
+          onBlur={(event) => validation.onBlur('email', event.target.value)}
           className="w-full"
         />
         <TextField
@@ -99,7 +107,7 @@ export function LoginForm() {
             onDismiss={() => setError(undefined)}
           />
         )}
-        <Button type="submit" size="lg" disabled={submitting} className="w-full">
+        <Button type="submit" size="lg" loading={submitting} className="w-full">
           {submitting ? '登录中' : '登录'}
         </Button>
       </form>

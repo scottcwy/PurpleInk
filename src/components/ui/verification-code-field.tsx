@@ -51,7 +51,8 @@ export function VerificationCodeField({
           type="button"
           variant="gray"
           onClick={onRequestCode}
-          disabled={disabled || requesting || cooling}
+          loading={requesting}
+          disabled={disabled || cooling}
           className="w-[116px] shrink-0"
         >
           {requesting ? '发送中' : cooling ? `${cooldownSeconds} 秒` : sent ? '重新发送' : '获取验证码'}

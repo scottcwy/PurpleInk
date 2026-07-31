@@ -1,37 +1,16 @@
 import { z } from 'zod'
+import { PASSWORD_MAX_LENGTH, emailSchema, passwordSchema } from './credential-policy'
 import { HONEYPOT_FIELD_NAME } from './honeypot'
 import { VERIFICATION_CODE_LENGTH } from './verification-code'
 
-/** RFC 5321 的 path 上限。超长邮箱一律拒，避免把垃圾写进唯一索引。 */
-const EMAIL_MAX_LENGTH = 254
-const PASSWORD_MIN_LENGTH = 10
-const PASSWORD_MAX_LENGTH = 200
 const NAME_MAX_LENGTH = 64
 const WORKSPACE_NAME_MAX_LENGTH = 64
 
 /**
- * 邮箱统一小写 + 去空白后再进入任何逻辑，与 `users_email_lower_unique` 索引口径一致。
- * 这样「A@x.com」和「a@x.com」在校验、限流、验证码摘要三处都是同一个 key。
+ * 邮箱与口令规则本体在 `credential-policy.ts`（客户端安全，供实时校验复用），
+ * 这里 re-export 以维持服务端消费方与测试的既有导入路径。
  */
-export const emailSchema = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .max(EMAIL_MAX_LENGTH, '邮箱过长')
-  .pipe(z.string().regex(/^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/, '邮箱格式不正确'))
-
-/**
- * 口令强度：长度优先，字符类别只要求「不是纯一种类别」。
- * 强制符号会把用户推向 `Passw0rd!` 这类可预测口令，长度带来的熵更实在。
- */
-export const passwordSchema = z
-  .string()
-  .min(PASSWORD_MIN_LENGTH, `密码至少 ${PASSWORD_MIN_LENGTH} 位`)
-  .max(PASSWORD_MAX_LENGTH, '密码过长')
-  .refine(
-    (value) => /\d/.test(value) && /[^\d]/.test(value),
-    '密码需同时包含数字与非数字字符',
-  )
+export { emailSchema, passwordSchema }
 
 export const displayNameSchema = z
   .string()

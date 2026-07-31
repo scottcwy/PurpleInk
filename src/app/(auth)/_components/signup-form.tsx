@@ -8,7 +8,9 @@ import { TextField } from '@/components/ui/text-field'
 import { VerificationCodeField } from '@/components/ui/verification-code-field'
 import { AuthFooterLink, AuthFormShell, HoneypotField } from './auth-form-shell'
 import { FormFeedback } from './form-feedback'
+import { PasswordStrengthMeter } from './password-strength-meter'
 import { signup } from './auth-api'
+import { useAuthValidation } from './use-auth-validation'
 import { useVerificationCode } from './use-verification-code'
 
 /**
@@ -31,6 +33,7 @@ export function SignupForm() {
   const [verificationCode, setVerificationCode] = useState('')
   const [error, setError] = useState<string>()
   const [submitting, setSubmitting] = useState(false)
+  const validation = useAuthValidation()
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -73,7 +76,12 @@ export function SignupForm() {
           autoComplete="email"
           required
           value={email}
-          onChange={(event) => setEmail(event.target.value)}
+          error={validation.errors.email}
+          onChange={(event) => {
+            setEmail(event.target.value)
+            validation.onChange('email')
+          }}
+          onBlur={(event) => validation.onBlur('email', event.target.value)}
           className="w-full"
         />
         <HumanCheckField
@@ -121,10 +129,16 @@ export function SignupForm() {
           autoComplete="new-password"
           required
           value={password}
-          onChange={(event) => setPassword(event.target.value)}
+          error={validation.errors.password}
+          hint="密码至少 10 位，需同时包含数字与非数字字符。"
+          onChange={(event) => {
+            setPassword(event.target.value)
+            validation.onChange('password')
+          }}
+          onBlur={(event) => validation.onBlur('password', event.target.value)}
           className="w-full"
         />
-        <p className="text-xs text-ds-text-muted">密码至少 10 位，需同时包含数字与非数字字符。</p>
+        <PasswordStrengthMeter password={password} />
         {code.notice && !code.error && (
           <FormFeedback
             variant="info"
@@ -149,7 +163,7 @@ export function SignupForm() {
             onDismiss={() => setError(undefined)}
           />
         )}
-        <Button type="submit" size="lg" disabled={submitting} className="w-full">
+        <Button type="submit" size="lg" loading={submitting} className="w-full">
           {submitting ? '创建中' : '创建账号并进入'}
         </Button>
       </form>
