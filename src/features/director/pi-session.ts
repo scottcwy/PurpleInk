@@ -45,6 +45,7 @@ export interface DirectorRunInput {
   prompt: string
   tools?: readonly DirectorTool[]
   output: DirectorOutputPolicy
+  signal?: AbortSignal
 }
 
 export type DirectorRunResult = DirectorOutput
@@ -135,10 +136,19 @@ export async function createDirectorSession(
       id: stored.id,
       storageKey: stored.storageKey,
       run: async (runInput) => {
+        runInput.signal?.throwIfAborted()
         const startedAt = Date.now()
         preflightFailure = undefined
         providerFailure = undefined
         let providerFailureHandled = false
+        const abortRun = () => {
+          try {
+            agent.abort()
+          } catch {
+            // 取消属于尽力清理；原始 AbortSignal reason 才是调用方真值。
+          }
+        }
+        runInput.signal?.addEventListener('abort', abortRun, { once: true })
         bridge.beginRun()
         agent.state.tools = adaptDirectorTools(runInput.tools)
         try {
@@ -166,6 +176,7 @@ export async function createDirectorSession(
           })
           return extractDirectorOutput(bridge.runMessages(), runInput.output)
         } catch (error) {
+          if (runInput.signal?.aborted) throw runInput.signal.reason
           if (preflightFailure !== undefined) throw preflightFailure
           if (providerFailure !== undefined && !providerFailureHandled) {
             providerFailureHandled = true
@@ -196,6 +207,8 @@ export async function createDirectorSession(
             })
           }
           throw error
+        } finally {
+          runInput.signal?.removeEventListener('abort', abortRun)
         }
       },
       close: async () => {

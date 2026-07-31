@@ -9,6 +9,10 @@ import {
 import type { DirectorStageContext } from './runtime-repository'
 import type { PreparedStageResult } from './stage-result'
 import { createCheckDeterminismTool } from './tools/check-determinism'
+import {
+  type FabricateRuntimeProbe,
+} from './tools/fabricate-runtime-probe'
+import { inspectFabricateCandidate } from './tools/fabricate-source-gate'
 import { createValidateShotPlanTool } from './tools/validate-shot-plan'
 import {
   ArtifactValidationError,
@@ -57,6 +61,7 @@ export interface ValidatedArtifactInput {
     rawContent: string
   ) => PreparedStageResult | Promise<PreparedStageResult>
   writeArtifact: (input: WriteArtifactInput) => Promise<ArtifactCommitResult>
+  probeRuntime?: FabricateRuntimeProbe
   signal?: AbortSignal
 }
 
@@ -77,9 +82,11 @@ export async function generateValidatedArtifact(
       prompt,
       tools: toolsForStage(input.stage),
       output: STAGE_OUTPUT[input.stage],
+      ...(input.signal ? { signal: input.signal } : {}),
     })
     input.signal?.throwIfAborted()
     try {
+      await assertRecoveredFabricateCandidate(input, result)
       const prepared = await input.prepareResult(
         input.context,
         result.artifactContent
@@ -101,6 +108,32 @@ export async function generateValidatedArtifact(
       retries += 1
       prompt = buildGateRetryPrompt(input.stage, retries, error.errors)
     }
+  }
+}
+
+async function assertRecoveredFabricateCandidate(
+  input: ValidatedArtifactInput,
+  result: Awaited<ReturnType<DirectorSession['run']>>,
+): Promise<void> {
+  if (
+    input.stage !== 'FABRICATE' ||
+    result.provenance.kind !== 'assistant-text-recovery'
+  ) {
+    return
+  }
+  const inspection = await inspectFabricateCandidate(
+    result.artifactContent,
+    {
+      ...(input.probeRuntime ? { probeRuntime: input.probeRuntime } : {}),
+      ...(input.signal ? { signal: input.signal } : {}),
+    },
+  )
+  if (!inspection.ok) {
+    throw new ArtifactValidationError(
+      inspection.violations.map(
+        (violation) => `${violation.ruleId}: ${violation.message}`,
+      ),
+    )
   }
 }
 

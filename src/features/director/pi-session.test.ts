@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
   const gatewayRelease = vi.fn()
   const agentInstances: MockAgent[] = []
   const promptMessages: unknown[][] = []
+  const promptModes: Array<'hang'> = []
   const billingProviderFailures: unknown[] = []
   const createDirectorBillingStream = vi.fn((input: {
     onProviderFailure?: (error: unknown) => void
@@ -42,6 +43,9 @@ const mocks = vi.hoisted(() => {
     }
     readonly onResponse?: (response: { status: number }, model: unknown) => Promise<void> | void
     readonly streamFn?: (...args: unknown[]) => unknown
+    promptPending = false
+    abortCalls = 0
+    private rejectPendingPrompt?: (error: Error) => void
 
     constructor(options: {
       initialState?: {
@@ -70,6 +74,12 @@ const mocks = vi.hoisted(() => {
     }
 
     async prompt(prompt: string) {
+      if (promptModes.shift() === 'hang') {
+        this.promptPending = true
+        await new Promise<never>((_resolve, reject) => {
+          this.rejectPendingPrompt = reject
+        })
+      }
       if (billingProviderFailures.length > 0) {
         this.streamFn?.({}, {}, {})
         this.state.errorMessage = 'Provider request failed'
@@ -102,7 +112,12 @@ const mocks = vi.hoisted(() => {
     }
 
     async waitForIdle() {}
-    abort() {}
+    abort() {
+      this.abortCalls += 1
+      this.rejectPendingPrompt?.(new Error('agent aborted'))
+      this.rejectPendingPrompt = undefined
+      this.promptPending = false
+    }
   }
 
   return {
@@ -121,6 +136,7 @@ const mocks = vi.hoisted(() => {
     gatewayRelease,
     agentInstances,
     promptMessages,
+    promptModes,
     billingProviderFailures,
     createDirectorBillingStream,
     MockAgent,
@@ -187,6 +203,7 @@ describe('createDirectorSession', () => {
     vi.clearAllMocks()
     mocks.agentInstances.length = 0
     mocks.promptMessages.length = 0
+    mocks.promptModes.length = 0
     mocks.billingProviderFailures.length = 0
     mocks.resolveDirectorModelTarget.mockReturnValue({
       provider: 'stepfun',
@@ -246,6 +263,30 @@ describe('createDirectorSession', () => {
     })
     expect(Object.keys(session).sort()).toEqual(['close', 'id', 'run', 'storageKey'])
     expect(agent.state.systemPrompt).not.toContain('Skill')
+  })
+
+  it('aborts an in-flight run with the outer Director signal reason', async () => {
+    mocks.promptModes.push('hang')
+    const session = await createDirectorSession({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      stage: 'FABRICATE',
+    })
+    const controller = new AbortController()
+    const reason = new Error('queue attempt cancelled')
+    const running = session.run({
+      prompt: '执行阶段',
+      output: assistantOutput,
+      signal: controller.signal,
+    })
+    const agent = mocks.agentInstances[0]!
+    await vi.waitFor(() => expect(agent.promptPending).toBe(true))
+
+    controller.abort(reason)
+
+    await expect(running).rejects.toBe(reason)
+    expect(agent.abortCalls).toBe(1)
+    await session.close()
   })
 
   it('closes the subscription and session store', async () => {

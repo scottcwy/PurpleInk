@@ -897,6 +897,16 @@ JavaScript 标识符在运行时都有定义。`openFrameCapture` 又没有监�
 
 - Chromium 页面从加载到每次 `seek` 都必须监听并 fail-closed 处理 `pageerror`；普通界面
   只返回稳定的“页面脚本执行失败”，不得泄漏生成代码或本地路径。
+- `check_determinism` 在 FABRICATE Artifact 提交前必须执行真实 Chromium 加载、母版
+  几何与逐帧 `seek` 探测；运行时不合格结果作为同一 Director 会话的安全门禁反馈，
+  让模型在既有两次修复额度内修改来源。渲染 admission 仍保留为第二道防线，不能因
+  前置探测通过而省略。
+- assistant 文本抢救路径没有成功的 `check_determinism` 工具结果，因此必须在 Artifact
+  提交前复用同一完整门禁：先执行静态合同，只有静态通过才启动 Chromium；不能只凭
+  HTML 首尾形状直接入库，也不能先执行本应由静态规则拒绝的来源。
+- 探测必须继承 Director 的取消信号，并为浏览器操作和总流程设置有限截止时间；字体或
+  `seek` 的永不结束 Promise 必须安全退出、关闭 Chromium、删除临时来源。页面内部
+  `seek` 超时属于可回馈的 source 违规，浏览器启动、协议断连等仍属于基础设施错误。
 - 只在浏览器页面内部把 `runtime.seek()` 自身异常转换为 source 合同错误；
   `page.evaluate`、CDP、Chromium 断连等基础设施失败必须原样进入重试，禁止误拒绝有效源。
 - runtime 缺失/版本/seek、页面脚本异常、母版几何不匹配都属于生成 source 合同失败；
