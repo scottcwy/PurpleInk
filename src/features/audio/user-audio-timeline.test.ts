@@ -49,6 +49,31 @@ describe('buildUserAudioTimeline', () => {
     ])
   })
 
+  it('merges a zero-duration boundary token without discarding valid timestamps', () => {
+    const transcript = '一二边三四五六'
+    const timeline = buildUserAudioTimeline({
+      transcript,
+      captions: [
+        { text: '一', startMs: 0, endMs: 3_000 },
+        { text: '二', startMs: 3_000, endMs: 6_000 },
+        { text: '边', startMs: 6_000, endMs: 6_000 },
+        { text: '三', startMs: 6_000, endMs: 9_000 },
+        { text: '四', startMs: 9_000, endMs: 12_000 },
+        { text: '五', startMs: 12_000, endMs: 15_000 },
+        { text: '六', startMs: 15_000, endMs: 18_000 },
+      ],
+      measured: measured(18_000),
+    })
+
+    expect(timeline.alignmentMode).toBe('caption-timestamps')
+    expect(timeline.scriptUnits).toEqual([
+      { unitId: 'U001', text: '一二边三', order: 0 },
+      { unitId: 'U002', text: '四五六', order: 1 },
+    ])
+    expect(timeline.scriptUnits.map((unit) => unit.text).join('')).toBe(transcript)
+    expectContinuousCoverage(timeline.slices, 288_000)
+  })
+
   it('uses a long natural pause as a boundary while covering leading and trailing audio', () => {
     const timeline = buildUserAudioTimeline({
       transcript: '甲乙丙丁',

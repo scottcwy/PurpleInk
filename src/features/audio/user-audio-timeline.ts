@@ -48,7 +48,9 @@ export function buildUserAudioTimeline(
   const transcript = input.transcript.trim()
   if (!transcript) throw new Error('录音转写文本为空，无法建立时间轴')
   const durationMs = validateMeasured(input.measured)
-  const captions = input.captions.filter((caption) => caption.text.trim().length > 0)
+  const captions = mergeZeroDurationBoundaryTokens(
+    input.captions.filter((caption) => caption.text.trim().length > 0)
+  )
   if (!hasUsableTimeline(captions, durationMs)) {
     return wholeRecording(transcript, input.measured)
   }
@@ -82,6 +84,28 @@ export function buildUserAudioTimeline(
     return wholeRecording(transcript, input.measured)
   }
   return { alignmentMode: 'caption-timestamps', scriptUnits, slices }
+}
+
+function mergeZeroDurationBoundaryTokens(
+  captions: readonly Caption[]
+): Caption[] {
+  const normalized: Caption[] = []
+  for (const caption of captions) {
+    const previous = normalized.at(-1)
+    if (
+      caption.startMs === caption.endMs &&
+      previous &&
+      previous.endMs === caption.startMs
+    ) {
+      normalized[normalized.length - 1] = {
+        ...previous,
+        text: `${previous.text}${caption.text}`,
+      }
+      continue
+    }
+    normalized.push(caption)
+  }
+  return normalized
 }
 
 function validateMeasured(measured: MeasuredAudio): number {
