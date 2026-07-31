@@ -1006,6 +1006,36 @@ key，重试时可能覆盖已登记版本，登记失败后也不能安全盲�
 
 ---
 
+## 7.24 模式 AD：启动恢复事务持锁调用入队，项目创建成功但 start 永久悬挂
+
+**症状**：`POST /api/projects` 已返回 201，项目和入口节点也已落库；随后
+`POST /api/projects/[id]/start` 长期 pending。项目卡片可能依据孤立 queued 节点显示
+“生成中”，但当前 `executionEpoch` 没有任何真实 run / attempt。
+
+**根因**：恢复控制事务先对 `projects` 行执行 `FOR UPDATE`，随后在事务提交前调用
+Director 入队；入队事务又必须锁定同一项目行校验自动推进门闩和 execution epoch，
+形成应用级自锁。仅给客户端增加超时会停止等待，却不能建立真实任务，还可能在重试时
+制造幽灵项目。
+
+**规则与护栏**：
+- 恢复控制只允许在短事务内读取门闩并校验 execution fence；事务提交后再进入真实
+  入队点。最终 stop/start 竞态必须由入队事务在同一项目行锁下复核门闩和 epoch。
+- 创建和启动是两个明确边界：create 原子写入项目、来源和拓扑；只有 run / attempt
+  提交成功后 start 才能返回 `started`。
+- 三类创建共用 `project_creation_requests`；客户端等待超时后只重试既有 projectId
+  的 start，不得再次创建。
+- 并发 script start 在真实入队提交点复用当前 epoch 的 active attempt，并把
+  `attemptId/status/reused` 原样透传到 API；不得依赖入队前快照猜测。
+- 无 attempt 时不得投影为 running。门闩开启但没有 active attempt 投影为
+  `recovering`；孤立 queued 入口允许显式启动恢复。
+- active attempt 的复用响应也必须先执行幂等队列初始化，避免服务重启后只返回
+  `reused` 却没有消费者。
+- PostgreSQL 回归必须完整经过 `startProjectWorkflow → Director → queue persistence`，
+  断言节点、run、attempt、execution epoch 一致，并覆盖并发 start、stop 栅栏和
+  多项目同时启动。
+
+---
+
 ## 9. 已知未修项
 
 当前无已确认而未修的代码/文档项。

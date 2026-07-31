@@ -104,7 +104,11 @@ export async function enqueueDirectorStageWithReceipt(
   })
   await resolved.captureInputFingerprint?.(payload.nodeId)
   if (!options.preservePending) {
-    await resolved.transitionNodeStatus(payload.nodeId, 'pending')
+    await resolved.transitionNodeStatus(
+      payload.nodeId,
+      'pending',
+      { idempotent: true },
+    )
   }
   try {
     // 闸门在 try 内：预算耗尽走既有补偿链，落节点 failed + directorError 投影。
