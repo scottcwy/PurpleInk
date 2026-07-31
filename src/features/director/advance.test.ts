@@ -174,28 +174,56 @@ describe('advancePipeline', () => {
     }
   )
 
-  it.each(['failed', 'stale'] as const)(
-    're-enqueues a ready %s target exactly once when autopilot advances',
-    async (status) => {
-      const test = harness([candidate({ status })])
+  it('re-enqueues a ready stale target exactly once when autopilot advances', async () => {
+    const test = harness([candidate({ status: 'stale' })])
 
-      const result = await advancePipeline('project-1', 'node-1', test.dependencies)
+    const result = await advancePipeline('project-1', 'node-1', test.dependencies)
 
-      expect(result.enqueuedNodeIds).toEqual(['node-2'])
-      expect(test.enqueueDirectorStage).toHaveBeenCalledOnce()
-    }
-  )
+    expect(result.enqueuedNodeIds).toEqual(['node-2'])
+    expect(test.enqueueDirectorStage).toHaveBeenCalledOnce()
+  })
 
-  it('does not automatically retry a failed non-retryable target', async () => {
+  it('re-enqueues a ready failed target only when retryable is explicitly true', async () => {
     const test = harness([
-      candidate({ status: 'failed', retryable: false }),
+      candidate({ status: 'failed', retryable: true }),
     ])
 
     const result = await advancePipeline('project-1', 'node-1', test.dependencies)
 
-    expect(result).toEqual({ enqueuedNodeIds: [], failedNodeIds: [] })
-    expect(test.enqueueDirectorStage).not.toHaveBeenCalled()
-    expect(test.enqueueRenderShot).not.toHaveBeenCalled()
+    expect(result.enqueuedNodeIds).toEqual(['node-2'])
+    expect(test.enqueueDirectorStage).toHaveBeenCalledOnce()
+  })
+
+  it.each([false, undefined])(
+    'does not automatically retry a failed target with retryable=%s',
+    async (retryable) => {
+      const test = harness([
+        candidate({ status: 'failed', retryable }),
+      ])
+
+      const result = await advancePipeline('project-1', 'node-1', test.dependencies)
+
+      expect(result).toEqual({ enqueuedNodeIds: [], failedNodeIds: [] })
+      expect(test.enqueueDirectorStage).not.toHaveBeenCalled()
+      expect(test.enqueueRenderShot).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not let a ready sibling branch re-enqueue a failed target without retryable=true', async () => {
+    const test = harness([
+      candidate({ id: 'blocked', status: 'failed', retryable: undefined }),
+      candidate({ id: 'ready', status: 'idle' }),
+    ])
+
+    const result = await advancePipeline('project-1', 'node-1', test.dependencies)
+
+    expect(result.enqueuedNodeIds).toEqual(['ready'])
+    expect(test.enqueueDirectorStage).toHaveBeenCalledOnce()
+    expect(test.enqueueDirectorStage).toHaveBeenCalledWith({
+      projectId: 'project-1',
+      nodeId: 'ready',
+      stage: 'SHOT_SPEC',
+    })
   })
 
   it('marks a succeeded target stale and re-enqueues it when its inputs changed', async () => {
@@ -278,7 +306,7 @@ describe('advancePipeline', () => {
 })
 
 describe('startProjectPipeline', () => {
-  it.each(['idle', 'failed', 'stale'] as const)(
+  it.each(['idle', 'stale'] as const)(
     'enqueues the trusted INGEST entry when it is %s',
     async (status) => {
       const test = harness([])
@@ -316,6 +344,71 @@ describe('startProjectPipeline', () => {
         failedNodeIds: [],
         blockedNodes: [],
       })
+    }
+  )
+
+  it('re-enqueues a failed INGEST entry when retryable is explicitly true', async () => {
+    const test = harness([])
+    const repository = {
+      ...test.repository,
+      setAutopilot: vi.fn(async () => true),
+      getEntryNode: vi.fn(async () =>
+        candidate({
+          id: 'ingest',
+          type: 'script-import',
+          stage: 'INGEST',
+          status: 'failed',
+          retryable: true,
+        })
+      ),
+      listCompletedNodeIds: vi.fn(async () => []),
+    }
+
+    const result = await startProjectPipeline('project-1', {
+      repository,
+      enqueueDirectorStage: test.enqueueDirectorStage,
+      advance: vi.fn(),
+    })
+
+    expect(test.enqueueDirectorStage).toHaveBeenCalledOnce()
+    expect(result.status).toBe('started')
+    expect(result.enqueuedNodeIds).toEqual(['ingest'])
+  })
+
+  it.each([false, undefined])(
+    'keeps a failed INGEST entry blocked with retryable=%s',
+    async (retryable) => {
+      const test = harness([])
+      const repository = {
+        ...test.repository,
+        setAutopilot: vi.fn(async () => true),
+        getEntryNode: vi.fn(async () =>
+          candidate({
+            id: 'ingest',
+            type: 'script-import',
+            stage: 'INGEST',
+            status: 'failed',
+            retryable,
+          })
+        ),
+        listCompletedNodeIds: vi.fn(async () => []),
+      }
+
+      const result = await startProjectPipeline('project-1', {
+        repository,
+        enqueueDirectorStage: test.enqueueDirectorStage,
+        advance: vi.fn(),
+      })
+
+      expect(test.enqueueDirectorStage).not.toHaveBeenCalled()
+      expect(result.status).toBe('blocked')
+      expect(result.blockedNodes).toEqual([
+        {
+          nodeId: 'ingest',
+          code: 'QUEUE_FAILED',
+          message: '项目尚未完成，但当前没有可入队节点',
+        },
+      ])
     }
   )
 

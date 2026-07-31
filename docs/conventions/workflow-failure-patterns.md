@@ -919,6 +919,31 @@ JavaScript 标识符在运行时都有定义。`openFrameCapture` 又没有监�
 
 ---
 
+## 7.21 模式 AA：自动入队补偿为 retryable failed，但后台前沿永远不再领取
+
+**症状**：上游节点已经成功、项目 `autopilot=true`、当前没有 active attempt，下游因
+一次瞬态入队或 admission 失败停在 `failed`，错误投影明确标记 `retryable=true`；
+用户再次点击启动可以继续，但无人值守后台长期没有自动推进。
+
+**根因**：即时 `advancePipeline` 与手动续跑都允许重新领取 retryable failed 节点，
+但后台 `listDirectorFrontierCandidates` 只把 `idle/stale` 当成 ready frontier。入队
+补偿会按合同把节点转为 `failed`，于是恰好需要自动恢复的节点反而被候选 SQL 永久排除。
+
+**规则与护栏**：
+
+- 后台前沿候选必须包含 `idle/stale`，以及当前有效错误投影明确
+  `retryable=true` 的 `failed` 节点；Director 错误优先于 render 错误，与
+  `AdvanceRepository` 的读取顺序保持一致。
+- 所有自动推进入口都只接受 JSON 布尔值 `retryable=true`；`false`、缺失字段或
+  字符串 `"true"` 均保持阻塞，禁止后台猜测重试。
+- 候选筛选是项目级信号，节点级推进仍必须独立执行同一门禁，禁止不可重试节点借
+  同项目另一条 ready 分支被顺带重新入队。
+- 候选仍必须同时满足：全部上游成功/跳过、同 execution epoch 无 active attempt、
+  项目 autopilot 开启且在恢复时间窗内。
+- PG 回归必须同时证明 retryable failed 会被领取，terminal failed 不会进入候选。
+
+---
+
 ## 9. 已知未修项
 
 当前无已确认而未修的代码/文档项。
@@ -934,7 +959,8 @@ JavaScript 标识符在运行时都有定义。`openFrameCapture` 又没有监�
 配音永久失败（模式 P）、数据库与应用时钟混用导致 Provider 等待风暴和字幕文本重复
 调用（模式 Q）、产物血缘用 artifactId 强绑定导致旁白重跑即判字幕失效（模式 S）
 、队列执行超时未中止旧阶段并允许迟到写入（模式 Y）、页面脚本异常未拒绝坏
-FABRICATE Artifact（模式 Z）——见各节「已落地护栏」。
+FABRICATE Artifact（模式 Z）、retryable failed 前沿未被后台恢复（模式 AA）——见
+各节「已落地护栏」。
 
 ---
 

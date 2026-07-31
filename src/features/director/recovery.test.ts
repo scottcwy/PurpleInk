@@ -187,6 +187,12 @@ describe('executeNodeAction', () => {
 describe('repairProjectFrontier', () => {
   it('repairs a historical invalid shot producer before normal project advancement', async () => {
     const test = harness(false)
+    test.graph.nodes[1]!.directorError = {
+      stage: 'FABRICATE',
+      message: '上游镜头合同需要修复',
+      code: 'UPSTREAM_ARTIFACT_INVALID',
+      retryable: true,
+    }
 
     const result = await repairProjectFrontier('project-1', test.dependencies)
 
@@ -200,6 +206,22 @@ describe('repairProjectFrontier', () => {
       'script-s002',
       'repair-upstream'
     )
+  })
+
+  it('does not automatically repair a failed frontier without retryable=true', async () => {
+    const test = harness(false)
+
+    const result = await repairProjectFrontier('project-1', test.dependencies)
+
+    expect(result.enqueuedNodeIds).toEqual([])
+    expect(result.repairRootNodeIds).toEqual([])
+    expect(result.blockedNodes).toContainEqual({
+      nodeId: 'codegen-s002',
+      code: 'CONFIGURATION_BLOCKED',
+      message: '失败节点缺少可重试标记，需要手动处理',
+    })
+    expect(test.invalidate).not.toHaveBeenCalled()
+    expect(test.enqueueDirectorStage).not.toHaveBeenCalled()
   })
 
   it('reports every failed non-retryable node as blocked without re-enqueueing it', async () => {

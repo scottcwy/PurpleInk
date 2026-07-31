@@ -51,6 +51,69 @@ it('selects only an unattended ready DAG with no active attempt', async () => {
   ])
 })
 
+it('blocks an active current epoch but ignores an active attempt from an old epoch', async () => {
+  await seedProject({
+    autopilot: true,
+    downstreamStatus: 'idle',
+    activeAttempt: true,
+    activeAttemptEpoch: 'current',
+  })
+  const oldEpochProjectId = await seedProject({
+    autopilot: true,
+    downstreamStatus: 'idle',
+    activeAttempt: true,
+    activeAttemptEpoch: 'old',
+  })
+
+  await expect(listDirectorFrontierCandidates(database.db)).resolves.toEqual([
+    { workspaceId: WORKSPACE_ID, projectId: oldEpochProjectId },
+  ])
+})
+
+it('recovers a retryable failed frontier but leaves terminal failures blocked', async () => {
+  const directorRetryableProjectId = await seedProject({
+    autopilot: true,
+    downstreamStatus: 'failed',
+    retryable: true,
+    errorProjection: 'director',
+  })
+  const renderRetryableProjectId = await seedProject({
+    autopilot: true,
+    downstreamStatus: 'failed',
+    retryable: true,
+    errorProjection: 'render',
+  })
+  await seedProject({
+    autopilot: true,
+    downstreamStatus: 'failed',
+    retryable: false,
+  })
+  await seedProject({
+    autopilot: true,
+    downstreamStatus: 'failed',
+    retryable: true,
+    errorProjection: 'both-conflict',
+  })
+  await seedProject({
+    autopilot: true,
+    downstreamStatus: 'failed',
+    errorProjection: 'director-missing-render-true',
+  })
+  await seedProject({
+    autopilot: true,
+    downstreamStatus: 'failed',
+    errorProjection: 'director-string-true',
+  })
+
+  const candidates = await listDirectorFrontierCandidates(database.db)
+
+  expect(candidates).toHaveLength(2)
+  expect(candidates).toEqual(expect.arrayContaining([
+    { workspaceId: WORKSPACE_ID, projectId: directorRetryableProjectId },
+    { workspaceId: WORKSPACE_ID, projectId: renderRetryableProjectId },
+  ]))
+})
+
 it('uses node activity instead of a stale project timestamp for the recovery window', async () => {
   const [clock] = await database.sql<{ now: string | Date }[]>`select now() as now`
   const now = new Date(clock!.now)
@@ -126,8 +189,16 @@ it('does not truncate a recoverable candidate behind sixteen newer frontiers', a
 
 async function seedProject(input: {
   autopilot: boolean
-  downstreamStatus: 'idle' | 'succeeded'
+  downstreamStatus: 'idle' | 'succeeded' | 'failed'
+  retryable?: boolean
+  errorProjection?:
+    | 'director'
+    | 'render'
+    | 'both-conflict'
+    | 'director-missing-render-true'
+    | 'director-string-true'
   activeAttempt?: boolean
+  activeAttemptEpoch?: 'current' | 'old'
   updatedAt?: Date
   nodeUpdatedAt?: Date
   attemptUpdatedAt?: Date
@@ -143,6 +214,7 @@ async function seedProject(input: {
     workflowVersion: 'test',
     workflowKind: 'script',
     autopilot: input.autopilot,
+    executionEpoch: input.activeAttemptEpoch === 'old' ? 1 : 0,
     exportSettings: { schemaVersion: 1 },
     ...(input.updatedAt ? { updatedAt: input.updatedAt } : {}),
   })
@@ -166,7 +238,12 @@ async function seedProject(input: {
       type: 'shot-split',
       stage: 'DIRECT',
       status: input.downstreamStatus,
-      data: { schemaVersion: 1, payload: {} },
+      data: {
+        schemaVersion: 1,
+        payload: input.downstreamStatus === 'failed'
+          ? failurePayload(input)
+          : {},
+      },
       ...(input.nodeUpdatedAt ? { updatedAt: input.nodeUpdatedAt } : {}),
     },
   ])
@@ -200,4 +277,40 @@ async function seedProject(input: {
     ...(input.attemptUpdatedAt ? { updatedAt: input.attemptUpdatedAt } : {}),
   })
   return projectId
+}
+
+function failurePayload(input: {
+  retryable?: boolean
+  errorProjection?:
+    | 'director'
+    | 'render'
+    | 'both-conflict'
+    | 'director-missing-render-true'
+    | 'director-string-true'
+}): Record<string, unknown> {
+  const error = {
+    code: 'QUEUE_FAILED',
+    message: '自动入队失败',
+    retryable: input.retryable ?? false,
+  }
+  if (input.errorProjection === 'render') return { renderError: error }
+  if (input.errorProjection === 'both-conflict') {
+    return {
+      directorError: { ...error, retryable: false },
+      renderError: { ...error, retryable: true },
+    }
+  }
+  if (input.errorProjection === 'director-missing-render-true') {
+    const { retryable: _retryable, ...directorError } = error
+    return {
+      directorError,
+      renderError: { ...error, retryable: true },
+    }
+  }
+  if (input.errorProjection === 'director-string-true') {
+    return {
+      directorError: { ...error, retryable: 'true' },
+    }
+  }
+  return { directorError: error }
 }

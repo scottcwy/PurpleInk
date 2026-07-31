@@ -75,6 +75,14 @@ export async function repairProjectFrontier(
       continue
     }
     const error = node.directorError ?? node.renderError
+    if (node.status === 'failed' && error?.retryable !== true) {
+      result.blockedNodes.push({
+        nodeId: node.id,
+        code: error?.code ?? 'CONFIGURATION_BLOCKED',
+        message: error?.message ?? '失败节点缺少可重试标记，需要手动处理',
+      })
+      continue
+    }
     if (
       node.type === 'export'
       && error?.code === 'STAGE_FAILED'
@@ -93,14 +101,6 @@ export async function repairProjectFrontier(
       } else {
         result.enqueuedNodeIds.push(node.id)
       }
-      continue
-    }
-    if (node.status === 'failed' && error?.retryable === false) {
-      result.blockedNodes.push({
-        nodeId: node.id,
-        code: error.code ?? 'CONFIGURATION_BLOCKED',
-        message: error.message,
-      })
       continue
     }
     if (node.type !== 'shot-codegen') continue

@@ -158,7 +158,23 @@ export async function listDirectorFrontierCandidates(
         from canvas_nodes candidate
         where candidate.workspace_id = project.workspace_id
           and candidate.project_id = project.id
-          and candidate.status in ('idle', 'stale')
+          and (
+            candidate.status in ('idle', 'stale')
+            or (
+              candidate.status = 'failed'
+              and case
+                when candidate.data #> '{payload,directorError}' is not null
+                  and candidate.data #> '{payload,directorError}' <> 'null'::jsonb
+                  then candidate.data #> '{payload,directorError,retryable}'
+                    = 'true'::jsonb
+                when candidate.data #> '{payload,renderError}' is not null
+                  and candidate.data #> '{payload,renderError}' <> 'null'::jsonb
+                  then candidate.data #> '{payload,renderError,retryable}'
+                    = 'true'::jsonb
+                else false
+              end
+            )
+          )
           and not exists (
             select 1
             from canvas_edges edge

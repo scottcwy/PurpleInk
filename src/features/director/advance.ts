@@ -133,7 +133,7 @@ export async function advancePipeline(
     }
     if (
       !['idle', 'failed', 'stale'].includes(status) ||
-      (status === 'failed' && candidate.retryable === false) ||
+      (status === 'failed' && candidate.retryable !== true) ||
       !isPipelineStage(candidate.stage) ||
       !(await resolved.repository.areAllUpstreamsSuccessful(
         projectId,
@@ -230,7 +230,10 @@ export async function startProjectPipeline(
       result.failedNodeIds.forEach((nodeId) => failed.add(nodeId))
       blockedNodes.push(...(result.blockedNodes ?? []))
     }
-  } else if (['idle', 'failed', 'stale'].includes(entry.status)) {
+  } else if (
+    ['idle', 'stale'].includes(entry.status) ||
+    (entry.status === 'failed' && entry.retryable === true)
+  ) {
     if (entry.stage !== 'INGEST') {
       throw new Error(`项目入口节点阶段无效：${entry.stage ?? 'null'}`)
     }
