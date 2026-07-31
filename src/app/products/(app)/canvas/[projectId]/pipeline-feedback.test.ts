@@ -88,10 +88,15 @@ describe('Canvas pipeline feedback wiring', () => {
     new URL('./canvas-view.tsx', import.meta.url),
     'utf8'
   )
-  const inspectorSource = readFileSync(
-    new URL('./canvas-inspector.tsx', import.meta.url),
-    'utf8'
-  )
+  // Inspector 拆为容器（收起/抽屉逻辑）与呈现层（节点详情）两个文件，
+  // 反馈接线断言覆盖两者拼接后的源码。
+  const inspectorSource = [
+    readFileSync(new URL('./canvas-inspector.tsx', import.meta.url), 'utf8'),
+    readFileSync(
+      new URL('./canvas-inspector-body.tsx', import.meta.url),
+      'utf8',
+    ),
+  ].join('\n')
   const streamingLogSource = readFileSync(
     new URL('./streaming-log-card.tsx', import.meta.url),
     'utf8'
