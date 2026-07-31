@@ -4,6 +4,7 @@ import type {
   ProjectExecutionSnapshot,
   WebsiteDeliverySnapshot,
 } from '@/features/projects'
+import { websiteExecutionStages } from '@/features/projects/website-execution-presentation'
 import {
   websiteDeliveryForDownload,
   websiteDownloadHref,
@@ -20,7 +21,9 @@ export function WebsiteDeliveryPreview({
 }) {
   const evidence = execution.delivery
   const verification = evidence?.verification
-  const exportStage = execution.stages.find((stage) => stage.phase === 'export')
+  const exportStage = websiteExecutionStages(execution).find(
+    (stage) => stage.phase === 'export',
+  )
   return (
     <section className="rounded-xl border border-ds-border bg-ds-surface p-4">
       <div className="aspect-video overflow-hidden rounded-lg bg-black">

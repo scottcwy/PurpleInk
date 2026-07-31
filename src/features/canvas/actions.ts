@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb } from '@/lib/db/client'
 import { projects } from '@/lib/db/schema/index'
@@ -51,7 +51,7 @@ export async function updateExportSettings(
       .update(projects)
       .set({
         exportSettings: { schemaVersion: 1, settings: exportSettings },
-        updatedAt: new Date(),
+        updatedAt: sql`now()`,
       })
       .where(
         and(
@@ -79,7 +79,7 @@ export async function setProjectAutopilot(
   const database = await getDb()
   const [updated] = await database
     .update(projects)
-    .set({ autopilot: enabled, updatedAt: new Date() })
+    .set({ autopilot: enabled, updatedAt: sql`now()` })
     .where(
       and(
         eq(projects.workspaceId, currentWorkspaceId()),

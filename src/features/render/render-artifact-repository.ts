@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, desc, eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import {
   commitArtifactRecord,
   commitArtifactRecords,
@@ -146,7 +146,7 @@ export class RenderArtifactRepository extends RenderShotRepository {
     const artifactIds = committed.map((artifact) => artifact.artifactId)
     const approved = await (await this.database())
       .update(artifacts)
-      .set({ lifecycle: 'approved', updatedAt: new Date() })
+      .set({ lifecycle: 'approved', updatedAt: sql`now()` })
       .where(and(
         eq(artifacts.workspaceId, workspaceId),
         eq(artifacts.projectId, input.projectId),

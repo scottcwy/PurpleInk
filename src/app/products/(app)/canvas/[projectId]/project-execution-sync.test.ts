@@ -74,6 +74,8 @@ function websiteNode(): PositionedCanvasNode {
 
 function snapshot(): ProjectExecutionSnapshot {
   return {
+    schemaVersion: 2,
+    projectKind: 'website',
     workflowKind: 'website',
     state: 'running',
     active: true,
@@ -89,6 +91,24 @@ function snapshot(): ProjectExecutionSnapshot {
       phase: 'capture',
       enginePhase: 'capturing',
       updatedAt: '2026-07-30T00:00:00.000Z',
+    },
+    currentWork: {
+      nodeId: '00000000-0000-4000-8000-000000000301',
+      logicalKey: 'website:capture',
+      state: 'running',
+      updatedAt: '2026-07-30T00:00:00.000Z',
+    },
+    failure: null,
+    recovery: { canStart: false, canStop: true, mode: 'stop' },
+    detail: {
+      kind: 'website',
+      stages: [{
+        nodeId: '00000000-0000-4000-8000-000000000301',
+        phase: 'capture',
+        state: 'running',
+        enginePhase: 'capturing',
+        updatedAt: '2026-07-30T00:00:00.000Z',
+      }],
     },
     stages: [{
       nodeId: '00000000-0000-4000-8000-000000000301',

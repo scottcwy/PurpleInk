@@ -106,7 +106,7 @@ export interface AudioTranscriptionDependencies {
     nodeId: string,
     execution?: NodeExecutionFence,
   ): Promise<unknown>
-  now(): Date
+  now(): Promise<Date>
 }
 
 export interface AudioTranscriptionExecution {

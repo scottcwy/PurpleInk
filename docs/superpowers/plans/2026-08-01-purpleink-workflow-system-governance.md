@@ -31,7 +31,7 @@
 - [x] 阶段 0：事故 RED、只读 `verify:workflow` 和审计基线（`1e5d555`）。
 - [x] 阶段 1：逻辑/出网模型分离，不可变执行计划覆盖所有 AI 路径（`e02df6e`、`f0dbddd`）。
 - [x] 阶段 2：数据库时钟、停止语义、invocation/lease/ticket 对账闭环。
-- [ ] 阶段 3：三来源 `ProjectExecutionSnapshotV2` 与 v1 兼容投影。
+- [x] 阶段 3：三来源 `ProjectExecutionSnapshotV2` 与 v1 兼容投影。
 - [ ] 阶段 4：dry-run/apply 恢复工具，现存可变孤儿清零。
 - [ ] 阶段 5：权威规范同步，全量门禁和三来源真实 E2E。
 
@@ -39,6 +39,12 @@
 invocation/lease/ticket/Artifact 栅栏共 46 个定向 PostgreSQL 用例通过；全量 lint、
 1710 个单元/契约测试、`verify:v3` 与生产构建通过。恢复工具 dry-run 重新确认
 4 条 orphan invocation 与 10 条 orphan lease，未执行 apply。
+
+阶段 3 验收证据：`routing.md` 先登记 v2 合同；脚本、音频、网站分别通过
+判别联合投影 Director/fan-out/汇聚、ASR/原音频绑定与六阶段状态；UI 生产代码
+已不再读取 `workflowKind/stages/currentStage` v1 顶层别名。客户端严格校验 v2
+一致性，v1 字段继续保留一个发布周期。63 个快照、UI、ASR/TTS 聚焦用例与
+2 个 PostgreSQL 快照用例通过；受影响的持久化状态时间改为数据库时钟。
 
 ## 安全边界
 

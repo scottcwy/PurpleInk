@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { type Db } from '@/lib/db/client'
 import {
@@ -299,7 +299,7 @@ export class DirectorRuntimeRepository {
         .update(canvasNodes)
         .set({
           data: patchNodePayload(node.data, patch),
-          updatedAt: new Date(),
+          updatedAt: sql`now()`,
         })
         .where(
           and(

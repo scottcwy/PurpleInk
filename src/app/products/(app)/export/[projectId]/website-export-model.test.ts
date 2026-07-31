@@ -62,13 +62,17 @@ describe('website export view model', () => {
 
   it('counts only persisted succeeded stages and never invents a percentage', () => {
     const execution = snapshot('running')
-    execution.stages[4] = { ...execution.stages[4]!, state: 'running' }
+    if (execution.detail.kind !== 'website') throw new Error('expected website detail')
+    execution.detail.stages[4] = {
+      ...execution.detail.stages[4]!,
+      state: 'running',
+    }
     expect(websiteExportProgress(execution)).toEqual({
       completed: 4,
       total: 6,
       label: '已完成 4/6 阶段',
     })
-    execution.stages.pop()
+    execution.detail.stages.pop()
     expect(websiteExportProgress(execution).label).toBe('已完成 4/6 阶段')
   })
 
@@ -99,6 +103,8 @@ function snapshot(
     updatedAt: '2026-07-31T00:00:00.000Z',
   }
   return {
+    schemaVersion: 2,
+    projectKind: 'website',
     workflowKind: 'website',
     state,
     active: ['queued', 'running', 'recovering', 'stopping'].includes(state),
@@ -106,6 +112,22 @@ function snapshot(
     canStop: ['queued', 'running', 'recovering'].includes(state),
     attempt,
     currentStage: null,
+    currentWork: null,
+    failure: null,
+    recovery: {
+      canStart: ['idle', 'failed', 'cancelled', 'blocked'].includes(state),
+      canStop: ['queued', 'running', 'recovering'].includes(state),
+      mode: ['queued', 'running', 'recovering'].includes(state) ? 'stop' : 'none',
+    },
+    detail: {
+      kind: 'website',
+      stages: phases.map((phase, index) => ({
+        nodeId: `node-${phase}`,
+        phase,
+        state: index < 4 ? 'succeeded' as const : 'idle' as const,
+        updatedAt: '2026-07-31T00:00:00.000Z',
+      })),
+    },
     stages: phases.map((phase, index) => ({
       nodeId: `node-${phase}`,
       phase,
@@ -116,6 +138,7 @@ function snapshot(
       artifactId: 'artifact-1',
       attemptId: 'attempt-1',
       lifecycle: 'approved',
+      schemaVersion: 'cvc.website-video/v1',
       contentHash: 'a'.repeat(64),
       sizeBytes: 1024,
       version: 1,

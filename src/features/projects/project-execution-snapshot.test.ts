@@ -20,6 +20,7 @@ describe('deriveProjectExecutionSnapshot', () => {
           autopilot: workflowKind === 'script',
           directorContinuationEnabled: workflowKind === 'audio',
           soundEffects: 'off',
+          subtitles: 'burn-in',
         },
         attempt: null,
         nodes: [node('entry', 'queued')],
@@ -41,6 +42,7 @@ describe('deriveProjectExecutionSnapshot', () => {
           autopilot: true,
           directorContinuationEnabled: workflowKind === 'audio',
           soundEffects: 'off',
+          subtitles: 'burn-in',
         },
         attempt: attempt('succeeded'),
         nodes: [
@@ -65,6 +67,7 @@ describe('deriveProjectExecutionSnapshot', () => {
           autopilot: true,
           directorContinuationEnabled: workflowKind === 'audio',
           soundEffects: 'off',
+          subtitles: 'burn-in',
         },
         attempt: attempt('succeeded'),
         nodes: [
@@ -114,6 +117,7 @@ describe('deriveProjectExecutionSnapshot', () => {
         autopilot: false,
         directorContinuationEnabled: false,
         soundEffects: 'procedural',
+        subtitles: 'burn-in',
       },
       attempt: attempt('succeeded'),
       nodes: websiteNodes('succeeded', passedExecution()),
@@ -148,6 +152,7 @@ describe('deriveProjectExecutionSnapshot', () => {
         autopilot: false,
         directorContinuationEnabled: false,
         soundEffects: 'off',
+        subtitles: 'burn-in',
       },
       attempt: attempt('succeeded'),
       nodes: [node('entry', 'succeeded'), node('next', 'idle')],
@@ -180,6 +185,98 @@ describe('deriveProjectExecutionSnapshot', () => {
     expect(JSON.stringify(snapshot)).not.toContain('provider raw response')
     expect(snapshot.delivery?.downloadUrl).toBeUndefined()
   })
+
+  it('publishes script Director, fan-out, merge, and export in snapshot v2', () => {
+    const snapshot = deriveProjectExecutionSnapshot(facts({
+      project: {
+        id: PROJECT_ID,
+        workflowKind: 'script',
+        autopilot: true,
+        directorContinuationEnabled: false,
+        soundEffects: 'off',
+        subtitles: 'burn-in',
+      },
+      attempt: attempt('running'),
+      nodes: [
+        node('global:script-import', 'succeeded'),
+        node('global:shot-split', 'succeeded'),
+        node('shot:S001:shot-script', 'running'),
+        node('shot:S001:shot-codegen', 'idle'),
+        node('global:score', 'idle'),
+        node('global:export', 'idle'),
+      ],
+    }))
+
+    expect(snapshot).toMatchObject({
+      schemaVersion: 2,
+      projectKind: 'script',
+      currentWork: { logicalKey: 'shot:S001:shot-script', state: 'running' },
+      recovery: { canStart: false, canStop: true, mode: 'stop' },
+      detail: {
+        kind: 'script',
+        fanOut: { shotCount: 1, completedShotCount: 0 },
+        merge: { logicalKey: 'global:score' },
+        export: { logicalKey: 'global:export' },
+      },
+    })
+  })
+
+  it('publishes audio ASR and original-audio binding without exposing node payload', () => {
+    const asr = node('source:audio-transcribe', 'succeeded')
+    asr.data = {
+      schemaVersion: 1,
+      payload: {
+        audioTranscription: {
+          status: 'ready',
+          audioArtifactId: '00000000-0000-4000-8000-000000000777',
+          providerRaw: 'must stay private',
+        },
+      },
+    }
+    const snapshot = deriveProjectExecutionSnapshot(facts({
+      project: {
+        id: PROJECT_ID,
+        workflowKind: 'audio',
+        autopilot: false,
+        directorContinuationEnabled: true,
+        soundEffects: 'off',
+        subtitles: 'off',
+      },
+      attempt: attempt('succeeded'),
+      nodes: [asr, node('global:shot-split', 'succeeded')],
+    }))
+
+    expect(snapshot.detail).toMatchObject({
+      kind: 'audio',
+      sourceAudioBound: true,
+      asr: { logicalKey: 'source:audio-transcribe', state: 'succeeded' },
+    })
+    expect(JSON.stringify(snapshot)).not.toContain('providerRaw')
+  })
+
+  it('publishes script delivery only when the final schema matches subtitle settings', () => {
+    const base = facts({
+      project: {
+        id: PROJECT_ID,
+        workflowKind: 'script',
+        autopilot: false,
+        directorContinuationEnabled: false,
+        soundEffects: 'off',
+        subtitles: 'burn-in',
+      },
+      attempt: attempt('succeeded'),
+      nodes: [node('global:export', 'succeeded')],
+      artifact: { ...artifact('approved'), schemaVersion: 'cvc.final-video/v2' },
+    })
+    const matching = deriveProjectExecutionSnapshot(base)
+    const stale = deriveProjectExecutionSnapshot({
+      ...base,
+      artifact: { ...base.artifact!, schemaVersion: 'cvc.final-video/v3' },
+    })
+
+    expect(matching.delivery?.downloadUrl).toContain('/api/artifacts/')
+    expect(stale.delivery?.downloadUrl).toBeUndefined()
+  })
 })
 
 function facts(
@@ -192,6 +289,7 @@ function facts(
       autopilot: false,
       directorContinuationEnabled: false,
       soundEffects: 'off',
+      subtitles: 'burn-in',
     },
     attempt: null,
     nodes: websiteNodes('idle'),
@@ -276,6 +374,7 @@ function artifact(lifecycle: 'draft' | 'approved' | 'rejected') {
     id: '00000000-0000-4000-8000-000000000301',
     attemptId: ATTEMPT_ID,
     lifecycle,
+    schemaVersion: 'cvc.website-video/v1',
     contentHash: 'a'.repeat(64),
     sizeBytes: 2048,
     version: 1,

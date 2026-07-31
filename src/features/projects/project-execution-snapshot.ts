@@ -16,6 +16,7 @@ import {
   taskAttempts,
 } from '@/lib/db/schema'
 import { storage, type StorageAdapter } from '@/lib/storage'
+import type { ProjectWorkflowKind } from '@/lib/workflow/project-workflow-registry'
 import {
   ProjectExecutionSnapshotError,
   type ProjectExecutionFacts,
@@ -25,10 +26,16 @@ import { deriveProjectExecutionSnapshot } from './project-execution-derive'
 
 export { ProjectExecutionSnapshotError } from './project-execution-contract'
 export type {
+  ProjectExecutionDetail,
   ProjectExecutionFacts,
   ProjectExecutionFailureCode,
+  ProjectExecutionFailureSnapshot,
+  ProjectExecutionRecoverySnapshot,
   ProjectExecutionSnapshot,
   ProjectExecutionState,
+  ProjectWorkItemSnapshot,
+  ProjectWorkItemState,
+  ShotWorkflowSnapshot,
   WebsiteDeliverySnapshot,
   WebsiteStageSnapshot,
   WebsiteStageState,
@@ -105,16 +112,18 @@ export async function getProjectExecutionSnapshot(
     workspaceId,
     projectId,
     attempt?.id,
+    project.workflowKind,
     dependencies.storage ?? storage,
   )
+  const exportSettings = resolvePersistedExportSettings(project.exportSettings)
   const facts: ProjectExecutionFacts = {
     project: {
       id: project.id,
       workflowKind: project.workflowKind,
       autopilot: project.autopilot,
       directorContinuationEnabled: project.directorContinuationEnabled,
-      soundEffects:
-        resolvePersistedExportSettings(project.exportSettings).soundEffects,
+      soundEffects: exportSettings.soundEffects,
+      subtitles: exportSettings.subtitles,
     },
     attempt: attempt
       ? {
@@ -139,6 +148,7 @@ async function findAttemptArtifact(
   workspaceId: string,
   projectId: string,
   attemptId?: string,
+  workflowKind: ProjectWorkflowKind = 'website',
   targetStorage: Pick<StorageAdapter, 'get'> = storage,
 ): Promise<ProjectExecutionFacts['artifact']> {
   if (!attemptId) return null
@@ -147,6 +157,7 @@ async function findAttemptArtifact(
       id: artifacts.id,
       attemptId: artifacts.attemptId,
       lifecycle: artifacts.lifecycle,
+      schemaVersion: artifacts.schemaVersion,
       contentHash: artifacts.contentHash,
       sizeBytes: artifacts.sizeBytes,
       version: artifacts.version,
@@ -156,7 +167,7 @@ async function findAttemptArtifact(
       eq(artifacts.workspaceId, workspaceId),
       eq(artifacts.projectId, projectId),
       eq(artifacts.attemptId, attemptId),
-      eq(artifacts.kind, 'website-video-mp4'),
+      eq(artifacts.kind, workflowKind === 'website' ? 'website-video-mp4' : 'final-mp4'),
     ))
     .orderBy(desc(artifacts.version))
     .limit(1)

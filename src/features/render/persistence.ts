@@ -1,6 +1,6 @@
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import type { TransactionContext } from '@/lib/db/transaction'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { canvasNodes } from '@/lib/db/schema/index'
 
 export function readPayload(value: unknown): Record<string, unknown> {
@@ -62,7 +62,7 @@ export async function writeNodeProjection(
     .update(canvasNodes)
     .set({
       data: versionedPayload({ ...readPayload(node.data), [key]: value }),
-      updatedAt: new Date(),
+      updatedAt: sql`now()`,
     })
     .where(
       and(

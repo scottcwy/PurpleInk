@@ -11,7 +11,10 @@ import type {
   ProjectExecutionSnapshot,
   WebsiteStageSnapshot,
 } from '@/features/projects'
-import { websiteStagePresentation } from '@/features/projects/website-execution-presentation'
+import {
+  websiteExecutionStages,
+  websiteStagePresentation,
+} from '@/features/projects/website-execution-presentation'
 import { cn } from '@/lib/utils'
 
 export function WebsiteExportStageList({
@@ -26,7 +29,7 @@ export function WebsiteExportStageList({
     >
       <h2 className="text-sm font-semibold text-ds-text">六阶段交付进度</h2>
       <ol className="mt-3 grid gap-2">
-        {execution.stages.map((stage, index) => {
+        {websiteExecutionStages(execution).map((stage, index) => {
           const presentation = websiteStagePresentation(
             execution,
             stage,

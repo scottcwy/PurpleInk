@@ -2,6 +2,7 @@ import type {
   ProjectExecutionSnapshot,
   WebsiteDeliverySnapshot,
 } from '@/features/projects'
+import { websiteExecutionStages } from '@/features/projects/website-execution-presentation'
 
 export interface WebsiteExportAction {
   mode: 'start' | 'stop' | 'busy' | 'download'
@@ -63,7 +64,7 @@ export function websiteExportProgress(
   execution: ProjectExecutionSnapshot,
 ): { completed: number; total: number; label: string } {
   const total = 6
-  const completed = execution.stages.filter(
+  const completed = websiteExecutionStages(execution).filter(
     (stage) => stage.state === 'succeeded',
   ).length
   return { completed, total, label: `已完成 ${completed}/${total} 阶段` }

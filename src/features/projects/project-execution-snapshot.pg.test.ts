@@ -56,6 +56,12 @@ it('projects a current-epoch active attempt as queued', async () => {
   })
 
   expect(snapshot.state).toBe('queued')
+  expect(snapshot).toMatchObject({
+    schemaVersion: 2,
+    projectKind: 'script',
+    recovery: { canStart: false, canStop: true, mode: 'stop' },
+    detail: { kind: 'script' },
+  })
   expect(snapshot.attempt).toMatchObject({
     id: fixture.attemptId,
     status: 'queued',

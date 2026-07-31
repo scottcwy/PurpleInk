@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb, type Db } from '@/lib/db/client'
 import { projects } from '@/lib/db/schema/index'
@@ -28,8 +28,8 @@ export async function enableProjectAutomaticAdvance(
     await transaction
       .update(projects)
       .set(project.workflowKind === 'script'
-        ? { autopilot: true, updatedAt: new Date() }
-        : { directorContinuationEnabled: true, updatedAt: new Date() })
+        ? { autopilot: true, updatedAt: sql`now()` }
+        : { directorContinuationEnabled: true, updatedAt: sql`now()` })
       .where(and(
         eq(projects.workspaceId, currentWorkspaceId()),
         eq(projects.id, projectId),

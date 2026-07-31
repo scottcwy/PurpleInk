@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import {
   assertNodeExecutionActive,
   materializeShotLanes,
@@ -13,6 +13,7 @@ import { patchNodePayload } from '@/features/director/runtime-node-data'
 import { PostgresProjectSourceRepository } from '@/features/projects'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb } from '@/lib/db/client'
+import { readDatabaseClock } from '@/lib/db/database-clock'
 import {
   assertNodeExecutionFence,
   type NodeExecutionFence,
@@ -89,7 +90,7 @@ Promise<AudioTranscriptionDependencies> {
         undefined,
         execution ? { nodeId, fence: execution } : undefined,
       ),
-    now: () => new Date(),
+    now: async () => readDatabaseClock(database),
   }
 }
 
@@ -109,7 +110,7 @@ async function updateAudioProjectScript(
     }
     const [updated] = await transaction
       .update(projects)
-      .set({ script: transcript, updatedAt: new Date() })
+      .set({ script: transcript, updatedAt: sql`now()` })
       .where(
         and(
           eq(projects.workspaceId, currentWorkspaceId()),
@@ -156,7 +157,7 @@ async function persistTranscriptionState(
           audioTranscription: state,
           ...(outputContentHash ? { outputContentHash } : {}),
         }),
-        updatedAt: new Date(),
+        updatedAt: sql`now()`,
       })
       .where(
         and(

@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb, type Db } from '@/lib/db/client'
 import {
@@ -71,7 +71,7 @@ export async function enableAudioDirectorContinuation(
       .update(projects)
       .set({
         directorContinuationEnabled: true,
-        updatedAt: new Date(),
+        updatedAt: sql`now()`,
       })
       .where(and(
         eq(projects.workspaceId, workspaceId),

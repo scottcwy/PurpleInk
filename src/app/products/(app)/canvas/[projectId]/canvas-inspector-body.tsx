@@ -21,7 +21,10 @@ import { getNodeStatusLabel, getNodeStatusPresentation } from './flow-elements'
 import { isNodeActionBlocked, nodeActionLabel } from './node-action-presentation'
 import { StreamingLogCard } from './streaming-log-card'
 import { WebsiteStageInspector } from './website-stage-inspector'
-import { websiteStagePresentation } from '@/features/projects/website-execution-presentation'
+import {
+  websiteExecutionStages,
+  websiteStagePresentation,
+} from '@/features/projects/website-execution-presentation'
 import { skipKindForNodeType } from '@/features/director/skip-policy'
 
 export function EmptyInspector({
@@ -73,11 +76,12 @@ export function InspectorBody({
   showCollapse: boolean
 }) {
   const status = getNodeStatusPresentation(node.status)
-  const websiteStageIndex = execution.stages.findIndex(
+  const websiteStages = websiteExecutionStages(execution)
+  const websiteStageIndex = websiteStages.findIndex(
     (stage) => stage.nodeId === node.id,
   )
   const websiteStage = websiteStageIndex >= 0
-    ? execution.stages[websiteStageIndex]
+    ? websiteStages[websiteStageIndex]
     : undefined
   const websitePresentation = websiteStage
     ? websiteStagePresentation(execution, websiteStage, websiteStageIndex)

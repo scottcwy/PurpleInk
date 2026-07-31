@@ -33,6 +33,7 @@ import { useProjectExecution } from '@/features/projects/use-project-execution'
 import {
   executionActionPresentation,
   projectExecutionLabel,
+  websiteExecutionStages,
   websitePhaseBorderClass,
   websiteStagePresentation,
 } from '@/features/projects/website-execution-presentation'
@@ -86,12 +87,13 @@ export function CanvasView({
     [execution, nodes],
   )
   const live = useProjectStatusStream(projectId, execution.active)
+  const websiteStages = websiteExecutionStages(execution)
   const overlay = useMemo(
     () => applyStatusOverlay(
       databaseNodes,
-      execution.workflowKind === 'website' ? new Map() : live.statuses,
+      execution.projectKind === 'website' ? new Map() : live.statuses,
     ),
-    [databaseNodes, execution.workflowKind, live.statuses],
+    [databaseNodes, execution.projectKind, live.statuses],
   )
   const liveNodes = overlay.nodes
   const topologyHandled = useRef(0)
@@ -113,10 +115,10 @@ export function CanvasView({
   const flowNodes = useMemo(
     () =>
       liveNodes.map((node) => {
-        const stageIndex = execution.stages.findIndex(
+        const stageIndex = websiteStages.findIndex(
           (stage) => stage.nodeId === node.id,
         )
-        const stage = stageIndex >= 0 ? execution.stages[stageIndex] : undefined
+        const stage = stageIndex >= 0 ? websiteStages[stageIndex] : undefined
         return toFlowNode(
           node,
           hiddenNodeIds,
@@ -130,7 +132,7 @@ export function CanvasView({
             : undefined,
         )
       }),
-    [collapsedLanes, execution, hiddenNodeIds, liveNodes, selectedNodeId],
+    [collapsedLanes, execution, hiddenNodeIds, liveNodes, selectedNodeId, websiteStages],
   )
   const flowEdges = useMemo(
     () => edges.map((edge) => toFlowEdge(edge, hiddenNodeIds)),
@@ -139,7 +141,7 @@ export function CanvasView({
   const selectedNode = liveNodes.find(({ id }) => id === selectedNodeId)
   const queueCounts = deriveQueueCounts(liveNodes)
   const rendererNodeId = liveNodes.find(({ type }) => type === 'shot-codegen')?.id
-  const websiteProject = execution.workflowKind === 'website'
+  const websiteProject = execution.projectKind === 'website'
   const action = websiteProject
     ? executionActionPresentation(execution)
     : execution.active

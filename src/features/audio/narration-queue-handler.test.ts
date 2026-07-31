@@ -12,6 +12,7 @@ vi.mock('server-only', () => ({}))
 
 function dependencies(): MediaNarrationDependencies {
   return {
+    now: vi.fn(async () => new Date('2026-08-01T00:00:00.000Z')),
     loadScriptUnits: vi.fn(async () => [{ unitId: 'U001', text: '第一句', order: 0 }]),
     synthesize: vi.fn(async () => ({
       engine: 'mimo-v2.5-tts',

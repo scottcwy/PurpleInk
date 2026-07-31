@@ -108,7 +108,7 @@ function dependencies(): AudioTranscriptionDependencies {
     transition: vi.fn(async () => {}),
     recordState: vi.fn(async () => {}),
     advance: vi.fn(async () => {}),
-    now: () => new Date('2026-07-30T01:00:00.000Z'),
+    now: async () => new Date('2026-07-30T01:00:00.000Z'),
   }
 }
 

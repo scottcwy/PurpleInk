@@ -1,6 +1,7 @@
 import type { WorkspaceConcurrencyProjection } from '@/features/ai/workspace-concurrency-projection'
 import type { PositionedCanvasNode } from '@/features/canvas'
 import type { ProjectExecutionSnapshot } from '@/features/projects'
+import { websiteExecutionStages } from '@/features/projects/website-execution-presentation'
 
 export interface QueueCounts {
   completed: number
@@ -33,8 +34,8 @@ export function queueBarLabel(
   execution: ProjectExecutionSnapshot,
   concurrency: WorkspaceConcurrencyProjection,
 ): string {
-  if (execution.workflowKind === 'website') {
-    const succeeded = execution.stages.filter(
+  if (execution.projectKind === 'website') {
+    const succeeded = websiteExecutionStages(execution).filter(
       (stage) => stage.state === 'succeeded',
     ).length
     return `已完成 ${succeeded}/6 阶段`

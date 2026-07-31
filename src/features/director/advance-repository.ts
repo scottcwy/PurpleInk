@@ -1,4 +1,4 @@
-import { and, eq, inArray, notInArray } from 'drizzle-orm'
+import { and, eq, inArray, notInArray, sql } from 'drizzle-orm'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { type Db } from '@/lib/db/client'
 import {
@@ -56,7 +56,7 @@ export class AdvanceRepositoryImpl
   async setAutopilot(projectId: string, enabled: boolean): Promise<boolean> {
     const [updated] = await this.db
       .update(projects)
-      .set({ autopilot: enabled, updatedAt: new Date() })
+      .set({ autopilot: enabled, updatedAt: sql`now()` })
       .where(and(
         scope(projects.workspaceId, projects.id, projectId),
         eq(projects.workflowKind, 'script'),

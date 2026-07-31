@@ -1,5 +1,6 @@
 import 'server-only'
 import { createHash, randomUUID } from 'node:crypto'
+import { sql } from 'drizzle-orm'
 import { commitArtifactRecord } from '@/features/artifacts'
 import {
   getCanvasGraph,
@@ -166,7 +167,7 @@ async function createSkipAttempt(
       status: 'running',
       workflowVersion: serializeWorkflowVersion(ACTIVE_WORKFLOW_VERSION),
       fingerprint,
-      startedAt: new Date(),
+      startedAt: sql`now()`,
     })
     await transaction.insert(taskAttempts).values({
       workspaceId,
@@ -179,7 +180,7 @@ async function createSkipAttempt(
       status: 'running',
       fingerprint,
       checkpoint: { schemaVersion: 1, kind: SKIP_TASK_KIND, payload },
-      startedAt: new Date(),
+      startedAt: sql`now()`,
       leaseExpiresAt: leaseDeadline(SKIP_TASK_KIND),
     })
   })

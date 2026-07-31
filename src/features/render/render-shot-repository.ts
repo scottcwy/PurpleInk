@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, desc, eq, ne } from 'drizzle-orm'
+import { and, desc, eq, ne, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb, type Db } from '@/lib/db/client'
@@ -92,7 +92,7 @@ export class RenderShotRepository {
     await database.transaction(async (transaction) => {
       await transaction
         .update(artifacts)
-        .set({ lifecycle: 'rejected', updatedAt: new Date() })
+        .set({ lifecycle: 'rejected', updatedAt: sql`now()` })
         .where(
           and(
             eq(artifacts.workspaceId, currentWorkspaceId()),
@@ -154,7 +154,7 @@ export class RenderShotRepository {
               outputContentHash: contentHash,
             },
           },
-          updatedAt: new Date(),
+          updatedAt: sql`now()`,
         })
         .where(
           and(
@@ -199,7 +199,7 @@ export class RenderShotRepository {
               ...projection,
             },
           },
-          updatedAt: new Date(),
+          updatedAt: sql`now()`,
         })
         .where(
           and(

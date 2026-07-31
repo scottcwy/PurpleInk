@@ -288,6 +288,8 @@ function response(body: unknown): Response {
 
 function execution(state: 'queued' | 'stopping') {
   return {
+    schemaVersion: 2 as const,
+    projectKind: 'website' as const,
     workflowKind: 'website',
     state,
     active: true,
@@ -299,6 +301,10 @@ function execution(state: 'queued' | 'stopping') {
       updatedAt: '2026-07-30T00:00:00.000Z',
     },
     currentStage: null,
+    currentWork: null,
+    failure: null,
+    recovery: { canStart: false, canStop: true, mode: 'stop' as const },
+    detail: { kind: 'website' as const, stages: [] },
     stages: [],
     delivery: null,
     revision: state === 'queued' ? 'a'.repeat(64) : 'b'.repeat(64),

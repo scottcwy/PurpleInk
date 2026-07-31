@@ -1,7 +1,7 @@
 import 'server-only'
 import { billingInvocationNo } from '@/features/billing'
 import { createHash } from 'node:crypto'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { ProviderQueueDeferral } from '@/features/ai/provider-queue-deferral'
 import {
@@ -26,6 +26,7 @@ import type {
 } from '@/features/director/schemas/ingest'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb } from '@/lib/db/client'
+import { readDatabaseClock } from '@/lib/db/database-clock'
 import { canvasNodes } from '@/lib/db/schema/index'
 import { queue as defaultQueue, type QueueAdapter } from '@/lib/queue'
 import { storage } from '@/lib/storage'
@@ -57,6 +58,7 @@ type MediaState =
   | { status: 'failed'; error: WorkflowErrorProjection; completedAt: string }
 
 export interface MediaNarrationDependencies {
+  now(): Promise<Date>
   loadScriptUnits(projectId: string): Promise<ScriptUnit[]>
   synthesize(input: {
     projectId: string
@@ -79,9 +81,10 @@ export async function runMediaNarrationJob(
 ): Promise<void> {
   const payload = mediaNarrationJobSchema.parse(input)
   const resolved = dependencies ?? (await createDefaultDependencies())
+  const startedAt = await resolved.now()
   await resolved.updateMediaState(payload.nodeId, {
     status: 'running',
-    startedAt: new Date().toISOString(),
+    startedAt: startedAt.toISOString(),
   })
   try {
     const scriptUnits = await resolved.loadScriptUnits(payload.projectId)
@@ -97,24 +100,30 @@ export async function runMediaNarrationJob(
       audioManifest,
       audioAllocation,
     })
+    const completedAt = await resolved.now()
     await resolved.updateMediaState(payload.nodeId, {
       status: 'ready',
       artifactId,
-      completedAt: new Date().toISOString(),
+      completedAt: completedAt.toISOString(),
     })
     for (const nodeId of await resolved.listWakeNodeIds(payload.projectId)) {
       await resolved.advance(payload.projectId, nodeId)
     }
   } catch (error) {
+    const completedAt = await resolved.now()
     await resolved.updateMediaState(
       payload.nodeId,
-      projectMediaErrorState(error, payload.nodeId)
+      projectMediaErrorState(error, payload.nodeId, completedAt)
     )
     throw error
   }
 }
 
-function projectMediaErrorState(error: unknown, nodeId: string): MediaState {
+function projectMediaErrorState(
+  error: unknown,
+  nodeId: string,
+  completedAt: Date,
+): MediaState {
   if (error instanceof ProviderQueueDeferral && error.retryAt) {
     return {
       status: 'waiting',
@@ -130,7 +139,7 @@ function projectMediaErrorState(error: unknown, nodeId: string): MediaState {
       stage: 'MEDIA_NARRATION',
       sourceNodeId: nodeId,
     }),
-    completedAt: new Date().toISOString(),
+    completedAt: completedAt.toISOString(),
   }
 }
 
@@ -176,6 +185,7 @@ async function createDefaultDependencies(): Promise<MediaNarrationDependencies> 
   const source = new DirectorArtifactSource(database, storage)
   const writer = new DirectorArtifactWriter(database, storage)
   return {
+    now: async () => readDatabaseClock(database),
     loadScriptUnits: async (projectId) =>
       (await source.loadIngestArtifact(projectId)).scriptUnits,
     synthesize: synthesizeNarration,
@@ -235,7 +245,7 @@ async function patchMediaState(nodeId: string, state: MediaState): Promise<void>
       .update(canvasNodes)
       .set({
         data: patchNodePayload(node.data, { mediaNarration: state }),
-        updatedAt: new Date(),
+        updatedAt: sql`now()`,
       })
       .where(
         and(

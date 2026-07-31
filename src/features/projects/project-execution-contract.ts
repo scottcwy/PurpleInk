@@ -6,6 +6,10 @@ import type {
   WebsiteWorkflowPhase,
 } from '@/features/website/website-stage-contract'
 import type { ProjectWorkflowKind } from '@/lib/workflow/project-workflow-registry'
+import type {
+  WorkflowFaultOrigin,
+  WorkflowRecovery,
+} from '@/features/canvas/workflow-fault'
 
 export type ProjectExecutionState =
   | 'idle'
@@ -54,6 +58,7 @@ export interface WebsiteDeliverySnapshot {
   artifactId: string
   attemptId: string
   lifecycle: 'draft' | 'approved' | 'released' | 'rejected'
+  schemaVersion: string
   contentHash: string
   sizeBytes: number
   version: number
@@ -73,7 +78,70 @@ export interface WebsiteDeliverySnapshot {
   downloadUrl?: string
 }
 
+export type ProjectWorkItemState =
+  | 'idle'
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'skipped'
+  | 'blocked'
+  | 'failed'
+  | 'cancelled'
+  | 'stale'
+
+export interface ProjectWorkItemSnapshot {
+  nodeId: string
+  logicalKey: string
+  state: ProjectWorkItemState
+  updatedAt: string
+}
+
+export interface ShotWorkflowSnapshot {
+  shotId: string
+  state: ProjectWorkItemState
+  steps: ProjectWorkItemSnapshot[]
+}
+
+interface DirectorWorkflowDetail {
+  director: ProjectWorkItemSnapshot[]
+  fanOut: {
+    shotCount: number
+    completedShotCount: number
+    shots: ShotWorkflowSnapshot[]
+  }
+  merge: ProjectWorkItemSnapshot | null
+  export: ProjectWorkItemSnapshot | null
+}
+
+export type ProjectExecutionDetail =
+  | ({ kind: 'script' } & DirectorWorkflowDetail)
+  | ({
+      kind: 'audio'
+      asr: ProjectWorkItemSnapshot | null
+      sourceAudioBound: boolean
+    } & DirectorWorkflowDetail)
+  | {
+      kind: 'website'
+      stages: WebsiteStageSnapshot[]
+    }
+
+export interface ProjectExecutionFailureSnapshot {
+  code: string
+  origin?: WorkflowFaultOrigin
+  retryable?: boolean
+  recovery?: WorkflowRecovery
+  referenceId?: string
+}
+
+export interface ProjectExecutionRecoverySnapshot {
+  canStart: boolean
+  canStop: boolean
+  mode: 'none' | 'start' | 'stop' | 'automatic' | 'manual'
+}
+
 export interface ProjectExecutionSnapshot {
+  schemaVersion: 2
+  projectKind: ProjectWorkflowKind
   workflowKind: ProjectWorkflowKind
   state: ProjectExecutionState
   active: boolean
@@ -91,6 +159,10 @@ export interface ProjectExecutionSnapshot {
     updatedAt: string
     enginePhase?: WebsiteEnginePhase
   } | null
+  currentWork: ProjectWorkItemSnapshot | null
+  failure: ProjectExecutionFailureSnapshot | null
+  recovery: ProjectExecutionRecoverySnapshot
+  detail: ProjectExecutionDetail
   stages: WebsiteStageSnapshot[]
   delivery: WebsiteDeliverySnapshot | null
   revision: string
@@ -103,6 +175,7 @@ export interface ProjectExecutionFacts {
     autopilot: boolean
     directorContinuationEnabled: boolean
     soundEffects: 'off' | 'procedural'
+    subtitles: 'burn-in' | 'off'
   }
   attempt: {
     id: string
@@ -123,6 +196,7 @@ export interface ProjectExecutionFacts {
     id: string
     attemptId: string
     lifecycle: string
+    schemaVersion: string
     contentHash: string
     sizeBytes: number
     version: number

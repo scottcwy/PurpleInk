@@ -175,6 +175,28 @@
 | `/api/ai-usage` | GET | query `view=account\|managed-cycle`、`range=7d\|30d\|cycle`、`timeZone=<IANA>`；账号与 workspace 只取当前会话 | `@/features/usage` | `wired` |
 | `/api/internal/ai/worker` | POST | Bearer 服务间密钥；严格 body 携带 `workspaceId`、`attemptId`、`operationId`、固定 workload 与文本/图片/TTS 输入 | `@/features/ai/worker-gateway` | `wired`；仅受信 worker 可用，先校验 attempt 归属，再在该 workspace 上下文解析统一 ExecutionPlan、并发与双账本；不返回凭据、渠道 URL 或原始 provider 错误 |
 
+#### `ProjectExecutionSnapshotV2` 加法合同
+
+`GET /api/projects/[id]/execution`、统一 start/stop 响应和 Products UI 使用同一份
+`schemaVersion: 2` 快照。公共字段固定为：`projectKind`、`state`、`attempt`、
+`currentWork`、`failure`、`recovery`、`delivery`、`detail` 与 `revision`。
+
+- `failure` 只投影结构化 `code/origin/retryable/recovery/referenceId`；禁止返回
+  task failure message、Provider 原始响应、Prompt、credential 或隐藏推理。
+- `recovery` 明确给出 `canStart/canStop/mode`；停止中与自动续接必须是独立状态，
+  不得由 `autopilot` 或页面本地状态猜测。
+- `detail` 是 `kind=script|audio|website` 判别联合。script 包含 Director 主阶段、
+  动态镜头 fan-out、汇聚和导出；audio 额外包含 ASR 与原音频绑定；website 保留
+  capture → script → narration → compose → render → export 六阶段。
+- 一个发布周期内继续返回现有顶层 `workflowKind/active/canStart/canStop/currentStage/stages`
+  v1 字段；它们是同一 v2 真值的兼容别名，不允许独立计算。旧消费者可忽略新增字段，
+  新 UI 只读 v2 字段。v1 删除不在本轮范围内。
+- SSE 只发送失效提示；客户端收到事件后仍必须重新 GET 快照，数据库投影是唯一真值。
+
+start/stop/recovery 状态码继续遵循：参数错误 400、作用域内不存在 404、旧版本或
+状态冲突 409、外部凭据/业务门禁 422、Managed 额度耗尽 402。失败响应与快照均只
+使用上述安全投影。
+
 约定：
 
 1. 写操作一律 POST/PATCH/DELETE + 严格 JSON schema 校验；校验失败返回 400 且**不落任何写入**。

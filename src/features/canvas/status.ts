@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb } from '@/lib/db/client'
 import {
@@ -118,7 +118,7 @@ export async function transitionNodeStatus(
       .set({
         status: toPersistedStatus(next),
         ...(nextData === null ? {} : { data: nextData }),
-        updatedAt: new Date(),
+        updatedAt: sql`now()`,
       })
       .where(
         and(
@@ -208,7 +208,7 @@ export async function captureNodeInputFingerprint(nodeId: string): Promise<strin
       .update(canvasNodes)
       .set({
         data: patchPayload(node.data, { inputFingerprint }),
-        updatedAt: new Date(),
+        updatedAt: sql`now()`,
       })
       .where(
         and(
@@ -253,7 +253,7 @@ export async function invalidateNodeForRegeneration(
           invalidationReason: reason,
           invalidatedAt: new Date().toISOString(),
         }),
-        updatedAt: new Date(),
+        updatedAt: sql`now()`,
       })
       .where(
         and(

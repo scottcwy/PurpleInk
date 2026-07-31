@@ -74,6 +74,8 @@ function snapshot(
 ): ProjectExecutionSnapshot {
   const active = ['queued', 'running', 'stopping', 'recovering'].includes(state)
   return {
+    schemaVersion: 2,
+    projectKind: 'website',
     workflowKind: 'website',
     state,
     active,
@@ -81,6 +83,14 @@ function snapshot(
     canStop: active,
     attempt: null,
     currentStage: null,
+    currentWork: null,
+    failure: null,
+    recovery: {
+      canStart: !active && state !== 'succeeded',
+      canStop: active,
+      mode: active ? 'stop' : state === 'idle' ? 'start' : 'none',
+    },
+    detail: { kind: 'website', stages: [] },
     stages: [],
     delivery: null,
     revision: 'a'.repeat(64),

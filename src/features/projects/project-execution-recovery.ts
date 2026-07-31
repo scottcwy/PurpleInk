@@ -150,7 +150,7 @@ export async function recoverWebsiteDelivery(
     if (draftIds.length > 0) {
       const updated = await transaction
         .update(artifacts)
-        .set({ lifecycle: 'approved', updatedAt: new Date() })
+        .set({ lifecycle: 'approved', updatedAt: sql`now()` })
         .where(and(
           eq(artifacts.workspaceId, workspaceId),
           eq(artifacts.projectId, projectId),

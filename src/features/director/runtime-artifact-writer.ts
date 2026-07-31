@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   commitArtifactRecord,
@@ -163,7 +163,7 @@ export class DirectorArtifactWriter {
                 outputContentHash: artifact.contentHash,
                 ...(result.renderSpec ? { renderSpec: result.renderSpec } : {}),
               }),
-              updatedAt: new Date(),
+              updatedAt: sql`now()`,
             })
             .where(
               and(

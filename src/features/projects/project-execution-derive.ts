@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto'
-import type { WebsiteEnginePhase } from '@/features/website/engine-client'
+import { finalVideoSchemaVersion } from '@/features/render/final-video-delivery'
 import {
   WEBSITE_WORKFLOW_PHASES,
-  type WebsiteVerificationProjection,
 } from '@/features/website/website-stage-contract'
 import type {
   ProjectExecutionFacts,
@@ -11,8 +10,23 @@ import type {
   ProjectExecutionState,
   WebsiteDeliverySnapshot,
   WebsiteStageSnapshot,
-  WebsiteStageState,
 } from './project-execution-contract'
+import {
+  currentProjectWork,
+  executionDetail,
+} from './project-execution-detail'
+import {
+  isLifecycle,
+  optionalDurationSource,
+  optionalNumberOrNull,
+  record,
+  safeArtifact,
+  safeEnginePhase,
+  safeFailureCode,
+  safeFailureProjection,
+  safeVerification,
+  websiteStageState,
+} from './project-execution-safe-projection'
 
 export function deriveProjectExecutionSnapshot(
   facts: ProjectExecutionFacts,
@@ -22,7 +36,7 @@ export function deriveProjectExecutionSnapshot(
     : []
   const exportStage = stages.find((stage) => stage.phase === 'export')
   const attemptFailure = safeFailureCode(facts.attempt?.failure)
-  const delivery = websiteDelivery(facts, exportStage)
+  const delivery = projectDelivery(facts, exportStage)
   const state = executionState(facts, stages, delivery, attemptFailure)
   const failureCode = state === 'blocked' && !attemptFailure
     ? 'WEBSITE_STATE_INCONSISTENT'
@@ -37,13 +51,19 @@ export function deriveProjectExecutionSnapshot(
     : null
   const current = stages.find((stage) =>
     ['queued', 'running', 'blocked', 'failed'].includes(stage.state))
+  const detail = executionDetail(facts, stages)
+  const currentWork = currentProjectWork(facts, stages)
   const active = ['queued', 'running', 'stopping', 'recovering'].includes(state)
+  const canStart = !active && state !== 'succeeded'
+  const canStop = active
   const snapshotWithoutRevision = {
+    schemaVersion: 2 as const,
+    projectKind: facts.project.workflowKind,
     workflowKind: facts.project.workflowKind,
     state,
     active,
-    canStart: !active && state !== 'succeeded',
-    canStop: active,
+    canStart,
+    canStop,
     attempt: normalizedAttempt,
     currentStage: current
       ? {
@@ -53,6 +73,14 @@ export function deriveProjectExecutionSnapshot(
           ...(current.enginePhase ? { enginePhase: current.enginePhase } : {}),
         }
       : null,
+    currentWork,
+    failure: safeFailureProjection(facts.attempt?.failure, failureCode),
+    recovery: {
+      canStart,
+      canStop,
+      mode: recoveryMode(state),
+    },
+    detail,
     stages,
     delivery,
   }
@@ -62,6 +90,16 @@ export function deriveProjectExecutionSnapshot(
       .update(JSON.stringify(snapshotWithoutRevision))
       .digest('hex'),
   }
+}
+
+function recoveryMode(
+  state: ProjectExecutionState,
+): ProjectExecutionSnapshot['recovery']['mode'] {
+  if (state === 'stopping' || state === 'queued' || state === 'running') return 'stop'
+  if (state === 'recovering') return 'automatic'
+  if (state === 'failed' || state === 'blocked' || state === 'cancelled') return 'manual'
+  if (state === 'idle') return 'start'
+  return 'none'
 }
 
 function executionState(
@@ -153,21 +191,28 @@ function websiteStages(
   })
 }
 
-function websiteDelivery(
+function projectDelivery(
   facts: ProjectExecutionFacts,
   exportStage?: WebsiteStageSnapshot,
 ): WebsiteDeliverySnapshot | null {
   const artifact = facts.artifact
   if (!artifact || !isLifecycle(artifact.lifecycle)) return null
-  const downloadable = facts.attempt?.status === 'succeeded'
-    && artifact.lifecycle === 'approved'
-    && exportStage?.verification?.outcome === 'passed'
-    && artifact.soundEffects?.lifecycle === 'approved'
+  const acceptedLifecycle = artifact.lifecycle === 'approved'
+    || (facts.project.workflowKind !== 'website' && artifact.lifecycle === 'released')
+  const matchingAudio = artifact.soundEffects?.lifecycle === 'approved'
     && artifact.soundEffects.mode === facts.project.soundEffects
+  const matchingDelivery = facts.project.workflowKind === 'website'
+    ? exportStage?.verification?.outcome === 'passed'
+    : artifact.schemaVersion === finalVideoSchemaVersion(facts.project.subtitles)
+  const downloadable = facts.attempt?.status === 'succeeded'
+    && acceptedLifecycle
+    && matchingAudio
+    && matchingDelivery
   return {
     artifactId: artifact.id,
     attemptId: artifact.attemptId,
     lifecycle: artifact.lifecycle,
+    schemaVersion: artifact.schemaVersion,
     contentHash: artifact.contentHash,
     sizeBytes: artifact.sizeBytes,
     version: artifact.version,
@@ -199,132 +244,4 @@ function publicAttemptStatus(
     return status
   }
   return 'cancelled'
-}
-
-function websiteStageState(value: unknown, persisted: string): WebsiteStageState {
-  if (
-    value === 'idle'
-    || value === 'queued'
-    || value === 'running'
-    || value === 'succeeded'
-    || value === 'blocked'
-    || value === 'failed'
-    || value === 'cancelled'
-  ) {
-    return value
-  }
-  if (persisted === 'queued') return 'queued'
-  if (persisted === 'running') return 'running'
-  if (persisted === 'succeeded') return 'succeeded'
-  if (persisted === 'failed') return 'failed'
-  if (persisted === 'cancelled') return 'cancelled'
-  return 'idle'
-}
-
-function safeFailureCode(value: unknown): ProjectExecutionFailureCode | undefined {
-  const candidate = record(value)
-  const code = typeof candidate.failureCode === 'string'
-    ? candidate.failureCode
-    : typeof candidate.code === 'string'
-      ? candidate.code
-      : undefined
-  return code && [
-    'WEBSITE_ENGINE_TIMEOUT',
-    'WEBSITE_ENGINE_FAILED',
-    'WEBSITE_ENGINE_UNAVAILABLE',
-    'WEBSITE_ENGINE_RESPONSE_INVALID',
-    'WEBSITE_VIDEO_INVALID',
-    'WEBSITE_PROJECT_INVALID',
-    'WEBSITE_EXECUTION_FAILED',
-    'WEBSITE_VERIFICATION_FAILED',
-    'WEBSITE_STATE_INCONSISTENT',
-  ].includes(code)
-    ? code as ProjectExecutionFailureCode
-    : undefined
-}
-
-function safeVerification(value: unknown): WebsiteVerificationProjection | undefined {
-  const candidate = record(value)
-  if (
-    typeof candidate.checkPassed !== 'boolean'
-    || typeof candidate.goldenVerified !== 'boolean'
-    || typeof candidate.goldenCheckCount !== 'number'
-    || !Number.isInteger(candidate.goldenCheckCount)
-  ) {
-    return undefined
-  }
-  return {
-    checkPassed: candidate.checkPassed,
-    goldenVerified: candidate.goldenVerified,
-    goldenCheckCount: candidate.goldenCheckCount,
-    outcome: candidate.checkPassed && candidate.goldenVerified
-      ? 'passed'
-      : 'degraded',
-  }
-}
-
-function safeArtifact(value: unknown): WebsiteStageSnapshot['artifact'] | undefined {
-  const candidate = record(value)
-  if (
-    typeof candidate.artifactId !== 'string'
-    || typeof candidate.contentHash !== 'string'
-    || !/^[0-9a-f]{64}$/u.test(candidate.contentHash)
-    || typeof candidate.sizeBytes !== 'number'
-    || candidate.sizeBytes < 0
-  ) {
-    return undefined
-  }
-  return {
-    artifactId: candidate.artifactId,
-    contentHash: candidate.contentHash,
-    sizeBytes: candidate.sizeBytes,
-  }
-}
-
-function safeEnginePhase(value: unknown): WebsiteEnginePhase | undefined {
-  return typeof value === 'string' && [
-    'queued',
-    'capturing',
-    'scripting',
-    'synthesizing',
-    'timing',
-    'composing',
-    'rendering',
-    'verifying',
-    'muxing',
-    'done',
-    'failed',
-    'cancelled',
-  ].includes(value)
-    ? value as WebsiteEnginePhase
-    : undefined
-}
-
-function optionalNumberOrNull(
-  value: unknown,
-  key: 'durationSec' | 'elapsedSec',
-): Partial<Pick<WebsiteStageSnapshot, 'durationSec' | 'elapsedSec'>> {
-  return value === null || (typeof value === 'number' && value >= 0)
-    ? { [key]: value }
-    : {}
-}
-
-function optionalDurationSource(
-  value: unknown,
-): Pick<WebsiteStageSnapshot, 'durationSource'> | Record<string, never> {
-  return value === null || value === 'request' || value === 'output'
-    ? { durationSource: value }
-    : {}
-}
-
-function isLifecycle(
-  value: string,
-): value is WebsiteDeliverySnapshot['lifecycle'] {
-  return ['draft', 'approved', 'released', 'rejected'].includes(value)
-}
-
-function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
 }

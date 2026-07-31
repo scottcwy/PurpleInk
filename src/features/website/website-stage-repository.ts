@@ -1,6 +1,7 @@
 import 'server-only'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { z } from 'zod'
+import { readDatabaseClock } from '@/lib/db/database-clock'
 import {
   fromPersistedStatus,
   isNodeStatusTransitionAllowed,
@@ -73,7 +74,7 @@ export class PostgresWebsiteStageProjector implements WebsiteStageProjector {
     progress: WebsiteStageProgress,
   ): Promise<void> {
     const activeIndex = WEBSITE_WORKFLOW_PHASES.indexOf(progress.phase)
-    const updatedAt = new Date().toISOString()
+    const updatedAt = (await readDatabaseClock(this.database)).toISOString()
     const mutations = new Map<string, WebsiteStageMutation>()
     for (const [index, phase] of WEBSITE_WORKFLOW_PHASES.entries()) {
       mutations.set(
@@ -116,7 +117,7 @@ export class PostgresWebsiteStageProjector implements WebsiteStageProjector {
     projectId: string,
     output: WebsiteOutputProjection,
   ): Promise<void> {
-    const updatedAt = new Date().toISOString()
+    const updatedAt = (await readDatabaseClock(this.database)).toISOString()
     const mutations = new Map<string, WebsiteStageMutation>(
       WEBSITE_WORKFLOW_PHASES.map((phase) => [
         `website:${phase}`,
@@ -162,7 +163,7 @@ export class PostgresWebsiteStageProjector implements WebsiteStageProjector {
     projectId: string,
     output: WebsiteOutputProjection,
   ): Promise<void> {
-    const updatedAt = new Date().toISOString()
+    const updatedAt = (await readDatabaseClock(this.database)).toISOString()
     const mutations = new Map<string, WebsiteStageMutation>(
       WEBSITE_WORKFLOW_PHASES.map((phase) => [
       `website:${phase}`,
@@ -206,7 +207,7 @@ export class PostgresWebsiteStageProjector implements WebsiteStageProjector {
     code: WebsiteExecutionFailureCode,
   ): Promise<void> {
     const activeIndex = WEBSITE_WORKFLOW_PHASES.indexOf(phase)
-    const updatedAt = new Date().toISOString()
+    const updatedAt = (await readDatabaseClock(this.database)).toISOString()
     const mutations = new Map<string, WebsiteStageMutation>()
     for (const [index, nodePhase] of WEBSITE_WORKFLOW_PHASES.entries()) {
       const state = index < activeIndex
@@ -270,7 +271,7 @@ export class PostgresWebsiteStageProjector implements WebsiteStageProjector {
           .set({
             status: toPersistedStatus(resolved.status),
             data: resolved.data,
-            updatedAt: new Date(),
+            updatedAt: sql`now()`,
           })
           .where(and(
             eq(canvasNodes.workspaceId, this.workspaceId),
@@ -285,7 +286,7 @@ export class PostgresWebsiteStageProjector implements WebsiteStageProjector {
           .update(artifacts)
           .set({
             lifecycle: artifactTransition.lifecycle,
-            updatedAt: new Date(),
+            updatedAt: sql`now()`,
           })
           .where(and(
             eq(artifacts.workspaceId, this.workspaceId),

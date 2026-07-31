@@ -51,7 +51,7 @@ export async function runAudioTranscriptionJob(
   try {
     await recordState(resolved, payload.nodeId, {
       status: 'running',
-      startedAt: resolved.now().toISOString(),
+      startedAt: (await resolved.now()).toISOString(),
     }, undefined, fence)
     await assertActive(resolved, payload.nodeId, fence)
     const loaded = await resolved.loadSource(payload.projectId)
@@ -111,7 +111,7 @@ export async function runAudioTranscriptionJob(
         unitCount: timeline.scriptUnits.length,
         alignmentMode: timeline.alignmentMode,
         alignmentSource: speech.alignmentSource,
-        completedAt: resolved.now().toISOString(),
+        completedAt: (await resolved.now()).toISOString(),
       },
       persisted.ingestContentHash,
       fence,
@@ -194,7 +194,7 @@ async function settleFailure(
     await recordState(dependencies, nodeId, {
       status: 'failed',
       error: projection,
-      completedAt: dependencies.now().toISOString(),
+      completedAt: (await dependencies.now()).toISOString(),
     }, undefined, execution)
   } catch (cleanupError) {
     cleanupErrors.push(cleanupError)

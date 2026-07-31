@@ -35,6 +35,12 @@ export interface WebsiteStagePresentation {
   status: string
 }
 
+export function websiteExecutionStages(
+  execution: ProjectExecutionSnapshot,
+): readonly WebsiteStageSnapshot[] {
+  return execution.detail.kind === 'website' ? execution.detail.stages : []
+}
+
 export function websiteStagePresentation(
   execution: ProjectExecutionSnapshot,
   stage: WebsiteStageSnapshot,
@@ -60,7 +66,7 @@ export function websiteStagePresentation(
   } else if (stage.state === 'failed') {
     status = failureLabel(stage.failureCode)
   } else {
-    const previousFailed = execution.stages
+    const previousFailed = websiteExecutionStages(execution)
       .slice(0, index)
       .some((candidate) =>
         candidate.state === 'failed' || candidate.state === 'blocked')

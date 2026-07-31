@@ -12,13 +12,16 @@ import { Button } from '@/components/ui/button'
 import { TopBar } from '@/components/ui/top-bar'
 import { Toggle } from '@/components/ui/toggle'
 import type { ExportSettings as ExportSettingsValue } from '@/features/canvas'
-import type { ProjectExecutionSnapshot } from '@/features/projects'
+import type { ProjectExecutionSnapshot, WebsiteStageSnapshot } from '@/features/projects'
 import { getProjectExecution } from '@/features/projects/execution-client'
 import {
   startPipeline,
   stopPipeline,
 } from '@/features/projects/execution-control-client'
-import { projectExecutionLabel } from '@/features/projects/website-execution-presentation'
+import {
+  projectExecutionLabel,
+  websiteExecutionStages,
+} from '@/features/projects/website-execution-presentation'
 import { useProjectExecution } from '@/features/projects/use-project-execution'
 import { usePublishNavContext } from '@/features/navigation/nav-context'
 import {
@@ -118,7 +121,7 @@ export function WebsiteExportWorkspace({
             <div className="text-right">
               <p className="text-xs font-medium">{progress.label}</p>
               <p className="mt-1 text-[11px] text-ds-text-muted">
-                {execution.currentStage
+                {execution.currentWork
                   ? `当前：${currentStageLabel(execution)}`
                   : '当前没有运行中的阶段'}
               </p>
@@ -205,16 +208,14 @@ function WebsitePrimaryAction({
 }
 
 function currentStageLabel(execution: ProjectExecutionSnapshot): string {
-  const stage = execution.stages.find(
-    (candidate) => candidate.nodeId === execution.currentStage?.nodeId,
+  const stage = websiteExecutionStages(execution).find(
+    (candidate) => `website:${candidate.phase}` === execution.currentWork?.logicalKey,
   )
-  return stage
-    ? websiteStageTitle(stage.phase)
-    : websiteStageTitle(execution.currentStage!.phase)
+  return stage ? websiteStageTitle(stage.phase) : '执行中'
 }
 
 function websiteStageTitle(
-  phase: ProjectExecutionSnapshot['stages'][number]['phase'],
+  phase: WebsiteStageSnapshot['phase'],
 ): string {
   return {
     capture: '网站采集',
