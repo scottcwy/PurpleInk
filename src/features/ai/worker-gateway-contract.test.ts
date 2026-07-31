@@ -54,4 +54,14 @@ describe('worker AI gateway contract', () => {
       channelId: 'internal-channel',
     }).success).toBe(false)
   })
+
+  it('accepts zero provider-reported TTS duration for later byte measurement', () => {
+    expect(workerAiSuccessSchema.safeParse({
+      ok: true,
+      capability: 'tts',
+      audioBase64: 'UklGRg==',
+      audioFormat: 'wav',
+      durationMs: 0,
+    }).success).toBe(true)
+  })
 })

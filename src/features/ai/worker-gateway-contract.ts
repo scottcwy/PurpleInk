@@ -68,7 +68,9 @@ const ttsResponseSchema = z.object({
   capability: z.literal('tts'),
   audioBase64: z.string().min(1),
   audioFormat: z.enum(['mp3', 'wav']),
-  durationMs: z.number().int().positive(),
+  // 供应商未提供时间戳时允许 0；worker 会从实际音频字节重新测量时长，
+  // 此字段不能反过来阻断合法字节进入可信测量边界。
+  durationMs: z.number().int().nonnegative(),
 }).strict()
 
 export const workerAiSuccessSchema = z.discriminatedUnion('capability', [
