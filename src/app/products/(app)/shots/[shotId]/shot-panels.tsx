@@ -150,7 +150,7 @@ export function ShotPanelChrome({
         side="right"
         scrimLabel="关闭代码列遮罩"
         className="flex bg-ds-surface text-ds-text"
-        style={{ width: panels.code.width }}
+        style={{ width: panels.code.width, maxWidth: 'calc(100vw - 48px)' }}
       >
         <ResizeHandle
           isDragging={panels.code.isDragging}
@@ -166,7 +166,7 @@ export function ShotPanelChrome({
         side="right"
         scrimLabel="关闭合同列遮罩"
         className="flex bg-ds-surface text-ds-text"
-        style={{ width: panels.contract.width }}
+        style={{ width: panels.contract.width, maxWidth: 'calc(100vw - 48px)' }}
       >
         <ResizeHandle
           isDragging={panels.contract.isDragging}

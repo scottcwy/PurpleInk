@@ -79,7 +79,7 @@ export function ProjectList({
         }
         actions={
           <>
-            {/* 高度与右侧 sm 新建按钮（h-8）对齐。 */}
+            {/* 高度与右侧 sm 新建按钮（h-8）对齐；<lg 选项补足 40px 触控热区。 */}
             <SegmentedControl
               options={[
                 { value: 'grid', label: '网格' },
@@ -87,7 +87,7 @@ export function ProjectList({
               ]}
               value={layout}
               onChange={changeLayout}
-              className="h-8 [&>button]:py-0.5"
+              className="h-8 shrink-0 [&>button]:py-0.5 max-lg:h-auto max-lg:[&>button]:min-h-10"
             />
             {newProjectAction}
           </>

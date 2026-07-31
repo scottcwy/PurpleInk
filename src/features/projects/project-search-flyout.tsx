@@ -46,7 +46,7 @@ export function ProjectSearchFlyout({
             fieldRef.current?.querySelector('input')?.focus(),
           )
         }}
-        className="flex size-7 items-center justify-center rounded-md text-ds-text-muted transition-colors duration-fast ease-standard hover:bg-ds-surface-muted hover:text-ds-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-ring"
+        className="flex size-10 items-center justify-center rounded-md text-ds-text-muted transition-colors duration-fast ease-standard hover:bg-ds-surface-muted hover:text-ds-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-ring lg:size-7"
       >
         <Search className="size-4" />
       </button>

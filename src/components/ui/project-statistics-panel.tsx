@@ -90,7 +90,7 @@ export function ProjectStatisticsPanel({
           </div>
           <Link
             href={PLAYBOOK_HREF}
-            className="inline-flex text-[10px] font-semibold text-ds-primary hover:underline"
+            className="inline-flex items-center text-[10px] font-semibold text-ds-primary hover:underline max-lg:min-h-10"
           >
             在 Playbook 查看
           </Link>
@@ -111,7 +111,7 @@ export function ProjectStatisticsPanel({
         <div className="flex justify-end md:hidden">
           <Link
             href={PLAYBOOK_HREF}
-            className="text-[10px] font-semibold text-ds-primary hover:underline"
+            className="inline-flex min-h-10 items-center text-[10px] font-semibold text-ds-primary hover:underline"
           >
             在 Playbook 查看
           </Link>
@@ -138,7 +138,7 @@ function StatsTab({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        'flex h-[34px] w-full items-center gap-2 rounded-md px-2.5 text-left text-xs transition-colors duration-fast ease-standard',
+        'flex h-10 w-full items-center gap-2 rounded-md px-2.5 text-left text-xs transition-colors duration-fast ease-standard lg:h-[34px]',
         active
           ? 'bg-ds-blue-soft font-semibold text-ds-text'
           : 'text-ds-text-muted hover:bg-ds-surface hover:text-ds-text',

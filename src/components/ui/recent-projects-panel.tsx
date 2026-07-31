@@ -34,7 +34,7 @@ export function RecentProjectsPanel({
         </div>
         <Link
           href="/products/projects"
-          className="flex items-center gap-1.5 text-xs text-ds-text-muted hover:text-ds-text"
+          className="flex items-center gap-1.5 text-xs text-ds-text-muted hover:text-ds-text max-lg:-my-3 max-lg:py-3"
         >
           查看全部
           <ArrowRight aria-hidden className="size-3.5" />

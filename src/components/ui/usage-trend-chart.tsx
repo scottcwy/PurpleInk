@@ -47,8 +47,9 @@ function CumulativeLine({ series }: { series: readonly UsageTrendPoint[] }) {
 
   return (
     <div className="overflow-x-auto rounded-md border border-ds-border bg-ds-surface-muted/40 p-2">
+      {/* <640px 按 viewBox 等比缩放到容器宽，保证整条曲线可见；sm 起维持 620px 底宽（超出可横滑）。 */}
       <svg
-        className="h-auto min-w-[620px]"
+        className="h-auto w-full sm:min-w-[620px]"
         viewBox={`0 0 ${width} ${height}`}
         role="img"
         aria-label="当前会员周期累计额度消耗百分比阶梯折线图"

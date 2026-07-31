@@ -41,10 +41,11 @@ export function AuthFormShell({
 }
 
 export function AuthFooterLink({ href, children }: { href: string; children: ReactNode }) {
+  // py-3 -my-3：热区拉到 ≥40px，负 margin 抵消布局占位，视觉尺寸不变。
   return (
     <Link
       href={href}
-      className="focus-ring ml-2 rounded-sm font-semibold text-ds-blue underline underline-offset-4"
+      className="focus-ring -my-3 ml-2 rounded-sm py-3 font-semibold text-ds-blue underline underline-offset-4"
     >
       {children}
     </Link>

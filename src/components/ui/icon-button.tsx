@@ -10,12 +10,13 @@ export interface IconButtonProps extends HTMLMotionProps<'button'> {
 /**
  * 32×32 Canonical 图标按钮（ds-surface 底 + 16px 图标）。
  * 微投影 + hover 浮起 + 统一 focus ring。
+ * <lg 放大为 40×40 触控热区（responsive-design.md §5），≥lg 维持 32×32。
  */
 export function IconButton({ icon: Icon, className, ...props }: IconButtonProps) {
   return (
     <ControlPressButton
       className={cn(
-        'inline-flex size-8 items-center justify-center rounded-md border border-ds-border bg-ds-surface text-ds-text-muted shadow-[0_1px_2px_#10183a14] transition-[background-color,color,box-shadow] duration-fast hover:bg-ds-surface-muted hover:text-ds-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-ring disabled:pointer-events-none disabled:opacity-50',
+        'inline-flex size-8 max-lg:size-10 items-center justify-center rounded-md border border-ds-border bg-ds-surface text-ds-text-muted shadow-[0_1px_2px_#10183a14] transition-[background-color,color,box-shadow] duration-fast hover:bg-ds-surface-muted hover:text-ds-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-ring disabled:pointer-events-none disabled:opacity-50',
         className,
       )}
       {...props}

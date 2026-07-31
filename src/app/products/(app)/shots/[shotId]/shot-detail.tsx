@@ -53,9 +53,11 @@ export function ShotDetail({
       <TopBar
         title={
           <span className="flex items-center gap-2">
+            {/* <lg 补足 40px 触控热区；lg 起还原 16px 图标原位。 */}
             <Link
               href={productCanvasHref(projectId)}
               aria-label="返回画布"
+              className="flex size-10 shrink-0 items-center justify-center lg:size-auto"
             >
               <ArrowLeft className="h-4 w-4" />
             </Link>
@@ -88,12 +90,13 @@ export function ShotDetail({
               onClick={runtime.render}
               disabled={runtime.rendering}
             >
-              重渲此镜
+              {/* <640px 收窄文案，配合 TopBar 换行减少占行。 */}
+              重渲<span className="hidden sm:inline">此镜</span>
             </Button>
             {runtime.outputUrl && (
               <a href={runtime.outputUrl} download>
                 <Button size="sm" icon={Download}>
-                  导出 MP4
+                  导出<span className="hidden sm:inline"> MP4</span>
                 </Button>
               </a>
             )}

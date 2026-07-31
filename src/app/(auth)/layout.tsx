@@ -32,7 +32,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           </Link>
           <Link
             href="/"
-            className="focus-ring rounded-md px-2 py-1 text-sm text-ds-text-muted underline-offset-4 hover:text-ds-text hover:underline"
+            className="focus-ring -my-1.5 rounded-md px-2 py-2.5 text-sm text-ds-text-muted underline-offset-4 hover:text-ds-text hover:underline"
           >
             返回首页
           </Link>

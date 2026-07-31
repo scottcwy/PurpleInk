@@ -33,9 +33,10 @@ const VARIANTS: Record<ButtonVariant, string> = {
     'bg-ds-red text-white hover:brightness-95 active:brightness-90',
 }
 
+/** <lg 用 min-h-10 把热区补到 40px（responsive-design.md §5），≥lg 保持桌面紧凑高度。 */
 const SIZES: Record<ButtonSize, string> = {
-  sm: 'h-8 gap-1.5 px-3 text-[13px] rounded-md',
-  md: 'h-9 gap-2 px-3.5 text-sm rounded-md',
+  sm: 'h-8 max-lg:min-h-10 gap-1.5 px-3 text-[13px] rounded-md',
+  md: 'h-9 max-lg:min-h-10 gap-2 px-3.5 text-sm rounded-md',
   lg: 'h-10 gap-2 px-4 text-sm rounded-md',
 }
 
