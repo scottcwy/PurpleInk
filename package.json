@@ -21,6 +21,8 @@
     "generate:ai-catalog": "tsx scripts/generate/ai-billing-catalog.ts --write",
     "verify:ai-catalog": "tsx scripts/generate/ai-billing-catalog.ts --check",
     "verify:v3": "tsx scripts/verify/v3-architecture.ts --check",
+    "verify:workflow": "tsx scripts/verify/workflow-integrity.ts",
+    "report:workflow": "tsx scripts/verify/workflow-integrity.ts --report",
     "verify:managed-services": "node scripts/verify/managed-service-readiness.mjs",
     "verify:e2e": "tsx scripts/verify/e2e-smoke.ts",
     "verify:motion": "tsx scripts/verify/motion-baseline.mjs",
