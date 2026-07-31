@@ -1,6 +1,9 @@
 import 'server-only'
 import { z } from 'zod'
-import { getMimoConfig, type MimoConfig } from '@/features/ai/mimo-config'
+import {
+  resolveBuiltInAudioConfig,
+  type BuiltInAudioConfig,
+} from '@/features/ai/built-in-audio-config'
 import {
   providerErrorFromResponse,
   providerNetworkError,
@@ -46,7 +49,7 @@ const asrResponseSchema = z
 
 export interface MimoAudioDependencies {
   fetcher: typeof fetch
-  getConfig: () => Promise<MimoConfig>
+  getConfig: () => Promise<BuiltInAudioConfig>
 }
 
 const DEFAULT_VOICE = 'mimo_default'
@@ -120,7 +123,7 @@ export async function transcribeMimoSpeech(
 
 async function request(
   fetcher: typeof fetch,
-  config: MimoConfig & { apiKey: string },
+  config: BuiltInAudioConfig & { apiKey: string },
   body: Record<string, unknown>,
   operation: string,
   externalSignal?: AbortSignal,
@@ -164,11 +167,16 @@ async function request(
   }
 }
 
-function requireKey(config: MimoConfig): MimoConfig & { apiKey: string } {
+function requireKey(
+  config: BuiltInAudioConfig,
+): BuiltInAudioConfig & { apiKey: string } {
   if (!config.apiKey) throw new Error('尚未配置 MiMo 产品 API Key')
   return { ...config, apiKey: config.apiKey }
 }
 
 function defaultDependencies(): MimoAudioDependencies {
-  return { fetcher: fetch, getConfig: getMimoConfig }
+  return {
+    fetcher: fetch,
+    getConfig: () => resolveBuiltInAudioConfig('mimo'),
+  }
 }

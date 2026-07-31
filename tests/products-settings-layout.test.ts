@@ -51,9 +51,9 @@ describe('Products settings workspace', () => {
   /**
    * 供应商网格是**家族**而不是 provider id：自定义兼容家族在 registry 里是三个 id
    * （文本视觉 / TTS / ASR，三份独立凭据必须有三个身份），但只出一张卡片，三个接入点
-   * 在卡片展开后的面板里按顺序配置。直接遍历 AI_PROVIDER_IDS 会渲染出六张卡片。
+   * 在卡片展开后的面板里按顺序配置。五家内置供应商加一个自定义家族共六张卡片。
    */
-  it('shows four provider cards and routes media capabilities explicitly', () => {
+  it('shows six provider-family cards and routes media capabilities explicitly', () => {
     const providerSource = readFileSync(
       'src/app/products/(app)/settings/provider-registry-panel.tsx',
       'utf8',
@@ -69,7 +69,7 @@ describe('Products settings workspace', () => {
 
     expect(providerSource).toContain('PROVIDER_CARDS')
     expect(providerSource).not.toContain('AI_PROVIDER_IDS.map')
-    expect(providerSource).toContain("useState<AiProviderId>('mimo')")
+    expect(providerSource).toContain("useState<ProviderCardId>('mimo')")
     // 三个自定义接入点必须同属一个面板，且按 文本视觉 → TTS → ASR 顺序出现。
     const textIndex = customSource.indexOf('文本与视觉')
     const ttsIndex = customSource.indexOf('CustomOpenAiTtsSection controller')

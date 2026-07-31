@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { applyProviderSettings } from '@/features/ai/provider-settings-apply'
 import { describeProviderSettings } from '@/features/ai/provider-settings-projection'
 import { validateProviderSettings } from '@/features/ai/provider-settings-validation'
-import { stepfunSettingsSchema } from '@/features/ai/schemas'
+import { providerSettingsSchema } from '@/features/ai/schemas'
 import { withApiSession } from '@/features/auth/api-session'
 
 export const dynamic = 'force-dynamic'
@@ -25,7 +25,7 @@ export function POST(request: Request): Promise<Response> {
 
 async function handlePost(request: Request) {
   const body: unknown = await request.json().catch(() => null)
-  const parsed = stepfunSettingsSchema.safeParse(body)
+  const parsed = providerSettingsSchema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json(
       { ok: false, error: parsed.error.issues[0]?.message ?? '输入无效' },

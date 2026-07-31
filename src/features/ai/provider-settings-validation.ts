@@ -11,13 +11,10 @@ import {
   reject,
   type ProviderSettingsOutcome,
 } from './provider-settings-contract'
-import { PROVIDER_REGISTRY, providerSupports } from './provider-registry'
-import type { StepfunSettings } from './schemas'
+import { PROVIDER_REGISTRY } from './provider-registry'
+import type { ProviderSettings } from './schemas'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getAiConfigDependencies } from './config'
-import { validateGeminiKey } from './gemini-adapter'
-import { validateMimoKey } from './mimo-adapter'
-import { validateKey as validateStepfunKey } from './stepfun-adapter'
 import type { ManagedProviderId } from './managed-service'
 import { createAuditedValidationFetcher } from './validation-fetch'
 import { validateOfficialByokKey } from './official-provider-validation'
@@ -29,35 +26,12 @@ import { validateOfficialByokKey } from './official-provider-validation'
  * Key 未提交时既不校验也不改动已存 Key；只提交了才走校验门禁。
  */
 export async function validateProviderSettings(
-  input: StepfunSettings,
+  input: ProviderSettings,
 ): Promise<ProviderSettingsOutcome> {
   const laneQuotas = checkLaneQuotas(input.laneQuotas)
   if (!laneQuotas.ok) return laneQuotas
-  const { apiKey: geminiApiKey, ...geminiSettings } = input.gemini ?? {}
-  const { apiKey: mimoApiKey, ...mimoSettings } = input.mimo ?? {}
-  if (
-    input.apiKey !== undefined ||
-    geminiApiKey !== undefined ||
-    mimoApiKey !== undefined ||
-    hasManagedModelInput(input, geminiSettings, mimoSettings)
-  ) {
-    return reject(422, '内置模型与旧凭据字段不接受写入，请使用服务来源配置', false)
-  }
   const builtIn = await validateBuiltInServices(input)
   if (!builtIn.ok) return builtIn
-
-  // 备选 provider 服务于 Director 文本会话的降级：纯音频端点切过去必然
-  // 以 RouteContractError 失败，在保存前就拒掉（先验证后保存）。
-  if (
-    input.fallbackProvider != null
-    && !providerSupports(input.fallbackProvider, 'text')
-  ) {
-    return reject(
-      422,
-      `${PROVIDER_REGISTRY[input.fallbackProvider].label} 不支持文本会话，不能作为备选 provider`,
-      false,
-    )
-  }
 
   if (input.customOpenAi) {
     const validated = await validateOpenAiCompatibleProfile(
@@ -111,7 +85,7 @@ export async function validateProviderSettings(
 }
 
 async function validateBuiltInServices(
-  input: StepfunSettings,
+  input: ProviderSettings,
 ): Promise<ProviderSettingsOutcome> {
   const entries = Object.entries(input.providerServices ?? {}) as Array<
     [ManagedProviderId, { funding: 'managed' | 'byok'; apiKey?: string }]
@@ -148,29 +122,11 @@ async function validateByok(
     provider,
     funding: 'byok',
   })
-  if (provider === 'stepfun') return validateStepfunKey(apiKey, fetcher)
-  if (provider === 'gemini') return validateGeminiKey(apiKey, {}, fetcher)
-  if (provider === 'mimo') return (await validateMimoKey(apiKey, {}, fetcher)).ok
   return validateOfficialByokKey(provider, apiKey, fetcher)
 }
 
 function providerLabel(provider: ManagedProviderId): string {
-  if (provider === 'stepfun') return 'StepFun'
-  if (provider === 'gemini') return 'Gemini'
-  if (provider === 'mimo') return 'MiMo'
   return PROVIDER_REGISTRY[provider].label
-}
-
-function hasManagedModelInput(
-  stepfun: object,
-  gemini: object,
-  mimo: object,
-): boolean {
-  return ['chatModel', 'ttsModel', 'asrModel', 'visionModel'].some((key) =>
-    key in stepfun)
-    || ['primaryModel', 'fastModel'].some((key) => key in gemini)
-    || ['textModel', 'visionModel', 'ttsModel', 'asrModel'].some((key) =>
-      key in mimo)
 }
 
 /**
@@ -178,7 +134,7 @@ function hasManagedModelInput(
  * 在写入任何 secret / models / routes / laneQuotas 之前做二次校验。
  */
 function checkLaneQuotas(
-  laneQuotas: StepfunSettings['laneQuotas'],
+  laneQuotas: ProviderSettings['laneQuotas'],
 ): ProviderSettingsOutcome {
   if (!laneQuotas) return OK
   const cpuCount = os.cpus().length

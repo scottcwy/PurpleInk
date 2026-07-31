@@ -5,26 +5,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { SettingsPanel } from '@/components/ui/settings-panel'
 import { SettingsRow } from '@/components/ui/settings-row'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { StepfunModelField } from '@/features/ai/config'
-import type { GeminiConfigField } from '@/features/ai/gemini-config'
-import type { MimoConfigField } from '@/features/ai/mimo-config'
 import type { AiProviderId } from '@/features/ai/model-routing'
 import type { DirectorCanvasNodeType } from '@/features/canvas/types'
 import {
-  GEMINI_FIELDS,
-  MIMO_FIELDS,
   ROUTE_ROWS,
-  STEPFUN_FIELDS,
-  type GeminiDraft,
   type LaneQuotasDraft,
-  type MimoDraft,
   type OpenAiCompatibleAsrDraft,
   type OpenAiCompatibleDraft,
   type OpenAiCompatibleTtsDraft,
   type ReadyModelSettingsController,
   type RouteDraft,
   type SettingsResponse,
-  type StepfunDraft,
 } from './model-service-contract'
 import { ModelServicePanels } from './model-service-panels'
 
@@ -52,9 +43,6 @@ export function ModelServiceSettings() {
  */
 interface DraftSetters {
   setData: (body: SettingsResponse) => void
-  setStepfun: (draft: StepfunDraft) => void
-  setGemini: (draft: GeminiDraft) => void
-  setMimo: (draft: MimoDraft) => void
   setCustomOpenAi: (draft: OpenAiCompatibleDraft) => void
   setCustomOpenAiTts: (draft: OpenAiCompatibleTtsDraft) => void
   setCustomOpenAiAsr: (draft: OpenAiCompatibleAsrDraft) => void
@@ -64,9 +52,6 @@ interface DraftSetters {
 
 export function useModelSettingsController(): ModelSettingsController {
   const [data, setData] = useState<SettingsResponse>()
-  const [stepfunDraft, setStepfun] = useState<StepfunDraft>()
-  const [geminiDraft, setGemini] = useState<GeminiDraft>()
-  const [mimoDraft, setMimo] = useState<MimoDraft>()
   const [customOpenAiDraft, setCustomOpenAi] = useState<OpenAiCompatibleDraft>()
   const [customOpenAiTtsDraft, setCustomOpenAiTts] = useState<OpenAiCompatibleTtsDraft>()
   const [customOpenAiAsrDraft, setCustomOpenAiAsr] = useState<OpenAiCompatibleAsrDraft>()
@@ -80,9 +65,6 @@ export function useModelSettingsController(): ModelSettingsController {
 
   const setters = useMemo<DraftSetters>(() => ({
     setData,
-    setStepfun,
-    setGemini,
-    setMimo,
     setCustomOpenAi,
     setCustomOpenAiTts,
     setCustomOpenAiAsr,
@@ -95,15 +77,6 @@ export function useModelSettingsController(): ModelSettingsController {
 
   function setRoute(nodeType: DirectorCanvasNodeType, provider: AiProviderId) {
     setRoutes((current) => current && { ...current, [nodeType]: provider })
-  }
-  function setStepfunField(field: StepfunModelField, value: string) {
-    setStepfun((current) => current && { ...current, [field]: value })
-  }
-  function setGeminiField(field: GeminiConfigField, value: string) {
-    setGemini((current) => current && { ...current, [field]: value })
-  }
-  function setMimoField(field: MimoConfigField, value: string) {
-    setMimo((current) => current && { ...current, [field]: value })
   }
   function setCustomOpenAiField(field: keyof OpenAiCompatibleDraft, value: string) {
     setCustomOpenAi((current) => current && { ...current, [field]: value })
@@ -126,9 +99,6 @@ export function useModelSettingsController(): ModelSettingsController {
 
   if (
     !data
-    || !stepfunDraft
-    || !geminiDraft
-    || !mimoDraft
     || !customOpenAiDraft
     || !customOpenAiTtsDraft
     || !customOpenAiAsrDraft
@@ -139,9 +109,6 @@ export function useModelSettingsController(): ModelSettingsController {
   return {
     ready: true,
     data,
-    stepfunDraft,
-    geminiDraft,
-    mimoDraft,
     customOpenAiDraft,
     customOpenAiTtsDraft,
     customOpenAiAsrDraft,
@@ -149,9 +116,6 @@ export function useModelSettingsController(): ModelSettingsController {
     laneQuotasDraft,
     busy,
     error,
-    setStepfunField,
-    setGeminiField,
-    setMimoField,
     setCustomOpenAiField,
     setCustomOpenAiTtsField,
     setCustomOpenAiAsrField,
@@ -224,9 +188,6 @@ async function loadSettings(): Promise<SettingsResponse> {
 
 function applyResponse(body: SettingsResponse, setters: DraftSetters) {
   setters.setData(body)
-  setters.setStepfun(draftFromView(STEPFUN_FIELDS, body.models))
-  setters.setGemini(draftFromView(GEMINI_FIELDS, body.gemini))
-  setters.setMimo(draftFromView(MIMO_FIELDS, body.mimo))
   setters.setCustomOpenAi({
     baseUrl: body.customOpenAi?.baseUrl?.value ?? '',
     textModel: body.customOpenAi?.textModel?.value ?? '',
@@ -260,16 +221,4 @@ function applyResponse(body: SettingsResponse, setters: DraftSetters) {
         ? String(body.laneQuotas.renderShot.value)
         : '',
   })
-}
-
-function draftFromView<T extends string>(
-  fields: Array<[T, string]>,
-  view?: Record<T, { value: string; source: string }>,
-): Record<T, string> {
-  return Object.fromEntries(
-    fields.map(([field]) => [
-      field,
-      view?.[field]?.source === 'settings' ? view[field].value : '',
-    ]),
-  ) as Record<T, string>
 }

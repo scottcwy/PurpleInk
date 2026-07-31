@@ -16,8 +16,8 @@ import type { VerificationPurpose } from './verification-code'
  * 收益为负。
  *
  * env 归属：**Next 侧不读 `server/.env`**。真实值由用户从 `server/.env` 复制到
- * 被 git 忽略的根 `.env.local` 的 `CVC_MAIL_*`，与 `GEMINI_API_KEY` /
- * `STEPFUN_API_KEY` 既有的「各自为政 + 值复制」先例一致
+ * 被 git 忽略的根 `.env.local` 的 `CVC_MAIL_*`。模型托管凭据同样仅由
+ * Next 侧读取，但使用独立的 `CVC_MANAGED_*_API_KEY` 命名空间
  * （`docs/configuration/credentials.md`）。
  *
  * 与 `server/src/capture/imap-email.ts` 零交集：那边是采集 agent **收信**

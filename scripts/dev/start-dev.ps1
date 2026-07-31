@@ -115,7 +115,14 @@ $PostgresWaitSec = 120
 
 # Required variable NAMES only. Values are read to test emptiness and never printed.
 $RequiredEnvKeys = @('DATABASE_URL', 'CVC_CREDENTIAL_MASTER_KEY')
-$AdvisoryEnvKeys = @('TEST_DATABASE_URL', 'GEMINI_API_KEY', 'STEPFUN_API_KEY')
+$AdvisoryEnvKeys = @(
+    'TEST_DATABASE_URL',
+    'CVC_MANAGED_STEPFUN_API_KEY',
+    'CVC_MANAGED_MIMO_API_KEY',
+    'CVC_MANAGED_GEMINI_API_KEY',
+    'CVC_MANAGED_OPENAI_API_KEY',
+    'CVC_MANAGED_ANTHROPIC_API_KEY'
+)
 
 $script:Warnings = New-Object System.Collections.Generic.List[string]
 

@@ -1,8 +1,6 @@
 import 'server-only'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
-import { type AiConfigDependencies, getStepfunConfig } from './config'
-import { getGeminiConfig } from './gemini-config'
-import { getMimoConfig } from './mimo-config'
+import type { AiConfigDependencies } from './config'
 import {
   CUSTOM_ASR_PROVIDER,
   CUSTOM_TTS_PROVIDER,
@@ -31,13 +29,13 @@ export async function providerDefaults(
   provider: AiProviderId,
   deps: AiConfigDependencies,
 ): Promise<ProviderDefaults> {
-  if (provider === 'stepfun') return stepfunDefaults(await getStepfunConfig(deps))
-  if (provider === 'mimo') return mimoDefaults(await getMimoConfig(deps))
   if (provider === CUSTOM_OPENAI_PROVIDER) return customOpenAiDefaults(deps)
   if (provider === CUSTOM_TTS_PROVIDER || provider === CUSTOM_ASR_PROVIDER) {
     return customAudioDefaults(provider, deps)
   }
-  return geminiDefaults(await getGeminiConfig(deps))
+  throw new RouteContractError(
+    '内置供应商必须通过统一 Deployment resolver 解析',
+  )
 }
 
 /**
@@ -71,39 +69,6 @@ async function customAudioDefaults(
     },
   }
 }
-
-function stepfunDefaults(
-  config: Awaited<ReturnType<typeof getStepfunConfig>>,
-): ProviderDefaults {
-  return {
-    baseUrl: config.baseUrl,
-    apiKey: config.apiKey,
-    modelFor: (target, capability) => {
-      assertProviderCapability('stepfun', capability)
-      if (target.domain === 'media') {
-        return target.kind === 'tts' ? config.ttsModel : config.asrModel
-      }
-      return capability === 'vision' ? config.visionModel : config.chatModel
-    },
-  }
-}
-
-function mimoDefaults(
-  config: Awaited<ReturnType<typeof getMimoConfig>>,
-): ProviderDefaults {
-  return {
-    baseUrl: config.baseUrl,
-    apiKey: config.apiKey,
-    modelFor: (target, capability) => {
-      assertProviderCapability('mimo', capability)
-      if (target.domain === 'media') {
-        return target.kind === 'tts' ? config.ttsModel : config.asrModel
-      }
-      return capability === 'vision' ? config.visionModel : config.textModel
-    },
-  }
-}
-
 async function customOpenAiDefaults(
   deps: AiConfigDependencies,
 ): Promise<ProviderDefaults> {
@@ -128,24 +93,6 @@ async function customOpenAiDefaults(
         )
       }
       return profile.visionModel
-    },
-  }
-}
-
-function geminiDefaults(
-  config: Awaited<ReturnType<typeof getGeminiConfig>>,
-): ProviderDefaults {
-  return {
-    baseUrl: config.baseUrl,
-    apiKey: config.apiKey,
-    modelFor: (target, capability) => {
-      assertProviderCapability('gemini', capability)
-      // project-plan 是全片规划与编排，用更快的档位；其余文本与视觉任务用主力档位。
-      return capability === 'vision' ||
-        target.domain === 'media' ||
-        target.kind !== 'project-plan'
-        ? config.primaryModel
-        : config.fastModel
     },
   }
 }

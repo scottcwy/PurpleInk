@@ -12,9 +12,12 @@ import {
   type OpenAiCompatibleTtsProfile,
 } from './openai-compatible-payloads'
 import type { OpenAiCompatibleAudioProfileStore } from './openai-compatible-audio-profile-store'
+import {
+  CUSTOM_ASR_PROVIDER,
+  CUSTOM_TTS_PROVIDER,
+} from './provider-registry'
 
-export const CUSTOM_TTS_PROVIDER = 'openai-compatible-tts' as const
-export const CUSTOM_ASR_PROVIDER = 'openai-compatible-asr' as const
+export { CUSTOM_ASR_PROVIDER, CUSTOM_TTS_PROVIDER }
 
 export interface TtsProfileInput {
   apiKey: string

@@ -21,7 +21,7 @@ import { authHeaders, establishSession } from './smoke-session'
 /**
  * `src/lib/db/client.ts` 与 `@/lib/storage` 用 `import 'server-only'` 作为 Next
  * 进程哨兵。本脚本在 Next runtime 之外读库取证，需先把该 bare specifier 重定向到
- * 空模块（与 `scripts/setup/bootstrap-credentials.ts` 同一模式），再 dynamic import。
+ * 空模块，再 dynamic import。
  */
 const nodeRequire = createRequire(import.meta.url)
 

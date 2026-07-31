@@ -4,7 +4,7 @@ import {
   describeLaneQuotas,
   saveLaneQuotas,
 } from '@/lib/queue/runtime-config'
-import { getAiConfigDependencies, resolveProviderFunding } from './config'
+import { getAiConfigDependencies } from './config'
 import { ManagedAiError } from './managed-service'
 import { saveDirectorRoutes } from './model-routing'
 import {
@@ -26,7 +26,7 @@ import {
   customOpenAiDependencies,
 } from './provider-settings-dependencies'
 import { RouteContractError } from './route-contract-error'
-import type { StepfunSettings } from './schemas'
+import type { ProviderSettings } from './schemas'
 import type { ManagedProviderId } from './managed-service'
 
 /**
@@ -37,41 +37,25 @@ import type { ManagedProviderId } from './managed-service'
  * 故障，不能伪装成用户输入错误。
  */
 export async function applyProviderSettings(
-  input: StepfunSettings,
+  input: ProviderSettings,
   negotiated: ProviderSettingsNegotiation = {},
 ): Promise<ProviderSettingsOutcome> {
   const {
-    apiKey,
-    gemini,
-    mimo,
     routes,
     laneQuotas,
     customOpenAi,
     customOpenAiTts,
     customOpenAiAsr,
-    fallbackProvider,
     providerServices,
-    ...modelSettings
   } = input
-  const { apiKey: geminiApiKey, ...geminiSettings } = gemini ?? {}
-  const { apiKey: mimoApiKey, ...mimoSettings } = mimo ?? {}
-  if (
-    apiKey !== undefined ||
-    geminiApiKey !== undefined ||
-    mimoApiKey !== undefined ||
-    hasManagedModelInput(modelSettings, geminiSettings, mimoSettings)
-  ) {
-    return reject(422, '内置模型与旧凭据字段不接受写入，请使用服务来源配置', false)
-  }
-  try {
-    const plan = await getAiConfigDependencies().currentPlan?.() ?? 'free'
-    if (plan === 'free' && fallbackProvider === 'gemini') {
-      const geminiFunding = providerServices?.gemini?.funding
-        ?? await resolveProviderFunding('gemini')
-      if (geminiFunding === 'managed') {
-        return reject(422, 'Free 套餐不可使用 Gemini 托管服务', false)
+  if (providerServices) {
+    for (const service of Object.values(providerServices)) {
+      if (service?.funding === 'managed' && service.apiKey !== undefined) {
+        return reject(422, '平台托管模式不接受用户 API Key', false)
       }
     }
+  }
+  try {
     if (routes) await saveDirectorRoutes(routes)
   } catch (error) {
     if (error instanceof RouteContractError || error instanceof ManagedAiError) {
@@ -121,27 +105,7 @@ export async function applyProviderSettings(
       renderShot: laneQuotas.renderShotConcurrency,
     })
   }
-  // 降级链备选：未提交不改已存值；null 显式清空。能力门禁已在
-  // `validateProviderSettings` 拒过，这里只负责落库。
-  if (fallbackProvider !== undefined) {
-    await getAiConfigDependencies().fallbackProviders?.save(
-      currentWorkspaceId(),
-      fallbackProvider,
-    )
-  }
   return OK
-}
-
-function hasManagedModelInput(
-  stepfun: object,
-  gemini: object,
-  mimo: object,
-): boolean {
-  return ['chatModel', 'ttsModel', 'asrModel', 'visionModel'].some((key) =>
-    key in stepfun)
-    || ['primaryModel', 'fastModel'].some((key) => key in gemini)
-    || ['textModel', 'visionModel', 'ttsModel', 'asrModel'].some((key) =>
-      key in mimo)
 }
 
 /**

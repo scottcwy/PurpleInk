@@ -1,6 +1,9 @@
 import 'server-only'
 import { z } from 'zod'
-import { getStepfunConfig, type StepfunConfig } from '@/features/ai/config'
+import {
+  resolveBuiltInAudioConfig,
+  type BuiltInAudioConfig,
+} from '@/features/ai/built-in-audio-config'
 import {
   providerErrorFromResponse,
   providerNetworkError,
@@ -78,7 +81,7 @@ const asrErrorSchema = z
 
 export interface StepfunAudioDependencies {
   fetcher: typeof fetch
-  getConfig: () => Promise<StepfunConfig>
+  getConfig: () => Promise<BuiltInAudioConfig>
 }
 
 export interface SynthesizedSpeech {
@@ -275,7 +278,9 @@ function parseSse(text: string): unknown[] {
   return events
 }
 
-function requireKey(config: StepfunConfig): StepfunConfig & { apiKey: string } {
+function requireKey(
+  config: BuiltInAudioConfig,
+): BuiltInAudioConfig & { apiKey: string } {
   if (!config.apiKey) throw new Error('尚未配置 StepFun API Key')
   return { ...config, apiKey: config.apiKey }
 }
@@ -320,5 +325,8 @@ async function request(
 }
 
 function defaultDependencies(): StepfunAudioDependencies {
-  return { fetcher: fetch, getConfig: getStepfunConfig }
+  return {
+    fetcher: fetch,
+    getConfig: () => resolveBuiltInAudioConfig('stepfun'),
+  }
 }

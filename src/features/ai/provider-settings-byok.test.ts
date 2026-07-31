@@ -4,9 +4,6 @@ const mocks = vi.hoisted(() => ({
   describeCredential: vi.fn(),
   saveCredential: vi.fn(),
   saveFunding: vi.fn(),
-  validateStepfun: vi.fn(),
-  validateGemini: vi.fn(),
-  validateMimo: vi.fn(),
   validateOfficial: vi.fn(),
 }))
 
@@ -24,35 +21,23 @@ vi.mock('./config', () => ({
     currentPlan: vi.fn(async () => 'free'),
   }),
 }))
-vi.mock('./stepfun-adapter', () => ({
-  validateKey: mocks.validateStepfun,
-}))
-vi.mock('./gemini-adapter', () => ({
-  validateGeminiKey: mocks.validateGemini,
-}))
-vi.mock('./mimo-adapter', () => ({
-  validateMimoKey: mocks.validateMimo,
-}))
 vi.mock('./official-provider-validation', () => ({
   validateOfficialByokKey: mocks.validateOfficial,
 }))
 
 import { applyProviderSettings } from './provider-settings-apply'
 import { validateProviderSettings } from './provider-settings-validation'
-import { stepfunSettingsSchema } from './schemas'
+import { providerSettingsSchema } from './schemas'
 
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.describeCredential.mockResolvedValue({ configured: false })
-  mocks.validateStepfun.mockResolvedValue(true)
-  mocks.validateGemini.mockResolvedValue(true)
-  mocks.validateMimo.mockResolvedValue({ ok: true })
   mocks.validateOfficial.mockResolvedValue(true)
 })
 
 describe('built-in provider funding settings', () => {
   it('accepts OpenAI and Anthropic as built-in service settings', () => {
-    expect(stepfunSettingsSchema.parse({
+    expect(providerSettingsSchema.parse({
       providerServices: {
         openai: { funding: 'managed' },
         anthropic: { funding: 'byok', apiKey: 'workspace-key' },
@@ -64,7 +49,7 @@ describe('built-in provider funding settings', () => {
   })
 
   it('rejects a custom URL for every built-in BYOK service', () => {
-    const parsed = stepfunSettingsSchema.safeParse({
+    const parsed = providerSettingsSchema.safeParse({
       providerServices: {
         openai: {
           funding: 'byok',
@@ -85,9 +70,9 @@ describe('built-in provider funding settings', () => {
     }
 
     await expect(validateProviderSettings(input)).resolves.toMatchObject({ ok: true })
-    expect(mocks.validateGemini).toHaveBeenCalledWith(
+    expect(mocks.validateOfficial).toHaveBeenCalledWith(
+      'gemini',
       'user-gemini-key',
-      {},
       expect.any(Function),
     )
     expect(mocks.saveCredential).not.toHaveBeenCalled()
@@ -120,7 +105,7 @@ describe('built-in provider funding settings', () => {
 
     await expect(validateProviderSettings(input)).resolves.toMatchObject({ ok: true })
     await expect(applyProviderSettings(input)).resolves.toMatchObject({ ok: true })
-    expect(mocks.validateMimo).not.toHaveBeenCalled()
+    expect(mocks.validateOfficial).not.toHaveBeenCalled()
     expect(mocks.saveCredential).not.toHaveBeenCalled()
     expect(mocks.saveFunding).toHaveBeenCalledWith(
       '00000000-0000-4000-8000-000000000001',
@@ -129,7 +114,7 @@ describe('built-in provider funding settings', () => {
     )
   })
 
-  it.each(['openai', 'anthropic'] as const)(
+  it.each(['stepfun', 'mimo', 'gemini', 'openai', 'anthropic'] as const)(
     'validates and stores an official %s BYOK key',
     async (provider) => {
       const input = {

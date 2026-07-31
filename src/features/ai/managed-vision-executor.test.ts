@@ -23,7 +23,7 @@ describe('executeManagedVisionQa', () => {
     const complete = vi.fn()
     const prepare = vi.fn(async () => {
       throw new ManagedAiError({
-        code: 'MANAGED_GEMINI_FORBIDDEN_FOR_FREE',
+        code: 'MANAGED_MODEL_NOT_AUTHORIZED',
         status: 403,
         retryable: false,
         message: 'Free 套餐不可使用 Gemini 托管服务',
@@ -43,7 +43,7 @@ describe('executeManagedVisionQa', () => {
       complete,
       dispatch: async (_input, invoke) => invoke(),
     })).rejects.toMatchObject({
-      code: 'MANAGED_GEMINI_FORBIDDEN_FOR_FREE',
+      code: 'MANAGED_MODEL_NOT_AUTHORIZED',
       status: 403,
     })
     expect(complete).not.toHaveBeenCalled()

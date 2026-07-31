@@ -18,7 +18,7 @@
  *
  * Runtime note: `src/lib/db/client.ts` 用 `import 'server-only'` 作为 Next 进程
  * 哨兵，脚本在 Next runtime 之外跑，需先把该 bare specifier 重定向到空模块，
- * 与 `bootstrap-credentials.ts` 同一手法。
+ * 与其他脱离 Next runtime 的维护脚本使用同一 server-only shim 手法。
  */
 import { createRequire } from 'node:module'
 

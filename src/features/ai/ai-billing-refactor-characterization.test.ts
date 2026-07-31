@@ -7,7 +7,7 @@ import {
   authorizeManagedRoute,
   type ManagedModelCatalogRepository,
 } from './managed-service'
-import { stepfunSettingsSchema } from './schemas'
+import { providerSettingsSchema } from './schemas'
 
 vi.mock('server-only', () => ({}))
 
@@ -37,7 +37,7 @@ describe('AI and billing refactor characterization', () => {
       'shot-qa': 'mimo',
     } as const
 
-    expect(stepfunSettingsSchema.parse({ routes }).routes).toEqual(routes)
+    expect(providerSettingsSchema.parse({ routes }).routes).toEqual(routes)
   })
 
   it('keeps managed and BYOK authorization financially disjoint', async () => {

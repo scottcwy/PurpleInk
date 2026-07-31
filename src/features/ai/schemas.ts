@@ -36,17 +36,7 @@ export const laneQuotasSchema = z
   .strict()
   .optional()
 
-/**
- * StepFun 设置输入：Key 可选（未提交则不改动已存 Key）；4 类模型 + 端点
- * 均可选，允许显式提交空串以清空该项（回退 env/默认）。
- */
-export const stepfunSettingsSchema = z.object({
-  apiKey: z.string().min(1, 'API Key 不能为空').optional(),
-  baseUrl: z.string().optional(),
-  chatModel: z.string().optional(),
-  ttsModel: z.string().optional(),
-  asrModel: z.string().optional(),
-  visionModel: z.string().optional(),
+export const providerSettingsSchema = z.object({
   providerServices: z.object({
     stepfun: builtInServiceSchema.optional(),
     gemini: builtInServiceSchema.optional(),
@@ -54,26 +44,6 @@ export const stepfunSettingsSchema = z.object({
     openai: builtInServiceSchema.optional(),
     anthropic: builtInServiceSchema.optional(),
   }).strict().optional(),
-  gemini: z
-    .object({
-      apiKey: z.string().min(1, 'Gemini API Key 不能为空').optional(),
-      baseUrl: z.string().optional(),
-      primaryModel: z.string().optional(),
-      fastModel: z.string().optional(),
-    })
-    .strict()
-    .optional(),
-  mimo: z
-    .object({
-      apiKey: z.string().min(1, 'MiMo API Key 不能为空').optional(),
-      baseUrl: z.string().optional(),
-      textModel: z.string().optional(),
-      visionModel: z.string().optional(),
-      ttsModel: z.string().optional(),
-      asrModel: z.string().optional(),
-    })
-    .strict()
-    .optional(),
   /**
    * 自定义兼容文本端点。`visionModel` 可选且允许空串——空串表示显式清空，
    * 该端点随后不能承担视觉路由。
@@ -128,14 +98,8 @@ export const stepfunSettingsSchema = z.object({
     })
     .strict()
     .optional(),
-  /**
-   * 熔断降级链的显式备选 provider（模式 H 阶段 4）。未提交则不改已存值；
-   * `null` 表示显式清空备选（回到默认的无备选状态）。必须支持文本会话，
-   * 由 `validateProviderSettings` 按能力兑住。
-   */
-  fallbackProvider: textProviderSchema.nullable().optional(),
   laneQuotas: laneQuotasSchema,
 }).strict()
 
-export type StepfunSettings = z.infer<typeof stepfunSettingsSchema>
+export type ProviderSettings = z.infer<typeof providerSettingsSchema>
 export type LaneQuotasSettingsInput = z.infer<typeof laneQuotasSchema>

@@ -1,64 +1,81 @@
-# 模型路由：熔断与备选降级
+# 模型路由、熔断与部署回退
 
-本文覆盖 Director 模型路由在 provider 故障时的两道容灾机制（模式 H 阶段 4）：
-进程内熔断器与显式备选降级链。路由本身的真值顺序（DB 路由 > env > 代码默认）
-与能力矩阵见 `docs/conventions/routing.md`。
+本文说明 Director 如何从工作板块选择解析出唯一的 `ExecutionPlan`。模型、渠道、
+协议与部署真值来自 `config/ai-catalog.yaml`；路由语义以
+`docs/conventions/routing.md` 为准。
 
-## 熔断器（无需配置）
+## 1. 固定解析链
 
-`src/features/ai/provider-breaker.ts`，按 provider 独立计数：
-
-- 连续外部失败 ≥3 次 → 该 provider 熔断 open **5 分钟**，期间路由解析直接拒绝；
-- 窗口过后进入 half-open，只放行**一次**试探调用：成功即恢复（close），
-  失败重新 open 一整个窗口；
-- 只有真实发生过的外部模型调用成败才计入（记账收敛点在
-  `pi-session.ts` 的 run 结果处）；路由/能力矛盾（`RouteContractError`）等
-  内部错误不计入，一条配置错误不会把健康的 provider 熏成不可用。
-
-限制：熔断状态纯内存（单实例假设，globalThis 锚定防 dev HMR 清零），
-重启进程即复位；多实例部署必须先落库，否则每个实例各自试探，熔断形同虚设。
-
-## 备选 provider（默认关闭，需显式配置）
-
-每个内置 provider 的资金来源独立存于 `workspace_settings`：
-`ai.funding.stepfun`、`ai.funding.mimo`、`ai.funding.gemini`。缺行默认
-`managed`。路由只决定 provider/model，资金来源不能由路由请求覆盖。
-
-- `managed` 按套餐目录授权并进入成本池；
-- `byok` 仍校验服务端模型目录与能力，但跳过套餐门禁和平台账本；
-- fallback 沿用备选 provider 自己已保存的来源，禁止在 BYOK 与 managed 之间
-  自动切换。
-
-主 provider 熔断 open 时的降级出路，**默认无备选**——未配置时只会得到
-「AI 服务暂时不可用，可稍后重试或选择跳过」的可重试失败
-（`PROVIDER_FAILED`），绝不擅自替用户换模型。
-
-配置方式：`POST /api/settings` 提交 `fallbackProvider` 字段：
-
-```jsonc
-{ "fallbackProvider": "stepfun" }   // 设置备选
-{ "fallbackProvider": null }        // 清空备选（回到默认）
+```text
+工作板块
+  → 工作区已有模型选择
+  → Managed / BYOK 资金来源
+  → 套餐权限或 BYOK 凭据
+  → Deployment
+  → ExecutionPlan
+  → 工作区并发许可 + 渠道并发许可
+  → outbound attempt
 ```
 
-规则：
+业务代码不得根据模型字符串前缀推断供应商、价格、能力或协议。五家内置供应商的
+模型调用都经过同一个内置部署解析器；自定义 OpenAI-compatible 保留独立且明确的
+用户配置边界。
 
-- 备选必须支持文本会话（Director 会话一律走文本域）；纯音频端点
-  （`openai-compatible-tts` / `openai-compatible-asr`）返回 422 不落库。
-- 存储在 `workspace_settings` 的 `ai.fallback-provider`
-  （`src/features/ai/fallback-provider-store.ts`）。
-- 切换条件：主选熔断 open，且备选 ≠ 主选、备选自身未熔断、备选已配置
-  API Key。任一不满足即抛 `PROVIDER_FAILED`（可重试），不回显 provider
-  原始错误。
-- 降级使用备选 provider 的**默认模型推导**（`providerDefaults().modelFor`，
-  与设置页展示同源），不复用主选路由行里的模型名。
+## 2. 资金来源
 
-## 降级的可观测口径
+五家内置 provider 的来源分别存于：
 
-设置页展示的始终是**配置真值**（用户选的主选），不随一次降级改口；
-降级发生时的执行真值通过三处如实留痕：
+- `ai.funding.stepfun`
+- `ai.funding.mimo`
+- `ai.funding.gemini`
+- `ai.funding.openai`
+- `ai.funding.anthropic`
 
-1. `resolveDirectorModelTarget` 返回值的 `degradedFrom` 字段
-   （仅降级时存在，记录被熔断的主选）；
-2. 会话 routeLabel 带备选标注（如 `stepfun/step-3.5-flash（备选，主选
-   gemini 已熔断）`），随失败落入 attempt.failure，UI 错误链路可追溯；
-3. 服务端日志 `[ai] provider_fallback { from, to }`。
+缺行默认 `managed`。路由只决定 provider/model，单次请求不能覆盖资金来源。
+
+- Managed：按 usage period 冻结的套餐权限进入平台渠道，并扣 Managed 权益。
+- BYOK：使用当前工作区加密凭据和目录固定的官方 URL，不扣 Managed 权益。
+- Managed 与 BYOK 不因鉴权、限流、超时或不可用而相互回退。
+
+## 3. 熔断器
+
+`src/features/ai/provider-breaker.ts` 按 provider 独立计数：
+
+- 连续外部失败达到阈值后熔断；
+- 窗口结束进入 half-open，只允许一次探测；
+- 只有真实 outbound 结果计数，路由合同错误不污染 provider 健康状态；
+- 状态当前为单进程内存状态，进程重启会复位。
+
+熔断打开时返回脱敏的可重试错误，不切换到另一家供应商，也不切换资金来源。
+
+## 4. 唯一自动回退
+
+只有 Managed Gemini 的同渠道部署允许自动回退：
+
+1. 主部署 `gemini.3.6-flash.managed`。
+2. 遇到明确限流、上游临时不可用、网络连接失败或硬超时时，
+   最多再执行一次 `gemini.3.1-flash-lite.managed`。
+
+鉴权错误、配置错误、套餐/额度不足、请求合同错误、内容策略与业务验证错误均不回退。
+BYOK Gemini 不继承该回退。
+
+主调用与回退调用各自创建独立 invocation/dispatch ticket，分别保存实际部署、
+模型、价格卡、usage 与失败分类。适配器内部不得隐藏自动重试。
+
+## 5. 并发
+
+真实请求必须同时获得工作区套餐许可与渠道许可。任一获取失败都不能发送请求。
+渠道 429 只影响自己的失败域，并按 `Retry-After` 自适应降速。
+
+工作区并发来自 usage period 的套餐快照：Free 3、Plus 20、Pro 50、Max 100。
+Gemini BCAI、OpenRouter 和 XhuoAI Managed 渠道各自最多 200 个在途请求；
+BYOK 按 `workspace + provider` 建立独立失败域。
+
+## 6. 可观测性
+
+设置页展示配置真值，不根据某次调用结果修改用户选择。运行真值记录在：
+
+- `ExecutionPlan`：资金来源、逻辑模型、实际模型、部署、渠道、协议和价格身份；
+- invocation：每次 outbound attempt 的开始、成功或脱敏失败；
+- reservation / 双账本：预占、官方参考成本、权益扣减与释放；
+- workflow 父记录：只聚合子调用，不额外扣费。

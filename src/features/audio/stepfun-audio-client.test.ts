@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { StepfunConfig } from '@/features/ai/config'
+import type { BuiltInAudioConfig } from '@/features/ai/built-in-audio-config'
 import {
   synthesizeSpeech,
   transcribeSpeech,
@@ -8,13 +8,11 @@ import {
 
 vi.mock('server-only', () => ({}))
 
-const config: StepfunConfig = {
+const config: BuiltInAudioConfig = {
   apiKey: 'test-key',
   baseUrl: 'https://api.stepfun.test/v1',
-  chatModel: 'step-chat',
   ttsModel: 'stepaudio-2.5-tts',
   asrModel: 'stepaudio-2.5-asr',
-  visionModel: 'step-vision',
 }
 
 function dependencies(fetcher: typeof fetch): StepfunAudioDependencies {

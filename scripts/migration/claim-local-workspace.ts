@@ -12,7 +12,7 @@ import { createRequire } from 'node:module'
 import { loadEnvConfig } from '@next/env'
 
 // `src/lib/db/client.ts` 用 `import 'server-only'` 作为 Next 进程哨兵；
-// 本脚本在 Next runtime 之外跑，与 bootstrap-credentials.ts 同一 shim 模式。
+// 本脚本在 Next runtime 之外跑，使用 server-only shim。
 const nodeRequire = createRequire(import.meta.url)
 
 function installServerOnlyShim(): void {

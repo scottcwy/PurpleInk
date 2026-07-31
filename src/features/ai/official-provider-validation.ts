@@ -4,13 +4,8 @@ import {
   type BuiltInProviderId,
 } from '@/lib/config/generated/ai-billing-manifest'
 
-type OfficialValidationProvider = Extract<
-  BuiltInProviderId,
-  'openai' | 'anthropic'
->
-
 export async function validateOfficialByokKey(
-  providerId: OfficialValidationProvider,
+  providerId: BuiltInProviderId,
   apiKey: string,
   fetcher: typeof fetch = fetch,
 ): Promise<boolean> {
@@ -22,11 +17,18 @@ export async function validateOfficialByokKey(
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       }
-    : { Authorization: `Bearer ${apiKey}` }
+    : providerId === 'mimo'
+      ? { 'api-key': apiKey }
+      : { Authorization: `Bearer ${apiKey}` }
   try {
     const response = await fetcher(
       `${channel.baseUrl.replace(/\/+$/, '')}/models`,
-      { method: 'GET', headers, cache: 'no-store' },
+      {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+        signal: AbortSignal.timeout(15_000),
+      },
     )
     return response.ok
   } catch {

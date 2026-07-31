@@ -2,14 +2,16 @@ import 'server-only'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import {
   fundingForProvider,
-  getStepfunConfig,
   type AiConfigDependencies,
 } from '@/features/ai/config'
 import { resolveDeploymentBinding } from '@/features/ai/execution-plan'
 import type { AdapterProtocol } from '@/features/ai/execution-plan'
+import {
+  CUSTOM_ASR_PROVIDER,
+  CUSTOM_TTS_PROVIDER,
+} from '@/features/ai/provider-registry'
 
-export const CUSTOM_TTS_PROVIDER = 'openai-compatible-tts' as const
-export const CUSTOM_ASR_PROVIDER = 'openai-compatible-asr' as const
+export { CUSTOM_ASR_PROVIDER, CUSTOM_TTS_PROVIDER }
 
 export type MediaProviderId =
   | 'stepfun'
@@ -60,18 +62,12 @@ async function defaultStepfunTarget(
   kind: 'tts' | 'asr',
   deps: AiConfigDependencies,
 ): Promise<MediaRouteTarget> {
-  const config = await getStepfunConfig(deps)
-  return builtInTarget(
-    'stepfun',
-    kind === 'tts' ? config.ttsModel : config.asrModel,
-    kind,
-    deps,
-  )
+  return builtInTarget('stepfun', undefined, kind, deps)
 }
 
 async function builtInTarget(
   provider: 'stepfun' | 'mimo',
-  logicalModelId: string,
+  logicalModelId: string | undefined,
   capability: 'tts' | 'asr',
   deps: AiConfigDependencies,
 ): Promise<MediaRouteTarget> {
@@ -80,7 +76,7 @@ async function builtInTarget(
     providerId: provider,
     fundingSource: funding,
     capability,
-    logicalModelId,
+    ...(logicalModelId ? { logicalModelId } : {}),
   })
   return {
     provider,

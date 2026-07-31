@@ -26,6 +26,10 @@ export const AI_PROVIDER_IDS = [
 export type AiProviderId = (typeof AI_PROVIDER_IDS)[number]
 export type ProviderCapability = 'text' | 'vision' | 'tts' | 'asr'
 
+export const CUSTOM_TEXT_PROVIDER = 'openai-compatible' as const
+export const CUSTOM_TTS_PROVIDER = 'openai-compatible-tts' as const
+export const CUSTOM_ASR_PROVIDER = 'openai-compatible-asr' as const
+
 export interface ProviderDefinition {
   id: AiProviderId
   label: string

@@ -12,18 +12,6 @@ vi.mock('@/lib/auth/workspace-context', async (importOriginal) => ({
 
 const mocks = vi.hoisted(() => ({
   describeCredential: vi.fn(),
-  saveApiKey: vi.fn(),
-  validateKey: vi.fn(),
-  describeStepfunConfig: vi.fn(),
-  saveStepfunModelSettings: vi.fn(),
-  describeGeminiConfig: vi.fn(),
-  saveGeminiSettings: vi.fn(),
-  saveGeminiApiKey: vi.fn(),
-  validateGeminiKey: vi.fn(),
-  describeMimoConfig: vi.fn(),
-  saveMimoSettings: vi.fn(),
-  saveMimoApiKey: vi.fn(),
-  validateMimoKey: vi.fn(),
   describeDirectorRoutes: vi.fn(),
   saveDirectorRoutes: vi.fn(),
   describeLaneQuotas: vi.fn(),
@@ -91,12 +79,7 @@ const UNCONFIGURED_ASR_VIEW = {
   timestampMode: null,
   verification: null,
 } as const
-vi.mock('@/features/ai/stepfun-adapter', () => ({
-  saveApiKey: mocks.saveApiKey,
-  validateKey: mocks.validateKey,
-}))
 vi.mock('@/features/ai/config', () => ({
-  describeStepfunConfig: mocks.describeStepfunConfig,
   resolveProviderFunding: mocks.resolveProviderFunding,
   getAiConfigDependencies: () => ({
     credentials: {
@@ -119,7 +102,6 @@ vi.mock('@/features/ai/config', () => ({
       saveAsr: vi.fn(),
     },
   }),
-  saveStepfunModelSettings: mocks.saveStepfunModelSettings,
 }))
 vi.mock('@/features/ai/openai-compatible-audio-config', () => ({
   CUSTOM_TTS_PROVIDER: 'openai-compatible-tts',
@@ -130,22 +112,6 @@ vi.mock('@/features/ai/openai-compatible-audio-config', () => ({
   saveAsrProfile: mocks.saveAsrProfile,
   validateTtsProfile: mocks.validateTtsProfile,
   validateAsrProfile: mocks.validateAsrProfile,
-}))
-vi.mock('@/features/ai/gemini-config', () => ({
-  describeGeminiConfig: mocks.describeGeminiConfig,
-  saveGeminiSettings: mocks.saveGeminiSettings,
-  saveGeminiApiKey: mocks.saveGeminiApiKey,
-}))
-vi.mock('@/features/ai/gemini-adapter', () => ({
-  validateGeminiKey: mocks.validateGeminiKey,
-}))
-vi.mock('@/features/ai/mimo-config', () => ({
-  describeMimoConfig: mocks.describeMimoConfig,
-  saveMimoSettings: mocks.saveMimoSettings,
-  saveMimoApiKey: mocks.saveMimoApiKey,
-}))
-vi.mock('@/features/ai/mimo-adapter', () => ({
-  validateMimoKey: mocks.validateMimoKey,
 }))
 vi.mock('@/features/ai/model-routing', () => ({
   describeDirectorRoutes: mocks.describeDirectorRoutes,
@@ -181,18 +147,6 @@ describe('GET /api/settings', () => {
           : null,
       }),
     )
-    mocks.describeStepfunConfig.mockResolvedValue({
-      baseUrl: { value: 'https://api.stepfun.com/v1', source: 'default' },
-      chatModel: { value: 'step-3.5-flash', source: 'env' },
-      ttsModel: { value: 'stepaudio-2.5-tts', source: 'default' },
-      asrModel: { value: 'stepaudio-2.5-asr', source: 'default' },
-      visionModel: { value: 'step-3.7-flash', source: 'default' },
-    })
-    mocks.describeGeminiConfig.mockResolvedValue({
-      baseUrl: { value: 'https://google.test/openai/', source: 'default' },
-      primaryModel: { value: 'gemini-3.6-flash', source: 'default' },
-      fastModel: { value: 'gemini-3.1-flash-lite', source: 'default' },
-    })
     mocks.describeDirectorRoutes.mockResolvedValue({
       'shot-codegen': {
         provider: 'gemini',
@@ -210,13 +164,6 @@ describe('GET /api/settings', () => {
     })
     mocks.describeTtsProfile.mockResolvedValue(UNCONFIGURED_TTS_VIEW)
     mocks.describeAsrProfile.mockResolvedValue(UNCONFIGURED_ASR_VIEW)
-    mocks.describeMimoConfig.mockResolvedValue({
-      baseUrl: { value: 'https://api.xiaomimimo.com/v1', source: 'default' },
-      textModel: { value: 'mimo-v2.5', source: 'default' },
-      visionModel: { value: 'mimo-v2.5', source: 'default' },
-      ttsModel: { value: 'mimo-v2.5-tts', source: 'default' },
-      asrModel: { value: 'mimo-v2.5-asr', source: 'default' },
-    })
     mocks.resolveProviderFunding.mockImplementation(async (provider: string) =>
       provider === 'openai' ? 'byok' : 'managed')
     mocks.listManagedModels.mockResolvedValue([
@@ -235,24 +182,10 @@ describe('GET /api/settings', () => {
     mocks.resolveProviderFunding.mockResolvedValue('managed')
     mocks.listManagedModels.mockResolvedValue([])
 
-    expect(body.configured).toBe(false)
-    expect(body.verifiedAt).toBeNull()
-    expect(body.updatedAt).toBeNull()
     expect(body).not.toHaveProperty('masked')
-    expect(body.models.chatModel).toEqual({ value: 'step-3.5-flash', source: 'env' })
-    expect(body.models.baseUrl.value).toBe('')
-    expect(body.gemini.baseUrl.value).toBe('')
-    expect(body.mimo.baseUrl.value).toBe('')
-    expect(body.geminiConfigured).toBe(false)
-    expect(body.geminiCredential).toEqual({
-      configured: false,
-      verifiedAt: null,
-      updatedAt: null,
-      managed: true,
-    })
-    expect(body.gemini.primaryModel.value).toBe('gemini-3.6-flash')
-    expect(body.mimo.textModel.value).toBe('mimo-v2.5')
-    expect(body.mimoCredential.configured).toBe(false)
+    expect(body).not.toHaveProperty('models')
+    expect(body).not.toHaveProperty('gemini')
+    expect(body).not.toHaveProperty('mimo')
     expect(body.routes['shot-codegen'].provider).toBe('gemini')
     expect(body.laneQuotas).toEqual(MOCK_DEFAULT_LANE_VIEW)
     expect(mocks.describeCredential).toHaveBeenCalledTimes(5)
@@ -284,7 +217,8 @@ describe('GET /api/settings', () => {
       }),
     ]))
     expect(JSON.stringify(body)).not.toContain('workspace-key')
-    expect(JSON.stringify(body)).not.toContain('https://google.test/openai/')
+    expect(JSON.stringify(body)).not.toContain('api.stepfun.com')
+    expect(JSON.stringify(body)).not.toContain('openrouter.ai')
   })
 })
 
@@ -296,18 +230,9 @@ describe('POST /api/settings', () => {
       verifiedAt: null,
       updatedAt: null,
     })
-    mocks.describeStepfunConfig.mockResolvedValue({})
-    mocks.describeGeminiConfig.mockResolvedValue({})
-    mocks.describeMimoConfig.mockResolvedValue({})
     mocks.describeDirectorRoutes.mockResolvedValue({})
     mocks.describeLaneQuotas.mockResolvedValue(MOCK_DEFAULT_LANE_VIEW)
-    mocks.saveStepfunModelSettings.mockResolvedValue(undefined)
-    mocks.saveGeminiSettings.mockResolvedValue(undefined)
-    mocks.saveMimoSettings.mockResolvedValue(undefined)
     mocks.saveDirectorRoutes.mockResolvedValue(undefined)
-    mocks.saveApiKey.mockResolvedValue(undefined)
-    mocks.saveGeminiApiKey.mockResolvedValue(undefined)
-    mocks.saveMimoApiKey.mockResolvedValue(undefined)
     mocks.saveLaneQuotas.mockResolvedValue(undefined)
     mocks.saveOpenAiCompatibleProfile.mockResolvedValue(undefined)
     mocks.describeTtsProfile.mockResolvedValue(UNCONFIGURED_TTS_VIEW)
@@ -487,133 +412,12 @@ describe('POST /api/settings', () => {
     expect(body).not.toContain('candidate-secret')
   })
 
-  it('rejects a MiMo Token Plan key without replacing the stored credential', async () => {
-    mocks.validateMimoKey.mockResolvedValue({
-      ok: false,
-      reason: 'token-plan-not-for-backend',
-    })
-
+  it('rejects removed legacy built-in provider fields at the schema boundary', async () => {
     const response = await POST(request({
       mimo: { apiKey: 'tp-not-for-product-backend' },
     }))
-    const body = await response.json()
-
-    expect(response.status).toBe(422)
-    expect(body.error).toContain('内置模型与旧凭据字段不接受写入')
-    expect(mocks.validateMimoKey).not.toHaveBeenCalled()
-    expect(mocks.saveMimoApiKey).not.toHaveBeenCalled()
-  })
-
-  it('validates and saves a MiMo product API key and model settings', async () => {
-    mocks.validateMimoKey.mockResolvedValue({ ok: true })
-    const response = await POST(request({
-      mimo: {
-        apiKey: 'sk-product-api-key',
-        textModel: 'mimo-v2.5',
-        ttsModel: 'mimo-v2.5-tts',
-      },
-      routes: {
-        'shot-codegen': 'mimo',
-        'shot-sfx': 'mimo',
-      },
-    }))
-
-    expect(response.status).toBe(422)
-    expect(mocks.validateMimoKey).not.toHaveBeenCalled()
-    expect(mocks.saveMimoApiKey).not.toHaveBeenCalled()
-    expect(mocks.saveMimoSettings).not.toHaveBeenCalled()
-  })
-
-  it('validates before saving a StepFun Key', async () => {
-    mocks.validateKey.mockResolvedValue(true)
-    const response = await POST(request({ apiKey: 'sk-valid-value' }))
-
-    expect(response.status).toBe(422)
-    expect(mocks.validateKey).not.toHaveBeenCalled()
-    expect(mocks.saveApiKey).not.toHaveBeenCalled()
-  })
-
-  it('never persists a Key that fails validation', async () => {
-    mocks.validateKey.mockResolvedValue(false)
-    const response = await POST(request({ apiKey: 'sk-invalid-value' }))
-
-    expect(response.status).toBe(422)
-    expect(mocks.saveApiKey).not.toHaveBeenCalled()
-    expect(mocks.saveStepfunModelSettings).not.toHaveBeenCalled()
-    await expect(response.json()).resolves.toEqual({
-      ok: false,
-      valid: false,
-      error: '内置模型与旧凭据字段不接受写入，请使用服务来源配置',
-    })
-  })
-
-  it('saves model settings without requiring or validating an apiKey', async () => {
-    const response = await POST(request({ chatModel: 'step-3.5-flash', ttsModel: '' }))
-
-    expect(response.status).toBe(422)
-    expect(mocks.validateKey).not.toHaveBeenCalled()
-    expect(mocks.saveApiKey).not.toHaveBeenCalled()
-    expect(mocks.saveStepfunModelSettings).not.toHaveBeenCalled()
-  })
-
-  it('applies apiKey and model settings together only after validation succeeds', async () => {
-    mocks.validateKey.mockResolvedValue(true)
-    const response = await POST(request({
-      apiKey: 'sk-valid-value',
-      baseUrl: 'https://api.stepfun.com/v1',
-    }))
-
-    expect(response.status).toBe(422)
-    expect(mocks.saveApiKey).not.toHaveBeenCalled()
-    expect(mocks.saveStepfunModelSettings).not.toHaveBeenCalled()
-  })
-
-  it('does not save a validated key when a custom base URL is rejected', async () => {
-    mocks.validateKey.mockResolvedValue(true)
-
-    const response = await POST(request({
-      apiKey: 'sk-valid-value',
-      baseUrl: 'https://custom.example/v1',
-    }))
-    expect(response.status).toBe(422)
-    expect(mocks.saveApiKey).not.toHaveBeenCalled()
-  })
-
-  it('validates and saves Gemini candidate config without replacing StepFun', async () => {
-    mocks.validateGeminiKey.mockResolvedValue(true)
-    const response = await POST(
-      request({
-        gemini: {
-          apiKey: 'gemini-valid',
-          primaryModel: 'gemini-3.6-flash',
-        },
-        routes: {
-          'shot-codegen': 'gemini',
-          'shot-sfx': 'stepfun',
-        },
-      })
-    )
-
-    expect(response.status).toBe(422)
-    expect(mocks.validateGeminiKey).not.toHaveBeenCalled()
-    expect(mocks.saveGeminiApiKey).not.toHaveBeenCalled()
-    expect(mocks.saveGeminiSettings).not.toHaveBeenCalled()
-    expect(mocks.saveDirectorRoutes).not.toHaveBeenCalled()
-    expect(mocks.saveApiKey).not.toHaveBeenCalled()
-  })
-
-  it('does not persist Gemini key/config/routes when validation fails', async () => {
-    mocks.validateGeminiKey.mockResolvedValue(false)
-    const response = await POST(
-      request({
-        gemini: { apiKey: 'gemini-invalid', fastModel: 'candidate-fast' },
-        routes: { 'script-import': 'gemini' },
-      })
-    )
-
-    expect(response.status).toBe(422)
-    expect(mocks.saveGeminiApiKey).not.toHaveBeenCalled()
-    expect(mocks.saveGeminiSettings).not.toHaveBeenCalled()
+    expect(response.status).toBe(400)
+    expect(mocks.saveCredential).not.toHaveBeenCalled()
     expect(mocks.saveDirectorRoutes).not.toHaveBeenCalled()
   })
 
@@ -632,9 +436,7 @@ describe('POST /api/settings', () => {
       valid: false,
       error: 'OpenAI 兼容模型服务尚未配置',
     })
-    expect(mocks.saveStepfunModelSettings).not.toHaveBeenCalled()
-    expect(mocks.saveGeminiSettings).not.toHaveBeenCalled()
-    expect(mocks.saveMimoSettings).not.toHaveBeenCalled()
+    expect(mocks.saveCredential).not.toHaveBeenCalled()
   })
 })
 
@@ -646,15 +448,9 @@ describe('POST /api/settings lane quotas (ISSUE-011)', () => {
       verifiedAt: null,
       updatedAt: null,
     })
-    mocks.describeStepfunConfig.mockResolvedValue({})
-    mocks.describeGeminiConfig.mockResolvedValue({})
     mocks.describeDirectorRoutes.mockResolvedValue({})
     mocks.describeLaneQuotas.mockResolvedValue(MOCK_DEFAULT_LANE_VIEW)
-    mocks.saveStepfunModelSettings.mockResolvedValue(undefined)
-    mocks.saveGeminiSettings.mockResolvedValue(undefined)
     mocks.saveDirectorRoutes.mockResolvedValue(undefined)
-    mocks.saveApiKey.mockResolvedValue(undefined)
-    mocks.saveGeminiApiKey.mockResolvedValue(undefined)
     mocks.saveLaneQuotas.mockResolvedValue(undefined)
   })
 
@@ -691,8 +487,7 @@ describe('POST /api/settings lane quotas (ISSUE-011)', () => {
 
     expect(response.status).toBe(400)
     expect(mocks.saveLaneQuotas).not.toHaveBeenCalled()
-    expect(mocks.saveStepfunModelSettings).not.toHaveBeenCalled()
-    expect(mocks.saveApiKey).not.toHaveBeenCalled()
+    expect(mocks.saveCredential).not.toHaveBeenCalled()
   })
 
   it('rejects renderShotConcurrency=-1 with 400', async () => {
@@ -729,33 +524,20 @@ describe('POST /api/settings lane quotas (ISSUE-011)', () => {
 
     expect(response.status).toBe(400)
     expect(mocks.saveLaneQuotas).not.toHaveBeenCalled()
-    expect(mocks.saveStepfunModelSettings).not.toHaveBeenCalled()
+    expect(mocks.saveCredential).not.toHaveBeenCalled()
     const body = await response.json()
     expect(body.error).toMatch(/CPU/)
   })
 
-  it('does not persist lane quotas when a StepFun key in the same request fails validation', async () => {
-    mocks.validateKey.mockResolvedValue(false)
+  it('does not persist lane quotas when a removed legacy key is present', async () => {
     const response = await POST(request({
       apiKey: 'sk-invalid',
       laneQuotas: { renderShotConcurrency: 2 },
     }))
 
-    expect(response.status).toBe(422)
+    expect(response.status).toBe(400)
     expect(mocks.saveLaneQuotas).not.toHaveBeenCalled()
-    expect(mocks.saveApiKey).not.toHaveBeenCalled()
-  })
-
-  it('rejects lane quotas combined with a managed StepFun key', async () => {
-    mocks.validateKey.mockResolvedValue(true)
-    const response = await POST(request({
-      apiKey: 'sk-valid',
-      laneQuotas: { renderShotConcurrency: 2 },
-    }))
-
-    expect(response.status).toBe(422)
-    expect(mocks.saveApiKey).not.toHaveBeenCalled()
-    expect(mocks.saveLaneQuotas).not.toHaveBeenCalled()
+    expect(mocks.saveCredential).not.toHaveBeenCalled()
   })
 })
 

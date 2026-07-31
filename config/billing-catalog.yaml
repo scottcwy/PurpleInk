@@ -13,7 +13,6 @@ serviceMultipliers:
   - { id: ai.vision.v1, capability: vision, numerator: 1, denominator: 1 }
   - { id: ai.tts.v1, capability: tts, numerator: 1, denominator: 1 }
   - { id: ai.asr.v1, capability: asr, numerator: 1, denominator: 1 }
-  - { id: workflow.video.v1, capability: workflow, numerator: 1, denominator: 1 }
 
 rateCards:
   - id: stepfun.step-3.7-flash.v1

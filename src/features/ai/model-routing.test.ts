@@ -184,19 +184,15 @@ describe('Director provider routing', () => {
       'text',
       dependencies,
     )).rejects.toMatchObject({
-      code: 'MANAGED_GEMINI_FORBIDDEN_FOR_FREE',
+      code: 'MANAGED_MODEL_NOT_AUTHORIZED',
       status: 403,
       retryable: false,
     })
   })
 
-  it('filters Gemini from the Free fallback chain before provider resolution', async () => {
+  it('does not cross providers when the Free default is unavailable', async () => {
     const { dependencies } = createDependencies()
     dependencies.currentPlan = vi.fn(async () => 'free' as const)
-    dependencies.fallbackProviders = {
-      find: vi.fn(async () => 'gemini' as const),
-      save: vi.fn(async () => {}),
-    }
     tripBreaker('stepfun')
     await expect(resolveDirectorModelTarget(
       'script-import',
@@ -435,22 +431,13 @@ describe('Director provider routing', () => {
     const { dependencies, secrets } = createDependencies()
     secrets.set('gemini', 'gemini-key')
     secrets.set('stepfun', 'stored-stepfun-key')
-    const find = vi.fn(async () => 'stepfun' as const)
-    const deps: AiConfigDependencies = {
-      ...dependencies,
-      fallbackProviders: {
-        find,
-        save: vi.fn(async () => {}),
-      },
-    }
     tripBreaker('gemini')
 
     await expect(resolveDirectorModelTarget(
       'script-import',
       'text',
-      deps,
+      dependencies,
     )).rejects.toMatchObject({ name: 'ProviderUnavailableError' })
-    expect(find).not.toHaveBeenCalled()
   })
 
   it('fails as retryable PROVIDER_FAILED when the breaker is open and no fallback is configured', async () => {
@@ -472,15 +459,13 @@ describe('Director provider routing', () => {
   it('keeps only the same-provider Gemini deployment fallback on a healthy path', async () => {
     const { dependencies, secrets } = createDependencies()
     secrets.set('gemini', 'gemini-key')
-    const find = vi.fn(async () => 'stepfun' as const)
-    const deps: AiConfigDependencies = {
-      ...dependencies,
-      fallbackProviders: { find, save: vi.fn(async () => {}) },
-    }
 
-    const target = await resolveDirectorModelTarget('script-import', 'text', deps)
+    const target = await resolveDirectorModelTarget(
+      'script-import',
+      'text',
+      dependencies,
+    )
     expect(target.provider).toBe('gemini')
     expect(target.fallbackDeploymentId).toBe('gemini.3.1-flash-lite.managed')
-    expect(find).not.toHaveBeenCalled()
   })
 })

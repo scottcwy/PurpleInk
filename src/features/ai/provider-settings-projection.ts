@@ -1,9 +1,7 @@
 import 'server-only'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { describeLaneQuotas } from '@/lib/queue/runtime-config'
-import { describeStepfunConfig, getAiConfigDependencies } from './config'
-import { describeGeminiConfig } from './gemini-config'
-import { describeMimoConfig } from './mimo-config'
+import { getAiConfigDependencies } from './config'
 import { describeDirectorRoutes } from './model-routing'
 import {
   describeAsrProfile,
@@ -41,37 +39,21 @@ export async function describeProviderSettings() {
     managed: true as const,
   })
   const [
-    stepfunCredential,
-    geminiCredential,
-    mimoCredential,
-    models,
     managedCatalog,
-    gemini,
-    mimo,
     routes,
     laneQuotas,
     customOpenAi,
     customOpenAiTts,
     customOpenAiAsr,
-    fallbackProvider,
     fundingEntries,
     byokCredentialEntries,
   ] = await Promise.all([
-    Promise.resolve(managedCredential('stepfun')),
-    Promise.resolve(managedCredential('gemini')),
-    Promise.resolve(managedCredential('mimo')),
-    describeStepfunConfig(),
     managedModelCatalogRepository.listEnabled(),
-    describeGeminiConfig(),
-    describeMimoConfig(),
     describeDirectorRoutes(),
     describeLaneQuotas(),
     describeOpenAiCompatibleProfile(customOpenAiDependencies()),
     describeTtsProfile(audioDependencies()),
     describeAsrProfile(audioDependencies()),
-    // 降级链备选：未配置时回 null（默认无备选）。只回 provider id，无 secret。
-    dependencies.fallbackProviders?.find(currentWorkspaceId())
-      ?? null,
     Promise.all(MANAGED_PROVIDER_IDS.map(async (provider) => [
       provider,
       await resolveProviderFunding(provider, dependencies),
@@ -89,13 +71,6 @@ export async function describeProviderSettings() {
       planKey: plan,
       limit: subscriptionConcurrencyLimit(plan),
     },
-    ...stepfunCredential,
-    models: hideManagedEndpoint(models),
-    geminiConfigured: geminiCredential.configured,
-    geminiCredential,
-    gemini: hideManagedEndpoint(gemini),
-    mimoCredential,
-    mimo: hideManagedEndpoint(mimo),
     managedProviders: MANAGED_PROVIDER_IDS.map((provider) => ({
       provider,
       funding: fundingByProvider[provider],
@@ -137,19 +112,6 @@ export async function describeProviderSettings() {
     customOpenAi,
     customOpenAiTts,
     customOpenAiAsr,
-    fallbackProvider,
-  }
-}
-
-function hideManagedEndpoint<T extends {
-  baseUrl: { value: string; source: 'settings' | 'env' | 'default' }
-}>(view: T): T {
-  return {
-    ...view,
-    baseUrl: {
-      value: '',
-      source: 'default',
-    },
   }
 }
 

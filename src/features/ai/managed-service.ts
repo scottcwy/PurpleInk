@@ -24,7 +24,6 @@ export type ManagedPlanKey = PlanKey
 export type { ManagedModelCatalogRepository, ManagedModelDefinition }
 
 export type ManagedAiErrorCode =
-  | 'MANAGED_GEMINI_FORBIDDEN_FOR_FREE'
   | 'MANAGED_MODEL_NOT_AUTHORIZED'
   | 'MANAGED_CREDENTIAL_UNAVAILABLE'
   | 'MANAGED_UPSTREAM_FAILED'
@@ -102,14 +101,6 @@ export async function authorizeManagedRoute(
     }
   }
   if (comparePlans(input.plan, model.minimumPlanKey) < 0) {
-    if (input.plan === 'free' && input.provider === 'gemini') {
-      throw new ManagedAiError({
-        code: 'MANAGED_GEMINI_FORBIDDEN_FOR_FREE',
-        status: 403,
-        retryable: false,
-        message: 'Free 套餐不可使用 Gemini 托管服务',
-      })
-    }
     throw new ManagedAiError({
       code: 'MANAGED_MODEL_NOT_AUTHORIZED',
       status: 403,
@@ -122,30 +113,6 @@ export async function authorizeManagedRoute(
     deductsManagedPool: true,
     catalogId: model.id,
   }
-}
-
-export interface FilterFallbacksInput {
-  plan: ManagedPlanKey
-  capability: ProviderCapability
-  candidates: readonly AiProviderId[]
-}
-/**
- * 只过滤调用方已经显式配置的候选，保持顺序；不会凭空添加或替换 provider。
- */
-export async function filterAuthorizedFallbacks(
-  input: FilterFallbacksInput,
-  catalog: ManagedModelCatalogRepository = managedModelCatalogRepository,
-): Promise<AiProviderId[]> {
-  const models = await catalog.listEnabled()
-  return [...new Set(input.candidates)].filter((provider) => {
-    if (!providerSupports(provider, input.capability)) return false
-    if (!isManagedProvider(provider)) return true
-    return models.some((entry) =>
-      entry.provider === provider
-      && entry.capabilities.includes(input.capability)
-      && comparePlans(input.plan, entry.minimumPlanKey) >= 0
-    )
-  })
 }
 
 export type ManagedUsage =

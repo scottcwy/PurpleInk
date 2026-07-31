@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   ManagedAiError,
   authorizeManagedRoute,
-  filterAuthorizedFallbacks,
   managedCredentialUnavailableError,
   managedUpstreamError,
   type ManagedUsage,
@@ -111,7 +110,7 @@ describe('managed model authorization', () => {
       capability: 'text',
     }, catalog)).rejects.toMatchObject({
       name: 'ManagedAiError',
-      code: 'MANAGED_GEMINI_FORBIDDEN_FOR_FREE',
+      code: 'MANAGED_MODEL_NOT_AUTHORIZED',
       status: 403,
       retryable: false,
     })
@@ -194,19 +193,6 @@ describe('managed model authorization', () => {
       funding: 'managed',
       deductsManagedPool: true,
     })
-  })
-
-  it('filters fallback candidates by plan, capability, and funding mode', async () => {
-    await expect(filterAuthorizedFallbacks({
-      plan: 'free',
-      capability: 'text',
-      candidates: [
-        'gemini',
-        'stepfun',
-        'openai-compatible',
-        'openai-compatible-tts',
-      ],
-    }, catalog)).resolves.toEqual(['stepfun', 'openai-compatible'])
   })
 })
 

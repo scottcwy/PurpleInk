@@ -69,27 +69,41 @@ async function describeFailure(response: Response): Promise<string> {
 }
 
 async function main(): Promise<void> {
-  const [{ loadEnvConfig }, { getStepfunConfig }] = await Promise.all([
+  const [
+    { loadEnvConfig },
+    { resolveDeploymentBinding },
+    { resolveManagedCredential },
+  ] = await Promise.all([
     import('@next/env'),
-    import('@/features/ai/config'),
+    import('@/features/ai/execution-plan'),
+    import('@/features/ai/managed-credentials'),
   ])
   loadEnvConfig(process.cwd())
 
   // L1 凭据解密
-  const config = await getStepfunConfig()
-  const baseUrl = config.baseUrl.replace(/\/+$/, '')
-  if (!config.apiKey) {
-    record('L1 凭据解密', false, '加密存储里没有 stepfun Key，或解密失败')
+  const binding = (capability: 'text' | 'vision' | 'tts' | 'asr') =>
+    resolveDeploymentBinding({
+      providerId: 'stepfun',
+      fundingSource: 'managed',
+      capability,
+    })
+  const text = binding('text')
+  const vision = binding('vision')
+  const tts = binding('tts')
+  const asr = binding('asr')
+  const apiKey = resolveManagedCredential('stepfun')
+  const baseUrl = text.baseUrl.replace(/\/+$/, '')
+  if (!apiKey) {
+    record('L1 托管凭据', false, '缺少 StepFun managed secretRef 对应的环境变量')
     return
   }
   record(
-    'L1 凭据解密',
+    'L1 托管凭据',
     true,
-    `Key 长度 ${config.apiKey.length}；baseUrl ${baseUrl}；`
-    + `chat=${config.chatModel} vision=${config.visionModel} `
-    + `tts=${config.ttsModel} asr=${config.asrModel}`,
+    `managed credential configured；chat=${text.outboundModelId} `
+    + `vision=${vision.outboundModelId} tts=${tts.outboundModelId} `
+    + `asr=${asr.outboundModelId}`,
   )
-  const apiKey = config.apiKey
   const authHeaders = {
     authorization: `Bearer ${apiKey}`,
     'content-type': 'application/json',
@@ -106,7 +120,12 @@ async function main(): Promise<void> {
     } else {
       const body = (await response.json()) as { data?: Array<{ id?: string }> }
       const ids = (body.data ?? []).map((item) => item.id).filter(Boolean) as string[]
-      const wanted = [config.chatModel, config.visionModel, config.ttsModel, config.asrModel]
+      const wanted = [
+        text.outboundModelId,
+        vision.outboundModelId,
+        tts.outboundModelId,
+        asr.outboundModelId,
+      ]
       const missing = wanted.filter((id) => !ids.includes(id))
       record(
         'L2 GET /models',
@@ -121,9 +140,9 @@ async function main(): Promise<void> {
     record('L2 GET /models', false, `${(error as Error).name}: ${(error as Error).message}`)
   }
 
-  // L3 最小补全（与 bootstrap 的 validateKey 同形状）
+  // L3 最小补全：保持与 OpenAI-compatible 文本验证请求同形状。
   await probeChat('L3 最小补全', {
-    model: config.chatModel,
+    model: text.outboundModelId,
     messages: [{ role: 'user', content: 'ping' }],
     max_tokens: 1,
   })
@@ -131,7 +150,7 @@ async function main(): Promise<void> {
   // L4 maxTokens 上限：REQUEST_SHAPE.stepfun 声明 32768，逐级验证对端是否接受
   for (const maxTokens of [1024, 4096, 8192, 16384, 32768]) {
     await probeChat(`L4 max_tokens=${maxTokens}`, {
-      model: config.chatModel,
+      model: text.outboundModelId,
       messages: [{ role: 'user', content: '回复一个字：好' }],
       max_tokens: maxTokens,
     })
@@ -142,7 +161,7 @@ async function main(): Promise<void> {
   const TINY_PNG =
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=='
   await probeChat('L5 视觉模型', {
-    model: config.visionModel,
+    model: vision.outboundModelId,
     messages: [
       {
         role: 'user',
@@ -157,13 +176,13 @@ async function main(): Promise<void> {
 
   // L6 结构化输出与工具调用：Director 的 pi 会话依赖这两项之一
   await probeChat('L6 response_format=json_object', {
-    model: config.chatModel,
+    model: text.outboundModelId,
     messages: [{ role: 'user', content: '用 JSON 回复 {"ok":true}' }],
     max_tokens: 64,
     response_format: { type: 'json_object' },
   })
   await probeChat('L6 tools（函数调用）', {
-    model: config.chatModel,
+    model: text.outboundModelId,
     messages: [{ role: 'user', content: '北京天气如何' }],
     max_tokens: 64,
     tools: [
@@ -185,7 +204,7 @@ async function main(): Promise<void> {
   // L7 长上下文：逼近 REQUEST_SHAPE.stepfun 声明的 131072
   for (const approxTokens of [8_000, 32_000, 100_000]) {
     await probeChat(`L7 上下文约 ${approxTokens} token`, {
-      model: config.chatModel,
+      model: text.outboundModelId,
       // 中文约 1 字 ≈ 1 token，用重复字符逼近目标长度。
       messages: [{ role: 'user', content: `忽略以下内容并回复"好"：${'字'.repeat(approxTokens)}` }],
       max_tokens: 8,

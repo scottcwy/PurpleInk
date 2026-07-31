@@ -1,8 +1,3 @@
-import type { StepfunConfigView, StepfunModelField } from '@/features/ai/config'
-import type {
-  GeminiConfigField,
-  GeminiConfigView,
-} from '@/features/ai/gemini-config'
 import type {
   AiProviderId,
   DirectorRouteView,
@@ -13,16 +8,12 @@ import type {
 } from '@/features/ai/openai-compatible-audio-config'
 import type { OpenAiCompatibleAudioFormat } from '@/features/ai/openai-compatible-payloads'
 import type { OpenAiCompatibleProfileView } from '@/features/ai/openai-compatible-config'
-import type { MimoConfigField, MimoConfigView } from '@/features/ai/mimo-config'
 import type { DirectorCanvasNodeType } from '@/features/canvas/types'
 import type { PlanKey } from '@/features/billing'
 import type { ProviderFunding } from '@/features/ai/provider-funding-store'
 import type { ProviderCapability } from '@/features/ai/provider-registry'
 import type { BuiltInProviderId as ManagedProviderId } from '@/lib/config/generated/ai-public-catalog'
 
-export type StepfunDraft = Record<StepfunModelField, string>
-export type GeminiDraft = Record<GeminiConfigField, string>
-export type MimoDraft = Record<MimoConfigField, string>
 export type OpenAiCompatibleDraft = {
   baseUrl: string
   textModel: string
@@ -45,28 +36,6 @@ export type OpenAiCompatibleAsrDraft = {
   model: string
 }
 export type RouteDraft = Record<DirectorCanvasNodeType, AiProviderId>
-
-export const STEPFUN_FIELDS: Array<[StepfunModelField, string]> = [
-  ['baseUrl', '端点（普通 v1 或 Step Plan）'],
-  ['chatModel', 'Chat 模型'],
-  ['ttsModel', 'TTS 模型'],
-  ['asrModel', 'ASR 模型'],
-  ['visionModel', 'Vision 模型'],
-]
-
-export const GEMINI_FIELDS: Array<[GeminiConfigField, string]> = [
-  ['baseUrl', 'OpenAI 兼容端点'],
-  ['primaryModel', '主模型'],
-  ['fastModel', '低延迟模型'],
-]
-
-export const MIMO_FIELDS: Array<[MimoConfigField, string]> = [
-  ['baseUrl', '产品 API 端点'],
-  ['textModel', '文本模型'],
-  ['visionModel', '视觉模型'],
-  ['ttsModel', '配音模型'],
-  ['asrModel', '语音识别模型'],
-]
 
 export const OPENAI_COMPATIBLE_FIELDS: Array<[keyof OpenAiCompatibleDraft, string]> = [
   ['baseUrl', 'OpenAI 兼容端点'],
@@ -157,11 +126,6 @@ export interface SettingsResponse {
   }>
   availableCatalog?: readonly ProviderModelView[]
   configured?: boolean
-  models?: StepfunConfigView
-  geminiConfigured?: boolean
-  gemini?: GeminiConfigView
-  mimoCredential?: { configured: boolean }
-  mimo?: MimoConfigView
   customOpenAi?: OpenAiCompatibleProfileView
   customOpenAiTts?: TtsProfileView
   customOpenAiAsr?: AsrProfileView
@@ -186,9 +150,6 @@ export interface ProviderModelView {
 export interface ReadyModelSettingsController {
   ready: true
   data: SettingsResponse
-  stepfunDraft: StepfunDraft
-  geminiDraft: GeminiDraft
-  mimoDraft: MimoDraft
   customOpenAiDraft: OpenAiCompatibleDraft
   customOpenAiTtsDraft: OpenAiCompatibleTtsDraft
   customOpenAiAsrDraft: OpenAiCompatibleAsrDraft
@@ -196,9 +157,6 @@ export interface ReadyModelSettingsController {
   laneQuotasDraft: LaneQuotasDraft
   busy?: string
   error?: string
-  setStepfunField: (field: StepfunModelField, value: string) => void
-  setGeminiField: (field: GeminiConfigField, value: string) => void
-  setMimoField: (field: MimoConfigField, value: string) => void
   setCustomOpenAiField: (field: keyof OpenAiCompatibleDraft, value: string) => void
   setCustomOpenAiTtsField: <K extends keyof OpenAiCompatibleTtsDraft>(
     field: K,
