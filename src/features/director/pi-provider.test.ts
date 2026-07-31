@@ -12,7 +12,7 @@ vi.mock('@earendil-works/pi-ai', () => ({
   envApiKeyAuth: vi.fn(() => ({
     resolve: async () => ({
       auth: { apiKey: 'legacy-env-key' },
-      source: 'STEP_API_KEY',
+      source: 'CVC_MANAGED_STEPFUN_API_KEY',
     }),
   })),
 }))

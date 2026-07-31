@@ -151,7 +151,7 @@ it('persists OpenAI cache-write and long-context pricing rules', async () => {
   })
 })
 
-it('seeds the website composite workflow rate in the shared managed catalog', async () => {
+it('keeps the historical website composite rate queryable for audit replay', async () => {
   const { getCurrentRateCard } = await import('./rate-card-repository')
   const card = await getCurrentRateCard({
     provider: 'purpleink-engine',
