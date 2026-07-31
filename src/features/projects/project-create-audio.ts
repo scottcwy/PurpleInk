@@ -5,9 +5,11 @@ import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { storage as defaultStorage } from '@/lib/storage'
 import {
   createProjectWithSource,
+  ProjectCreationIdempotencyError,
   type CreatedProject,
   type CreateProjectWithSourceInput,
 } from './project-creation'
+import { fingerprintProjectCreationRequest } from './project-creation-fingerprint'
 import {
   MAX_PROJECT_AUDIO_BYTES,
   MAX_PROJECT_AUDIO_DURATION_MS,
@@ -35,6 +37,12 @@ export async function createProjectFromAudioForm(
     throw new ProjectCreateInputError('录音上传表单无效')
   })
   assertAudioFormShape(form)
+  const idempotencyKey = request.headers.get('idempotency-key')?.trim()
+  if (!idempotencyKey || !uuidSchema.safeParse(idempotencyKey).success) {
+    throw new ProjectCreateInputError(
+      '录音项目创建请求缺少有效的 Idempotency-Key',
+    )
+  }
   const file = form.get('file')
   if (!isUploadedFile(file)) {
     throw new ProjectCreateInputError('请选择 MP3 或 WAV 录音文件')
@@ -91,16 +99,40 @@ export async function createProjectFromAudioForm(
   try {
     writeAttempted = true
     await storage.put(storageKey, bytes)
-    return await createFromCanonicalSource(
-      { projectId, title, source, sourceFingerprint },
+    const result = await createFromCanonicalSource(
+      {
+        projectId,
+        title,
+        source,
+        sourceFingerprint,
+        idempotency: {
+          key: idempotencyKey,
+          requestFingerprint: fingerprintProjectCreationRequest({
+            title,
+            source,
+            sourceFingerprint,
+          }),
+        },
+      },
       {
         ...dependencies,
         getWorkspaceId: () => workspaceId,
         createId,
       },
     )
+    if (result.reused) {
+      await storage.delete(storageKey).catch(() => undefined)
+    }
+    return result
   } catch (error) {
     if (writeAttempted) await storage.delete(storageKey).catch(() => undefined)
+    if (error instanceof ProjectCreationIdempotencyError) {
+      throw new ProjectCreateInputError(
+        '同一创建请求标识已用于其他项目参数',
+        error.code,
+        409,
+      )
+    }
     throw error
   }
 }

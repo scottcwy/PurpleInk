@@ -201,6 +201,54 @@ describe('createProjectWithSource', () => {
     expect(await database.db.select().from(canvasNodes)).toHaveLength(6)
   })
 
+  it('returns one audio project for concurrent retries with the same creation key', async () => {
+    const source = parseProjectSourcePayload({
+      schemaVersion: 1,
+      kind: 'audio',
+      storageKey: 'project-sources/workspace/project/source.wav',
+      fileName: '录音.wav',
+      mimeType: 'audio/wav',
+      container: 'wav',
+      sizeBytes: 96_044,
+      durationMs: 1_000,
+      sampleRate: 48_000,
+      sampleCount: 48_000,
+      visualTheme: 'dark',
+    })
+    const input = {
+      title: '幂等录音项目',
+      source,
+      sourceFingerprint: FINGERPRINT,
+      idempotency: {
+        key: '10000000-0000-4000-8000-000000000003',
+        requestFingerprint: 'e'.repeat(64),
+      },
+    } as Parameters<typeof createProjectWithSource>[0] & {
+      idempotency: { key: string; requestFingerprint: string }
+    }
+
+    const [first, second] = await Promise.all([
+      createProjectWithSource(input, {
+        database: database.db,
+        workspaceId: WORKSPACE_ID,
+        createId: randomUUID,
+      }),
+      createProjectWithSource(input, {
+        database: database.db,
+        workspaceId: WORKSPACE_ID,
+        createId: randomUUID,
+      }),
+    ])
+
+    expect(first.project.id).toBe(second.project.id)
+    expect([first.reused, second.reused].sort()).toEqual([false, true])
+    expect(await database.db.select().from(projects)).toHaveLength(1)
+    expect(await database.db.select().from(projectSources)).toHaveLength(1)
+    expect(await database.db.select().from(canvasNodes)).toHaveLength(
+      buildProjectTopology(source).nodes.length,
+    )
+  })
+
   it('rejects reusing a creation key for a different canonical request', async () => {
     const source = parseProjectSourcePayload({
       schemaVersion: 1,

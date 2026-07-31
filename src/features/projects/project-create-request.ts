@@ -13,6 +13,7 @@ import {
   type CreatedProject,
   type CreateProjectWithSourceInput,
 } from './project-creation'
+import { fingerprintProjectCreationRequest } from './project-creation-fingerprint'
 import {
   parseProjectSourcePayload,
   PROJECT_SOURCE_SCHEMA_VERSION,
@@ -137,7 +138,7 @@ async function createWebsite(
       sourceFingerprint,
       idempotency: {
         key: idempotencyKey,
-        requestFingerprint: fingerprintCreationRequest({
+        requestFingerprint: fingerprintProjectCreationRequest({
           title,
           source,
           sourceFingerprint,
@@ -182,22 +183,6 @@ async function createFromCanonicalSource(
     workspaceId: (dependencies.getWorkspaceId ?? currentWorkspaceId)(),
     createId: dependencies.createId,
   })
-}
-
-function fingerprintCreationRequest(
-  input: Pick<
-    CreateProjectWithSourceInput,
-    'title' | 'source' | 'sourceFingerprint'
-  >,
-): string {
-  return createHash('sha256')
-    .update(JSON.stringify([
-      input.title,
-      input.source.kind,
-      input.sourceFingerprint,
-      input.source,
-    ]))
-    .digest('hex')
 }
 
 function titleFromWebsite(value: string): string {

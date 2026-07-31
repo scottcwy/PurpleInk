@@ -298,6 +298,9 @@ describe('createProjectFromRequest audio upload', () => {
 function audioRequest(bytes: Buffer): Request {
   return new Request('http://localhost/api/projects', {
     method: 'POST',
+    headers: {
+      'idempotency-key': '30000000-0000-4000-8000-000000000001',
+    },
     body: audioForm(bytes),
   })
 }

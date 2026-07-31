@@ -102,6 +102,11 @@ describe('createProjectAndStart', () => {
     expect(form.get('title')).toBe('采访成片')
     expect(form.get('visualTheme')).toBe('dark')
     expect(form.get('file')).toBe(file)
+    expect(request?.headers).toMatchObject({
+      'idempotency-key': expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+      ),
+    })
     expect(fetcher).toHaveBeenNthCalledWith(
       2,
       '/api/projects/project-audio/start',

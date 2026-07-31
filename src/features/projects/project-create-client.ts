@@ -46,7 +46,7 @@ export class ProjectStartQuotaError extends Error {
 export async function createProject(
   input: CreateProjectInput,
   fetcher: typeof fetch = fetch,
-  creationKey = input.kind === 'website'
+  creationKey = input.kind === 'website' || input.kind === 'audio'
     ? createProjectCreationKey()
     : undefined,
 ): Promise<string> {
@@ -108,7 +108,11 @@ function projectRequest(
     form.set('customVisualStyle', input.customVisualStyle)
   }
   if (input.title?.trim()) form.set('title', input.title.trim())
-  return { method: 'POST', body: form }
+  return {
+    method: 'POST',
+    headers: creationKey ? { 'idempotency-key': creationKey } : undefined,
+    body: form,
+  }
 }
 
 function jsonRequest(body: unknown, creationKey?: string): RequestInit {
