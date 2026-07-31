@@ -51,10 +51,11 @@
 - audio / website 的 queued / running / succeeded attempt 通过稳定队列指纹复用，
   重复点击不得制造平行执行；failed attempt 仅在用户显式重启时新建；
   队列 attempt id 同时是计费与 Artifact 的真实归属。
-- audio / website 创建请求共用 `project_creation_requests` 幂等账本；audio 的请求
-  指纹由规范化标题、视觉设置、实测媒体元数据与上传字节 SHA-256 派生，排除随机
-  `projectId` / `storageKey`。相同 key 并发只提交一个项目；复用原项目时清理本次
-  隔离上传，启动失败后的重试只重启已创建项目。
+- script / audio / website 创建请求共用 `project_creation_requests` 幂等账本。
+  script 指纹绑定规范化标题、文稿、主题和视觉风格；audio 指纹由规范化标题、视觉
+  设置、实测媒体元数据与上传字节 SHA-256 派生，排除随机 `projectId` /
+  `storageKey`。相同 key 并发只提交一个项目；复用原项目时清理本次隔离上传，启动
+  失败或客户端等待超时后的重试只启动已创建项目，不得重复创建。
 - 复用 succeeded audio attempt 时必须重新推进既有 Director frontier，以恢复 ASR
   成功后下游启动失败；复用 succeeded website attempt 则据实返回 `complete`。
 - 创建只负责项目与初始拓扑的原子持久化；启动负责建立真实 run / attempt。

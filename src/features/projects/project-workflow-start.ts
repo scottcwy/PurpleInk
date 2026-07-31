@@ -29,7 +29,10 @@ export interface ProjectWorkflowStartDescriptor {
 
 interface ScriptStartResult {
   autopilot: true
-  status: 'started' | 'blocked' | 'complete'
+  status: 'started' | 'reused' | 'blocked' | 'complete'
+  jobId?: string
+  attemptStatus?: QueueEnqueueReceipt['status']
+  reused?: boolean
   enqueuedNodeIds: string[]
   repairRootNodeIds: string[]
   failedNodeIds: string[]
@@ -37,7 +40,7 @@ interface ScriptStartResult {
 }
 
 interface AudioResumeResult {
-  status: 'started' | 'blocked' | 'complete'
+  status: 'started' | 'reused' | 'blocked' | 'complete'
   enqueuedNodeIds: string[]
   repairRootNodeIds: string[]
   failedNodeIds: string[]

@@ -107,10 +107,7 @@ export function NewProjectDialog({
     setError(undefined);
     try {
       const projectInput = buildNewProjectInput(values);
-      if (
-        (projectInput.kind === "website" || projectInput.kind === "audio") &&
-        !creationKeyRef.current
-      ) {
+      if (!creationKeyRef.current) {
         creationKeyRef.current = createProjectCreationKey();
       }
       const projectId =

@@ -160,6 +160,7 @@ export async function enqueueRenderShot(
       ...(options.requireAutomaticAdvance
         ? { requireAutomaticAdvance: true }
         : {}),
+      reuseActiveAttempt: true,
     })
   } catch (error) {
     if (error instanceof AutomaticAdvanceDisabledError && pendingSet) {

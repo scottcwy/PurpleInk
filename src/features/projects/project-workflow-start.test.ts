@@ -66,6 +66,29 @@ describe('startProjectWorkflow', () => {
     expect(deps.enqueueWebsite).not.toHaveBeenCalled()
   })
 
+  it('preserves a script reuse receipt for the unified start response', async () => {
+    const deps = dependencies('script')
+    vi.mocked(deps.startScript).mockResolvedValue({
+      autopilot: true,
+      status: 'reused',
+      jobId: 'script-attempt',
+      attemptStatus: 'running',
+      reused: true,
+      enqueuedNodeIds: [ENTRY_ID],
+      repairRootNodeIds: [],
+      failedNodeIds: [],
+      blockedNodes: [],
+    })
+
+    await expect(startProjectWorkflow(PROJECT_ID, deps)).resolves.toMatchObject({
+      kind: 'script',
+      status: 'reused',
+      jobId: 'script-attempt',
+      attemptStatus: 'running',
+      reused: true,
+    })
+  })
+
   it('dispatches audio from the persisted descriptor and trusted entry node', async () => {
     const deps = dependencies('audio')
     await expect(startProjectWorkflow(PROJECT_ID, deps)).resolves.toEqual({

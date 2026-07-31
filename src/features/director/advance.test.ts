@@ -458,6 +458,77 @@ describe('startProjectPipeline', () => {
     expect(result.enqueuedNodeIds).toEqual(['ingest'])
   })
 
+  it('recovers a queued INGEST entry when no active attempt exists', async () => {
+    const test = harness([])
+    const repository = {
+      ...test.repository,
+      setAutopilot: vi.fn(async () => true),
+      getEntryNode: vi.fn(async () =>
+        candidate({
+          id: 'ingest',
+          type: 'script-import',
+          stage: 'INGEST',
+          status: 'pending',
+        }),
+      ),
+      findActiveAttempt: vi.fn(async () => null),
+      listCompletedNodeIds: vi.fn(async () => []),
+    }
+
+    const result = await startProjectPipeline('project-1', {
+      repository,
+      enqueueDirectorStage: test.enqueueDirectorStage,
+      advance: vi.fn(),
+    })
+
+    expect(test.enqueueDirectorStage).toHaveBeenCalledWith(
+      {
+        projectId: 'project-1',
+        nodeId: 'ingest',
+        stage: 'INGEST',
+      },
+      { preservePending: true },
+    )
+    expect(result.status).toBe('started')
+  })
+
+  it('reuses a queued INGEST entry when its active attempt still exists', async () => {
+    const test = harness([])
+    const repository = {
+      ...test.repository,
+      setAutopilot: vi.fn(async () => true),
+      getEntryNode: vi.fn(async () =>
+        candidate({
+          id: 'ingest',
+          type: 'script-import',
+          stage: 'INGEST',
+          status: 'pending',
+        }),
+      ),
+      findActiveAttempt: vi.fn(async () => ({
+        attemptId: 'attempt-active',
+        status: 'queued' as const,
+        reused: true,
+      })),
+      listCompletedNodeIds: vi.fn(async () => []),
+    }
+
+    const result = await startProjectPipeline('project-1', {
+      repository,
+      enqueueDirectorStage: test.enqueueDirectorStage,
+      advance: vi.fn(),
+    })
+
+    expect(test.enqueueDirectorStage).not.toHaveBeenCalled()
+    expect(result.status).toBe('reused')
+    expect(result.enqueuedNodeIds).toEqual(['ingest'])
+    expect(result).toMatchObject({
+      jobId: 'attempt-active',
+      attemptStatus: 'queued',
+      reused: true,
+    })
+  })
+
   it.each([false, undefined])(
     'keeps a failed INGEST entry blocked with retryable=%s',
     async (retryable) => {

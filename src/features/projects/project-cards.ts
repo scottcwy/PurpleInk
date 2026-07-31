@@ -2,7 +2,13 @@ import 'server-only'
 import { and, count, desc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb, type Db } from '@/lib/db/client'
-import { canvasNodes, projects, projectSources } from '@/lib/db/schema/index'
+import {
+  canvasNodes,
+  pipelineRuns,
+  projects,
+  projectSources,
+  taskAttempts,
+} from '@/lib/db/schema/index'
 import {
   PROJECT_WORKFLOW_KINDS,
   activeWorkflowVersionFor,
@@ -14,7 +20,12 @@ export const PROJECT_CARD_PAGE_LIMIT = 50
 /** 首屏每板块投影条数。 */
 export const PROJECT_CARD_FIRST_PAGE_SIZE = 12
 
-export type ProjectCardStatus = 'pending' | 'generating' | 'rendered' | 'failed'
+export type ProjectCardStatus =
+  | 'pending'
+  | 'generating'
+  | 'recovering'
+  | 'rendered'
+  | 'failed'
 
 export interface ProjectCardItem {
   id: string
@@ -170,7 +181,8 @@ interface NodeStatRow {
   nodeCount: number
   shotCount: number
   failedCount: number
-  activeCount: number
+  activeNodeCount: number
+  hasCurrentAttempt: boolean
   succeededCount: number
 }
 
@@ -186,17 +198,32 @@ async function loadNodeStats(
       nodeCount: sql<number>`count(*)::int`,
       shotCount: sql<number>`count(*) filter (where ${canvasNodes.type} = 'shot-codegen')::int`,
       failedCount: sql<number>`count(*) filter (where ${canvasNodes.status} = 'failed')::int`,
-      activeCount: sql<number>`count(*) filter (where ${canvasNodes.status} in ('queued', 'running'))::int`,
+      activeNodeCount: sql<number>`count(*) filter (where ${canvasNodes.status} in ('queued', 'running'))::int`,
+      hasCurrentAttempt: sql<boolean>`exists (
+        select 1
+        from ${taskAttempts}
+        inner join ${pipelineRuns}
+          on ${pipelineRuns.workspaceId} = ${taskAttempts.workspaceId}
+          and ${pipelineRuns.id} = ${taskAttempts.runId}
+        where ${taskAttempts.workspaceId} = ${workspaceId}
+          and ${pipelineRuns.projectId} = ${canvasNodes.projectId}
+          and ${pipelineRuns.executionEpoch} = ${projects.executionEpoch}
+          and ${taskAttempts.status} in ('queued', 'running')
+      )`,
       succeededCount: sql<number>`count(*) filter (where ${canvasNodes.status} = 'succeeded')::int`,
     })
     .from(canvasNodes)
+    .innerJoin(projects, and(
+      eq(projects.workspaceId, canvasNodes.workspaceId),
+      eq(projects.id, canvasNodes.projectId),
+    ))
     .where(
       and(
         eq(canvasNodes.workspaceId, workspaceId),
         inArray(canvasNodes.projectId, projectIds),
       ),
     )
-    .groupBy(canvasNodes.projectId)
+    .groupBy(canvasNodes.projectId, projects.executionEpoch)
   return new Map(rows.map((row) => [row.projectId, row]))
 }
 
@@ -240,8 +267,9 @@ function toCardItem(row: CardRow, stat: NodeStatRow | undefined): ProjectCardIte
 /** 与旧页面逐图推导一致：失败 > 执行中 > 全部成功 > 待生成。 */
 function deriveStatus(stat: NodeStatRow | undefined): ProjectCardStatus {
   if (!stat || stat.nodeCount === 0) return 'pending'
+  if (stat.hasCurrentAttempt) return 'generating'
   if (stat.failedCount > 0) return 'failed'
-  if (stat.activeCount > 0) return 'generating'
+  if (stat.activeNodeCount > 0) return 'recovering'
   if (stat.succeededCount === stat.nodeCount) return 'rendered'
   return 'pending'
 }

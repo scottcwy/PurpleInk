@@ -6,6 +6,7 @@ import {
 } from '@/lib/queue'
 import {
   enqueueDirectorStage,
+  enqueueDirectorStageWithReceipt,
   registerDirectorStageHandler,
   startDirectorQueue,
 } from './queue-handler'
@@ -100,8 +101,33 @@ describe('director queue handler', () => {
         projectId: 'project-1',
         nodeId: 'node-1',
         requireAutomaticAdvance: true,
+        reuseActiveAttempt: true,
       }
     )
+  })
+
+  it('returns the real reused receipt from the queue commit point', async () => {
+    const harness = createQueue()
+    harness.queue.enqueueWithReceipt = vi.fn(async () => ({
+      attemptId: 'existing-attempt',
+      status: 'running' as const,
+      reused: true,
+    }))
+
+    await expect(enqueueDirectorStageWithReceipt(
+      { projectId: 'project-1', nodeId: 'node-1', stage: 'INGEST' },
+      {
+        queue: harness.queue,
+        assertEnqueueable: vi.fn(async () => {}),
+        transitionNodeStatus: vi.fn(async () => {}),
+        recordStageError: vi.fn(async () => {}),
+      },
+    )).resolves.toEqual({
+      attemptId: 'existing-attempt',
+      status: 'running',
+      reused: true,
+    })
+    expect(harness.queue.enqueue).not.toHaveBeenCalled()
   })
 
   it('projects a stop race as cancellation without recording a workflow failure', async () => {

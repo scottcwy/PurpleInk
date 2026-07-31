@@ -12,6 +12,7 @@ import {
   assertEnqueueRetryBudget,
   queue as defaultQueue,
   type QueueAdapter,
+  type QueueEnqueueReceipt,
 } from '@/lib/queue'
 import { DirectorRuntimeRepository } from './runtime-repository'
 import { assertDirectorBillingAvailable } from './pi-provider'
@@ -86,6 +87,15 @@ export async function enqueueDirectorStage(
   dependencies?: EnqueueDependencies,
   options: { preservePending?: boolean } = {}
 ): Promise<string> {
+  return (await enqueueDirectorStageWithReceipt(input, dependencies, options))
+    .attemptId
+}
+
+export async function enqueueDirectorStageWithReceipt(
+  input: DirectorStageJobInput,
+  dependencies?: EnqueueDependencies,
+  options: { preservePending?: boolean } = {},
+): Promise<QueueEnqueueReceipt> {
   const payload = directorStageJobSchema.parse(input)
   if (!dependencies) await assertProjectWorkflowSupported(payload.projectId)
   const resolved = dependencies ?? (await createDefaultEnqueueDependencies())
@@ -100,11 +110,28 @@ export async function enqueueDirectorStage(
     // 闸门在 try 内：预算耗尽走既有补偿链，落节点 failed + directorError 投影。
     await resolved.assertRetryBudget?.('director-stage', payload)
     await resolved.assertBillingAvailable?.(payload)
-    return await resolved.queue.enqueue('director-stage', payload, {
+    const enqueueOptions = {
       projectId: payload.projectId,
       nodeId: payload.nodeId,
       requireAutomaticAdvance: true,
-    })
+      reuseActiveAttempt: true,
+    }
+    if (resolved.queue.enqueueWithReceipt) {
+      return await resolved.queue.enqueueWithReceipt(
+        'director-stage',
+        payload,
+        enqueueOptions,
+      )
+    }
+    return {
+      attemptId: await resolved.queue.enqueue(
+        'director-stage',
+        payload,
+        enqueueOptions,
+      ),
+      status: 'queued',
+      reused: false,
+    }
   } catch (error) {
     if (error instanceof AutomaticAdvanceDisabledError) {
       await resolved.transitionNodeStatus(

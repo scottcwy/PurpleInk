@@ -1,8 +1,15 @@
 import { and, eq, inArray, notInArray } from 'drizzle-orm'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { type Db } from '@/lib/db/client'
-import { canvasEdges, canvasNodes, projects } from '@/lib/db/schema/index'
+import {
+  canvasEdges,
+  canvasNodes,
+  pipelineRuns,
+  projects,
+  taskAttempts,
+} from '@/lib/db/schema/index'
 import { storage } from '@/lib/storage'
+import type { QueueEnqueueReceipt } from '@/lib/queue'
 import {
   DIRECTOR_INGEST_SOURCE_NODE_TYPES,
   type CanvasNodeType,
@@ -164,6 +171,41 @@ export class AdvanceRepositoryImpl
         ({ status }) => status === 'succeeded' || status === 'skipped'
       )
     )
+  }
+
+  async findActiveAttempt(
+    projectId: string,
+    nodeId: string,
+  ): Promise<QueueEnqueueReceipt | null> {
+    const [attempt] = await this.db
+      .select({
+        id: taskAttempts.id,
+        status: taskAttempts.status,
+      })
+      .from(taskAttempts)
+      .innerJoin(pipelineRuns, and(
+        eq(pipelineRuns.workspaceId, taskAttempts.workspaceId),
+        eq(pipelineRuns.id, taskAttempts.runId),
+      ))
+      .innerJoin(projects, and(
+        eq(projects.workspaceId, pipelineRuns.workspaceId),
+        eq(projects.id, pipelineRuns.projectId),
+      ))
+      .where(and(
+        eq(taskAttempts.workspaceId, currentWorkspaceId()),
+        eq(taskAttempts.entityType, 'node'),
+        eq(taskAttempts.entityId, nodeId),
+        inArray(taskAttempts.status, ['queued', 'running']),
+        eq(pipelineRuns.projectId, projectId),
+        eq(pipelineRuns.executionEpoch, projects.executionEpoch),
+      ))
+      .limit(1)
+    if (!attempt || !['queued', 'running'].includes(attempt.status)) return null
+    return {
+      attemptId: attempt.id,
+      status: attempt.status as 'queued' | 'running',
+      reused: true,
+    }
   }
 
   async isMediaReady(projectId: string): Promise<boolean> {

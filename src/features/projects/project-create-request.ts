@@ -90,7 +90,7 @@ async function createFromJson(
   try {
     return raw.kind === 'website'
       ? await createWebsite(raw, request, dependencies)
-      : await createScript(raw, dependencies)
+      : await createScript(raw, request, dependencies)
   } catch (error) {
     if (error instanceof ProjectCreateInputError) throw error
     if (error instanceof ProjectCreationIdempotencyError) {
@@ -125,12 +125,7 @@ async function createWebsite(
   if (source.kind !== 'website') throw new Error('网站来源归一化失败')
   const title = input.title ?? titleFromWebsite(source.url)
   const sourceFingerprint = fingerprintCanonicalSource(source)
-  const idempotencyKey = request.headers.get('idempotency-key')?.trim()
-  if (!idempotencyKey || !uuidSchema.safeParse(idempotencyKey).success) {
-    throw new ProjectCreateInputError(
-      '网站项目创建请求缺少有效的 Idempotency-Key',
-    )
-  }
+  const idempotencyKey = requiredIdempotencyKey(request, '网站')
   return createFromCanonicalSource(
     {
       title,
@@ -151,6 +146,7 @@ async function createWebsite(
 
 async function createScript(
   raw: Record<string, unknown>,
+  request: Request,
   dependencies: ProjectCreateRequestDependencies,
 ): Promise<CreatedProject> {
   const input = raw.kind === 'script'
@@ -163,14 +159,34 @@ async function createScript(
     visualTheme: input.visualTheme,
     ...normalizeProjectVisualStyle(input),
   })
+  const sourceFingerprint = fingerprintCanonicalSource(source)
+  const idempotencyKey = requiredIdempotencyKey(request, '文稿')
   return createFromCanonicalSource(
     {
       title: input.title,
       source,
-      sourceFingerprint: fingerprintCanonicalSource(source),
+      sourceFingerprint,
+      idempotency: {
+        key: idempotencyKey,
+        requestFingerprint: fingerprintProjectCreationRequest({
+          title: input.title,
+          source,
+          sourceFingerprint,
+        }),
+      },
     },
     dependencies,
   )
+}
+
+function requiredIdempotencyKey(request: Request, label: string): string {
+  const key = request.headers.get('idempotency-key')?.trim()
+  if (!key || !uuidSchema.safeParse(key).success) {
+    throw new ProjectCreateInputError(
+      `${label}项目创建请求缺少有效的 Idempotency-Key`,
+    )
+  }
+  return key
 }
 
 async function createFromCanonicalSource(

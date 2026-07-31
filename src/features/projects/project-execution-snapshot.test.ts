@@ -11,6 +11,27 @@ const ATTEMPT_ID = '00000000-0000-4000-8000-000000000201'
 
 describe('deriveProjectExecutionSnapshot', () => {
   it.each(['script', 'audio'] as const)(
+    'reports %s latch-without-attempt as recovering instead of running',
+    (workflowKind) => {
+      const snapshot = deriveProjectExecutionSnapshot(facts({
+        project: {
+          id: PROJECT_ID,
+          workflowKind,
+          autopilot: workflowKind === 'script',
+          directorContinuationEnabled: workflowKind === 'audio',
+          soundEffects: 'off',
+        },
+        attempt: null,
+        nodes: [node('entry', 'queued')],
+      }))
+
+      expect(snapshot.state).toBe('recovering')
+      expect(snapshot.attempt).toBeNull()
+      expect(snapshot.active).toBe(true)
+    },
+  )
+
+  it.each(['script', 'audio'] as const)(
     'keeps an unfinished %s DAG recoverable after the latest node attempt succeeded',
     (workflowKind) => {
       const snapshot = deriveProjectExecutionSnapshot(facts({

@@ -1,6 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Db } from '@/lib/db/client'
-import { canvasNodes, projects, projectSources, workspaces } from '@/lib/db/schema/index'
+import {
+  canvasNodes,
+  pipelineRuns,
+  projects,
+  projectSources,
+  taskAttempts,
+  workspaces,
+} from '@/lib/db/schema/index'
 import { activeWorkflowVersionFor } from '@/lib/workflow/project-workflow-registry'
 import { createPgTestDatabase } from '@/lib/db/test/pg-test-database'
 import { loadProjectCardPage } from './project-cards'
@@ -59,7 +66,10 @@ describe('loadProjectCardPage', () => {
       shotCount: 1,
     })
     expect(byId.get(AUDIO_ID)).toMatchObject({ status: 'generating' })
-    expect(byId.get(WEBSITE_ID)).toMatchObject({ status: 'pending', shotCount: 0 })
+    expect(byId.get(WEBSITE_ID)).toMatchObject({
+      status: 'recovering',
+      shotCount: 0,
+    })
   })
 
   it('projects source summaries per kind and never ships the full script', async () => {
@@ -141,7 +151,29 @@ async function seed(db: Db): Promise<void> {
     nodeRow(SCRIPT_OLD_ID, 'n4', 'script-import', 'INGEST', 'succeeded'),
     // AUDIO：排队中 → generating
     nodeRow(AUDIO_ID, 'n5', 'audio-transcribe', 'INGEST', 'queued'),
+    nodeRow(WEBSITE_ID, 'n6', 'website-stage', 'INGEST', 'queued'),
   ])
+  await db.insert(pipelineRuns).values({
+    workspaceId: WORKSPACE_ID,
+    id: '00000000-0000-4000-8000-000000000821',
+    projectId: AUDIO_ID,
+    status: 'queued',
+    executionEpoch: 0,
+    workflowVersion: activeWorkflowVersionFor('audio'),
+    fingerprint: 'c'.repeat(64),
+  })
+  await db.insert(taskAttempts).values({
+    workspaceId: WORKSPACE_ID,
+    id: '00000000-0000-4000-8000-000000000822',
+    runId: '00000000-0000-4000-8000-000000000821',
+    taskId: 'legacy.audio-transcribe',
+    entityType: 'project',
+    entityId: AUDIO_ID,
+    attemptNo: 1,
+    status: 'queued',
+    fingerprint: 'd'.repeat(64),
+    checkpoint: { schemaVersion: 1 },
+  })
   await db.insert(projectSources).values([
     {
       workspaceId: WORKSPACE_ID,

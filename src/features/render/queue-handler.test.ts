@@ -396,7 +396,11 @@ describe('render queue handler', () => {
     expect(harness.queue.enqueue).toHaveBeenCalledWith(
       'render-shot',
       { projectId: 'project-1', nodeId: 'node-1' },
-      { projectId: 'project-1', nodeId: 'node-1' }
+      {
+        projectId: 'project-1',
+        nodeId: 'node-1',
+        reuseActiveAttempt: true,
+      }
     )
   })
 
@@ -435,7 +439,10 @@ describe('render queue handler', () => {
     const harness = createQueue()
 
     await enqueueRenderShot(
-      { projectId: 'project-1', nodeId: 'node-1' },
+      {
+        projectId: 'project-1',
+        nodeId: 'node-1',
+      },
       {
         queue: harness.queue,
         loadAdmissionContext: vi.fn(async () => enqueueContext),
@@ -453,6 +460,7 @@ describe('render queue handler', () => {
         projectId: 'project-1',
         nodeId: 'node-1',
         requireAutomaticAdvance: true,
+        reuseActiveAttempt: true,
       },
     )
   })
@@ -514,7 +522,11 @@ describe('render queue handler', () => {
         regenerateSource: true,
         revisionBrief: '主视觉改成俯视构图',
       },
-      { projectId: 'project-1', nodeId: 'node-1' },
+      {
+        projectId: 'project-1',
+        nodeId: 'node-1',
+        reuseActiveAttempt: true,
+      },
     )
   })
 

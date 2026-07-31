@@ -61,7 +61,7 @@ const PROJECT_ID = '10000000-0000-4000-8000-000000000001'
 
 describe('POST /api/projects/[id]/start', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
     mocks.initQueue.mockResolvedValue(undefined)
     mocks.startProjectWorkflow.mockResolvedValue({
       kind: 'audio',
@@ -84,7 +84,14 @@ describe('POST /api/projects/[id]/start', () => {
       cancelledLeases: 2,
       remainingRunning: 1,
     })
-    mocks.getProjectExecutionSnapshot.mockResolvedValue(execution())
+    mocks.getProjectExecutionSnapshot.mockResolvedValue({
+      ...execution(),
+      state: 'idle',
+      active: false,
+      canStart: true,
+      canStop: false,
+      attempt: null,
+    })
     mocks.recoverWebsiteDelivery.mockResolvedValue(false)
     mocks.classifyWorkflowError.mockReturnValue({
       code: 'QUEUE_FAILED',
@@ -93,6 +100,16 @@ describe('POST /api/projects/[id]/start', () => {
   })
 
   it('initializes the queue and dispatches from the persisted workflow kind', async () => {
+    mocks.getProjectExecutionSnapshot
+      .mockResolvedValueOnce({
+        ...execution(),
+        state: 'idle',
+        active: false,
+        canStart: true,
+        canStop: false,
+        attempt: null,
+      })
+      .mockResolvedValueOnce(execution())
     const response = await POST(new Request('http://localhost'), context(PROJECT_ID))
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toMatchObject({
@@ -199,6 +216,32 @@ describe('POST /api/projects/[id]/start', () => {
     })
   })
 
+  it('reuses an active script attempt without dispatching a parallel start', async () => {
+    mocks.getProjectExecutionSnapshot.mockResolvedValue({
+      ...execution(),
+      workflowKind: 'script',
+      state: 'running',
+      attempt: {
+        id: 'script-attempt',
+        status: 'running',
+        updatedAt: '2026-07-30T00:00:00.000Z',
+      },
+    })
+
+    const response = await POST(new Request('http://localhost'), context(PROJECT_ID))
+
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      kind: 'script',
+      status: 'reused',
+      jobId: 'script-attempt',
+      attemptStatus: 'running',
+      execution: { state: 'running' },
+    })
+    expect(mocks.initQueue).toHaveBeenCalledOnce()
+    expect(mocks.startProjectWorkflow).not.toHaveBeenCalled()
+  })
+
   it('rejects an invalid path before touching billing or queue state', async () => {
     const response = await POST(new Request('http://localhost'), context('../bad'))
     expect(response.status).toBe(400)
@@ -243,6 +286,7 @@ describe('POST /api/projects/[id]/start', () => {
   })
 
   it('stops every workflow kind through the unified project route', async () => {
+    mocks.getProjectExecutionSnapshot.mockResolvedValue(execution())
     const response = await DELETE(
       new Request('http://localhost', { method: 'DELETE' }),
       context(PROJECT_ID),

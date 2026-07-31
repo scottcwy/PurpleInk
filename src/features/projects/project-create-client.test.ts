@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createProjectAndStart,
   ProjectStartQuotaError,
+  ProjectStartUnconfirmedError,
   startProject,
 } from './project-create-client'
 
@@ -38,10 +39,16 @@ describe('createProjectAndStart', () => {
         }),
       }),
     )
+    const scriptRequest = fetcher.mock.calls[0]?.[1]
+    expect(scriptRequest?.headers).toMatchObject({
+      'idempotency-key': expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u,
+      ),
+    })
     expect(fetcher).toHaveBeenNthCalledWith(
       2,
       '/api/projects/project-script/start',
-      { method: 'POST' },
+      expect.objectContaining({ method: 'POST', signal: expect.any(AbortSignal) }),
     )
   })
 
@@ -110,7 +117,7 @@ describe('createProjectAndStart', () => {
     expect(fetcher).toHaveBeenNthCalledWith(
       2,
       '/api/projects/project-audio/start',
-      { method: 'POST' },
+      expect.objectContaining({ method: 'POST', signal: expect.any(AbortSignal) }),
     )
   })
 
@@ -136,6 +143,19 @@ describe('createProjectAndStart', () => {
       billingUrl: '/products/billing',
       message: '本周期 AI 额度已用完',
     })
+  })
+
+  it('reports an aborted start as unconfirmed without claiming workflow failure', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(
+      new DOMException('aborted', 'AbortError'),
+    )
+
+    await expect(startProject('project-timeout', fetcher)).rejects.toEqual(
+      expect.objectContaining({
+        name: ProjectStartUnconfirmedError.name,
+        message: '项目已创建，启动状态未确认，可重试启动',
+      }),
+    )
   })
 })
 

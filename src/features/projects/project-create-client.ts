@@ -43,12 +43,17 @@ export class ProjectStartQuotaError extends Error {
   }
 }
 
+export class ProjectStartUnconfirmedError extends Error {
+  constructor() {
+    super('项目已创建，启动状态未确认，可重试启动')
+    this.name = 'ProjectStartUnconfirmedError'
+  }
+}
+
 export async function createProject(
   input: CreateProjectInput,
   fetcher: typeof fetch = fetch,
-  creationKey = input.kind === 'website' || input.kind === 'audio'
-    ? createProjectCreationKey()
-    : undefined,
+  creationKey = createProjectCreationKey(),
 ): Promise<string> {
   const response = await fetcher(
     '/api/projects',
@@ -63,11 +68,27 @@ export async function createProject(
 export async function startProject(
   projectId: string,
   fetcher: typeof fetch = fetch,
+  timeoutMs = 15_000,
 ): Promise<void> {
-  const response = await fetcher(
-    `/api/projects/${encodeURIComponent(projectId)}/start`,
-    { method: 'POST' },
-  )
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  let response: Response
+  try {
+    response = await fetcher(
+      `/api/projects/${encodeURIComponent(projectId)}/start`,
+      { method: 'POST', signal: controller.signal },
+    )
+  } catch (error) {
+    if (
+      controller.signal.aborted
+      || (error instanceof Error && error.name === 'AbortError')
+    ) {
+      throw new ProjectStartUnconfirmedError()
+    }
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
   throwIfUnauthenticated(response)
   const result = await readJson(response)
   if (!response.ok) {
@@ -96,7 +117,7 @@ function projectRequest(
   creationKey?: string,
 ): RequestInit {
   if (input.kind !== 'audio') {
-    return jsonRequest(input, input.kind === 'website' ? creationKey : undefined)
+    return jsonRequest(input, creationKey)
   }
 
   const form = new FormData()

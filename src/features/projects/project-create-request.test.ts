@@ -14,6 +14,7 @@ vi.mock('server-only', () => ({}))
 
 const WORKSPACE_ID = '00000000-0000-4000-8000-000000000001'
 const PROJECT_ID = '10000000-0000-4000-8000-000000000001'
+const CREATION_KEY = '30000000-0000-4000-8000-000000000001'
 
 function created(input: CreateProjectWithSourceInput) {
   return {
@@ -40,7 +41,10 @@ describe('createProjectFromRequest JSON', () => {
     )
     const request = new Request('http://localhost/api/projects', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        'idempotency-key': CREATION_KEY,
+      },
       body: JSON.stringify({
         title: '旧版文稿入口',
         script: '只存真实产品事实。',
@@ -66,6 +70,10 @@ describe('createProjectFromRequest JSON', () => {
       },
     })
     expect(input.sourceFingerprint).toMatch(/^[0-9a-f]{64}$/u)
+    expect(input.idempotency).toMatchObject({
+      key: CREATION_KEY,
+      requestFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/u),
+    })
     expect(dependencies?.workspaceId).toBe(WORKSPACE_ID)
   })
 
@@ -80,7 +88,7 @@ describe('createProjectFromRequest JSON', () => {
       method: 'POST',
       headers: {
         'content-type': 'application/json; charset=utf-8',
-        'idempotency-key': '30000000-0000-4000-8000-000000000001',
+        'idempotency-key': CREATION_KEY,
       },
       body: JSON.stringify({
         kind: 'website',
@@ -115,7 +123,10 @@ describe('createProjectFromRequest JSON', () => {
     )
     const request = new Request('http://localhost/api/projects', {
       method: 'POST',
-      headers: { 'content-type': 'application/json; charset=utf-8' },
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'idempotency-key': CREATION_KEY,
+      },
       body: JSON.stringify({
         kind: 'script',
         title: '风格化项目',
@@ -157,6 +168,23 @@ describe('createProjectFromRequest JSON', () => {
     )
   })
 
+  it('rejects a script creation without an idempotency key', async () => {
+    const request = new Request('http://localhost/api/projects', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        kind: 'script',
+        title: '缺少幂等键',
+        script: '不会创建幽灵项目。',
+        visualTheme: 'dark',
+      }),
+    })
+
+    await expect(createProjectFromRequest(request)).rejects.toThrow(
+      '文稿项目创建请求缺少有效的 Idempotency-Key',
+    )
+  })
+
   it('rejects JSON audio and undeclared server-owned fields as safe input errors', async () => {
     for (const body of [
       { kind: 'audio', title: '绕过上传', storageKey: 'client/value.wav' },
@@ -186,7 +214,7 @@ describe('createProjectFromRequest audio upload', () => {
   })
   const storage = {
     put: vi.fn(async (key: string) => key),
-    delete: vi.fn(async () => undefined),
+    delete: vi.fn(async (_key: string) => undefined),
   }
   const measure = vi.fn(async (received: Buffer) => {
     expect(received).toEqual(bytes)
@@ -254,6 +282,9 @@ describe('createProjectFromRequest audio upload', () => {
         storage,
         measureAudio: measure,
         createProject,
+        cleanupSourceUpload: async ({ storageKey }) => {
+          await storage.delete(storageKey)
+        },
         getWorkspaceId: () => WORKSPACE_ID,
         createId: () => PROJECT_ID,
       }),

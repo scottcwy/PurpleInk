@@ -676,6 +676,30 @@ describe('legacy in-process queue PG compatibility', () => {
     expect(attempts).toHaveLength(0)
   })
 
+  it('reuses one active attempt for concurrent duplicate enqueues', async () => {
+    const { InProcessQueue } = await import('./in-process-queue')
+    const projectId = await seedProject()
+    const queue = new InProcessQueue()
+
+    const receipts = await Promise.all([
+      inLocalWs(() => queue.enqueueWithReceipt('director-stage', { projectId }, {
+        projectId,
+        reuseActiveAttempt: true,
+      })),
+      inLocalWs(() => queue.enqueueWithReceipt('director-stage', { projectId }, {
+        projectId,
+        reuseActiveAttempt: true,
+      })),
+    ])
+
+    expect(new Set(receipts.map((receipt) => receipt.attemptId)).size).toBe(1)
+    expect(receipts.map((receipt) => receipt.reused).sort()).toEqual([false, true])
+    const attempts = await database.db
+      .select({ id: taskAttempts.id })
+      .from(taskAttempts)
+    expect(attempts).toHaveLength(1)
+  })
+
   it('rejects non-positive or non-integer lane quotas before starting', async () => {
     const { InProcessQueue } = await import('./in-process-queue')
     const queue = new InProcessQueue()

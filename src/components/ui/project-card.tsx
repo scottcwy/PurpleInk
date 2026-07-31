@@ -5,7 +5,7 @@ import { StatusPill } from './status-pill'
 export interface ProjectCardProps {
   title: string
   meta: string
-  status?: 'pending' | 'generating' | 'rendered' | 'cached' | 'failed'
+  status?: 'pending' | 'generating' | 'recovering' | 'rendered' | 'cached' | 'failed'
   className?: string
 }
 

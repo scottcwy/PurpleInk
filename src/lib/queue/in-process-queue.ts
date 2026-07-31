@@ -15,7 +15,13 @@ import {
   withExecutionTimeout,
 } from './lease'
 import { runQueueMaintenance } from './queue-maintenance'
-import type { JobHandler, LaneQuotas, QueueAdapter, QueueJob } from './types'
+import type {
+  JobHandler,
+  LaneQuotas,
+  QueueAdapter,
+  QueueEnqueueReceipt,
+  QueueJob,
+} from './types'
 import type { ClaimFilter } from './queue-claim'
 import { defaultQueueLaneQuotas } from './queue-defaults'
 import {
@@ -24,6 +30,7 @@ import {
 } from './execution-cancellation'
 import {
   enqueueLegacyJob,
+  enqueueLegacyJobWithReceipt,
   type QueueEnqueueOptions,
 } from './queue-enqueue'
 
@@ -75,6 +82,14 @@ export class InProcessQueue implements QueueAdapter {
     opts: QueueEnqueueOptions = {},
   ): Promise<string> {
     return enqueueLegacyJob(kind, payload, opts)
+  }
+
+  async enqueueWithReceipt(
+    kind: string,
+    payload: Record<string, unknown> = {},
+    opts: QueueEnqueueOptions = {},
+  ): Promise<QueueEnqueueReceipt> {
+    return enqueueLegacyJobWithReceipt(kind, payload, opts)
   }
 
   register(kind: string, handler: JobHandler): void {

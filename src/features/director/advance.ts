@@ -1,13 +1,14 @@
 import 'server-only'
-import { AutomaticAdvanceDisabledError } from '@/lib/queue'
-import { getDb } from '@/lib/db/client'
+import {
+  AutomaticAdvanceDisabledError,
+  type QueueEnqueueReceipt,
+} from '@/lib/queue'
 import { assertProjectWorkflowSupported } from '@/features/projects/project-compatibility'
 import {
   assertNodeExecutionActive,
   type CanvasNodeType,
   type NodeStatus,
 } from '@/features/canvas'
-import { AdvanceRepositoryImpl } from './advance-repository'
 import { PIPELINE_STAGES, type PipelineStage } from './types'
 import type {
   ExportFinalizationResult,
@@ -15,9 +16,13 @@ import type {
 } from './export-finalization'
 import {
   automaticAdvanceDisabled,
-  withProjectResumeControl,
   type PipelineResumeExecution,
 } from './resume-control'
+import {
+  createDefaultAdvanceDependencies,
+  createDefaultPipelineControlDependencies,
+} from './advance-default-dependencies'
+import { resumePipelineEntry } from './resume-entry'
 
 export interface AdvanceCandidate {
   id: string
@@ -47,16 +52,20 @@ export interface AdvanceRepository {
 export interface PipelineRepository extends AdvanceRepository {
   setAutopilot(projectId: string, enabled: boolean): Promise<boolean>
   getEntryNode(projectId: string): Promise<AdvanceCandidate>
+  findActiveAttempt?(projectId: string, nodeId: string): Promise<QueueEnqueueReceipt | null>
   /** 已完成（成功或已跳过）的节点，作为续跑推进的起点。 */
   listCompletedNodeIds(projectId: string): Promise<string[]>
   isProjectComplete?(projectId: string): Promise<boolean>
 }
 
-type EnqueueDirectorStage = (input: {
-  projectId: string
-  nodeId: string
-  stage: PipelineStage
-}) => Promise<string>
+export type EnqueueDirectorStage = (
+  input: {
+    projectId: string
+    nodeId: string
+    stage: PipelineStage
+  },
+  options?: { preservePending?: boolean },
+) => Promise<string | QueueEnqueueReceipt>
 
 type EnqueueRenderShot = (
   input: {
@@ -91,18 +100,24 @@ export interface AdvanceResult {
 
 export interface PipelineStartResult extends AdvanceResult {
   autopilot: true
-  status: 'started' | 'blocked' | 'complete'
+  status: 'started' | 'reused' | 'blocked' | 'complete'
+  jobId?: string
+  attemptStatus?: QueueEnqueueReceipt['status']
+  reused?: boolean
   repairRootNodeIds: string[]
   blockedNodes: PipelineBlock[]
 }
 
 export interface PipelineResumeResult extends AdvanceResult {
-  status: 'started' | 'blocked' | 'complete'
+  status: 'started' | 'reused' | 'blocked' | 'complete'
+  jobId?: string
+  attemptStatus?: QueueEnqueueReceipt['status']
+  reused?: boolean
   repairRootNodeIds: string[]
   blockedNodes: PipelineBlock[]
 }
 
-interface PipelineControlDependencies {
+export interface PipelineControlDependencies {
   repository: PipelineRepository
   enqueueDirectorStage: EnqueueDirectorStage
   advance: (
@@ -134,7 +149,7 @@ export async function advancePipeline(
   execution?: { attemptId: string; signal?: AbortSignal },
 ): Promise<AdvanceResult> {
   await assertExecutionActive()
-  const resolved = dependencies ?? (await createDefaultDependencies())
+  const resolved = dependencies ?? (await createDefaultAdvanceDependencies())
   const result: AdvanceResult = { enqueuedNodeIds: [], failedNodeIds: [] }
   if (!(await resolved.repository.isAutomaticAdvanceEnabled(projectId))) return result
 
@@ -226,7 +241,9 @@ export async function startProjectPipeline(
   dependencies?: PipelineControlDependencies
 ): Promise<PipelineStartResult> {
   if (!dependencies) await assertProjectWorkflowSupported(projectId)
-  const resolved = dependencies ?? (await createDefaultControlDependencies())
+  const resolved = dependencies ?? (
+    await createDefaultPipelineControlDependencies(advancePipeline)
+  )
   await resolved.repository.setAutopilot(projectId, true)
   return {
     autopilot: true,
@@ -241,7 +258,9 @@ export async function resumeProjectPipeline(
   execution?: PipelineResumeExecution,
 ): Promise<PipelineResumeResult> {
   if (!dependencies) await assertProjectWorkflowSupported(projectId)
-  const resolved = dependencies ?? (await createDefaultControlDependencies())
+  const resolved = dependencies ?? (
+    await createDefaultPipelineControlDependencies(advancePipeline)
+  )
   const resume = () => resumeProjectPipelineUnlocked(projectId, resolved)
   const result = resolved.withResumeControl
     ? await resolved.withResumeControl(projectId, execution, resume)
@@ -259,6 +278,7 @@ async function resumeProjectPipelineUnlocked(
   const repairRoots = new Set<string>()
   const blockedNodes: PipelineResumeResult['blockedNodes'] = []
   const handledSuccessfulNodes = new Set<string>()
+  let entryAttempt: QueueEnqueueReceipt | null = null
 
   if (entry.status === 'success') {
     if (resolved.repairFrontier) {
@@ -279,19 +299,15 @@ async function resumeProjectPipelineUnlocked(
       result.failedNodeIds.forEach((nodeId) => failed.add(nodeId))
       blockedNodes.push(...(result.blockedNodes ?? []))
     }
-  } else if (
-    ['idle', 'stale'].includes(entry.status) ||
-    (entry.status === 'failed' && entry.retryable === true)
-  ) {
-    if (entry.stage !== 'INGEST') {
-      throw new Error(`项目入口节点阶段无效：${entry.stage ?? 'null'}`)
-    }
-    await resolved.enqueueDirectorStage({
+  } else {
+    const entryResume = await resumePipelineEntry(
       projectId,
-      nodeId: entry.id,
-      stage: 'INGEST',
-    })
-    enqueued.add(entry.id)
+      entry,
+      resolved.repository,
+      resolved.enqueueDirectorStage,
+    )
+    entryAttempt = entryResume.attempt
+    if (entryResume.enqueued) enqueued.add(entry.id)
   }
 
   const complete =
@@ -307,45 +323,24 @@ async function resumeProjectPipelineUnlocked(
     })
   }
   return {
-    status: complete ? 'complete' : enqueued.size > 0 ? 'started' : 'blocked',
+    status: complete
+      ? 'complete'
+      : entryAttempt?.reused
+        ? 'reused'
+        : enqueued.size > 0
+          ? 'started'
+          : 'blocked',
+    ...(entryAttempt
+      ? {
+          jobId: entryAttempt.attemptId,
+          attemptStatus: entryAttempt.status,
+          reused: entryAttempt.reused,
+        }
+      : {}),
     enqueuedNodeIds: [...enqueued],
     repairRootNodeIds: [...repairRoots],
     failedNodeIds: [...failed],
     blockedNodes,
-  }
-}
-
-async function createDefaultDependencies(): Promise<AdvanceDependencies> {
-  const [
-    { enqueueDirectorStage },
-    { enqueueRenderShot },
-    { requestExportFinalization },
-  ] = await Promise.all([
-    import('./queue-handler'),
-    import('@/features/render/queue-handler'),
-    import('./export-finalization'),
-  ])
-  return {
-    repository: new AdvanceRepositoryImpl(await getDb()),
-    enqueueDirectorStage,
-    enqueueRenderShot: (input, options) =>
-      enqueueRenderShot(input, undefined, options),
-    requestExportFinalization,
-  }
-}
-
-async function createDefaultControlDependencies(): Promise<PipelineControlDependencies> {
-  const { repairProjectFrontier } = await import('./recovery')
-  const advanceDependencies = await createDefaultDependencies()
-  const repository = advanceDependencies.repository as PipelineRepository
-  return {
-    repository,
-    enqueueDirectorStage: advanceDependencies.enqueueDirectorStage,
-    repairFrontier: repairProjectFrontier,
-    withResumeControl: (projectId, execution, operation) =>
-      withProjectResumeControl(projectId, execution, operation),
-    advance: (projectId, completedNodeId) =>
-      advancePipeline(projectId, completedNodeId, advanceDependencies),
   }
 }
 

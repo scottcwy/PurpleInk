@@ -40,6 +40,21 @@ async function handlePost(context: RouteContext): Promise<Response> {
   if (!parsedId.success) return parsedId.response
   try {
     const current = await getProjectExecutionSnapshot(parsedId.projectId)
+    if (
+      current.active
+      && current.attempt
+      && (current.attempt.status === 'queued' || current.attempt.status === 'running')
+    ) {
+      await initQueue()
+      return NextResponse.json({
+        ok: true,
+        kind: current.workflowKind,
+        status: 'reused',
+        jobId: current.attempt.id,
+        attemptStatus: current.attempt.status,
+        execution: current,
+      })
+    }
     if (current.workflowKind === 'website' && current.state === 'succeeded') {
       return NextResponse.json({
         ok: true,

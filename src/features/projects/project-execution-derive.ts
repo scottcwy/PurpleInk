@@ -73,7 +73,7 @@ function executionState(
   const attempt = facts.attempt
   if (!attempt) {
     if (isAutomaticContinuationEnabled(facts)) {
-      return 'running'
+      return 'recovering'
     }
     return 'idle'
   }

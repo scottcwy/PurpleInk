@@ -40,8 +40,21 @@ export interface QueueAdapter {
       requestedByUserId?: string
       workflowVersion?: string
       requireAutomaticAdvance?: boolean
+      reuseActiveAttempt?: boolean
     },
   ): Promise<string>
+  enqueueWithReceipt?(
+    kind: string,
+    payload?: Record<string, unknown>,
+    opts?: {
+      projectId?: string
+      nodeId?: string
+      requestedByUserId?: string
+      workflowVersion?: string
+      requireAutomaticAdvance?: boolean
+      reuseActiveAttempt?: boolean
+    },
+  ): Promise<QueueEnqueueReceipt>
   register(kind: string, handler: JobHandler): void
   start(lanes?: LaneQuotas): void
   stop(): void

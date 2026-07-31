@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import {
   currentUserId,
   currentWorkspaceId,
@@ -17,6 +17,7 @@ import {
   serializeWorkflowVersion,
 } from '@/lib/workflow/version'
 import { queueFingerprint } from './attempt-checkpoint'
+import type { QueueEnqueueReceipt } from './types'
 
 export interface QueueEnqueueOptions {
   projectId?: string
@@ -24,6 +25,7 @@ export interface QueueEnqueueOptions {
   requestedByUserId?: string
   workflowVersion?: string
   requireAutomaticAdvance?: boolean
+  reuseActiveAttempt?: boolean
 }
 
 export class AutomaticAdvanceDisabledError extends Error {
@@ -40,6 +42,14 @@ export async function enqueueLegacyJob(
   payload: Record<string, unknown>,
   opts: QueueEnqueueOptions,
 ): Promise<string> {
+  return (await enqueueLegacyJobWithReceipt(kind, payload, opts)).attemptId
+}
+
+export async function enqueueLegacyJobWithReceipt(
+  kind: string,
+  payload: Record<string, unknown>,
+  opts: QueueEnqueueOptions,
+): Promise<QueueEnqueueReceipt> {
   if (!opts.projectId) {
     throw new Error('legacy queue enqueue requires a trusted projectId')
   }
@@ -51,7 +61,7 @@ export async function enqueueLegacyJob(
   const runId = randomUUID()
   const attemptId = randomUUID()
   const fingerprint = queueFingerprint(kind, payload)
-  await database.transaction(async (transaction) => {
+  return database.transaction(async (transaction) => {
     const [project] = await transaction
       .select({
         executionEpoch: projects.executionEpoch,
@@ -75,6 +85,37 @@ export async function enqueueLegacyJob(
     ) {
       throw new AutomaticAdvanceDisabledError()
     }
+    const entityType = opts.nodeId ? 'node' : 'project'
+    const entityId = opts.nodeId ?? opts.projectId!
+    if (opts.reuseActiveAttempt) {
+      const [activeAttempt] = await transaction
+        .select({
+          id: taskAttempts.id,
+          status: taskAttempts.status,
+        })
+        .from(taskAttempts)
+        .innerJoin(pipelineRuns, and(
+          eq(pipelineRuns.workspaceId, taskAttempts.workspaceId),
+          eq(pipelineRuns.id, taskAttempts.runId),
+        ))
+        .where(and(
+          eq(taskAttempts.workspaceId, workspaceId),
+          eq(taskAttempts.taskId, `legacy.${kind}`),
+          eq(taskAttempts.entityType, entityType),
+          eq(taskAttempts.entityId, entityId),
+          inArray(taskAttempts.status, ['queued', 'running']),
+          eq(pipelineRuns.projectId, opts.projectId!),
+          eq(pipelineRuns.executionEpoch, project.executionEpoch),
+        ))
+        .limit(1)
+      if (activeAttempt) {
+        return {
+          attemptId: activeAttempt.id,
+          status: activeAttempt.status as 'queued' | 'running',
+          reused: true,
+        }
+      }
+    }
     const workUnitKey = opts.nodeId
       ? await readWorkUnitKey(transaction, workspaceId, opts.projectId!, opts.nodeId)
       : null
@@ -95,15 +136,19 @@ export async function enqueueLegacyJob(
       runId,
       taskId: `legacy.${kind}`,
       entityType: opts.nodeId ? 'node' : 'project',
-      entityId: opts.nodeId ?? opts.projectId!,
+      entityId,
       attemptNo: 1,
       status: 'queued',
       fingerprint,
       checkpoint: { schemaVersion: 1, kind, payload },
       workUnitKey,
     })
+    return {
+      attemptId,
+      status: 'queued',
+      reused: false,
+    }
   })
-  return attemptId
 }
 
 function isAutomaticAdvanceEnabled(project: {

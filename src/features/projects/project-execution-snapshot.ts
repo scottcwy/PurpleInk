@@ -52,6 +52,7 @@ export async function getProjectExecutionSnapshot(
       workflowKind: projects.workflowKind,
       autopilot: projects.autopilot,
       directorContinuationEnabled: projects.directorContinuationEnabled,
+      executionEpoch: projects.executionEpoch,
       exportSettings: projects.exportSettings,
     })
     .from(projects)
@@ -93,6 +94,7 @@ export async function getProjectExecutionSnapshot(
       .where(and(
         eq(taskAttempts.workspaceId, workspaceId),
         eq(pipelineRuns.projectId, projectId),
+        eq(pipelineRuns.executionEpoch, project.executionEpoch),
       ))
       .orderBy(desc(taskAttempts.createdAt))
       .limit(1),

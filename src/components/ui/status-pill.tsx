@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 export type StatusPillVariant =
   | 'pending'
   | 'generating'
+  | 'recovering'
   | 'rendered'
   | 'cached'
   | 'stale'
@@ -24,6 +25,11 @@ const STYLES: Record<StatusPillVariant, { bg: string; color: string; defaultLabe
     defaultLabel: '待生成',
   },
   generating: { bg: 'bg-ds-blue-soft', color: 'text-ds-blue', defaultLabel: '生成中' },
+  recovering: {
+    bg: 'bg-ds-amber-soft',
+    color: 'text-ds-amber',
+    defaultLabel: '待恢复',
+  },
   rendered: { bg: 'bg-ds-green-soft', color: 'text-ds-green', defaultLabel: '已渲染' },
   cached: { bg: 'bg-ds-blue-soft', color: 'text-ds-blue', defaultLabel: '已缓存' },
   stale: { bg: 'bg-ds-amber-soft', color: 'text-ds-amber', defaultLabel: '需重渲' },
