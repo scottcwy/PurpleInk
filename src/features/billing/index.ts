@@ -60,3 +60,8 @@ export {
   billingInvocationNo,
   type BillingInvocationScope,
 } from './invocation-number'
+export {
+  reconcileBillingShadow,
+  type BillingShadowDifference,
+  type BillingShadowReport,
+} from './shadow-reconciliation'

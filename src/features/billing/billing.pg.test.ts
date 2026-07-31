@@ -325,6 +325,34 @@ it('atomically creates, reserves and idempotently settles an invocation', async 
   expect(await database.db.select().from(billingReservations)).toHaveLength(1)
   expect(await database.db.select().from(officialCostEntries)).toHaveLength(1)
   expect(await database.db.select().from(entitlementLedgerEntries)).toHaveLength(1)
+  const { reconcileBillingShadow } = await import('./shadow-reconciliation')
+  await expect(reconcileBillingShadow(WORKSPACE_ID)).resolves.toMatchObject({
+    workspaceId: WORKSPACE_ID,
+    exact: true,
+    periods: [expect.objectContaining({
+      invocationSettledCnyMicros: BigInt(600),
+      entitlementDebitCnyMicros: BigInt(600),
+      periodDifferenceCnyMicros: BigInt(0),
+      invocationDifferenceCnyMicros: BigInt(0),
+      exact: true,
+    })],
+  })
+})
+
+it('reports shadow differences instead of silently accepting them', async () => {
+  await provision()
+  await database.db.update(usagePeriods).set({
+    usedCnyMicros: BigInt(1),
+  })
+  const { reconcileBillingShadow } = await import('./shadow-reconciliation')
+  await expect(reconcileBillingShadow(WORKSPACE_ID)).resolves.toMatchObject({
+    exact: false,
+    periods: [expect.objectContaining({
+      periodDifferenceCnyMicros: BigInt(1),
+      invocationDifferenceCnyMicros: BigInt(0),
+      exact: false,
+    })],
+  })
 })
 
 it('settles reserved invocations whose parent attempt is already terminal', async () => {
