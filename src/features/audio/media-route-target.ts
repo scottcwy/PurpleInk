@@ -1,15 +1,24 @@
 import 'server-only'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import {
-  fundingForProvider,
   type AiConfigDependencies,
 } from '@/features/ai/config'
-import { resolveDeploymentBinding } from '@/features/ai/execution-plan'
-import type { AdapterProtocol } from '@/features/ai/execution-plan'
+import {
+  freezeResolvedExecutionPlanV2,
+  type AdapterProtocol,
+  type ResolvedExecutionPlanV2,
+} from '@/features/ai/execution-plan'
+import { resolveBuiltInModelTarget } from '@/features/ai/built-in-model-target'
+import { providerDefaults } from '@/features/ai/route-provider-defaults'
+import { RouteContractError } from '@/features/ai/route-contract-error'
 import {
   CUSTOM_ASR_PROVIDER,
   CUSTOM_TTS_PROVIDER,
 } from '@/features/ai/provider-registry'
+import type {
+  OpenAiCompatibleAsrProfile,
+  OpenAiCompatibleTtsProfile,
+} from '@/features/ai/openai-compatible-payloads'
 
 export { CUSTOM_ASR_PROVIDER, CUSTOM_TTS_PROVIDER }
 
@@ -29,6 +38,8 @@ export interface MediaRouteTarget {
   officialPriceIdentity?: string
   providerPoolId?: string
   failureDomainId?: string
+  resolvedPlan: ResolvedExecutionPlanV2
+  customAudioProfile?: OpenAiCompatibleTtsProfile | OpenAiCompatibleAsrProfile
 }
 
 const MEDIA_PROVIDERS: readonly MediaProviderId[] = [
@@ -53,7 +64,7 @@ export async function resolveMediaRouteTarget(
   const provider = MEDIA_PROVIDERS.find((candidate) => candidate === route.provider)
   if (!provider) throw new Error(`媒体路由供应商不受支持：${route.provider}`)
   if (provider === CUSTOM_TTS_PROVIDER || provider === CUSTOM_ASR_PROVIDER) {
-    return { provider, model: await customModel(provider, deps) }
+    return customTarget(provider, kind, deps)
   }
   return builtInTarget(provider, route.model, kind, deps)
 }
@@ -71,42 +82,75 @@ async function builtInTarget(
   capability: 'tts' | 'asr',
   deps: AiConfigDependencies,
 ): Promise<MediaRouteTarget> {
-  const funding = await fundingForProvider(provider, deps)
-  const binding = resolveDeploymentBinding({
-    providerId: provider,
-    fundingSource: funding,
-    capability,
+  const target = await resolveBuiltInModelTarget({
+    provider,
     ...(logicalModelId ? { logicalModelId } : {}),
+    capability,
+    plan: deps.currentPlan ? await deps.currentPlan() : 'free',
+    deps,
   })
   return {
     provider,
-    model: binding.outboundModelId,
-    logicalModelId: binding.logicalModelId,
-    deploymentId: binding.deploymentId,
-    channelId: binding.channelId,
-    adapterProtocol: binding.adapterProtocol,
-    officialPriceIdentity: binding.officialPriceIdentity,
-    providerPoolId: funding === 'managed'
-      ? binding.providerPoolId
-      : `${currentWorkspaceId()}:${provider}`,
-    failureDomainId: funding === 'managed'
-      ? binding.failureDomainId
-      : `${currentWorkspaceId()}:${provider}`,
+    model: target.modelId,
+    logicalModelId: target.logicalModelId,
+    deploymentId: target.deploymentId,
+    channelId: target.channelId,
+    adapterProtocol: target.adapterProtocol,
+    officialPriceIdentity: target.officialPriceIdentity,
+    providerPoolId: target.providerPoolId,
+    failureDomainId: target.failureDomainId,
+    resolvedPlan: target.resolvedPlan,
   }
 }
 
-async function customModel(
+async function customTarget(
   provider: typeof CUSTOM_TTS_PROVIDER | typeof CUSTOM_ASR_PROVIDER,
+  capability: 'tts' | 'asr',
   deps: AiConfigDependencies,
-): Promise<string> {
-  const store = audioProfiles(deps)
-  const profile = provider === CUSTOM_TTS_PROVIDER
-    ? await store.findTts(currentWorkspaceId())
-    : await store.findAsr(currentWorkspaceId())
-  if (profile) return profile.model
-  throw new Error(
-    provider === CUSTOM_TTS_PROVIDER
-      ? '自定义兼容 TTS 端点尚未配置'
-      : '自定义兼容 ASR 端点尚未配置',
-  )
+): Promise<MediaRouteTarget> {
+  const defaults = await providerDefaults(provider, deps)
+  const model = defaults.modelFor({ domain: 'media', kind: capability }, capability)
+  if (!defaults.apiKey) throw new RouteContractError('自定义音频端点尚未配置 API Key')
+  if (!defaults.audioProfile) {
+    throw new RouteContractError('自定义音频端点配置快照缺失')
+  }
+  const workspaceId = currentWorkspaceId()
+  const routeIdentity = `${workspaceId}:${provider}`
+  const planVersion = 'workspace-route/v1'
+  const resolvedPlan = freezeResolvedExecutionPlanV2({
+    schemaVersion: 2,
+    kind: 'custom',
+    providerId: provider,
+    fundingSource: 'custom',
+    logicalModelId: model,
+    outboundModelId: model,
+    deploymentId: `workspace.${provider}.${capability}`,
+    channelId: `workspace.${provider}`,
+    adapterProtocol: 'openai-completions',
+    baseUrl: defaults.baseUrl,
+    officialPriceIdentity: `custom.${provider}.${model}`,
+    providerPoolId: routeIdentity,
+    failureDomainId: routeIdentity,
+    capability,
+    planVersion,
+    credentialLease: {
+      source: 'custom',
+      reference: `workspace-credential:${provider}`,
+      version: planVersion,
+      credential: defaults.apiKey,
+    },
+  })
+  return {
+    provider,
+    model,
+    logicalModelId: model,
+    deploymentId: resolvedPlan.deploymentId,
+    channelId: resolvedPlan.channelId,
+    adapterProtocol: resolvedPlan.adapterProtocol,
+    officialPriceIdentity: resolvedPlan.officialPriceIdentity,
+    providerPoolId: resolvedPlan.providerPoolId,
+    failureDomainId: resolvedPlan.failureDomainId,
+    resolvedPlan,
+    customAudioProfile: Object.freeze({ ...defaults.audioProfile }),
+  }
 }

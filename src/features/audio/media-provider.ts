@@ -4,6 +4,10 @@ import {
   getAiConfigDependencies,
   type AiConfigDependencies,
 } from '@/features/ai/config'
+import type {
+  OpenAiCompatibleAsrProfile,
+  OpenAiCompatibleTtsProfile,
+} from '@/features/ai/openai-compatible-payloads'
 import {
   synthesizeMimoSpeech,
   transcribeMimoSpeech,
@@ -22,6 +26,7 @@ import {
   runManagedAudioBilling,
   type AudioBillingContext,
   type ManagedAudioBillingInput,
+  type ManagedAudioInvocationRoute,
 } from './managed-audio-billing'
 import {
   audioProfiles,
@@ -31,6 +36,11 @@ import {
   type MediaRouteTarget,
   type MediaProviderId,
 } from './media-route-target'
+import {
+  builtInAudioDependencies,
+  requireCustomAsrProfile,
+  requireCustomTtsProfile,
+} from './media-invocation-route'
 
 export { CUSTOM_ASR_PROVIDER, CUSTOM_TTS_PROVIDER }
 
@@ -73,11 +83,13 @@ interface RoutedMediaDependencies {
   transcribeMimo: typeof transcribeMimoSpeech
   synthesizeCustom: (
     input: { text: string; voiceId?: string },
-    deps: AiConfigDependencies,
+    profile: OpenAiCompatibleTtsProfile,
+    route: ManagedAudioInvocationRoute,
   ) => Promise<SynthesizedSpeech>
   transcribeCustom: (
     input: { audioBytes: Buffer; audioFormat: 'mp3' | 'wav' },
-    deps: AiConfigDependencies,
+    profile: OpenAiCompatibleAsrProfile,
+    route: ManagedAudioInvocationRoute,
     options?: { signal?: AbortSignal },
   ) => Promise<TranscribedSpeech & { timestampMode: 'segment' | 'none' }>
   billManaged?: <T>(input: ManagedAudioBillingInput<T>) => Promise<T>
@@ -90,19 +102,25 @@ function defaultDependencies(): RoutedMediaDependencies {
     synthesizeMimo: synthesizeMimoSpeech,
     transcribeStepfun: transcribeSpeech,
     transcribeMimo: transcribeMimoSpeech,
-    synthesizeCustom: (input, deps) =>
+    synthesizeCustom: (input, profile, route) =>
       synthesizeOpenAiCompatibleSpeech(input, {
         fetcher: fetch,
-        getProfile: () => audioProfiles(deps).findTts(currentWorkspaceId()),
-        getApiKey: () =>
-          deps.credentials.loadSecret(currentWorkspaceId(), CUSTOM_TTS_PROVIDER),
+        getProfile: async () => ({
+          ...profile,
+          baseUrl: route.resolvedPlan?.baseUrl ?? profile.baseUrl,
+          model: route.resolvedPlan?.outboundModelId ?? profile.model,
+        }),
+        getApiKey: async () => route.credential,
       }),
-    transcribeCustom: (input, deps, options) =>
+    transcribeCustom: (input, profile, route, options) =>
       transcribeOpenAiCompatibleSpeech(input, {
         fetcher: fetch,
-        getProfile: () => audioProfiles(deps).findAsr(currentWorkspaceId()),
-        getApiKey: () =>
-          deps.credentials.loadSecret(currentWorkspaceId(), CUSTOM_ASR_PROVIDER),
+        getProfile: async () => ({
+          ...profile,
+          baseUrl: route.resolvedPlan?.baseUrl ?? profile.baseUrl,
+          model: route.resolvedPlan?.outboundModelId ?? profile.model,
+        }),
+        getApiKey: async () => route.credential,
       }, options),
   }
 }
@@ -145,13 +163,15 @@ export async function synthesizeRoutedSpeech(
       model: target.model,
       providerPoolId: target.providerPoolId,
       execution: executionMetadata(target),
+      resolvedPlan: target.resolvedPlan,
       capability: 'tts',
       billingContext: input.billingContext,
       estimate: { kind: 'tts', characters: Array.from(input.text).length },
       input: input.text,
-      invoke: () => dependencies.synthesizeCustom(
+      invoke: (route) => dependencies.synthesizeCustom(
         { text: input.text, voiceId: input.voiceId },
-        dependencies.config,
+        requireCustomTtsProfile(target),
+        route,
       ),
       outputBytes: (speech) => speech.audioBytes,
       usageFromResult: (speech) => ({
@@ -165,14 +185,21 @@ export async function synthesizeRoutedSpeech(
     throw new Error(`媒体路由供应商不支持 TTS：${target.provider}`)
   }
   const managedProvider = target.provider
-  const invoke = () => managedProvider === 'mimo'
-    ? dependencies.synthesizeMimo({ text: input.text, voiceId: input.voiceId })
-    : dependencies.synthesizeStepfun({ text: input.text, voiceId: input.voiceId })
+  const invoke = (route: ManagedAudioInvocationRoute) => managedProvider === 'mimo'
+    ? dependencies.synthesizeMimo(
+        { text: input.text, voiceId: input.voiceId },
+        builtInAudioDependencies(target, route),
+      )
+    : dependencies.synthesizeStepfun(
+        { text: input.text, voiceId: input.voiceId },
+        builtInAudioDependencies(target, route),
+      )
   return (dependencies.billManaged ?? runManagedAudioBilling)({
     provider: managedProvider,
     model: target.model,
     providerPoolId: target.providerPoolId,
     execution: executionMetadata(target),
+    resolvedPlan: target.resolvedPlan,
     capability: 'tts',
     billingContext: input.billingContext,
     estimate: { kind: 'tts', characters: Array.from(input.text).length },
@@ -205,16 +232,18 @@ export async function transcribeRoutedSpeech(
       model: target.model,
       providerPoolId: target.providerPoolId,
       execution: executionMetadata(target),
+      resolvedPlan: target.resolvedPlan,
       capability: 'asr',
       billingContext: input.billingContext,
       estimate: { kind: 'asr', audioSeconds },
       input: input.audioBytes,
-      invoke: () => dependencies.transcribeCustom(
+      invoke: (route) => dependencies.transcribeCustom(
         {
           audioBytes: input.audioBytes,
           audioFormat: compactFormat(input, '自定义兼容 ASR'),
         },
-        dependencies.config,
+        requireCustomAsrProfile(target),
+        route,
         { signal: input.signal },
       ),
       outputBytes: (speech) => speech.transcript,
@@ -237,14 +266,15 @@ export async function transcribeRoutedSpeech(
   if (!Number.isFinite(audioSeconds) || (audioSeconds ?? 0) <= 0) {
     throw new Error('托管 ASR 调用缺少实测音频时长')
   }
-  const invoke = async () => {
+  const invoke = async (route: ManagedAudioInvocationRoute) => {
+    const audioDependencies = builtInAudioDependencies(target, route)
     if (managedProvider === 'mimo') {
       const result = await dependencies.transcribeMimo(
         {
           audioBytes: input.audioBytes,
           audioFormat: compactFormat(input, 'MiMo ASR'),
         },
-        undefined,
+        audioDependencies,
         { signal: input.signal },
       )
       return { ...result, alignmentSource: 'mimo-asr-segment' as const }
@@ -254,7 +284,7 @@ export async function transcribeRoutedSpeech(
         audioBytes: input.audioBytes,
         audioFormat: input.audioFormat,
       },
-      undefined,
+      audioDependencies,
       { signal: input.signal },
     )
     return { ...result, alignmentSource: 'stepfun-asr' as const }
@@ -264,6 +294,7 @@ export async function transcribeRoutedSpeech(
     model: target.model,
     providerPoolId: target.providerPoolId,
     execution: executionMetadata(target),
+    resolvedPlan: target.resolvedPlan,
     capability: 'asr',
     billingContext: input.billingContext,
     estimate: { kind: 'asr', audioSeconds: audioSeconds! },

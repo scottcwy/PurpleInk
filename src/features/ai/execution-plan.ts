@@ -6,9 +6,15 @@ import {
 } from '@/lib/config/generated/ai-billing-manifest'
 import { ManagedAiError } from './managed-service'
 import type { ProviderCapability } from './provider-registry'
+import type { AdapterProtocol } from './resolved-execution-plan'
+export {
+  freezeResolvedExecutionPlanV2,
+  type AdapterProtocol,
+  type CredentialLease,
+  type ResolvedExecutionPlanV2,
+} from './resolved-execution-plan'
 
 export type FundingSource = 'managed' | 'byok'
-export type AdapterProtocol = 'openai-completions' | 'anthropic-messages'
 
 export interface ExecutionPlan {
   operationId: string

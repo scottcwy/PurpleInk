@@ -5,6 +5,10 @@ import {
   CUSTOM_ASR_PROVIDER,
   CUSTOM_TTS_PROVIDER,
 } from './openai-compatible-audio-config'
+import type {
+  OpenAiCompatibleAsrProfile,
+  OpenAiCompatibleTtsProfile,
+} from './openai-compatible-payloads'
 import { CUSTOM_OPENAI_PROVIDER } from './openai-compatible-config'
 import { assertProviderCapability, type AiProviderId, type ProviderCapability } from './provider-registry'
 import { RouteContractError } from './route-contract-error'
@@ -15,6 +19,7 @@ export interface ProviderDefaults {
   baseUrl: string
   apiKey: string | null
   modelFor: (target: RouteTarget, capability: ProviderCapability) => string
+  audioProfile?: OpenAiCompatibleTtsProfile | OpenAiCompatibleAsrProfile
 }
 
 /**
@@ -63,6 +68,7 @@ async function customAudioDefaults(
   return {
     baseUrl: profile.baseUrl,
     apiKey,
+    audioProfile: profile,
     modelFor: (_target, capability) => {
       assertProviderCapability(provider, capability)
       return profile.model

@@ -107,6 +107,7 @@ async function* fallbackEvents(
     fallbackModelId: undefined,
     fallbackDeploymentId: undefined,
     fallback: undefined,
+    resolvedPlan: input.runtime.resolvedPlan?.fallback,
   }
   yield* attemptEvents(
     input,

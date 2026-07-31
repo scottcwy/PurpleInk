@@ -13,6 +13,7 @@ import { withProviderDispatch } from '@/features/ai/provider-dispatch'
 import { ProviderRequestError } from '@/features/ai/provider-request-error'
 import { PROVIDER_REGISTRY } from '@/features/ai/provider-registry'
 import type { MaximumUsageEstimate } from '@/features/billing'
+import type { ResolvedExecutionPlanV2 } from '@/features/ai/execution-plan'
 
 export interface AudioBillingContext {
   attemptId: string
@@ -28,16 +29,22 @@ export interface ManagedAudioBillingInput<T> {
   model: string
   providerPoolId?: string
   execution?: InvocationExecutionMetadata
+  resolvedPlan?: ResolvedExecutionPlanV2
   capability: 'tts' | 'asr'
   billingContext?: AudioBillingContext
   estimate: Extract<MaximumUsageEstimate, { kind: 'tts' | 'asr' }>
   input: string | Uint8Array
   prepare?: () => Promise<void>
-  invoke: () => Promise<T>
+  invoke: (route: ManagedAudioInvocationRoute) => Promise<T>
   outputBytes: (result: T) => string | Uint8Array
   usageFromResult: (
     result: T,
   ) => Parameters<ManagedAiHandle['settle']>[0] | null
+}
+
+export interface ManagedAudioInvocationRoute {
+  credential: string
+  resolvedPlan?: ResolvedExecutionPlanV2
 }
 
 export interface ManagedAudioBillingDependencies {
@@ -83,7 +90,11 @@ export async function runManagedAudioBilling<T>(
   let result: T
   try {
     await handle.markProviderStarted?.()
-    result = await input.invoke()
+    result = await input.invoke({
+      credential: input.resolvedPlan?.credentialLease.credential
+        ?? prepared.credential,
+      ...(input.resolvedPlan ? { resolvedPlan: input.resolvedPlan } : {}),
+    })
   } catch (error) {
     // Provider 调度等待不是上游失败：透传让队列用内置的 dispatch-wait 调度恢复，
     // 不得包装为 managedUpstreamError（会丢掉 retryAt 并消耗普通重试预算）。
@@ -138,6 +149,7 @@ function gatewayInput<T>(
           },
         }
       : {}),
+    ...(input.resolvedPlan ? { resolvedPlan: input.resolvedPlan } : {}),
   }
   return input.capability === 'tts'
     ? {

@@ -115,6 +115,30 @@ describe('Director per-provider-call billing stream', () => {
           modelId: model.id,
           maxOutputTokens: 4_096,
           deductsManagedPool: true,
+          resolvedPlan: {
+            schemaVersion: 2,
+            kind: 'built-in',
+            providerId: 'stepfun',
+            fundingSource: 'managed',
+            logicalModelId: model.id,
+            outboundModelId: model.id,
+            deploymentId: 'stepfun.step-3.7-flash.managed',
+            channelId: 'stepfun.step-plan',
+            adapterProtocol: 'openai-completions',
+            baseUrl: model.baseUrl,
+            officialPriceIdentity: 'stepfun.step-3.7-flash',
+            providerPoolId: 'stepfun.step-plan',
+            failureDomainId: 'stepfun.step-plan',
+            capability: 'text',
+            catalogId: 'catalog-stepfun',
+            planVersion: '2026-07-31.1',
+            credentialLease: {
+              source: 'managed',
+              reference: 'CVC_MANAGED_STEPFUN_API_KEY',
+              version: '2026-07-31.1',
+              credential: 'test-key',
+            },
+          },
         },
         attemptId: '00000000-0000-4000-8000-000000000001',
         invocationIndex: index,
@@ -125,6 +149,9 @@ describe('Director per-provider-call billing stream', () => {
     }
 
     expect(begin.mock.calls.map(([input]) => input.invocationNo)).toEqual([1, 2, 3])
+    expect(begin.mock.calls[0]?.[0].resolvedPlan).toMatchObject({
+      deploymentId: 'stepfun.step-3.7-flash.managed',
+    })
     expect(streamSimple).toHaveBeenCalledTimes(3)
     expect(streamSimple).toHaveBeenCalledWith(
       model,

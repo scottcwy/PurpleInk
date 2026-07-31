@@ -99,6 +99,7 @@ function createDependencies() {
     ['mimo', 'mimo-v2.5-tts', ['tts'], 'free'],
     ['mimo', 'mimo-v2.5-asr', ['asr'], 'free'],
     ['gemini', 'gemini-3.6-flash', ['text', 'vision'], 'plus'],
+    ['gemini', 'gemini-3.1-flash-lite', ['text', 'vision'], 'plus'],
   ].map(([provider, modelId, capabilities, minimumPlanKey], index) => ({
     id: `catalog-${index}`,
     provider,
@@ -283,13 +284,22 @@ describe('Director provider routing', () => {
       'script-import',
       'text',
       dependencies,
-    )).resolves.toEqual({
+    )).resolves.toMatchObject({
       provider: 'openai-compatible',
       baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
       modelId: 'mimo-v2.5-pro',
       apiKey: 'custom-key',
       funding: 'byok',
       deductsManagedPool: false,
+      resolvedPlan: {
+        schemaVersion: 2,
+        kind: 'custom',
+        providerId: 'openai-compatible',
+        fundingSource: 'custom',
+        logicalModelId: 'mimo-v2.5-pro',
+        outboundModelId: 'mimo-v2.5-pro',
+        credentialLease: { credential: 'custom-key' },
+      },
     })
   })
 
@@ -318,6 +328,15 @@ describe('Director provider routing', () => {
       apiKey: 'mimo-key',
       funding: 'managed',
       deductsManagedPool: true,
+      resolvedPlan: {
+        schemaVersion: 2,
+        kind: 'built-in',
+        providerId: 'mimo',
+        fundingSource: 'managed',
+        logicalModelId: 'mimo-v2.5',
+        outboundModelId: 'mimo-v2.5',
+        credentialLease: { credential: 'mimo-key' },
+      },
     })
   })
 

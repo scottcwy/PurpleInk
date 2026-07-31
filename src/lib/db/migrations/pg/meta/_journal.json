@@ -197,6 +197,13 @@
       "when": 1785477686540,
       "tag": "0027_billing_legacy_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1785552000000,
+      "tag": "0028_ai_invocation_telemetry_v3",
+      "breakpoints": true
     }
   ]
 }

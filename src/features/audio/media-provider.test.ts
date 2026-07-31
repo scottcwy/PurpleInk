@@ -86,6 +86,21 @@ function dependencies(
         audio && 'asr' in audio ? audio.asr : ASR_PROFILE),
       saveAsr: vi.fn(),
     },
+    currentPlan: vi.fn(async () => 'plus' as const),
+    providerFunding: {
+      find: vi.fn(async () => 'byok' as const),
+    },
+    managedModelCatalog: {
+      find: vi.fn(async ({ provider: selected, modelId, capability }) => ({
+        id: `catalog-${selected}-${modelId}-${capability}`,
+        provider: selected,
+        modelId,
+        capabilities: [capability],
+        minimumPlanKey: 'free',
+        enabled: true,
+      })),
+      listEnabled: vi.fn(async () => []),
+    },
   } as unknown as AiConfigDependencies
 }
 
@@ -126,7 +141,14 @@ function routedDependencies(provider: Provider, config = dependencies(provider))
 async function bypassManagedBilling<T>(
   input: ManagedAudioBillingInput<T>,
 ): Promise<T> {
-  return input.invoke()
+  return input.invoke(invocationRoute(input))
+}
+
+function invocationRoute<T>(input: ManagedAudioBillingInput<T>) {
+  return {
+    credential: input.resolvedPlan?.credentialLease.credential ?? 'test-key',
+    ...(input.resolvedPlan ? { resolvedPlan: input.resolvedPlan } : {}),
+  }
 }
 
 describe('media provider dispatcher', () => {
@@ -142,6 +164,12 @@ describe('media provider dispatcher', () => {
 
   it('dispatches synthesis and transcription to the configured provider', async () => {
     const deps = routedDependencies('mimo')
+    const billingInputs: ManagedAudioBillingInput<unknown>[] = []
+    const billing = async <T>(input: ManagedAudioBillingInput<T>): Promise<T> => {
+      billingInputs.push(input as ManagedAudioBillingInput<unknown>)
+      return input.invoke(invocationRoute(input))
+    }
+    deps.billManaged = billing
 
     await synthesizeRoutedSpeech({ text: '旁白' }, deps)
     await transcribeRoutedSpeech({
@@ -154,6 +182,15 @@ describe('media provider dispatcher', () => {
     expect(deps.transcribeMimo).toHaveBeenCalledOnce()
     expect(deps.synthesizeStepfun).not.toHaveBeenCalled()
     expect(deps.synthesizeCustom).not.toHaveBeenCalled()
+    expect(billingInputs[0]).toEqual(expect.objectContaining({
+      resolvedPlan: expect.objectContaining({
+        schemaVersion: 2,
+        kind: 'built-in',
+        providerId: 'mimo',
+        fundingSource: 'byok',
+        credentialLease: expect.objectContaining({ credential: 'stored-key' }),
+      }),
+    }))
   })
 
   it('forwards the project cancellation signal to the routed ASR adapter', async () => {
@@ -172,9 +209,21 @@ describe('media provider dispatcher', () => {
         audioBytes: Buffer.from('wav'),
         audioFormat: 'wav',
       },
-      undefined,
+      expect.objectContaining({
+        fetcher: expect.any(Function),
+        getConfig: expect.any(Function),
+      }),
       { signal: controller.signal },
     )
+    const adapterDependencies = (
+      deps.transcribeMimo.mock.calls[0] as unknown[] | undefined
+    )?.[1] as { getConfig(): Promise<unknown> } | undefined
+    await expect(adapterDependencies?.getConfig()).resolves.toEqual({
+      apiKey: 'stored-key',
+      baseUrl: 'https://api.xiaomimimo.com/v1',
+      ttsModel: 'mimo-v2.5-asr',
+      asrModel: 'mimo-v2.5-asr',
+    })
   })
 
   it('keeps provider adapters untouched when the managed quota gate rejects', async () => {
@@ -220,7 +269,7 @@ describe('media provider dispatcher', () => {
       _input: ManagedAudioBillingInput<T>,
     ): Promise<T> => {
       billingCalls += 1
-      return _input.invoke()
+      return _input.invoke(invocationRoute(_input))
     }
     const ttsDeps = {
       ...routedDependencies(CUSTOM_TTS_PROVIDER),

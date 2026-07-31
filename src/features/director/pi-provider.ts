@@ -14,7 +14,10 @@ import {
   type ModelCapability,
 } from '@/features/ai/model-routing'
 import type { AiProviderId } from '@/features/ai/provider-registry'
-import type { AdapterProtocol } from '@/features/ai/execution-plan'
+import type {
+  AdapterProtocol,
+  ResolvedExecutionPlanV2,
+} from '@/features/ai/execution-plan'
 import { RouteContractError } from '@/features/ai/route-contract-error'
 import type { PipelineStage } from './types'
 
@@ -91,6 +94,7 @@ export interface DirectorModelRuntime {
   }
   maxOutputTokens: number
   deductsManagedPool: boolean
+  resolvedPlan?: ResolvedExecutionPlanV2
 }
 
 /**
@@ -192,6 +196,7 @@ export async function createDirectorModelRuntime(input: {
       : {}),
     maxOutputTokens: requestShape.maxTokens,
     deductsManagedPool: target.deductsManagedPool === true,
+    ...(target.resolvedPlan ? { resolvedPlan: target.resolvedPlan } : {}),
     routeLabel: `${target.provider}/${target.modelId}`,
   }
 }

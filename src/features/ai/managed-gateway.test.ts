@@ -72,6 +72,52 @@ const TEXT_INPUT = {
 } as const
 
 describe('ManagedAiGateway', () => {
+  it('consumes a resolved execution plan without resolving route or credential again', async () => {
+    const deps = dependencies()
+    const handle = await new ManagedAiGateway(deps).begin({
+      ...TEXT_INPUT,
+      provider: 'openai',
+      model: 'openai/gpt-5.6-luna',
+      resolvedPlan: {
+        schemaVersion: 2,
+        kind: 'built-in',
+        providerId: 'openai',
+        fundingSource: 'managed',
+        logicalModelId: 'gpt-5.6-luna',
+        outboundModelId: 'openai/gpt-5.6-luna',
+        deploymentId: 'openai.gpt-5.6-luna.managed',
+        channelId: 'openai.openrouter',
+        adapterProtocol: 'openai-completions',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        officialPriceIdentity: 'openai.gpt-5.6-luna',
+        providerPoolId: 'openai.openrouter',
+        failureDomainId: 'openai.openrouter',
+        capability: 'text',
+        catalogId: '00000000-0000-4000-8000-000000000009',
+        planVersion: '2026-07-31.1',
+        credentialLease: {
+          source: 'managed',
+          reference: 'CVC_MANAGED_OPENAI_API_KEY',
+          version: '2026-07-31.1',
+          credential: 'frozen-managed-secret',
+        },
+      },
+    })
+
+    expect(handle.credential).toBe('frozen-managed-secret')
+    expect(deps.getCurrentPlanKey).not.toHaveBeenCalled()
+    expect(deps.fundingForProvider).not.toHaveBeenCalled()
+    expect(deps.authorizeManagedRoute).not.toHaveBeenCalled()
+    expect(deps.requireManagedCredential).not.toHaveBeenCalled()
+    expect(deps.loadByokCredential).not.toHaveBeenCalled()
+    expect(deps.getCurrentRateCard).toHaveBeenCalledWith({
+      catalogId: '00000000-0000-4000-8000-000000000009',
+      provider: 'openai',
+      model: 'gpt-5.6-luna',
+      capability: 'text',
+    })
+  })
+
   it('authorizes and prices the logical model while preserving the outbound model', async () => {
     const deps = dependencies()
     await new ManagedAiGateway(deps).begin({

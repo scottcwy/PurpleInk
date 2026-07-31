@@ -295,7 +295,21 @@ export const aiInvocations = pgTable(
     ),
     check(
       'ai_invocations_telemetry_version_check',
-      sql`${table.telemetryVersion} in (1, 2)`,
+      sql`${table.telemetryVersion} in (1, 2, 3)`,
+    ),
+    check(
+      'ai_invocations_v3_identity_check',
+      sql`${table.telemetryVersion} <> 3 or (
+        nullif(btrim(${table.logicalModelId}), '') is not null
+        and nullif(btrim(${table.outboundModelId}), '') is not null
+        and nullif(btrim(${table.deploymentId}), '') is not null
+        and nullif(btrim(${table.channelId}), '') is not null
+        and nullif(btrim(${table.adapterProtocol}), '') is not null
+        and nullif(btrim(${table.officialPriceIdentity}), '') is not null
+        and nullif(btrim(${table.providerPoolId}), '') is not null
+        and nullif(btrim(${table.failureDomainId}), '') is not null
+        and nullif(btrim(${table.planVersion}), '') is not null
+      )`,
     ),
     check(
       'ai_invocations_provider_duration_check',

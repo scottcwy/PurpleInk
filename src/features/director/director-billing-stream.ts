@@ -15,6 +15,7 @@ import {
   ManagedAiGateway,
   type ManagedAiHandle,
 } from '@/features/ai'
+import type { ResolvedExecutionPlanV2 } from '@/features/ai/execution-plan'
 import {
   reserveProviderDispatch,
   type ProviderDispatchLease,
@@ -49,6 +50,7 @@ interface DirectorBillingRuntime {
   adapterProtocol?: string
   officialPriceIdentity?: string
   failureDomainId?: string
+  resolvedPlan?: ResolvedExecutionPlanV2
 }
 
 /** 单次上游调用的硬上限；队列层负责重试，SDK 内不得再做嵌套重试。 */
@@ -283,6 +285,9 @@ async function beginInvocation(
       providerPoolId: input.runtime.providerPoolId,
       failureDomainId: input.runtime.failureDomainId,
     },
+    ...(input.runtime.resolvedPlan
+      ? { resolvedPlan: input.runtime.resolvedPlan }
+      : {}),
   })
 }
 

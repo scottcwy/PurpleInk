@@ -88,6 +88,7 @@ export async function executeManagedVisionQa(
       providerPoolId: target.providerPoolId,
       failureDomainId: target.failureDomainId,
     },
+    ...(target.resolvedPlan ? { resolvedPlan: target.resolvedPlan } : {}),
   })
   const apiKey = prepared.credential ?? target.apiKey
   if (!apiKey) {

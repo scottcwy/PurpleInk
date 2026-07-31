@@ -54,6 +54,7 @@ async function main(): Promise<void> {
         or i.deployment_id is null or i.channel_id is null
         or i.adapter_protocol is null or i.official_price_identity is null
         or i.provider_pool_id is null or i.failure_domain_id is null
+        or i.plan_version is null
       )
       union all
       select 'invalid_artifact_evidence', count(*)::int, true

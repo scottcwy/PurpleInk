@@ -14,6 +14,7 @@ import {
 import type { VersionedPayload } from '@/lib/db/schema/core'
 import { ProviderInvocationAlreadyStartedError } from '@/features/billing'
 import type { ProviderCapability } from './provider-registry'
+import { aiInvocationTelemetryVersion } from '@/lib/ai-invocation-telemetry'
 
 export type InvocationFunding = 'managed' | 'byok' | 'custom'
 
@@ -84,7 +85,7 @@ export async function createUnbilledInvocation(
     capability: input.capability,
     operation: input.operation,
     source: input.source ?? 'products',
-    telemetryVersion: 2,
+    telemetryVersion: aiInvocationTelemetryVersion(input),
     inputHash: input.inputHash,
     billingStatus: 'not_applicable',
   }).onConflictDoNothing()

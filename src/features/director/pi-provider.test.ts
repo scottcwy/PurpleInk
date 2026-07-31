@@ -86,6 +86,29 @@ describe('createDirectorModelRuntime', () => {
   })
 
   it('uses Anthropic Messages only for the official Anthropic BYOK deployment', async () => {
+    const resolvedPlan = {
+      schemaVersion: 2 as const,
+      kind: 'built-in' as const,
+      providerId: 'anthropic' as const,
+      fundingSource: 'byok' as const,
+      logicalModelId: 'claude-sonnet-5',
+      outboundModelId: 'claude-sonnet-5',
+      deploymentId: 'anthropic.claude-sonnet-5.byok',
+      channelId: 'anthropic.official-byok',
+      adapterProtocol: 'anthropic-messages' as const,
+      baseUrl: 'https://api.anthropic.com/v1',
+      officialPriceIdentity: 'anthropic.claude-sonnet-5',
+      providerPoolId: 'workspace-1:anthropic',
+      failureDomainId: 'workspace-1:anthropic',
+      capability: 'text' as const,
+      planVersion: '2026-07-31.1',
+      credentialLease: {
+        source: 'byok' as const,
+        reference: 'workspace-credential',
+        version: '2026-07-31.1',
+        credential: 'stored-anthropic-secret',
+      },
+    }
     resolveDirectorModelTarget.mockResolvedValueOnce({
       provider: 'anthropic',
       baseUrl: 'https://api.anthropic.com/v1/',
@@ -96,6 +119,7 @@ describe('createDirectorModelRuntime', () => {
       adapterProtocol: 'anthropic-messages',
       apiKey: 'stored-anthropic-secret',
       funding: 'byok',
+      resolvedPlan,
     })
 
     const runtime = await createDirectorModelRuntime({
@@ -114,6 +138,7 @@ describe('createDirectorModelRuntime', () => {
       deploymentId: 'anthropic.claude-sonnet-5.byok',
       providerPoolId: 'workspace-1:anthropic',
       funding: 'byok',
+      resolvedPlan,
     })
   })
 })

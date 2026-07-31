@@ -9,7 +9,8 @@ import {
   getAiConfigDependencies,
 } from './config'
 import { resolveBuiltInModelTarget } from './built-in-model-target'
-import type { AdapterProtocol } from './execution-plan'
+import type { AdapterProtocol, ResolvedExecutionPlanV2 } from './execution-plan'
+import { createCustomModelTarget } from './custom-model-target'
 import { isProviderAvailable } from './provider-breaker'
 import { ProviderUnavailableError } from './provider-unavailable-error'
 import { providerDefaults } from './route-provider-defaults'
@@ -111,6 +112,7 @@ export interface DirectorModelTarget {
   apiKey: string | null
   funding?: ManagedRouteAuthorization['funding']
   deductsManagedPool?: boolean
+  resolvedPlan?: ResolvedExecutionPlanV2
 }
 
 interface ResolvedRoute {
@@ -219,16 +221,15 @@ export async function resolveDirectorModelTarget(
       capability,
       funding,
     }, deps.managedModelCatalog)
-    const { catalogId: _catalogId, ...publicAuthorization } = authorization
-    return {
+    return createCustomModelTarget({
+      workspaceId: currentWorkspaceId(),
       provider: configured.provider,
       baseUrl: defaults.baseUrl,
-      modelId: configured.model,
-      apiKey: isManagedProvider(configured.provider)
-        ? defaults.apiKey
-        : configured.secret,
-      ...publicAuthorization,
-    }
+      model: configured.model,
+      secret: configured.secret,
+      capability,
+      authorization,
+    })
   }
   throw new ProviderUnavailableError()
 }

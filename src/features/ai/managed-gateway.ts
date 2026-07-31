@@ -34,6 +34,11 @@ import {
   createUnbilledHandle,
   type ManagedAiHandle,
 } from './invocation-handles'
+import type { ResolvedExecutionPlanV2 } from './execution-plan'
+import {
+  assertResolvedPlanMatches,
+  gatewayExecutionMetadata,
+} from './managed-gateway-execution'
 
 export interface ManagedAiGatewayDependencies {
   getCurrentPlanKey: typeof getCurrentPlanKey
@@ -103,6 +108,7 @@ interface BeginBase {
   operation?: string
   source?: string
   execution?: InvocationExecutionMetadata
+  resolvedPlan?: ResolvedExecutionPlanV2
 }
 
 export type ManagedAiBeginInput = BeginBase & (
@@ -139,23 +145,36 @@ export class ManagedAiGateway {
   }
 
   async prepare(input: ManagedAiBeginInput): Promise<PreparedManagedAiInvocation> {
-    const plan = await this.dependencies.getCurrentPlanKey()
-    const funding = await this.dependencies.fundingForProvider(input.provider)
-    const logicalModelId = input.execution?.logicalModelId ?? input.model
-    const authorization = await this.dependencies.authorizeManagedRoute({
-      plan,
-      provider: input.provider,
-      modelId: logicalModelId,
-      capability: input.capability,
-      funding,
-    })
+    const resolved = input.resolvedPlan
+    if (resolved) assertResolvedPlanMatches(input, resolved)
+    const logicalModelId = resolved?.logicalModelId
+      ?? input.execution?.logicalModelId
+      ?? input.model
+    const funding = resolved?.fundingSource === 'custom'
+      ? 'byok'
+      : resolved?.fundingSource
+        ?? await this.dependencies.fundingForProvider(input.provider)
+    const authorization = resolved
+      ? {
+          funding: funding === 'managed' ? 'managed' as const : 'byok' as const,
+          deductsManagedPool: funding === 'managed',
+          ...(resolved.catalogId ? { catalogId: resolved.catalogId } : {}),
+        }
+      : await this.dependencies.authorizeManagedRoute({
+          plan: await this.dependencies.getCurrentPlanKey(),
+          provider: input.provider,
+          modelId: logicalModelId,
+          capability: input.capability,
+          funding,
+        })
     if (authorization.funding === 'byok') {
-      const credential = await this.dependencies.loadByokCredential(input.provider)
+      const credential = resolved?.credentialLease.credential
+        ?? await this.dependencies.loadByokCredential(input.provider)
       if (!credential) {
         throw new RouteContractError('所选供应商尚未配置自己的 API Key')
       }
       const invocationId = invocationUuid(input)
-      const execution = executionMetadata(input, invocationId)
+      const execution = gatewayExecutionMetadata(input, invocationId)
       const ledgerFunding = isManagedProvider(input.provider) ? 'byok' : 'custom'
       return {
         credential,
@@ -194,7 +213,8 @@ export class ManagedAiGateway {
     }
 
     const provider = requireManagedProvider(input.provider)
-    const credential = this.dependencies.requireManagedCredential(provider)
+    const credential = resolved?.credentialLease.credential
+      ?? this.dependencies.requireManagedCredential(provider)
     const rateCard = await this.dependencies.getCurrentRateCard({
       catalogId: authorization.catalogId,
       provider,
@@ -208,7 +228,7 @@ export class ManagedAiGateway {
     )
     const inputHash = sha256(input.rawInput)
     const invocationId = invocationUuid(input)
-    const execution = executionMetadata(input, invocationId)
+    const execution = gatewayExecutionMetadata(input, invocationId)
     return {
       credential,
       dispatchFunding: 'managed',
@@ -299,24 +319,4 @@ function invocationUuid(input: ManagedAiBeginInput): string {
     hex.slice(16, 20),
     hex.slice(20),
   ].join('-')
-}
-
-function executionMetadata(
-  input: ManagedAiBeginInput,
-  invocationId: string,
-): InvocationExecutionMetadata {
-  return {
-    operationId: input.execution?.operationId ?? invocationId,
-    attemptGroupId: input.execution?.attemptGroupId ?? input.attemptId,
-    logicalModelId: input.execution?.logicalModelId ?? input.model,
-    outboundModelId: input.execution?.outboundModelId ?? input.model,
-    deploymentId: input.execution?.deploymentId,
-    channelId: input.execution?.channelId,
-    adapterProtocol: input.execution?.adapterProtocol,
-    officialPriceIdentity: input.execution?.officialPriceIdentity,
-    providerPoolId: input.execution?.providerPoolId,
-    failureDomainId: input.execution?.failureDomainId,
-    planVersion: input.execution?.planVersion,
-    entitlementRateCardId: input.execution?.entitlementRateCardId,
-  }
 }

@@ -5,6 +5,7 @@ import type { ManagedAiHandle } from '@/features/ai'
 import {
   runManagedAudioBilling,
   type ManagedAudioBillingDependencies,
+  type ManagedAudioInvocationRoute,
 } from './managed-audio-billing'
 
 vi.mock('server-only', () => ({}))
@@ -97,6 +98,58 @@ describe('managed audio billing adapter', () => {
       outputAudioSeconds: 1.5,
     }, createHash('sha256').update('audio').digest('hex'))
     expect(handle.settleUnavailable).not.toHaveBeenCalled()
+  })
+
+  it('passes a frozen route plan to the gateway without rebuilding it', async () => {
+    const { dependencies } = createDependencies()
+    const resolvedPlan = {
+      schemaVersion: 2 as const,
+      kind: 'built-in' as const,
+      providerId: 'mimo' as const,
+      fundingSource: 'byok' as const,
+      logicalModelId: 'mimo-v2.5-tts',
+      outboundModelId: 'mimo-v2.5-tts',
+      deploymentId: 'mimo.v2.5-tts.byok',
+      channelId: 'mimo.official-byok',
+      adapterProtocol: 'openai-completions' as const,
+      baseUrl: 'https://api.xiaomimimo.com/v1',
+      officialPriceIdentity: 'xiaomi.mimo-v2.5-tts',
+      providerPoolId: 'workspace:mimo',
+      failureDomainId: 'workspace:mimo',
+      capability: 'tts' as const,
+      planVersion: '2026-07-31.1',
+      credentialLease: {
+        source: 'byok' as const,
+        reference: 'workspace-credential',
+        version: '2026-07-31.1',
+        credential: 'workspace-key',
+      },
+    }
+    const invoke = vi.fn(async (route: ManagedAudioInvocationRoute) =>
+      Buffer.from(route.credential))
+
+    await runManagedAudioBilling({
+      provider: 'mimo',
+      model: 'mimo-v2.5-tts',
+      resolvedPlan,
+      capability: 'tts',
+      billingContext: { ...CONTEXT, invocationNo: 5 },
+      estimate: { kind: 'tts', characters: 2 },
+      input: '旁白',
+      invoke,
+      outputBytes: (bytes) => bytes,
+      usageFromResult: () => ({
+        kind: 'tts', inputCharacters: 2, outputAudioSeconds: 1,
+      }),
+    }, dependencies)
+
+    expect(dependencies.gateway.prepare).toHaveBeenCalledWith(
+      expect.objectContaining({ resolvedPlan }),
+    )
+    expect(invoke).toHaveBeenCalledWith({
+      credential: 'workspace-key',
+      resolvedPlan,
+    })
   })
 
   it('settles provider failures as unavailable and exposes only the safe error', async () => {

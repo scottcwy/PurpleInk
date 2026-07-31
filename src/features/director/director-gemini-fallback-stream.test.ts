@@ -6,6 +6,7 @@ import {
   type Model,
 } from '@earendil-works/pi-ai'
 import type { ManagedAiGateway, ManagedAiHandle } from '@/features/ai'
+import type { ResolvedExecutionPlanV2 } from '@/features/ai/execution-plan'
 import { createDirectorModelStream } from './director-gemini-fallback-stream'
 import type { DirectorModelRuntime } from './pi-provider'
 
@@ -77,6 +78,8 @@ describe('Director Gemini same-channel fallback', () => {
       .toEqual(['vision', 'vision'])
     expect(begin.mock.calls.map(([input]) => input.execution?.operationId))
       .toEqual(['website:job:compose:1', 'website:job:compose:1'])
+    expect(begin.mock.calls.map(([input]) => input.resolvedPlan?.outboundModelId))
+      .toEqual([primaryModel.id, fallbackModel.id])
     expect(streamSimple.mock.calls.map(([nextModel]) => nextModel.id))
       .toEqual([primaryModel.id, fallbackModel.id])
     expect(events.map((event) => event.type)).toEqual(['done'])
@@ -100,6 +103,48 @@ function runtime(): DirectorModelRuntime {
     fallbackDeploymentId: 'gemini.3.1-flash-lite.managed',
     fallbackModel,
     fallbackModelId: fallbackModel.id,
+    resolvedPlan: executionPlan(),
+  }
+}
+
+function executionPlan(): ResolvedExecutionPlanV2 {
+  const route = (input: {
+    modelId: string
+    deploymentId: string
+  }): ResolvedExecutionPlanV2 => ({
+    schemaVersion: 2,
+    kind: 'built-in',
+    providerId: 'gemini',
+    fundingSource: 'managed',
+    logicalModelId: input.modelId,
+    outboundModelId: input.modelId,
+    deploymentId: input.deploymentId,
+    channelId: 'gemini.bcai',
+    adapterProtocol: 'openai-completions',
+    baseUrl: 'https://bcai.online/v1',
+    officialPriceIdentity: `google.${input.modelId}`,
+    providerPoolId: 'gemini.bcai',
+    failureDomainId: 'gemini.bcai',
+    capability: 'vision',
+    catalogId: `catalog-${input.modelId}`,
+    planVersion: '2026-08-01.1',
+    credentialLease: {
+      source: 'managed',
+      reference: 'CVC_MANAGED_GEMINI_API_KEY',
+      version: '2026-08-01.1',
+      credential: 'managed-gemini-key',
+    },
+  })
+  const fallback = route({
+    modelId: fallbackModel.id,
+    deploymentId: 'gemini.3.1-flash-lite.managed',
+  })
+  return {
+    ...route({
+      modelId: primaryModel.id,
+      deploymentId: 'gemini.3.6-flash-tiered.managed',
+    }),
+    fallback,
   }
 }
 

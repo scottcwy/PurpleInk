@@ -17,6 +17,7 @@ import {
 import { QuotaExhaustedError } from './contracts'
 import { applyBillingRatio, divideBillingRoundUp } from './billing-math'
 import type { BillingCapability } from './rate-card'
+import { aiInvocationTelemetryVersion } from '@/lib/ai-invocation-telemetry'
 
 export interface ManagedInvocationReservation {
   workspaceId?: string
@@ -109,7 +110,7 @@ export async function reserveManagedInvocation(
         capability: input.create.capability ?? 'text',
         operation: input.create.operation ?? 'workflow',
         source: input.create.source ?? 'products',
-        telemetryVersion: 2,
+        telemetryVersion: aiInvocationTelemetryVersion(input.create),
         inputHash: input.create.inputHash,
       }).onConflictDoNothing().returning()
       if (!invocation) {
