@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: web_app/features
-title: PurpleInk 特性域集合（Features）
-scope:
-    - src/features/
-source_files: []
-depends_on: []
-related_to: []

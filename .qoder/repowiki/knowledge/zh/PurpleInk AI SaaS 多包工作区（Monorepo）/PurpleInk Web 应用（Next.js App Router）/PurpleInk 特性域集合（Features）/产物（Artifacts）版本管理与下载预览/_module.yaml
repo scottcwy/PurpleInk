@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: web_app/features/artifacts
-title: 产物（Artifacts）版本管理与下载预览
-scope:
-    - src/features/artifacts/
-source_files: []
-depends_on: []
-related_to:
-    - path: web_app/features/director

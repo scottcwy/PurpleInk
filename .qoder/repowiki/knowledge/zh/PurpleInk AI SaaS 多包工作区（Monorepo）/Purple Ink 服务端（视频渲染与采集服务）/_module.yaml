@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: server_service
-title: Purple Ink 服务端（视频渲染与采集服务）
-scope:
-    - server/
-source_files: []
-depends_on: []
-related_to: []

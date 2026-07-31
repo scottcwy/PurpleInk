@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: web_app/lib/determinism
-title: Shot 渲染确定性违规检测
-scope:
-    - src/lib/determinism/
-source_files: []
-depends_on: []
-related_to: []

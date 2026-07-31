@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: web_app/features/auth
-title: 认证域（登录、注册、验证码与会话管理）
-scope:
-    - src/features/auth/
-source_files: []
-depends_on: []
-related_to:
-    - path: web_app/lib/auth

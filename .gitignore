@@ -67,3 +67,9 @@ docs/archive/
 # Reverse-proxy Basic Auth 凭据（真实值），示例文件 *.example 保留入库
 deploy/reverse-proxy/secrets/*
 !deploy/reverse-proxy/secrets/*.example
+
+# Qoder repowiki（工具自动生成的知识库，不入库）
+.qoder/
+
+# HyperFrames 视频工作目录（含大媒体与采集中间产物）
+/videos/

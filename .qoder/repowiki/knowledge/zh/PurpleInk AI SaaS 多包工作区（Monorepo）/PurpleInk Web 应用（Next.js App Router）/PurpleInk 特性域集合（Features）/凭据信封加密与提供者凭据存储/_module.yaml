@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: web_app/features/credentials
-title: 凭据信封加密与提供者凭据存储
-scope:
-    - src/features/credentials/
-source_files: []
-depends_on: []
-related_to:
-    - path: web_app/lib/db
