@@ -32,7 +32,7 @@
 - [x] 阶段 1：逻辑/出网模型分离，不可变执行计划覆盖所有 AI 路径（`e02df6e`、`f0dbddd`）。
 - [x] 阶段 2：数据库时钟、停止语义、invocation/lease/ticket 对账闭环。
 - [x] 阶段 3：三来源 `ProjectExecutionSnapshotV2` 与 v1 兼容投影。
-- [ ] 阶段 4：dry-run/apply 恢复工具，现存可变孤儿清零。
+- [x] 阶段 4：dry-run/apply 恢复工具，现存可变孤儿清零。
 - [ ] 阶段 5：权威规范同步，全量门禁和三来源真实 E2E。
 
 阶段 2 验收证据：±90 秒主机时钟偏差、停止前/后 Provider 分流、旧 epoch
@@ -45,6 +45,13 @@ invocation/lease/ticket/Artifact 栅栏共 46 个定向 PostgreSQL 用例通过�
 已不再读取 `workflowKind/stages/currentStage` v1 顶层别名。客户端严格校验 v2
 一致性，v1 字段继续保留一个发布周期。63 个快照、UI、ASR/TTS 聚焦用例与
 2 个 PostgreSQL 快照用例通过；受影响的持久化状态时间改为数据库时钟。
+
+阶段 4 验收证据：apply 前再次确认 14 条可变孤儿（4 条 Provider 已开始且
+`not_applicable` 的 invocation、10 条无活动父任务的 waiting lease）；CAS apply
+后活动孤儿为 0，第二次 apply 更新 0 条。`verify:workflow` 返回安全引用号
+`01371bcb60dc`，7 项阻断检查全部为 0；1626 条历史时间逆序仅保留为只读 advisory，
+未改写历史完成时间、failure 报文或 Artifact。脱敏快照保存在本地忽略目录
+`.data/workflow-integrity/`，不进入 Git。
 
 ## 安全边界
 
