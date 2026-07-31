@@ -8,7 +8,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
 
-OUT = Path("docs/artifacts/大健康短视频AI工具-产品需求文档-v1.docx")
+OUT = Path("docs/artifacts/宏泰AI智能体-产品需求文档-v1.docx")
 FONT = "Microsoft YaHei"
 ACCENT = "1F4E79"
 MUTED = "666666"
@@ -173,7 +173,7 @@ def add_header_footer(section):
     p = header.paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
     p.paragraph_format.space_after = Pt(0)
-    r = p.add_run("大健康短视频AI工具｜产品需求文档（第一版）")
+    r = p.add_run("宏泰AI智能体｜产品需求文档（第一版）")
     set_font(r, 8.5, color=MUTED)
     add_rule(p, "B7C9D6")
 
@@ -194,7 +194,7 @@ def add_metadata_table(doc):
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.style = "Table Grid"
     entries = [
-        ("文档名称", "大健康短视频AI工具 - 产品需求文档"),
+        ("文档名称", "宏泰AI智能体 - 产品需求文档"),
         ("版本", "V1.0（第一版）"),
         ("文档类型", "产品需求文档（PRD）"),
         ("状态", "Demo 阶段需求基线"),
@@ -241,7 +241,7 @@ def main():
     configure_styles(doc)
     configure_section(doc.sections[0])
     add_header_footer(doc.sections[0])
-    doc.core_properties.title = "大健康短视频AI工具 - 产品需求文档（第一版）"
+    doc.core_properties.title = "宏泰AI智能体 - 产品需求文档（第一版）"
     doc.core_properties.subject = "产品需求文档"
     doc.core_properties.author = "PurpleInk"
     doc.core_properties.comments = "已按 PRD 版式完成排版。"
@@ -252,7 +252,7 @@ def main():
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.paragraph_format.space_after = Pt(10)
-    r = p.add_run("大健康短视频AI工具")
+    r = p.add_run("宏泰AI智能体")
     set_font(r, 26, bold=True, color=ACCENT)
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
