@@ -16,6 +16,11 @@
 > `cumulative-line` 与 `stacked-bars` 两种变体。Pencil MCP 因编辑器未打开
 > `canvas.pen` 无法读取 schema，本轮不得绕过加密文件直接修改；B0 母组件与 S1/S6
 > 实例同步继续挂起，React、Playbook 与正式路由已按既有 token 合同接线。
+>
+> **2026-07-31**：S3 画布交互层代码先行：Inspector 收起态由 32px 边条改为
+> 悬浮设置圆钮（无右缘边框）、分镜通道面板新增整体最小化（收起为悬浮扳手圆钮）、
+> QueueBar 新增 `glass` 变体并以悬浮条浮于 DAG 之上。`canvas.pen` S3 帧与
+> `XL8t8` 同步挂起，待下次 Pencil 会话回写。
 
 ---
 
@@ -224,7 +229,7 @@ JS 镜像在 `src/lib/motion/tokens.ts`，由 `tokens.test.ts` 的同步测试�
 | `InspectorTabs/Canonical` | `N4FZZS` | 固定四页签 | Data / Source / Gates / Execution |
 | `ProjectCard/Canonical` | `S1xDL` | 项目摘要 | surface / muted preview |
 | `PipelineNode/Canonical` | `Qsovp` | DAG 任务与 checkpoint | surface + semantic status；生产挂载 `/products/canvas/[projectId]`；状态枚举为领域 `NodeStatus`；实例 override 含 `selected`；website 六阶段由数据库执行快照覆盖真实标题、动作文案与既有 stage 色 |
-| `QueueBar/Canonical` | `XL8t8` | Trigger/队列摘要 | surface + border；script/audio 可投影套餐并发与排队数，website 只显示数据库确认的“已完成 N/6 阶段” |
+| `QueueBar/Canonical` | `XL8t8` | Trigger/队列摘要 | surface + border；script/audio 可投影套餐并发与排队数，website 只显示数据库确认的“已完成 N/6 阶段”。代码侧增补 `variant="glass"`（半透明 surface + backdrop-blur + 圆角悬浮），S3 画布以悬浮条形式浮于 DAG 之上（`inset-x-3 bottom-3`），视口工具条与小地图相应上移让位 |
 
 规则：
 
@@ -360,7 +365,7 @@ Canonical 状态集合：`loading / empty / ready / running / succeeded / failed
 
 **应用壳与导航**：`clapperboard`、`layout-dashboard`、`folder`、`waypoints`、`film`、`download`、`settings`
 
-**操作**：`plus`、`save`、`settings-2`、`ellipsis`、`x`、`upload`、`refresh-cw`、`arrow-left`、`chevron-right`、`skip-forward`、`zoom-in`、`zoom-out`、`maximize-2`、`minimize-2`、`folder-open`、`pencil`、`trash-2`
+**操作**：`plus`、`save`、`settings-2`、`ellipsis`、`x`、`upload`、`refresh-cw`、`arrow-left`、`chevron-right`、`skip-forward`、`zoom-in`、`zoom-out`、`maximize-2`、`minimize-2`、`folder-open`、`pencil`、`trash-2`、`wrench`（仅 S3 分镜通道面板最小化后的悬浮展开钮）
 
 **执行与内容**：`list-tree`、`sparkles`、`combine`、`file-code`、`audio-lines`、`globe`、`play`、`loader-circle`
 
