@@ -32,6 +32,17 @@ export function ButtonDemo() {
           取消
         </Button>
       </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button loading icon={Plus}>
+          创建中…
+        </Button>
+        <Button variant="tinted" loading size="sm">
+          生成中…
+        </Button>
+        <Button variant="destructive" loading>
+          重渲中…
+        </Button>
+      </div>
     </div>
   )
 }

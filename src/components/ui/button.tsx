@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from 'react'
 import type { HTMLMotionProps } from 'motion/react'
+import { LoaderCircle } from 'lucide-react'
 import { ControlPressButton } from '@/components/ui/control-motion'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +18,8 @@ export interface ButtonProps extends Omit<HTMLMotionProps<'button'>, 'children'>
   variant?: ButtonVariant
   size?: ButtonSize
   icon?: ComponentType<{ className?: string }>
+  /** opt-in 加载态：强制 disabled + aria-busy，图标槽位换成 loader-circle 旋转；文案切换由调用方 children 控制。 */
+  loading?: boolean
   children?: ReactNode
 }
 
@@ -63,6 +66,8 @@ export function Button({
   variant = 'primary',
   size = 'md',
   icon: Icon,
+  loading = false,
+  disabled,
   children,
   className,
   ...props
@@ -70,9 +75,15 @@ export function Button({
   return (
     <ControlPressButton
       className={buttonClassName({ variant, size, className })}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
       {...props}
     >
-      {Icon && <Icon className="h-4 w-4 shrink-0" />}
+      {loading ? (
+        <LoaderCircle aria-hidden className="h-4 w-4 shrink-0 animate-spin" />
+      ) : (
+        Icon && <Icon className="h-4 w-4 shrink-0" />
+      )}
       {children}
     </ControlPressButton>
   )
