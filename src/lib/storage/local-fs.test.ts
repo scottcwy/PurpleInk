@@ -71,14 +71,22 @@ describe('LocalFsStorage', () => {
   })
 
   it('rejects keys that escape the root directory', async () => {
-    const escapes = ['../outside.txt', '..\\outside.txt', 'a/../../outside.txt']
+    // POSIX 下反斜杠是合法文件名字符，'..\outside.txt' 只是一个怪名字的文件，
+    // 并不越出 root；它只在 Windows 上才是穿越，所以按平台挑用例，否则这条断言
+    // 在 Linux CI 上恒红。
+    const escapes = ['../outside.txt', 'a/../../outside.txt']
+    if (process.platform === 'win32') {
+      escapes.push('..\\outside.txt')
+    }
     for (const key of escapes) {
       await expect(storage.put(key, 'x')).rejects.toThrow(/root/)
       await expect(storage.get(key)).rejects.toThrow(/root/)
       await expect(storage.delete(key)).rejects.toThrow(/root/)
       expect(() => storage.localPath(key)).toThrow(/root/)
     }
-    // 绝对路径 key 同样不得穿透 root。
-    await expect(storage.put('C:/temp/abs.txt', 'x')).rejects.toThrow(/root/)
+    // 绝对路径 key 同样不得穿透 root；各平台取各自的绝对路径写法。
+    const absoluteKey =
+      process.platform === 'win32' ? 'C:/temp/abs.txt' : '/tmp/abs.txt'
+    await expect(storage.put(absoluteKey, 'x')).rejects.toThrow(/root/)
   })
 })
