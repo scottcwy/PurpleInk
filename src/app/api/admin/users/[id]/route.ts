@@ -1,5 +1,9 @@
 import { updateAdminUser } from '@/features/admin'
-import { adminErrorResponse, jsonObject } from '@/features/admin/http-errors'
+import {
+  adminErrorResponse,
+  parseAdminUuid,
+  readAdminMutationJson,
+} from '@/features/admin/http-errors'
 import { withAdminSession } from '@/features/auth'
 
 export const dynamic = 'force-dynamic'
@@ -9,7 +13,8 @@ type Context = { params: Promise<{ id: string }> }
 export async function PATCH(request: Request, context: Context): Promise<Response> {
   return withAdminSession(async (session) => {
     try {
-      const [{ id }, body] = await Promise.all([context.params, jsonObject(request)])
+      const body = await readAdminMutationJson(request)
+      const id = parseAdminUuid((await context.params).id)
       if (body.status === 'disabled') {
         return Response.json(
           { ok: false, error: '停用账号必须使用二次确认操作' },
@@ -35,7 +40,8 @@ export async function PATCH(request: Request, context: Context): Promise<Respons
 export async function DELETE(request: Request, context: Context): Promise<Response> {
   return withAdminSession(async (session) => {
     try {
-      const [{ id }, body] = await Promise.all([context.params, jsonObject(request)])
+      const body = await readAdminMutationJson(request)
+      const id = parseAdminUuid((await context.params).id)
       if (body.confirmation !== 'DISABLE') {
         return Response.json({ ok: false, error: '需要确认停用账号' }, { status: 400 })
       }

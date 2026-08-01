@@ -1,5 +1,8 @@
 import { createAdminUser, listAdminUsers } from '@/features/admin'
-import { adminErrorResponse, jsonObject } from '@/features/admin/http-errors'
+import {
+  adminErrorResponse,
+  readAdminMutationJson,
+} from '@/features/admin/http-errors'
 import { positiveQueryInteger } from '@/features/admin/http-query'
 import { withAdminSession } from '@/features/auth'
 
@@ -20,7 +23,7 @@ export async function GET(request: Request): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   return withAdminSession(async () => {
     try {
-      const body = await jsonObject(request)
+      const body = await readAdminMutationJson(request)
       const created = await createAdminUser({
         email: typeof body.email === 'string' ? body.email : '',
         name: typeof body.name === 'string' ? body.name : '',

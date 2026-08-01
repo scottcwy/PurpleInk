@@ -1,5 +1,9 @@
 import { revokeRedemptionBatch } from '@/features/admin'
-import { adminErrorResponse, jsonObject } from '@/features/admin/http-errors'
+import {
+  adminErrorResponse,
+  parseAdminUuid,
+  readAdminMutationJson,
+} from '@/features/admin/http-errors'
 import { withAdminSession } from '@/features/auth'
 
 export const dynamic = 'force-dynamic'
@@ -9,7 +13,8 @@ export async function PATCH(request: Request, context: {
 }): Promise<Response> {
   return withAdminSession(async () => {
     try {
-      const [{ id }, body] = await Promise.all([context.params, jsonObject(request)])
+      const body = await readAdminMutationJson(request)
+      const id = parseAdminUuid((await context.params).id)
       if (body.action !== 'revoke' || body.confirmation !== 'REVOKE') {
         return Response.json({ ok: false, error: '需要确认撤销批次' }, { status: 400 })
       }

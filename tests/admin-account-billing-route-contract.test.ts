@@ -37,4 +37,23 @@ describe('admin account and billing route contracts', () => {
     expect(source).toContain("href: '/admin/billing'")
     expect(source).not.toContain('用户与计费 · 待接线')
   })
+
+  it.each([
+    'users/route.ts',
+    'users/[id]/route.ts',
+    'billing/batches/route.ts',
+    'billing/batches/[id]/route.ts',
+  ])('applies the shared JSON mutation boundary in %s', (route) => {
+    const source = readFileSync(resolve('src/app/api/admin', route), 'utf8')
+    expect(source).toContain('readAdminMutationJson')
+    expect(source).not.toContain('request.json()')
+  })
+
+  it.each(['users/[id]/route.ts', 'billing/batches/[id]/route.ts'])(
+    'validates path UUIDs before service calls in %s',
+    (route) => {
+      const source = readFileSync(resolve('src/app/api/admin', route), 'utf8')
+      expect(source).toContain('parseAdminUuid')
+    },
+  )
 })
