@@ -73,3 +73,6 @@ deploy/reverse-proxy/secrets/*
 
 # HyperFrames 视频工作目录（含大媒体与采集中间产物）
 /videos/
+
+# 个人代理指令（AGENTS.md 本地化，不入库）
+/AGENTS.md
