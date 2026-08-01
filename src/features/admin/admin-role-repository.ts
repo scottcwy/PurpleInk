@@ -2,6 +2,7 @@ import 'server-only'
 import { and, eq, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db/client'
 import { users, type UserRole } from '@/lib/db/schema'
+import { globalAdminMutationLockSql } from './global-admin-mutation-lock'
 
 export type SetUserRoleResult =
   | { outcome: 'updated'; userId: string; previousRole: UserRole; role: UserRole }
@@ -15,7 +16,7 @@ export async function setUserRoleByEmail(input: {
 }): Promise<SetUserRoleResult> {
   const database = await getDb()
   return database.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('purpleink:admin-role'))`)
+    await tx.execute(globalAdminMutationLockSql())
     const [target] = await tx
       .select({ id: users.id, role: users.role, status: users.status })
       .from(users)

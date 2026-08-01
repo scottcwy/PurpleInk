@@ -1,4 +1,6 @@
 import { and, eq } from 'drizzle-orm'
+import { drizzle } from 'drizzle-orm/postgres-js'
+import postgres from 'postgres'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runInAuthContext } from '@/lib/auth/workspace-context'
 import {
@@ -10,6 +12,7 @@ import {
   workspaceMembers,
   workspaces,
 } from '@/lib/db/schema'
+import * as schema from '@/lib/db/schema'
 import { createPgTestDatabase, type PgTestDatabase } from '@/lib/db/test/pg-test-database'
 
 const getDbMock = vi.hoisted(() => vi.fn())
@@ -151,6 +154,62 @@ describe('safe account administration', () => {
     ])
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
     expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1)
+    expect(await database.db.select().from(users).where(and(
+      eq(users.role, 'admin'),
+      eq(users.status, 'active'),
+    ))).toHaveLength(1)
+  })
+
+  it('serializes disable and CLI role demotion through one global admin lock', async () => {
+    const [operator] = await database.db.insert(users).values({
+      email: 'cross-entry-operator@example.test',
+      name: 'Cross-entry operator',
+      passwordHash: 'test-only',
+    }).returning({ id: users.id })
+    const [{ updateAdminUser }, { setUserRoleByEmail }] = await Promise.all([
+      import('./user-admin'),
+      import('./admin-role-repository'),
+    ])
+    await database.sql`
+      create function delay_cross_entry_admin_mutation() returns trigger as $$
+      begin
+        perform pg_sleep(0.25);
+        return new;
+      end;
+      $$ language plpgsql
+    `
+    await database.sql`
+      create trigger delay_cross_entry_admin_mutation_trigger
+      before update of role, status on users
+      for each row execute function delay_cross_entry_admin_mutation()
+    `
+    const concurrentClient = postgres(process.env.TEST_DATABASE_URL!, { max: 2 })
+    const concurrentDb = drizzle(concurrentClient, { schema })
+    getDbMock.mockResolvedValue(concurrentDb)
+
+    const [disable, demote] = await Promise.all([
+      updateAdminUser({
+        actorUserId: operator!.id,
+        targetUserId: ACTOR_ID,
+        patch: { status: 'disabled' },
+      }).then(() => 'updated' as const).catch((error: unknown) => (
+        typeof error === 'object' && error !== null && 'code' in error
+          ? String(error.code)
+          : 'unknown'
+      )),
+      setUserRoleByEmail({
+        email: 'second@example.test',
+        role: 'user',
+      }).then((result) => result.outcome),
+    ]).finally(async () => {
+      await concurrentClient.end({ timeout: 5 })
+      getDbMock.mockResolvedValue(database.db)
+    })
+
+    expect([disable, demote]).toContain('updated')
+    expect([disable, demote]).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^(LAST_ACTIVE_ADMIN|last_active_admin)$/),
+    ]))
     expect(await database.db.select().from(users).where(and(
       eq(users.role, 'admin'),
       eq(users.status, 'active'),

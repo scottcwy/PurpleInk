@@ -10,6 +10,7 @@ import {
 import { hashPassword } from '@/features/auth/password'
 import { getDb } from '@/lib/db/client'
 import { sessions, users, workspaceMembers } from '@/lib/db/schema'
+import { globalAdminMutationLockSql } from './global-admin-mutation-lock'
 
 export type UserAdminErrorCode =
   | 'INVALID_INPUT'
@@ -120,7 +121,7 @@ export async function updateAdminUser(input: {
   const database = await getDb()
   try {
     return await database.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('purpleink:admin-user-status'))`)
+      await tx.execute(globalAdminMutationLockSql())
       const [target] = await tx.select().from(users)
         .where(eq(users.id, input.targetUserId)).for('update')
       if (!target) throw new UserAdminError('USER_NOT_FOUND', '用户不存在')
