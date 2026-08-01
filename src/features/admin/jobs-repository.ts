@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, desc, eq, or, type SQL } from 'drizzle-orm'
+import { and, desc, eq, or, sql, type SQL } from 'drizzle-orm'
 import { getDb } from '@/lib/db/client'
 import { pipelineRuns, taskAttempts } from '@/lib/db/schema'
 import { normalizeJobRow, type AdminJobRow } from './operational-projections'
@@ -36,16 +36,16 @@ export async function listAdminJobs(input: AdminJobsQuery = {}): Promise<AdminJo
       attemptCompletedAt: taskAttempts.completedAt,
       failure: taskAttempts.failure,
     })
-    .from(pipelineRuns)
-    .leftJoin(
-      taskAttempts,
+    .from(taskAttempts)
+    .innerJoin(
+      pipelineRuns,
       and(
         eq(taskAttempts.workspaceId, pipelineRuns.workspaceId),
         eq(taskAttempts.runId, pipelineRuns.id),
       ),
     )
     .where(condition)
-    .orderBy(desc(taskAttempts.createdAt), desc(pipelineRuns.createdAt))
+    .orderBy(sql`${taskAttempts.createdAt} desc nulls last`)
     .limit(pageSize)
     .offset((page - 1) * pageSize)
 

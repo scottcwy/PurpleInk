@@ -1,0 +1,1 @@
+CREATE INDEX "task_attempts_admin_created_idx" ON "task_attempts" USING btree ("created_at" DESC NULLS LAST);

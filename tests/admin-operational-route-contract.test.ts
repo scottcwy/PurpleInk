@@ -59,6 +59,25 @@ describe("admin operational route contracts", () => {
     expect(detail).not.toContain("render_jobs");
   });
 
+  it("drives the jobs list from attempts while preserving run-only detail lookup", () => {
+    const source = readFileSync(
+      resolve("src/features/admin/jobs-repository.ts"),
+      "utf8"
+    );
+    const listSource = source.slice(
+      source.indexOf("export async function listAdminJobs"),
+      source.indexOf("export async function getAdminJob")
+    );
+    const detailSource = source.slice(
+      source.indexOf("export async function getAdminJob")
+    );
+    expect(listSource).toContain(".from(taskAttempts)");
+    expect(listSource).toContain(".innerJoin(");
+    expect(listSource).not.toContain(".leftJoin(");
+    expect(detailSource).toContain(".from(pipelineRuns)");
+    expect(detailSource).toContain(".leftJoin(");
+  });
+
   it("keeps layout auth-only and uses a page frame without a second shell mapping", () => {
     const layout = readFileSync(resolve("src/app/admin/layout.tsx"), "utf8");
     const frame = readFileSync(

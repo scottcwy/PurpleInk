@@ -150,6 +150,14 @@ describe('admin operational PostgreSQL projections', () => {
 
   it('projects real attempts safely and observes current lease/dispatch state', async () => {
     const { workspace, project, run, attempt } = await seedWorkflow()
+    const [runWithoutAttempt] = await database.db.insert(pipelineRuns).values({
+      workspaceId: workspace.id,
+      projectId: project.id,
+      status: 'triggering',
+      workflowVersion: 'v3',
+      fingerprint: '9'.repeat(64),
+    }).returning({ id: pipelineRuns.id })
+    if (!runWithoutAttempt) throw new Error('seed run without attempt failed')
     await database.db.insert(taskAttempts).values([
       {
         workspaceId: workspace.id,
@@ -236,6 +244,12 @@ describe('admin operational PostgreSQL projections', () => {
     expect(jobs.items).toContainEqual(
       expect.objectContaining({ taskId: 'DIRECT', failureCategory: 'capacity' }),
     )
+    expect(jobs.items).not.toContainEqual(
+      expect.objectContaining({ runId: runWithoutAttempt.id }),
+    )
+    await expect(getAdminJob(runWithoutAttempt.id)).resolves.toEqual([
+      expect.objectContaining({ runId: runWithoutAttempt.id, attemptId: null }),
+    ])
     await expect(getAdminJob(attempt.id)).resolves.toEqual([
       expect.objectContaining({ attemptId: attempt.id, failureCategory: 'capacity' }),
     ])
@@ -248,5 +262,28 @@ describe('admin operational PostgreSQL projections', () => {
     expect(ops.providerTickets).not.toContainEqual(expect.objectContaining({ status: 'released' }))
     expect(ops.providerPools[0]).toMatchObject({ provider: 'safe-provider', currentConcurrency: 2 })
     expect(JSON.stringify(ops)).not.toContain('4444444444')
+  })
+
+  it('uses the global created-at index for default jobs top-N without an explicit sort', async () => {
+    await seedWorkflow()
+    await database.sql`set enable_seqscan = off`
+    try {
+      const [explain] = await database.sql<{ 'QUERY PLAN': unknown }[]>`
+        explain (format json)
+        select attempt.id
+        from task_attempts as attempt
+        inner join pipeline_runs as run
+          on run.workspace_id = attempt.workspace_id
+          and run.id = attempt.run_id
+        order by attempt.created_at desc nulls last
+        limit 50
+      `
+      const plan = JSON.stringify(explain?.['QUERY PLAN'])
+      // Stable structural contract: disabling seqscan forces the planner to prove the top-N path.
+      expect(plan).toContain('task_attempts_admin_created_idx')
+      expect(plan).not.toContain('"Node Type":"Sort"')
+    } finally {
+      await database.sql`set enable_seqscan = on`
+    }
   })
 })
