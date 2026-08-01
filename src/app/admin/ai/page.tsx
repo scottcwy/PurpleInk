@@ -1,7 +1,7 @@
 import { requireAdminSession } from "@/features/auth/page-session";
 import { getAdminAiAudit } from "@/features/admin";
 import { AdminAiAuditPanel } from "@/features/admin/ui/ai-audit-panel";
-import { AdminPageHeader } from "@/features/admin/ui/admin-shell";
+import { AdminPageFrame } from "@/features/admin/ui/admin-page-frame";
 
 export const dynamic = "force-dynamic";
 
@@ -14,13 +14,12 @@ export default async function AdminAiPage({
   const { days } = await searchParams;
   const snapshot = await getAdminAiAudit(parseDays(days));
   return (
-    <div className="flex flex-col gap-6">
-      <AdminPageHeader
-        title="AI 审计"
-        description="ai_invocations v3 身份与双账本成本的跨 workspace 脱敏聚合。"
-      />
+    <AdminPageFrame
+      title="AI 审计"
+      description="ai_invocations v3 身份与双账本成本的跨 workspace 脱敏聚合。"
+    >
       <AdminAiAuditPanel snapshot={snapshot} />
-    </div>
+    </AdminPageFrame>
   );
 }
 

@@ -35,14 +35,56 @@ export function AdminAiAuditPanel({ snapshot }: { snapshot: AdminAiAuditSnapshot
               <Cell mono>{item.failureDomainId}</Cell>
               <Cell><StatusPill variant={item.status === 'failed' ? 'failed' : item.status === 'succeeded' ? 'rendered' : 'generating'} label={item.status} /></Cell>
               <Cell mono>{item.invocationCount}</Cell>
-              <Cell mono>{formatCnyMicros(item.officialCostCnyMicros)}</Cell>
-              <Cell mono>{formatCnyMicros(item.entitlementDebitCnyMicros)}</Cell>
+              <Cell>
+                <CostValue
+                  total={item.officialCost.totalCnyMicros}
+                  known={item.officialCost.knownCnyMicros}
+                  ledgerCount={item.officialCost.ledgerCount}
+                  invocationCount={item.invocationCount}
+                  detail={item.officialCost.measurementQualities.join(' / ')}
+                />
+              </Cell>
+              <Cell>
+                <CostValue
+                  total={item.entitlement.totalDebitCnyMicros}
+                  known={item.entitlement.knownDebitCnyMicros}
+                  ledgerCount={item.entitlement.ledgerCount}
+                  invocationCount={item.invocationCount}
+                />
+              </Cell>
               <Cell mono>{item.lastInvokedAt}</Cell>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+  )
+}
+
+function CostValue({
+  total,
+  known,
+  ledgerCount,
+  invocationCount,
+  detail,
+}: {
+  total: string | null
+  known: string
+  ledgerCount: number
+  invocationCount: number
+  detail?: string
+}) {
+  return (
+    <span className="block min-w-32">
+      <span className="block font-mono text-xs">
+        {total === null ? '未知' : formatCnyMicros(total)}
+      </span>
+      <span className="mt-1 block text-[11px] text-ds-text-muted">
+        {ledgerCount}/{invocationCount} 已登记
+        {total === null ? ` · 已知小计 ${formatCnyMicros(known)}` : ''}
+        {detail ? ` · ${detail}` : ''}
+      </span>
+    </span>
   )
 }
 

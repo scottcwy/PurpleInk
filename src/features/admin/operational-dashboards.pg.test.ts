@@ -96,7 +96,14 @@ describe('admin operational PostgreSQL projections', () => {
       bucketStartedAt: new Date(),
       count: 4,
     })
-    await database.db.insert(authThrottle).values({ key: `ip:${'3'.repeat(64)}:login`, count: 2 })
+    await database.db.insert(authThrottle).values([
+      { key: `ip:${'3'.repeat(64)}:login`, count: 2 },
+      {
+        key: `ip:${'5'.repeat(64)}:login`,
+        count: 99,
+        windowStartedAt: new Date('2000-01-01T00:00:00.000Z'),
+      },
+    ])
 
     const { getAdminOverview } = await import('./overview-repository')
     const { getAdminDauMetrics } = await import('./metrics-repository')
@@ -113,7 +120,32 @@ describe('admin operational PostgreSQL projections', () => {
   })
 
   it('projects real attempts safely and observes current lease/dispatch state', async () => {
-    const { workspace, project, attempt } = await seedWorkflow()
+    const { workspace, project, run, attempt } = await seedWorkflow()
+    await database.db.insert(taskAttempts).values([
+      {
+        workspaceId: workspace.id,
+        runId: run.id,
+        taskId: 'queued-work',
+        entityType: 'canvas_node',
+        entityId: project.id,
+        attemptNo: 1,
+        status: 'queued',
+        fingerprint: '6'.repeat(64),
+        checkpoint: { schemaVersion: 1 },
+      },
+      {
+        workspaceId: workspace.id,
+        runId: run.id,
+        taskId: 'expired-running-work',
+        entityType: 'canvas_node',
+        entityId: project.id,
+        attemptNo: 1,
+        status: 'running',
+        leaseExpiresAt: new Date('2000-01-01T00:00:00.000Z'),
+        fingerprint: '8'.repeat(64),
+        checkpoint: { schemaVersion: 1 },
+      },
+    ])
     await database.db.insert(workflowConcurrencyLeases).values({
       workspaceId: workspace.id,
       workUnitKey: 'shot-1',
@@ -128,12 +160,12 @@ describe('admin operational PostgreSQL projections', () => {
       provider: 'safe-provider',
       funding: 'managed',
       status: 'scheduled',
-      leaseExpiresAt: new Date(Date.now() + 60_000),
+      leaseExpiresAt: new Date('2100-01-01T00:00:00.000Z'),
     })
     await database.db.insert(providerDispatchCooldowns).values({
       scopeKey: '4'.repeat(64),
       provider: 'safe-provider',
-      blockedUntil: new Date(Date.now() + 60_000),
+      blockedUntil: new Date('2100-01-01T00:00:00.000Z'),
     })
     await database.db.insert(providerPoolStates).values({
       scopeKey: '4'.repeat(64),
@@ -142,19 +174,49 @@ describe('admin operational PostgreSQL projections', () => {
       maxConcurrency: 8,
       failureCount: 1,
     })
+    await database.db.insert(workflowConcurrencyLeases).values({
+      workspaceId: workspace.id,
+      workUnitKey: 'historical-shot',
+      projectId: project.id,
+      planKey: 'free',
+      status: 'released',
+    })
+    await database.db.insert(workflowConcurrencyLeases).values({
+      workspaceId: workspace.id,
+      workUnitKey: 'expired-active-shot',
+      projectId: project.id,
+      planKey: 'free',
+      status: 'active',
+      leaseExpiresAt: new Date('2000-01-01T00:00:00.000Z'),
+    })
+    await database.db.insert(providerDispatches).values({
+      scopeKey: '7'.repeat(64),
+      workspaceId: workspace.id,
+      attemptId: attempt.id,
+      provider: 'safe-provider',
+      funding: 'managed',
+      status: 'released',
+      leaseExpiresAt: new Date('2100-01-01T00:00:00.000Z'),
+    })
 
     const { getAdminJob, listAdminJobs } = await import('./jobs-repository')
     const { getAdminOpsSnapshot } = await import('./ops-repository')
     const jobs = await listAdminJobs()
     const ops = await getAdminOpsSnapshot()
 
-    expect(jobs.items[0]).toMatchObject({ taskId: 'DIRECT', failureCategory: 'capacity' })
+    expect(jobs.items).toContainEqual(
+      expect.objectContaining({ taskId: 'DIRECT', failureCategory: 'capacity' }),
+    )
     await expect(getAdminJob(attempt.id)).resolves.toEqual([
       expect.objectContaining({ attemptId: attempt.id, failureCategory: 'capacity' }),
     ])
     expect(JSON.stringify(jobs)).not.toContain('secret provider response')
+    expect(ops.queue).toEqual([{ status: 'queued', count: 1 }])
     expect(ops.workflowLeases).toContainEqual({ status: 'waiting', count: 1 })
+    expect(ops.workflowLeases).not.toContainEqual(expect.objectContaining({ status: 'released' }))
+    expect(ops.workflowLeases).not.toContainEqual(expect.objectContaining({ status: 'active' }))
     expect(ops.providerTickets).toContainEqual({ status: 'scheduled', count: 1 })
+    expect(ops.providerTickets).not.toContainEqual(expect.objectContaining({ status: 'released' }))
     expect(ops.providerPools[0]).toMatchObject({ provider: 'safe-provider', currentConcurrency: 2 })
     expect(JSON.stringify(ops)).not.toContain('4444444444')
   })

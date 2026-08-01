@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -54,10 +54,20 @@ describe("admin operational route contracts", () => {
     expect(detail).not.toContain("render_jobs");
   });
 
-  it("keeps the admin shell separate from the product AppSidebar", () => {
-    const source = readFileSync(resolve("src/app/admin/layout.tsx"), "utf8");
-    expect(source).toContain("requireAdminSession");
-    expect(source).not.toContain("AppSidebar");
-    expect(source).not.toContain("usePathname");
+  it("keeps layout auth-only and uses a page frame without a second shell mapping", () => {
+    const layout = readFileSync(resolve("src/app/admin/layout.tsx"), "utf8");
+    const frame = readFileSync(
+      resolve("src/features/admin/ui/admin-page-frame.tsx"),
+      "utf8"
+    );
+    expect(layout).toContain("requireAdminSession");
+    expect(layout).not.toContain("AdminShell");
+    expect(layout).not.toContain("AdminPageFrame");
+    expect(frame).not.toContain("AppSidebar");
+    expect(frame).not.toContain("usePathname");
+    expect(frame).not.toContain("active:");
+    expect(existsSync(resolve("src/features/admin/ui/admin-shell.tsx"))).toBe(
+      false
+    );
   });
 });

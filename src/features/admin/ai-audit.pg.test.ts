@@ -65,9 +65,8 @@ describe('admin AI audit PostgreSQL projection', () => {
       effectiveFrom: now,
     })
     if (!rateCard || !usagePeriod) throw new Error('seed billing catalog failed')
-    const [invocation] = await database.db.insert(aiInvocations).values({
+    const invocationBase = {
       workspaceId: workspace.id,
-      invocationNo: 1,
       status: 'succeeded',
       provider: 'safe-provider',
       model: 'outbound-model',
@@ -86,8 +85,16 @@ describe('admin AI audit PostgreSQL projection', () => {
       rateCardId: rateCard.id,
       billingStatus: 'settled',
       completedAt: now,
-    }).returning({ id: aiInvocations.id })
-    if (!invocation) throw new Error('seed invocation failed')
+    } as const
+    const [invocation, nullCostInvocation] = await database.db
+      .insert(aiInvocations)
+      .values([
+        { ...invocationBase, invocationNo: 1 },
+        { ...invocationBase, invocationNo: 2 },
+        { ...invocationBase, invocationNo: 3 },
+      ])
+      .returning({ id: aiInvocations.id })
+    if (!invocation || !nullCostInvocation) throw new Error('seed invocation failed')
     await database.db.insert(officialCostEntries).values({
       workspaceId: workspace.id,
       invocationId: invocation.id,
@@ -96,6 +103,15 @@ describe('admin AI audit PostgreSQL projection', () => {
       currency: 'CNY',
       cnyMicros: BigInt(12_500),
       measurementQuality: 'reported',
+    })
+    await database.db.insert(officialCostEntries).values({
+      workspaceId: workspace.id,
+      invocationId: nullCostInvocation.id,
+      rateCardId: rateCard.id,
+      officialPriceIdentity: 'official-price-v1',
+      currency: 'CNY',
+      cnyMicros: null,
+      measurementQuality: 'uncertain',
     })
     await database.db.insert(entitlementLedgerEntries).values({
       workspaceId: workspace.id,
@@ -119,9 +135,18 @@ describe('admin AI audit PostgreSQL projection', () => {
       channelId: 'managed',
       funding: 'managed',
       failureDomainId: 'safe-provider:text',
-      invocationCount: 1,
-      officialCostCnyMicros: '12500',
-      entitlementDebitCnyMicros: '15000',
+      invocationCount: 3,
+      officialCost: {
+        totalCnyMicros: null,
+        knownCnyMicros: '12500',
+        ledgerCount: 2,
+        measurementQualities: ['reported', 'uncertain'],
+      },
+      entitlement: {
+        totalDebitCnyMicros: null,
+        knownDebitCnyMicros: '15000',
+        ledgerCount: 1,
+      },
     })])
     const serialized = JSON.stringify(snapshot)
     expect(serialized).not.toContain(workspace.id)

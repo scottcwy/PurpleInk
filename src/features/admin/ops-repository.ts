@@ -1,5 +1,5 @@
 import 'server-only'
-import { count, gt, sql } from 'drizzle-orm'
+import { and, count, eq, gt, inArray, or, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db/client'
 import {
   providerDispatchCooldowns,
@@ -35,11 +35,32 @@ export async function getAdminOpsSnapshot(): Promise<AdminOpsSnapshot> {
   const [clock, queue, workflowLeases, providerTickets, cooldowns, pools] = await Promise.all([
     db.execute(sql<{ database_time: Date }>`select now() as database_time`),
     db.select({ status: taskAttempts.status, count: count() })
-      .from(taskAttempts).groupBy(taskAttempts.status),
+      .from(taskAttempts)
+      .where(or(
+        eq(taskAttempts.status, 'queued'),
+        and(
+          eq(taskAttempts.status, 'running'),
+          gt(taskAttempts.leaseExpiresAt, sql`now()`),
+        ),
+      ))
+      .groupBy(taskAttempts.status),
     db.select({ status: workflowConcurrencyLeases.status, count: count() })
-      .from(workflowConcurrencyLeases).groupBy(workflowConcurrencyLeases.status),
+      .from(workflowConcurrencyLeases)
+      .where(or(
+        eq(workflowConcurrencyLeases.status, 'waiting'),
+        and(
+          eq(workflowConcurrencyLeases.status, 'active'),
+          gt(workflowConcurrencyLeases.leaseExpiresAt, sql`now()`),
+        ),
+      ))
+      .groupBy(workflowConcurrencyLeases.status),
     db.select({ status: providerDispatches.status, count: count() })
-      .from(providerDispatches).groupBy(providerDispatches.status),
+      .from(providerDispatches)
+      .where(and(
+        inArray(providerDispatches.status, ['scheduled', 'in_flight']),
+        gt(providerDispatches.leaseExpiresAt, sql`now()`),
+      ))
+      .groupBy(providerDispatches.status),
     db.select({
       provider: providerDispatchCooldowns.provider,
       count: count(),

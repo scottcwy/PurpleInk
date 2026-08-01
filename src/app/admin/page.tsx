@@ -7,7 +7,7 @@ import {
 import { Card, CardBody, CardTitle } from "@/components/ui/card";
 import { requireAdminSession } from "@/features/auth/page-session";
 import { getAdminOverview } from "@/features/admin";
-import { AdminPageHeader } from "@/features/admin/ui/admin-shell";
+import { AdminPageFrame } from "@/features/admin/ui/admin-page-frame";
 
 export const dynamic = "force-dynamic";
 
@@ -21,11 +21,10 @@ export default async function AdminOverviewPage() {
     { label: "有效会话", value: overview.activeSessions, icon: Clock3 },
   ];
   return (
-    <div className="flex flex-col gap-6">
-      <AdminPageHeader
-        title="运营概览"
-        description="用户、会话与 PostgreSQL 时钟的实时只读投影。"
-      />
+    <AdminPageFrame
+      title="运营概览"
+      description="用户、会话与 PostgreSQL 时钟的实时只读投影。"
+    >
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {metrics.map(({ label, value, icon: Icon }) => (
           <Card key={label}>
@@ -45,6 +44,6 @@ export default async function AdminOverviewPage() {
           {overview.databaseTime}
         </CardBody>
       </Card>
-    </div>
+    </AdminPageFrame>
   );
 }

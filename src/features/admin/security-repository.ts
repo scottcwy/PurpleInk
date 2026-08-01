@@ -22,7 +22,8 @@ export async function getAdminSecuritySnapshot(): Promise<AdminSecuritySnapshot>
     db.select({
       trackedBuckets: count(),
       attempts: sql<number>`coalesce(${sum(authThrottle.count)}, 0)::int`,
-    }).from(authThrottle),
+    }).from(authThrottle)
+      .where(gte(authThrottle.windowStartedAt, sql`now() - interval '24 hours'`)),
   ])
   return {
     windowHours: 24,

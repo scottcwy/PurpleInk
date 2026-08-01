@@ -47,8 +47,17 @@ export interface AdminAiAuditRow {
   failureDomainId: string
   status: string
   invocationCount: number
-  officialCostCnyMicros: string
-  entitlementDebitCnyMicros: string
+  officialCost: {
+    totalCnyMicros: string | null
+    knownCnyMicros: string
+    ledgerCount: number
+    measurementQualities: string[]
+  }
+  entitlement: {
+    totalDebitCnyMicros: string | null
+    knownDebitCnyMicros: string
+    ledgerCount: number
+  }
   lastInvokedAt: string
 }
 
@@ -62,7 +71,12 @@ interface AiAuditProjectionInput extends Record<string, unknown> {
   status: string
   invocationCount: number
   officialCostCnyMicros: string | number | bigint | null
+  officialCostKnownCnyMicros: string | number | bigint
+  officialCostLedgerCount: number
+  officialCostMeasurementQualities: string | null
   entitlementDebitCnyMicros: string | number | bigint | null
+  entitlementKnownDebitCnyMicros: string | number | bigint
+  entitlementLedgerCount: number
   lastInvokedAt: Date | string
 }
 
@@ -111,10 +125,23 @@ export function normalizeAiAuditRow(input: AiAuditProjectionInput): AdminAiAudit
     failureDomainId: input.failureDomainId ?? 'unknown',
     status: input.status,
     invocationCount: input.invocationCount,
-    officialCostCnyMicros: String(input.officialCostCnyMicros ?? 0),
-    entitlementDebitCnyMicros: String(input.entitlementDebitCnyMicros ?? 0),
+    officialCost: {
+      totalCnyMicros: nullableMicros(input.officialCostCnyMicros),
+      knownCnyMicros: String(input.officialCostKnownCnyMicros),
+      ledgerCount: input.officialCostLedgerCount,
+      measurementQualities: input.officialCostMeasurementQualities?.split(',') ?? [],
+    },
+    entitlement: {
+      totalDebitCnyMicros: nullableMicros(input.entitlementDebitCnyMicros),
+      knownDebitCnyMicros: String(input.entitlementKnownDebitCnyMicros),
+      ledgerCount: input.entitlementLedgerCount,
+    },
     lastInvokedAt: normalizeTimestamp(input.lastInvokedAt),
   }
+}
+
+function nullableMicros(value: string | number | bigint | null): string | null {
+  return value === null ? null : String(value)
 }
 
 export function normalizeTimestamp(value: unknown): string {
