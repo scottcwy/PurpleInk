@@ -27,6 +27,7 @@ Set `PURPLEINK_IMAGE_TAG` to a full `sha-<40 lowercase hex>` tag and verify
 both Compose entrypoints before touching the running stack:
 
 ```powershell
+$env:PURPLEINK_IMAGE_TAG = (Get-Content deploy/.env | Where-Object { $_ -match '^PURPLEINK_IMAGE_TAG=' } | ForEach-Object { $_ -replace '^PURPLEINK_IMAGE_TAG=', '' })
 node scripts/deploy/validate-image-tag.mjs $env:PURPLEINK_IMAGE_TAG
 docker compose --env-file deploy/.env -f deploy/compose.yaml config --quiet
 docker compose --env-file deploy/.env -f docker-compose.prod.yml config --quiet
@@ -39,6 +40,10 @@ Stop if either command fails.
 Web has a single production replica and a 120-second graceful stop period.
 Caddy is the only published service and retains the SSE flush behavior and
 security headers documented in `access.md`.
+
+Worker intake is limited to public website capture through the authenticated
+application workflow. It does not receive IMAP or signup credentials, and it
+must not be repurposed as an email or account-registration ingestion service.
 
 ```powershell
 docker compose --env-file deploy/.env -f deploy/compose.yaml pull

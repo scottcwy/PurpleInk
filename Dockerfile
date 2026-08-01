@@ -37,6 +37,8 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS build
 WORKDIR /repo
 COPY . .
+ARG BACKEND_ORIGIN=http://worker:8787
+ENV BACKEND_ORIGIN=${BACKEND_ORIGIN}
 ENV NODE_ENV=production
 RUN pnpm build
 

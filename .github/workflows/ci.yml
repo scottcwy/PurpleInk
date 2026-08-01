@@ -127,6 +127,8 @@ jobs:
           target: ${{ matrix.target }}
           platforms: linux/amd64
           push: false
+          build-args: |
+            BACKEND_ORIGIN: http://worker:8787
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 
@@ -177,6 +179,8 @@ jobs:
           target: ${{ matrix.target }}
           platforms: linux/amd64
           push: true
+          build-args: |
+            BACKEND_ORIGIN: http://worker:8787
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.image }}

@@ -416,7 +416,7 @@ Project（可变，L3 内部）
 
 业务查询的 workspace 一律取自 `currentWorkspaceId()`（会话/队列上下文，无上下文即抛错不回落）；队列作业在领到的 attempt 行自身的 workspace 上下文内执行。`LOCAL_WORKSPACE_ID` 已降级为迁移/bootstrap/进程级配置锚点，由 `tests/workspace-context-contract.test.ts` 锁住。公开保留面：`/api/ping`（健康检查）、`/api/auth/*`、营销页与 `/playbook`。
 
-**入站边界仍未收敛**（ISSUE-015 P-2，`docs/deployment/access.md`）：反代（Caddy）的 IP 过滤 + Basic Auth 保留为纵深防御；应用内认证落地后，P-2 边界形态可降级为纯网络层（只改反代配置，不动 `src/**`），但在 PLAN-001 完成前不得声称已收敛。
+**入站边界已收敛为一套会话合同**（`docs/deployment/access.md`）：Caddy 只保留显式 CIDR 过滤、TLS、安全头和 SSE 透传；用户身份只由应用会话校验。反代不再承担第二次登录，Worker 只经 app 网络接受来自 Next 的服务间请求。
 
 ### 9.2 守卫矩阵（逐行核销）
 

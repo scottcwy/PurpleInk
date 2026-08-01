@@ -214,6 +214,45 @@ describe("immutable production deployment", () => {
     expect((workflow.match(/push:\s*true/g) ?? []).length).toBe(1);
   });
 
+  it("sets the Worker backend at Web build time without baking a localhost runtime", async () => {
+    const dockerfile = await text("Dockerfile");
+    const build = dockerfile.slice(
+      dockerfile.indexOf("FROM deps AS build"),
+      dockerfile.indexOf("FROM deps AS migrate")
+    );
+    const runtime = dockerfile.slice(
+      dockerfile.indexOf("FROM node:22-bookworm-slim AS runtime")
+    );
+    expect(build).toContain("ARG BACKEND_ORIGIN=http://worker:8787");
+    expect(build).toContain("ENV BACKEND_ORIGIN=${BACKEND_ORIGIN}");
+    expect(runtime).not.toContain("BACKEND_ORIGIN=http://localhost:8787");
+
+    const workflow = await text(".github/workflows/ci.yml");
+    expect((workflow.match(/build-args: \|\s*\n\s+BACKEND_ORIGIN: http:\/\/worker:8787/g) ?? []).length).toBe(2);
+  });
+
+  it("requires explicit production CIDRs and strips IMAP and signup inputs from deployment material", async () => {
+    const compose = await text("deploy/compose.yaml");
+    const envExample = await text("deploy/env.example");
+    const runbook = await text("docs/deployment/runbook.md");
+
+    expect(compose).toContain(
+      'CVC_ALLOWED_CIDRS: "${CVC_ALLOWED_CIDRS:?set CVC_ALLOWED_CIDRS to approved CIDRs}"'
+    );
+    expect(envExample).toContain("CVC_ALLOWED_CIDRS=203.0.113.0/24 2001:db8::/32");
+    expect(envExample).not.toMatch(/^(IMAP_|SIGNUP_)/m);
+    expect(runbook).toContain("Get-Content deploy/.env");
+    expect(runbook).toContain("public website capture");
+  });
+
+  it("records Caddy plus application sessions as the current access contract", async () => {
+    const routing = await text("docs/conventions/routing.md");
+    const smokeSession = await text("scripts/verify/smoke-session.ts");
+    expect(routing).not.toContain("Basic Auth");
+    expect(smokeSession).not.toContain("CVC_VERIFY_BASIC_AUTH");
+    expect(smokeSession).not.toContain("basicAuthHeaders");
+  });
+
   it("keeps Caddy security headers and streaming proxy behavior", async () => {
     const caddyfile = await text("deploy/Caddyfile");
     for (const contract of [

@@ -157,7 +157,7 @@ services:
     image: caddy:2.10.2-alpine
     environment:
       PURPLEINK_DOMAIN: "${PURPLEINK_DOMAIN:?set PURPLEINK_DOMAIN}"
-      CVC_ALLOWED_CIDRS: "${CVC_ALLOWED_CIDRS:-0.0.0.0/0 ::/0}"
+      CVC_ALLOWED_CIDRS: "${CVC_ALLOWED_CIDRS:?set CVC_ALLOWED_CIDRS to approved CIDRs}"
     ports:
       - "80:80"
       - "443:443"
