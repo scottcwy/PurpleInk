@@ -1,5 +1,9 @@
 # PLAN-001 · P-2 / P-6 / P-7 生产部署完整修复计划
 
+> Historical note: the current deployment contract is deploy/compose.yaml,
+> deploy/Caddyfile, and docs/deployment/. This plan predates the immutable GHCR
+> stack; its Basic Auth and former reverse-proxy guidance is historical only.
+
 - 对应 issue：`docs/issues/ISSUE-015-production-issue.md` §9 的 P-2、P-6、P-7
 - 计划性质：部署面从零建立 + 接入边界防护。**不改 `src/**`**（唯一例外见 §5.3）
 - 撰写日期：2026-07-26

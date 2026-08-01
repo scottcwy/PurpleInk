@@ -261,6 +261,17 @@ describe("immutable production deployment", () => {
     expect(e2eSmoke).toContain("Application session");
   });
 
+  it("marks superseded Basic Auth deployment plans as historical", async () => {
+    for (const relativePath of [
+      "docs/issues/ISSUE-015-production-issue.md",
+      "docs/plans/PLAN-001-p2-p6-p7-production-deployment.md",
+    ]) {
+      expect(await text(relativePath)).toContain(
+        "Historical note: the current deployment contract is deploy/compose.yaml"
+      );
+    }
+  });
+
   it("keeps Caddy security headers and streaming proxy behavior", async () => {
     const caddyfile = await text("deploy/Caddyfile");
     for (const contract of [

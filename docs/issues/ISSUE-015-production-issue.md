@@ -1,5 +1,10 @@
 # ISSUE-015 · Docker 生产部署前置问题与分批修复清单
 
+> Historical note: the current deployment contract is deploy/compose.yaml,
+> deploy/Caddyfile, and docs/deployment/. Any Basic Auth, reverse-proxy, image,
+> or job-table statement below records the former implementation only and must
+> not be used as current deployment guidance.
+
 - 优先级：**P0（阻断上线）**
 - 状态：`in-progress`（P-1/P-2/P-3/P-6/P-7 已完成，见 §9）
 - 范围：`next.config.ts`、`.dockerignore`、`Dockerfile`、生产 compose、
