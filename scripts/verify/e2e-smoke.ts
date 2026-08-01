@@ -229,7 +229,7 @@ async function readGraphNodes(projectId: string): Promise<GraphNode[]> {
   return rows
 }
 
-/** 凭据注入（Basic Auth + 应用内会话）收在 `./smoke-session.ts`，唯一出口。 */
+/** Application session headers are provided by `./smoke-session.ts`. */
 
 async function post(
   baseUrl: string,

@@ -253,6 +253,14 @@ describe("immutable production deployment", () => {
     expect(smokeSession).not.toContain("basicAuthHeaders");
   });
 
+  it("keeps root verification examples on the application-session contract", async () => {
+    const rootEnvExample = await text(".env.example");
+    const e2eSmoke = await text("scripts/verify/e2e-smoke.ts");
+    expect(rootEnvExample).not.toContain("CVC_VERIFY_BASIC_AUTH");
+    expect(e2eSmoke).not.toContain("Basic Auth");
+    expect(e2eSmoke).toContain("Application session");
+  });
+
   it("keeps Caddy security headers and streaming proxy behavior", async () => {
     const caddyfile = await text("deploy/Caddyfile");
     for (const contract of [
