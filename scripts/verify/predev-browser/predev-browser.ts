@@ -10,7 +10,7 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { chromium, request as playwrightRequest, type APIRequestContext } from 'playwright'
 import { communityFilms } from '@/features/community/catalog'
-import { createEvidenceManifest, requireIsolatedProjectName, selectVerifiedImages, verifyAdminGuardMatrix, verifyComposeIsolation, verifyMediaRange } from './contracts'
+import { createEvidenceManifest, expectedAttestedImageNames, requireIsolatedProjectName, selectVerifiedImages, verifyAdminGuardMatrix, verifyComposeIsolation, verifyMediaRange } from './contracts'
 
 const root = process.cwd()
 const compose = ['compose', '-f', 'deploy/compose.yaml', '-f', 'scripts/verify/predev-browser/compose.override.yaml']
@@ -173,7 +173,7 @@ async function freePort(): Promise<number> { const server = createServer(); awai
 async function waitFor(check: () => Promise<number>, expected: number): Promise<void> { for (let i = 0; i < 60; i += 1) { if (await check().catch(() => 0) === expected) return; await new Promise(resolve => setTimeout(resolve, 1000)) } throw new Error('service did not become ready') }
 async function httpsStatus(url: string): Promise<number> { return (await insecureFetch(url)).status }
 async function verifiedImages(commit: string) {
-  const names = { web: 'purpleink-web:verify-predev', worker: 'purpleink-worker:verify-predev', migrate: 'purpleink-migrate:verify-predev' }
+  const names = expectedAttestedImageNames(commit)
   const entries = await Promise.all(Object.entries(names).map(async ([key, image]) => {
     const revision = await run('docker', ['image', 'inspect', image, '--format', '{{index .Config.Labels "org.opencontainers.image.revision"}}']).catch(() => '')
     return [key, { image, revision: revision.trim() || null }] as const

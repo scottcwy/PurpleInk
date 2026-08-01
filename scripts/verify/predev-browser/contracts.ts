@@ -32,6 +32,8 @@ export interface ImageAttestation {
   revision: string | null
 }
 
+type PredevImageName = Record<'web' | 'worker' | 'migrate', string>
+
 export function createEvidenceManifest(input: EvidenceManifestInput): Record<string, unknown> {
   return {
     commit: input.commit,
@@ -89,10 +91,24 @@ export function selectVerifiedImages(
   revision: string,
   images: Record<'web' | 'worker' | 'migrate', ImageAttestation>,
 ): { mode: 'no-build'; images: Record<'web' | 'worker' | 'migrate', string> } | { mode: 'build'; images: null } {
-  if (Object.values(images).every((image) => image.revision === revision)) {
-    return { mode: 'no-build', images: { web: images.web.image, worker: images.worker.image, migrate: images.migrate.image } }
+  const expected = expectedAttestedImageNames(revision)
+  if (
+    images.web.revision === revision && images.web.image === expected.web &&
+    images.worker.revision === revision && images.worker.image === expected.worker &&
+    images.migrate.revision === revision && images.migrate.image === expected.migrate
+  ) {
+    return { mode: 'no-build', images: expected }
   }
   return { mode: 'build', images: null }
+}
+
+export function expectedAttestedImageNames(revision: string): PredevImageName {
+  const tag = revision.slice(0, 12)
+  return {
+    web: `purpleink-web:predev-${tag}`,
+    worker: `purpleink-worker:predev-${tag}`,
+    migrate: `purpleink-migrate:predev-${tag}`,
+  }
 }
 
 function redactEvidence(value: unknown, secretValues: readonly string[]): unknown {

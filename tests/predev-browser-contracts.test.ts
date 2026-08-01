@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   createEvidenceManifest,
+  expectedAttestedImageNames,
   requireIsolatedProjectName,
   selectVerifiedImages,
   verifyComposeIsolation,
@@ -69,17 +70,34 @@ describe('predev browser acceptance contracts', () => {
 
   it('uses no-build images only when every image attests the current source revision', () => {
     const head = 'a'.repeat(40)
+    const images = expectedAttestedImageNames(head)
     expect(selectVerifiedImages(head, {
-      web: { revision: head, image: 'purpleink-web:verify-predev' },
-      worker: { revision: head, image: 'purpleink-worker:verify-predev' },
-      migrate: { revision: head, image: 'purpleink-migrate:verify-predev' },
+      web: { revision: head, image: images.web },
+      worker: { revision: head, image: images.worker },
+      migrate: { revision: head, image: images.migrate },
     })).toEqual({ mode: 'no-build', images: {
-      web: 'purpleink-web:verify-predev', worker: 'purpleink-worker:verify-predev', migrate: 'purpleink-migrate:verify-predev',
+      web: images.web, worker: images.worker, migrate: images.migrate,
     } })
     expect(selectVerifiedImages(head, {
-      web: { revision: null, image: 'purpleink-web:verify-predev' },
-      worker: { revision: head, image: 'purpleink-worker:verify-predev' },
-      migrate: { revision: head, image: 'purpleink-migrate:verify-predev' },
+      web: { revision: null, image: images.web },
+      worker: { revision: head, image: images.worker },
+      migrate: { revision: head, image: images.migrate },
     })).toEqual({ mode: 'build', images: null })
+    expect(selectVerifiedImages(head, {
+      web: { revision: head, image: 'purpleink-web:verify-predev' },
+      worker: { revision: head, image: images.worker },
+      migrate: { revision: head, image: images.migrate },
+    })).toEqual({ mode: 'build', images: null })
+  })
+
+  it('discovers only the current revision-tagged image set for no-build acceptance', () => {
+    const head = 'a'.repeat(40)
+
+    expect(expectedAttestedImageNames(head)).toEqual({
+      web: 'purpleink-web:predev-aaaaaaaaaaaa',
+      worker: 'purpleink-worker:predev-aaaaaaaaaaaa',
+      migrate: 'purpleink-migrate:predev-aaaaaaaaaaaa',
+    })
+
   })
 })
