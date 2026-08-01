@@ -32,6 +32,8 @@ RUN pnpm install --frozen-lockfile
 # 不产出单独构建物。CJK 字体同样必须装（采集/截图链路也过 Playwright）。
 # ---------------------------------------------------------------------------
 FROM node:22-bookworm-slim AS runtime
+ARG SOURCE_COMMIT
+LABEL org.opencontainers.image.revision=$SOURCE_COMMIT
 WORKDIR /repo
 
 # fonts-wqy-zenhei 而非 fonts-noto-cjk：见根 Dockerfile 同一处注释，本仓库构建

@@ -15,19 +15,25 @@ services:
       context: ..
       dockerfile: Dockerfile
       target: migrate
-    image: purpleink-migrate:predev-local
+      args:
+        SOURCE_COMMIT: ${PREDEV_SOURCE_COMMIT}
+    image: ${PREDEV_MIGRATE_IMAGE}
 
   worker:
     build:
       context: ..
       dockerfile: server/Dockerfile
-    image: purpleink-worker:predev-local
+      args:
+        SOURCE_COMMIT: ${PREDEV_SOURCE_COMMIT}
+    image: ${PREDEV_WORKER_IMAGE}
 
   web:
     build:
       context: ..
       dockerfile: Dockerfile
-    image: purpleink-web:predev-local
+      args:
+        SOURCE_COMMIT: ${PREDEV_SOURCE_COMMIT}
+    image: ${PREDEV_WEB_IMAGE}
     volumes:
       - predev_data:/app/.data
 

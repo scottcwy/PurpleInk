@@ -21,6 +21,17 @@ export interface MediaRangeResult {
   bytes: number
 }
 
+export interface ComposeIsolation {
+  networks: readonly string[]
+  volumes: readonly string[]
+  ports: readonly { service: string; hostIp: string; target: number }[]
+}
+
+export interface ImageAttestation {
+  image: string
+  revision: string | null
+}
+
 export function createEvidenceManifest(input: EvidenceManifestInput): Record<string, unknown> {
   return {
     commit: input.commit,
@@ -56,6 +67,32 @@ export function verifyMediaRange(result: MediaRangeResult): void {
     throw new Error('range response must be HTTP 206 with a byte content-range')
   }
   if (result.bytes <= 0) throw new Error('range response was empty')
+}
+
+export function verifyComposeIsolation(config: ComposeIsolation, project: string): void {
+  requireIsolatedProjectName(project)
+  if (!config.networks.every((name) => name.startsWith(`${project}_`))) {
+    throw new Error('all networks must use the temporary project prefix')
+  }
+  if (!config.volumes.every((name) => name.startsWith(`${project}_`))) {
+    throw new Error('all volumes must use the temporary project prefix')
+  }
+  for (const port of config.ports) {
+    const expected = port.service === 'caddy' ? 443 : port.service === 'postgres' ? 5432 : null
+    if (port.hostIp !== '127.0.0.1' || port.target !== expected) {
+      throw new Error('only Caddy HTTPS and Postgres may publish loopback ports')
+    }
+  }
+}
+
+export function selectVerifiedImages(
+  revision: string,
+  images: Record<'web' | 'worker' | 'migrate', ImageAttestation>,
+): { mode: 'no-build'; images: Record<'web' | 'worker' | 'migrate', string> } | { mode: 'build'; images: null } {
+  if (Object.values(images).every((image) => image.revision === revision)) {
+    return { mode: 'no-build', images: { web: images.web.image, worker: images.worker.image, migrate: images.migrate.image } }
+  }
+  return { mode: 'build', images: null }
 }
 
 function redactEvidence(value: unknown, secretValues: readonly string[]): unknown {

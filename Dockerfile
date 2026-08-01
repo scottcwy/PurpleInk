@@ -48,6 +48,8 @@ RUN pnpm build
 # 必须是仓库根、且需要完整 src/lib/db/migrations/pg。
 # ---------------------------------------------------------------------------
 FROM deps AS migrate
+ARG SOURCE_COMMIT
+LABEL org.opencontainers.image.revision=$SOURCE_COMMIT
 WORKDIR /repo
 COPY tsconfig.json ./tsconfig.json
 COPY scripts/setup/db-migrate.ts ./scripts/setup/db-migrate.ts
@@ -62,6 +64,8 @@ ENTRYPOINT ["pnpm", "db:migrate"]
 # 有意义的防线）。
 # ---------------------------------------------------------------------------
 FROM node:22-bookworm-slim AS runtime
+ARG SOURCE_COMMIT
+LABEL org.opencontainers.image.revision=$SOURCE_COMMIT
 WORKDIR /app
 
 # fonts-wqy-zenhei 而非 fonts-noto-cjk：实测 fonts-noto-cjk 单文件 60.2MB，

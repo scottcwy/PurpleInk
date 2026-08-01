@@ -10,7 +10,7 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { chromium, request as playwrightRequest, type APIRequestContext } from 'playwright'
 import { communityFilms } from '@/features/community/catalog'
-import { createEvidenceManifest, requireIsolatedProjectName, verifyAdminGuardMatrix, verifyMediaRange } from './contracts'
+import { createEvidenceManifest, requireIsolatedProjectName, selectVerifiedImages, verifyAdminGuardMatrix, verifyComposeIsolation, verifyMediaRange } from './contracts'
 
 const root = process.cwd()
 const compose = ['compose', '-f', 'deploy/compose.yaml', '-f', 'scripts/verify/predev-browser/compose.override.yaml']
@@ -24,31 +24,49 @@ async function main(): Promise<void> {
   const envPath = path.join(root, '.data', `predev-browser-${suffix}.env`)
   const ports = { http: await freePort(), postgres: await freePort() }
   const values = { password: secret(), master: randomBytes(32).toString('base64'), pepper: secret(), engine: secret() }
-  const env = {
+  const env: Record<string, string> = {
     PREDEV_HTTP_PORT: String(ports.http), PREDEV_POSTGRES_PORT: String(ports.postgres),
     POSTGRES_PASSWORD: secret(), CVC_CREDENTIAL_MASTER_KEY: values.master,
     CVC_REDEMPTION_CODE_PEPPER: values.pepper, PURPLEINK_ENGINE_INTERNAL_KEY: values.engine,
     CVC_QUEUE_RENDER_SHOT_CONCURRENCY: '1', CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY: '1',
     PURPLEINK_IMAGE_TAG: `sha-${'0'.repeat(40)}`, PURPLEINK_DOMAIN: 'localhost', CVC_ALLOWED_CIDRS: '0.0.0.0/0',
   }
+  const secrets = [values.password, values.master, values.pepper, values.engine, env.POSTGRES_PASSWORD]
+  const images = await verifiedImages(commit)
+  env.PREDEV_SOURCE_COMMIT = commit
+  env.PREDEV_WEB_IMAGE = images.images?.web ?? `purpleink-web:predev-${commit.slice(0, 12)}`
+  env.PREDEV_WORKER_IMAGE = images.images?.worker ?? `purpleink-worker:predev-${commit.slice(0, 12)}`
+  env.PREDEV_MIGRATE_IMAGE = images.images?.migrate ?? `purpleink-migrate:predev-${commit.slice(0, 12)}`
   await mkdir(evidence, { recursive: true })
   await writeFile(envPath, Object.entries(env).map(([key, value]) => `${key}=${value}`).join('\n'), 'utf8')
   const baseUrl = `https://127.0.0.1:${ports.http}`
-  const facts: Record<string, unknown> = { phases: [] as string[], baseUrl }
+  const facts: Record<string, unknown> = { phases: [] as string[], baseUrl, imageMode: images.mode }
+  const checkpoint = async (phase: string, result: 'started' | 'passed' | 'blocked') => {
+    ;(facts.phases as string[]).push(`${phase}:${result}`)
+    await writeEvidence(evidence, commit, baseUrl, project, secrets, facts)
+  }
   try {
-    await docker(project, envPath, ['up', '--build', '--wait'])
+    await checkpoint('compose', 'started')
+    await docker(project, envPath, ['up', ...(images.mode === 'no-build' ? ['--no-build'] : ['--build']), '--wait'])
+    await checkpoint('compose', 'passed')
+    await checkpoint('migrations', 'started')
     await docker(project, envPath, ['run', '--rm', 'migrate'])
     await docker(project, envPath, ['run', '--rm', 'migrate'])
     facts.migrations = 'twice after Compose migration'
+    await checkpoint('migrations', 'passed')
     await waitFor(() => httpsStatus(`${baseUrl}/api/ping`), 200)
-    await acceptMarketing(baseUrl, evidence, facts)
-    await acceptMedia(baseUrl, facts)
-    await acceptRuntime(project, envPath, facts)
-    await acceptAdmin(baseUrl, values.password, env, facts)
+    await checkpoint('marketing', 'started'); await acceptMarketing(baseUrl, evidence, facts); await checkpoint('marketing', 'passed')
+    await checkpoint('media', 'started'); await acceptMedia(baseUrl, facts); await checkpoint('media', 'passed')
+    await checkpoint('runtime', 'started'); await acceptRuntime(project, envPath, facts); await checkpoint('runtime', 'passed')
+    await checkpoint('admin', 'started'); await acceptAdmin(baseUrl, values.password, env, facts, secrets); await checkpoint('admin', 'passed')
     await docker(project, envPath, ['restart', 'postgres', 'web', 'worker', 'caddy'])
     await waitFor(() => httpsStatus(`${baseUrl}/api/ping`), 200)
     facts.restartPersistence = 'services restarted and ping recovered'
-    await writeEvidence(evidence, commit, baseUrl, project, Object.values(values), facts)
+    await checkpoint('restart', 'passed')
+  } catch (error) {
+    facts.failure = error instanceof Error ? redactMessage(error.message, secrets) : 'unknown acceptance failure'
+    await checkpoint('failure', 'blocked')
+    throw error
   } finally {
     await docker(project, envPath, ['down', '--volumes', '--remove-orphans']).catch(() => undefined)
     await rm(envPath, { force: true })
@@ -94,30 +112,47 @@ async function acceptMedia(baseUrl: string, facts: Record<string, unknown>): Pro
   facts.media = media
 }
 
-async function acceptAdmin(baseUrl: string, ownerPassword: string, env: Record<string, string>, facts: Record<string, unknown>): Promise<void> {
+async function acceptAdmin(baseUrl: string, ownerPassword: string, env: Record<string, string>, facts: Record<string, unknown>, secrets: string[]): Promise<void> {
   const adminEmail = `acceptance-admin-${randomBytes(6).toString('hex')}@purpleink.local`
   await run('pnpm', ['tsx', 'scripts/setup/seed-owner-account.ts', '--email', adminEmail, '--password', ownerPassword, '--workspace', 'new'], { ...process.env, DATABASE_URL: `postgres://cvc:${env.POSTGRES_PASSWORD}@127.0.0.1:${env.PREDEV_POSTGRES_PORT}/cvc`, CVC_CREDENTIAL_MASTER_KEY: env.CVC_CREDENTIAL_MASTER_KEY })
   await run('pnpm', ['admin:set-role', '--email', adminEmail, '--role', 'admin'], { ...process.env, DATABASE_URL: `postgres://cvc:${env.POSTGRES_PASSWORD}@127.0.0.1:${env.PREDEV_POSTGRES_PORT}/cvc` })
   const admin = await session(baseUrl, adminEmail, ownerPassword)
   const regularPassword = secret()
-  const created = await json(admin, '/api/admin/users', 'POST', { email: `acceptance-user-${randomBytes(6).toString('hex')}@purpleink.local`, name: 'Acceptance User', password: regularPassword, workspaceName: 'Acceptance Workspace' })
-  const user = await session(baseUrl, String((created.user as { email: string }).email), regularPassword)
+  const regularEmail = `acceptance-user-${randomBytes(6).toString('hex')}@purpleink.local`
+  secrets.push(regularPassword)
+  const created = await json(admin, '/api/admin/users', 'POST', { email: regularEmail, name: 'Acceptance User', password: regularPassword, workspaceName: 'Acceptance Workspace' })
+  const user = await session(baseUrl, regularEmail, regularPassword)
   const targets = ['/admin', '/admin/users', '/admin/jobs', '/admin/ops', '/admin/security', '/admin/ai', '/admin/billing', '/api/admin/users', '/api/admin/jobs', '/api/admin/ops', '/api/admin/security', '/api/admin/ai', '/api/admin/billing']
   const matrix = await Promise.all(targets.map(async target => ({ target, unauthenticated: await httpsStatus(`${baseUrl}${target}`), user: await status(user, target), admin: await status(admin, target) })))
   verifyAdminGuardMatrix(matrix)
   const batch = await json(admin, '/api/admin/billing/batches', 'POST', { planKey: 'plus', label: 'acceptance', count: 1 })
   const code = (batch.codes as string[])[0]
   if (!code) throw new Error('redemption batch did not return one-time plaintext code')
-  await json(user, '/api/billing/redemptions', 'POST', { code, idempotencyKey: randomUUID() })
+  secrets.push(code)
+  await json(user, '/api/billing/redemptions', 'POST', { code, idempotencyKey: randomUUID() }, { 'idempotency-key': randomUUID() })
   await json(admin, `/api/admin/billing/batches/${String(batch.id)}`, 'PATCH', { action: 'revoke', confirmation: 'REVOKE' })
+  const userId = String((created.user as { id: string }).id)
+  await json(admin, `/api/admin/users/${userId}`, 'DELETE', { confirmation: 'DISABLE' })
+  if (await status(user, '/api/billing') !== 401) throw new Error('disabled account retained its old session')
+  await json(admin, `/api/admin/users/${userId}`, 'PATCH', { status: 'active' })
+  if (await status(user, '/api/billing') !== 401) throw new Error('restored account revived a revoked old session')
+  const restored = await session(baseUrl, regularEmail, regularPassword)
+  if (await status(restored, '/api/billing') !== 200) throw new Error('restored account could not establish a new session')
+  const own = await response(admin, `/api/admin/users/${await currentAdminId(admin, adminEmail)}`, 'DELETE', { confirmation: 'DISABLE' })
+  if (own.status !== 400 || (own.body as { code?: unknown }).code !== 'SELF_DISABLE') throw new Error('self-disable guard failed')
+  await assertRedactedResponses(admin, secrets)
+  await restored.dispose()
   await admin.dispose(); await user.dispose()
-  facts.admin = { guards: matrix, sessionDisabledRestore: 'covered by admin user API in isolated run', lastAdmin: 'covered by seeded sole admin guard', redemption: 'plaintext once, redeemed, revoked' }
+  facts.admin = { guards: matrix, sessionDisabledRestore: 'disabled session invalidated; restore required a new login', selfDisable: 'SELF_DISABLE', redemption: 'plaintext once, redeemed, revoked', responses: 'redaction checked' }
 }
 
 async function acceptRuntime(project: string, envFile: string, facts: Record<string, unknown>): Promise<void> {
   const config = await docker(project, envFile, ['config', '--format', 'json'])
-  const parsed = JSON.parse(config) as { services: Record<string, { ports?: unknown[]; networks?: unknown }> }
-  if (Object.entries(parsed.services).some(([name, service]) => name !== 'caddy' && service.ports?.length)) throw new Error('only Caddy may publish a host port')
+  const parsed = JSON.parse(config) as { networks: Record<string, { name: string }>; volumes: Record<string, { name: string }>; services: Record<string, { ports?: { host_ip?: string; target?: number }[] }> }
+  verifyComposeIsolation({
+    networks: Object.values(parsed.networks).map(network => network.name), volumes: Object.values(parsed.volumes).map(volume => volume.name),
+    ports: Object.entries(parsed.services).flatMap(([service, value]) => (value.ports ?? []).map(port => ({ service, hostIp: port.host_ip ?? '', target: port.target ?? 0 }))),
+  }, project)
   const worker = await docker(project, envFile, ['exec', '-T', 'worker', 'node', '-e', "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1))"])
   facts.runtime = { composeProject: project, engineHealth: worker.trim() || 'ok', caddyOnlyPublishedPort: true, networks: 'compose config inspected' }
 }
@@ -128,12 +163,23 @@ async function session(baseUrl: string, email: string, password: string): Promis
   if (!response.ok()) throw new Error(`login failed: ${response.status()}`)
   return api
 }
-async function json(api: APIRequestContext, url: string, method: 'POST' | 'PATCH', data: unknown): Promise<Record<string, unknown>> { const r = await api.fetch(url, { method, data }); if (!r.ok()) throw new Error(`${url}: ${r.status()}`); return await r.json() as Record<string, unknown> }
+async function json(api: APIRequestContext, url: string, method: 'POST' | 'PATCH' | 'DELETE', data: unknown, headers?: Record<string, string>): Promise<Record<string, unknown>> { const result = await response(api, url, method, data, headers); if (result.status < 200 || result.status >= 300) throw new Error(`${url}: ${result.status}`); return result.body }
+async function response(api: APIRequestContext, url: string, method: 'POST' | 'PATCH' | 'DELETE', data: unknown, headers?: Record<string, string>): Promise<{ status: number; body: Record<string, unknown> }> { const result = await api.fetch(url, { method, data, headers }); return { status: result.status(), body: await result.json() as Record<string, unknown> } }
 async function status(api: APIRequestContext, url: string): Promise<number> { return (await api.get(url)).status() }
+async function currentAdminId(api: APIRequestContext, email: string): Promise<string> { const users = await api.get(`/api/admin/users?q=${encodeURIComponent(email)}`); const body = await users.json() as { items?: { id?: unknown; email?: unknown }[] }; const item = body.items?.find(row => row.email === email); if (typeof item?.id !== 'string') throw new Error('seed admin missing from admin users projection'); return item.id }
+async function assertRedactedResponses(api: APIRequestContext, secrets: readonly string[]): Promise<void> { for (const endpoint of ['/api/admin/jobs', '/api/admin/ops', '/api/admin/ai', '/api/admin/billing']) { const result = await api.get(endpoint); if (!result.ok()) throw new Error(`${endpoint}: ${result.status()}`); const payload = JSON.stringify(await result.json()); if (secrets.some(secret => secret && payload.includes(secret))) throw new Error(`${endpoint} returned a generated secret`) } }
 async function docker(project: string, envFile: string, args: string[]): Promise<string> { return run('docker', [...compose, '--project-name', project, '--env-file', envFile, ...args]) }
 async function freePort(): Promise<number> { const server = createServer(); await new Promise<void>((resolve, reject) => server.once('error', reject).listen(0, '127.0.0.1', resolve)); const address = server.address(); server.close(); return typeof address === 'object' && address ? address.port : Promise.reject(new Error('no port')) }
 async function waitFor(check: () => Promise<number>, expected: number): Promise<void> { for (let i = 0; i < 60; i += 1) { if (await check().catch(() => 0) === expected) return; await new Promise(resolve => setTimeout(resolve, 1000)) } throw new Error('service did not become ready') }
 async function httpsStatus(url: string): Promise<number> { return (await insecureFetch(url)).status }
+async function verifiedImages(commit: string) {
+  const names = { web: 'purpleink-web:verify-predev', worker: 'purpleink-worker:verify-predev', migrate: 'purpleink-migrate:verify-predev' }
+  const entries = await Promise.all(Object.entries(names).map(async ([key, image]) => {
+    const revision = await run('docker', ['image', 'inspect', image, '--format', '{{index .Config.Labels "org.opencontainers.image.revision"}}']).catch(() => '')
+    return [key, { image, revision: revision.trim() || null }] as const
+  }))
+  return selectVerifiedImages(commit, Object.fromEntries(entries) as Parameters<typeof selectVerifiedImages>[1])
+}
 function sha256(value: Buffer): string { return createHash('sha256').update(value).digest('hex') }
 async function writeEvidence(directory: string, commit: string, baseUrl: string, project: string, secrets: string[], facts: unknown): Promise<void> { await writeFile(path.join(directory, 'manifest.json'), `${JSON.stringify(createEvidenceManifest({ commit, baseUrl, composeProject: project, secretValues: secrets, facts }), null, 2)}\n`, 'utf8') }
 function run(command: string, args: string[], env = process.env): Promise<string> {
@@ -144,9 +190,10 @@ function run(command: string, args: string[], env = process.env): Promise<string
     child.stdout.on('data', data => { stdout += data })
     child.stderr.on('data', data => { stderr += data })
     child.on('error', reject)
-    child.on('close', code => code === 0 ? resolve(stdout) : reject(new Error(`${command} failed (${code}): ${stderr.slice(-500)}`)))
+    child.on('close', code => code === 0 ? resolve(stdout) : reject(new Error(`${command} failed (${code})`)))
   })
 }
+function redactMessage(message: string, secrets: readonly string[]): string { return secrets.reduce((result, secret) => secret ? result.replaceAll(secret, '[REDACTED]') : result, message) }
 function insecureFetch(url: string, headers: Record<string, string> = {}): Promise<{ status: number; headers: Record<string, string | undefined>; body: Buffer }> {
   return new Promise((resolve, reject) => {
     const request = httpsRequest(url, { rejectUnauthorized: false, headers }, (response) => {
