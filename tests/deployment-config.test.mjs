@@ -71,6 +71,10 @@ test("builds the Worker with matching Playwright and pnpm dependencies", async (
   assert.match(dockerfile, /COPY --chown=node:node src\/lib\/tts/);
   assert.match(
     dockerfile,
+    /COPY --chown=node:node packages\/procedural-sfx \.\/packages\/procedural-sfx/
+  );
+  assert.match(
+    dockerfile,
     /CMD \["pnpm", "--filter", "purpleink-server", "start"\]/
   );
 });

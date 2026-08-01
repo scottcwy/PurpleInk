@@ -22,6 +22,7 @@ RUN headless_shell="$(find /ms-playwright/chromium_headless_shell-* -type f -nam
     && ln -s "$headless_shell" "$HYPERFRAMES_BROWSER_PATH"
 
 COPY --chown=node:node server ./server
+COPY --chown=node:node packages/procedural-sfx ./packages/procedural-sfx
 COPY --chown=node:node src/lib/tts ./src/lib/tts
 
 USER node
