@@ -22,6 +22,10 @@ const PRUNE = process.argv.includes("--prune");
 // 与 Dockerfile.web 的源 COPY 一致）。
 const ALLOWED_TOP = new Set(["server.js", "package.json", "node_modules", ".next", "public", "assets"]);
 // 敏感文件名模式：任何层级出现即失败（.env*、secret、credential、pem、明文口令）。
+// 有意跳过 node_modules：依赖内容由 pnpm-lock.yaml 锁文件管控，且镜像层由
+// Dockerfile.web 白名单 COPY 决定（node_modules 只收 standalone 裁剪后的子集），
+// 全量扫依赖树每次构建会拖慢门禁；该取舍使 node_modules 内的"疑似敏感命名"
+// 依赖（如 @aws-sdk/credential-providers）不误报。
 const SENSITIVE = [/\.env/i, /secret/i, /credential/i, /\.pem$/i, /plaintext/i];
 
 const root = path.resolve(".next/standalone");

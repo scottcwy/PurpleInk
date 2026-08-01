@@ -1,5 +1,10 @@
 # PLAN-001 · P-2 / P-6 / P-7 生产部署完整修复计划
 
+> **状态：已归档**（2026-08）。本文档描述的是已退役的方案 A 部署体系
+> （docker-compose.prod.yml + 自建 Caddy 反代）。当前部署以方案 B（ghcr 镜像 +
+> 官方 Caddy，见 `deploy/README.md`）与方案 C（Zeabur，见
+> `docs/deployment/zeabur-setup.md`）为准；保留本文仅作历史决策追溯。
+
 - 对应 issue：`docs/issues/ISSUE-015-production-issue.md` §9 的 P-2、P-6、P-7
 - 计划性质：部署面从零建立 + 接入边界防护。**不改 `src/**`**（唯一例外见 §5.3）
 - 撰写日期：2026-07-26

@@ -85,8 +85,15 @@ jobs:
 
       # 字体已改为 geist 包自托管（next/font/local），构建期不再访问
       # fonts.googleapis.com；这一步同时守住那条依赖不被改回去。
-      - name: build
-        run: pnpm build
+      # build 后跑 standalone 卫生门禁：CI 全新 checkout 下 instrumentation nft
+      # 不受 outputFileTracingExcludes 控制（Next 16 机制限制），顶层必然混入
+      # src/server 等非白名单条目，所以先 --prune 物理清理再 check 锁定结果；
+      # check 的敏感文件名扫描（.env*/secret/plaintext）是 fail 红线。
+      - name: build + standalone hygiene
+        run: |
+          pnpm build
+          node scripts/verify/standalone-hygiene.mjs --prune
+          node scripts/verify/standalone-hygiene.mjs
 
   postgres:
     name: postgres migrations + pg tests

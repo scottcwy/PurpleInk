@@ -123,7 +123,7 @@
 1. `web` 域名 HTTPS 可达：`/` 200、`/login` 200、`/products` 307
 2. `worker` 无公网域名；`/api/engine/health` 经私网 200
 3. Chromium 在容器内以非 root 运行且无 `--no-sandbox`；ffmpeg-static 可执行
-   （镜像内已按 runbook 验收过的构建方式出包，重建后抽查一次）
+   （镜像内已按 deploy/README.md 验收过的构建方式出包，重建后抽查一次）
 4. 迁移连续执行两次幂等
 5. 真实渲染一条视频：产物出现在 R2；下载走 302 预签名 URL；`ffprobe` 校验 +
    `content_hash` 与实际字节 SHA-256 一致
@@ -157,7 +157,7 @@
 | 文件 | 作用 |
 | --- | --- |
 | `docs/deployment/zeabur-plan.md` | 决策依据与成本 |
-| `docs/deployment/runbook.md` | compose 部署的运行手册（镜像验收、卷、凭据轮换） |
+| `deploy/README.md` | compose 部署的运行手册（镜像验收、卷、凭据轮换） |
 | `deploy/zeabur.template.yaml` | Zeabur 服务编排模板（路径 A 输入） |
 | `Dockerfile.web` / `.worker` / `.migrate` / `.backup` | 四镜像（服务名自动匹配） |
 | `scripts/backup/{schedule,run-backup,pg-backup-r2,rotation}.ts` | 每日备份调度/核心/CLI/轮转 |
