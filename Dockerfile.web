@@ -11,7 +11,11 @@ FROM node:24-bookworm-slim AS builder
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV BACKEND_ORIGIN=http://worker:8787
+# rewrites（next.config.ts）在构建期内联 BACKEND_ORIGIN。
+# compose 场景默认 compose 网络内的 worker；Zeabur 部署时由面板环境变量作为
+# 构建 ARG 注入（如 http://worker.zeabur.internal:8787），见 zeabur-setup.md。
+ARG BACKEND_ORIGIN=http://worker:8787
+ENV BACKEND_ORIGIN=${BACKEND_ORIGIN}
 WORKDIR /app
 RUN corepack enable
 COPY --from=dependencies /app/node_modules ./node_modules

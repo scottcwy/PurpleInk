@@ -7,7 +7,8 @@
  * + gemini-config.test.ts:93 双向锁定）。本脚本是 `provision-master-key.ts`
  * 在凭据维度的对称实现。
  *
- * 不读 `server/.env`（issue §3 边界），不回显 secret 值；失败立即非 0 退出。
+ * 只读根 `.env.local`（唯一环境文件，Next 与 worker 共用），不回显 secret 值；
+ * 失败立即非 0 退出。
  *
  * Runtime note: src/lib/db/client.ts 与 src/features/ai/** 用 `import 'server-only'`
  * 作为 Next 进程哨兵。在 Next runtime 之外由本脚本直接跑时，需要先把该 bare

@@ -29,6 +29,7 @@ import type { DriverType } from "../src/capture/browser-driver"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SERVER_ROOT = join(HERE, "..")
+const REPO_ROOT = join(SERVER_ROOT, "..")
 
 function parseArgs(argv: string[]): { url?: string; opts: RunCaptureOptions } {
   const opts: RunCaptureOptions = {}
@@ -60,7 +61,8 @@ function parseArgs(argv: string[]): { url?: string; opts: RunCaptureOptions } {
 }
 
 async function main(): Promise<void> {
-  await loadEnv(join(SERVER_ROOT, ".env"))
+  // 唯一环境文件：仓库根 `.env.local`。
+  await loadEnv(join(REPO_ROOT, ".env.local"))
 
   const { url, opts } = parseArgs(process.argv.slice(2))
   if (!url) {

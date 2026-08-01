@@ -9,25 +9,27 @@ It exists to resolve the truth drift recorded in
 anyone wiring credentials; any change to the boundary must update this file
 first and code second.
 
-## 1. Two credential stores, by design
+## 1. One env file, two consumers
 
 | | Next application (Director canvas pipeline) | Backend worker (server/) |
 | --- | --- | --- |
 | Process | `pnpm dev`, `next start` | `pnpm dev:worker`, `node server/src` |
-| Secrets env file (git-ignored) | root `./.env.local` | `./server/.env` |
-| Variable naming | 托管服务使用 `CVC_MANAGED_STEPFUN_API_KEY`、`CVC_MANAGED_MIMO_API_KEY`、`CVC_MANAGED_GEMINI_API_KEY` | `GEMINI_API_KEY`, `STEP_API_KEY`, `STEP_*` |
+| Secrets env file (git-ignored) | root `./.env.local`（唯一） | 同一文件（`server/src/index.ts` 启动时加载） |
+| Variable naming | 托管服务使用 `CVC_MANAGED_STEPFUN_API_KEY`、`CVC_MANAGED_MIMO_API_KEY`、`CVC_MANAGED_GEMINI_API_KEY` | `STEP_API_KEY`, `STEP_*`, `IMAP_*`, `TTS_PROVIDER`, `LISTENHUB_*` |
 | Runtime resolution | 三家内置托管服务只读 server-only env；自定义 OpenAI-compatible 继续使用 DB 加密凭据 | env only |
 | Bootstrap writer | `scripts/setup/bootstrap-credentials.ts` 仅服务历史/自定义凭据，不是内置托管服务主路径 | none (worker reads env at start) |
 | Truth hierarchy | 托管目录 + `CVC_MANAGED_*`；自定义路由 → DB 加密凭据 | env → code default |
 | Cache | none — every call re-reads DB and env (see `config.ts:77-92`, `gemini-config.ts:38-53`) | none |
 
-The worker's legacy names and Next's `CVC_MANAGED_*` names belong to different
-process trees. Do not introduce a shared loader or a unified env file.
+合并背景（2026-08-01）：历史上两进程各有独立 env 文件（`./server/.env` 与根
+`.env.local`），本文档曾强制双文件隔离；现统一为根 `.env.local` 唯一文件
+（模板：根 `.env.example`，Next 变量在前、worker 变量在后）。worker 的
+legacy 变量名（`STEP_API_KEY` 等）与 Next 的 `CVC_MANAGED_*` 名称仍属于
+不同消费方、互不代替，但**物理上共处一个文件**，按进程各自读取。
 
-This boundary mirrors `docs/issues/README.md` §0 and is enforced by:
-`scripts/setup/server-only-stub.js` + the bootstrap script's exclusive use of
-`loadEnvConfig(process.cwd())` (which reads the root `.env.local`, never
-`server/.env`).
+该边界由 `scripts/setup/server-only-stub.js` 与 bootstrap 脚本强制：后者只用
+`loadEnvConfig(process.cwd())` 读根 `.env.local`；worker 启动
+（`server/src/index.ts`）与 `server/scripts/*` 也只读根 `.env.local`。
 
 ## 2. Next 的托管 Key 与自定义 BYOK 边界
 
@@ -58,11 +60,11 @@ Sequence on a clean clone (assuming Postgres is up via
      # writes CVC_CREDENTIAL_MASTER_KEY (32-byte canonical base64) into .env.local
 3. pnpm db:migrate
      # applies migrations; creates provider_credentials + workspaces + ...
-4. Manually add to ./.env.local:
-     GEMINI_API_KEY=<copy the value from server/.env line 'GEMINI_API_KEY='>
-     STEPFUN_API_KEY=<copy the value from server/.env line 'STEP_API_KEY='>
-   Note: if server/.env has a different value, you must still copy your own
-   value here — the two files keep separate copies by design.
+4. Manually add to ./.env.local（唯一环境文件，Next 与 worker 共用）:
+     GEMINI_API_KEY=<你的 Gemini Key>
+     STEPFUN_API_KEY=<你的 StepFun Key>
+   Note: worker 侧的 STEP_API_KEY 在同一文件里单独一行，两端各自消费、
+   互不代替；不存在需要跨文件复制值的情况。
 5. pnpm tsx scripts/setup/bootstrap-credentials.ts
      # for each provider: validate via real API -> save encrypted -> clear env
    Output expected: written=2 skipped=0 failed=0

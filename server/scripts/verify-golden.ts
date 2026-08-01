@@ -18,11 +18,12 @@ import type { CapturedScreenshot } from "../src/types/capture.ts"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SERVER_ROOT = join(HERE, "..")
+const REPO_ROOT = join(SERVER_ROOT, "..")
 const PROBE = join(SERVER_ROOT, "..", "_capture_probe")
 
-// --- 极简 .env 加载（不引依赖）---
+// --- 极简 .env 加载（不引依赖）：唯一环境文件是仓库根 `.env.local` ---
 async function loadEnv(): Promise<void> {
-  const envPath = join(SERVER_ROOT, ".env")
+  const envPath = join(REPO_ROOT, ".env.local")
   if (!existsSync(envPath)) return
   const raw = await readFile(envPath, "utf8")
   for (const line of raw.split("\n")) {
@@ -175,7 +176,7 @@ async function main(): Promise<void> {
   if (wantVision) {
     console.log("\n[7] StepFun 视觉实测（step-explore）\n")
     if (!process.env.STEP_API_KEY) {
-      check("STEP_API_KEY 已配置", false, "未在 .env 找到 STEP_API_KEY")
+      check("STEP_API_KEY 已配置", false, " 未在根 .env.local 找到 STEP_API_KEY")
     } else {
       const buffer = await readFile(join(PROBE, "assets", "dashboard.jpg"))
       const one: AssetToDescribe[] = [

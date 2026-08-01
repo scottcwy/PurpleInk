@@ -116,7 +116,9 @@ services:
     expose:
       - "8787"
     env_file:
-      - path: ${WORKER_ENV_FILE:-.env.worker}
+      # 唯一 env 文件：与 compose 变量源同一份（含 web 与 worker 全部变量，
+      # worker 只消费其中的 worker 段；模板见 env.example）。
+      - path: ${ENV_FILE:-.env}
         required: true
     environment:
       NODE_ENV: production

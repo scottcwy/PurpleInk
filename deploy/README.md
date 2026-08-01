@@ -11,15 +11,16 @@ to Worker through `BACKEND_ORIGIN`.
   compose.yaml
   Caddyfile
   .env
-  .env.worker
   data/
 ```
 
-Copy `env.example` to `.env` and `worker.env.example` to `.env.worker` on the
-server, then replace every placeholder. `POSTGRES_PASSWORD` must be URL-safe
-because the same value appears in `DATABASE_URL`. Generate it with
-`openssl rand -hex 32`; generate `CVC_CREDENTIAL_MASTER_KEY` with
-`openssl rand -base64 32`. Keep both files mode `600` and never commit them.
+Copy `env.example` to `.env` on the server, then replace every placeholder.
+`POSTGRES_PASSWORD` must be URL-safe because the same value appears in
+`DATABASE_URL`. Generate it with `openssl rand -hex 32`; generate
+`CVC_CREDENTIAL_MASTER_KEY` with `openssl rand -base64 32`. Keep the file
+mode `600` and never commit it. The same `.env` also feeds the Worker service
+(`env_file`), which consumes only the worker section at the bottom of the
+template.
 
 PostgreSQL data is stored in the `postgres_data` named volume. Do not use
 `docker compose down --volumes` during normal deploys or rollbacks.

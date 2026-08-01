@@ -21,7 +21,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/start-dev.ps1 -K
 ## 执行顺序
 
 1. **工具链**：node ≥ 22.11、pnpm（与 `packageManager` 的 10.30.0 不一致时告警）。
-2. **环境**：`.env.local` / `server/.env` 是否存在；`DATABASE_URL`、
+2. **环境**：`.env.local`（唯一环境文件，Next 与 worker 共用）是否存在；`DATABASE_URL`、
    `CVC_CREDENTIAL_MASTER_KEY` 缺值直接失败；`GEMINI_API_KEY` 等缺值只告警。
 3. **Postgres**：Docker 引擎没起就拉起 Docker Desktop 并等待，然后
    `docker compose -f docker-compose.dev.yml up -d`，等容器 healthcheck 变

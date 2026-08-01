@@ -13,6 +13,8 @@
 | 产物存储 | Cloudflare R2（免费额度 10GB，egress 永久免费） | 视频分发 egress 是成本大头，R2 是唯一免 egress 的 S3 系服务 |
 | 下载路径 | 预签名 URL + 302，不再由 Next 缓冲整文件 | 现有 `api/artifacts/[id]/route.ts` 整文件进内存，是待修缺陷 |
 | 入口 | Zeabur 网关（域名 + 自动 TLS）；Cloudflare Access 为可选加固 | Caddy 不随迁：basic_auth / CVC_ALLOWED_CIDRS / 自签证书均退役 |
+| 服务间通信 | Zeabur 服务内网 `<服务名>.zeabur.internal`；web→worker 经构建期 `BACKEND_ORIGIN` ARG 注入 | 已核实官方私网文档；`Dockerfile.web` 已改 ARG 可覆盖，默认值保持 compose 的 `worker:8787` |
+| 数据库备份载体 | 独立常驻 `backup` 服务（`Dockerfile.backup`，Node 调度每日 pg_dump → R2） | Zeabur 无原生 cron 服务类型；平台卷自动备份仅作兜底双保险 |
 | 镜像构建 | 首选 Zeabur 直连 GitHub 构建；备选 CI 推 GHCR 预构建镜像 | Free/Dev 档构建机为 2C4G，若 Next 构建超时则切备选 |
 | 不迁移项 | Vercel / Supabase / Cloudflare Containers / D1 | 本轮评估已逐一否决，结论见对话记录与本文 §7 |
 
@@ -20,27 +22,30 @@
 
 ```
 用户 ──→ Zeabur 网关（域名 + TLS）──→ web 服务（Dockerfile.web, Next.js）
-                                          │ 项目内私网
+                                          │ 项目内私网（*.zeabur.internal）
                                           ├──→ worker 服务（Dockerfile.worker, 渲染引擎）
                                           │      不暴露公网，鉴权走 PURPLEINK_ENGINE_INTERNAL_KEY
-                                          └──→ postgres 服务（Zeabur PG 模板 + 持久卷）
+                                          ├──→ postgres 服务（Zeabur PG 模板 + 持久卷）
+                                          └──→ backup 服务（Dockerfile.backup, 每日 pg_dump）
 用户下载视频 ──→ Cloudflare R2（预签名 URL 直连，不经过服务器带宽）
-每日备份     ──→ pg_dump | gzip ──→ R2（免费额度内，$0）
+每日备份     ──→ pg_dump -Fc ──→ R2（免费额度内，$0）
 ```
 
 与 `deploy/compose.yaml` 五服务编排的对应关系：
 
 | compose 服务 | Zeabur 去向 |
 | --- | --- |
-| postgres | 面板一键 PG 模板（挂卷） |
+| postgres | 面板一键 PG 模板（postgres:18，挂卷） |
 | migrate | 独立服务 `migrate`（Dockerfile.migrate 自动匹配），每次发版后手动触发一次 |
 | caddy | **退役**。TLS/域名由 Zeabur 网关承担；边缘登录墙可选 Cloudflare Access |
-| web | 服务名 `web`，自动匹配 Dockerfile.web |
+| web | 服务名 `web`，自动匹配 Dockerfile.web，挂卷 `/app/.data` |
 | worker | 服务名 `worker`，自动匹配 Dockerfile.worker，仅私网可达 |
+| （新增）backup | 服务名 `backup`，自动匹配 Dockerfile.backup，每日 pg_dump 落 R2（§4.3） |
 
-Dockerfile 零改动：Zeabur monorepo 约定即 `Dockerfile.[服务名]` 自动匹配（官方文档
-Deploying with Dockerfile，2026-05-12 版），仓库现有三个 Dockerfile 命名恰好符合。
-Zeabur 不支持 docker-compose YAML，服务需在面板逐个创建（或后续沉淀为 Template YAML）。
+Dockerfile 零改动（web 的 `BACKEND_ORIGIN` 已改构建期 ARG，默认值不变）：Zeabur monorepo
+约定即 `Dockerfile.[服务名]` 自动匹配（官方文档 Deploying with Dockerfile，2026-05-12 版），
+仓库四个 Dockerfile 命名恰好符合。Zeabur 不支持 docker-compose YAML；服务编排已固化为
+`deploy/zeabur.template.yaml`（五服务，可从 YAML 一键创建），也可面板逐个创建。
 
 ## 2. 代码改造（唯一一期，与部署平台无关）
 
@@ -107,27 +112,43 @@ S3_PRESIGN_TTL_SECONDS=300
 
 ### 4.2 服务创建顺序
 
-1. `postgres`：面板 PG 模板，挂持久卷；记录私网连接串
+> 推荐用 `deploy/zeabur.template.yaml`（从 YAML 创建模板）一键生成五个服务，
+> 再按下面顺序补配置；面板逐个创建见 `docs/deployment/zeabur-setup.md` §3 路径 B。
+
+1. `postgresql`：面板 PG 模板（postgres:18），挂持久卷；记录私网主机名
+   （形如 `postgresql.zeabur.internal`）与 `POSTGRES_PORT`（默认 5432），
+   连接串引用变量 `POSTGRES_CONNECTION_STRING`（官方模板已 expose）
 2. `migrate`：Git 服务，服务名 `migrate` 自动匹配 Dockerfile.migrate；
-   注入 `DATABASE_URL`；首次部署跑一次，之后每次发版手动触发。
-   验收口径沿用 runbook：迁移连续执行两次，第二次必须幂等无报错
-3. `worker`：服务名 `worker`；**不绑定公网域名**，仅私网可达；
+   `DATABASE_URL` 引用 `POSTGRES_CONNECTION_STRING`；首次部署跑一次，之后每次
+   发版手动 Redeploy 触发。验收口径沿用 runbook：迁移连续执行两次，第二次必须
+   幂等无报错。跑完退出后如被平台自动重启（幂等无害），在面板 Suspend
+3. `worker`：Git 服务，服务名 `worker`；**不绑定公网域名**，仅私网可达；
    注入引擎所需变量（`PURPLEINK_ENGINE_INTERNAL_KEY` 等，清单见
-   `deploy/worker.env.example`）
-4. `web`：服务名 `web`；绑定域名（Zeabur 网关自动 TLS）；
-   注入 `DATABASE_URL`（私网 PG）、`PURPLEINK_ENGINE_URL`（私网 worker）、
-   S3 五个变量及其余 `.env` 项
-5. 环境变量全部通过面板注入，禁止写入镜像；密钥值不进 Git、不进本文档
+   `docs/deployment/zeabur-setup.md` §2.2）
+4. `web`：Git 服务，服务名 `web`；绑定域名（Zeabur 网关自动 TLS）；
+   挂卷 `/app/.data`；注入 `DATABASE_URL`（引用 PG 连接串）、
+   `BACKEND_ORIGIN=http://worker.zeabur.internal:8787`（**构建期 ARG**，
+   next.config.ts rewrites 内联，改动需重新部署生效）、S3 五变量及其余 `.env` 项
+5. `backup`：Git 服务，服务名 `backup`；仅私网；注入 `DATABASE_URL` + S3 五变量
+6. 环境变量全部通过面板注入，禁止写入镜像；密钥值不进 Git、不进本文档
 
 ### 4.3 备份（每日，落 R2）
 
-- 方式：面板 Cron 服务或 worker 容器内 crontab 执行
-  `pg_dump | gzip | aws s3 cp - s3://purpleink-artifacts/backups/$(date +%F).sql.gz`
-- 保留 30 天，过期清理（R2 的 DeleteObject 免费）
+- 载体：`backup` 服务（`Dockerfile.backup`，node:24 + postgresql-client-18 + tsx）
+  常驻运行 `scripts/backup/schedule.ts`：启动 10s 后首跑，成功后每 24h 一次，
+  失败 1h 后自动重试。不用 crond 的原因：容器 env 不进 cron 环境，secret 落盘
+  违反凭据约束；Node 调度天然继承容器 env
+- 流程：`pg_dump -Fc` → 按实际字节算 SHA-256 → 上传 R2 → HeadObject 核对字节数
+  → 轮转删除超出 `PG_BACKUP_RETAIN`（默认 14）的旧备份
+- 客户端大版本与 Zeabur 官方 PG 模板（postgres:18）对齐；面板换版本时同步改
+  `postgresql-client-XX`
+- 双保险：Zeabur 平台对持久卷的自动备份（每日固定时段）作为 PG 数据目录兜底，
+  恢复走面板下载 `data.sql`；R2 备份是 SQL 级异地副本
 - **恢复演练是验收项**：从 R2 拉最新备份恢复到全新 PG 实例并通过冒烟，
   未演练过的备份视同不存在
 
-## 5. 验收清单（改编自 runbook §4，Caddy/宿主项已按新拓扑替换）
+## 5. 验收清单（改编自 runbook §4，Caddy/宿主项已按新拓扑替换；
+逐项操作见 `docs/deployment/zeabur-setup.md` §5）
 
 1. `web` 域名 HTTPS 可达：`/` 200、`/login` 200、`/products` 307
 2. `worker` 无公网入口；由 `web` 侧 `/api/engine/*` 反代链路验证 `/health` 200
@@ -167,8 +188,8 @@ S3_PRESIGN_TTL_SECONDS=300
 | P1 | S3 写穿适配器 + 单测 | feat(storage) | 无，可立即开工 |
 | P2 | 预签名 URL 下载路由 + 契约测试 | feat(artifacts) | P1 |
 | P3 | env.example 双文件 + 本文档随实况修订 | docs(deploy) | P1 |
-| P4 | 备份脚本（scripts/ 下，配 R2 目标） | feat(scripts) | P1 |
-| P5 | Zeabur 面板配置 + 验收 §5 全项 | 无代码提交，证据回填本文档 | P1–P4 + 用户开通账号 |
+| P4 | 备份脚本（scripts/ 下，配 R2 目标）+ `Dockerfile.backup` + 常驻调度 | feat(scripts) | P1 |
+| P5 | Zeabur 面板配置 + 验收 §5 全项（执行见 `docs/deployment/zeabur-setup.md`） | 无代码提交，证据回填本文档 | P1–P4 + 用户开通账号 |
 
 P1–P4 不依赖任何外部账号，本地即可完成并全量验证；
 P5 需要用户先完成：Zeabur 注册/订阅/购机、Cloudflare R2 开通、（可选）域名托管。

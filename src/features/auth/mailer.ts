@@ -15,10 +15,8 @@ import type { VerificationPurpose } from './verification-code'
  * 手写 SMTP 客户端（STARTTLS + AUTH LOGIN + 行折叠 + 编码）约 150 行且易错，
  * 收益为负。
  *
- * env 归属：**Next 侧不读 `server/.env`**。真实值由用户从 `server/.env` 复制到
- * 被 git 忽略的根 `.env.local` 的 `CVC_MAIL_*`，与 `GEMINI_API_KEY` /
- * `STEPFUN_API_KEY` 既有的「各自为政 + 值复制」先例一致
- * （`docs/configuration/credentials.md`）。
+ * env 归属：唯一环境文件是根 `.env.local`（Next 与 worker 共用），
+ * `CVC_MAIL_*` 直接写在那里（`docs/configuration/credentials.md` §1）。
  *
  * 与 `server/src/capture/imap-email.ts` 零交集：那边是采集 agent **收信**
  * （出站登录被演示站点时读对方的验证码），方向相反，不得复用（§6）。

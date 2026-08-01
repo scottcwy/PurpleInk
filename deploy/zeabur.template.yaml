@@ -1,0 +1,254 @@
+# PurpleInk — Zeabur 部署编排模板（服务器计算 + Cloudflare R2 存储）
+#
+# 用法：Zeabur 控制台「从 YAML 创建模板」导入本文件，或
+#   npx zeabur@latest template deploy --file deploy/zeabur.template.yaml
+#
+# 拓扑（与 docs/deployment/zeabur-plan.md §1 对应）：
+#   postgresql ← web / migrate / backup（私网，postgresql.zeabur.internal:5432）
+#   web ──► worker（私网 http://worker.zeabur.internal:8787，构建期 ARG 内联 rewrites）
+#   backup：每日 pg_dump -Fc 落 Cloudflare R2（scripts/backup/schedule.ts 常驻调度）
+#
+# 安全约束（AGENTS.md §7）：secret 类变量（CVC_CREDENTIAL_MASTER_KEY、API key、
+# S3 密钥等）一律不在本文件落值，部署后在各服务 Variables 面板填写。
+# 只读变量由平台注入（${PASSWORD} 随机生成 PG 口令、${CONTAINER_HOSTNAME} 内网主机名）。
+#
+# 服务命名与仓库 Dockerfile 自动匹配（Zeabur 约定）：web → Dockerfile.web、
+# worker → Dockerfile.worker、migrate → Dockerfile.migrate、backup → Dockerfile.backup。
+# GIT 服务当前指向 zeabur/deploy 分支；后续改走 CI/镜像部署时同步更新。
+apiVersion: zeabur.com/v1
+kind: Template
+metadata:
+    name: PurpleInk
+spec:
+    description: Product launch video workspace — Next.js web + render worker + Postgres, backed by Cloudflare R2.
+    tags:
+        - Video
+        - AI
+    readme: |
+        # PurpleInk on Zeabur
+
+        服务器计算全部落在 Zeabur（web / worker / migrate / backup / postgresql），
+        对象存储与每日数据库备份落在 Cloudflare R2。
+
+        部署后必做（按顺序）：
+
+        1. **填密钥**：各服务 Variables 面板填写 secret（见
+           `docs/deployment/zeabur-setup.md` §3 环境变量清单）：
+           - web：`CVC_CREDENTIAL_MASTER_KEY`、`CVC_MANAGED_STEPFUN_API_KEY`、
+             `CVC_MANAGED_MIMO_API_KEY`、`CVC_MANAGED_GEMINI_API_KEY`、
+             `PURPLEINK_ENGINE_INTERNAL_KEY`、`S3_ENDPOINT`、`S3_BUCKET`、
+             `S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`、`NEXT_PUBLIC_SITE_URL`
+           - worker：`PURPLEINK_ENGINE_INTERNAL_KEY`（与 web **完全相同**）、
+             `STEP_API_KEY`、`LISTENHUB_API_KEY`、`GEMINI_API_KEY`
+           - backup：`S3_ENDPOINT`、`S3_BUCKET`、`S3_ACCESS_KEY_ID`、
+             `S3_SECRET_ACCESS_KEY`（DATABASE_URL 已自动引用 PG）
+        2. **跑迁移**：手动重新部署一次 `migrate` 服务（跑完退出后如被平台
+           自动重启，可在面板 Suspend；迁移幂等，二次执行无变更）。
+        3. **不要给 worker 绑定公网域名**：仅私网可达，由 web 的
+           `/api/engine/*` rewrites 反代。
+        4. **验收**：按 `docs/deployment/zeabur-setup.md` §5 验收清单执行。
+    variables:
+        - key: PURPLEINK_DOMAIN
+          type: DOMAIN
+          name: 域名
+          description: 绑定到 web 服务的域名（Zeabur 网关自动 TLS）。
+        - key: NEXT_PUBLIC_SITE_URL
+          type: STRING
+          name: 站点 URL
+          description: 生产站点绝对 URL（如 https://app.example.com），用于元数据与预签名回退。
+    services:
+        - name: postgresql
+          icon: https://cdn.zeabur.com/marketplace/postgresql.svg
+          template: PREBUILT
+          spec:
+            id: postgresql
+            source:
+                image: postgres:18
+            ports:
+                - id: database
+                  port: 5432
+                  type: TCP
+            volumes:
+                - id: data
+                  dir: /var/lib/postgresql/18/docker
+            instructions:
+                - title: Connection String
+                  content: postgresql://${POSTGRES_USERNAME}:${POSTGRES_PASSWORD}@${PORT_FORWARDED_HOSTNAME}:${DATABASE_PORT_FORWARDED_PORT}/${POSTGRES_DATABASE}
+                - title: PostgreSQL username
+                  content: ${POSTGRES_USERNAME}
+                - title: PostgresSQL password
+                  content: ${POSTGRES_PASSWORD}
+                - title: PostgreSQL database
+                  content: ${POSTGRES_DATABASE}
+                - title: PostgreSQL host
+                  content: ${PORT_FORWARDED_HOSTNAME}
+                - title: PostgreSQL port
+                  content: ${DATABASE_PORT_FORWARDED_PORT}
+            env:
+                PGDATA:
+                    default: /var/lib/postgresql/18/docker/pgdata
+                    expose: false
+                POSTGRES_CONNECTION_STRING:
+                    default: postgresql://${POSTGRES_USERNAME}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DATABASE}
+                    expose: true
+                POSTGRES_DATABASE:
+                    default: ${POSTGRES_DB}
+                    expose: true
+                POSTGRES_DB:
+                    default: purpleink
+                POSTGRES_HOST:
+                    default: ${CONTAINER_HOSTNAME}
+                    expose: true
+                POSTGRES_PASSWORD:
+                    default: ${PASSWORD}
+                    expose: true
+                POSTGRES_PORT:
+                    default: ${DATABASE_PORT}
+                    expose: true
+                POSTGRES_URI:
+                    default: ${POSTGRES_CONNECTION_STRING}
+                    expose: true
+                POSTGRES_USER:
+                    default: purpleink
+                POSTGRES_USERNAME:
+                    default: ${POSTGRES_USER}
+                    expose: true
+            configs:
+                - path: /etc/postgresql/postgresql.conf
+                  template: |
+                    # https://github.com/postgres/postgres/blob/master/src/backend/utils/misc/postgresql.conf.sample
+                    listen_addresses = '*'
+                    max_connections = 256
+                    shared_buffers = 256MB
+                    dynamic_shared_memory_type = posix
+                    max_wal_size = 1GB
+                    min_wal_size = 80MB
+                    log_timezone = 'UTC'
+                    datestyle = 'iso, mdy'
+                    timezone = 'UTC'
+                    lc_messages = 'en_US.UTF-8'
+                    lc_monetary = 'en_US.UTF-8'
+                    lc_numeric = 'en_US.UTF-8'
+                    lc_time = 'en_US.UTF-8'
+                    default_text_search_config = 'pg_catalog.english'
+        - name: web
+          icon: https://raw.githubusercontent.com/zeabur/service-icons/main/zeabur/nextjs.svg
+          template: GIT
+          domainKey: PURPLEINK_DOMAIN
+          dependencies:
+              - postgresql
+              - worker
+          spec:
+            id: web
+            source:
+                github:
+                    repoID: 1309522452
+                    branch: zeabur/deploy
+            ports:
+                - id: web
+                  port: 3000
+                  type: HTTP
+            volumes:
+                - id: data
+                  dir: /app/.data
+            env:
+                BACKEND_ORIGIN:
+                    # 构建期 ARG 注入（next.config.ts rewrites 内联）；必须指向 worker 私网地址。
+                    default: http://worker.zeabur.internal:8787
+                    readonly: true
+                DATABASE_URL:
+                    default: ${POSTGRES_CONNECTION_STRING}
+                CVC_CREDENTIAL_MASTER_KEY:
+                    default: ""
+                CVC_MANAGED_STEPFUN_API_KEY:
+                    default: ""
+                CVC_MANAGED_MIMO_API_KEY:
+                    default: ""
+                CVC_MANAGED_GEMINI_API_KEY:
+                    default: ""
+                PURPLEINK_ENGINE_INTERNAL_KEY:
+                    default: ""
+                STORAGE_MODE:
+                    default: s3-mirror
+                S3_ENDPOINT:
+                    default: ""
+                S3_BUCKET:
+                    default: ""
+                S3_REGION:
+                    default: auto
+                S3_ACCESS_KEY_ID:
+                    default: ""
+                S3_SECRET_ACCESS_KEY:
+                    default: ""
+                NEXT_PUBLIC_SITE_URL:
+                    default: ${NEXT_PUBLIC_SITE_URL}
+        - name: worker
+          icon: https://raw.githubusercontent.com/zeabur/service-icons/main/zeabur/nodejs.svg
+          template: GIT
+          dependencies:
+              - postgresql
+          spec:
+            id: worker
+            source:
+                github:
+                    repoID: 1309522452
+                    branch: zeabur/deploy
+            ports:
+                - id: engine
+                  port: 8787
+                  type: HTTP
+            env:
+                PURPLEINK_ENGINE_INTERNAL_KEY:
+                    default: ""
+                STEP_API_KEY:
+                    default: ""
+                LISTENHUB_API_KEY:
+                    default: ""
+                GEMINI_API_KEY:
+                    default: ""
+                TTS_PROVIDER:
+                    default: listenhub-flowspeech
+                PURPLEINK_COMPOSE_MODE:
+                    default: auto
+                BROWSER_DRIVER:
+                    default: playwright
+        - name: migrate
+          icon: https://raw.githubusercontent.com/zeabur/service-icons/main/zeabur/nodejs.svg
+          template: GIT
+          dependencies:
+              - postgresql
+          spec:
+            id: migrate
+            source:
+                github:
+                    repoID: 1309522452
+                    branch: zeabur/deploy
+            env:
+                DATABASE_URL:
+                    default: ${POSTGRES_CONNECTION_STRING}
+        - name: backup
+          icon: https://raw.githubusercontent.com/zeabur/service-icons/main/zeabur/nodejs.svg
+          template: GIT
+          dependencies:
+              - postgresql
+          spec:
+            id: backup
+            source:
+                github:
+                    repoID: 1309522452
+                    branch: zeabur/deploy
+            env:
+                DATABASE_URL:
+                    default: ${POSTGRES_CONNECTION_STRING}
+                S3_ENDPOINT:
+                    default: ""
+                S3_BUCKET:
+                    default: ""
+                S3_REGION:
+                    default: auto
+                S3_ACCESS_KEY_ID:
+                    default: ""
+                S3_SECRET_ACCESS_KEY:
+                    default: ""
+                PG_BACKUP_RETAIN:
+                    default: "14"

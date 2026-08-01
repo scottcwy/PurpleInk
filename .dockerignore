@@ -35,7 +35,6 @@ coverage
 .env
 .env.*
 !.env.example
-!server/.env.example
 *.pem
 
 # 版本控制与本地工具

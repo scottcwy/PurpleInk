@@ -46,11 +46,16 @@ test("builds a standalone pnpm Web image for the internal Worker", async () => {
 
   assert.match(dockerfile, /pnpm-lock\.yaml/);
   assert.match(dockerfile, /pnpm install --frozen-lockfile/);
-  assert.match(dockerfile, /BACKEND_ORIGIN=http:\/\/worker:8787/);
+  // BACKEND_ORIGIN 必须是构建期可覆盖的 ARG（Zeabur 私网地址 worker.zeabur.internal），
+  // 默认值保持 compose 网络内的 worker:8787。
+  assert.match(dockerfile, /ARG BACKEND_ORIGIN=http:\/\/worker:8787/);
+  assert.match(dockerfile, /ENV BACKEND_ORIGIN=\$\{BACKEND_ORIGIN\}/);
   assert.match(dockerfile, /\.next\/standalone/);
   assert.match(dockerfile, /CMD \["node", "server\.js"\]/);
   assert.match(nextConfig, /output:\s*["']standalone["']/);
-  assert.doesNotMatch(rootLayout, /next\/font\/google/);
+  // layout.tsx 走 geist 包自托管（next/font/local），不得 import next/font/google。
+  // 注意用 import 形态匹配，避免命中文件注释里的同名字符串。
+  assert.doesNotMatch(rootLayout, /from\s+["']next\/font\/google["']/);
 });
 
 test("builds the Worker with matching Playwright and pnpm dependencies", async () => {
@@ -130,8 +135,9 @@ test("injects database secrets into Web and gates health on the workbench", asyn
 test("keeps credentials and generated media out of image build contexts", async () => {
   const dockerignore = await read(".dockerignore");
 
-  assert.match(dockerignore, /^\.env\*$/m);
-  assert.match(dockerignore, /^server\/\.env\*$/m);
+  // .dockerignore 的 secret 段用 `.env` / `.env.*` 两行排除（并保留模板例外）。
+  assert.match(dockerignore, /^\.env$/m);
+  assert.match(dockerignore, /^\.env\.\*$/m);
   assert.match(dockerignore, /^server\/out$/m);
   assert.match(dockerignore, /^\.git$/m);
 });

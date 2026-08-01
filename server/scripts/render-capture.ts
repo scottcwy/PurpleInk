@@ -80,7 +80,7 @@ function isUrl(s: string): boolean {
 }
 
 async function main(): Promise<void> {
-  await loadEnv(join(SERVER_ROOT, ".env"))
+  // 唯一环境文件：仓库根 `.env.local`。
   await loadEnv(join(REPO_ROOT, ".env.local"))
 
   const { target, opts } = parseArgs(process.argv.slice(2))

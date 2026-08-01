@@ -54,7 +54,7 @@ docker compose -f docker-compose.prod.yml build
 | `CVC_QUEUE_RENDER_SHOT_CONCURRENCY` | P-4 未落地前的强制项；按目标容器 `--cpus` 上限设置，建议 ≤ `floor(cpus/2)` |
 | `CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY` | 同上 |
 | `CVC_ALLOWED_CIDRS` | 反代 IP 过滤网段，留空默认放行所有（不设防），生产必须收紧 |
-| `STEP_API_KEY` / `GEMINI_API_KEY` / `LISTENHUB_API_KEY` 等 | worker 的 provider 凭据，见 `server/.env.example` |
+| `STEP_API_KEY` / `GEMINI_API_KEY` / `LISTENHUB_API_KEY` 等 | worker 的 provider 凭据，见根 `.env.example` 的 worker 段 |
 | `STEPFUN_API_KEY` | **可选**。Next 侧凭据 bootstrap 用；留空则默认复用 `STEP_API_KEY` 的值 |
 | `CVC_DEMO_ACCOUNT_EMAIL` / `CVC_DEMO_ACCOUNT_PASSWORD` | **可选**。设置后 `seed-demo-account` 服务自动创建该体验账号；登录页的体验账号提示弹窗已移除，这组变量不再下发到浏览器 |
 | `CVC_DEMO_ACCOUNT_NAME` | 可选，体验账号显示名（仅建号脚本消费） |
@@ -196,9 +196,9 @@ Test-NetConnection -ComputerName localhost -Port 5432
 `BACKEND_ORIGIN=http://worker:8787` 内网访问（`next.config.ts` 的
 `/api/engine/:path*` rewrites 消费）。注意事项：
 
-- `worker` 是独立系统，独立 env 模板（`server/.env.example`），独立 job
-  状态机，不与 `next` 共用 env 加载器或 model routing（AGENTS.md §0 硬边界）；
-  compose 里两个服务的 `environment` 块也刻意分开写，不引用同一份变量列表。
+- `worker` 是独立系统，但与 `next` 共用根 `.env.example` / `.env.local` 唯一
+  env 文件（模板按进程分组，见 `docs/configuration/credentials.md` §1）；
+  compose 里两个服务的 `environment` 块仍刻意分开写，不引用同一份变量列表。
 - `worker` 健康检查是 `GET /health`（Node 内置 HTTP 服务自带路由），与 `next`
   的 `GET /api/ping` 互不影响。
 - `worker` 同样需要 CJK 字体与 Chromium（`server/Dockerfile` 已装），因为它的

@@ -7,9 +7,11 @@ import { writeProject } from "../src/compose/project"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SERVER_ROOT = join(HERE, "..")
+const REPO_ROOT = join(SERVER_ROOT, "..")
 
 async function main(): Promise<void> {
-  await loadEnv(join(SERVER_ROOT, ".env"))
+  // 唯一环境文件：仓库根 `.env.local`。
+  await loadEnv(join(REPO_ROOT, ".env.local"))
   const captureDir = process.argv[2]
   const durationSec = Number(process.argv[3] || 30)
   if (!captureDir) {

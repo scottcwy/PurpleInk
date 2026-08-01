@@ -382,12 +382,6 @@ function Test-EnvironmentFiles {
     else {
         Write-Ok 'Found .env.local'
     }
-    if (-not (Test-Path -LiteralPath (Join-Path $RepoRoot 'server\.env'))) {
-        Write-Warn 'Missing server/.env. The worker will start but provider-backed features stay unconfigured.'
-    }
-    else {
-        Write-Ok 'Found server/.env'
-    }
 
     $envMap = Get-EffectiveEnv
     $missing = @()
