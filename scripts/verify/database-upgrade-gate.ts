@@ -11,6 +11,10 @@ import { spawn } from 'node:child_process'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import postgres from 'postgres'
+import {
+  assertAdminIndexDefinitions,
+  assertUsersRoleCheckConstraint,
+} from './database-upgrade-schema-contract'
 
 const ROOT = process.cwd()
 const YUSHENG_BASELINE = '2cb33c9a680722968c539917c21350e34bea0815'
@@ -69,22 +73,29 @@ async function assertCurrentSchema(url: string, expectedHistoricalRole: boolean)
       select count(*)::text as count from api_access_counters
     `
     if (counter?.count !== '0') throw new Error(`api_access_counters did not start empty: ${counter?.count}`)
-    const indexRows = await client<{ indexname: string }[]>`
-      select indexname from pg_indexes
-      where schemaname = 'public' and indexname in (
+    const indexRows = await client<{ indexname: string; indexdef: string }[]>`
+      select index_class.relname as indexname, pg_get_indexdef(index_class.oid) as indexdef
+      from pg_class index_class
+      inner join pg_index index_metadata on index_metadata.indexrelid = index_class.oid
+      inner join pg_class table_class on table_class.oid = index_metadata.indrelid
+      inner join pg_namespace table_namespace on table_namespace.oid = table_class.relnamespace
+      where table_namespace.nspname = 'public' and index_class.relname in (
         'ai_invocations_admin_telemetry_created_idx',
         'task_attempts_admin_status_created_idx',
         'task_attempts_admin_created_idx'
       )
     `
-    const indexNames = new Set(indexRows.map(row => row.indexname))
-    for (const indexName of [
-      'ai_invocations_admin_telemetry_created_idx',
-      'task_attempts_admin_status_created_idx',
-      'task_attempts_admin_created_idx',
-    ]) {
-      if (!indexNames.has(indexName)) throw new Error(`missing admin index: ${indexName}`)
-    }
+    assertAdminIndexDefinitions(new Map(indexRows.map(row => [row.indexname, row.indexdef])))
+    const [roleConstraint] = await client<{ definition: string | null }[]>`
+      select pg_get_constraintdef(constraint_metadata.oid) as definition
+      from pg_constraint constraint_metadata
+      inner join pg_class table_class on table_class.oid = constraint_metadata.conrelid
+      inner join pg_namespace table_namespace on table_namespace.oid = table_class.relnamespace
+      where table_namespace.nspname = 'public'
+        and table_class.relname = 'users'
+        and constraint_metadata.conname = 'users_role_check'
+    `
+    assertUsersRoleCheckConstraint(roleConstraint?.definition ?? null)
     const [renderJobs] = await client<{ count: string }[]>`
       select count(*)::text as count
       from information_schema.tables

@@ -33,6 +33,13 @@ the developer Compose project, its volume, `DATABASE_URL`, or
   Both attempts ran more than 180 seconds without a Vitest result and were
   explicitly terminated; therefore full PG is **not accepted** in this ledger.
   The temporary containers were removed after each attempt.
+- The reproducible full-suite command is now `pnpm test:pg:isolated`. It starts
+  a disposable `postgres:17.5-alpine` container, overwrites both inherited
+  `DATABASE_URL` and `TEST_DATABASE_URL` for the child process with that
+  container's loopback URL, and removes the exact container in `finally`.
+  `tests/database-upgrade-gate-contract.test.ts` locks that override behavior;
+  this command may only be recorded as passed when Vitest returns its final
+  success result.
 
 ## Full quality gates
 
@@ -58,6 +65,10 @@ the developer Compose project, its volume, `DATABASE_URL`, or
   first 5-second request assertion. The route is now loaded during test-file
   initialization; the request timeout itself was not changed. The focused test
   and the complete unit suite passed afterwards.
+- The database upgrade gate now reads `pg_get_indexdef` and requires the exact
+  table, column order, direction, and `NULLS LAST` definitions for all three
+  administrator indexes. It also reads `pg_get_constraintdef` and requires the
+  `users_role_check` enum to be exactly `user | admin`.
 
 No migration, workflow, queue, artifact, provider, or database contract was
 modified by this closeout.

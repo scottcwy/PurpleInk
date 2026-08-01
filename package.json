@@ -16,6 +16,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mjs,json,css,md}\"",
     "test": "vitest run",
     "test:pg": "vitest run --config vitest.pg.config.ts",
+    "test:pg:isolated": "tsx scripts/verify/isolated-pg-tests.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/setup/db-migrate.ts",
     "admin:set-role": "tsx scripts/admin/set-role.ts",
