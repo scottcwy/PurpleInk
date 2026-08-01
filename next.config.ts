@@ -31,6 +31,38 @@ const nextConfig: NextConfig = {
       "./node_modules/playwright-core/**/*",
     ],
   },
+  // Turbopack 对仓库根的动态文件访问无法静态裁剪，会把整个仓库 trace 进
+  // standalone（实测 277M：videos/51M、docs/9.6M、deploy 凭据文件全在）。
+  // 白名单排除已知非运行时目录；assets/ 不走 trace，由 Dockerfile 源 COPY
+  // （硬字幕字体真值，语义更明确）。
+  // 注意：excludes 只对路由 entry 的 nft 生效（collect-build-traces 按
+  // entryNameFilesMap 应用），instrumentation 等非路由入口不受控——其残留由
+  // scripts/verify/standalone-hygiene.mjs --prune 在镜像构建期物理清理，
+  // Dockerfile.web 白名单 COPY 兜底镜像边界。
+  // 另外 glob 是 contains 语义：不能排除 "./server/**/*"——它会把运行时必需的
+  // .next/server/chunks/ssr 误删（实测 page nft 80 条 ssr 引用被清空，
+  // standalone 缺 ssr chunk，所有页面 500）。仓库根 server/ 由 prune 兜底。
+  outputFileTracingExcludes: {
+    "/*": [
+      "./videos/**/*",
+      "./docs/**/*",
+      "./tests/**/*",
+      "./scripts/**/*",
+      "./deploy/**/*",
+      "./output/**/*",
+      "./patches/**/*",
+      "./config/**/*",
+      "./assets/**/*",
+      "./*.md",
+      "./Dockerfile*",
+      "./docker-compose*.yml",
+      "./*.config.*",
+      "./tsconfig.json",
+      "./vitest*",
+      "./pnpm-workspace.yaml",
+      "./pnpm-lock.yaml",
+    ],
+  },
   // Disable source maps in production to protect code
   productionBrowserSourceMaps: false,
   // 生产构建移除 console.log，但**必须保留 error / warn**：

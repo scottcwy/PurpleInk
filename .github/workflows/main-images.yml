@@ -34,7 +34,14 @@ jobs:
       - run: pnpm --filter purpleink-server typecheck
       - run: pnpm test
       - run: node --test tests/deployment-config.test.mjs
-      - run: pnpm build
+      # build 后跑 standalone 卫生门禁，语义同 ci.yml：先 --prune 物理清理
+      # instrumentation 级 trace 残留（excludes 管不到的机制限制），再 check
+      # 锁定顶层白名单 + 敏感文件名扫描；镜像层由 Dockerfile.web 白名单 COPY
+      # 兜底，这里保证构建产物在 push main 前就 fail-early。
+      - run: |
+          pnpm build
+          node scripts/verify/standalone-hygiene.mjs --prune
+          node scripts/verify/standalone-hygiene.mjs
         env:
           BACKEND_ORIGIN: http://worker:8787
 

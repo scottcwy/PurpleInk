@@ -120,7 +120,7 @@ S3_PRESIGN_TTL_SECONDS=300
    连接串引用变量 `POSTGRES_CONNECTION_STRING`（官方模板已 expose）
 2. `migrate`：Git 服务，服务名 `migrate` 自动匹配 Dockerfile.migrate；
    `DATABASE_URL` 引用 `POSTGRES_CONNECTION_STRING`；首次部署跑一次，之后每次
-   发版手动 Redeploy 触发。验收口径沿用 runbook：迁移连续执行两次，第二次必须
+   发版手动 Redeploy 触发。验收口径沿用 deploy/README.md：迁移连续执行两次，第二次必须
    幂等无报错。跑完退出后如被平台自动重启（幂等无害），在面板 Suspend
 3. `worker`：Git 服务，服务名 `worker`；**不绑定公网域名**，仅私网可达；
    注入引擎所需变量（`PURPLEINK_ENGINE_INTERNAL_KEY` 等，清单见
@@ -147,8 +147,8 @@ S3_PRESIGN_TTL_SECONDS=300
 - **恢复演练是验收项**：从 R2 拉最新备份恢复到全新 PG 实例并通过冒烟，
   未演练过的备份视同不存在
 
-## 5. 验收清单（改编自 runbook §4，Caddy/宿主项已按新拓扑替换；
-逐项操作见 `docs/deployment/zeabur-setup.md` §5）
+## 5. 验收清单（改编自方案 A runbook §4，该文档已随方案 A 退役；
+Caddy/宿主项已按新拓扑替换，逐项操作见 `docs/deployment/zeabur-setup.md` §5）
 
 1. `web` 域名 HTTPS 可达：`/` 200、`/login` 200、`/products` 307
 2. `worker` 无公网入口；由 `web` 侧 `/api/engine/*` 反代链路验证 `/health` 200

@@ -123,7 +123,7 @@
 1. `web` 域名 HTTPS 可达：`/` 200、`/login` 200、`/products` 307
 2. `worker` 无公网域名；`/api/engine/health` 经私网 200
 3. Chromium 在容器内以非 root 运行且无 `--no-sandbox`；ffmpeg-static 可执行
-   （镜像内已按 runbook 验收过的构建方式出包，重建后抽查一次）
+   （镜像内已按 deploy/README.md 验收过的构建方式出包，重建后抽查一次）
 4. 迁移连续执行两次幂等
 5. 真实渲染一条视频：产物出现在 R2；下载走 302 预签名 URL；`ffprobe` 校验 +
    `content_hash` 与实际字节 SHA-256 一致
@@ -139,7 +139,7 @@
 | --- | --- | --- |
 | 构建机 2C4G（Free/Dev 档）跑 `pnpm build` 超时/OOM | Next 构建卡死或被杀 | 备选：CI（GitHub Actions）推 GHCR 预构建镜像，Zeabur 用「自定义 Docker 镜像」部署（`ghcr.io/scottcwy/purpleink-*`，compose 已有同款 tag 约定）；或升级 Pro 档 4C8G 构建机 |
 | `migrate` 退出后平台重启循环 | 服务反复 Running/Exited | 幂等无害；跑完在面板 Suspend（§4.2） |
-| 挂卷服务无法零停机滚动部署 | 更新 web 时短暂断连 | 与既有 runbook 一致：单实例 + recreate 更新，更新前确认队列排空（画布无 running 节点） |
+| 挂卷服务无法零停机滚动部署 | 更新 web 时短暂断连 | 与 ISSUE-015 §9 的 P-5 约束一致：单实例 + recreate 更新，更新前确认队列排空（画布无 running 节点）。非正常重启（OOMKill、面板重启）会让 `task_attempts` / `canvas_nodes` 的 `running` 永久卡住（P-5 未落地，无 lease/reclaim），重启后必须人工核对：`select id,status from task_attempts where status='running';`，不得静默改回 `queued` 自动重试 |
 | PG 大版本漂移 | `pg_dump` 版本 < 服务器版本导致备份失败 | `Dockerfile.backup` 按官方模板 postgres:18 对齐客户端；若面板版本不同，改 `postgresql-client-XX` 重构建 |
 | `BACKEND_ORIGIN` 是构建期内联 | 改了值要重新部署 web 才生效 | 面板改后 Redeploy web；运行时 `engine-client` 读同一变量，两侧必须一致 |
 | Zeabur 平台自动备份 | 仅备份持久卷（PG 数据目录），非 SQL 级 | 作为 R2 pg_dump 的兜底双保险；恢复走面板下载 `data.sql` |
@@ -157,7 +157,7 @@
 | 文件 | 作用 |
 | --- | --- |
 | `docs/deployment/zeabur-plan.md` | 决策依据与成本 |
-| `docs/deployment/runbook.md` | compose 部署的运行手册（镜像验收、卷、凭据轮换） |
+| `deploy/README.md` | compose 部署的运行手册（镜像验收、卷、凭据轮换） |
 | `deploy/zeabur.template.yaml` | Zeabur 服务编排模板（路径 A 输入） |
 | `Dockerfile.web` / `.worker` / `.migrate` / `.backup` | 四镜像（服务名自动匹配） |
 | `scripts/backup/{schedule,run-backup,pg-backup-r2,rotation}.ts` | 每日备份调度/核心/CLI/轮转 |

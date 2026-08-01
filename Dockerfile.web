@@ -22,7 +22,10 @@ RUN corepack enable
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=dependencies /app/server/node_modules ./server/node_modules
 COPY . .
-RUN pnpm build
+# build 后物理清理 standalone 顶层白名单外的条目：Turbopack trace 会把整个
+# 仓库根纳入（instrumentation nft 不受 outputFileTracingExcludes 控制，Next 16
+# 机制限制），prune 保证构建器目录本身干净；下方白名单 COPY 再兜底镜像边界。
+RUN pnpm build && node scripts/verify/standalone-hygiene.mjs --prune
 
 FROM node:24-bookworm-slim AS runner
 WORKDIR /app
@@ -39,7 +42,15 @@ RUN npx --yes playwright@1.62.0 install --with-deps chromium \
     && useradd --system --uid 1001 --gid nodejs nextjs
 
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+# standalone 只取白名单子集，不整目录 COPY：Turbopack trace 会把整个仓库根打进
+# standalone（实测 277M，含 videos/51M、docs/、deploy 凭据文件），整目录复制 =
+# 镜像膨胀 + 凭据外泄面。真实运行只需要以下条目；assets 走源 COPY（硬字幕字体
+# 真值，不依赖 trace 行为）。
+COPY --from=builder --chown=nextjs:nodejs /app/assets ./assets
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/server.js ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/package.json ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone/.next ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # The production compose file mounts this directory as the persistent artifact root.

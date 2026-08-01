@@ -722,6 +722,10 @@ pg 测试（`*.pg.test.ts`）：
 
 ### 9.1 ISSUE-015 P-2（接入策略）· **需要复核并降级**
 
+> **已随方案 A 退役**（2026-08）：方案 A 自建反代（`deploy/reverse-proxy/`）已删除，
+> P-2 的纵深防御层随之退役，入站边界以应用内认证为最终形态（见
+> `docs/conventions/routing.md` §9.1）；本节保留为历史决策记录。
+
 - 登录落地**不解除** P-2 的必要性：P-2 还管着 Postgres 端口、worker 暴露面、
   Next 不直连公网这些应用层管不到的事。
 - 但边界形态应从 **Basic Auth 降级为纯网络层**（IP allowlist / VPN / mTLS），

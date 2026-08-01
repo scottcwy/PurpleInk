@@ -362,7 +362,7 @@ Project（可变，L3 内部）
 
 业务查询的 workspace 一律取自 `currentWorkspaceId()`（会话/队列上下文，无上下文即抛错不回落）；队列作业在领到的 attempt 行自身的 workspace 上下文内执行。`LOCAL_WORKSPACE_ID` 已降级为迁移/bootstrap/进程级配置锚点，由 `tests/workspace-context-contract.test.ts` 锁住。公开保留面：`/api/ping`（健康检查）、`/api/auth/*`、营销页与 `/playbook`。
 
-**入站边界仍未收敛**（ISSUE-015 P-2，`docs/deployment/access.md`）：反代（Caddy）的 IP 过滤 + Basic Auth 保留为纵深防御；应用内认证落地后，P-2 边界形态可降级为纯网络层（只改反代配置，不动 `src/**`），但在 PLAN-001 完成前不得声称已收敛。
+**入站边界**：方案 A 自建反代（IP 过滤 + Basic Auth，`deploy/reverse-proxy/`）已于 2026-08 随方案 A 一并退役；当前入站边界由应用内认证承担（`src/proxy.ts` 形状拦截 + `withPageSession`/`withApiSession` 查库校验），方案 B 官方 Caddy（`deploy/Caddyfile`）与 Zeabur 仅做 TLS 终结与转发，不再承载业务级访问控制。ISSUE-015 P-2 的纵深防御层随方案 A 退役，最终形态以应用内认证为准。
 
 ### 9.2 守卫矩阵（逐行核销）
 
