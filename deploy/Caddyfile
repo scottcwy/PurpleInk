@@ -1,0 +1,31 @@
+{
+	servers {
+		protocols h1 h2
+	}
+}
+
+{$PURPLEINK_DOMAIN} {
+	@blocked not remote_ip {$CVC_ALLOWED_CIDRS}
+	respond @blocked 403
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), geolocation=(), microphone=()"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	reverse_proxy web:3000 {
+		flush_interval -1
+		header_up Host {host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

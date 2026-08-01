@@ -57,8 +57,8 @@ AGENTS.md
 
 # 跨目录契约测试与本地 compose（镜像不需要）
 tests
+**/*.test.ts
+**/*.test.tsx
+**/*.pg.test.ts
+**/__tests__
 docker-compose.dev.yml
-
-# 注意：刻意**不**排除 src 内的 *.test.ts。
-# 它们体积可忽略，而 tsconfig 的 include 覆盖 src/**，在未实测 Docker 构建前
-# 排除源码内测试文件属于不可验证的风险改动。确认构建稳定后可再单独收紧。

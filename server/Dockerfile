@@ -22,7 +22,9 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 RUN corepack enable && corepack prepare pnpm@10.30.0 --activate
 WORKDIR /repo
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY patches patches
 COPY server/package.json server/package.json
+COPY packages/procedural-sfx/package.json packages/procedural-sfx/package.json
 RUN pnpm install --frozen-lockfile
 
 # ---------------------------------------------------------------------------
@@ -38,16 +40,21 @@ WORKDIR /repo
 RUN apt-get update \
     && apt-get install -y --no-install-recommends -o Acquire::Retries=5 -o Acquire::http::Timeout=30 \
       ca-certificates \
+      ffmpeg \
       fonts-wqy-zenhei \
+    && ffmpeg -version \
+    && ffprobe -version \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=deps /repo/node_modules ./node_modules
 COPY --from=deps /repo/server/node_modules ./server/node_modules
 COPY --from=deps /repo/package.json ./package.json
 COPY --from=deps /repo/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY packages ./packages
 COPY server ./server
 
-RUN npx --yes playwright@"$(node -p "require('./server/node_modules/playwright/package.json').version")" install-deps chromium
+WORKDIR /repo/server
+RUN node ./node_modules/playwright/cli.js install-deps chromium
 
 RUN groupadd -r pwuser \
     && useradd -r -g pwuser -m -d /home/pwuser -s /usr/sbin/nologin pwuser
@@ -56,15 +63,15 @@ RUN mkdir -p /ms-playwright /repo/server/out /repo/server/capture \
     && chown -R pwuser:pwuser /ms-playwright /repo/server/out /repo/server/capture /repo
 
 USER pwuser
-RUN npx --yes playwright@"$(node -p "require('./server/node_modules/playwright/package.json').version")" install chromium
+RUN node ./node_modules/playwright/cli.js install chromium
 
 # Worker 与 Next 只共享严格、无 secret 的内部请求合同；不复制完整 src/，防止
 # Worker 意外重新引入供应商路由或计费实现。
-COPY --chown=pwuser:pwuser src/features/ai/worker-gateway-contract.ts ./src/features/ai/worker-gateway-contract.ts
+COPY --chown=pwuser:pwuser src/features/ai/worker-gateway-contract.ts /repo/src/features/ai/worker-gateway-contract.ts
 
 ENV NODE_ENV=production
 EXPOSE 8787
 # 直接执行 tsx 的 shim（POSIX shell 脚本，#!/bin/sh 开头）本身，不要用
 # `node node_modules/.bin/tsx ...` 包一层——那会把 shell 代码当 JS 解析报语法
 # 错误，见根 Dockerfile 同一处注释。exec 形式直接给路径，内核按 shebang 处理。
-CMD ["node_modules/.bin/tsx", "server/src/index.ts"]
+CMD ["node_modules/.bin/tsx", "src/index.ts"]

@@ -1,0 +1,183 @@
+name: predev and dev gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - predev
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: purpleink-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  quality:
+    name: lint / typecheck / unit / architecture / build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm --filter purpleink-server typecheck
+      - run: pnpm --filter @purpleink/procedural-sfx typecheck
+      - run: pnpm test
+      - run: pnpm --filter @purpleink/procedural-sfx test
+      - run: pnpm verify:v3
+      - run: pnpm build
+        env:
+          BACKEND_ORIGIN: http://worker:8787
+      - run: node scripts/verify/standalone-artifact-contract.mjs
+      - run: node scripts/deploy/validate-image-tag.mjs sha-${{ github.sha }}
+      - run: docker compose --env-file deploy/env.example -f deploy/compose.yaml config --quiet
+      - run: docker compose --env-file deploy/env.example -f docker-compose.prod.yml config --quiet
+
+  postgres:
+    name: migrations twice / pg / workflow integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:17.5-alpine
+        env:
+          POSTGRES_DB: cvc
+          POSTGRES_USER: cvc
+          POSTGRES_PASSWORD: cvc_ci_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cvc -d cvc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: create pg test database and local env
+        env:
+          PGPASSWORD: cvc_ci_only
+        run: |
+          psql -h 127.0.0.1 -U cvc -d cvc -c 'CREATE DATABASE cvc_test OWNER cvc'
+          printf '%s\n' \
+            'DATABASE_URL=postgres://cvc:cvc_ci_only@127.0.0.1:5432/cvc' \
+            'TEST_DATABASE_URL=postgres://cvc:cvc_ci_only@127.0.0.1:5432/cvc_test' \
+            > .env.local
+      - run: pnpm db:migrate
+      - run: pnpm db:migrate
+      - run: pnpm test:pg
+      - run: pnpm verify:workflow
+
+  images:
+    name: build ${{ matrix.image }} image without push
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: web
+            file: ./Dockerfile
+            target: runtime
+          - image: migrate
+            file: ./Dockerfile
+            target: migrate
+          - image: worker
+            file: ./server/Dockerfile
+            target: runtime
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          target: ${{ matrix.target }}
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  publish:
+    name: publish immutable dev images
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs:
+      - quality
+      - postgres
+      - images
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: web
+            file: ./Dockerfile
+            target: runtime
+          - image: migrate
+            file: ./Dockerfile
+            target: migrate
+          - image: worker
+            file: ./server/Dockerfile
+            target: runtime
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/purpleink-${{ matrix.image }}
+          tags: |
+            type=raw,value=sha-${{ github.sha }}
+            type=raw,value=dev
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          target: ${{ matrix.target }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

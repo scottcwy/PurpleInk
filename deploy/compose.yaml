@@ -1,0 +1,193 @@
+name: purpleink
+
+services:
+  image-tag-guard:
+    image: "ghcr.io/scottcwy/purpleink-migrate:${PURPLEINK_IMAGE_TAG:?set PURPLEINK_IMAGE_TAG to sha-<40 lowercase hex>}"
+    entrypoint:
+      - node
+      - -e
+      - >-
+        const tag = process.env.PURPLEINK_IMAGE_TAG ?? '';
+        if (!/^sha-[0-9a-f]{40}$/.test(tag)) {
+          console.error('PURPLEINK_IMAGE_TAG must be an immutable sha-<40 lowercase hex> tag');
+          process.exit(64);
+        }
+    environment:
+      PURPLEINK_IMAGE_TAG: "${PURPLEINK_IMAGE_TAG:?set PURPLEINK_IMAGE_TAG to sha-<40 lowercase hex>}"
+    network_mode: none
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  postgres:
+    image: postgres:17.5-alpine
+    environment:
+      POSTGRES_DB: cvc
+      POSTGRES_USER: cvc
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}"
+    volumes:
+      - cvc_postgres_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cvc -d cvc"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - data
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+  migrate:
+    image: "ghcr.io/scottcwy/purpleink-migrate:${PURPLEINK_IMAGE_TAG:?set PURPLEINK_IMAGE_TAG to sha-<40 lowercase hex>}"
+    environment:
+      DATABASE_URL: "postgres://cvc:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/cvc"
+    depends_on:
+      image-tag-guard:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  worker:
+    image: "ghcr.io/scottcwy/purpleink-worker:${PURPLEINK_IMAGE_TAG:?set PURPLEINK_IMAGE_TAG to sha-<40 lowercase hex>}"
+    init: true
+    environment:
+      NODE_ENV: production
+      PORT: "8787"
+      PURPLEINK_ENGINE_INTERNAL_KEY: "${PURPLEINK_ENGINE_INTERNAL_KEY:?set PURPLEINK_ENGINE_INTERNAL_KEY}"
+      PURPLEINK_AI_GATEWAY_ORIGIN: http://web:3000
+      BROWSER_DRIVER: "${BROWSER_DRIVER:-playwright}"
+      PURPLEINK_COMPOSE_MODE: "${PURPLEINK_COMPOSE_MODE:-auto}"
+      PURPLEINK_FFMPEG_DIR: "${PURPLEINK_FFMPEG_DIR:-}"
+    volumes:
+      - cvc_worker_out:/repo/server/out
+      - cvc_worker_capture:/repo/server/capture
+    depends_on:
+      image-tag-guard:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - app
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    shm_size: 1gb
+
+  web:
+    image: "ghcr.io/scottcwy/purpleink-web:${PURPLEINK_IMAGE_TAG:?set PURPLEINK_IMAGE_TAG to sha-<40 lowercase hex>}"
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      DATABASE_URL: "postgres://cvc:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/cvc"
+      DATA_DIR: /app/.data
+      BACKEND_ORIGIN: http://worker:8787
+      CVC_CREDENTIAL_MASTER_KEY: "${CVC_CREDENTIAL_MASTER_KEY:?set CVC_CREDENTIAL_MASTER_KEY}"
+      CVC_REDEMPTION_CODE_PEPPER: "${CVC_REDEMPTION_CODE_PEPPER:?set CVC_REDEMPTION_CODE_PEPPER}"
+      PURPLEINK_ENGINE_INTERNAL_KEY: "${PURPLEINK_ENGINE_INTERNAL_KEY:?set PURPLEINK_ENGINE_INTERNAL_KEY}"
+      CVC_QUEUE_RENDER_SHOT_CONCURRENCY: "${CVC_QUEUE_RENDER_SHOT_CONCURRENCY:?set CVC_QUEUE_RENDER_SHOT_CONCURRENCY}"
+      CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY: "${CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY:?set CVC_QUEUE_DIRECTOR_STAGE_CONCURRENCY}"
+      CVC_MANAGED_STEPFUN_API_KEY: "${CVC_MANAGED_STEPFUN_API_KEY:-}"
+      CVC_MANAGED_MIMO_API_KEY: "${CVC_MANAGED_MIMO_API_KEY:-}"
+      CVC_MANAGED_GEMINI_API_KEY: "${CVC_MANAGED_GEMINI_API_KEY:-}"
+      CVC_MANAGED_OPENAI_API_KEY: "${CVC_MANAGED_OPENAI_API_KEY:-}"
+      CVC_MANAGED_ANTHROPIC_API_KEY: "${CVC_MANAGED_ANTHROPIC_API_KEY:-}"
+      CVC_MAIL_SMTP_HOST: "${CVC_MAIL_SMTP_HOST:-}"
+      CVC_MAIL_SMTP_PORT: "${CVC_MAIL_SMTP_PORT:-}"
+      CVC_MAIL_SMTP_USER: "${CVC_MAIL_SMTP_USER:-}"
+      CVC_MAIL_SMTP_PASS: "${CVC_MAIL_SMTP_PASS:-}"
+      CVC_MAIL_FROM_ADDRESS: "${CVC_MAIL_FROM_ADDRESS:-}"
+      CVC_MAIL_FROM_NAME: "${CVC_MAIL_FROM_NAME:-PurpleInk}"
+    volumes:
+      - cvc_data:/app/.data
+    depends_on:
+      image-tag-guard:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+      worker:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/ping').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - app
+      - data
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+    stop_grace_period: 120s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    environment:
+      PURPLEINK_DOMAIN: "${PURPLEINK_DOMAIN:?set PURPLEINK_DOMAIN}"
+      CVC_ALLOWED_CIDRS: "${CVC_ALLOWED_CIDRS:-0.0.0.0/0 ::/0}"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - cvc_caddy_data:/data
+      - cvc_caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - edge
+      - app
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  edge:
+    driver: bridge
+  app:
+    driver: bridge
+  data:
+    driver: bridge
+    internal: true
+
+volumes:
+  cvc_data:
+  cvc_postgres_prod:
+  cvc_caddy_data:
+  cvc_caddy_config:
+  cvc_worker_out:
+  cvc_worker_capture:

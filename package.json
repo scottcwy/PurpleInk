@@ -19,6 +19,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/setup/db-migrate.ts",
     "admin:set-role": "tsx scripts/admin/set-role.ts",
+    "deploy:validate-tag": "node scripts/deploy/validate-image-tag.mjs",
     "generate:ai-catalog": "tsx scripts/generate/ai-billing-catalog.ts --write",
     "verify:ai-catalog": "tsx scripts/generate/ai-billing-catalog.ts --check",
     "verify:v3": "tsx scripts/verify/v3-architecture.ts --check",
