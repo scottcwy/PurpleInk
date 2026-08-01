@@ -3,27 +3,36 @@ import { sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db/client'
 import { sessions, users } from '@/lib/db/schema'
 
-export interface AdminDailyMetric {
+export interface AdminLastSessionActivityDay {
   date: string
-  dau: number
+  usersWithLastSessionActivity: number
   newUsers: number
 }
 
-export interface AdminDauMetrics {
-  days: AdminDailyMetric[]
+export interface AdminLastSessionActivityMetrics {
+  metric: 'last_session_activity'
+  snapshotNature: 'mutable'
+  historicalDau: false
+  days: AdminLastSessionActivityDay[]
   totalUsers: number
-  dauToday: number
-  wau: number
-  mau: number
+  usersWithLastSessionActivityToday: number
+  usersWithLastSessionActivity7d: number
+  usersWithLastSessionActivity30d: number
 }
 
-export async function getAdminDauMetrics(days = 30): Promise<AdminDauMetrics> {
+/**
+ * Groups the current sessions.last_seen_at snapshot. A later activity update moves the same
+ * session between buckets, so these values are intentionally not presented as historical DAU.
+ */
+export async function getAdminLastSessionActivityMetrics(
+  days = 30,
+): Promise<AdminLastSessionActivityMetrics> {
   const db = await getDb()
   const window = Math.min(Math.max(Math.trunc(days), 1), 90)
   const [daily, summaryRows] = await Promise.all([
     db.execute<{
       date: string
-      dau: number
+      users_with_last_session_activity: number
       new_users: number
     }>(sql`
       with day as (
@@ -39,7 +48,7 @@ export async function getAdminDauMetrics(days = 30): Promise<AdminDauMetrics> {
           select count(distinct ${sessions.userId})::int from ${sessions}
           where ${sessions.lastSeenAt} >= day.d
             and ${sessions.lastSeenAt} < day.d + interval '1 day'
-        ) as dau,
+        ) as users_with_last_session_activity,
         (
           select count(*)::int from ${users}
           where ${users.createdAt} >= day.d
@@ -50,28 +59,36 @@ export async function getAdminDauMetrics(days = 30): Promise<AdminDauMetrics> {
     `),
     db.execute<{
       total_users: number
-      wau: number
-      mau: number
+      users_with_last_session_activity_7d: number
+      users_with_last_session_activity_30d: number
     }>(sql`
       select
         (select count(*)::int from ${users}) as total_users,
         (select count(distinct ${sessions.userId})::int from ${sessions}
-          where ${sessions.lastSeenAt} >= now() - interval '7 days') as wau,
+          where ${sessions.lastSeenAt} >= now() - interval '7 days')
+          as users_with_last_session_activity_7d,
         (select count(distinct ${sessions.userId})::int from ${sessions}
-          where ${sessions.lastSeenAt} >= now() - interval '30 days') as mau
+          where ${sessions.lastSeenAt} >= now() - interval '30 days')
+          as users_with_last_session_activity_30d
     `),
   ])
   const dayRows = [...daily].map((row) => ({
     date: row.date,
-    dau: row.dau,
+    usersWithLastSessionActivity: row.users_with_last_session_activity,
     newUsers: row.new_users,
   }))
   const summary = summaryRows[0]
   return {
+    metric: 'last_session_activity',
+    snapshotNature: 'mutable',
+    historicalDau: false,
     days: dayRows,
     totalUsers: summary?.total_users ?? 0,
-    dauToday: dayRows.at(-1)?.dau ?? 0,
-    wau: summary?.wau ?? 0,
-    mau: summary?.mau ?? 0,
+    usersWithLastSessionActivityToday:
+      dayRows.at(-1)?.usersWithLastSessionActivity ?? 0,
+    usersWithLastSessionActivity7d:
+      summary?.users_with_last_session_activity_7d ?? 0,
+    usersWithLastSessionActivity30d:
+      summary?.users_with_last_session_activity_30d ?? 0,
   }
 }

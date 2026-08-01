@@ -310,6 +310,27 @@ it('creates the complete schema with scoped primary keys', async () => {
   expect(signatures).toEqual(expected)
 })
 
+it('locks cross-workspace admin query indexes', async () => {
+  const indexes = await database.sql<{ indexname: string; indexdef: string }[]>`
+    SELECT indexname, indexdef
+    FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND indexname IN (
+        'ai_invocations_admin_telemetry_created_idx',
+        'task_attempts_admin_status_created_idx'
+      )
+    ORDER BY indexname
+  `
+  expect(indexes.map((row) => row.indexname)).toEqual([
+    'ai_invocations_admin_telemetry_created_idx',
+    'task_attempts_admin_status_created_idx',
+  ])
+  expect(indexes[0]?.indexdef).toContain(
+    '(telemetry_version, created_at DESC NULLS LAST)',
+  )
+  expect(indexes[1]?.indexdef).toContain('(status, created_at DESC NULLS LAST)')
+})
+
 it('locks the exact workspace and identity foreign keys', async () => {
   const signatures = (await foreignKeys()).map(foreignKeySignature).sort()
   expect(EXPECTED_FOREIGN_KEYS).toHaveLength(62)

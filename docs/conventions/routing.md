@@ -95,7 +95,7 @@
 
 | 路由 | 文件 | 状态 | 数据与行为 |
 | --- | --- | --- | --- |
-| `/admin` | `src/app/admin/page.tsx` | `wired` | PostgreSQL 真实用户、有效会话与数据库时间概览；DAU 由登记 API 投影 |
+| `/admin` | `src/app/admin/page.tsx` | `wired` | PostgreSQL 真实用户、有效会话与数据库时间概览；兼容 metrics API 只提供可变的最后会话活动分布，不提供历史 DAU |
 | `/admin/users` | `src/app/admin/users/page.tsx` | `planned` | PostgreSQL 账号查询与受控管理操作 |
 | `/admin/jobs` | `src/app/admin/jobs/page.tsx` | `wired` | `pipeline_runs + task_attempts` 当前任务与安全错误类别投影 |
 | `/admin/ops` | `src/app/admin/ops/page.tsx` | `wired` | 当前 queue、有效 lease、有效 dispatch ticket、cooldown 与 Provider pool 的只读 PostgreSQL 投影 |
@@ -191,7 +191,7 @@
 | `/api/billing` | GET | — | `@/features/billing` | `wired` |
 | `/api/billing/redemptions` | POST | header `Idempotency-Key` + body `{code}` | `@/features/billing` | `wired` |
 | `/api/ai-usage` | GET | query `view=account\|managed-cycle`、`range=7d\|30d\|cycle`、`timeZone=<IANA>`；账号与 workspace 只取当前会话 | `@/features/usage` | `wired` |
-| `/api/admin/metrics/dau` | GET | query `days` | `@/features/admin/metrics-repository` | `wired`；admin-only PostgreSQL DAU 投影 |
+| `/api/admin/metrics/dau` | GET | query `days` | `@/features/admin/metrics-repository` | `wired`；路径仅为兼容保留，payload 为 `metric=last_session_activity`、`snapshotNature=mutable`、`historicalDau=false` 的最后会话活动分布；同一 session 更新 `last_seen_at` 会从旧日桶移到新日桶，不得作为历史 DAU |
 | `/api/admin/users` | GET, POST | GET query `q`、`page`、`pageSize`；POST body 由账号管理合同校验 | `@/features/admin/user-admin` | `planned`；真实账号查询与创建 |
 | `/api/admin/users/[id]` | PATCH, DELETE | `id` path；body 由账号管理合同校验 | `@/features/admin/user-admin` | `planned`；真实账号更新与删除，危险操作必须二次确认 |
 | `/api/admin/jobs` | GET | query `status`、`page`、`pageSize` | `@/features/admin/jobs-repository` | `wired`；当前 `pipeline_runs + task_attempts` 投影，不引入 `render_jobs` 或第二套 job-db |

@@ -1,5 +1,5 @@
 import { withAdminSession } from "@/features/auth";
-import { getAdminDauMetrics } from "@/features/admin";
+import { getAdminLastSessionActivityMetrics } from "@/features/admin";
 import { positiveQueryInteger } from "@/features/admin/http-query";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,10 @@ export async function GET(request: Request): Promise<Response> {
         30,
         90
       );
-      return Response.json({ ok: true, ...(await getAdminDauMetrics(days)) });
+      return Response.json({
+        ok: true,
+        ...(await getAdminLastSessionActivityMetrics(days)),
+      });
     },
     { routeGroup: "admin-metrics-dau" }
   );

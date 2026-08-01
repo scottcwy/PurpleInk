@@ -73,7 +73,7 @@ async function seedWorkflow() {
     checkpoint: { schemaVersion: 1 },
     failure: {
       schemaVersion: 1,
-      kind: 'provider_rate_limit',
+      code: 'PROVIDER_POOL_WAIT',
       message: 'secret provider response and user@example.com',
     },
   }).returning({ id: taskAttempts.id })
@@ -82,14 +82,20 @@ async function seedWorkflow() {
 }
 
 describe('admin operational PostgreSQL projections', () => {
-  it('aggregates overview and anonymous security counters', async () => {
+  it('reports last-session activity as a mutable snapshot, not historical DAU', async () => {
     const { user, workspace } = await seedWorkflow()
-    await database.db.insert(sessions).values({
+    const [session] = await database.db.insert(sessions).values({
       tokenHash: '2'.repeat(64),
       userId: user.id,
       workspaceId: workspace.id,
       expiresAt: new Date('2100-01-01T00:00:00.000Z'),
-    })
+    }).returning({ id: sessions.id })
+    if (!session) throw new Error('seed session failed')
+    await database.sql`
+      update sessions
+      set last_seen_at = date_trunc('day', now()) - interval '1 day' + interval '12 hours'
+      where id = ${session.id}
+    `
     await database.db.insert(apiAccessCounters).values({
       routeGroup: 'projects',
       outcome: '2xx',
@@ -106,14 +112,37 @@ describe('admin operational PostgreSQL projections', () => {
     ])
 
     const { getAdminOverview } = await import('./overview-repository')
-    const { getAdminDauMetrics } = await import('./metrics-repository')
+    const { getAdminLastSessionActivityMetrics } = await import('./metrics-repository')
     const { getAdminSecuritySnapshot } = await import('./security-repository')
     const overview = await getAdminOverview()
-    const metrics = await getAdminDauMetrics(7)
+    const beforeMove = await getAdminLastSessionActivityMetrics(7)
+    const previousActivity = beforeMove.days.find(
+      (day) => day.usersWithLastSessionActivity === 1,
+    )
+    expect(previousActivity).toBeDefined()
+    expect(beforeMove).toMatchObject({
+      metric: 'last_session_activity',
+      snapshotNature: 'mutable',
+      historicalDau: false,
+      totalUsers: 1,
+      usersWithLastSessionActivityToday: 0,
+      usersWithLastSessionActivity7d: 1,
+      usersWithLastSessionActivity30d: 1,
+    })
+
+    await database.sql`update sessions set last_seen_at = now() where id = ${session.id}`
+    const afterMove = await getAdminLastSessionActivityMetrics(7)
     const security = await getAdminSecuritySnapshot()
 
     expect(overview).toMatchObject({ users: { total: 1, active: 1, disabled: 0 }, activeSessions: 1 })
-    expect(metrics).toMatchObject({ totalUsers: 1, dauToday: 1, wau: 1, mau: 1 })
+    expect(afterMove.days.find((day) => day.date === previousActivity?.date))
+      .toMatchObject({ usersWithLastSessionActivity: 0 })
+    expect(afterMove).toMatchObject({
+      metric: 'last_session_activity',
+      snapshotNature: 'mutable',
+      historicalDau: false,
+      usersWithLastSessionActivityToday: 1,
+    })
     expect(security.apiAccess).toEqual([{ routeGroup: 'projects', outcome: '2xx', count: 4 }])
     expect(security.authThrottle).toEqual({ trackedBuckets: 1, attempts: 2 })
     expect(JSON.stringify(security)).not.toContain('ip:')

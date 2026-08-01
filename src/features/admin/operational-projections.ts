@@ -1,3 +1,5 @@
+import type { WorkflowExecutionNotice, WorkflowFaultCode } from '@/features/canvas'
+
 export type AdminFailureCategory =
   | 'none'
   | 'capacity'
@@ -7,6 +9,47 @@ export type AdminFailureCategory =
   | 'transport'
   | 'cancelled'
   | 'internal'
+
+const FAILURE_CATEGORY_BY_CODE = {
+  PROVIDER_RATE_LIMITED: 'capacity',
+  PROVIDER_TIMEOUT: 'timeout',
+  PROVIDER_UNAVAILABLE: 'transport',
+  PROVIDER_AUTH_FAILED: 'authentication',
+  PROVIDER_BALANCE_EXHAUSTED: 'capacity',
+  PROVIDER_PERMISSION_DENIED: 'authentication',
+  PROVIDER_REQUEST_REJECTED: 'validation',
+  PROVIDER_SAFETY_REJECTED: 'validation',
+  PLATFORM_PREFLIGHT_FAILED: 'internal',
+  PLATFORM_QUEUE_FAILED: 'internal',
+  PLATFORM_STORAGE_FAILED: 'internal',
+  PLATFORM_RENDER_FAILED: 'internal',
+  PLATFORM_INTERNAL_ERROR: 'internal',
+  UPSTREAM_ARTIFACT_MISSING: 'validation',
+  FINAL_ARTIFACT_NOT_READY: 'validation',
+  UPSTREAM_ARTIFACT_INVALID: 'validation',
+  STAGE_INPUT_INVALID: 'validation',
+  INTERNAL_PREFLIGHT_FAILED: 'internal',
+  AUDIO_SOURCE_INTEGRITY_INVALID: 'validation',
+  ROUTE_CONTRACT_INVALID: 'validation',
+  ROUTE_NOT_AUTHORIZED: 'authentication',
+  MEDIA_NOT_READY: 'validation',
+  TASK_INTERRUPTED: 'cancelled',
+  RETRY_BUDGET_EXHAUSTED: 'capacity',
+  DEGRADED_EXPORT_CONFIRMATION_REQUIRED: 'validation',
+  QUOTA_EXHAUSTED: 'capacity',
+  CONFIGURATION_BLOCKED: 'validation',
+  PROVIDER_FAILED: 'internal',
+  FABRICATE_FAILED: 'internal',
+  RENDER_FAILED: 'internal',
+  MEDIA_FAILED: 'internal',
+  QUEUE_FAILED: 'internal',
+  STAGE_FAILED: 'internal',
+  PROVIDER_POOL_WAIT: 'capacity',
+  PLAN_CONCURRENCY_WAIT: 'capacity',
+} as const satisfies Record<
+  WorkflowFaultCode | WorkflowExecutionNotice['code'],
+  AdminFailureCategory
+>
 
 export interface AdminJobRow {
   runId: string
@@ -85,17 +128,9 @@ export function classifyAttemptFailure(failure: unknown): AdminFailureCategory {
   const payload = 'payload' in failure ? failure.payload : failure
   if (!payload || typeof payload !== 'object') return 'internal'
   const record = payload as Record<string, unknown>
-  const discriminator = [record.category, record.kind, record.code, record.type]
-    .find((value): value is string => typeof value === 'string')
-    ?.toLowerCase() ?? ''
-
-  if (/rate|capacity|quota|concurr|busy|429/.test(discriminator)) return 'capacity'
-  if (/timeout|deadline|lease/.test(discriminator)) return 'timeout'
-  if (/valid|schema|input|contract/.test(discriminator)) return 'validation'
-  if (/auth|credential|permission|forbidden/.test(discriminator)) return 'authentication'
-  if (/network|transport|connection|socket/.test(discriminator)) return 'transport'
-  if (/cancel|abort|stop/.test(discriminator)) return 'cancelled'
-  return 'internal'
+  if (typeof record.code !== 'string') return 'internal'
+  return FAILURE_CATEGORY_BY_CODE[record.code as keyof typeof FAILURE_CATEGORY_BY_CODE]
+    ?? 'internal'
 }
 
 export function normalizeJobRow(input: JobProjectionInput): AdminJobRow {

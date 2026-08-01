@@ -37,17 +37,22 @@ describe("admin operational route contracts", () => {
     }
   );
 
-  it("keeps the registered DAU and job-detail API shapes", () => {
-    const dau = readFileSync(
+  it("keeps the compatibility metrics route honest about mutable last-session activity", () => {
+    const metrics = readFileSync(
       resolve("src/app/api/admin/metrics/dau/route.ts"),
       "utf8"
     );
+    expect(metrics).toContain("withAdminSession");
+    expect(metrics).toContain("getAdminLastSessionActivityMetrics");
+    expect(metrics).not.toContain("getAdminDauMetrics");
+    expect(metrics).toMatch(/routeGroup: ["']admin-metrics-dau["']/);
+  });
+
+  it("keeps the registered job-detail API shape", () => {
     const detail = readFileSync(
       resolve("src/app/api/admin/jobs/[id]/route.ts"),
       "utf8"
     );
-    expect(dau).toContain("withAdminSession");
-    expect(dau).toMatch(/routeGroup: ["']admin-metrics-dau["']/);
     expect(detail).toContain("withAdminSession");
     expect(detail).toMatch(/routeGroup: ["']admin-jobs-detail["']/);
     expect(detail).toContain("status: 404");

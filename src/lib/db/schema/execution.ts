@@ -158,6 +158,10 @@ export const taskAttempts = pgTable(
       table.workUnitKey,
       table.createdAt,
     ),
+    index('task_attempts_admin_status_created_idx').on(
+      table.status,
+      table.createdAt.desc(),
+    ),
     check(
       'task_attempts_fingerprint_check',
       sql`length(${table.fingerprint}) = 64`,

@@ -1,0 +1,2 @@
+CREATE INDEX "ai_invocations_admin_telemetry_created_idx" ON "ai_invocations" USING btree ("telemetry_version","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "task_attempts_admin_status_created_idx" ON "task_attempts" USING btree ("status","created_at" DESC NULLS LAST);

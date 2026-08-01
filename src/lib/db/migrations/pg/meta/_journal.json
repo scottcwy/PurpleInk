@@ -211,6 +211,13 @@
       "when": 1785563267120,
       "tag": "0029_bored_red_ghost",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1785568250966,
+      "tag": "0030_steady_venus",
+      "breakpoints": true
     }
   ]
 }

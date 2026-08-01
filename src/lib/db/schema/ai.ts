@@ -325,5 +325,9 @@ export const aiInvocations = pgTable(
       table.usagePeriodId,
       table.providerStartedAt,
     ),
+    index('ai_invocations_admin_telemetry_created_idx').on(
+      table.telemetryVersion,
+      table.createdAt.desc(),
+    ),
   ],
 )

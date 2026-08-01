@@ -6,11 +6,11 @@ import {
 } from './operational-projections'
 
 describe('admin operational projections', () => {
-  it('maps workflow failures to a safe category without exposing provider text', () => {
+  it('maps PROVIDER_POOL_WAIT to capacity without exposing provider text', () => {
     const failure = {
-      version: 1,
+      schemaVersion: 1,
       payload: {
-        kind: 'provider_rate_limit',
+        code: 'PROVIDER_POOL_WAIT',
         message: 'upstream rejected sk-secret and user@example.com',
         providerResponse: { body: 'private response' },
       },
@@ -18,6 +18,21 @@ describe('admin operational projections', () => {
 
     expect(classifyAttemptFailure(failure)).toBe('capacity')
     expect(JSON.stringify(classifyAttemptFailure(failure))).not.toContain('secret')
+  })
+
+  it('maps TASK_INTERRUPTED to cancelled', () => {
+    expect(classifyAttemptFailure({ schemaVersion: 2, code: 'TASK_INTERRUPTED' }))
+      .toBe('cancelled')
+  })
+
+  it('maps unknown failure codes to internal without returning raw data', () => {
+    const failure = {
+      schemaVersion: 2,
+      code: 'PROVIDER_POOL_WAIT_WITH_SECRET_SUFFIX',
+      message: 'credential=private',
+    }
+    expect(classifyAttemptFailure(failure)).toBe('internal')
+    expect(JSON.stringify(classifyAttemptFailure(failure))).not.toContain('private')
   })
 
   it('returns only the allowlisted run and attempt fields', () => {
@@ -34,8 +49,9 @@ describe('admin operational projections', () => {
       attemptCreatedAt: new Date('2026-08-01T00:01:00.000Z'),
       attemptCompletedAt: new Date('2026-08-01T00:02:00.000Z'),
       failure: {
-        version: 1,
-        payload: { kind: 'timeout', message: 'credential=private' },
+        schemaVersion: 2,
+        code: 'PROVIDER_TIMEOUT',
+        message: 'credential=private',
       },
     })
 

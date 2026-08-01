@@ -4,8 +4,11 @@ export { getAdminAiAudit } from './ai-audit-repository'
 export type { AdminAiAuditSnapshot } from './ai-audit-repository'
 export { getAdminJob, listAdminJobs } from './jobs-repository'
 export type { AdminJobsPage, AdminJobsQuery } from './jobs-repository'
-export { getAdminDauMetrics } from './metrics-repository'
-export type { AdminDauMetrics, AdminDailyMetric } from './metrics-repository'
+export { getAdminLastSessionActivityMetrics } from './metrics-repository'
+export type {
+  AdminLastSessionActivityDay,
+  AdminLastSessionActivityMetrics,
+} from './metrics-repository'
 export { getAdminOpsSnapshot } from './ops-repository'
 export type { AdminOpsSnapshot } from './ops-repository'
 export { getAdminOverview } from './overview-repository'
