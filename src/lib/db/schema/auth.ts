@@ -14,6 +14,10 @@ import {
 import { workspaces } from './core'
 
 export const USER_STATUSES = ['active', 'disabled'] as const
+export const USER_ROLES = ['user', 'admin'] as const
+export type UserRole = (typeof USER_ROLES)[number]
+export const API_ACCESS_OUTCOMES = ['2xx', '4xx', '5xx', '401', '404'] as const
+export type ApiAccessOutcome = (typeof API_ACCESS_OUTCOMES)[number]
 export const WORKSPACE_MEMBER_ROLES = ['owner', 'member'] as const
 export const VERIFICATION_PURPOSES = ['signup', 'password_reset'] as const
 
@@ -39,6 +43,7 @@ export const users = pgTable(
     passwordUpdatedAt: timestamp('password_updated_at', { withTimezone: true })
       .defaultNow()
       .notNull(),
+    role: text('role').default('user').notNull(),
     status: text('status').default('active').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -46,6 +51,7 @@ export const users = pgTable(
   (table) => [
     // 唯一性建在 lower(email) 上：A@x.com 与 a@x.com 是同一个人，不允许重复注册。
     uniqueIndex('users_email_lower_unique').on(sql`lower(${table.email})`),
+    check('users_role_check', sql`${table.role} in ('user', 'admin')`),
     check('users_status_check', sql`${table.status} in ('active', 'disabled')`),
     check('users_email_shape_check', sql`position('@' in ${table.email}) > 1`),
   ],
@@ -164,4 +170,28 @@ export const authThrottle = pgTable(
     count: integer('count').default(0).notNull(),
   },
   (table) => [check('auth_throttle_count_check', sql`${table.count} >= 0`)],
+)
+
+/**
+ * API 访问量的分钟桶。只记录调用方在代码中声明的 route group，不记录 URL、query、
+ * email、workspace 或 IP；outcome 只存安全 status 类别。写入是 fire-and-forget
+ * 旁路，失败不得改变业务响应。
+ */
+export const apiAccessCounters = pgTable(
+  'api_access_counters',
+  {
+    routeGroup: text('route_group').notNull(),
+    outcome: text('outcome').notNull(),
+    bucketStartedAt: timestamp('bucket_started_at', { withTimezone: true }).notNull(),
+    count: integer('count').default(1).notNull(),
+  },
+  (table) => [
+    primaryKey({
+      name: 'api_access_counters_pkey',
+      columns: [table.bucketStartedAt, table.routeGroup, table.outcome],
+    }),
+    check('api_access_counters_route_group_check', sql`length(${table.routeGroup}) between 1 and 80`),
+    check('api_access_counters_outcome_check', sql`${table.outcome} in ('2xx', '4xx', '5xx', '401', '404')`),
+    check('api_access_counters_count_check', sql`${table.count} >= 0`),
+  ],
 )

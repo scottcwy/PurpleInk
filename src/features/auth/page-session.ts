@@ -1,5 +1,5 @@
 import 'server-only'
-import { redirect } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { readSessionToken } from '@/lib/auth/session-cookie'
 import { runInAuthContext } from '@/lib/auth/workspace-context'
 import { DEFAULT_POST_LOGIN_PATH, safeNextPath } from './next-path'
@@ -17,6 +17,13 @@ export async function requireSession(currentPath: string): Promise<SessionOwner>
   if (!session) {
     redirect(`/login?next=${encodeURIComponent(safeNextPath(currentPath))}`)
   }
+  return session
+}
+
+/** 管理页面未登录重定向；已登录非管理员统一 404。 */
+export async function requireAdminSession(currentPath: string): Promise<SessionOwner> {
+  const session = await requireSession(currentPath)
+  if (session.role !== 'admin') notFound()
   return session
 }
 

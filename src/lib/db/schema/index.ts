@@ -16,14 +16,18 @@ export {
 
 export {
   USER_STATUSES,
+  USER_ROLES,
+  API_ACCESS_OUTCOMES,
   VERIFICATION_PURPOSES,
   WORKSPACE_MEMBER_ROLES,
+  apiAccessCounters,
   authThrottle,
   emailVerificationCodes,
   sessions,
   users,
   workspaceMembers,
 } from './auth'
+export type { ApiAccessOutcome, UserRole } from './auth'
 
 export {
   CANVAS_NODE_STAGES,

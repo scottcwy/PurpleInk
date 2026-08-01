@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { readSessionToken } from '@/lib/auth/session-cookie'
 import { runInAuthContext } from '@/lib/auth/workspace-context'
 import { resolveSession, type SessionOwner } from './session'
+import { recordApiAccess } from './api-access-counter'
 
 /**
  * `/api/*` 的会话解析与归属上下文包裹（PLAN-002 §3.3）。
@@ -35,11 +36,31 @@ export async function currentSession(): Promise<SessionOwner | null> {
  */
 export async function withApiSession(
   handler: (session: SessionOwner) => Promise<Response>,
+  options: { routeGroup?: string } = {},
 ): Promise<Response> {
   const session = await currentSession()
-  if (!session) return unauthenticatedResponse()
-  return runInAuthContext(
+  if (!session) {
+    const response = unauthenticatedResponse()
+    if (options.routeGroup) void recordApiAccess(options.routeGroup, response.status)
+    return response
+  }
+  const response = await runInAuthContext(
     { userId: session.userId, workspaceId: session.workspaceId },
     () => handler(session),
+  )
+  if (options.routeGroup) void recordApiAccess(options.routeGroup, response.status)
+  return response
+}
+
+/** 管理 API 对非管理员返回 404，避免暴露后台表面是否存在。 */
+export async function withAdminSession(
+  handler: (session: SessionOwner) => Promise<Response>,
+  options: { routeGroup?: string } = {},
+): Promise<Response> {
+  return withApiSession(
+    (session) => session.role === 'admin'
+      ? handler(session)
+      : Promise.resolve(new Response(null, { status: 404 })),
+    options,
   )
 }

@@ -9,7 +9,7 @@ const TABLES = [
   'provider_dispatch_cooldowns',
   'provider_pool_states', 'workflow_concurrency_leases',
   'users', 'workspace_members', 'sessions', 'email_verification_codes',
-  'auth_throttle', 'managed_model_catalog', 'rate_cards', 'rate_card_units',
+  'auth_throttle', 'api_access_counters', 'managed_model_catalog', 'rate_cards', 'rate_card_units',
   'workspace_entitlements', 'usage_periods', 'redemption_batches',
   'redemption_codes', 'redemption_audits', 'telemetry_cutovers',
   'project_sources', 'project_creation_requests',
@@ -85,6 +85,8 @@ const ENUM_CHECKS = {
     'artifact-registration-failed', 'duplicate-upload', 'creation-failed',
   ],
   users_status_check: ['active', 'disabled'],
+  users_role_check: ['user', 'admin'],
+  api_access_counters_outcome_check: ['2xx', '4xx', '5xx', '401', '404'],
   workspace_members_role_check: ['owner', 'member'],
   email_verification_codes_purpose_check: ['signup', 'password_reset'],
 } as const
@@ -105,6 +107,7 @@ const NUMERIC_CHECKS = [
   'provider_pool_states_current_concurrency_check',
   'provider_pool_states_max_concurrency_check',
   'email_verification_codes_attempt_check', 'auth_throttle_count_check',
+  'api_access_counters_count_check',
   'storage_cleanup_requests_generation_check',
   'storage_cleanup_requests_attempt_count_check',
   'usage_periods_concurrency_check',
@@ -299,6 +302,7 @@ it('creates the complete schema with scoped primary keys', async () => {
     'sessions:id',
     'email_verification_codes:id',
     'auth_throttle:key',
+    'api_access_counters:bucket_started_at,route_group,outcome',
     'telemetry_cutovers:key',
     'billing_fx_rates:id',
     'service_multiplier_cards:id',
@@ -382,7 +386,7 @@ it('uses UUID identities, bigint revisions, and timestamptz suffixes', async () 
     WHERE table_schema = 'public' AND right(column_name, 3) = '_at'
   `
   // 队列租约、取消、调度与项目创建回执都使用 timestamptz。
-  expect(times).toHaveLength(99)
+  expect(times).toHaveLength(100)
   expect(new Set(times.map((row) => row.table_name))).toEqual(
     new Set(TABLES.filter((table) => table !== 'rate_card_units')),
   )

@@ -18,6 +18,7 @@
     "test:pg": "vitest run --config vitest.pg.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/setup/db-migrate.ts",
+    "admin:set-role": "tsx scripts/admin/set-role.ts",
     "generate:ai-catalog": "tsx scripts/generate/ai-billing-catalog.ts --write",
     "verify:ai-catalog": "tsx scripts/generate/ai-billing-catalog.ts --check",
     "verify:v3": "tsx scripts/verify/v3-architecture.ts --check",

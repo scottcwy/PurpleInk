@@ -412,6 +412,7 @@ Project（可变，L3 内部）
 | 入站 proxy | `src/proxy.ts` | 只拦 `/products/*`：无形状合法的会话 cookie → 302 `/login?next=` | **不查库**。只做 cookie 存在性与形状（43 位 base64url）判断；proxy 跑在每个请求上，连库会成为全站延迟与连接数压力。**不拦认证页**：按 cookie 形状把 `/login` 弹回 dashboard 会与页面级 302 `/login` 对残留失效 cookie 形成无限重定向循环（已踩过） |
 | 页面会话 | `withPageSession`（`src/features/auth/page-session.ts`），6 个 `/products/*` page 逐个包 | 查库校验会话（登出/过期/改密踢下线），建立 workspace 归属上下文后执行渲染体 | 不包在 layout 里：RSC 的 children 独立渲染，layout 的 AsyncLocalStorage 不传播到子页面 |
 | API 会话 | `withApiSession`（`src/features/auth/api-session.ts`），13 条业务 API 入口包裹 | 未登录统一 401 同一句文案；已登录则在归属上下文内执行 handler | 不靠 proxy 兜底（API 要 401/404 语义不是 302）；SSE 路由的流回调在 handler 内闭包捕获上下文 |
+| Admin 守卫基础 | `requireAdminSession` / `withAdminSession`（`src/features/auth/*-session.ts`） | 全局角色来自 `users.role`；页面未登录重定向、非 admin `notFound()`；API 未登录 401、非 admin 404 | workspace `owner` 不等于全局 admin；具体 `/admin/*` 页面与 `/api/admin/*` 仍须逐入口接线后才可在 §9.2 核销 |
 
 业务查询的 workspace 一律取自 `currentWorkspaceId()`（会话/队列上下文，无上下文即抛错不回落）；队列作业在领到的 attempt 行自身的 workspace 上下文内执行。`LOCAL_WORKSPACE_ID` 已降级为迁移/bootstrap/进程级配置锚点，由 `tests/workspace-context-contract.test.ts` 锁住。公开保留面：`/api/ping`（健康检查）、`/api/auth/*`、营销页与 `/playbook`。
 
@@ -437,6 +438,8 @@ Project（可变，L3 内部）
 | 营销页 AI 演示（LaunchComposer） | 未登录先弹登录引导并中止；登录后创建 `website` 项目、统一启动并进入画布，不直接访问 worker | 已实现 |
 
 一律用 404 掩盖归属错误，不区分「不存在」与「无权限」，避免泄露其他 workspace 中对象是否存在。前端不得为了让页面渲染成功而隐式创建缺失数据。
+
+`withApiSession(handler, { routeGroup })` 在 401 与 handler 正常响应出口按 status 向 `api_access_counters` 写分钟桶；401/404 独立归类，其他响应归入 2xx/4xx/5xx。route group 必须是代码内静态分类，不含 URL、query 或身份信息。该写入是失败隔离的 fire-and-forget 旁路，失败只记安全类别日志，不得改变或阻塞原 API 响应。
 
 ### 9.3 覆盖边界（如实记录，不虚报）
 

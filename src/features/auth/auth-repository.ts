@@ -29,6 +29,7 @@ export interface SessionOwner {
   name: string
   workspaceName: string
   sessionId: string
+  role: 'user' | 'admin'
 }
 
 /** 按 `lower(email)` 查，与 `users_email_lower_unique` 索引同口径（可走索引）。 */
@@ -163,6 +164,7 @@ export async function findSessionOwner(
       email: users.email,
       name: users.name,
       workspaceName: workspaces.name,
+      role: users.role,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
@@ -178,7 +180,11 @@ export async function findSessionOwner(
       ),
     )
     .limit(1)
-  return row ?? null
+  if (!row) return null
+  if (row.role !== 'user' && row.role !== 'admin') {
+    throw new Error('users.role violates the global role contract')
+  }
+  return { ...row, role: row.role }
 }
 
 export async function touchSession(sessionId: string, now: Date): Promise<void> {

@@ -9,12 +9,14 @@ export {
   UNAUTHENTICATED_MESSAGE,
   currentSession,
   unauthenticatedResponse,
+  withAdminSession,
   withApiSession,
 } from './api-session'
 
 export {
   optionalSession,
   redirectIfAuthenticated,
+  requireAdminSession,
   requireSession,
   withPageSession,
 } from './page-session'

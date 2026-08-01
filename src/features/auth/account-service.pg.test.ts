@@ -87,6 +87,7 @@ describe('registerAccount', () => {
     const [entitlement] = await database.db.select().from(workspaceEntitlements)
     const [usagePeriod] = await database.db.select().from(usagePeriods)
     expect(user?.email).toBe('owner@example.com')
+    expect(user?.role).toBe('user')
     expect(user?.emailVerifiedAt).not.toBeNull()
     expect(membership).toMatchObject({
       userId: user?.id,
@@ -114,6 +115,7 @@ describe('registerAccount', () => {
     const [workspace] = await database.db.select().from(workspaces)
     expect(owner?.workspaceId).toBe(workspace?.id)
     expect(owner?.email).toBe('owner@example.com')
+    expect(owner?.role).toBe('user')
   })
 
   it('never stores the password in clear text', async () => {
