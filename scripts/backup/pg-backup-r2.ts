@@ -10,15 +10,15 @@
  * 输出恒为单行 JSON（成功含 key/sizeBytes/sha256/deleted；失败只给类别）。
  * 核心逻辑见 ./run-backup；常驻每日调度见 ./schedule。
  */
-import { runBackupOnce } from './run-backup'
+import { runBackupOnce } from "./run-backup";
 
 void runBackupOnce()
   .then((result) => {
-    console.log(JSON.stringify({ status: 'ok', ...result }))
+    console.log(JSON.stringify({ status: "ok", ...result }));
   })
   .catch((error: unknown) => {
     // 失败输出只给类别文案；连接串/密钥值一律不回显。
-    const message = error instanceof Error ? error.message : 'BACKUP_FAILED'
-    console.error(JSON.stringify({ status: 'failed', message }))
-    process.exitCode = 1
-  })
+    const message = error instanceof Error ? error.message : "BACKUP_FAILED";
+    console.error(JSON.stringify({ status: "failed", message }));
+    process.exitCode = 1;
+  });

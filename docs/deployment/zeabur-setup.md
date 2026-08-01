@@ -50,7 +50,7 @@
 | `CVC_MANAGED_MIMO_API_KEY` | web | 现有 MiMo 平台 Key |
 | `CVC_MANAGED_GEMINI_API_KEY` | web | 现有 Gemini 平台 Key |
 | `PURPLEINK_ENGINE_INTERNAL_KEY` | web + worker（**两端必须完全相同**） | 随机强密钥（如 `openssl rand -base64 32`） |
-| `STEP_API_KEY` | worker | 现有 StepFun Key（worker 侧独立，见 `server/.env.example`） |
+| `STEP_API_KEY` | worker | 现有 StepFun Key（worker 侧独立，见根 `.env.example` worker 段；worker 读 `STEP_API_KEY`，与 web 侧 `CVC_MANAGED_STEPFUN_API_KEY` 互不代替） |
 | `LISTENHUB_API_KEY` | worker | 现有 ListenHub Key |
 | `GEMINI_API_KEY` | worker | 现有 Gemini Key（worker 侧独立） |
 | `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | web + backup | R2 Token（见 §2.1） |

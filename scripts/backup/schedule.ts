@@ -8,30 +8,30 @@
  * 失败则 1 小时后自动重试，避免单次网络抖动漏掉一整天的备份。
  * 每次运行输出恒为单行 JSON，直接进容器日志。
  */
-import { runBackupOnce } from './run-backup'
+import { runBackupOnce } from "./run-backup";
 
-const RUN_INTERVAL_MS = 24 * 60 * 60 * 1000
-const RETRY_INTERVAL_MS = 60 * 60 * 1000
-const FIRST_RUN_DELAY_MS = 10 * 1000
+const RUN_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const RETRY_INTERVAL_MS = 60 * 60 * 1000;
+const FIRST_RUN_DELAY_MS = 10 * 1000;
 
 function scheduleNext(delayMs: number): void {
   setTimeout(() => {
-    void tick()
-  }, delayMs).unref()
+    void tick();
+  }, delayMs).unref();
 }
 
 async function tick(): Promise<void> {
-  const at = new Date().toISOString()
+  const at = new Date().toISOString();
   try {
-    const result = await runBackupOnce()
-    console.log(JSON.stringify({ at, status: 'ok', ...result }))
-    scheduleNext(RUN_INTERVAL_MS)
+    const result = await runBackupOnce();
+    console.log(JSON.stringify({ at, status: "ok", ...result }));
+    scheduleNext(RUN_INTERVAL_MS);
   } catch (error: unknown) {
     // 失败只给类别文案；连接串/密钥值不回显，原始错误由 pg_dump stderr 落到容器日志。
-    const message = error instanceof Error ? error.message : 'BACKUP_FAILED'
-    console.error(JSON.stringify({ at, status: 'failed', message }))
-    scheduleNext(RETRY_INTERVAL_MS)
+    const message = error instanceof Error ? error.message : "BACKUP_FAILED";
+    console.error(JSON.stringify({ at, status: "failed", message }));
+    scheduleNext(RETRY_INTERVAL_MS);
   }
 }
 
-scheduleNext(FIRST_RUN_DELAY_MS)
+scheduleNext(FIRST_RUN_DELAY_MS);
