@@ -15,22 +15,23 @@
 
 ## 1. 路由分层
 
-只允许存在四层。每层的壳、认证要求、数据来源、可索引性都不同。
+只允许存在五层。每层的壳、认证要求、数据来源、可索引性都不同。
 
 | 层 | 前缀 | 壳 | 认证 | 可索引 | 用途 |
 | --- | --- | --- | --- | --- | --- |
-| L1 公开 | `/`、`/artifacts*`、`/share/*`、`/release` | 营销壳 / 只读分享壳 | 匿名 | `/`、`/artifacts*` 是；`/share/*` 否 | 获客、案例、对外分享 |
+| L1 公开 | `/`、`/community`、`/artifacts*`、`/share/*`、`/release` | 营销壳 / 只读分享壳 | 匿名 | `/`、`/community`、`/artifacts*` 是；`/share/*` 否 | 获客、社区案例、对外分享 |
 | L2 认证 | `/login`、`/signup`、`/password/reset` | 认证壳（无侧栏，左海报 + 右表单） | 匿名 | 否 | 进入 L3 |
 | L3 制作应用 | `/products/*` | `AppShell` + `AppSidebarShell` | 必须登录（见 §9） | 否 | 全部真实制作功能 |
-| L4 内部 | `/playbook/*` | 独立无业务壳 | 仅非生产环境 | 否 | 组件登记与视觉验收 |
+| L4 管理后台 | `/admin/*` | 独立 Admin 壳 | 必须登录且必须是 admin（见 §9） | 否 | PostgreSQL 真实运营投影与管理操作 |
+| L5 内部 | `/playbook/*` | 独立无业务壳 | 仅非生产环境 | 否 | 组件登记与视觉验收 |
 | API | `/api/*` | 无 | 见 §4 | 否（robots 已 disallow） | 数据与引擎 |
 
 硬约束：
 
 - **L3 只允许一套壳。** `src/features/navigation/app-shell.tsx` + `app-sidebar-shell.tsx` + `app-sidebar.tsx` 是唯一实现。禁止再出现第二个 app shell、第二个 sidebar 组件或第二套 pathname→高亮映射。
 - L1、L2 不挂 `AppSidebar`。分享页与案例页不得出现制作侧导航、项目切换器或任何写操作入口。
-- L4 不在任何业务壳内，且不得被 L1/L3 页面链接。
-- **滚动 Provider 按路由分层。** 根 `src/app/providers.tsx` 只负责全站主题协议；`src/app/(marketing)/layout.tsx` 独占营销动效与 Lenis。L2、L3、L4 和 L1 的非营销公开页使用原生滚动，禁止引用营销 Provider。
+- L4 使用独立 Admin 壳，不挂 `AppSidebar`，不得复用制作侧 pathname→高亮映射；L5 不在任何业务壳内，且不得被 L1/L3 页面链接。
+- **滚动 Provider 按路由分层。** 根 `src/app/providers.tsx` 只负责全站主题协议；`src/app/(marketing)/layout.tsx` 独占营销动效与 Lenis。L2、L3、L4、L5 和 L1 的非营销公开页使用原生滚动，禁止引用营销 Provider。
 - **L3 的滚动归 AppShell 内部容器所有。** `AppShell` 保持全屏固定壳，各产品页面的 `main` 或领域面板负责自己的原生滚动；不得在根布局重新挂载会接管 wheel 事件的全局平滑滚动。
 
 ## 2. 页面路由表
@@ -42,12 +43,15 @@
 | 路由 | 文件 | 状态 |
 | --- | --- | --- |
 | `/` | `src/app/(marketing)/page.tsx` | `wired` |
+| `/community` | `src/app/(marketing)/community/page.tsx` | `planned` |
 | `/artifacts` | `src/app/(public)/artifacts/page.tsx` | `planned` |
 | `/artifacts/[caseSlug]` | `src/app/(public)/artifacts/[caseSlug]/page.tsx` | `planned` |
 | `/share/[shareId]` | `src/app/(public)/share/[shareId]/page.tsx` | `planned` |
 | `/release` | `src/app/(public)/release/page.tsx` | `shell` |
 
 `(public)` 组的壳是 `src/app/(public)/layout.tsx`：无侧栏、无写操作入口。
+
+`/community` 是无需认证的静态 catalog，只消费代码内受版本控制的目录和 `public/img/community/*`、`public/videos/community/*` 公开媒体；不得接入数据库、伪造动态统计或把内部 Artifact 暴露为社区素材。该页必须进入 sitemap。
 
 `/` 右上角 **Try it** 已接线到 `PRODUCTS_ROUTES.projects`（`/products/projects`），是进入 L3 的主 CTA。未登录点击会被 §9 的守卫收敛到 `/login?next=/products/projects`。首页 `LaunchComposer` 接收公开 HTTP(S) URL 后只创建 `website` 项目并调用 `/api/projects/[id]/start`，随后进入项目画布；不得绕过项目工作流直接轮询 `/api/engine/*` 或从营销页下载终片。Contact 与 footer 仍多为 `#` / 空串。
 
@@ -87,7 +91,21 @@
 - 当前产品 workflow 的唯一母版合同是 `1920×1080 @ 30fps`。项目列表、工作台统计与最近项目只投影当前 `ACTIVE_WORKFLOW_VERSION`；历史 workflow 项目及其 Artifact 不迁移、不删除，但不进入普通列表。
 - 项目深链必须用持久化 `workflowVersion` 区分 `supported | legacy | missing`，禁止按创建日期、导出设置或 Artifact 尺寸猜测。`legacy` 显示“旧版项目暂不可用，数据已保留”，`missing` 才调用 `notFound()`。
 
-### 2.4 L4 内部
+### 2.4 L4 管理后台
+
+| 路由 | 文件 | 状态 | 数据与行为 |
+| --- | --- | --- | --- |
+| `/admin` | `src/app/admin/page.tsx` | `planned` | PostgreSQL 真实概览与 DAU 投影 |
+| `/admin/users` | `src/app/admin/users/page.tsx` | `planned` | PostgreSQL 账号查询与受控管理操作 |
+| `/admin/jobs` | `src/app/admin/jobs/page.tsx` | `planned` | 当前任务与执行记录的真实投影 |
+| `/admin/ops` | `src/app/admin/ops/page.tsx` | `planned` | PostgreSQL 运维状态投影 |
+| `/admin/security` | `src/app/admin/security/page.tsx` | `planned` | 认证限流与 API 访问计数的真实投影 |
+| `/admin/billing` | `src/app/admin/billing/page.tsx` | `planned` | 当前会员、额度与兑换批次的真实投影和受控操作 |
+| `/admin/ai` | `src/app/admin/ai/page.tsx` | `planned` | `ai_invocations` 的跨 workspace 脱敏审计聚合 |
+
+所有管理页必须逐页查库校验会话与 admin 角色：未登录 302 到 `/login?next=<原路径>`，已登录但非 admin 统一 `notFound()`，不得用 403 暴露后台是否存在。管理页只读 PostgreSQL 真实投影或执行明确登记的真实操作，不接 fixture/mock、第二套任务库、第二套队列或旧计费模型；全部 `noindex` 且不得进入 sitemap。
+
+### 2.5 L5 内部
 
 | 路由 | 文件 | 状态 |
 | --- | --- | --- |
@@ -101,9 +119,9 @@
 
 `/playbook/motion` 是动效的唯一对照真值面：`docs/conventions/motion-interaction.md` 的 L1 意图表逐条在此有可交互标本。新增 L1 意图必须同批在该页登记，禁止只改文档不落标本。该页的标本必须复用生产组件与 `src/lib/motion/tokens.ts` 的同一份参数，禁止为展示复刻一套近似实现。
 
-`/playbook/patterns` 与 `patterns` 分类已于 2026-07-25（ISSUE-007）整体删除：唯一登记项 `WorkflowCanvas` 是脚手架期硬编码 fixture（`STAGE_B_WORKFLOW_NODES`），未被 `docs/designs/Design-system-inventory.md` 登记为必需组合，且其内联的两个 disabled 按钮与「`ProductFlowVersion`/`FlowNode`」文案引用了 §12 已作废的 Release 六步模型实体。删除后不留空分类占位，见 §2.5。
+`/playbook/patterns` 与 `patterns` 分类已于 2026-07-25（ISSUE-007）整体删除：唯一登记项 `WorkflowCanvas` 是脚手架期硬编码 fixture（`STAGE_B_WORKFLOW_NODES`），未被 `docs/designs/Design-system-inventory.md` 登记为必需组合，且其内联的两个 disabled 按钮与「`ProductFlowVersion`/`FlowNode`」文案引用了 §12 已作废的 Release 六步模型实体。删除后不留空分类占位，见 §2.6。
 
-### 2.5 已收敛
+### 2.6 已收敛
 
 以下路由与并行壳已于 2026-07-25 删除，不允许回归。`tests/app-route-contract.test.tsx` 锁定这一点。
 
@@ -123,7 +141,7 @@
 | 路由 | 文件 | 状态 | 规则 |
 | --- | --- | --- | --- |
 | `/robots.txt` | `src/app/robots.ts` | `wired` | 当前 `allow: /`、`disallow: /api/`、`/private/`。新增 `/share/` 到 disallow |
-| `/sitemap.xml` | `src/app/sitemap.ts` | `wired` | 当前只有 `/` 一条。`/artifacts` 与每个 `featured` 案例必须进 sitemap |
+| `/sitemap.xml` | `src/app/sitemap.ts` | `wired` | 当前只有 `/` 一条。`/community`、`/artifacts` 与每个 `featured` 案例必须进 sitemap；`/admin/*` 禁止进入 |
 | `/favicon.ico`、`/icon.svg`、`/apple-icon.svg` | `src/app/*` | `wired` | — |
 | `/site.webmanifest` | `public/site.webmanifest` | `wired` | 由 `src/lib/metadata.ts` 的 `manifest` 引用 |
 
@@ -173,7 +191,20 @@
 | `/api/billing` | GET | — | `@/features/billing` | `wired` |
 | `/api/billing/redemptions` | POST | header `Idempotency-Key` + body `{code}` | `@/features/billing` | `wired` |
 | `/api/ai-usage` | GET | query `view=account\|managed-cycle`、`range=7d\|30d\|cycle`、`timeZone=<IANA>`；账号与 workspace 只取当前会话 | `@/features/usage` | `wired` |
+| `/api/admin/metrics/dau` | GET | query `days` | `@/features/admin/metrics` | `planned`；admin-only PostgreSQL DAU 投影 |
+| `/api/admin/users` | GET, POST | GET query `q`、`page`、`pageSize`；POST body 由账号管理合同校验 | `@/features/admin/user-admin` | `planned`；真实账号查询与创建 |
+| `/api/admin/users/[id]` | PATCH, DELETE | `id` path；body 由账号管理合同校验 | `@/features/admin/user-admin` | `planned`；真实账号更新与删除，危险操作必须二次确认 |
+| `/api/admin/jobs` | GET | query `status`、`page`、`pageSize` | `@/features/admin` 当前任务投影 | `planned`；不得引入 `render_jobs` 或第二套 job-db |
+| `/api/admin/jobs/[id]` | GET | `id` path | `@/features/admin` 当前任务投影 | `planned`；不存在与越权统一 404 |
+| `/api/admin/ops` | GET | — | `@/features/admin/ops` | `planned`；PostgreSQL 真实运维投影 |
+| `/api/admin/security` | GET | — | `@/features/admin/security` | `planned`；认证限流与 API 访问聚合 |
+| `/api/admin/billing` | GET | query `page`、`pageSize` | `@/features/admin/billing-admin` | `planned`；当前计费合同的真实投影，不复活旧计费模型 |
+| `/api/admin/billing/batches` | POST | body 由兑换批次合同校验 | `@/features/admin/billing-admin`、`@/features/billing` | `planned`；明文兑换码只显示一次，数据库只存哈希 |
+| `/api/admin/billing/batches/[id]` | PATCH | `id` path；body 由批次撤销合同校验 | `@/features/admin/billing-admin`、`@/features/billing` | `planned`；按批次执行真实撤销 |
+| `/api/admin/ai` | GET | query `days` | `@/features/admin/ai-audit` | `planned`；`ai_invocations` 脱敏只读聚合，不返回 prompt、credential 或单 workspace PII |
 | `/api/internal/ai/worker` | POST | Bearer 服务间密钥；严格 body 携带 `workspaceId`、`attemptId`、`operationId`、固定 workload 与文本/图片/TTS 输入 | `@/features/ai/worker-gateway` | `wired`；仅受信 worker 可用，先校验 attempt 归属，再在该 workspace 上下文解析统一 ExecutionPlan、并发与双账本；不返回凭据、渠道 URL 或原始 provider 错误 |
+
+全部 `/api/admin/*` 只接受经数据库校验的 admin 会话：未登录返回 401；已登录但非 admin 返回 404。它们不得由 proxy 重定向，也不得返回 mock/fixture；响应必须来自 PostgreSQL 当前真值，并继续遵守最小字段、脱敏错误和不回显凭据的边界。
 
 #### `ProjectExecutionSnapshotV2` 加法合同
 
@@ -391,8 +422,12 @@ Project（可变，L3 内部）
 | 情况 | 响应 | 状态 |
 | --- | --- | --- |
 | 未登录访问 `/products/*` | 302 → `/login?next=`（proxy 形状拦截 + 页面查库兼校） | 已实现 |
+| 未登录访问 `/admin/*` | 302 → `/login?next=`（页面查库校验；proxy 若增加形状预检也不得替代页面校验） | 待实现 |
+| 已登录非 admin 访问 `/admin/*` | 404，不暴露后台是否存在 | 待实现 |
 | 已登录访问 `/login`、`/signup` | 302 → `/products/dashboard`（仅页面级 `redirectIfAuthenticated` 查库判定；proxy 不拦认证页，避免残留失效 cookie 的重定向循环） | 已实现 |
 | 未登录调业务 `/api/*` | 401 + 类别文案，不带用户信息、不回显 projectId | 已实现 |
+| 未登录调 `/api/admin/*` | 401 + 类别文案 | 待实现 |
+| 已登录非 admin 调 `/api/admin/*` | 404，不返回 403 | 待实现 |
 | `projectId` 不存在或不属于当前 workspace | 404（查询按会话 workspace 过滤，命中 0 即不存在） | 已实现 |
 | `shotId` 不属于该 `projectId`，或节点类型不是 `shot-codegen` | 404 | 已实现 |
 | `shareId` 不存在、已撤销、已被新版本取代 | 404 | 已实现（与认证无关） |
@@ -437,7 +472,7 @@ Project（可变，L3 内部）
 
 错误与未找到边界（`not-found.tsx` ×2、`error.tsx`、`global-error.tsx`、`route-status.tsx`）已落盘，见 §3.1。
 
-已完成、无需再处理（见 §2.5）：`/legacy/*`、根 `/dashboard`、`/products/[productId]`、整个 `(product)` 路由组、`/playbook/patterns`（含 `WorkflowCanvas`，ISSUE-007）。占位组件已收敛到 `src/app/_components/{unwired-panel,route-shell-page}.tsx`。`src/app/README.md` 记录路由树现状。
+已完成、无需再处理（见 §2.6）：`/legacy/*`、根 `/dashboard`、`/products/[productId]`、整个 `(product)` 路由组、`/playbook/patterns`（含 `WorkflowCanvas`，ISSUE-007）。占位组件已收敛到 `src/app/_components/{unwired-panel,route-shell-page}.tsx`。`src/app/README.md` 记录路由树现状。
 
 ## 12. 归档：已作废的 Release 六步规范
 
@@ -465,7 +500,7 @@ Project（可变，L3 内部）
 
 新增任何路由前逐条过：
 
-1. 属于 §1 四层中的哪一层？壳、认证、可索引性是否与该层一致？
+1. 属于 §1 五层中的哪一层？壳、认证、可索引性是否与该层一致？
 2. 已在 §2 或 §4 的表里登记？状态标了 `wired` / `shell` / `planned` / `redirect`？
 3. 上下文 id 的位置符合 §5 第 2 条（path 还是 query）？
 4. L3 路由是否补了 `products-routes.ts` helper、`resolveProductsSection` 分支和对应测试？
