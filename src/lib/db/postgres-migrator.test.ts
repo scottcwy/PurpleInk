@@ -75,9 +75,7 @@ describe('Postgres migrator boundary', () => {
     await expect(migratePostgres()).resolves.toBeUndefined()
 
     expect(mocks.postgres).toHaveBeenCalledWith(databaseUrl, { max: 1 })
-    expect(mocks.drizzlePostgres).toHaveBeenCalledWith(mocks.client, {
-      schema: {},
-    })
+    expect(mocks.drizzlePostgres).toHaveBeenCalledWith(mocks.client)
     expect(mocks.migratePostgresDatabase).toHaveBeenCalledWith(
       { kind: 'postgres-db' },
       {

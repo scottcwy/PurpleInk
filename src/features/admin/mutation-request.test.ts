@@ -16,6 +16,8 @@ vi.mock('@/features/auth', () => ({
   ) => handler({ userId: 'admin-1' }),
 }))
 
+const { POST: createAdminUserRoute } = await import('@/app/api/admin/users/route')
+
 beforeEach(() => {
   createAdminUser.mockClear()
   updateAdminUser.mockClear()
@@ -48,8 +50,7 @@ describe('admin mutation request boundary', () => {
   it.each(rejectedMutationCases)(
     'rejects $name before invoking the account service',
     async ({ headers, status }) => {
-    const { POST } = await import('@/app/api/admin/users/route')
-    const response = await POST(new Request('https://purpleink.example/api/admin/users', {
+    const response = await createAdminUserRoute(new Request('https://purpleink.example/api/admin/users', {
       method: 'POST',
       headers,
       body: JSON.stringify({}),
@@ -60,8 +61,7 @@ describe('admin mutation request boundary', () => {
   )
 
   it('accepts JSON with charset and same-origin browser metadata', async () => {
-    const { POST } = await import('@/app/api/admin/users/route')
-    const response = await POST(new Request('https://purpleink.example/api/admin/users', {
+    const response = await createAdminUserRoute(new Request('https://purpleink.example/api/admin/users', {
       method: 'POST',
       headers: {
         'content-type': 'application/json; charset=utf-8',

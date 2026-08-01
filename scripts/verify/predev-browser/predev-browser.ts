@@ -186,9 +186,8 @@ function run(command: string, args: string[], env = process.env): Promise<string
   const executable = process.platform === 'win32' && command === 'pnpm' ? 'pnpm.cmd' : command
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] })
-    let stdout = '', stderr = ''
+    let stdout = ''
     child.stdout.on('data', data => { stdout += data })
-    child.stderr.on('data', data => { stderr += data })
     child.on('error', reject)
     child.on('close', code => code === 0 ? resolve(stdout) : reject(new Error(`${command} failed (${code})`)))
   })
