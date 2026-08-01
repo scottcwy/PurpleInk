@@ -140,7 +140,7 @@
 
 | 路由 | 文件 | 状态 | 规则 |
 | --- | --- | --- | --- |
-| `/robots.txt` | `src/app/robots.ts` | `wired` | 当前 `allow: /`、`disallow: /api/`、`/private/`。新增 `/share/` 到 disallow |
+| `/robots.txt` | `src/app/robots.ts` | `wired` | 当前 `allow: /`、`disallow: /api/`、`/private/`。新增 `/share/`、`/admin/` 到 disallow；后者覆盖全部 `/admin/*` |
 | `/sitemap.xml` | `src/app/sitemap.ts` | `wired` | 当前只有 `/` 一条。`/community`、`/artifacts` 与每个 `featured` 案例必须进 sitemap；`/admin/*` 禁止进入 |
 | `/favicon.ico`、`/icon.svg`、`/apple-icon.svg` | `src/app/*` | `wired` | — |
 | `/site.webmanifest` | `public/site.webmanifest` | `wired` | 由 `src/lib/metadata.ts` 的 `manifest` 引用 |
@@ -506,7 +506,7 @@ Project（可变，L3 内部）
 4. L3 路由是否补了 `products-routes.ts` helper、`resolveProductsSection` 分支和对应测试？
 5. 是否需要新的守卫？404 / 302 / 409 行为在 §9 有对应？
 6. 是否是模态而非路由（§7 最后一段）？
-7. 可索引路由是否进了 `sitemap.ts`；不可索引路由是否进了 `robots.ts` disallow？
+7. 可索引路由是否进了 `sitemap.ts`；不可索引路由是否进了 `robots.ts` disallow？`/admin/*` 必须由 `/admin/` disallow 覆盖，并同时保持页面 `noindex`、不进入 sitemap。
 8. 页面可见字段是否都能追溯到 API、数据库投影、Artifact 或明确的未接线占位？
 
 ## 15. 待锁定决策
