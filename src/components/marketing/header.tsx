@@ -11,7 +11,7 @@ import { useState, type ReactNode } from "react";
 import { OverlayRoot } from "@/components/ui/overlay-root";
 import { PRODUCTS_ROUTES } from "@/features/navigation/products-routes";
 
-const navLinks = [{ href: "#community", label: "Community" }];
+const navLinks = [{ href: "/community", label: "Community" }];
 
 const authLinks = [
   { href: "", label: "Contact" },

@@ -9,6 +9,7 @@ const ROUTE_FILES = [
   // L1 公开
   'src/app/(marketing)/layout.tsx',
   'src/app/(marketing)/page.tsx',
+  'src/app/(marketing)/community/page.tsx',
   'src/app/(public)/layout.tsx',
   'src/app/(public)/release/page.tsx',
   // L2 认证
@@ -124,6 +125,24 @@ describe('src/app 路由契约', () => {
 
     expect(sources).not.toContain('/legacy')
     expect(sources).not.toContain('/releases/')
+  })
+
+  it('Community 导航、站点地图与 robots 遵守路由真值', () => {
+    const headerSource = readFileSync(
+      'src/components/marketing/header.tsx',
+      'utf8',
+    )
+    const footerSource = readFileSync(
+      'src/components/marketing/footer.tsx',
+      'utf8',
+    )
+    const sitemapSource = readFileSync('src/app/sitemap.ts', 'utf8')
+    const robotsSource = readFileSync('src/app/robots.ts', 'utf8')
+
+    expect(headerSource).toContain('href: "/community"')
+    expect(footerSource).toContain('label: "Community", href: "/community"')
+    expect(sitemapSource).toContain('url: `${baseUrl}/community`')
+    expect(robotsSource).toContain('"/admin/"')
   })
 
   it('Playbook 与应用复用同一个 Canonical 侧栏', () => {
