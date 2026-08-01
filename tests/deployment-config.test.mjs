@@ -142,6 +142,32 @@ test("keeps credentials and generated media out of image build contexts", async 
   assert.match(dockerignore, /^\.git$/m);
 });
 
+test("copies the patched dependency file into every image build", async () => {
+  const packageJson = JSON.parse(await read("package.json"));
+  const patchPaths = Object.values(
+    packageJson.pnpm?.patchedDependencies ?? {}
+  ).flat();
+  // patchedDependencies 声明的 patch 文件必须真实存在，且镜像构建期在 pnpm
+  // install 之前 COPY patches/，否则 --frozen-lockfile 在镜像内找不到 patch 而失败。
+  for (const patch of patchPaths) {
+    assert.match(patch, /^patches\//);
+    await read(patch);
+  }
+  for (const file of [
+    "Dockerfile.web",
+    "Dockerfile.worker",
+    "Dockerfile.migrate",
+    "Dockerfile.backup",
+  ]) {
+    const dockerfile = await read(file);
+    assert.ok(
+      dockerfile.indexOf("COPY patches ./patches") <
+        dockerfile.indexOf("pnpm install --frozen-lockfile"),
+      `${file} must copy patches/ before pnpm install`
+    );
+  }
+});
+
 test("threads the S3 mirror storage variables through Web templates and compose", async () => {
   const compose = await read("deploy/compose.yaml");
   const deployEnv = await read("deploy/env.example");
