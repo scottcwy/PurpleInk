@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 /** 从 worker 的 JobPhase 联合类型源码提取全部阶段（单一真源）。 */
 async function readWorkerPhases(): Promise<string[]> {
   const source = await readFile("server/src/server/job-store.ts", "utf8");
-  const union = /export type JobPhase =([^;]*?)\n\nexport interface/.exec(source);
+  const union = /export type JobPhase =([^;]*?)\r?\n\r?\nexport interface/.exec(source);
   if (!union) throw new Error("无法在 job-store.ts 中定位 JobPhase 联合类型");
   const phases = [...union[1]!.matchAll(/"([a-z]+)"/g)].map((m) => m[1]!);
   if (phases.length === 0) throw new Error("JobPhase 联合类型为空");
