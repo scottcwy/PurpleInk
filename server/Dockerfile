@@ -54,7 +54,9 @@ COPY packages ./packages
 COPY server ./server
 
 WORKDIR /repo/server
-RUN node ./node_modules/playwright/cli.js install-deps chromium
+RUN printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\n' \
+      > /etc/apt/apt.conf.d/80purpleink-retries \
+    && node ./node_modules/playwright/cli.js install-deps chromium
 
 RUN groupadd -r pwuser \
     && useradd -r -g pwuser -m -d /home/pwuser -s /usr/sbin/nologin pwuser

@@ -85,7 +85,9 @@ COPY --from=build /repo/assets ./assets
 
 # Chromium 系统依赖（需要 root 装 apt 包）与浏览器二进制分两步：
 # install-deps 装系统库；浏览器二进制下载到非 root 用户可写的共享目录。
-RUN node /playwright/node_modules/playwright/cli.js install-deps chromium
+RUN printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\n' \
+      > /etc/apt/apt.conf.d/80purpleink-retries \
+    && node /playwright/node_modules/playwright/cli.js install-deps chromium
 
 RUN groupadd -r pwuser \
     && useradd -r -g pwuser -m -d /home/pwuser -s /usr/sbin/nologin pwuser

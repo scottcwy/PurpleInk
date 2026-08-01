@@ -137,6 +137,7 @@ describe("immutable production deployment", () => {
     expect(dockerfile).toContain(
       "node ./node_modules/playwright/cli.js install-deps chromium"
     );
+    expect(dockerfile).toContain("/etc/apt/apt.conf.d/80purpleink-retries");
     expect(dockerfile).toContain(
       "node ./node_modules/playwright/cli.js install chromium"
     );
@@ -179,6 +180,7 @@ describe("immutable production deployment", () => {
     expect(runtime).toContain(
       "node /playwright/node_modules/playwright/cli.js install-deps chromium"
     );
+    expect(runtime).toContain("/etc/apt/apt.conf.d/80purpleink-retries");
   });
 
   it("runs all gates for PR and predev, and publishes only dev sha images after checks", async () => {
