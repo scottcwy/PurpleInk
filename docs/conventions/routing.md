@@ -43,7 +43,7 @@
 | 路由 | 文件 | 状态 |
 | --- | --- | --- |
 | `/` | `src/app/(marketing)/page.tsx` | `wired` |
-| `/community` | `src/app/(marketing)/community/page.tsx` | `planned` |
+| `/community` | `src/app/(marketing)/community/page.tsx` | `wired` |
 | `/artifacts` | `src/app/(public)/artifacts/page.tsx` | `planned` |
 | `/artifacts/[caseSlug]` | `src/app/(public)/artifacts/[caseSlug]/page.tsx` | `planned` |
 | `/share/[shareId]` | `src/app/(public)/share/[shareId]/page.tsx` | `planned` |
@@ -141,7 +141,7 @@
 | 路由 | 文件 | 状态 | 规则 |
 | --- | --- | --- | --- |
 | `/robots.txt` | `src/app/robots.ts` | `wired` | 当前 `allow: /`、`disallow: /api/`、`/private/`。新增 `/share/`、`/admin/` 到 disallow；后者覆盖全部 `/admin/*` |
-| `/sitemap.xml` | `src/app/sitemap.ts` | `wired` | 当前只有 `/` 一条。`/community`、`/artifacts` 与每个 `featured` 案例必须进 sitemap；`/admin/*` 禁止进入 |
+| `/sitemap.xml` | `src/app/sitemap.ts` | `wired` | 当前包含 `/` 与 `/community`。`/artifacts` 与每个 `featured` 案例必须在 ShareSnapshot 落盘后接入；`/admin/*` 禁止进入 |
 | `/favicon.ico`、`/icon.svg`、`/apple-icon.svg` | `src/app/*` | `wired` | — |
 | `/site.webmanifest` | `public/site.webmanifest` | `wired` | 由 `src/lib/metadata.ts` 的 `manifest` 引用 |
 
