@@ -13,8 +13,10 @@ export function CanvasViewportToolbar() {
   const minZoomReached = useStore((state) => state.transform[2] <= state.minZoom)
   const maxZoomReached = useStore((state) => state.transform[2] >= state.maxZoom)
 
+  // xyflow 的 .react-flow__panel { margin: 15px } 是未分层样式，会压过
+  // @layer utilities 里的 Tailwind 类，必须用 ! 提升，否则与 QueueStatusBar 重叠。
   return (
-    <Panel position="bottom-center" className="mx-3 mt-3 mb-16">
+    <Panel position="bottom-center" className="mx-3! mt-3! mb-16!">
       <div
         role="toolbar"
         aria-label="画布视口"
