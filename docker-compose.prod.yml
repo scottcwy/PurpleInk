@@ -1,3 +1,5 @@
 # Compatibility entrypoint. Production truth lives in deploy/compose.yaml.
+name: purpleink
+
 include:
   - path: ./deploy/compose.yaml

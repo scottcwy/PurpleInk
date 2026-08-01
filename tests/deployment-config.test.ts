@@ -10,6 +10,16 @@ async function text(relativePath: string): Promise<string> {
 }
 
 describe("immutable production deployment", () => {
+  it("pins the compatibility entrypoint to the production project name", async () => {
+    const compatibility = parse(await text("docker-compose.prod.yml")) as {
+      include?: Array<{ path?: string }>;
+      name?: string;
+    };
+
+    expect(compatibility.name).toBe("purpleink");
+    expect(compatibility.include).toEqual([{ path: "./deploy/compose.yaml" }]);
+  });
+
   it("bootstraps Debian HTTPS certificates over HTTP before installing runtime packages", async () => {
     for (const relativePath of ["Dockerfile", "server/Dockerfile"]) {
       const dockerfile = await text(relativePath);
