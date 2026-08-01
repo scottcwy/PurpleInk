@@ -23,12 +23,23 @@ const nextConfig: NextConfig = {
     "playwright",
     "playwright-core",
   ],
-  // Playwright 动态加载 browsers.json 与服务端 bundle，standalone tracer
-  // 无法从静态 import 完整发现，生产包需显式包含两套 runtime 文件。
+  // Playwright Core 通过动态 path.join 加载 browsers.json；其余 runtime
+  // 由正常的模块依赖追踪收集，禁止 broad glob 把整个仓库复制进 standalone。
   outputFileTracingIncludes: {
     "/*": [
-      "./node_modules/playwright/**/*",
-      "./node_modules/playwright-core/**/*",
+      "./node_modules/playwright-core/browsers.json",
+      "./assets/fonts/**/*",
+    ],
+  },
+  outputFileTracingExcludes: {
+    "/*": [
+      "./AGENTS.md",
+      "./README.md",
+      "./PRD_PurpleInk.md",
+      "./docs/**/*",
+      "./scripts/**/*",
+      "./src/**/*",
+      "./tests/**/*",
     ],
   },
   // Disable source maps in production to protect code

@@ -8,7 +8,7 @@
     "dev:all": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/start-dev.ps1",
     "dev:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/start-dev.ps1 -Status",
     "dev:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev/start-dev.ps1 -Stop",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx,.mjs",
     "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx,.mjs --fix",

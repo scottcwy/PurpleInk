@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 interface PackageManifest {
   readonly dependencies?: Readonly<Record<string, string>>;
+  readonly scripts?: Readonly<Record<string, string>>;
 }
 
 describe("marketing production runtime contract", () => {
@@ -19,7 +20,7 @@ describe("marketing production runtime contract", () => {
     expect(layoutSource).not.toContain('from "next/font/google"');
   });
 
-  it("traces the complete Playwright runtime into the standalone build", async () => {
+  it("traces only Playwright's dynamically loaded browser manifest", async () => {
     const { default: nextConfig } = await import("../next.config");
     const packageJson = JSON.parse(
       readFileSync(resolve(process.cwd(), "package.json"), "utf8")
@@ -33,9 +34,17 @@ describe("marketing production runtime contract", () => {
     );
     expect(nextConfig.outputFileTracingIncludes).toEqual({
       "/*": [
-        "./node_modules/playwright/**/*",
-        "./node_modules/playwright-core/**/*",
+        "./node_modules/playwright-core/browsers.json",
+        "./assets/fonts/**/*",
       ],
     });
+    expect(nextConfig.outputFileTracingExcludes).toHaveProperty("/*");
+    expect(JSON.stringify(nextConfig.outputFileTracingIncludes)).not.toContain(
+      "playwright/**/*"
+    );
+    expect(JSON.stringify(nextConfig.outputFileTracingIncludes)).not.toContain(
+      "playwright-core/**/*"
+    );
+    expect(packageJson.scripts?.build).toBe("next build --webpack");
   });
 });
