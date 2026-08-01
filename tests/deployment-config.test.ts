@@ -10,13 +10,21 @@ async function text(relativePath: string): Promise<string> {
 }
 
 describe("immutable production deployment", () => {
-  it("uses HTTPS Debian package sources before installing Web and Worker runtime packages", async () => {
+  it("bootstraps Debian HTTPS certificates over HTTP before installing runtime packages", async () => {
     for (const relativePath of ["Dockerfile", "server/Dockerfile"]) {
       const dockerfile = await text(relativePath);
       const httpsSources = "sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources";
+      const firstAptUpdate = dockerfile.indexOf("apt-get update");
+      const httpsAptUpdate = dockerfile.lastIndexOf("apt-get update");
 
       expect(dockerfile).toContain(httpsSources);
-      expect(dockerfile.indexOf(httpsSources)).toBeLessThan(dockerfile.indexOf("apt-get update"));
+      expect(firstAptUpdate).toBeGreaterThanOrEqual(0);
+      expect(firstAptUpdate).toBeLessThan(dockerfile.indexOf("ca-certificates"));
+      expect(dockerfile.indexOf("ca-certificates")).toBeLessThan(dockerfile.indexOf(httpsSources));
+      expect(dockerfile.indexOf(httpsSources)).toBeLessThan(httpsAptUpdate);
+      expect(httpsAptUpdate).toBeLessThan(dockerfile.lastIndexOf("fonts-wqy-zenhei"));
+      expect(dockerfile.match(/Acquire::Retries=5/g)).toHaveLength(2);
+      expect(dockerfile.match(/Acquire::http::Timeout=30/g)).toHaveLength(2);
     }
   });
 

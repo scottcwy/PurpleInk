@@ -68,10 +68,12 @@ WORKDIR /app
 # 在本仓库的构建网络环境下反复因大文件长连接被中断下载失败（Connection
 # failed），换成 7.5MB 的 fonts-wqy-zenhei 稳定下载成功；本产品渲染的是中文
 # 内容（见 AGENTS.md），文泉驿正黑覆盖简繁中文字形，满足「不豆腐块」要求。
-RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
-    && apt-get update \
+RUN apt-get update \
     && apt-get install -y --no-install-recommends -o Acquire::Retries=5 -o Acquire::http::Timeout=30 \
       ca-certificates \
+    && sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends -o Acquire::Retries=5 -o Acquire::http::Timeout=30 \
       fonts-wqy-zenhei \
     && rm -rf /var/lib/apt/lists/*
 
