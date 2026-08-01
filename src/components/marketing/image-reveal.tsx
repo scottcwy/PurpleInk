@@ -26,27 +26,27 @@ interface RevealOrigin {
   blur: number;
 }
 
-const REVEAL_ORIGINS: readonly RevealOrigin[] = [
+export const REVEAL_ORIGINS: readonly RevealOrigin[] = [
   {
-    xPercent: -400,
-    scaleX: 6,
-    scaleY: 0.3,
+    xPercent: -120,
+    scaleX: 1.18,
+    scaleY: 0.92,
     transformOrigin: "0% 50%",
-    blur: 10,
+    blur: 2,
   },
   {
     xPercent: 0,
-    scaleX: 0.7,
-    scaleY: 0.7,
+    scaleX: 0.94,
+    scaleY: 0.94,
     transformOrigin: "50% 50%",
-    blur: 5,
+    blur: 1,
   },
   {
-    xPercent: 400,
-    scaleX: 6,
-    scaleY: 0.3,
+    xPercent: 120,
+    scaleX: 1.18,
+    scaleY: 0.92,
     transformOrigin: "100% 50%",
-    blur: 10,
+    blur: 2,
   },
 ];
 
@@ -73,7 +73,7 @@ function RevealTile({
   const motionReady = useSyncExternalStore(
     subscribeToHydration,
     () => true,
-    () => false,
+    () => false
   );
   const { scrollYProgress } = useScroll({
     target: itemRef,
@@ -83,20 +83,20 @@ function RevealTile({
     revealProgress(value, motionReady && Boolean(prefersReducedMotion));
   const x = useTransform(
     scrollYProgress,
-    (value) => `${origin.xPercent * (1 - progress(value))}%`,
+    (value) => `${origin.xPercent * (1 - progress(value))}%`
   );
   const opacity = useTransform(scrollYProgress, progress);
   const scaleX = useTransform(
     scrollYProgress,
-    (value) => origin.scaleX + (1 - origin.scaleX) * progress(value),
+    (value) => origin.scaleX + (1 - origin.scaleX) * progress(value)
   );
   const scaleY = useTransform(
     scrollYProgress,
-    (value) => origin.scaleY + (1 - origin.scaleY) * progress(value),
+    (value) => origin.scaleY + (1 - origin.scaleY) * progress(value)
   );
   const filter = useTransform(
     scrollYProgress,
-    (value) => `blur(${origin.blur * (1 - progress(value))}px)`,
+    (value) => `blur(${origin.blur * (1 - progress(value))}px)`
   );
 
   return (

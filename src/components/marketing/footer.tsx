@@ -1,32 +1,13 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { MessageCircle, Network, Share2 } from "lucide-react";
 
 const footerLinks = {
-  Product: [
-    { label: "Features", href: "#" },
-    { label: "Changelog", href: "#" },
-    { label: "Roadmap", href: "#" },
-  ],
-  Company: [
-    { label: "About", href: "#" },
-    { label: "Blog", href: "#" },
-    { label: "Careers", href: "#" },
-    { label: "Press", href: "#" },
-  ],
   Resources: [
-    { label: "Documentation", href: "#" },
-    { label: "Help Center", href: "#" },
     { label: "Community", href: "/community" },
+    { label: "Contact", href: "mailto:support@purpleink.cn" },
   ],
 };
-
-const socialLinks = [
-  { icon: MessageCircle, href: "#", label: "Facebook" },
-  { icon: Share2, href: "#", label: "Twitter" },
-  { icon: Network, href: "#", label: "LinkedIn" },
-];
 
 export function Footer(): ReactNode {
   return (
@@ -45,44 +26,27 @@ export function Footer(): ReactNode {
       />
       <div className="relative mx-auto max-w-7xl py-16">
         <div className="flex flex-col gap-12 lg:flex-row lg:justify-between">
-          <div className="grid flex-1 gap-8 sm:grid-cols-3">
-            {Object.entries(footerLinks).map(([category, links]) => (
-              <div key={category}>
-                <h3 className="text-muted-foreground text-sm">{category}</h3>
-                <ul className="mt-4 space-y-3">
-                  {links.map((link) => (
-                    <li key={link.label}>
-                      <Link
-                        href={link.href}
-                        className="text-foreground hover:text-foreground/70 text-lg transition-colors"
-                      >
-                        {link.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-
-          <div className="lg:text-right">
-            <h3 className="text-muted-foreground text-sm">Social</h3>
-            <div className="mt-4 flex gap-3 lg:justify-end">
-              {socialLinks.map((social) => (
-                <Link
-                  key={social.label}
-                  href={social.href}
-                  className="bg-foreground/10 text-foreground hover:bg-foreground/20 flex h-11 w-11 items-center justify-center rounded-full transition-colors"
-                  aria-label={social.label}
-                >
-                  <social.icon
-                    className="fill-foreground/40 text-foreground/40 h-5 w-5"
-                    strokeWidth={1}
-                  />
-                </Link>
+          <nav aria-label="Footer navigation">
+            <div className="grid gap-8">
+              {Object.entries(footerLinks).map(([category, links]) => (
+                <div key={category}>
+                  <h3 className="text-muted-foreground text-sm">{category}</h3>
+                  <ul className="mt-4 space-y-3">
+                    {links.map((link) => (
+                      <li key={link.label}>
+                        <Link
+                          href={link.href}
+                          className="text-foreground hover:text-foreground/70 focus-ring inline-flex min-h-11 items-center rounded-md text-lg transition-colors"
+                        >
+                          {link.label}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
             </div>
-          </div>
+          </nav>
         </div>
       </div>
 
@@ -91,26 +55,6 @@ export function Footer(): ReactNode {
           <p className="text-muted-foreground text-sm">
             © {new Date().getFullYear()} PurpleInk. All rights reserved.
           </p>
-          <div className="flex gap-6">
-            <Link
-              href="#"
-              className="text-muted-foreground hover:text-foreground text-sm transition-colors"
-            >
-              Terms
-            </Link>
-            <Link
-              href="#"
-              className="text-muted-foreground hover:text-foreground text-sm transition-colors"
-            >
-              Privacy
-            </Link>
-            <Link
-              href="#"
-              className="text-muted-foreground hover:text-foreground text-sm transition-colors"
-            >
-              Cookies
-            </Link>
-          </div>
         </div>
       </div>
 

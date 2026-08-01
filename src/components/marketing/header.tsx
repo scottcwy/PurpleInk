@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  motion,
-  useScroll,
-  useMotionValueEvent,
-} from "motion/react";
+import { motion, useScroll, useMotionValueEvent } from "motion/react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { OverlayRoot } from "@/components/ui/overlay-root";
@@ -14,7 +10,7 @@ import { PurpleInkLogo } from "@/components/ui/purple-ink-logo";
 const navLinks = [{ href: "/community", label: "Community" }];
 
 const authLinks = [
-  { href: "", label: "Contact" },
+  { href: "mailto:support@purpleink.cn", label: "Contact" },
   { href: PRODUCTS_ROUTES.projects, label: "Try\u00A0it" },
 ];
 
@@ -137,7 +133,7 @@ export function Header(): ReactNode {
           <button
             type="button"
             onClick={toggleMenu}
-            className="focus-ring relative flex h-10 w-10 items-center justify-center lg:hidden"
+            className="focus-ring relative flex h-11 w-11 items-center justify-center lg:hidden"
             aria-label={isOpen ? "Close menu" : "Open menu"}
             aria-expanded={isOpen}
           >
@@ -145,12 +141,12 @@ export function Header(): ReactNode {
               {isOpen ? "Close menu" : "Open menu"}
             </span>
             <span
-              className={`absolute h-0.5 w-5 bg-white transition-transform duration-fast ease-standard ${
+              className={`duration-fast ease-standard absolute h-0.5 w-5 bg-white transition-transform ${
                 isOpen ? "rotate-45" : "rotate-0"
               }`}
             />
             <span
-              className={`absolute h-5 w-0.5 bg-white transition-transform duration-fast ease-standard ${
+              className={`duration-fast ease-standard absolute h-5 w-0.5 bg-white transition-transform ${
                 isOpen ? "rotate-45" : "rotate-0"
               }`}
             />
@@ -168,60 +164,60 @@ export function Header(): ReactNode {
         ariaLabel="Mobile navigation"
         className="pointer-events-none fixed inset-0 h-dvh max-h-none w-dvw max-w-none lg:hidden"
       >
-        <div className="pointer-events-none fixed inset-x-0 bottom-0 top-24 bg-black/95 backdrop-blur-xl" />
+        <div className="pointer-events-none fixed inset-x-0 top-24 bottom-0 bg-black/95 backdrop-blur-xl" />
         <nav
           className="pointer-events-none mx-auto flex h-full max-w-7xl flex-col items-start gap-4 px-4 pt-32 sm:px-6"
           aria-label="Mobile navigation"
         >
-              {navLinks.map((link, index) => (
-                <motion.div
-                  key={link.href}
-                  initial={{ opacity: 0, x: -40, filter: "blur(10px)" }}
-                  animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
-                  transition={{
-                    duration: 0.4,
-                    delay: 0.05 + index * 0.08,
-                    ease: [0.25, 0.46, 0.45, 0.94],
-                  }}
-                >
-                  <Link
-                    href={link.href}
-                    onClick={closeMenu}
-                    className="focus-ring pointer-events-auto block text-6xl text-white transition-colors hover:text-white sm:text-6xl"
-                  >
-                    {link.label}
-                  </Link>
-                </motion.div>
-              ))}
+          {navLinks.map((link, index) => (
+            <motion.div
+              key={link.href}
+              initial={{ opacity: 0, x: -40, filter: "blur(10px)" }}
+              animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+              transition={{
+                duration: 0.4,
+                delay: 0.05 + index * 0.08,
+                ease: [0.25, 0.46, 0.45, 0.94],
+              }}
+            >
+              <Link
+                href={link.href}
+                onClick={closeMenu}
+                className="focus-ring pointer-events-auto block text-6xl text-white transition-colors hover:text-white sm:text-6xl"
+              >
+                {link.label}
+              </Link>
+            </motion.div>
+          ))}
 
-              <motion.div
-                initial={{ opacity: 0, scaleX: 0 }}
-                animate={{ opacity: 1, scaleX: 1 }}
-                transition={{ duration: 0.5, delay: 0.4, ease: "easeOut" }}
-                className="my-4 h-px w-20 origin-left bg-white/30"
-                role="separator"
-              />
+          <motion.div
+            initial={{ opacity: 0, scaleX: 0 }}
+            animate={{ opacity: 1, scaleX: 1 }}
+            transition={{ duration: 0.5, delay: 0.4, ease: "easeOut" }}
+            className="my-4 h-px w-20 origin-left bg-white/30"
+            role="separator"
+          />
 
-              {authLinks.map((link, index) => (
-                <motion.div
-                  key={link.label}
-                  initial={{ opacity: 0, x: -40, filter: "blur(10px)" }}
-                  animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
-                  transition={{
-                    duration: 0.4,
-                    delay: 0.45 + index * 0.08,
-                    ease: [0.25, 0.46, 0.45, 0.94],
-                  }}
-                >
-                  <Link
-                    href={link.href}
-                    onClick={closeMenu}
-                    className="focus-ring pointer-events-auto block text-6xl text-white transition-colors hover:text-white sm:text-6xl"
-                  >
-                    {link.label}
-                  </Link>
-                </motion.div>
-              ))}
+          {authLinks.map((link, index) => (
+            <motion.div
+              key={link.label}
+              initial={{ opacity: 0, x: -40, filter: "blur(10px)" }}
+              animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+              transition={{
+                duration: 0.4,
+                delay: 0.45 + index * 0.08,
+                ease: [0.25, 0.46, 0.45, 0.94],
+              }}
+            >
+              <Link
+                href={link.href}
+                onClick={closeMenu}
+                className="focus-ring pointer-events-auto block text-6xl text-white transition-colors hover:text-white sm:text-6xl"
+              >
+                {link.label}
+              </Link>
+            </motion.div>
+          ))}
         </nav>
       </OverlayRoot>
     </>

@@ -1,6 +1,13 @@
 "use client";
 
-import { useRef, useEffect, useCallback, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  useRef,
+  useEffect,
+  useCallback,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
@@ -9,17 +16,15 @@ import NextImage from "next/image";
 function getIsSafari(): boolean {
   if (typeof window === "undefined") return false;
   const ua = navigator.userAgent.toLowerCase();
-  return ua.includes("safari") && !ua.includes("chrome") && !ua.includes("chromium");
+  return (
+    ua.includes("safari") && !ua.includes("chrome") && !ua.includes("chromium")
+  );
 }
 
 const emptySubscribe = () => () => {};
 
 function useIsSafari(): boolean {
-  return useSyncExternalStore(
-    emptySubscribe,
-    getIsSafari,
-    () => false
-  );
+  return useSyncExternalStore(emptySubscribe, getIsSafari, () => false);
 }
 
 interface CardData {
@@ -152,7 +157,7 @@ function SafariCard({ title, imageSrc, index }: BulgeCardProps): ReactNode {
 
   return (
     <motion.div
-      className="relative border border-border/25 aspect-4/5 w-full overflow-hidden rounded-xl cursor-pointer"
+      className="border-border/25 relative aspect-4/5 w-full cursor-pointer overflow-hidden rounded-xl border"
       initial={{ opacity: 0, y: 30 }}
       whileInView={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, delay: index * 0.1 }}
@@ -160,7 +165,7 @@ function SafariCard({ title, imageSrc, index }: BulgeCardProps): ReactNode {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <motion.div 
+      <motion.div
         className="absolute inset-0"
         animate={{ scale: isHovered ? 1.1 : 1 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
@@ -180,9 +185,11 @@ function SafariCard({ title, imageSrc, index }: BulgeCardProps): ReactNode {
         }}
         aria-hidden="true"
       />
-      <motion.div 
+      <motion.div
         className="absolute inset-0"
-        animate={{ backgroundColor: isHovered ? "rgba(0,0,0,0.1)" : "rgba(0,0,0,0.2)" }}
+        animate={{
+          backgroundColor: isHovered ? "rgba(0,0,0,0.1)" : "rgba(0,0,0,0.2)",
+        }}
         transition={{ duration: 0.3 }}
       />
       <div className="absolute inset-0 flex items-center justify-center">
@@ -227,7 +234,11 @@ function BulgeCard({ title, imageSrc, index }: BulgeCardProps): ReactNode {
     glRef.current = gl;
 
     const vertexShader = createShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER);
-    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
+    const fragmentShader = createShader(
+      gl,
+      gl.FRAGMENT_SHADER,
+      FRAGMENT_SHADER
+    );
     if (!vertexShader || !fragmentShader) return;
 
     const program = createProgram(gl, vertexShader, fragmentShader);
@@ -237,9 +248,7 @@ function BulgeCard({ title, imageSrc, index }: BulgeCardProps): ReactNode {
     gl.useProgram(program);
 
     const positions = new Float32Array([
-      -1, -1, 0, 0,
-       3, -1, 2, 0,
-      -1,  3, 0, 2,
+      -1, -1, 0, 0, 3, -1, 2, 0, -1, 3, 0, 2,
     ]);
 
     const buffer = gl.createBuffer();
@@ -294,7 +303,14 @@ function BulgeCard({ title, imageSrc, index }: BulgeCardProps): ReactNode {
       if (!gl || !texture || isDisposedRef.current) return;
       imageSizeRef.current = { width: image.width, height: image.height };
       gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        image
+      );
       imageLoadedRef.current = true;
       const texResLoc = uniformsRef.current.uTextureResolution;
       if (texResLoc) {
@@ -321,7 +337,7 @@ function BulgeCard({ title, imageSrc, index }: BulgeCardProps): ReactNode {
 
     const render = () => {
       if (isDisposedRef.current) return;
-      
+
       if (!gl || !programRef.current || !imageLoadedRef.current) {
         rafRef.current = requestAnimationFrame(render);
         return;
@@ -371,7 +387,7 @@ function BulgeCard({ title, imageSrc, index }: BulgeCardProps): ReactNode {
   return (
     <motion.div
       ref={containerRef}
-      className="group relative border border-border/25 aspect-4/5 w-full overflow-hidden rounded-xl cursor-pointer"
+      className="group border-border/25 relative aspect-4/5 w-full cursor-pointer overflow-hidden rounded-xl border"
       onMouseMove={handleMouseMove}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -409,7 +425,7 @@ export function ShowcaseCards(): ReactNode {
   return (
     <section className="px-4 py-20 sm:px-6 md:py-28 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        <h2 className="mb-12 text-2xl font-medium tracking-tight text-foreground md:text-3xl lg:text-4xl">
+        <h2 className="text-foreground mb-12 text-2xl font-medium tracking-tight md:text-3xl lg:text-4xl">
           Launch video templates, ready to customize
         </h2>
 
@@ -424,17 +440,17 @@ export function ShowcaseCards(): ReactNode {
           ))}
         </div>
 
-        <div className="mt-12 flex flex-col gap-2 sm:flex-row items-start sm:justify-between">
-          <p className="max-w-md text-lg text-muted-foreground">
+        <div className="mt-12 flex flex-col items-start gap-2 sm:flex-row sm:justify-between">
+          <p className="text-muted-foreground max-w-md text-lg">
             Start from a proven launch-video structure, then tailor the story,
             product proof, pacing, and brand for every release.
           </p>
           <Link
-            href="#"
-            className="group flex shrink-0 items-center leading-0 gap-2 text-xl font-medium text-muted-foreground transition-colors hover:text-foreground"
+            href="/community"
+            className="group text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-2 text-xl leading-0 font-medium transition-colors"
           >
-            View templates
-            <ArrowRight className="h-5 w-5 transition-transform duration-fast group-hover:translate-x-0.5" />
+            View community films
+            <ArrowRight className="duration-fast h-5 w-5 transition-transform group-hover:translate-x-0.5" />
           </Link>
         </div>
       </div>
