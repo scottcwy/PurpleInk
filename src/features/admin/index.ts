@@ -15,3 +15,17 @@ export { getAdminOverview } from './overview-repository'
 export type { AdminOverview } from './overview-repository'
 export { getAdminSecuritySnapshot } from './security-repository'
 export type { AdminSecuritySnapshot } from './security-repository'
+export {
+  createAdminUser,
+  listAdminUsers,
+  updateAdminUser,
+  UserAdminError,
+} from './user-admin'
+export type { AdminUserRow, UserAdminErrorCode } from './user-admin'
+export {
+  BillingAdminError,
+  createRedemptionBatch,
+  getAdminBilling,
+  revokeRedemptionBatch,
+} from './billing-admin'
+export type { AdminBillingSnapshot } from './billing-admin'

@@ -96,11 +96,11 @@
 | 路由 | 文件 | 状态 | 数据与行为 |
 | --- | --- | --- | --- |
 | `/admin` | `src/app/admin/page.tsx` | `wired` | PostgreSQL 真实用户、有效会话与数据库时间概览；兼容 metrics API 只提供可变的最后会话活动分布，不提供历史 DAU |
-| `/admin/users` | `src/app/admin/users/page.tsx` | `planned` | PostgreSQL 账号查询与受控管理操作 |
+| `/admin/users` | `src/app/admin/users/page.tsx` | `wired` | PostgreSQL 账号查询与受控管理操作；停用只改变 `users.status` 并注销会话，不物理删除业务数据 |
 | `/admin/jobs` | `src/app/admin/jobs/page.tsx` | `wired` | `pipeline_runs + task_attempts` 当前任务与安全错误类别投影 |
 | `/admin/ops` | `src/app/admin/ops/page.tsx` | `wired` | 当前 queue、有效 lease、有效 dispatch ticket、cooldown 与 Provider pool 的只读 PostgreSQL 投影 |
 | `/admin/security` | `src/app/admin/security/page.tsx` | `wired` | 最近 24 小时 `api_access_counters + auth_throttle` 匿名聚合 |
-| `/admin/billing` | `src/app/admin/billing/page.tsx` | `planned` | 当前会员、额度与兑换批次的真实投影和受控操作 |
+| `/admin/billing` | `src/app/admin/billing/page.tsx` | `wired` | 当前方案 manifest、Workspace 权益、双账本与兑换批次的真实投影和受控操作 |
 | `/admin/ai` | `src/app/admin/ai/page.tsx` | `wired` | `ai_invocations v3` 身份与 `official_cost_entries + entitlement_ledger_entries` 成本的跨 workspace 脱敏聚合；缺失账本明确标为未知 |
 
 所有管理页必须逐页查库校验会话与 admin 角色：未登录 302 到 `/login?next=<原路径>`，已登录但非 admin 统一 `notFound()`，不得用 403 暴露后台是否存在。管理页只读 PostgreSQL 真实投影或执行明确登记的真实操作，不接 fixture/mock、第二套任务库、第二套队列或旧计费模型；全部 `noindex` 且不得进入 sitemap。
@@ -192,15 +192,15 @@
 | `/api/billing/redemptions` | POST | header `Idempotency-Key` + body `{code}` | `@/features/billing` | `wired` |
 | `/api/ai-usage` | GET | query `view=account\|managed-cycle`、`range=7d\|30d\|cycle`、`timeZone=<IANA>`；账号与 workspace 只取当前会话 | `@/features/usage` | `wired` |
 | `/api/admin/metrics/dau` | GET | query `days` | `@/features/admin/metrics-repository` | `wired`；路径仅为兼容保留，payload 为 `metric=last_session_activity`、`snapshotNature=mutable`、`historicalDau=false` 的最后会话活动分布；同一 session 更新 `last_seen_at` 会从旧日桶移到新日桶，不得作为历史 DAU |
-| `/api/admin/users` | GET, POST | GET query `q`、`page`、`pageSize`；POST body 由账号管理合同校验 | `@/features/admin/user-admin` | `planned`；真实账号查询与创建 |
-| `/api/admin/users/[id]` | PATCH, DELETE | `id` path；body 由账号管理合同校验 | `@/features/admin/user-admin` | `planned`；真实账号更新与删除，危险操作必须二次确认 |
+| `/api/admin/users` | GET, POST | GET query `q`、`page`、`pageSize`；POST body 由账号管理合同校验 | `@/features/admin/user-admin` | `wired`；创建复用注册原子事务，普通 owner 保持全局 user |
+| `/api/admin/users/[id]` | PATCH, DELETE | `id` path；PATCH 编辑或恢复；DELETE body 必须确认 `DISABLE` | `@/features/admin/user-admin` | `wired`；DELETE 语义为停用并注销全部会话，不物理删除 Workspace、项目、账本或 Artifact；禁止自停用和停用最后一个活跃 admin |
 | `/api/admin/jobs` | GET | query `status`、`page`、`pageSize` | `@/features/admin/jobs-repository` | `wired`；当前 `pipeline_runs + task_attempts` 投影，不引入 `render_jobs` 或第二套 job-db |
 | `/api/admin/jobs/[id]` | GET | `id` path | `@/features/admin/jobs-repository` | `wired`；run/attempt 详情，不存在统一 404 |
 | `/api/admin/ops` | GET | — | `@/features/admin/ops-repository` | `wired`；当前 queue、有效 lease/ticket、cooldown 与 Provider pool 的只读 PostgreSQL 投影 |
 | `/api/admin/security` | GET | — | `@/features/admin/security-repository` | `wired`；最近 24 小时认证限流与 API 访问匿名聚合 |
-| `/api/admin/billing` | GET | query `page`、`pageSize` | `@/features/admin/billing-admin` | `planned`；当前计费合同的真实投影，不复活旧计费模型 |
-| `/api/admin/billing/batches` | POST | body 由兑换批次合同校验 | `@/features/admin/billing-admin`、`@/features/billing` | `planned`；明文兑换码只显示一次，数据库只存哈希 |
-| `/api/admin/billing/batches/[id]` | PATCH | `id` path；body 由批次撤销合同校验 | `@/features/admin/billing-admin`、`@/features/billing` | `planned`；按批次执行真实撤销 |
+| `/api/admin/billing` | GET | query `page`、`pageSize` | `@/features/admin/billing-admin` | `wired`；当前计费合同、方案 manifest、权益与双账本真实投影，不复活旧计费模型 |
+| `/api/admin/billing/batches` | POST | body 由兑换批次合同校验 | `@/features/admin/billing-admin`、`@/features/billing` | `wired`；明文兑换码只在创建响应显示一次，数据库只存带 pepper 的 HMAC 哈希 |
+| `/api/admin/billing/batches/[id]` | PATCH | `id` path；body `{action:'revoke',confirmation:'REVOKE'}` | `@/features/admin/billing-admin`、`@/features/billing` | `wired`；按批次撤销未使用代码，不回退已生效权益 |
 | `/api/admin/ai` | GET | query `days` | `@/features/admin/ai-audit-repository` | `wired`；`ai_invocations v3` 与双账本脱敏只读聚合，缺失成本保持未知，不返回 prompt、credential、原始 Provider 错误或单 workspace PII |
 | `/api/internal/ai/worker` | POST | Bearer 服务间密钥；严格 body 携带 `workspaceId`、`attemptId`、`operationId`、固定 workload 与文本/图片/TTS 输入 | `@/features/ai/worker-gateway` | `wired`；仅受信 worker 可用，先校验 attempt 归属，再在该 workspace 上下文解析统一 ExecutionPlan、并发与双账本；不返回凭据、渠道 URL 或原始 provider 错误 |
 
@@ -423,12 +423,12 @@ Project（可变，L3 内部）
 | 情况 | 响应 | 状态 |
 | --- | --- | --- |
 | 未登录访问 `/products/*` | 302 → `/login?next=`（proxy 形状拦截 + 页面查库兼校） | 已实现 |
-| 未登录访问 `/admin/*` | 302 → `/login?next=`（页面查库校验；proxy 若增加形状预检也不得替代页面校验） | 待实现 |
-| 已登录非 admin 访问 `/admin/*` | 404，不暴露后台是否存在 | 待实现 |
+| 未登录访问 `/admin/*` | 302 → `/login?next=`（页面查库校验；proxy 若增加形状预检也不得替代页面校验） | 已实现 |
+| 已登录非 admin 访问 `/admin/*` | 404，不暴露后台是否存在 | 已实现 |
 | 已登录访问 `/login`、`/signup` | 302 → `/products/dashboard`（仅页面级 `redirectIfAuthenticated` 查库判定；proxy 不拦认证页，避免残留失效 cookie 的重定向循环） | 已实现 |
 | 未登录调业务 `/api/*` | 401 + 类别文案，不带用户信息、不回显 projectId | 已实现 |
-| 未登录调 `/api/admin/*` | 401 + 类别文案 | 待实现 |
-| 已登录非 admin 调 `/api/admin/*` | 404，不返回 403 | 待实现 |
+| 未登录调 `/api/admin/*` | 401 + 类别文案 | 已实现 |
+| 已登录非 admin 调 `/api/admin/*` | 404，不返回 403 | 已实现 |
 | `projectId` 不存在或不属于当前 workspace | 404（查询按会话 workspace 过滤，命中 0 即不存在） | 已实现 |
 | `shotId` 不属于该 `projectId`，或节点类型不是 `shot-codegen` | 404 | 已实现 |
 | `shareId` 不存在、已撤销、已被新版本取代 | 404 | 已实现（与认证无关） |

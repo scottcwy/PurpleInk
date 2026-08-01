@@ -6,10 +6,12 @@ import { Card } from '@/components/ui/card'
 
 const ADMIN_SECTION_LINKS = [
   { href: '/admin', label: '概览' },
+  { href: '/admin/users', label: '用户' },
   { href: '/admin/jobs', label: '任务' },
   { href: '/admin/ops', label: '运维' },
   { href: '/admin/security', label: '安全' },
   { href: '/admin/ai', label: 'AI 审计' },
+  { href: '/admin/billing', label: '计费' },
 ] as const
 
 export function AdminPageFrame({
@@ -48,9 +50,6 @@ export function AdminPageFrame({
               {item.label}
             </Link>
           ))}
-          <span className="inline-flex min-h-10 shrink-0 items-center px-2 text-xs text-ds-text-muted">
-            用户与计费 · 待接线
-          </span>
         </nav>
       </Card>
       {children}

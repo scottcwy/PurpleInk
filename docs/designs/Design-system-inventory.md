@@ -358,8 +358,10 @@ Zod 真值，服务端 `schemas.ts` 与认证页的 blur 校验、强度条都�
 各页使用页面级 `AdminPageFrame` 组织标题和无激活态链接，并只组合 canonical
 `Card`、`Button`、`StatusPill`、`EmptyState` 与语义化 table。
 
-状态始终有文本，窄屏表格允许横向滚动，导航触控目标不低于 40px；尚未接线的
-用户与计费项显示禁用文案而不是可点击空入口。全部页面使用现有 `ds-*` token，
+状态始终有文本，窄屏表格允许横向滚动，导航触控目标不低于 40px。用户与计费项
+已接入同一 `AdminPageFrame` 导航；账号停用、批次撤销使用 canonical `Dialog` 二次确认，
+账号与批次创建使用 `TextField` / `Button`，一次性明文兑换码只在创建成功弹窗中展示。
+全部页面使用现有 `ds-*` token，
 同时支持 Porcelain Light / Obsidian Navy Dark，不引入后台专属色相、第二套交互状态模型或重复 UI 原语。
 
 共同约束：
