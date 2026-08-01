@@ -58,17 +58,17 @@ Pencil reusable symbol
 
 ## 2. 当前画布地图
 
-| 区域 | 内容 | 当前节点 |
-|---|---|---|
-| A | Foundations | A1 Tokens、A2 Typography & Spacing、A3 Icon & Content Rules、A4 Board Headers & Sync、Scrollbar（`--scrollbar-*` 细条，明暗不同；`.scrollbar-hide` 全隐） |
-| B0 | Canonical mother components | 16 个正式 reusable symbols |
-| B | Component specimens | B1 Actions & Inputs、B2 Navigation & Feedback、B3 CVC Domain Components |
-| C | Stable compositions | C1 Workbench、C2 Pipeline、C3 Inspector |
-| D | Governance contracts | D1 Route、D2 State & Feedback、D3 Dependency |
-| S Light | 正式浅色页面 | S1–S6，1440×900 |
-| S Dark | 正式暗色页面 | S1–S6，1440×900 |
-| R2 | Source archive | shadcn source kit，保持原始 token 与外观 |
-| R3 | Source archive | generated dashboard explorations + prompts |
+| 区域    | 内容                        | 当前节点                                                                                                                                                  |
+| ------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A       | Foundations                 | A1 Tokens、A2 Typography & Spacing、A3 Icon & Content Rules、A4 Board Headers & Sync、Scrollbar（`--scrollbar-*` 细条，明暗不同；`.scrollbar-hide` 全隐） |
+| B0      | Canonical mother components | 16 个正式 reusable symbols                                                                                                                                |
+| B       | Component specimens         | B1 Actions & Inputs、B2 Navigation & Feedback、B3 CVC Domain Components                                                                                   |
+| C       | Stable compositions         | C1 Workbench、C2 Pipeline、C3 Inspector                                                                                                                   |
+| D       | Governance contracts        | D1 Route、D2 State & Feedback、D3 Dependency                                                                                                              |
+| S Light | 正式浅色页面                | S1–S6，1440×900                                                                                                                                           |
+| S Dark  | 正式暗色页面                | S1–S6，1440×900                                                                                                                                           |
+| R2      | Source archive              | shadcn source kit，保持原始 token 与外观                                                                                                                  |
+| R3      | Source archive              | generated dashboard explorations + prompts                                                                                                                |
 
 当前 `.pen` 共 103 个 reusable 节点：
 
@@ -108,16 +108,16 @@ Pencil reusable symbol
 
 ### 4.1 基础表面
 
-| Token | Light | Dark | 用途 |
-|---|---|---|---|
-| `ds-bg` | `#EEF2FF` | `#03040A` | 页面基底 |
-| `ds-surface` | `#FCFDFFF8` | `#11131AF5` | 卡片、顶栏、Inspector、Dialog |
-| `ds-surface-muted` | `#F1F4FA` | `#191C26` | 次级面、选中导航、控件轨道 |
-| `ds-text` | `#171A2E` | `#F1F1F4` | 主文字 |
-| `ds-text-muted` | `#5E6679` | `#9BA0B0` | 次级文字、元数据 |
-| `ds-border` | `#DDE2EE` | `#2A2E3C` | 1px 边界与分隔 |
-| `ds-shadow` | `#25305A1F` | `#00000099` | Canonical 卡片/浮层阴影色 |
-| `ds-ring` | `#3B5BDB59` | `#93A5FF66` | 全控件统一 focus-visible 光环 |
+| Token              | Light       | Dark        | 用途                          |
+| ------------------ | ----------- | ----------- | ----------------------------- |
+| `ds-bg`            | `#EEF2FF`   | `#03040A`   | 页面基底                      |
+| `ds-surface`       | `#FCFDFFF8` | `#11131AF5` | 卡片、顶栏、Inspector、Dialog |
+| `ds-surface-muted` | `#F1F4FA`   | `#191C26`   | 次级面、选中导航、控件轨道    |
+| `ds-text`          | `#171A2E`   | `#F1F1F4`   | 主文字                        |
+| `ds-text-muted`    | `#5E6679`   | `#9BA0B0`   | 次级文字、元数据              |
+| `ds-border`        | `#DDE2EE`   | `#2A2E3C`   | 1px 边界与分隔                |
+| `ds-shadow`        | `#25305A1F` | `#00000099` | Canonical 卡片/浮层阴影色     |
+| `ds-ring`          | `#3B5BDB59` | `#93A5FF66` | 全控件统一 focus-visible 光环 |
 
 ### 4.1.1 滚动条（全局细条）
 
@@ -125,52 +125,52 @@ Pencil reusable symbol
 
 ### 4.2 页面背景渐变
 
-| Token | Light | Dark |
-|---|---|---|
+| Token               | Light     | Dark      |
+| ------------------- | --------- | --------- |
 | `ds-gradient-start` | `#FFFFFF` | `#03040A` |
-| `ds-gradient-mid` | `#F5F7FD` | `#080912` |
-| `ds-gradient-end` | `#E6EAF8` | `#23295C` |
+| `ds-gradient-mid`   | `#F5F7FD` | `#080912` |
+| `ds-gradient-end`   | `#E6EAF8` | `#23295C` |
 
 统一配置：线性、纵向、stop `0 / 0.52 / 1`。A–D、Sidebar 与 S1–S6 使用同一组变量；不得为单页另造背景渐变。
 
 ### 4.3 主操作
 
-| Token | Light | Dark | 用途 |
-|---|---|---|---|
-| `ds-primary` | `#202A5B` | `#403778` | Toggle、品牌标及非渐变主色 |
-| `ds-button-bg` | `#171A2E` | `#F1F1F4` | Primary 按钮底（墨色，与 `ds-text` 同族） |
-| `ds-button-fg` | `#F8FAFF` | `#171A2E` | Primary 按钮前景 |
-| `ds-button-bg-hover` | `#252C48` | `#FFFFFF` | Primary 按钮 hover 底 |
+| Token                | Light     | Dark      | 用途                                      |
+| -------------------- | --------- | --------- | ----------------------------------------- |
+| `ds-primary`         | `#202A5B` | `#403778` | Toggle、品牌标及非渐变主色                |
+| `ds-button-bg`       | `#171A2E` | `#F1F1F4` | Primary 按钮底（墨色，与 `ds-text` 同族） |
+| `ds-button-fg`       | `#F8FAFF` | `#171A2E` | Primary 按钮前景                          |
+| `ds-button-bg-hover` | `#252C48` | `#FFFFFF` | Primary 按钮 hover 底                     |
 
 Primary 按钮为**扁平实心**（Vercel/Linear 式）：零渐变、零投影、零内高光，浅色模式用墨色、暗色模式反转为近白——按钮色取自 `ds-text` 墨族，与全局平面的瓷白/黑曜表面同源，不引入额外色相（两向对比均 ≥14:1）。交互状态只靠底色明度迁移：hover 换 `--ds-button-bg-hover`、active 下压 `translate-y-px` + `brightness-95`、focus-visible 统一 `ds-ring` 光环。业务页通过 `Button` 变体选用配色，不得本地覆写。语义约定：`primary` = 新建 / 导出等主 CTA；`tinted` = 执行阶段等次主操作；`destructive` = 重渲此镜等高代价操作；`gray` = 取消 / 次级。
 
 ### 4.4 信息与状态
 
-| Token | Light | Dark |
-|---|---|---|
-| `ds-blue` | `#3B5BDB` | `#93A5FF` |
-| `ds-blue-soft` | `#E9EEFE` | `#1B2140` |
-| `ds-green` | `#168F63` | `#63B28E` |
-| `ds-green-soft` | `#E9F8F2` | `#122A22` |
-| `ds-amber` | `#B66A18` | `#D9A55E` |
-| `ds-amber-soft` | `#F3E7D4` | `#3B2D1D` |
-| `ds-red` | `#D92D20` | `#E5534B` |
-| `ds-red-soft` | `#FDECEA` | `#3B1D1A` |
-| `ds-accent` | `#80663A` | `#C4A15E` |
+| Token            | Light     | Dark      |
+| ---------------- | --------- | --------- |
+| `ds-blue`        | `#3B5BDB` | `#93A5FF` |
+| `ds-blue-soft`   | `#E9EEFE` | `#1B2140` |
+| `ds-green`       | `#168F63` | `#63B28E` |
+| `ds-green-soft`  | `#E9F8F2` | `#122A22` |
+| `ds-amber`       | `#B66A18` | `#D9A55E` |
+| `ds-amber-soft`  | `#F3E7D4` | `#3B2D1D` |
+| `ds-red`         | `#D92D20` | `#E5534B` |
+| `ds-red-soft`    | `#FDECEA` | `#3B1D1A` |
+| `ds-accent`      | `#80663A` | `#C4A15E` |
 | `ds-accent-soft` | `#F0E6D2` | `#383020` |
 
 ### 4.5 媒体、遮罩与中性 Save
 
-| Token | Light | Dark | 用途 |
-|---|---|---|---|
-| `ds-scrim` | `#10183A70` | `#02030A99` | S2 模态遮罩 |
-| `ds-player-start` | `#26366F` | `#0E0F15` | 播放器渐变顶部 |
-| `ds-player-mid` | `#131E48` | `#05060B` | 播放器渐变中段 |
-| `ds-player-end` | `#070B20` | `#161A3C` | 播放器渐变底部 |
-| `ds-player-fg` | `#EEF2FF` | `#EEF2FF` | 播放器图标 |
-| `ds-save-neutral` | `#252836` | `#E8EBF5` | 仅 S6 Save 按钮背景 |
-| `ds-save-neutral-fg` | `#F5F6FA` | `#171A2E` | 仅 S6 Save 按钮前景 |
-| `ds-save-shadow` | `#1118271F` | `#02061766` | 仅 S6 Save 按钮阴影 |
+| Token                | Light       | Dark        | 用途                |
+| -------------------- | ----------- | ----------- | ------------------- |
+| `ds-scrim`           | `#10183A70` | `#02030A99` | S2 模态遮罩         |
+| `ds-player-start`    | `#26366F`   | `#0E0F15`   | 播放器渐变顶部      |
+| `ds-player-mid`      | `#131E48`   | `#05060B`   | 播放器渐变中段      |
+| `ds-player-end`      | `#070B20`   | `#161A3C`   | 播放器渐变底部      |
+| `ds-player-fg`       | `#EEF2FF`   | `#EEF2FF`   | 播放器图标          |
+| `ds-save-neutral`    | `#252836`   | `#E8EBF5`   | 仅 S6 Save 按钮背景 |
+| `ds-save-neutral-fg` | `#F5F6FA`   | `#171A2E`   | 仅 S6 Save 按钮前景 |
+| `ds-save-shadow`     | `#1118271F` | `#02061766` | 仅 S6 Save 按钮阴影 |
 
 中性 Save 是唯一批准的页面级按钮色彩例外，但仍通过主题变量实现，不使用实例硬编码 hex。
 
@@ -181,12 +181,12 @@ Primary 按钮为**扁平实心**（Vercel/Linear 式）：零渐变、零投影
 
 ### 4.6 字体与密度
 
-| Token | 值 | 用途 |
-|---|---|---|
-| `ds-font` | Geist | UI、标题、正文 |
-| `ds-mono` | Geist Mono | ID、hash、task ID、artifact、时间码 |
-| `ds-radius` | 8 | 默认表面圆角 |
-| `ds-gap` | 16 | 默认模块间距 |
+| Token       | 值         | 用途                                |
+| ----------- | ---------- | ----------------------------------- |
+| `ds-font`   | Geist      | UI、标题、正文                      |
+| `ds-mono`   | Geist Mono | ID、hash、task ID、artifact、时间码 |
+| `ds-radius` | 8          | 默认表面圆角                        |
+| `ds-gap`    | 16         | 默认模块间距                        |
 
 常用字号：Display 36、H1 30、H2 22、Body 14、Label 12；正文行高建议 1.45–1.55。圆角：控件 8（`--radius-md`）、卡片/面板/Dialog 12（`--radius-lg`）、pill 999。设置行节奏：导航/只读行 48px（`SettingsRow`，px-5），表单行 `SettingsField`（min-h 56、px-5 py-3.5，label+hint 在左、多控件区在右，窄屏纵向堆叠）——禁止再用行高覆写把多控件塞进 44px 行。
 
@@ -195,13 +195,13 @@ Primary 按钮为**扁平实心**（Vercel/Linear 式）：零渐变、零投影
 动效**不从 Pencil 推导**——`canvas.pen` 是静态像素真值，不含时间维度。动效的唯一文字真值是
 `docs/conventions/motion-interaction.md`，本节只保留索引，不重复参数。
 
-| 维度 | 值 | 详见 |
-| --- | --- | --- |
-| 时长 | `fast` 150 / `base` 220 / `slow` 360 / `narrative` 300（仅营销层） | 该文 §2.2 |
-| 曲线 | `standard` / `emphasized` / `exit` | 该文 §2.3 |
-| 弹性 | spatial 三档（`visualDuration` + `bounce`）；effects 类属性禁用 | 该文 §2.4 |
-| 意图表 | 17 条交互意图 → 参数映射 | 该文 §3 |
-| 覆盖层 | `OverlayRoot` 双模式（`<dialog>` / Popover API）；Toast 使用独立根级 viewport | 该文 §4 |
+| 维度   | 值                                                                            | 详见      |
+| ------ | ----------------------------------------------------------------------------- | --------- |
+| 时长   | `fast` 150 / `base` 220 / `slow` 360 / `narrative` 300（仅营销层）            | 该文 §2.2 |
+| 曲线   | `standard` / `emphasized` / `exit`                                            | 该文 §2.3 |
+| 弹性   | spatial 三档（`visualDuration` + `bounce`）；effects 类属性禁用               | 该文 §2.4 |
+| 意图表 | 17 条交互意图 → 参数映射                                                      | 该文 §3   |
+| 覆盖层 | `OverlayRoot` 双模式（`<dialog>` / Popover API）；Toast 使用独立根级 viewport | 该文 §4   |
 
 token 在 `src/app/globals.css` 分两层落地：`:root` 存语义值，`@theme inline` 用
 Tailwind v4 的 `--transition-duration-*` 命名空间导出为 class。
@@ -213,37 +213,37 @@ JS 镜像在 `src/lib/motion/tokens.ts`，由 `tokens.test.ts` 的同步测试�
 `canvas.pen` 目前只有 1440×900 桌面帧，不含移动端像素真值——移动端适配为**代码先行**，
 文字真值是 `docs/conventions/responsive-design.md`，本节只索引，不重复参数。
 
-| 维度 | 值 | 详见 |
-| --- | --- | --- |
-| JS 结构断点 | 900 / 1180 / 1280（`src/lib/layout/breakpoints.ts`） | 该文 §2 |
-| 应用壳三态 | hidden ≤899 / rail 900–1279 / expanded ≥1280 | 该文 §3 |
-| 编辑器降级 | 画布 <900px 显式降级卡；镜头/导出折叠不降级 | 该文 §4 |
-| 触控热区 | 可点元素 ≥40px（`py-N -my-N` 负 margin 技巧） | 该文 §5 |
-| 控件尺寸变形 | `Button` sm/md 在 <lg 取 `min-h-10`；`IconButton` <lg 为 40×40、≥lg 仍 32×32 | 该文 §5 |
-| safe-area | `--safe-area-inset-*` 由贴屏边 fixed 元素消费（当前唯一消费方：应用壳悬浮导航钮） | 该文 §6 |
+| 维度         | 值                                                                                | 详见    |
+| ------------ | --------------------------------------------------------------------------------- | ------- |
+| JS 结构断点  | 900 / 1180 / 1280（`src/lib/layout/breakpoints.ts`）                              | 该文 §2 |
+| 应用壳三态   | hidden ≤899 / rail 900–1279 / expanded ≥1280                                      | 该文 §3 |
+| 编辑器降级   | 画布 <900px 显式降级卡；镜头/导出折叠不降级                                       | 该文 §4 |
+| 触控热区     | 可点元素 ≥40px（`py-N -my-N` 负 margin 技巧）                                     | 该文 §5 |
+| 控件尺寸变形 | `Button` sm/md 在 <lg 取 `min-h-10`；`IconButton` <lg 为 40×40、≥lg 仍 32×32      | 该文 §5 |
+| safe-area    | `--safe-area-inset-*` 由贴屏边 fixed 元素消费（当前唯一消费方：应用壳悬浮导航钮） | 该文 §6 |
 
 ---
 
 ## 5. Canonical Reusable Symbols（B0）
 
-| Pencil symbol | ID | 责任 | 主题行为 |
-|---|---|---|---|
-| `SpecBoardHeader/Canonical` | `naY6Q` | A–D 规范板统一标题 | `ds-text / muted / border` |
-| `Button/Primary/Canonical` | `QDsSV` | 主操作 | 主题化主渐变 |
-| `Button/Outline/Canonical` | `rRzIi` | 次操作 | surface + border |
-| `Button/Ghost/Canonical` | `j7HxdL` | 低强调操作 | 透明底 + token 前景 |
-| `Field/Canonical` | `AIern` | 单行字段 | surface + border |
-| `Textarea/Canonical` | `pAGbj` | 多行源文本 | surface + border |
-| `Toggle/Canonical` | `tRDRK` | 布尔状态 | primary track |
-| `NavItem/Canonical` | `OD6of` | 导航原子 | muted / selected override |
-| `StatusBadge/Canonical` | `G3szjk` | 运行与语义状态 | semantic + soft surface |
-| `Progress/Canonical` | `cjFyE` | 离散进度 | muted track + blue fill |
-| `AppSidebar/Canonical` | `ViGub` | 唯一应用侧栏 | 与页面同源渐变 |
-| `ArtifactChip/Canonical` | `OJzNk` | Artifact 标识/链接外观 | muted surface + mono |
-| `InspectorTabs/Canonical` | `N4FZZS` | 固定四页签 | Data / Source / Gates / Execution |
-| `ProjectCard/Canonical` | `S1xDL` | 项目摘要 | surface / muted preview |
-| `PipelineNode/Canonical` | `Qsovp` | DAG 任务与 checkpoint | surface + semantic status；生产挂载 `/products/canvas/[projectId]`；状态枚举为领域 `NodeStatus`；实例 override 含 `selected`；website 六阶段由数据库执行快照覆盖真实标题、动作文案与既有 stage 色 |
-| `QueueBar/Canonical` | `XL8t8` | Trigger/队列摘要 | surface + border；script/audio 可投影套餐并发与排队数，website 只显示数据库确认的“已完成 N/6 阶段”。代码侧增补 `variant="glass"`（半透明 surface + backdrop-blur + 圆角悬浮），S3 画布以悬浮条形式浮于 DAG 之上（`inset-x-3 bottom-3`），视口工具条与小地图相应上移让位 |
+| Pencil symbol               | ID       | 责任                   | 主题行为                                                                                                                                                                                                                                                                |
+| --------------------------- | -------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SpecBoardHeader/Canonical` | `naY6Q`  | A–D 规范板统一标题     | `ds-text / muted / border`                                                                                                                                                                                                                                              |
+| `Button/Primary/Canonical`  | `QDsSV`  | 主操作                 | 主题化主渐变                                                                                                                                                                                                                                                            |
+| `Button/Outline/Canonical`  | `rRzIi`  | 次操作                 | surface + border                                                                                                                                                                                                                                                        |
+| `Button/Ghost/Canonical`    | `j7HxdL` | 低强调操作             | 透明底 + token 前景                                                                                                                                                                                                                                                     |
+| `Field/Canonical`           | `AIern`  | 单行字段               | surface + border                                                                                                                                                                                                                                                        |
+| `Textarea/Canonical`        | `pAGbj`  | 多行源文本             | surface + border                                                                                                                                                                                                                                                        |
+| `Toggle/Canonical`          | `tRDRK`  | 布尔状态               | primary track                                                                                                                                                                                                                                                           |
+| `NavItem/Canonical`         | `OD6of`  | 导航原子               | muted / selected override                                                                                                                                                                                                                                               |
+| `StatusBadge/Canonical`     | `G3szjk` | 运行与语义状态         | semantic + soft surface                                                                                                                                                                                                                                                 |
+| `Progress/Canonical`        | `cjFyE`  | 离散进度               | muted track + blue fill                                                                                                                                                                                                                                                 |
+| `AppSidebar/Canonical`      | `ViGub`  | 唯一应用侧栏           | 与页面同源渐变                                                                                                                                                                                                                                                          |
+| `ArtifactChip/Canonical`    | `OJzNk`  | Artifact 标识/链接外观 | muted surface + mono                                                                                                                                                                                                                                                    |
+| `InspectorTabs/Canonical`   | `N4FZZS` | 固定四页签             | Data / Source / Gates / Execution                                                                                                                                                                                                                                       |
+| `ProjectCard/Canonical`     | `S1xDL`  | 项目摘要               | surface / muted preview                                                                                                                                                                                                                                                 |
+| `PipelineNode/Canonical`    | `Qsovp`  | DAG 任务与 checkpoint  | surface + semantic status；生产挂载 `/products/canvas/[projectId]`；状态枚举为领域 `NodeStatus`；实例 override 含 `selected`；website 六阶段由数据库执行快照覆盖真实标题、动作文案与既有 stage 色                                                                       |
+| `QueueBar/Canonical`        | `XL8t8`  | Trigger/队列摘要       | surface + border；script/audio 可投影套餐并发与排队数，website 只显示数据库确认的“已完成 N/6 阶段”。代码侧增补 `variant="glass"`（半透明 surface + backdrop-blur + 圆角悬浮），S3 画布以悬浮条形式浮于 DAG 之上（`inset-x-3 bottom-3`），视口工具条与小地图相应上移让位 |
 
 规则：
 
@@ -278,11 +278,11 @@ lane 必须留空位而不是让后续 clip 前移，否则 UI 会暗示错误�
 
 ## 6. 组合模块（C）
 
-| 模块 | 消费组件 | 正式消费点 |
-|---|---|---|
-| C1 Workbench | Primary Button、ProjectCard | S1、S2 背景 |
-| C2 Pipeline | PipelineNode、QueueBar | S3（画布 DAG 节点 UI 唯一消费 `PipelineNode`，禁止 page 内联平行节点壳） |
-| C3 Inspector | InspectorTabs、Progress、MediaViewport、状态与预览表面 | S3、S4 |
+| 模块         | 消费组件                                               | 正式消费点                                                               |
+| ------------ | ------------------------------------------------------ | ------------------------------------------------------------------------ |
+| C1 Workbench | Primary Button、ProjectCard                            | S1、S2 背景                                                              |
+| C2 Pipeline  | PipelineNode、QueueBar                                 | S3（画布 DAG 节点 UI 唯一消费 `PipelineNode`，禁止 page 内联平行节点壳） |
+| C3 Inspector | InspectorTabs、Progress、MediaViewport、状态与预览表面 | S3、S4                                                                   |
 
 C 只负责稳定布局与业务组合，不定义新颜色。任何可复用的新 viewer、trace、gate、source、run control 或 status bar，必须先按 N6 顺序加入 B0/B 区，再进入 C/S。
 
@@ -290,24 +290,24 @@ C 只负责稳定布局与业务组合，不定义新颜色。任何可复用的
 
 ## 7. 正式页面与路由合同（S）
 
-| 屏 | 路由/状态 | 主目的 | 主操作 |
-|---|---|---|---|
-| S1 | `/workbench` | 恢复或创建项目 | New project |
-| S2 | `/workbench` New Project state | 创建 durable project | Start planning |
-| S3 | `/canvas/[projectId]` | 操作执行 DAG | Run ready nodes |
-| S4 | `/shots/[shotId]` | 审查单镜合同与媒体 | Render shot |
-| S5 | `/export/[projectId]` | script/audio 验证镜头时间线；website 验证六阶段执行与 approved MP4 | Compose project / 下载 MP4 |
-| S6 | `/settings` | 验证 workspace providers/defaults | Save settings |
+| 屏  | 路由/状态                      | 主目的                                                             | 主操作                     |
+| --- | ------------------------------ | ------------------------------------------------------------------ | -------------------------- |
+| S1  | `/workbench`                   | 恢复或创建项目                                                     | New project                |
+| S2  | `/workbench` New Project state | 创建 durable project                                               | Start planning             |
+| S3  | `/canvas/[projectId]`          | 操作执行 DAG                                                       | Run ready nodes            |
+| S4  | `/shots/[shotId]`              | 审查单镜合同与媒体                                                 | Render shot                |
+| S5  | `/export/[projectId]`          | script/audio 验证镜头时间线；website 验证六阶段执行与 approved MP4 | Compose project / 下载 MP4 |
+| S6  | `/settings`                    | 验证 workspace providers/defaults                                  | Save settings              |
 
 ### 7.1 认证页（L2）的视觉归属
 
 `canvas.pen` 里没有认证屏 —— 登录体系（PLAN-002）落地时新增，此处是它的文字真值。
 
-| 屏 | 路由 | 主目的 | 主操作 |
-|---|---|---|---|
-| A1 | `/login` | 用已有账号进入 workspace | 登录 |
-| A2 | `/signup` | 创建账号与独立 workspace | 创建账号并进入 |
-| A3 | `/password/reset` | 用邮件验证码重置口令 | 设置新密码并登录 |
+| 屏  | 路由              | 主目的                   | 主操作           |
+| --- | ----------------- | ------------------------ | ---------------- |
+| A1  | `/login`          | 用已有账号进入 workspace | 登录             |
+| A2  | `/signup`         | 创建账号与独立 workspace | 创建账号并进入   |
+| A3  | `/password/reset` | 用邮件验证码重置口令     | 设置新密码并登录 |
 
 **归属结论：三页用应用侧 `ds-*` token，不用营销侧 token。** PLAN-002 §4.1 原本推荐
 营销侧，实施时按实测改为应用侧，依据三条：
@@ -327,29 +327,40 @@ C 只负责稳定布局与业务组合，不定义新颜色。任何可复用的
 
 新增两个组件族（已登记 `/playbook`，只用 `ds-*` token）：
 
-| 组件 | 责任 | 纪律 |
-|---|---|---|
-| `HumanCheckField` | 算术人机验证的题面 + 答案输入 | 纯呈现；题目与 SVG 由服务端下发，客户端不生成、不校验 |
-| `VerificationCodeField` | 邮件验证码输入 + 重发按钮 | 纯呈现；倒计时由父级驱动，与服务端 `auth_throttle` 同一份真值 |
+| 组件                    | 责任                          | 纪律                                                          |
+| ----------------------- | ----------------------------- | ------------------------------------------------------------- |
+| `HumanCheckField`       | 算术人机验证的题面 + 答案输入 | 纯呈现；题目与 SVG 由服务端下发，客户端不生成、不校验         |
+| `VerificationCodeField` | 邮件验证码输入 + 重发按钮     | 纯呈现；倒计时由父级驱动，与服务端 `auth_throttle` 同一份真值 |
 
 两者都提供非视觉替代：验证题以文本同时呈现并带 `aria-label`，倒计时带
 `aria-live="polite"` 文本，不只靠禁用态的视觉变化表达状态（§8）。
 
 微交互（动效参数一律见 `motion-interaction.md`，此处只登记能力与纪律）：
 
-| 能力 | 归属 | 纪律 |
-|---|---|---|
-| `Button` 的 `loading` | `components/ui/button.tsx` | opt-in 默认关闭；spinner 占图标槽，强制 `disabled` + `aria-busy`，不传时与历史渲染完全一致 |
-| `TextField` 的 `error` / `hint` | `components/ui/text-field.tsx` | opt-in；`error` 优先于 `hint`，带 `aria-invalid` + `aria-describedby` |
-| `FormFeedback` 行内反馈条 | `(auth)/_components/form-feedback.tsx` | 组合 `Toast` 原语而非另造；`info`/`success` 自动消失（时长取 toast store），`error`/`warning` 常驻待处理 |
-| `PasswordStrengthMeter` | `(auth)/_components/password-strength-meter.tsx` | 档位与 `credential-policy.ts` 的 `passwordSchema` 同源；色条 + 文字 + `aria-live` 三重通道 |
-| 注册两阶段渐进披露 | `(auth)/_components/signup-form.tsx` | 字段始终挂载（输入值与倒计时不丢），折叠态 `aria-hidden` + `inert` 隔离 Tab 与读屏 |
-| 人机验证失败态 | `components/ui/human-check-field.tsx` | `failed` 给出重试引导文本 + 红色双通道；刷新中图标旋转且按钮禁用 |
-| 侧栏登出反馈 | `components/ui/sidebar-chrome.tsx` | `pending` spinner 与文案并行；`failed` 5 秒自动复位，期间可立即重试 |
-| 认证壳入场 | `(auth)/_components/auth-form-shell.tsx` | 复用共享 `fadeInUp`，不本地写变体；整页导航故无 `exit`；reduced-motion 由根布局 `MotionConfig` 降级 |
+| 能力                            | 归属                                             | 纪律                                                                                                     |
+| ------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `Button` 的 `loading`           | `components/ui/button.tsx`                       | opt-in 默认关闭；spinner 占图标槽，强制 `disabled` + `aria-busy`，不传时与历史渲染完全一致               |
+| `TextField` 的 `error` / `hint` | `components/ui/text-field.tsx`                   | opt-in；`error` 优先于 `hint`，带 `aria-invalid` + `aria-describedby`                                    |
+| `FormFeedback` 行内反馈条       | `(auth)/_components/form-feedback.tsx`           | 组合 `Toast` 原语而非另造；`info`/`success` 自动消失（时长取 toast store），`error`/`warning` 常驻待处理 |
+| `PasswordStrengthMeter`         | `(auth)/_components/password-strength-meter.tsx` | 档位与 `credential-policy.ts` 的 `passwordSchema` 同源；色条 + 文字 + `aria-live` 三重通道               |
+| 注册两阶段渐进披露              | `(auth)/_components/signup-form.tsx`             | 字段始终挂载（输入值与倒计时不丢），折叠态 `aria-hidden` + `inert` 隔离 Tab 与读屏                       |
+| 人机验证失败态                  | `components/ui/human-check-field.tsx`            | `failed` 给出重试引导文本 + 红色双通道；刷新中图标旋转且按钮禁用                                         |
+| 侧栏登出反馈                    | `components/ui/sidebar-chrome.tsx`               | `pending` spinner 与文案并行；`failed` 5 秒自动复位，期间可立即重试                                      |
+| 认证壳入场                      | `(auth)/_components/auth-form-shell.tsx`         | 复用共享 `fadeInUp`，不本地写变体；整页导航故无 `exit`；reduced-motion 由根布局 `MotionConfig` 降级      |
 
 客户端实时校验不复制规则：`features/auth/credential-policy.ts` 是邮箱与口令的唯一
 Zod 真值，服务端 `schemas.ts` 与认证页的 blur 校验、强度条都从它取同一份定义。
+
+### 7.2 管理后台（L4）的视觉归属
+
+`canvas.pen` 尚无管理后台画板；当前 L4 以本节为文字真值。Admin 壳使用全站
+`ds-*` token 和 `PurpleInkLogo`，以响应式横向导航区分于制作侧唯一
+`AppSidebar`，不得复制产品侧 sidebar、pathname 高亮映射或交互状态模型。
+
+已接线的概览、任务、运维、安全与 AI 审计页只组合 canonical `Card`、
+`StatusPill`、`EmptyState` 与语义化 table；状态始终有文本，窄屏表格允许横向滚动，
+导航触控目标不低于 40px。尚未接线的用户与计费项显示禁用文案而不是可点击空入口。
+全部页面同时支持 Porcelain Light / Obsidian Navy Dark，不引入管理后台专属色相、渐变控件或重投影。
 
 共同约束：
 
@@ -435,13 +446,13 @@ Canonical 状态集合：`loading / empty / ready / running / succeeded / failed
 
 ## 11. 文档归属
 
-| 文档 | 责任 |
-|---|---|
-| [`canvas.pen`](./canvas.pen) | 视觉像素、变量、reusable symbol、页面 SSOT |
-| 本文 | 当前 token、组件、页面与同步规则的文字索引 |
-| [`README.md`](./README.md) | `docs/designs` 权威关系与历史/当前文档入口 |
-| [`../conventions/architecture-conventions.md`](../conventions/architecture-conventions.md#ui-design-ssot) | 设计到代码的长期架构边界 |
-| [`../issues/refactor-v3/issue-n6-ui-truth-and-governance.md`](../issues/refactor-v3/issue-n6-ui-truth-and-governance.md) | N6 实施顺序、测试和证据要求 |
-| [`2026-07-23-ui-design-handoff.md`](./2026-07-23-ui-design-handoff.md) | 冻结的 Demo v1 历史执行稿，不再提供当前 token |
+| 文档                                                                                                                     | 责任                                          |
+| ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
+| [`canvas.pen`](./canvas.pen)                                                                                             | 视觉像素、变量、reusable symbol、页面 SSOT    |
+| 本文                                                                                                                     | 当前 token、组件、页面与同步规则的文字索引    |
+| [`README.md`](./README.md)                                                                                               | `docs/designs` 权威关系与历史/当前文档入口    |
+| [`../conventions/architecture-conventions.md`](../conventions/architecture-conventions.md#ui-design-ssot)                | 设计到代码的长期架构边界                      |
+| [`../issues/refactor-v3/issue-n6-ui-truth-and-governance.md`](../issues/refactor-v3/issue-n6-ui-truth-and-governance.md) | N6 实施顺序、测试和证据要求                   |
+| [`2026-07-23-ui-design-handoff.md`](./2026-07-23-ui-design-handoff.md)                                                   | 冻结的 Demo v1 历史执行稿，不再提供当前 token |
 
 Product/Architecture/Harness/Task Breakdown 继续管理产品行为、长期架构、施工协议和状态；本次视觉整理不改变其业务合同或 Track 状态。

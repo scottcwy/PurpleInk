@@ -17,14 +17,14 @@
 
 只允许存在五层。每层的壳、认证要求、数据来源、可索引性都不同。
 
-| 层 | 前缀 | 壳 | 认证 | 可索引 | 用途 |
-| --- | --- | --- | --- | --- | --- |
-| L1 公开 | `/`、`/community`、`/artifacts*`、`/share/*`、`/release` | 营销壳 / 只读分享壳 | 匿名 | `/`、`/community`、`/artifacts*` 是；`/share/*` 否 | 获客、社区案例、对外分享 |
-| L2 认证 | `/login`、`/signup`、`/password/reset` | 认证壳（无侧栏，左海报 + 右表单） | 匿名 | 否 | 进入 L3 |
-| L3 制作应用 | `/products/*` | `AppShell` + `AppSidebarShell` | 必须登录（见 §9） | 否 | 全部真实制作功能 |
-| L4 管理后台 | `/admin/*` | 独立 Admin 壳 | 必须登录且必须是 admin（见 §9） | 否 | PostgreSQL 真实运营投影与管理操作 |
-| L5 内部 | `/playbook/*` | 独立无业务壳 | 仅非生产环境 | 否 | 组件登记与视觉验收 |
-| API | `/api/*` | 无 | 见 §4 | 否（robots 已 disallow） | 数据与引擎 |
+| 层          | 前缀                                                     | 壳                                | 认证                            | 可索引                                             | 用途                              |
+| ----------- | -------------------------------------------------------- | --------------------------------- | ------------------------------- | -------------------------------------------------- | --------------------------------- |
+| L1 公开     | `/`、`/community`、`/artifacts*`、`/share/*`、`/release` | 营销壳 / 只读分享壳               | 匿名                            | `/`、`/community`、`/artifacts*` 是；`/share/*` 否 | 获客、社区案例、对外分享          |
+| L2 认证     | `/login`、`/signup`、`/password/reset`                   | 认证壳（无侧栏，左海报 + 右表单） | 匿名                            | 否                                                 | 进入 L3                           |
+| L3 制作应用 | `/products/*`                                            | `AppShell` + `AppSidebarShell`    | 必须登录（见 §9）               | 否                                                 | 全部真实制作功能                  |
+| L4 管理后台 | `/admin/*`                                               | 独立 Admin 壳                     | 必须登录且必须是 admin（见 §9） | 否                                                 | PostgreSQL 真实运营投影与管理操作 |
+| L5 内部     | `/playbook/*`                                            | 独立无业务壳                      | 仅非生产环境                    | 否                                                 | 组件登记与视觉验收                |
+| API         | `/api/*`                                                 | 无                                | 见 §4                           | 否（robots 已 disallow）                           | 数据与引擎                        |
 
 硬约束：
 
@@ -40,14 +40,14 @@
 
 ### 2.1 L1 公开
 
-| 路由 | 文件 | 状态 |
-| --- | --- | --- |
-| `/` | `src/app/(marketing)/page.tsx` | `wired` |
-| `/community` | `src/app/(marketing)/community/page.tsx` | `wired` |
-| `/artifacts` | `src/app/(public)/artifacts/page.tsx` | `planned` |
+| 路由                    | 文件                                             | 状态      |
+| ----------------------- | ------------------------------------------------ | --------- |
+| `/`                     | `src/app/(marketing)/page.tsx`                   | `wired`   |
+| `/community`            | `src/app/(marketing)/community/page.tsx`         | `wired`   |
+| `/artifacts`            | `src/app/(public)/artifacts/page.tsx`            | `planned` |
 | `/artifacts/[caseSlug]` | `src/app/(public)/artifacts/[caseSlug]/page.tsx` | `planned` |
-| `/share/[shareId]` | `src/app/(public)/share/[shareId]/page.tsx` | `planned` |
-| `/release` | `src/app/(public)/release/page.tsx` | `shell` |
+| `/share/[shareId]`      | `src/app/(public)/share/[shareId]/page.tsx`      | `planned` |
+| `/release`              | `src/app/(public)/release/page.tsx`              | `shell`   |
 
 `(public)` 组的壳是 `src/app/(public)/layout.tsx`：无侧栏、无写操作入口。
 
@@ -57,10 +57,10 @@
 
 ### 2.2 L2 认证
 
-| 路由 | 文件 | 状态 | 提交目标 |
-| --- | --- | --- | --- |
-| `/login` | `src/app/(auth)/login/page.tsx` | `wired` | `POST /api/auth/login` |
-| `/signup` | `src/app/(auth)/signup/page.tsx` | `wired` | `POST /api/auth/signup/code` → `POST /api/auth/signup` |
+| 路由              | 文件                                     | 状态    | 提交目标                                                         |
+| ----------------- | ---------------------------------------- | ------- | ---------------------------------------------------------------- |
+| `/login`          | `src/app/(auth)/login/page.tsx`          | `wired` | `POST /api/auth/login`                                           |
+| `/signup`         | `src/app/(auth)/signup/page.tsx`         | `wired` | `POST /api/auth/signup/code` → `POST /api/auth/signup`           |
 | `/password/reset` | `src/app/(auth)/password/reset/page.tsx` | `wired` | `POST /api/auth/password/code` → `POST /api/auth/password/reset` |
 
 三页共用 `src/app/(auth)/layout.tsx` 的无侧栏认证壳：`lg` 及以上左半屏通栏海报（`public/img/login.webp`）+ 右半屏表单栏，移动端单栏、海报折叠。海报走 `next/image` 且 `sizes="(min-width: 1024px) 50vw, 1px"`，移动端落到最小候选档（实测 12,292 B）。视觉归属见 `docs/designs/Design-system-inventory.md` 的登录页条目。
@@ -71,16 +71,16 @@
 
 侧栏顺序即 Pencil 页面顺序：工作台、项目、画布、镜头、导出；设置固定在底部，不占主导航位。
 
-| 路由 | 文件 | 状态 | 上下文来源 | 缺失上下文时 |
-| --- | --- | --- | --- | --- |
-| `/products` | `src/app/products/page.tsx` | `redirect` → `/products/dashboard` | 无 | — |
-| `/products/dashboard` | `src/app/products/(app)/dashboard/page.tsx` | `wired` | 无 | 空状态引导新建项目 |
-| `/products/projects` | `src/app/products/(app)/projects/page.tsx` | `wired` | 无 | 代码（文稿）/录音/URL 介绍三板块真实投影，支持网格（横向行式，按数量降序）与列表双布局，首屏每板块分页投影、滚动经 `/api/projects?view=cards` 追加；空分组各保留对应来源创建入口 |
-| `/products/canvas/[projectId]` | `src/app/products/(app)/canvas/[projectId]/page.tsx` | `wired` | `projectId` path | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明；<900px 视口显式降级为桌面引导卡（见 `responsive-design.md` §4） |
-| `/products/shots/[shotId]` | `src/app/products/(app)/shots/[shotId]/page.tsx` | `wired` | `shotId` path + `projectId` query（必填） | 缺失项目/镜头 `notFound()`；旧 workflow 显示保留数据说明 |
-| `/products/export/[projectId]` | `src/app/products/(app)/export/[projectId]/page.tsx` | `wired` | `projectId` path + 持久化 `workflowKind` | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明；script/audio 进入镜头时间线导出，website 进入六阶段执行快照与 approved MP4 交付工作区 |
-| `/products/settings` | `src/app/products/(app)/settings/page.tsx` | `wired` | `projectId` query（可选） | 无项目参数渲染账号级设置；旧 workflow 显示保留数据说明 |
-| `/products/billing` | `src/app/products/(app)/billing/page.tsx` | `wired` | 当前 workspace 会话 | 展示当前会员、额度比例与兑换入口；不回显内部人民币成本 |
+| 路由                           | 文件                                                 | 状态                               | 上下文来源                                | 缺失上下文时                                                                                                                                                                     |
+| ------------------------------ | ---------------------------------------------------- | ---------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/products`                    | `src/app/products/page.tsx`                          | `redirect` → `/products/dashboard` | 无                                        | —                                                                                                                                                                                |
+| `/products/dashboard`          | `src/app/products/(app)/dashboard/page.tsx`          | `wired`                            | 无                                        | 空状态引导新建项目                                                                                                                                                               |
+| `/products/projects`           | `src/app/products/(app)/projects/page.tsx`           | `wired`                            | 无                                        | 代码（文稿）/录音/URL 介绍三板块真实投影，支持网格（横向行式，按数量降序）与列表双布局，首屏每板块分页投影、滚动经 `/api/projects?view=cards` 追加；空分组各保留对应来源创建入口 |
+| `/products/canvas/[projectId]` | `src/app/products/(app)/canvas/[projectId]/page.tsx` | `wired`                            | `projectId` path                          | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明；<900px 视口显式降级为桌面引导卡（见 `responsive-design.md` §4）                                                             |
+| `/products/shots/[shotId]`     | `src/app/products/(app)/shots/[shotId]/page.tsx`     | `wired`                            | `shotId` path + `projectId` query（必填） | 缺失项目/镜头 `notFound()`；旧 workflow 显示保留数据说明                                                                                                                         |
+| `/products/export/[projectId]` | `src/app/products/(app)/export/[projectId]/page.tsx` | `wired`                            | `projectId` path + 持久化 `workflowKind`  | 缺失项目 `notFound()`；旧 workflow 显示保留数据说明；script/audio 进入镜头时间线导出，website 进入六阶段执行快照与 approved MP4 交付工作区                                       |
+| `/products/settings`           | `src/app/products/(app)/settings/page.tsx`           | `wired`                            | `projectId` query（可选）                 | 无项目参数渲染账号级设置；旧 workflow 显示保留数据说明                                                                                                                           |
+| `/products/billing`            | `src/app/products/(app)/billing/page.tsx`            | `wired`                            | 当前 workspace 会话                       | 展示当前会员、额度比例与兑换入口；不回显内部人民币成本                                                                                                                           |
 
 段级约定（已落盘，新增 L3 路由沿用）：
 
@@ -93,27 +93,27 @@
 
 ### 2.4 L4 管理后台
 
-| 路由 | 文件 | 状态 | 数据与行为 |
-| --- | --- | --- | --- |
-| `/admin` | `src/app/admin/page.tsx` | `planned` | PostgreSQL 真实概览与 DAU 投影 |
-| `/admin/users` | `src/app/admin/users/page.tsx` | `planned` | PostgreSQL 账号查询与受控管理操作 |
-| `/admin/jobs` | `src/app/admin/jobs/page.tsx` | `planned` | 当前任务与执行记录的真实投影 |
-| `/admin/ops` | `src/app/admin/ops/page.tsx` | `planned` | PostgreSQL 运维状态投影 |
-| `/admin/security` | `src/app/admin/security/page.tsx` | `planned` | 认证限流与 API 访问计数的真实投影 |
-| `/admin/billing` | `src/app/admin/billing/page.tsx` | `planned` | 当前会员、额度与兑换批次的真实投影和受控操作 |
-| `/admin/ai` | `src/app/admin/ai/page.tsx` | `planned` | `ai_invocations` 的跨 workspace 脱敏审计聚合 |
+| 路由              | 文件                              | 状态      | 数据与行为                                                                                                  |
+| ----------------- | --------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------- |
+| `/admin`          | `src/app/admin/page.tsx`          | `wired`   | PostgreSQL 真实用户、有效会话与数据库时间概览；DAU 由登记 API 投影                                          |
+| `/admin/users`    | `src/app/admin/users/page.tsx`    | `planned` | PostgreSQL 账号查询与受控管理操作                                                                           |
+| `/admin/jobs`     | `src/app/admin/jobs/page.tsx`     | `wired`   | `pipeline_runs + task_attempts` 当前任务与安全错误类别投影                                                  |
+| `/admin/ops`      | `src/app/admin/ops/page.tsx`      | `wired`   | 当前 queue、lease、dispatch ticket、cooldown 与 Provider pool 的只读 PostgreSQL 投影                        |
+| `/admin/security` | `src/app/admin/security/page.tsx` | `wired`   | `api_access_counters + auth_throttle` 匿名聚合                                                              |
+| `/admin/billing`  | `src/app/admin/billing/page.tsx`  | `planned` | 当前会员、额度与兑换批次的真实投影和受控操作                                                                |
+| `/admin/ai`       | `src/app/admin/ai/page.tsx`       | `wired`   | `ai_invocations v3` 身份与 `official_cost_entries + entitlement_ledger_entries` 成本的跨 workspace 脱敏聚合 |
 
 所有管理页必须逐页查库校验会话与 admin 角色：未登录 302 到 `/login?next=<原路径>`，已登录但非 admin 统一 `notFound()`，不得用 403 暴露后台是否存在。管理页只读 PostgreSQL 真实投影或执行明确登记的真实操作，不接 fixture/mock、第二套任务库、第二套队列或旧计费模型；全部 `noindex` 且不得进入 sitemap。
 
 ### 2.5 L5 内部
 
-| 路由 | 文件 | 状态 |
-| --- | --- | --- |
-| `/playbook` | `src/app/playbook/page.tsx` | `wired` |
-| `/playbook/ui` | `src/app/playbook/ui/page.tsx` | `wired`（`UI_COMPONENT_FAMILY_COUNT` 个组件族，页面从常量读取，不在文档硬写数字） |
-| `/playbook/icons` | `src/app/playbook/icons/page.tsx` | `wired`（Pencil A4 图标白名单） |
-| `/playbook/foundations` | `src/app/playbook/foundations/page.tsx` | `wired`，但无 registry 分类 |
-| `/playbook/motion` | `src/app/playbook/motion/page.tsx` | `wired`，但无 registry 分类；动效意图对照台，见 `docs/conventions/motion-interaction.md` |
+| 路由                    | 文件                                    | 状态                                                                                     |
+| ----------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `/playbook`             | `src/app/playbook/page.tsx`             | `wired`                                                                                  |
+| `/playbook/ui`          | `src/app/playbook/ui/page.tsx`          | `wired`（`UI_COMPONENT_FAMILY_COUNT` 个组件族，页面从常量读取，不在文档硬写数字）        |
+| `/playbook/icons`       | `src/app/playbook/icons/page.tsx`       | `wired`（Pencil A4 图标白名单）                                                          |
+| `/playbook/foundations` | `src/app/playbook/foundations/page.tsx` | `wired`，但无 registry 分类                                                              |
+| `/playbook/motion`      | `src/app/playbook/motion/page.tsx`      | `wired`，但无 registry 分类；动效意图对照台，见 `docs/conventions/motion-interaction.md` |
 
 `/playbook/foundations` 与 `/playbook/motion` 是手写 token / 动效展示页，`PlaybookCategory` 只有 `ui | icons`。这是已知不一致：两者要么补进 registry，要么在索引页标注它们不是组件登记页（当前采取后者）。
 
@@ -125,34 +125,34 @@
 
 以下路由与并行壳已于 2026-07-25 删除，不允许回归。`tests/app-route-contract.test.tsx` 锁定这一点。
 
-| 已删 | 替代 |
-| --- | --- |
-| `/legacy/*` | `/products/*` |
-| 根 `/dashboard` | `/products/dashboard` |
-| `/products/[productId]` | 无（未接线空壳） |
-| `/releases`、`/releases/[releaseId]/{brief,flow,evidence,storyboard,review,artifacts,sources,render}` | `/release` 单页占位 |
-| `(product)` 路由组整体（含 `ProductAppShell`、`ProductSidebar`、`ReleaseStepNav`、`ProductPageHeader`） | `(auth)` + `(public)` + `products/(app)` |
-| `/playbook/patterns`（含 `patterns` 分类、`src/features/workflow/**`） | 无（ISSUE-007：分类整体移除，无设计真值要求保留） |
+| 已删                                                                                                    | 替代                                              |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `/legacy/*`                                                                                             | `/products/*`                                     |
+| 根 `/dashboard`                                                                                         | `/products/dashboard`                             |
+| `/products/[productId]`                                                                                 | 无（未接线空壳）                                  |
+| `/releases`、`/releases/[releaseId]/{brief,flow,evidence,storyboard,review,artifacts,sources,render}`   | `/release` 单页占位                               |
+| `(product)` 路由组整体（含 `ProductAppShell`、`ProductSidebar`、`ReleaseStepNav`、`ProductPageHeader`） | `(auth)` + `(public)` + `products/(app)`          |
+| `/playbook/patterns`（含 `patterns` 分类、`src/features/workflow/**`）                                  | 无（ISSUE-007：分类整体移除，无设计真值要求保留） |
 
 `/releases/[releaseId]/artifacts` 与 L1 的 `/artifacts` 曾有语义冲突，这批删除同时解决了它。
 
 ## 3. 元数据路由
 
-| 路由 | 文件 | 状态 | 规则 |
-| --- | --- | --- | --- |
-| `/robots.txt` | `src/app/robots.ts` | `wired` | 当前 `allow: /`、`disallow: /api/`、`/private/`。新增 `/share/`、`/admin/` 到 disallow；后者覆盖全部 `/admin/*` |
-| `/sitemap.xml` | `src/app/sitemap.ts` | `wired` | 当前包含 `/` 与 `/community`。`/artifacts` 与每个 `featured` 案例必须在 ShareSnapshot 落盘后接入；`/admin/*` 禁止进入 |
-| `/favicon.ico`、`/icon.svg`、`/apple-icon.svg` | `src/app/*` | `wired` | — |
-| `/site.webmanifest` | `public/site.webmanifest` | `wired` | 由 `src/lib/metadata.ts` 的 `manifest` 引用 |
+| 路由                                           | 文件                      | 状态    | 规则                                                                                                                  |
+| ---------------------------------------------- | ------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------- |
+| `/robots.txt`                                  | `src/app/robots.ts`       | `wired` | 当前 `allow: /`、`disallow: /api/`、`/private/`。新增 `/share/`、`/admin/` 到 disallow；后者覆盖全部 `/admin/*`       |
+| `/sitemap.xml`                                 | `src/app/sitemap.ts`      | `wired` | 当前包含 `/` 与 `/community`。`/artifacts` 与每个 `featured` 案例必须在 ShareSnapshot 落盘后接入；`/admin/*` 禁止进入 |
+| `/favicon.ico`、`/icon.svg`、`/apple-icon.svg` | `src/app/*`               | `wired` | —                                                                                                                     |
+| `/site.webmanifest`                            | `public/site.webmanifest` | `wired` | 由 `src/lib/metadata.ts` 的 `manifest` 引用                                                                           |
 
 ## 3.1 错误与未找到边界
 
-| 文件 | 承载 | 壳 | 状态 |
-| --- | --- | --- | --- |
-| `src/app/not-found.tsx` | URL 未匹配；无更近边界的 `notFound()` | `ds-app-gradient` 全屏，无侧栏 | `wired` |
-| `src/app/products/(app)/not-found.tsx` | L3 各页显式 `notFound()` | `AppShell` 内，侧栏保留 | `wired` |
-| `src/app/products/(app)/error.tsx` | L3 未处理异常（Client，带 `reset`） | `AppShell` 内，侧栏保留 | `wired` |
-| `src/app/global-error.tsx` | root layout 失效后的兜底（自带 `html`/`body`） | 自带样式，无 Providers | `wired` |
+| 文件                                   | 承载                                           | 壳                             | 状态    |
+| -------------------------------------- | ---------------------------------------------- | ------------------------------ | ------- |
+| `src/app/not-found.tsx`                | URL 未匹配；无更近边界的 `notFound()`          | `ds-app-gradient` 全屏，无侧栏 | `wired` |
+| `src/app/products/(app)/not-found.tsx` | L3 各页显式 `notFound()`                       | `AppShell` 内，侧栏保留        | `wired` |
+| `src/app/products/(app)/error.tsx`     | L3 未处理异常（Client，带 `reset`）            | `AppShell` 内，侧栏保留        | `wired` |
+| `src/app/global-error.tsx`             | root layout 失效后的兜底（自带 `html`/`body`） | 自带样式，无 Providers         | `wired` |
 
 规则：
 
@@ -170,39 +170,39 @@
 
 ### 4.1 Next 自有 API
 
-| 路由 | 方法 | 上下文参数 | 委托 | 状态 |
-| --- | --- | --- | --- | --- |
-| `/api/ping` | GET | — | 无 | `wired` |
-| `/api/projects` | GET, POST | GET 可选 `view=cards` + `kind`、`q`、`offset`、`limit`；audio / website POST 使用 `Idempotency-Key` header | GET：无参数时 `@/features/canvas` `listProjects`；`view=cards` 时 `@/features/projects` 卡片投影；POST：`@/features/projects` | `wired`；`view=cards` 返回分页项目卡片投影 `{items,total,kindCounts}`（镜头数与状态为聚合 SQL，来源摘要为 URL/录音文件名/文稿前 80 字，不下发完整文稿）；`kind` 缺省跨三类混合，`limit` 钳位 1–50；无参数 GET 保持既有全量形状不变；POST 接受判别联合 `kind=script|audio|website`，兼容旧文稿 JSON；audio 仅接受 MP3/WAV multipart，最大 100 MiB / 30 分钟；同一 workspace 的 audio / website 创建 key 只允许绑定同一规范化请求，复用返回原项目，不同请求返回 409；audio 请求指纹由规范化表单与真实上传字节 SHA-256 派生，不信任浏览器 MIME 或客户端元数据 |
-| `/api/projects/[id]/start` | POST, DELETE | `id` path | POST：`@/features/projects` 按已持久化 `workflowKind` 分派 script Director、audio ASR、website video 队列；DELETE：`@/features/projects` `stopProjectExecution` | `wired`；POST 精确校验 kind + active workflowVersion，再由真实来源入口按资金来源预检（managed 进入统一会员额度，BYOK 不检查会员额度）；统一返回数据库派生的 `execution` 快照，兼容 `autopilot` 只能返回持久化真值，不作为 website/audio 执行状态；active attempt 返回 `reused`，website 只有 attempt、六阶段、校验与 approved Artifact 一致时返回 `complete`。DELETE 使用 execution epoch 栅栏旧作业并返回 `stopping|stopped` 与最新 `execution` |
-| `/api/projects/[id]/execution` | GET | `id` path | `@/features/projects` 执行快照仓库 | `wired`；返回当前 workspace 内项目的 `ProjectExecutionSnapshotV2`：真实 attempt、三来源判别详情、安全失败、恢复动作、交付门禁与内容 revision；不返回完整 URL、raw failure、prompt、credential 或 storage key |
-| `/api/projects/[id]` | PATCH, DELETE | `id` path | PATCH：body 含 `exportSettings` → `@/features/canvas` `updateExportSettings`，含 `title` → `@/features/projects` `renameProject`；DELETE：`@/features/projects` `deleteProject` | `wired`；PATCH 两个分支互斥，body 同时缺两者返回 400 且不写库，`title` 取 trim 后 1–200 字；DELETE 是不可恢复的整项目物理删除（口径见 `project-workflows.md` 的项目删除合同），项目不存在 404，项目仍有 queued/running attempt 或未释放并发租约时 409 且一行不删 |
-| `/api/artifacts/[id]` | GET | `id` path + `projectId` query（必填） | `@/features/artifacts` | `wired` |
-| `/api/jobs/[id]` | GET | `id` path + `projectId` query | `@/lib/queue`、`@/features/artifacts` | `wired` |
-| `/api/render` | POST | body `{projectId,nodeId,intent}`；`intent=execute|repair|rerender` | `@/features/director/recovery` | `wired`；`rerender` 只重渲既有 HTML |
-| `/api/render/export` | GET, POST | GET `projectId` query；POST body `{projectId, degraded?, confirmationFingerprint?}`；`degraded=true` 时确认指纹必填 | `@/features/render/export-service`、`@/features/render/export-degraded`、`@/features/director/export-finalization` | `wired` |
-| `/api/render/thumbnails` | GET | `projectId`、`nodeId` | `@/features/render` | `wired` |
-| `/api/director/pipeline` | POST, DELETE | body `{projectId}`；POST 返回 `started|blocked|complete` 与修复根/阻塞明细 | POST：`@/features/director/advance`；DELETE：委托 `@/features/projects` `stopProjectExecution` | `wired`；仅为既有 script 客户端保留；POST 在队列操作前按持久化 kind 拒绝 audio / website，DELETE 只做代理兼容且与统一停止入口语义完全一致；额度由真实节点按 managed / BYOK 来源预检；新入口统一使用 `/api/projects/[id]/start` |
-| `/api/director/stage` | POST | body `{projectId,nodeId,intent,skipReason?,revisionBrief?}`；`intent=execute|repair|regenerate|skip|cancel-wait`（`skip` 时 `skipReason` 必填 1–200 字；`revisionBrief` 仅允许用于 `shot-codegen + regenerate`，trim 后 1–200 字）；`cancel-wait` 仅取消尚未领取的 Provider 限流等待 attempt | `@/features/director/recovery`、`@/features/director/skip`、`@/features/director/cancel-wait` | `wired`；带 `revisionBrief` 的 `regenerate` 在 worker 执行期读取当前最新、未 rejected 的完整 FABRICATE HTML 作为 AI 编辑底稿，只允许按简报做最小局部修改；输出完整新版 HTML 后继续走原有确定性门禁、Artifact 版本与渲染链路 |
-| `/api/director/stream/[nodeId]` | GET (SSE) | `nodeId` path + `projectId` query | `@/lib/stream/stream-bus` | `wired` |
-| `/api/director/stream/project/[projectId]` | GET (SSE) | `projectId` path | `@/lib/stream/status-bus` | `wired` |
-| `/api/share/[shareId]` | GET | `shareId` path | `@/features/share`（待建） | `planned` |
-| `/api/settings` | GET, POST | — | `@/features/ai/*`、`@/lib/queue/runtime-config` | `wired` |
-| `/api/billing` | GET | — | `@/features/billing` | `wired` |
-| `/api/billing/redemptions` | POST | header `Idempotency-Key` + body `{code}` | `@/features/billing` | `wired` |
-| `/api/ai-usage` | GET | query `view=account\|managed-cycle`、`range=7d\|30d\|cycle`、`timeZone=<IANA>`；账号与 workspace 只取当前会话 | `@/features/usage` | `wired` |
-| `/api/admin/metrics/dau` | GET | query `days` | `@/features/admin/metrics` | `planned`；admin-only PostgreSQL DAU 投影 |
-| `/api/admin/users` | GET, POST | GET query `q`、`page`、`pageSize`；POST body 由账号管理合同校验 | `@/features/admin/user-admin` | `planned`；真实账号查询与创建 |
-| `/api/admin/users/[id]` | PATCH, DELETE | `id` path；body 由账号管理合同校验 | `@/features/admin/user-admin` | `planned`；真实账号更新与删除，危险操作必须二次确认 |
-| `/api/admin/jobs` | GET | query `status`、`page`、`pageSize` | `@/features/admin` 当前任务投影 | `planned`；不得引入 `render_jobs` 或第二套 job-db |
-| `/api/admin/jobs/[id]` | GET | `id` path | `@/features/admin` 当前任务投影 | `planned`；不存在与越权统一 404 |
-| `/api/admin/ops` | GET | — | `@/features/admin/ops` | `planned`；PostgreSQL 真实运维投影 |
-| `/api/admin/security` | GET | — | `@/features/admin/security` | `planned`；认证限流与 API 访问聚合 |
-| `/api/admin/billing` | GET | query `page`、`pageSize` | `@/features/admin/billing-admin` | `planned`；当前计费合同的真实投影，不复活旧计费模型 |
-| `/api/admin/billing/batches` | POST | body 由兑换批次合同校验 | `@/features/admin/billing-admin`、`@/features/billing` | `planned`；明文兑换码只显示一次，数据库只存哈希 |
-| `/api/admin/billing/batches/[id]` | PATCH | `id` path；body 由批次撤销合同校验 | `@/features/admin/billing-admin`、`@/features/billing` | `planned`；按批次执行真实撤销 |
-| `/api/admin/ai` | GET | query `days` | `@/features/admin/ai-audit` | `planned`；`ai_invocations` 脱敏只读聚合，不返回 prompt、credential 或单 workspace PII |
-| `/api/internal/ai/worker` | POST | Bearer 服务间密钥；严格 body 携带 `workspaceId`、`attemptId`、`operationId`、固定 workload 与文本/图片/TTS 输入 | `@/features/ai/worker-gateway` | `wired`；仅受信 worker 可用，先校验 attempt 归属，再在该 workspace 上下文解析统一 ExecutionPlan、并发与双账本；不返回凭据、渠道 URL 或原始 provider 错误 |
+| 路由                                       | 方法          | 上下文参数                                                                                                          | 委托                                                                                                                                                                            | 状态                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/ping`                                | GET           | —                                                                                                                   | 无                                                                                                                                                                              | `wired`                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `/api/projects`                            | GET, POST     | GET 可选 `view=cards` + `kind`、`q`、`offset`、`limit`；audio / website POST 使用 `Idempotency-Key` header          | GET：无参数时 `@/features/canvas` `listProjects`；`view=cards` 时 `@/features/projects` 卡片投影；POST：`@/features/projects`                                                   | `wired`；`view=cards` 返回分页项目卡片投影 `{items,total,kindCounts}`（镜头数与状态为聚合 SQL，来源摘要为 URL/录音文件名/文稿前 80 字，不下发完整文稿）；`kind` 缺省跨三类混合，`limit` 钳位 1–50；无参数 GET 保持既有全量形状不变；POST 接受判别联合 `kind=script                                                                                                                                                   | audio                                                                                          | website`，兼容旧文稿 JSON；audio 仅接受 MP3/WAV multipart，最大 100 MiB / 30 分钟；同一 workspace 的 audio / website 创建 key 只允许绑定同一规范化请求，复用返回原项目，不同请求返回 409；audio 请求指纹由规范化表单与真实上传字节 SHA-256 派生，不信任浏览器 MIME 或客户端元数据 |
+| `/api/projects/[id]/start`                 | POST, DELETE  | `id` path                                                                                                           | POST：`@/features/projects` 按已持久化 `workflowKind` 分派 script Director、audio ASR、website video 队列；DELETE：`@/features/projects` `stopProjectExecution`                 | `wired`；POST 精确校验 kind + active workflowVersion，再由真实来源入口按资金来源预检（managed 进入统一会员额度，BYOK 不检查会员额度）；统一返回数据库派生的 `execution` 快照，兼容 `autopilot` 只能返回持久化真值，不作为 website/audio 执行状态；active attempt 返回 `reused`，website 只有 attempt、六阶段、校验与 approved Artifact 一致时返回 `complete`。DELETE 使用 execution epoch 栅栏旧作业并返回 `stopping | stopped`与最新`execution`                                                                      |
+| `/api/projects/[id]/execution`             | GET           | `id` path                                                                                                           | `@/features/projects` 执行快照仓库                                                                                                                                              | `wired`；返回当前 workspace 内项目的 `ProjectExecutionSnapshotV2`：真实 attempt、三来源判别详情、安全失败、恢复动作、交付门禁与内容 revision；不返回完整 URL、raw failure、prompt、credential 或 storage key                                                                                                                                                                                                         |
+| `/api/projects/[id]`                       | PATCH, DELETE | `id` path                                                                                                           | PATCH：body 含 `exportSettings` → `@/features/canvas` `updateExportSettings`，含 `title` → `@/features/projects` `renameProject`；DELETE：`@/features/projects` `deleteProject` | `wired`；PATCH 两个分支互斥，body 同时缺两者返回 400 且不写库，`title` 取 trim 后 1–200 字；DELETE 是不可恢复的整项目物理删除（口径见 `project-workflows.md` 的项目删除合同），项目不存在 404，项目仍有 queued/running attempt 或未释放并发租约时 409 且一行不删                                                                                                                                                     |
+| `/api/artifacts/[id]`                      | GET           | `id` path + `projectId` query（必填）                                                                               | `@/features/artifacts`                                                                                                                                                          | `wired`                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `/api/jobs/[id]`                           | GET           | `id` path + `projectId` query                                                                                       | `@/lib/queue`、`@/features/artifacts`                                                                                                                                           | `wired`                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `/api/render`                              | POST          | body `{projectId,nodeId,intent}`；`intent=execute                                                                   | repair                                                                                                                                                                          | rerender`                                                                                                                                                                                                                                                                                                                                                                                                            | `@/features/director/recovery`                                                                 | `wired`；`rerender` 只重渲既有 HTML                                                                                                                                                                                                                                               |
+| `/api/render/export`                       | GET, POST     | GET `projectId` query；POST body `{projectId, degraded?, confirmationFingerprint?}`；`degraded=true` 时确认指纹必填 | `@/features/render/export-service`、`@/features/render/export-degraded`、`@/features/director/export-finalization`                                                              | `wired`                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `/api/render/thumbnails`                   | GET           | `projectId`、`nodeId`                                                                                               | `@/features/render`                                                                                                                                                             | `wired`                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `/api/director/pipeline`                   | POST, DELETE  | body `{projectId}`；POST 返回 `started                                                                              | blocked                                                                                                                                                                         | complete` 与修复根/阻塞明细                                                                                                                                                                                                                                                                                                                                                                                          | POST：`@/features/director/advance`；DELETE：委托 `@/features/projects` `stopProjectExecution` | `wired`；仅为既有 script 客户端保留；POST 在队列操作前按持久化 kind 拒绝 audio / website，DELETE 只做代理兼容且与统一停止入口语义完全一致；额度由真实节点按 managed / BYOK 来源预检；新入口统一使用 `/api/projects/[id]/start`                                                    |
+| `/api/director/stage`                      | POST          | body `{projectId,nodeId,intent,skipReason?,revisionBrief?}`；`intent=execute                                        | repair                                                                                                                                                                          | regenerate                                                                                                                                                                                                                                                                                                                                                                                                           | skip                                                                                           | cancel-wait`（`skip`时`skipReason` 必填 1–200 字；`revisionBrief`仅允许用于`shot-codegen + regenerate`，trim 后 1–200 字）；`cancel-wait` 仅取消尚未领取的 Provider 限流等待 attempt                                                                                              | `@/features/director/recovery`、`@/features/director/skip`、`@/features/director/cancel-wait` | `wired`；带 `revisionBrief` 的 `regenerate` 在 worker 执行期读取当前最新、未 rejected 的完整 FABRICATE HTML 作为 AI 编辑底稿，只允许按简报做最小局部修改；输出完整新版 HTML 后继续走原有确定性门禁、Artifact 版本与渲染链路 |
+| `/api/director/stream/[nodeId]`            | GET (SSE)     | `nodeId` path + `projectId` query                                                                                   | `@/lib/stream/stream-bus`                                                                                                                                                       | `wired`                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `/api/director/stream/project/[projectId]` | GET (SSE)     | `projectId` path                                                                                                    | `@/lib/stream/status-bus`                                                                                                                                                       | `wired`                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `/api/share/[shareId]`                     | GET           | `shareId` path                                                                                                      | `@/features/share`（待建）                                                                                                                                                      | `planned`                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `/api/settings`                            | GET, POST     | —                                                                                                                   | `@/features/ai/*`、`@/lib/queue/runtime-config`                                                                                                                                 | `wired`                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `/api/billing`                             | GET           | —                                                                                                                   | `@/features/billing`                                                                                                                                                            | `wired`                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `/api/billing/redemptions`                 | POST          | header `Idempotency-Key` + body `{code}`                                                                            | `@/features/billing`                                                                                                                                                            | `wired`                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `/api/ai-usage`                            | GET           | query `view=account\|managed-cycle`、`range=7d\|30d\|cycle`、`timeZone=<IANA>`；账号与 workspace 只取当前会话       | `@/features/usage`                                                                                                                                                              | `wired`                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `/api/admin/metrics/dau`                   | GET           | query `days`                                                                                                        | `@/features/admin/metrics-repository`                                                                                                                                           | `wired`；admin-only PostgreSQL DAU 投影                                                                                                                                                                                                                                                                                                                                                                              |
+| `/api/admin/users`                         | GET, POST     | GET query `q`、`page`、`pageSize`；POST body 由账号管理合同校验                                                     | `@/features/admin/user-admin`                                                                                                                                                   | `planned`；真实账号查询与创建                                                                                                                                                                                                                                                                                                                                                                                        |
+| `/api/admin/users/[id]`                    | PATCH, DELETE | `id` path；body 由账号管理合同校验                                                                                  | `@/features/admin/user-admin`                                                                                                                                                   | `planned`；真实账号更新与删除，危险操作必须二次确认                                                                                                                                                                                                                                                                                                                                                                  |
+| `/api/admin/jobs`                          | GET           | query `status`、`page`、`pageSize`                                                                                  | `@/features/admin` 当前任务投影                                                                                                                                                 | `wired`；读取 `pipeline_runs + task_attempts`，不得引入 `render_jobs` 或第二套 job-db                                                                                                                                                                                                                                                                                                                                |
+| `/api/admin/jobs/[id]`                     | GET           | `id` path                                                                                                           | `@/features/admin` 当前任务投影                                                                                                                                                 | `wired`；按 run/attempt UUID 返回脱敏投影，不存在与越权统一 404                                                                                                                                                                                                                                                                                                                                                      |
+| `/api/admin/ops`                           | GET           | —                                                                                                                   | `@/features/admin/ops-repository`                                                                                                                                               | `wired`；PostgreSQL 真实运维投影，无控制操作                                                                                                                                                                                                                                                                                                                                                                         |
+| `/api/admin/security`                      | GET           | —                                                                                                                   | `@/features/admin/security-repository`                                                                                                                                          | `wired`；认证限流与 API 访问匿名聚合                                                                                                                                                                                                                                                                                                                                                                                 |
+| `/api/admin/billing`                       | GET           | query `page`、`pageSize`                                                                                            | `@/features/admin/billing-admin`                                                                                                                                                | `planned`；当前计费合同的真实投影，不复活旧计费模型                                                                                                                                                                                                                                                                                                                                                                  |
+| `/api/admin/billing/batches`               | POST          | body 由兑换批次合同校验                                                                                             | `@/features/admin/billing-admin`、`@/features/billing`                                                                                                                          | `planned`；明文兑换码只显示一次，数据库只存哈希                                                                                                                                                                                                                                                                                                                                                                      |
+| `/api/admin/billing/batches/[id]`          | PATCH         | `id` path；body 由批次撤销合同校验                                                                                  | `@/features/admin/billing-admin`、`@/features/billing`                                                                                                                          | `planned`；按批次执行真实撤销                                                                                                                                                                                                                                                                                                                                                                                        |
+| `/api/admin/ai`                            | GET           | query `days`                                                                                                        | `@/features/admin/ai-audit-repository`                                                                                                                                          | `wired`；`ai_invocations v3` 与双账本脱敏只读聚合，不返回 prompt、credential、raw provider error 或单 workspace PII                                                                                                                                                                                                                                                                                                  |
+| `/api/internal/ai/worker`                  | POST          | Bearer 服务间密钥；严格 body 携带 `workspaceId`、`attemptId`、`operationId`、固定 workload 与文本/图片/TTS 输入     | `@/features/ai/worker-gateway`                                                                                                                                                  | `wired`；仅受信 worker 可用，先校验 attempt 归属，再在该 workspace 上下文解析统一 ExecutionPlan、并发与双账本；不返回凭据、渠道 URL 或原始 provider 错误                                                                                                                                                                                                                                                             |
 
 全部 `/api/admin/*` 只接受经数据库校验的 admin 会话：未登录返回 401；已登录但非 admin 返回 404。它们不得由 proxy 重定向，也不得返回 mock/fixture；响应必须来自 PostgreSQL 当前真值，并继续遵守最小字段、脱敏错误和不回显凭据的边界。
 
@@ -252,13 +252,13 @@ start/stop/recovery 状态码继续遵循：参数错误 400、作用域内不�
 
 `next.config.ts` 唯一 rewrite：`/api/engine/:path*` → `${BACKEND_ORIGIN || http://localhost:8787}/:path*`。
 
-| 前端路由 | worker 端点 |
-| --- | --- |
-| `GET /api/engine/health` | `GET /health` |
-| `POST /api/engine/render` | `POST /render` → 410；公开直启已退役，防止绕过 workspace、attempt、统一模型路由与计费 |
-| `GET /api/engine/jobs` | `GET /jobs` |
-| `GET /api/engine/jobs/:id` | `GET /jobs/:id` |
-| `GET /api/engine/jobs/:id/video` | `GET /jobs/:id/video`（支持 Range，206/409/416） |
+| 前端路由                         | worker 端点                                                                           |
+| -------------------------------- | ------------------------------------------------------------------------------------- |
+| `GET /api/engine/health`         | `GET /health`                                                                         |
+| `POST /api/engine/render`        | `POST /render` → 410；公开直启已退役，防止绕过 workspace、attempt、统一模型路由与计费 |
+| `GET /api/engine/jobs`           | `GET /jobs`                                                                           |
+| `GET /api/engine/jobs/:id`       | `GET /jobs/:id`                                                                       |
+| `GET /api/engine/jobs/:id/video` | `GET /jobs/:id/video`（支持 Range，206/409/416）                                      |
 
 规则：
 
@@ -268,12 +268,12 @@ start/stop/recovery 状态码继续遵循：参数错误 400、作用域内不�
 
 ### 4.3 资源 URL 合同
 
-| 资源 | URL 形状 | 生产方 | 消费方 |
-| --- | --- | --- | --- |
-| Artifact 下载 | `/api/artifacts/{artifactId}?projectId={projectId}` | `api/jobs/[id]`、`api/render/export`、`api/render/thumbnails`、`shots/[shotId]/page.tsx` | `ArtifactChip`、`ExportWorkspace`、`CanvasInspector` |
-| 阶段日志流 | `/api/director/stream/{nodeId}?projectId={projectId}` | `use-stage-stream.ts` | `StreamingLogCard` |
-| 项目状态流 | `/api/director/stream/project/{projectId}` | `use-project-status-stream.ts` | `CanvasView`（节点状态覆盖层 + 拓扑变更触发 refresh） |
-| worker 视频 | `${API_BASE}/jobs/{jobId}/video` | `src/lib/api.ts` | 下载/播放 |
+| 资源          | URL 形状                                              | 生产方                                                                                   | 消费方                                                |
+| ------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Artifact 下载 | `/api/artifacts/{artifactId}?projectId={projectId}`   | `api/jobs/[id]`、`api/render/export`、`api/render/thumbnails`、`shots/[shotId]/page.tsx` | `ArtifactChip`、`ExportWorkspace`、`CanvasInspector`  |
+| 阶段日志流    | `/api/director/stream/{nodeId}?projectId={projectId}` | `use-stage-stream.ts`                                                                    | `StreamingLogCard`                                    |
+| 项目状态流    | `/api/director/stream/project/{projectId}`            | `use-project-status-stream.ts`                                                           | `CanvasView`（节点状态覆盖层 + 拓扑变更触发 refresh） |
+| worker 视频   | `${API_BASE}/jobs/{jobId}/video`                      | `src/lib/api.ts`                                                                         | 下载/播放                                             |
 
 四条 URL 的所有 path 与 query 片段都必须 `encodeURIComponent`。ISSUE-009 已修复 `canvas-inspector.tsx` 与 `src/lib/api.ts` 的编码缺失。
 
@@ -294,13 +294,13 @@ start/stop/recovery 状态码继续遵循：参数错误 400、作用域内不�
 
 ## 6. 导航真值
 
-| 关注点 | 唯一实现 |
-| --- | --- |
-| 常驻壳 | `src/features/navigation/app-shell.tsx` |
-| 响应式与抽屉 | `src/features/navigation/app-sidebar-shell.tsx`（`expanded` / `rail` / `hidden`，优先级 hidden > rail > expanded） |
-| 侧栏内容 | `src/features/navigation/app-sidebar.tsx` |
-| pathname → 高亮 | `resolveProductsSection`（`src/features/navigation/products-routes.ts`） |
-| 深链上下文传递 | `src/features/navigation/nav-context.tsx` |
+| 关注点          | 唯一实现                                                                                                           |
+| --------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 常驻壳          | `src/features/navigation/app-shell.tsx`                                                                            |
+| 响应式与抽屉    | `src/features/navigation/app-sidebar-shell.tsx`（`expanded` / `rail` / `hidden`，优先级 hidden > rail > expanded） |
+| 侧栏内容        | `src/features/navigation/app-sidebar.tsx`                                                                          |
+| pathname → 高亮 | `resolveProductsSection`（`src/features/navigation/products-routes.ts`）                                           |
+| 深链上下文传递  | `src/features/navigation/nav-context.tsx`                                                                          |
 
 `resolveProductsSection` 的匹配顺序有语义：子路由（`shots/`、`export/`、`canvas/`）必须先于根前缀匹配，否则高亮错位。新增路由插入时保持这个顺序不变。
 
@@ -308,27 +308,27 @@ start/stop/recovery 状态码继续遵循：参数错误 400、作用域内不�
 
 `AppSection` 的枚举名与 URL 段名不一致，属已固化词汇，不再改动：
 
-| `AppSection` | URL 段 | 中文标签 | Pencil 屏 |
-| --- | --- | --- | --- |
-| `workbench` | `dashboard` | 工作台 | S1 / S2 |
-| `projects` | `projects` | 项目 | Projects Light / Dark 三栏屏 |
-| `canvas` | `canvas` | 画布 | S3 |
-| `renderer` | `shots` | 镜头 | S4 |
-| `export` | `export` | 导出 | S5 |
-| `settings` | `settings` | 设置 | S6 |
+| `AppSection` | URL 段      | 中文标签 | Pencil 屏                    |
+| ------------ | ----------- | -------- | ---------------------------- |
+| `workbench`  | `dashboard` | 工作台   | S1 / S2                      |
+| `projects`   | `projects`  | 项目     | Projects Light / Dark 三栏屏 |
+| `canvas`     | `canvas`    | 画布     | S3                           |
+| `renderer`   | `shots`     | 镜头     | S4                           |
+| `export`     | `export`    | 导出     | S5                           |
+| `settings`   | `settings`  | 设置     | S6                           |
 
 ## 7. 设计稿路由名与实现路由名
 
 `Design-system-inventory.md` 的 S1–S6 用的是无前缀路由名。实现加了 `/products` 前缀。映射固定如下，两侧都不再改名：
 
-| Pencil 屏 | 设计稿路由 | 实现路由 |
-| --- | --- | --- |
-| S1 | `/workbench` | `/products/dashboard` |
-| S2 | `/workbench` New Project 态 | `/products/dashboard` 上的模态，不是独立路由 |
-| S3 | `/canvas/[projectId]` | `/products/canvas/[projectId]` |
-| S4 | `/shots/[shotId]` | `/products/shots/[shotId]?projectId=` |
-| S5 | `/export/[projectId]` | `/products/export/[projectId]` |
-| S6 | `/settings` | `/products/settings?projectId=` |
+| Pencil 屏 | 设计稿路由                  | 实现路由                                     |
+| --------- | --------------------------- | -------------------------------------------- |
+| S1        | `/workbench`                | `/products/dashboard`                        |
+| S2        | `/workbench` New Project 态 | `/products/dashboard` 上的模态，不是独立路由 |
+| S3        | `/canvas/[projectId]`       | `/products/canvas/[projectId]`               |
+| S4        | `/shots/[shotId]`           | `/products/shots/[shotId]?projectId=`        |
+| S5        | `/export/[projectId]`       | `/products/export/[projectId]`               |
+| S6        | `/settings`                 | `/products/settings?projectId=`              |
 
 S3 画布 DAG 节点 UI 唯一消费 `@/components/ui/pipeline-node`（Canonical `Qsovp`，状态枚举为领域 `NodeStatus`，含 `selected` 实例态）；禁止在 page 内联平行节点壳。`StageNode` / `ShotNode` / `AudioNode` / `ExportNode` 仅作 `/playbook` 标本，不挂载生产 React Flow。
 
@@ -379,14 +379,14 @@ Project（可变，L3 内部）
 
 ### 8.4 行为矩阵
 
-| 动作 | 结果 |
-| --- | --- |
-| 开启分享 | 新建 `ShareSnapshot`，`visibility = link`，分配 `shareId` |
-| 作者继续编辑项目 | 已有快照不变；L3 显示「当前项目已领先于分享版本」 |
-| 更新分享 | 新建下一版本快照并记录 `supersedes`；旧 `shareId` 默认失效 |
-| 关闭分享 | `visibility = private`；`/share/[shareId]` 返回 404，不返回 403 |
-| 运营精选 | `visibility = featured` + 分配 `caseSlug`，进入 `/artifacts` 与 sitemap |
-| 引用的 Artifact 被新版本取代 | 快照仍指向原 `contentHash`，不跟随；页面标注版本时间 |
+| 动作                         | 结果                                                                    |
+| ---------------------------- | ----------------------------------------------------------------------- |
+| 开启分享                     | 新建 `ShareSnapshot`，`visibility = link`，分配 `shareId`               |
+| 作者继续编辑项目             | 已有快照不变；L3 显示「当前项目已领先于分享版本」                       |
+| 更新分享                     | 新建下一版本快照并记录 `supersedes`；旧 `shareId` 默认失效              |
+| 关闭分享                     | `visibility = private`；`/share/[shareId]` 返回 404，不返回 403         |
+| 运营精选                     | `visibility = featured` + 分配 `caseSlug`，进入 `/artifacts` 与 sitemap |
+| 引用的 Artifact 被新版本取代 | 快照仍指向原 `contentHash`，不跟随；页面标注版本时间                    |
 
 ### 8.5 页面规则
 
@@ -407,12 +407,12 @@ Project（可变，L3 内部）
 
 应用内认证已落地（PLAN-002 阶段 A + 阶段 B），守卫分三层，各层职责不同，不可互相替代：
 
-| 层 | 位置 | 职责 | 刻意不做的事 |
-| --- | --- | --- | --- |
-| 入站 proxy | `src/proxy.ts` | 只拦 `/products/*`：无形状合法的会话 cookie → 302 `/login?next=` | **不查库**。只做 cookie 存在性与形状（43 位 base64url）判断；proxy 跑在每个请求上，连库会成为全站延迟与连接数压力。**不拦认证页**：按 cookie 形状把 `/login` 弹回 dashboard 会与页面级 302 `/login` 对残留失效 cookie 形成无限重定向循环（已踩过） |
-| 页面会话 | `withPageSession`（`src/features/auth/page-session.ts`），6 个 `/products/*` page 逐个包 | 查库校验会话（登出/过期/改密踢下线），建立 workspace 归属上下文后执行渲染体 | 不包在 layout 里：RSC 的 children 独立渲染，layout 的 AsyncLocalStorage 不传播到子页面 |
-| API 会话 | `withApiSession`（`src/features/auth/api-session.ts`），13 条业务 API 入口包裹 | 未登录统一 401 同一句文案；已登录则在归属上下文内执行 handler | 不靠 proxy 兜底（API 要 401/404 语义不是 302）；SSE 路由的流回调在 handler 内闭包捕获上下文 |
-| Admin 守卫基础 | `requireAdminSession` / `withAdminSession`（`src/features/auth/*-session.ts`） | 全局角色来自 `users.role`；页面未登录重定向、非 admin `notFound()`；API 未登录 401、非 admin 404 | workspace `owner` 不等于全局 admin；具体 `/admin/*` 页面与 `/api/admin/*` 仍须逐入口接线后才可在 §9.2 核销 |
+| 层             | 位置                                                                                     | 职责                                                                                             | 刻意不做的事                                                                                                                                                                                                                                       |
+| -------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 入站 proxy     | `src/proxy.ts`                                                                           | 只拦 `/products/*`：无形状合法的会话 cookie → 302 `/login?next=`                                 | **不查库**。只做 cookie 存在性与形状（43 位 base64url）判断；proxy 跑在每个请求上，连库会成为全站延迟与连接数压力。**不拦认证页**：按 cookie 形状把 `/login` 弹回 dashboard 会与页面级 302 `/login` 对残留失效 cookie 形成无限重定向循环（已踩过） |
+| 页面会话       | `withPageSession`（`src/features/auth/page-session.ts`），6 个 `/products/*` page 逐个包 | 查库校验会话（登出/过期/改密踢下线），建立 workspace 归属上下文后执行渲染体                      | 不包在 layout 里：RSC 的 children 独立渲染，layout 的 AsyncLocalStorage 不传播到子页面                                                                                                                                                             |
+| API 会话       | `withApiSession`（`src/features/auth/api-session.ts`），13 条业务 API 入口包裹           | 未登录统一 401 同一句文案；已登录则在归属上下文内执行 handler                                    | 不靠 proxy 兜底（API 要 401/404 语义不是 302）；SSE 路由的流回调在 handler 内闭包捕获上下文                                                                                                                                                        |
+| Admin 守卫基础 | `requireAdminSession` / `withAdminSession`（`src/features/auth/*-session.ts`）           | 全局角色来自 `users.role`；页面未登录重定向、非 admin `notFound()`；API 未登录 401、非 admin 404 | workspace `owner` 不等于全局 admin；具体 `/admin/*` 页面与 `/api/admin/*` 仍须逐入口接线后才可在 §9.2 核销                                                                                                                                         |
 
 业务查询的 workspace 一律取自 `currentWorkspaceId()`（会话/队列上下文，无上下文即抛错不回落）；队列作业在领到的 attempt 行自身的 workspace 上下文内执行。`LOCAL_WORKSPACE_ID` 已降级为迁移/bootstrap/进程级配置锚点，由 `tests/workspace-context-contract.test.ts` 锁住。公开保留面：`/api/ping`（健康检查）、`/api/auth/*`、营销页与 `/playbook`。
 
@@ -420,22 +420,22 @@ Project（可变，L3 内部）
 
 ### 9.2 守卫矩阵（逐行核销）
 
-| 情况 | 响应 | 状态 |
-| --- | --- | --- |
-| 未登录访问 `/products/*` | 302 → `/login?next=`（proxy 形状拦截 + 页面查库兼校） | 已实现 |
-| 未登录访问 `/admin/*` | 302 → `/login?next=`（页面查库校验；proxy 若增加形状预检也不得替代页面校验） | 待实现 |
-| 已登录非 admin 访问 `/admin/*` | 404，不暴露后台是否存在 | 待实现 |
-| 已登录访问 `/login`、`/signup` | 302 → `/products/dashboard`（仅页面级 `redirectIfAuthenticated` 查库判定；proxy 不拦认证页，避免残留失效 cookie 的重定向循环） | 已实现 |
-| 未登录调业务 `/api/*` | 401 + 类别文案，不带用户信息、不回显 projectId | 已实现 |
-| 未登录调 `/api/admin/*` | 401 + 类别文案 | 待实现 |
-| 已登录非 admin 调 `/api/admin/*` | 404，不返回 403 | 待实现 |
-| `projectId` 不存在或不属于当前 workspace | 404（查询按会话 workspace 过滤，命中 0 即不存在） | 已实现 |
-| `shotId` 不属于该 `projectId`，或节点类型不是 `shot-codegen` | 404 | 已实现 |
-| `shareId` 不存在、已撤销、已被新版本取代 | 404 | 已实现（与认证无关） |
-| `caseSlug` 不存在 | 404 | 已实现（与认证无关） |
-| 上下文缺失但路由本身合法 | 不进入页面；侧栏项禁用并给出原因 | 已实现 |
-| 非生产环境外访问 `/playbook/*` | 404 | 已实现（与认证无关） |
-| 营销页 AI 演示（LaunchComposer） | 未登录先弹登录引导并中止；登录后创建 `website` 项目、统一启动并进入画布，不直接访问 worker | 已实现 |
+| 情况                                                         | 响应                                                                                                                           | 状态                                                      |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| 未登录访问 `/products/*`                                     | 302 → `/login?next=`（proxy 形状拦截 + 页面查库兼校）                                                                          | 已实现                                                    |
+| 未登录访问 `/admin/*`                                        | 302 → `/login?next=`（页面查库校验；proxy 若增加形状预检也不得替代页面校验）                                                   | 部分实现（当前 wired 页已覆盖；users/billing 待后续批次） |
+| 已登录非 admin 访问 `/admin/*`                               | 404，不暴露后台是否存在                                                                                                        | 部分实现（当前 wired 页已覆盖；users/billing 待后续批次） |
+| 已登录访问 `/login`、`/signup`                               | 302 → `/products/dashboard`（仅页面级 `redirectIfAuthenticated` 查库判定；proxy 不拦认证页，避免残留失效 cookie 的重定向循环） | 已实现                                                    |
+| 未登录调业务 `/api/*`                                        | 401 + 类别文案，不带用户信息、不回显 projectId                                                                                 | 已实现                                                    |
+| 未登录调 `/api/admin/*`                                      | 401 + 类别文案                                                                                                                 | 部分实现（当前 wired API 已覆盖）                         |
+| 已登录非 admin 调 `/api/admin/*`                             | 404，不返回 403                                                                                                                | 部分实现（当前 wired API 已覆盖）                         |
+| `projectId` 不存在或不属于当前 workspace                     | 404（查询按会话 workspace 过滤，命中 0 即不存在）                                                                              | 已实现                                                    |
+| `shotId` 不属于该 `projectId`，或节点类型不是 `shot-codegen` | 404                                                                                                                            | 已实现                                                    |
+| `shareId` 不存在、已撤销、已被新版本取代                     | 404                                                                                                                            | 已实现（与认证无关）                                      |
+| `caseSlug` 不存在                                            | 404                                                                                                                            | 已实现（与认证无关）                                      |
+| 上下文缺失但路由本身合法                                     | 不进入页面；侧栏项禁用并给出原因                                                                                               | 已实现                                                    |
+| 非生产环境外访问 `/playbook/*`                               | 404                                                                                                                            | 已实现（与认证无关）                                      |
+| 营销页 AI 演示（LaunchComposer）                             | 未登录先弹登录引导并中止；登录后创建 `website` 项目、统一启动并进入画布，不直接访问 worker                                     | 已实现                                                    |
 
 一律用 404 掩盖归属错误，不区分「不存在」与「无权限」，避免泄露其他 workspace 中对象是否存在。前端不得为了让页面渲染成功而隐式创建缺失数据。
 
@@ -465,13 +465,13 @@ Project（可变，L3 内部）
 
 删除前必须先验证等价功能已在新 URL 可用。
 
-| 资产 | 处置 | 理由 | 状态 |
-| --- | --- | --- | --- |
-| `src/app/products/(app)/canvas/[projectId]/canvas-inspector.tsx` | 修 artifact href 的 `projectId` 编码 | §4.3 | ✅ 已完成（ISSUE-009） |
-| `src/app/robots.ts` | 增加 `/share/` 到 disallow | §8.5 | ✅ 已完成（ISSUE-009） |
-| `src/app/sitemap.ts` | 增加 `/artifacts` 与 featured 案例 | §3 | ⏳ 结构就绪，待 `ShareSnapshot` 落盘后接入（见 `sitemap.ts` 注释） |
-| `src/components/ui/empty-state.tsx` | token 收敛：仍在用 `text-label-secondary` / `text-label-tertiary` 等历史 token | design-system-inventory §4 要求新 Canonical 组件只用 `ds-*` | ✅ 已完成（ISSUE-009） |
-| `font-sc` class | 全仓库未定义，`button.tsx`、`empty-state.tsx` 仍在挂 | 空类名，应删或补定义 | ✅ 已删除（ISSUE-009） |
+| 资产                                                             | 处置                                                                           | 理由                                                        | 状态                                                               |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------- | ------------------------------------------------------------------ |
+| `src/app/products/(app)/canvas/[projectId]/canvas-inspector.tsx` | 修 artifact href 的 `projectId` 编码                                           | §4.3                                                        | ✅ 已完成（ISSUE-009）                                             |
+| `src/app/robots.ts`                                              | 增加 `/share/` 到 disallow                                                     | §8.5                                                        | ✅ 已完成（ISSUE-009）                                             |
+| `src/app/sitemap.ts`                                             | 增加 `/artifacts` 与 featured 案例                                             | §3                                                          | ⏳ 结构就绪，待 `ShareSnapshot` 落盘后接入（见 `sitemap.ts` 注释） |
+| `src/components/ui/empty-state.tsx`                              | token 收敛：仍在用 `text-label-secondary` / `text-label-tertiary` 等历史 token | design-system-inventory §4 要求新 Canonical 组件只用 `ds-*` | ✅ 已完成（ISSUE-009）                                             |
+| `font-sc` class                                                  | 全仓库未定义，`button.tsx`、`empty-state.tsx` 仍在挂                           | 空类名，应删或补定义                                        | ✅ 已删除（ISSUE-009）                                             |
 
 错误与未找到边界（`not-found.tsx` ×2、`error.tsx`、`global-error.tsx`、`route-status.tsx`）已落盘，见 §3.1。
 
@@ -491,11 +491,11 @@ Project（可变，L3 内部）
 
 三处命名与领域术语重叠，属已知代价，不再改动，但新增路由不得继续加重：
 
-| 名字 | 在路由里的意思 | 容易混淆的对象 |
-| --- | --- | --- |
-| `/products/*` | 制作应用本体 | 被营销的 Product 实体 |
-| `/artifacts` | 对外案例库 | `artifacts` 表（渲染产物记录） |
-| `/release` | 未来发布流程入口 | 已作废的 Release 六步模型 |
+| 名字          | 在路由里的意思   | 容易混淆的对象                 |
+| ------------- | ---------------- | ------------------------------ |
+| `/products/*` | 制作应用本体     | 被营销的 Product 实体          |
+| `/artifacts`  | 对外案例库       | `artifacts` 表（渲染产物记录） |
+| `/release`    | 未来发布流程入口 | 已作废的 Release 六步模型      |
 
 案例库页面引用产物时必须写明它读的是 `Artifact` 记录，避免第二列的混淆继续扩散。
 
@@ -514,11 +514,11 @@ Project（可变，L3 内部）
 
 ## 15. 待锁定决策
 
-| 编号 | 问题 | 建议 |
-| --- | --- | --- |
-| D1 | `shots` / `settings` 的项目上下文用 query 还是嵌到 `/products/projects/[projectId]/*` | 保留扁平形态匹配 Pencil；用统一的 `resolveProjectContext` 收敛守卫，避免每页重复校验。改动窗口在认证落地前最便宜 |
-| D2 | 认证接入的时间点 | 建议排在 `/share` 之前。`/share` 会引入第一个真正的公开读路径，此时如果 L3 仍无认证，公私边界无法验证 |
-| D3 | `/artifacts` 是否需要分类、标签或搜索 | 首版只做时间序列表；等真实案例数量再定 |
-| D4 | 分享是否需要有效期与访问口令 | 首版只做 `private` / `link` / `featured` 三态 |
-| D5 | `/playbook/*` 在生产环境的可见性 | 建议非生产才注册路由，避免内部组件表面对外可达 |
-| D6 | 营销首页与 `/artifacts` 的互相入口位置 | 等 Pencil 补画，不在页面里临时加导航 |
+| 编号 | 问题                                                                                  | 建议                                                                                                             |
+| ---- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| D1   | `shots` / `settings` 的项目上下文用 query 还是嵌到 `/products/projects/[projectId]/*` | 保留扁平形态匹配 Pencil；用统一的 `resolveProjectContext` 收敛守卫，避免每页重复校验。改动窗口在认证落地前最便宜 |
+| D2   | 认证接入的时间点                                                                      | 建议排在 `/share` 之前。`/share` 会引入第一个真正的公开读路径，此时如果 L3 仍无认证，公私边界无法验证            |
+| D3   | `/artifacts` 是否需要分类、标签或搜索                                                 | 首版只做时间序列表；等真实案例数量再定                                                                           |
+| D4   | 分享是否需要有效期与访问口令                                                          | 首版只做 `private` / `link` / `featured` 三态                                                                    |
+| D5   | `/playbook/*` 在生产环境的可见性                                                      | 建议非生产才注册路由，避免内部组件表面对外可达                                                                   |
+| D6   | 营销首页与 `/artifacts` 的互相入口位置                                                | 等 Pencil 补画，不在页面里临时加导航                                                                             |
