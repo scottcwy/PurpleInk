@@ -10,6 +10,16 @@ async function text(relativePath: string): Promise<string> {
 }
 
 describe("immutable production deployment", () => {
+  it("uses HTTPS Debian package sources before installing Web and Worker runtime packages", async () => {
+    for (const relativePath of ["Dockerfile", "server/Dockerfile"]) {
+      const dockerfile = await text(relativePath);
+      const httpsSources = "sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources";
+
+      expect(dockerfile).toContain(httpsSources);
+      expect(dockerfile.indexOf(httpsSources)).toBeLessThan(dockerfile.indexOf("apt-get update"));
+    }
+  });
+
   it("uses three immutable application images behind the only published Caddy ports", async () => {
     const compose = parse(await text("deploy/compose.yaml")) as {
       services: Record<string, Record<string, unknown>>;

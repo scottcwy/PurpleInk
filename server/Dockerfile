@@ -37,7 +37,8 @@ WORKDIR /repo
 # fonts-wqy-zenhei 而非 fonts-noto-cjk：见根 Dockerfile 同一处注释，本仓库构建
 # 网络环境下 60.2MB 的 fonts-noto-cjk 单文件反复下载失败，换成 7.5MB 的
 # fonts-wqy-zenhei（覆盖中文字形，本产品实际渲染的语言）。
-RUN apt-get update \
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
     && apt-get install -y --no-install-recommends -o Acquire::Retries=5 -o Acquire::http::Timeout=30 \
       ca-certificates \
       ffmpeg \
