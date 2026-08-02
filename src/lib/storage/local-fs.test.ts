@@ -70,15 +70,36 @@ describe('LocalFsStorage', () => {
     ).resolves.toBeUndefined()
   })
 
-  it('rejects keys that escape the root directory', async () => {
+  it('normalizes safe Windows separators below the root directory', async () => {
+    await storage.put(String.raw`nested\file.txt`, 'content')
+
+    expect(storage.localPath(String.raw`nested\file.txt`)).toBe(
+      path.join(root, 'nested', 'file.txt'),
+    )
+    expect((await storage.get('nested/file.txt')).toString()).toBe('content')
+  })
+
+  it('rejects traversal and foreign-platform absolute keys', async () => {
     const escapes = ['../outside.txt', '..\\outside.txt', 'a/../../outside.txt']
     for (const key of escapes) {
       await expect(storage.put(key, 'x')).rejects.toThrow(/root/)
       await expect(storage.get(key)).rejects.toThrow(/root/)
+      await expect(storage.exists(key)).rejects.toThrow(/root/)
       await expect(storage.delete(key)).rejects.toThrow(/root/)
       expect(() => storage.localPath(key)).toThrow(/root/)
     }
-    // 绝对路径 key 同样不得穿透 root。
-    await expect(storage.put('C:/temp/abs.txt', 'x')).rejects.toThrow(/root/)
+    const absoluteKeys = [
+      '/tmp/abs.txt',
+      'C:/temp/abs.txt',
+      String.raw`C:\temp\abs.txt`,
+      String.raw`\\server\share\abs.txt`,
+    ]
+    for (const key of absoluteKeys) {
+      await expect(storage.put(key, 'x')).rejects.toThrow(/root/)
+      await expect(storage.get(key)).rejects.toThrow(/root/)
+      await expect(storage.exists(key)).rejects.toThrow(/root/)
+      await expect(storage.delete(key)).rejects.toThrow(/root/)
+      expect(() => storage.localPath(key)).toThrow(/root/)
+    }
   })
 })

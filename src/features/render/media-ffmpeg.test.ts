@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { MediaAssemblyPlan } from './media-assembly'
-import { buildMediaAssemblyArgs } from './media-ffmpeg-args'
+import { buildMediaAssemblyArgs, escapeFilterPath } from './media-ffmpeg-args'
 
 vi.mock('server-only', () => ({}))
 
@@ -70,6 +70,12 @@ describe('buildMediaAssemblyArgs', () => {
     expect(filter).toContain('concat=n=2:v=0:a=1')
     expect(command).not.toContain('-an')
     expect(command).not.toContain('atempo')
+  })
+
+  it('preserves Windows absolute paths while escaping filter metacharacters', () => {
+    expect(escapeFilterPath(String.raw`C:\repo\assets\a'b[0].ass`)).toBe(
+      String.raw`C\:/repo/assets/a\'b\[0\].ass`,
+    )
   })
 
   it('keeps the off path exactly identical when the SFX input list is empty', () => {

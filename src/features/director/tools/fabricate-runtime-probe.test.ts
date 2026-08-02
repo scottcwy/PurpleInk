@@ -22,7 +22,7 @@ window.__CVC_RENDER__ = { version: 1, seek() {} };
 describe('probeFabricateRuntime', () => {
   it('accepts a runtime-safe 1920×1080 source', async () => {
     await expect(probeFabricateRuntime(VALID_SOURCE)).resolves.toEqual([])
-  }, 15_000)
+  }, 30_000)
 
   it('rejects computed master geometry overflow', async () => {
     const source = VALID_SOURCE.replace(

@@ -210,8 +210,10 @@ function videoFilterChain(input: MediaAssemblyArgsInput): string {
 }
 
 export function escapeFilterPath(file: string): string {
-  return path
-    .resolve(file)
+  const absolute = path.win32.isAbsolute(file) || path.posix.isAbsolute(file)
+    ? file
+    : path.resolve(file)
+  return absolute
     .replaceAll('\\', '/')
     .replace(':', String.raw`\:`)
     .replaceAll("'", String.raw`\'`)
