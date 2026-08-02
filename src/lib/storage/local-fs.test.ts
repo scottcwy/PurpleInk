@@ -71,8 +71,9 @@ describe('LocalFsStorage', () => {
   })
 
   it('normalizes safe Windows separators below the root directory', async () => {
-    await storage.put(String.raw`nested\file.txt`, 'content')
+    const storedKey = await storage.put(String.raw`nested\file.txt`, 'content')
 
+    expect(storedKey).toBe('nested/file.txt')
     expect(storage.localPath(String.raw`nested\file.txt`)).toBe(
       path.join(root, 'nested', 'file.txt'),
     )

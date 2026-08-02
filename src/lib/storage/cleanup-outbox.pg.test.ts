@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { createPgTestDatabase } from '@/lib/db/test/pg-test-database'
 import {
@@ -6,6 +9,9 @@ import {
   drainStorageCleanupRequests,
   enqueueStorageCleanupRequest,
 } from './cleanup-outbox'
+import { LocalFsStorage } from './local-fs'
+import type { RemoteObjectStore } from './remote-store'
+import { S3MirrorStorage } from './s3-mirror'
 
 vi.mock('server-only', () => ({}))
 
@@ -89,6 +95,56 @@ it('keeps failed cleanup retryable with only a safe failure code', async () => {
   })
   expect(new Date(rows[0]?.next_attempt_at ?? 0).getTime()).toBeGreaterThan(Date.now())
   expect(JSON.stringify(rows)).not.toContain('raw storage endpoint')
+})
+
+it('retries a failed mirror remote delete and settles it after recovery', async () => {
+  await enqueueStorageCleanupRequest(
+    {
+      workspaceId: WORKSPACE_ID,
+      storageKey: STORAGE_KEY,
+      reason: 'duplicate-upload',
+    },
+    { database: database.db },
+  )
+  const root = mkdtempSync(path.join(tmpdir(), 'purpleink-outbox-mirror-'))
+  const remote = new FailOnceDeleteRemoteStore()
+  const storage = new S3MirrorStorage(new LocalFsStorage(root), remote)
+  await storage.put(STORAGE_KEY, 'bytes')
+
+  try {
+    const first = await drainStorageCleanupRequests(
+      { workspaceId: WORKSPACE_ID, limit: 10 },
+      { database: database.db, storage },
+    )
+
+    expect(first).toEqual({ claimed: 1, deleted: 0, deferred: 1 })
+    expect(remote.objects.has(STORAGE_KEY)).toBe(true)
+    const [deferred] = await database.sql<{
+      failure_code: string
+      attempt_count: number
+    }[]>`
+      SELECT failure_code, attempt_count FROM storage_cleanup_requests
+    `
+    expect(deferred).toEqual({
+      failure_code: 'STORAGE_DELETE_FAILED',
+      attempt_count: 1,
+    })
+    expect(JSON.stringify(deferred)).not.toContain('remote-endpoint-sentinel')
+
+    await database.sql`
+      UPDATE storage_cleanup_requests SET next_attempt_at = now() - interval '1 second'
+    `
+    const second = await drainStorageCleanupRequests(
+      { workspaceId: WORKSPACE_ID, limit: 10 },
+      { database: database.db, storage },
+    )
+
+    expect(second).toEqual({ claimed: 1, deleted: 1, deferred: 0 })
+    expect(remote.objects.has(STORAGE_KEY)).toBe(false)
+    await expectCleanupRowCount(0)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 it('drains the exact newly-enqueued key even when the workspace has older work', async () => {
@@ -378,3 +434,28 @@ it('globally drains a bounded batch across workspaces', async () => {
     storage_key: keys[2],
   }])
 })
+
+class FailOnceDeleteRemoteStore implements RemoteObjectStore {
+  readonly objects = new Map<string, Buffer>()
+  private shouldFailDelete = true
+
+  async putObject(key: string, data: Buffer): Promise<void> {
+    this.objects.set(key, Buffer.from(data))
+  }
+
+  async getObject(key: string): Promise<Buffer | null> {
+    return this.objects.get(key) ?? null
+  }
+
+  async hasObject(key: string): Promise<boolean> {
+    return this.objects.has(key)
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    if (this.shouldFailDelete) {
+      this.shouldFailDelete = false
+      throw new Error('remote-endpoint-sentinel')
+    }
+    this.objects.delete(key)
+  }
+}

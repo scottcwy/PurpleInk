@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { canonicalizeStorageKey } from './storage-key'
 import type { StorageAdapter } from './types'
 
 /** 基于本地文件系统的存储适配器，所有 key 相对于 root 目录。 */
@@ -10,25 +11,20 @@ export class LocalFsStorage implements StorageAdapter {
   /** 把 key 解析到 root 内；越界（../、绝对路径）直接拒绝，防路径穿越。 */
   private resolve(key: string): string {
     const rootPath = path.resolve(this.root)
-    const normalizedKey = key.replaceAll('\\', '/')
-    if (
-      path.posix.isAbsolute(normalizedKey) ||
-      path.win32.isAbsolute(normalizedKey)
-    ) {
-      throw new Error(`storage key 越出 root 目录: ${key}`)
-    }
-    const resolved = path.resolve(rootPath, normalizedKey)
+    const canonicalKey = canonicalizeStorageKey(key)
+    const resolved = path.resolve(rootPath, canonicalKey)
     if (resolved !== rootPath && !resolved.startsWith(rootPath + path.sep)) {
-      throw new Error(`storage key 越出 root 目录: ${key}`)
+      throw new Error('storage key 越出 root 目录')
     }
     return resolved
   }
 
   async put(key: string, data: Buffer | Uint8Array | string): Promise<string> {
-    const file = this.resolve(key)
+    const canonicalKey = canonicalizeStorageKey(key)
+    const file = this.resolve(canonicalKey)
     await mkdir(path.dirname(file), { recursive: true })
     await writeFile(file, data)
-    return key
+    return canonicalKey
   }
 
   async get(key: string): Promise<Buffer> {

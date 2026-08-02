@@ -1,4 +1,4 @@
-/** 二进制产物存储适配器。Demo 用本地 FS；未来可换 S3 / COS / MinIO。 */
+/** 二进制产物存储适配器；工厂可配置本地 FS 或 S3/R2 持久镜像。 */
 export interface StorageAdapter {
   /** 写入内容，返回存储键（相对路径）。 */
   put(key: string, data: Buffer | Uint8Array | string): Promise<string>
