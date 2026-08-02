@@ -17,5 +17,6 @@ COPY scripts/setup/db-migrate.ts ./scripts/setup/db-migrate.ts
 COPY src/lib/db/migrate.ts ./src/lib/db/migrate.ts
 COPY src/lib/db/schema ./src/lib/db/schema
 COPY src/lib/db/migrations/pg ./src/lib/db/migrations/pg
+COPY src/lib/workflow ./src/lib/workflow
 
 CMD ["pnpm", "db:migrate"]

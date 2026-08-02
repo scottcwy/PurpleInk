@@ -31,6 +31,7 @@ test("builds a dedicated one-shot Postgres migration image", async () => {
   assert.match(dockerfile, /pnpm install --frozen-lockfile/);
   assert.match(dockerfile, /scripts\/setup\/db-migrate\.ts/);
   assert.match(dockerfile, /src\/lib\/db\/migrations\/pg/);
+  assert.match(dockerfile, /COPY src\/lib\/workflow \.\/src\/lib\/workflow/);
   assert.match(dockerfile, /CMD \["pnpm", "db:migrate"\]/);
   assert.ok(
     dockerfile.indexOf("pnpm install --frozen-lockfile") <
