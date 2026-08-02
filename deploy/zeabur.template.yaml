@@ -45,7 +45,7 @@ spec:
     2. **跑迁移**：手动重新部署一次 `migrate` 服务（跑完退出后如被平台
        自动重启，可在面板 Suspend；迁移幂等，二次执行无变更）。
     3. **不要给 worker 绑定公网域名**：仅私网可达，由 web 的
-       `/api/engine/*` rewrites 反代。
+       `/api/engine/*` 运行时 Route Handler 反代。
     4. **验收**：按 `docs/deployment/zeabur-setup.md` §5 验收清单执行。
   variables:
     - key: PURPLEINK_DOMAIN
@@ -153,7 +153,7 @@ spec:
             dir: /app/.data
         env:
           BACKEND_ORIGIN:
-            # 构建期 ARG 注入（next.config.ts rewrites 内联）；必须指向 worker 私网地址。
+            # web 运行时 Route Handler 读取；必须指向 worker 私网地址。
             default: http://worker.zeabur.internal:8787
             readonly: true
           DATABASE_URL:

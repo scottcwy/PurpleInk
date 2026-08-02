@@ -197,7 +197,8 @@
 
 ### 4.2 引擎代理
 
-`next.config.ts` 唯一 rewrite：`/api/engine/:path*` → `${BACKEND_ORIGIN || http://localhost:8787}/:path*`。
+`src/app/api/engine/[[...path]]/route.ts` 在运行时将 `/api/engine/:path*`
+转发到 `${BACKEND_ORIGIN || http://localhost:8787}/:path*`。
 
 | 前端路由 | worker 端点 |
 | --- | --- |
@@ -210,7 +211,7 @@
 规则：
 
 - 浏览器只打同源 `/api/engine/*`；客户端 base 固定由 `src/lib/api.ts` 的 `API_BASE` 提供，页面与组件不得直连 worker 端口。
-- worker 不对外暴露，生产走内网 `BACKEND_ORIGIN`。worker 当前 `Access-Control-Allow-Origin: *` 且无认证，因此暴露到公网即为未授权渲染入口。
+- worker 不对外暴露，生产走内网 `BACKEND_ORIGIN`；该值是运行时环境变量，不得内联到构建产物。worker 当前 `Access-Control-Allow-Origin: *` 且无认证，因此暴露到公网即为未授权渲染入口。
 - `statusUrl` 是 worker 相对路径（`/jobs/<id>`），前端消费时必须补 `API_BASE` 前缀，不得直接当作 Next 路由使用。
 
 ### 4.3 资源 URL 合同

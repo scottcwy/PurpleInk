@@ -13,7 +13,7 @@
 | 产物存储 | Cloudflare R2（免费额度 10GB，egress 永久免费） | 视频分发 egress 是成本大头，R2 是唯一免 egress 的 S3 系服务 |
 | 下载路径 | 预签名 URL + 302，不再由 Next 缓冲整文件 | 现有 `api/artifacts/[id]/route.ts` 整文件进内存，是待修缺陷 |
 | 入口 | Zeabur 网关（域名 + 自动 TLS）；Cloudflare Access 为可选加固 | Caddy 不随迁：basic_auth / CVC_ALLOWED_CIDRS / 自签证书均退役 |
-| 服务间通信 | Zeabur 服务内网 `<服务名>.zeabur.internal`；web→worker 经构建期 `BACKEND_ORIGIN` ARG 注入 | 已核实官方私网文档；`Dockerfile.web` 已改 ARG 可覆盖，默认值保持 compose 的 `worker:8787` |
+| 服务间通信 | Zeabur 服务内网 `<服务名>.zeabur.internal`；web→worker 由运行时 `BACKEND_ORIGIN` 环境变量控制 | `/api/engine/*` Route Handler 每次请求读取环境变量，不再依赖 Docker build ARG |
 | 数据库备份载体 | 独立常驻 `backup` 服务（`Dockerfile.backup`，Node 调度每日 pg_dump → R2） | Zeabur 无原生 cron 服务类型；平台卷自动备份仅作兜底双保险 |
 | 镜像构建 | 首选 Zeabur 直连 GitHub 构建；备选 CI 推 GHCR 预构建镜像 | Free/Dev 档构建机为 2C4G，若 Next 构建超时则切备选 |
 | 不迁移项 | Vercel / Supabase / Cloudflare Containers / D1 | 本轮评估已逐一否决，结论见对话记录与本文 §7 |
@@ -42,7 +42,7 @@
 | worker | 服务名 `worker`，自动匹配 Dockerfile.worker，仅私网可达 |
 | （新增）backup | 服务名 `backup`，自动匹配 Dockerfile.backup，每日 pg_dump 落 R2（§4.3） |
 
-Dockerfile 零改动（web 的 `BACKEND_ORIGIN` 已改构建期 ARG，默认值不变）：Zeabur monorepo
+Dockerfile 零特殊构建参数：`BACKEND_ORIGIN` 仅作为 web 运行时环境变量。Zeabur monorepo
 约定即 `Dockerfile.[服务名]` 自动匹配（官方文档 Deploying with Dockerfile，2026-05-12 版），
 仓库四个 Dockerfile 命名恰好符合。Zeabur 不支持 docker-compose YAML；服务编排已固化为
 `deploy/zeabur.template.yaml`（五服务，可从 YAML 一键创建），也可面板逐个创建。
@@ -127,8 +127,8 @@ S3_PRESIGN_TTL_SECONDS=300
    `docs/deployment/zeabur-setup.md` §2.2）
 4. `web`：Git 服务，服务名 `web`；绑定域名（Zeabur 网关自动 TLS）；
    挂卷 `/app/.data`；注入 `DATABASE_URL`（引用 PG 连接串）、
-   `BACKEND_ORIGIN=http://worker.zeabur.internal:8787`（**构建期 ARG**，
-   next.config.ts rewrites 内联，改动需重新部署生效）、S3 五变量及其余 `.env` 项
+   `BACKEND_ORIGIN=http://worker.zeabur.internal:8787`（**运行时环境变量**，
+   由 `/api/engine/*` Route Handler 逐请求读取）、S3 五变量及其余 `.env` 项
 5. `backup`：Git 服务，服务名 `backup`；仅私网；注入 `DATABASE_URL` + S3 五变量
 6. 环境变量全部通过面板注入，禁止写入镜像；密钥值不进 Git、不进本文档
 

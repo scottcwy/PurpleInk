@@ -84,7 +84,7 @@
 3. **web**：Git 服务，服务名 **`web`**；绑定域名（网关自动 TLS）
    - 挂卷：路径 **`/app/.data`**（产物本地热缓存 + 重启保留）
    - 填 §2.2 的 web 变量；`BACKEND_ORIGIN` 模板已内置 `http://worker.zeabur.internal:8787`
-     （**构建期 ARG**，改它需要重新部署才生效）
+     （运行时环境变量，由 `/api/engine/*` Route Handler 读取）
 4. **migrate**：Git 服务，服务名 **`migrate`**；仅注入 `DATABASE_URL` → 部署一次跑迁移
 5. **backup**：Git 服务，服务名 **`backup`**；注入 `DATABASE_URL` + S3 五变量
 
@@ -105,7 +105,7 @@
 
 ### 4.3 验证私网链路
 
-`web` 的 `/api/engine/*` rewrites 指向构建期内联的 `BACKEND_ORIGIN`。部署后浏览器
+`web` 的 `/api/engine/*` Route Handler 按请求读取 `BACKEND_ORIGIN`。部署后浏览器
 打开 `https://<域名>/api/engine/health`，应返回 worker 的 `GET /health` 200
 （走 web → worker 私网，worker 无公网入口）。
 
@@ -141,7 +141,7 @@
 | `migrate` 退出后平台重启循环 | 服务反复 Running/Exited | 幂等无害；跑完在面板 Suspend（§4.2） |
 | 挂卷服务无法零停机滚动部署 | 更新 web 时短暂断连 | 与 ISSUE-015 §9 的 P-5 约束一致：单实例 + recreate 更新，更新前确认队列排空（画布无 running 节点）。非正常重启（OOMKill、面板重启）会让 `task_attempts` / `canvas_nodes` 的 `running` 永久卡住（P-5 未落地，无 lease/reclaim），重启后必须人工核对：`select id,status from task_attempts where status='running';`，不得静默改回 `queued` 自动重试 |
 | PG 大版本漂移 | `pg_dump` 版本 < 服务器版本导致备份失败 | `Dockerfile.backup` 按官方模板 postgres:18 对齐客户端；若面板版本不同，改 `postgresql-client-XX` 重构建 |
-| `BACKEND_ORIGIN` 是构建期内联 | 改了值要重新部署 web 才生效 | 面板改后 Redeploy web；运行时 `engine-client` 读同一变量，两侧必须一致 |
+| `BACKEND_ORIGIN` 指向错误端口 | `/api/engine/*` 返回 502 | 修正 web 运行时环境变量；Route Handler 与 `engine-client` 读同一变量 |
 | Zeabur 平台自动备份 | 仅备份持久卷（PG 数据目录），非 SQL 级 | 作为 R2 pg_dump 的兜底双保险；恢复走面板下载 `data.sql` |
 
 ## 7. 后续迭代（CI 接入）预留

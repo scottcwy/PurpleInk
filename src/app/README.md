@@ -137,7 +137,8 @@ L3 的壳只有一处实现：`src/features/navigation/app-shell.tsx`。`(auth)`
 
 - 状态码固定语义：400 参数非法、404 不存在或不属于当前作用域、409 状态冲突、422 外部凭据校验失败。
 - 除 `/api/ping` 外全部 `dynamic = 'force-dynamic'`。
-- `/api/engine/*` 不在本目录，由 `next.config.ts` rewrite 到 worker（默认 `http://localhost:8787`）。
+- `/api/engine/*` 由 `api/engine/[[...path]]/route.ts` 在运行时读取 `BACKEND_ORIGIN`
+  并转发到 worker（本地默认 `http://localhost:8787`）。
 - 资源 URL 合同：Artifact 下载 `/api/artifacts/{id}?projectId={id}`；日志流 `/api/director/stream/{nodeId}?projectId={id}`；worker 视频 `${API_BASE}/jobs/{jobId}/video`。所有片段必须 `encodeURIComponent`。
 
 ## 8. 当前已知问题

@@ -47,10 +47,8 @@ test("builds a standalone pnpm Web image for the internal Worker", async () => {
 
   assert.match(dockerfile, /pnpm-lock\.yaml/);
   assert.match(dockerfile, /pnpm install --frozen-lockfile/);
-  // BACKEND_ORIGIN 必须是构建期可覆盖的 ARG（Zeabur 私网地址 worker.zeabur.internal），
-  // 默认值保持 compose 网络内的 worker:8787。
-  assert.match(dockerfile, /ARG BACKEND_ORIGIN=http:\/\/worker:8787/);
-  assert.match(dockerfile, /ENV BACKEND_ORIGIN=\$\{BACKEND_ORIGIN\}/);
+  assert.doesNotMatch(dockerfile, /ARG BACKEND_ORIGIN/);
+  assert.doesNotMatch(nextConfig, /async rewrites\(\)/);
   assert.match(dockerfile, /\.next\/standalone/);
   assert.match(dockerfile, /CMD \["node", "server\.js"\]/);
   assert.match(nextConfig, /output:\s*["']standalone["']/);
