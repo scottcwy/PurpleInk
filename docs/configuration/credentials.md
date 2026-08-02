@@ -115,3 +115,30 @@ pnpm tsx scripts/migration/provision-master-key.ts --env .env.local
 
 `server/` 只持有服务间认证 Key。它不得签发凭据租约、读取 provider credential，
 也不得在网关失败后直连供应商。
+
+## 9. S3/R2 与 PostgreSQL 备份凭据
+
+Artifact 字节（Web）与 PostgreSQL 备份归档（Backup 服务）都持久化到
+Cloudflare R2。两组服务通过同一组 S3 兼容变量读取凭据，变量名如下（值一律只
+写进 Zeabur Variables 面板或被忽略的环境文件，不回显）：
+
+- `S3_ENDPOINT` / `S3_BUCKET` / `S3_REGION`（R2 固定 `auto`）/
+  `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`
+
+边界：
+
+- Web 持有 Artifact R2 凭据（`STORAGE_MODE=s3-mirror` 路径消费）；
+- Backup 服务持有 PostgreSQL 备份 R2 凭据（同一组 `S3_*` 变量），另消费非
+  secret 的 `PG_BACKUP_PREFIX`（默认 `backups/postgres/`）与
+  `PG_BACKUP_RETAIN`（正整数，默认 14）；
+- Web 与 Backup 的 R2 token 可分别签发（Artifact bucket 与 Backup bucket，
+  均为写/读/删除 + `HeadObject`），轮换见 `docs/deployment/zeabur-setup.md`
+  §4；
+- **Worker 永不接收** `S3_*`、`DATABASE_URL`、`CVC_MANAGED_*` 或 `CVC_MAIL_*`；
+  它只持有 `PURPLEINK_ENGINE_INTERNAL_KEY` 与只读的
+  `PURPLEINK_AI_GATEWAY_ORIGIN`；
+- 恢复只允许进入空的、隔离的数据库；任何生产恢复决策之前先跑演练
+  （`scripts/verify/pg-backup-restore-drill.ts`）。
+
+部署与运维真值见 `docs/deployment/zeabur-plan.md` 与
+`docs/deployment/zeabur-setup.md`。

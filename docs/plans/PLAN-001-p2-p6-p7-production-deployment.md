@@ -1,5 +1,10 @@
 # PLAN-001 · P-2 / P-6 / P-7 生产部署完整修复计划
 
+> **HISTORICAL（2026-08-02 已被取代）**：本文是 2026-07-26 的 P-2 / P-6 / P-7
+> 生产部署计划的历史记录，只供追溯；文中编排 / 镜像 / 反向代理内容不再代表
+> 现行实现。当前部署真值见 `docs/deployment/zeabur-plan.md` 与
+> `docs/deployment/zeabur-setup.md`。
+
 > Historical note: the current deployment contract is deploy/compose.yaml,
 > deploy/Caddyfile, and docs/deployment/. This plan predates the immutable GHCR
 > stack; its Basic Auth and former reverse-proxy guidance is historical only.

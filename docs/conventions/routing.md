@@ -416,7 +416,7 @@ Project（可变，L3 内部）
 
 业务查询的 workspace 一律取自 `currentWorkspaceId()`（会话/队列上下文，无上下文即抛错不回落）；队列作业在领到的 attempt 行自身的 workspace 上下文内执行。`LOCAL_WORKSPACE_ID` 已降级为迁移/bootstrap/进程级配置锚点，由 `tests/workspace-context-contract.test.ts` 锁住。公开保留面：`/api/ping`（健康检查）、`/api/auth/*`、营销页与 `/playbook`。
 
-**入站边界已收敛为一套会话合同**（`docs/deployment/access.md`）：Caddy 只保留显式 CIDR 过滤、TLS、安全头和 SSE 透传；用户身份只由应用会话校验。反代不再承担第二次登录，Worker 只经 app 网络接受来自 Next 的服务间请求。
+**入站边界已收敛为 Zeabur 私服边界**：生产拓扑是 Zeabur 私有服务网络（`http://web.zeabur.internal:3000` / `http://worker.zeabur.internal:8787`），不存在自托管反向代理，没有反代层认证或 IP 白名单；用户身份只由应用会话校验（session-only）。Worker 无公网入口，只能经认证 AI 网关（`PURPLEINK_AI_GATEWAY_ORIGIN` 指向 `http://web.zeabur.internal:3000` + `PURPLEINK_ENGINE_INTERNAL_KEY`）访问 Web，不持有数据库或 R2 凭据。部署与运维真值见 `docs/deployment/zeabur-plan.md` 与 `docs/deployment/zeabur-setup.md`。
 
 ### 9.2 守卫矩阵（逐行核销）
 

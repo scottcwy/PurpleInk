@@ -76,4 +76,12 @@ describe("global environment isolation", () => {
 
     expect(webConfig).not.toMatch(/(?:getTtsEnv|tts\/config)/);
   });
+
+  it("documents the non-secret PostgreSQL backup prefix and retention for the Backup service", async () => {
+    const rootExample = await readFile(".env.example", "utf8");
+
+    // 非 secret 配置值允许直接出现在模板：Backup 服务（scripts/backup）消费。
+    expect(rootExample).toMatch(/^PG_BACKUP_PREFIX=backups\/postgres\/$/m);
+    expect(rootExample).toMatch(/^PG_BACKUP_RETAIN=14$/m);
+  });
 });

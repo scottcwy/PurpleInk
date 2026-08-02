@@ -361,4 +361,61 @@ describe("Zeabur production deployment", () => {
     expect(readme).toContain("deploy/zeabur.template.yaml");
     expect(readme).not.toMatch(/GHCR|Caddy|Docker Compose|immutable image/i);
   });
+
+  it("documents Zeabur and R2 as the active deployment truth with retired files removed", async () => {
+    const readme = await text("README.md");
+
+    for (const relativePath of [
+      "docs/deployment/zeabur-plan.md",
+      "docs/deployment/zeabur-setup.md",
+      "docs/integration/zeabur-predev-integration-2026-08-02.md",
+    ]) {
+      expect(
+        await missing(relativePath),
+        `missing active deployment doc: ${relativePath}`
+      ).toBe(false);
+    }
+    for (const relativePath of [
+      "docs/deployment/access.md",
+      "docs/deployment/runbook.md",
+    ]) {
+      expect(
+        await missing(relativePath),
+        `retired deployment doc still present: ${relativePath}`
+      ).toBe(true);
+    }
+
+    expect(readme).toContain("Node.js 22");
+    expect(readme).not.toContain("Node.js 24");
+  });
+
+  it("keeps the Zeabur plan and setup docs free of retired production guidance", async () => {
+    const [plan, setup] = await Promise.all([
+      text("docs/deployment/zeabur-plan.md"),
+      text("docs/deployment/zeabur-setup.md"),
+    ]);
+
+    for (const doc of [plan, setup]) {
+      expect(doc).toMatch(/Zeabur/i);
+      expect(doc).toContain("PostgreSQL 17.5");
+      expect(doc).toMatch(/R2/i);
+      expect(doc).toContain("PURPLEINK_ENGINE_INTERNAL_KEY");
+      expect(doc).toContain("worker.zeabur.internal");
+      expect(doc).not.toMatch(
+        /GHCR|Caddy|docker compose|docker-compose|compose\.yaml|PURPLEINK_IMAGE_TAG|immutable image/i
+      );
+    }
+
+    expect(plan).toContain("web.zeabur.internal");
+    expect(setup).toContain("PG_BACKUP_RETAIN");
+  });
+
+  it("points routing.md at the Zeabur private-service boundary instead of the retired proxy contract", async () => {
+    const routing = await text("docs/conventions/routing.md");
+
+    expect(routing).toContain("web.zeabur.internal");
+    expect(routing).toContain("worker.zeabur.internal");
+    expect(routing).not.toMatch(/access\.md/i);
+    expect(routing).not.toMatch(/Caddy/i);
+  });
 });

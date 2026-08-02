@@ -54,7 +54,7 @@ Director / 渲染 / 音频 / 模型路由这条链路的复发失败模式、取
 
 ## 环境要求
 
-- Node.js 24
+- Node.js 22
 - pnpm 10.30.0
 - Docker Desktop（用于本地 Postgres）
 - FFmpeg / ffprobe
@@ -117,6 +117,14 @@ docs/                     路由规范、迁移报告和浏览器证据
 ```
 
 TypeScript 别名 `@/*` 映射到 `src/*`。仓库使用 pnpm workspace 管理根应用与 `server/`，不要生成 npm lockfile。
+
+## 生产部署
+
+生产部署只走 Zeabur Git 构建：架构决策见
+[zeabur-plan.md](docs/deployment/zeabur-plan.md)，部署与运维见
+[zeabur-setup.md](docs/deployment/zeabur-setup.md)。结构化数据真值是
+PostgreSQL 17.5；Artifact 字节与 PostgreSQL 备份归档持久化在 Cloudflare R2。
+集成账本见 [zeabur-predev-integration-2026-08-02.md](docs/integration/zeabur-predev-integration-2026-08-02.md)。
 
 ## 生产边界
 
