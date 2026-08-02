@@ -4,7 +4,7 @@ import type { StorageAdapter } from './types'
 
 /** Local hot cache backed by an S3-compatible durable object store. */
 export class S3MirrorStorage implements StorageAdapter {
-  private readonly untrustedLocalKeys = new Set<string>()
+  private readonly trustedLocalKeys = new Set<string>()
 
   constructor(
     private readonly local: StorageAdapter,
@@ -22,12 +22,11 @@ export class S3MirrorStorage implements StorageAdapter {
   private async writeLocalCache(key: string, bytes: Buffer): Promise<void> {
     try {
       await this.local.put(key, bytes)
-      this.untrustedLocalKeys.delete(key)
+      this.trustedLocalKeys.add(key)
     } catch (writeError) {
-      this.untrustedLocalKeys.add(key)
+      this.trustedLocalKeys.delete(key)
       try {
         await this.local.delete(key)
-        this.untrustedLocalKeys.delete(key)
       } catch (deleteError) {
         throw new AggregateError(
           [writeError, deleteError],
@@ -41,7 +40,7 @@ export class S3MirrorStorage implements StorageAdapter {
   async get(key: string): Promise<Buffer> {
     const canonicalKey = canonicalizeStorageKey(key)
     if (
-      !this.untrustedLocalKeys.has(canonicalKey)
+      this.trustedLocalKeys.has(canonicalKey)
       && await this.local.exists(canonicalKey)
     ) {
       return this.local.get(canonicalKey)
@@ -57,7 +56,7 @@ export class S3MirrorStorage implements StorageAdapter {
   async exists(key: string): Promise<boolean> {
     const canonicalKey = canonicalizeStorageKey(key)
     if (
-      !this.untrustedLocalKeys.has(canonicalKey)
+      this.trustedLocalKeys.has(canonicalKey)
       && await this.local.exists(canonicalKey)
     ) return true
     return this.remote.hasObject(canonicalKey)
@@ -65,7 +64,7 @@ export class S3MirrorStorage implements StorageAdapter {
 
   localPath(key: string): string {
     const canonicalKey = canonicalizeStorageKey(key)
-    if (this.untrustedLocalKeys.has(canonicalKey)) {
+    if (!this.trustedLocalKeys.has(canonicalKey)) {
       throw new Error('untrusted local cache entry')
     }
     return this.local.localPath(canonicalKey)
@@ -73,15 +72,11 @@ export class S3MirrorStorage implements StorageAdapter {
 
   async delete(key: string): Promise<void> {
     const canonicalKey = canonicalizeStorageKey(key)
+    this.trustedLocalKeys.delete(canonicalKey)
     const results = await Promise.allSettled([
       this.local.delete(canonicalKey),
       this.remote.deleteObject(canonicalKey),
     ])
-    if (results[0].status === 'fulfilled') {
-      this.untrustedLocalKeys.delete(canonicalKey)
-    } else {
-      this.untrustedLocalKeys.add(canonicalKey)
-    }
     if (results.some((result) => result.status === 'rejected')) {
       throw new Error('存储对象删除失败')
     }

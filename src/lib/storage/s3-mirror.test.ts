@@ -189,9 +189,37 @@ describe('S3MirrorStorage', () => {
     expect(() => mirror.localPath('durable.bin')).toThrow(/untrusted/i)
   })
 
+  it('does not trust residual local bytes after adapter recreation', async () => {
+    local.putError = new Error('local write sentinel')
+    local.deleteError = new Error('local delete sentinel')
+    await expect(mirror.put('durable.bin', 'stale')).rejects.toBeInstanceOf(
+      AggregateError,
+    )
+    expect(await local.get('durable.bin')).toEqual(Buffer.from('stale'))
+    remote.objects.delete('durable.bin')
+    local.putError = undefined
+    local.deleteError = undefined
+
+    const recreated = new S3MirrorStorage(local, remote)
+
+    await expect(recreated.exists('durable.bin')).resolves.toBe(false)
+    expect(remote.hasKeys).toEqual(['durable.bin'])
+    expect(() => recreated.localPath('durable.bin')).toThrow(/untrusted/i)
+
+    remote.objects.set('durable.bin', Buffer.from('fresh'))
+    await expect(recreated.get('durable.bin')).resolves.toEqual(
+      Buffer.from('fresh'),
+    )
+    expect(remote.getKeys).toEqual(['durable.bin'])
+    expect(await local.get('durable.bin')).toEqual(Buffer.from('fresh'))
+    expect(recreated.localPath('durable.bin')).toBe(
+      local.localPath('durable.bin'),
+    )
+  })
+
   it('reads locally first and refills a missing cache from remote', async () => {
     remote.objects.set('remote-only.bin', Buffer.from('remote'))
-    await local.put('local.bin', 'local')
+    await mirror.put('local.bin', 'local')
 
     await expect(mirror.get('local.bin')).resolves.toEqual(Buffer.from('local'))
     expect(remote.getKeys).toEqual([])
@@ -203,7 +231,7 @@ describe('S3MirrorStorage', () => {
   })
 
   it('checks local existence before remote existence', async () => {
-    await local.put('local.bin', 'local')
+    await mirror.put('local.bin', 'local')
     remote.objects.set('remote.bin', Buffer.from('remote'))
 
     await expect(mirror.exists('local.bin')).resolves.toBe(true)
@@ -229,7 +257,7 @@ describe('S3MirrorStorage', () => {
     expect(remote.objects.has('artifact.bin')).toBe(false)
   })
 
-  it('quarantines a failed local delete until a later local delete succeeds', async () => {
+  it('keeps localPath untrusted after a retry deletes quarantined bytes', async () => {
     await mirror.put('artifact.bin', 'bytes')
     local.deleteError = new Error('local path sentinel')
 
@@ -243,7 +271,7 @@ describe('S3MirrorStorage', () => {
 
     local.deleteError = undefined
     await expect(mirror.delete('artifact.bin')).resolves.toBeUndefined()
-    expect(mirror.localPath('artifact.bin')).toBe(local.localPath('artifact.bin'))
+    expect(() => mirror.localPath('artifact.bin')).toThrow(/untrusted/i)
   })
 
   it('still deletes local when remote delete fails and returns a safe error', async () => {
@@ -256,6 +284,7 @@ describe('S3MirrorStorage', () => {
     await expect(operation).rejects.not.toThrow('remote endpoint sentinel')
     expect(await local.exists('artifact.bin')).toBe(false)
     expect(remote.objects.has('artifact.bin')).toBe(true)
+    expect(() => mirror.localPath('artifact.bin')).toThrow(/untrusted/i)
   })
 })
 
