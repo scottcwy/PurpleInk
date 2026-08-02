@@ -21,6 +21,7 @@ interface ZeaburService {
       github?: { branch?: string; repoID?: number };
     };
     env?: ZeaburEnvironment;
+    ports?: unknown[];
     volumes?: Array<{ dir?: string; id?: string }>;
   };
 }
@@ -72,12 +73,13 @@ function defaults(
 }
 
 describe("Zeabur production deployment", () => {
-  it("pins PostgreSQL 17.5 and builds exactly Web, Worker, and Migrate from zeabur/deploy", async () => {
+  it("pins PostgreSQL 17.5 and builds exactly Web, Worker, Migrate, and Backup from zeabur/deploy", async () => {
     const { raw, template } = await deploymentTemplate();
 
     expect(template.apiVersion).toBe("zeabur.com/v1");
     expect(template.kind).toBe("Template");
     expect(template.spec.services.map(({ name }) => name).sort()).toEqual([
+      "backup",
       "migrate",
       "postgresql",
       "web",
@@ -91,7 +93,7 @@ describe("Zeabur production deployment", () => {
       { id: "data", dir: "/var/lib/postgresql/data" },
     ]);
 
-    for (const name of ["web", "worker", "migrate"]) {
+    for (const name of ["web", "worker", "migrate", "backup"]) {
       const application = service(template, name);
       expect(application.template).toBe("GIT");
       expect(application.spec.source.github).toMatchObject({
@@ -175,14 +177,43 @@ describe("Zeabur production deployment", () => {
     });
   });
 
-  it("builds three Node 22 images with their minimum runtime closures", async () => {
-    const [web, worker, migrate] = await Promise.all([
+  it("gives Backup only its database and R2 boundary with no ports or volumes", async () => {
+    const { template } = await deploymentTemplate();
+    const backup = service(template, "backup");
+
+    expect(backup.template).toBe("GIT");
+    expect(backup.spec.source.github).toMatchObject({
+      branch: "zeabur/deploy",
+    });
+    expect(backup.dependencies).toEqual(["postgresql"]);
+    expect(backup.spec.ports).toBeUndefined();
+    expect(backup.spec.volumes).toBeUndefined();
+
+    const backupEnvironment = defaults(backup.spec.env);
+    expect(backupEnvironment).toEqual({
+      DATABASE_URL: "${POSTGRES_CONNECTION_STRING}",
+      S3_ENDPOINT: "",
+      S3_BUCKET: "",
+      S3_REGION: "auto",
+      S3_ACCESS_KEY_ID: "",
+      S3_SECRET_ACCESS_KEY: "",
+      PG_BACKUP_PREFIX: "backups/postgres/",
+      PG_BACKUP_RETAIN: "14",
+    });
+    expect(Object.keys(backupEnvironment).join("\n")).not.toMatch(
+      /CVC_MANAGED_|CVC_MAIL_|STORAGE_MODE|PURPLEINK_/
+    );
+  });
+
+  it("builds four Node 22 images with their minimum runtime closures", async () => {
+    const [web, worker, migrate, backup] = await Promise.all([
       text("Dockerfile.web"),
       text("Dockerfile.worker"),
       text("Dockerfile.migrate"),
+      text("Dockerfile.backup"),
     ]);
 
-    for (const dockerfile of [web, worker, migrate]) {
+    for (const dockerfile of [web, worker, migrate, backup]) {
       expect(dockerfile).toMatch(/^FROM node:22-bookworm-slim/m);
       expect(dockerfile).toContain("COPY patches patches");
       expect(dockerfile).toContain(
@@ -249,6 +280,13 @@ describe("Zeabur production deployment", () => {
     }
     expect(migrate).not.toMatch(/COPY (assets|public|server\/src)/);
     expect(migrate).toContain('CMD ["pnpm", "db:migrate"]');
+
+    expect(backup).not.toContain("COPY . .");
+    expect(backup).toContain("postgresql-client-17");
+    expect(backup).not.toMatch(/node:24|postgresql-client-18/);
+    expect(backup).toContain(
+      'CMD ["pnpm", "tsx", "scripts/backup/schedule.ts"]'
+    );
   });
 
   it("removes the Compose, Caddy, GHCR guard, and browser harness runtime", async () => {
@@ -296,6 +334,7 @@ describe("Zeabur production deployment", () => {
       "./Dockerfile.web",
       "./Dockerfile.worker",
       "./Dockerfile.migrate",
+      "./Dockerfile.backup",
     ]) {
       expect(workflow).toContain(dockerfile);
     }

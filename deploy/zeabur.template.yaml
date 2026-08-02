@@ -196,3 +196,31 @@ spec:
         env:
           DATABASE_URL:
             default: ${POSTGRES_CONNECTION_STRING}
+    - name: backup
+      icon: https://raw.githubusercontent.com/zeabur/service-icons/main/zeabur/nodejs.svg
+      template: GIT
+      dependencies:
+        - postgresql
+      spec:
+        id: backup
+        source:
+          github:
+            repoID: 1309522452
+            branch: zeabur/deploy
+        env:
+          DATABASE_URL:
+            default: ${POSTGRES_CONNECTION_STRING}
+          S3_ENDPOINT:
+            default: ""
+          S3_BUCKET:
+            default: ""
+          S3_REGION:
+            default: auto
+          S3_ACCESS_KEY_ID:
+            default: ""
+          S3_SECRET_ACCESS_KEY:
+            default: ""
+          PG_BACKUP_PREFIX:
+            default: backups/postgres/
+          PG_BACKUP_RETAIN:
+            default: "14"
