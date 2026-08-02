@@ -50,12 +50,13 @@ server/out
 server/capture
 *.mp4
 
-# 文档与历史记录（镜像不需要）
+# 文档与部署编排（镜像不需要）
 docs
+deploy
 README.md
 AGENTS.md
 
-# 跨目录契约测试与本地 compose（镜像不需要）
+# 跨目录契约测试与本地开发编排（镜像不需要）
 tests
 **/*.test.ts
 **/*.test.tsx
