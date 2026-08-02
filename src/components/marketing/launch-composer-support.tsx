@@ -50,7 +50,7 @@ export function Chip({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className="focus-ring rounded-full px-3 py-1 text-xs font-medium transition-colors"
+      className="focus-ring min-h-11 rounded-full px-3 py-1 text-xs font-medium transition-colors"
       style={{
         backgroundColor: active
           ? '#352e82'
@@ -76,7 +76,7 @@ export function ComposerSettings({
 }): ReactNode {
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-2 pt-4">
-      <div className="flex items-center gap-1.5">
+      <div role="group" aria-label="视频质量" className="flex items-center gap-1.5">
         <span className="text-muted-foreground mr-0.5 text-xs">质量</span>
         {QUALITY_OPTS.map((option) => (
           <Chip
@@ -88,7 +88,7 @@ export function ComposerSettings({
           </Chip>
         ))}
       </div>
-      <div className="flex items-center gap-1.5">
+      <div role="group" aria-label="视频时长" className="flex items-center gap-1.5">
         <span className="text-muted-foreground mr-0.5 text-xs">时长</span>
         {DURATION_OPTS.map((seconds) => (
           <Chip

@@ -53,7 +53,7 @@
 
 `/community` 是无需认证的静态 catalog，只消费代码内受版本控制的目录和 `public/img/community/*`、`public/videos/community/*` 公开媒体；不得接入数据库、伪造动态统计或把内部 Artifact 暴露为社区素材。该页必须进入 sitemap。
 
-`/` 右上角 **Try it** 已接线到 `PRODUCTS_ROUTES.projects`（`/products/projects`），是进入 L3 的主 CTA。未登录点击会被 §9 的守卫收敛到 `/login?next=/products/projects`。首页 `LaunchComposer` 接收公开 HTTP(S) URL 后只创建 `website` 项目并调用 `/api/projects/[id]/start`，随后进入项目画布；不得绕过项目工作流直接轮询 `/api/engine/*` 或从营销页下载终片。Contact 与 footer 仍多为 `#` / 空串。
+`/` 右上角 **Try it** 已接线到 `PRODUCTS_ROUTES.projects`（`/products/projects`），是进入 L3 的主 CTA。未登录点击会被 §9 的守卫收敛到 `/login?next=/products/projects`。首页 `LaunchComposer` 接收公开 HTTP(S) URL 后只创建 `website` 项目并调用 `/api/projects/[id]/start`，随后进入项目画布；不得绕过项目工作流直接轮询 `/api/engine/*` 或从营销页下载终片。营销导航只保留真实链接：header 与 footer 的 **Community** 指向 `/community`，**Contact** 为 `mailto:support@purpleink.cn`；首页 showcase CTA「View community films」同样指向 `/community`。
 
 ### 2.2 L2 认证
 

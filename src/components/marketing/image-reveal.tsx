@@ -26,27 +26,27 @@ interface RevealOrigin {
   blur: number;
 }
 
-const REVEAL_ORIGINS: readonly RevealOrigin[] = [
+export const REVEAL_ORIGINS: readonly RevealOrigin[] = [
   {
-    xPercent: -400,
-    scaleX: 6,
-    scaleY: 0.3,
+    xPercent: -120,
+    scaleX: 1.18,
+    scaleY: 0.92,
     transformOrigin: "0% 50%",
-    blur: 10,
+    blur: 2,
   },
   {
     xPercent: 0,
-    scaleX: 0.7,
-    scaleY: 0.7,
+    scaleX: 0.94,
+    scaleY: 0.94,
     transformOrigin: "50% 50%",
-    blur: 5,
+    blur: 1,
   },
   {
-    xPercent: 400,
-    scaleX: 6,
-    scaleY: 0.3,
+    xPercent: 120,
+    scaleX: 1.18,
+    scaleY: 0.92,
     transformOrigin: "100% 50%",
-    blur: 10,
+    blur: 2,
   },
 ];
 

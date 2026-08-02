@@ -173,6 +173,7 @@ export function LaunchComposer(): ReactNode {
         {stage === 'input' && (
           <motion.form
             key="input"
+            noValidate
             onSubmit={(event) => {
               event.preventDefault()
               void run()
@@ -195,6 +196,9 @@ export function LaunchComposer(): ReactNode {
               placeholder="粘贴产品网址，例如 https://ui.shadcn.com"
               className="no-focus-ring text-foreground placeholder:text-muted-foreground relative z-10 h-full min-w-0 flex-1 bg-transparent pr-3 text-base font-medium focus:outline-none"
               aria-label="产品网址"
+              required
+              aria-invalid={Boolean(message)}
+              aria-describedby={message ? "product-url-error" : undefined}
             />
             <button type="submit" aria-label="创建网站视频项目" className="focus-ring rounded-full">
               <ActionCircle>
@@ -242,6 +246,17 @@ export function LaunchComposer(): ReactNode {
       </AnimatePresence>
 
       <AnimatePresence initial={false}>
+        {stage === 'input' && message && (
+          <motion.p
+            key="input-error"
+            id="product-url-error"
+            role="alert"
+            className="text-red-700 px-2 pt-3 text-sm font-medium dark:text-red-300"
+            {...accessory}
+          >
+            {message}
+          </motion.p>
+        )}
         {stage === 'input' && (
           <motion.div key="settings" className="overflow-hidden" {...accessory}>
             <ComposerSettings

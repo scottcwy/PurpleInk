@@ -43,13 +43,17 @@ const faqs: FAQItem[] = [
 
 function FAQItemComponent({
   item,
+  index,
   isOpen,
   onToggle,
 }: {
   item: FAQItem;
+  index: number;
   isOpen: boolean;
   onToggle: () => void;
 }) {
+  const buttonId = `faq-${index}-button`;
+  const answerId = `faq-${index}-answer`;
   return (
     <motion.div
       layout
@@ -57,8 +61,11 @@ function FAQItemComponent({
       transition={SPRING_SPATIAL_DEFAULT}
     >
       <button
+        id={buttonId}
         type="button"
         onClick={onToggle}
+        aria-expanded={isOpen}
+        aria-controls={answerId}
         className="flex w-full cursor-pointer items-center justify-between gap-4 px-6 py-5 text-left"
       >
         <span className="text-foreground text-base font-medium">
@@ -76,6 +83,9 @@ function FAQItemComponent({
       <AnimatePresence initial={false}>
         {isOpen && (
           <motion.div
+            id={answerId}
+            role="region"
+            aria-labelledby={buttonId}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -105,9 +115,9 @@ export function FAQ(): ReactNode {
       <div className="mx-auto max-w-7xl">
         <div className="grid items-start gap-12 lg:grid-cols-12 lg:gap-16">
           <div className="lg:col-span-6">
-            <p className="text-foreground text-4xl font-medium tracking-tight">
+            <h2 className="text-foreground text-4xl font-medium tracking-tight">
               Answers to your questions
-            </p>
+            </h2>
           </div>
 
           <div className="lg:col-span-6">
@@ -116,6 +126,7 @@ export function FAQ(): ReactNode {
                 <FAQItemComponent
                   key={faq.question}
                   item={faq}
+                  index={index}
                   isOpen={openIndex === index}
                   onToggle={() => handleToggle(index)}
                 />

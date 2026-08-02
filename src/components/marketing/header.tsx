@@ -14,7 +14,7 @@ import { PRODUCTS_ROUTES } from "@/features/navigation/products-routes";
 const navLinks = [{ href: "/community", label: "Community" }];
 
 const authLinks = [
-  { href: "", label: "Contact" },
+  { href: "mailto:support@purpleink.cn", label: "Contact" },
   { href: PRODUCTS_ROUTES.projects, label: "Try\u00A0it" },
 ];
 
@@ -143,7 +143,7 @@ export function Header(): ReactNode {
           <button
             type="button"
             onClick={toggleMenu}
-            className="focus-ring relative flex h-10 w-10 items-center justify-center lg:hidden"
+            className="focus-ring relative flex h-11 w-11 items-center justify-center lg:hidden"
             aria-label={isOpen ? "Close menu" : "Open menu"}
             aria-expanded={isOpen}
           >

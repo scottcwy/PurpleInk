@@ -2,7 +2,7 @@
 
 本文件是 `src/app` 目录的现状快照，供代理快速定位。**规范真值在 `docs/conventions/routing.md`**；本文件只描述「现在长什么样、每个文件干什么」。两者冲突时以规范为准，并在同一次改动中回写本文件。
 
-最后同步：2026-07-25。
+最后同步：2026-08-03。
 
 ## 1. 目录形状
 
@@ -95,7 +95,7 @@ L3 的壳只有一处实现：`src/features/navigation/app-shell.tsx`。`(auth)`
 
 | 路由 | 状态 | 说明 |
 | --- | --- | --- |
-| `/` | `wired` | 营销页。**已知缺口**：header / footer 链接全是 `#` 或空串，没有进入 L3 或 `/login` 的入口 |
+| `/` | `wired` | 营销页。header / footer / showcase 导航已接线：Community → `/community`、Contact → `mailto:support@purpleink.cn`、CTA「View community films」→ `/community`；无 `#` / 空串占位链接 |
 | `/products/dashboard` | `wired` | `listProjects()` + `getCanvasGraph()` 真实统计与最近项目 |
 | `/products/projects` | `wired` | 真实项目列表 |
 | `/products/canvas/[projectId]` | `wired` | 真实 DAG，节点动作打 `/api/director/*` 与 `/api/render` |
