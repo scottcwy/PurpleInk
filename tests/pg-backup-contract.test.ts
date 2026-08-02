@@ -7,6 +7,12 @@ import { parse } from "yaml";
 
 import type { BackupDeps } from "../scripts/backup/run-backup";
 import { parseRetain, runBackup } from "../scripts/backup/run-backup";
+import {
+  FIRST_RUN_DELAY_MS,
+  RETRY_INTERVAL_MS,
+  RUN_INTERVAL_MS,
+  createScheduler,
+} from "../scripts/backup/schedule";
 
 // ---------------------------------------------------------------------------
 // 部署契约：Zeabur Backup 服务、Dockerfile.backup、CI 矩阵。
@@ -180,6 +186,13 @@ const aws = vi.hoisted(() => {
         .name;
       if (name === "PutObjectCommand") {
         if (state.putError) throw state.putError;
+        // R2 强一致：上传成功后 ListObjectsV2 立即包含新 key，fake 同步该语义。
+        const uploadedKey = (command as { input: { Key?: string } }).input.Key;
+        if (uploadedKey) {
+          state.listResponse = state.listResponse ?? { Contents: [] };
+          state.listResponse.Contents = state.listResponse.Contents ?? [];
+          state.listResponse.Contents.push({ Key: uploadedKey });
+        }
         return {};
       }
       if (name === "HeadObjectCommand") {
@@ -346,6 +359,19 @@ describe("backup pipeline failure safety", () => {
     expect(message).not.toContain(SECRETS.databaseUrl);
   });
 
+  it("BACKUP_TEMP_FAILED hides raw OS errors when the temp directory cannot be created", async () => {
+    const tempBase = await mkdtemp(path.join(tmpdir(), "pg-backup-contract-"));
+    const blocker = path.join(tempBase, "blocker");
+    await writeFile(blocker, "not a directory");
+    try {
+      const { message } = await runAndCaptureError({ tempBase: blocker });
+      expect(message).toBe("BACKUP_TEMP_FAILED");
+      expect(message).not.toMatch(/ENOTDIR|EACCES|mkdtemp/iu);
+    } finally {
+      await rm(tempBase, { recursive: true, force: true });
+    }
+  });
+
   it("uploads verified bytes, rotates stale backups, and cleans the unique temp dir", async () => {
     aws.state.headResponse = { ContentLength: DUMP_BYTES.length };
     aws.state.listResponse = {
@@ -367,8 +393,10 @@ describe("backup pipeline failure safety", () => {
         createHash("sha256").update(DUMP_BYTES).digest("hex")
       );
       expect(result.retain).toBe(2);
-      // 轮转只基于列表返回的 key（donor 管线语义：新 key 不重复加入列表）。
+      // R2 强一致：列表包含刚上传的新 key（共 5 个），retain=2 保留最新
+      // 2 个（含新 key），删除最旧 3 个。
       expect(result.deleted).toEqual([
+        "backups/postgres/2026-07-30T00-00-00-000Z-proddb.dump",
         "backups/postgres/2026-07-29T00-00-00-000Z-proddb.dump",
         "backups/postgres/2026-07-28T00-00-00-000Z-proddb.dump",
       ]);
@@ -384,6 +412,90 @@ describe("backup pipeline failure safety", () => {
       expect(await readdir(tempBase)).toEqual([]);
     } finally {
       await rm(tempBase, { recursive: true, force: true });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 常驻调度器：定时器必须 ref'd（否则 Dockerfile.backup 进程立即退出）；
+// 成功/失败分别以 run/retry 间隔重排。冒烟测试用 5-20ms 真实短定时器。
+// ---------------------------------------------------------------------------
+
+describe("backup scheduler", () => {
+  it("keeps the keep-alive timer ref'd (no .unref()) so the container stays resident", async () => {
+    const source = await text("scripts/backup/schedule.ts");
+    expect(source).not.toContain(".unref()");
+  });
+
+  it("keeps the production entrypoint delays: 10s first run, 24h success, 1h retry", () => {
+    expect(FIRST_RUN_DELAY_MS).toBe(10 * 1000);
+    expect(RUN_INTERVAL_MS).toBe(24 * 60 * 60 * 1000);
+    expect(RETRY_INTERVAL_MS).toBe(60 * 60 * 1000);
+  });
+
+  it("runs once and reschedules with runInterval after success, logging single-line JSON", async () => {
+    const logLines: string[] = [];
+    const logSpy = vi.spyOn(console, "log").mockImplementation((line: string) => {
+      logLines.push(line);
+    });
+    let runs = 0;
+    const key = "backups/postgres/2026-07-31T08-30-05-123Z-proddb.dump";
+    const scheduler = createScheduler({
+      firstDelayMs: 5,
+      runIntervalMs: 20,
+      retryIntervalMs: 15,
+      run: async () => {
+        runs += 1;
+        return { key, sizeBytes: 42, sha256: "abc", retain: 2, deleted: [] };
+      },
+    });
+    scheduler.start();
+    try {
+      await vi.waitFor(() => {
+        expect(runs).toBeGreaterThanOrEqual(1);
+        expect(scheduler.nextDelayMs()).toBe(20);
+      });
+      const line = logLines[0];
+      expect(line).not.toContain("\n");
+      expect(JSON.parse(line)).toMatchObject({ status: "ok", key });
+    } finally {
+      scheduler.stop();
+      logSpy.mockRestore();
+    }
+  });
+
+  it("reschedules with retryInterval after failure, logging single-line JSON with the stable category", async () => {
+    const errorLines: string[] = [];
+    const errorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation((line: string) => {
+        errorLines.push(line);
+      });
+    let runs = 0;
+    const scheduler = createScheduler({
+      firstDelayMs: 5,
+      runIntervalMs: 20,
+      retryIntervalMs: 15,
+      run: async () => {
+        runs += 1;
+        throw new Error("PG_DUMP_FAILED");
+      },
+    });
+    scheduler.start();
+    try {
+      await vi.waitFor(() => {
+        expect(runs).toBeGreaterThanOrEqual(1);
+        expect(scheduler.nextDelayMs()).toBe(15);
+      });
+      const line = errorLines[0];
+      expect(line).not.toContain("\n");
+      expect(JSON.parse(line)).toMatchObject({
+        status: "failed",
+        message: "PG_DUMP_FAILED",
+      });
+    } finally {
+      scheduler.stop();
+      errorSpy.mockRestore();
     }
   });
 });

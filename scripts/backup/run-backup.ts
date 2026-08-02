@@ -11,8 +11,10 @@
  * 流程：pg_dump -Fc 到唯一临时目录 → 按实际字节算 SHA-256 → 上传 R2 →
  *      HeadObject 核对字节数（不符即中止，不做轮转）→ 轮转删除超出保留份数的旧备份。
  * 失败只抛稳定类别（PG_DUMP_FAILED / PG_DUMP_EMPTY / R2_UPLOAD_FAILED /
- * R2_VERIFY_FAILED / R2_LIST_FAILED / R2_ROTATE_FAILED），连接串/密钥值/
- * 底层 AWS 错误/原始 stderr 一律不回显。
+ * R2_VERIFY_FAILED / R2_LIST_FAILED / R2_ROTATE_FAILED / BACKUP_TEMP_FAILED），
+ * 连接串/密钥值/底层 AWS 错误/原始 stderr 一律不回显。
+ * BACKUP_TEMP_FAILED 覆盖临时目录的创建与清理失败：mkdtemp 失败、finally 清理
+ * 失败都归一为该类别（清理失败可能掩盖主错误，可接受，类别稳定）。
  */
 import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -101,13 +103,16 @@ async function listBackupKeys(
   bucket: string,
   prefix: string
 ): Promise<string[]> {
+  // 与 backupObjectKey 共用同一套前缀归一化：缺尾斜杠补上，避免匹配到
+  // backups/postgresql/ 这类兄弟前缀。
+  const normalizedPrefix = prefix.endsWith("/") ? prefix : `${prefix}/`;
   const keys: string[] = [];
   let token: string | undefined;
   do {
     const page = (await client.send(
       new ListObjectsV2Command({
         Bucket: bucket,
-        Prefix: prefix,
+        Prefix: normalizedPrefix,
         ContinuationToken: token,
       })
     )) as
@@ -139,7 +144,12 @@ export async function runBackup(deps: BackupDeps): Promise<BackupResult> {
     retain,
     databaseUrl,
   } = deps;
-  const workDirectory = await mkdtemp(path.join(tempBase, "pg-backup-"));
+  let workDirectory: string;
+  try {
+    workDirectory = await mkdtemp(path.join(tempBase, "pg-backup-"));
+  } catch {
+    throw new Error("BACKUP_TEMP_FAILED");
+  }
   try {
     const dumpFile = path.join(workDirectory, `${randomUUID()}.dump`);
     try {
@@ -199,8 +209,13 @@ export async function runBackup(deps: BackupDeps): Promise<BackupResult> {
 
     return { key, sizeBytes: bytes.length, sha256, retain, deleted: expired };
   } finally {
-    // 无论成功还是任意失败路径，都删除本次唯一的临时目录。
-    await rm(workDirectory, { recursive: true, force: true });
+    // 无论成功还是任意失败路径，都删除本次唯一的临时目录；清理失败归一为
+    // 稳定类别 BACKUP_TEMP_FAILED（可能掩盖主错误，可接受，类别稳定）。
+    try {
+      await rm(workDirectory, { recursive: true, force: true });
+    } catch {
+      throw new Error("BACKUP_TEMP_FAILED");
+    }
   }
 }
 

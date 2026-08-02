@@ -16,11 +16,13 @@ export interface BackupKeyInput {
 export function backupObjectKey(input: BackupKeyInput): string {
   const prefix = input.prefix.endsWith("/") ? input.prefix : `${input.prefix}/`;
   const stamp = input.timestamp.toISOString().replaceAll(/[:.]/gu, "-");
+  // 净化到 [a-z0-9-]：非字母数字统一转连字符、连续连字符折叠、首尾连字符去除。
   const database =
     input.database
       .toLowerCase()
-      .replaceAll(/[^a-z0-9-]+/gu, "-")
-      .replace(/^-+/u, "") || "postgres";
+      .replaceAll(/[^a-z0-9]+/gu, "-")
+      .replace(/-+/gu, "-")
+      .replace(/^-+|-+$/gu, "") || "postgres";
   return `${prefix}${stamp}-${database}.dump`;
 }
 

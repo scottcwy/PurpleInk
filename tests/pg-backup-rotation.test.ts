@@ -13,8 +13,9 @@ describe("backupObjectKey", () => {
       timestamp: new Date("2026-07-31T08:30:05.123Z"),
     });
     // 冒号/点替换为连字符：R2 key 安全，且 ISO 前缀保证新旧可按字符串排序。
+    // 数据库名净化到 [a-z0-9-]：连续连字符折叠、首尾连字符去除。
     expect(key).toBe(
-      "backups/postgres/2026-07-31T08-30-05-123Z-purple-ink-.dump"
+      "backups/postgres/2026-07-31T08-30-05-123Z-purple-ink.dump"
     );
   });
 
@@ -34,6 +35,25 @@ describe("backupObjectKey", () => {
       timestamp: new Date("2026-07-31T00:00:00.000Z"),
     });
     expect(key).toBe("backups/postgres/2026-07-31T00-00-00-000Z-postgres.dump");
+  });
+
+  it("collapses consecutive hyphens and trims trailing hyphens", () => {
+    const trailing = backupObjectKey({
+      prefix: "backups/postgres/",
+      database: "purple-ink-",
+      timestamp: new Date("2026-07-31T00:00:00.000Z"),
+    });
+    const consecutive = backupObjectKey({
+      prefix: "backups/postgres/",
+      database: "purple--ink--店",
+      timestamp: new Date("2026-07-31T00:00:00.000Z"),
+    });
+    expect(trailing).toBe(
+      "backups/postgres/2026-07-31T00-00-00-000Z-purple-ink.dump"
+    );
+    expect(consecutive).toBe(
+      "backups/postgres/2026-07-31T00-00-00-000Z-purple-ink.dump"
+    );
   });
 });
 
