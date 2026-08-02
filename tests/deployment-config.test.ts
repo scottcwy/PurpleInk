@@ -201,6 +201,8 @@ describe("Zeabur production deployment", () => {
     expect(web).toContain(
       "ARG BACKEND_ORIGIN=http://worker.zeabur.internal:8787"
     );
+    expect(web).toContain("ARG NEXT_PUBLIC_SITE_URL");
+    expect(web).toContain("ENV NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}");
     expect(web).toContain("COPY --from=build /repo/.next/standalone ./");
     expect(web).toContain(
       "COPY --from=build /repo/.next/static ./.next/static"
