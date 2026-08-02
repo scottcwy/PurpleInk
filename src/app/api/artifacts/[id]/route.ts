@@ -4,6 +4,7 @@ import {
   attachmentDisposition,
   artifactDownloadFilename,
   getArtifactDescriptor,
+  getArtifactDownloadRedirect,
   readArtifact,
   wantsAttachment,
 } from '@/features/artifacts'
@@ -49,6 +50,28 @@ async function handleGet(request: Request, params: Promise<{ id: string }>) {
         throw new Error('final delivery unavailable')
       }
     }
+    // 不带 download 时保持内联：画布检查器与成片预览都靠内联播放。
+    const attachment = wantsAttachment(query.get('download'))
+    const protectedVideo = candidate.kind === 'website-video-mp4'
+      || candidate.kind === 'final-mp4'
+    if (protectedVideo && !candidate.contentHash) {
+      throw new Error('protected artifact hash missing')
+    }
+    const redirect = await getArtifactDownloadRedirect(projectId, artifactId, {
+      attachment,
+    })
+    if (redirect) {
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: redirect,
+          'cache-control': 'private, no-store',
+          ...(protectedVideo
+            ? { 'x-content-sha256': candidate.contentHash ?? '' }
+            : {}),
+        },
+      })
+    }
     const { descriptor, bytes } = await readArtifact(projectId, artifactId)
     if (
       (descriptor.kind === 'website-video-mp4' || descriptor.kind === 'final-mp4')
@@ -60,8 +83,6 @@ async function handleGet(request: Request, params: Promise<{ id: string }>) {
     ) {
       throw new Error('website delivery hash mismatch')
     }
-    // 不带 download 时保持内联：画布检查器与成片预览都靠内联播放。
-    const attachment = wantsAttachment(query.get('download'))
     return new Response(new Uint8Array(bytes), {
       headers: {
         'content-type': artifactContentType(descriptor.kind),

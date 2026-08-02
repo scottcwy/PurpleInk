@@ -447,8 +447,16 @@ class FailOnceDeleteRemoteStore implements RemoteObjectStore {
     return this.objects.get(key) ?? null
   }
 
+  async getObjectMetadata(key: string): Promise<Record<string, string> | null> {
+    return this.objects.has(key) ? {} : null
+  }
+
   async hasObject(key: string): Promise<boolean> {
     return this.objects.has(key)
+  }
+
+  async presignGetUrl(key: string): Promise<string> {
+    return `https://example.test/${key}`
   }
 
   async deleteObject(key: string): Promise<void> {

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { RemoteObjectStore } from './remote-store'
 import { canonicalizeStorageKey } from './storage-key'
 import type { StorageAdapter } from './types'
@@ -14,7 +15,11 @@ export class S3MirrorStorage implements StorageAdapter {
   async put(key: string, data: Buffer | Uint8Array | string): Promise<string> {
     const canonicalKey = canonicalizeStorageKey(key)
     const bytes = Buffer.isBuffer(data) ? data : Buffer.from(data)
-    await this.remote.putObject(canonicalKey, bytes)
+    const contentSha256 = createHash('sha256').update(bytes).digest('hex')
+    this.trustedLocalKeys.delete(canonicalKey)
+    await this.remote.putObject(canonicalKey, bytes, {
+      metadata: { 'content-sha256': contentSha256 },
+    })
     await this.writeLocalCache(canonicalKey, bytes)
     return canonicalKey
   }
@@ -85,6 +90,24 @@ export class S3MirrorStorage implements StorageAdapter {
     }
     await this.writeLocalCache(canonicalKey, bytes)
     return this.local.localPath(canonicalKey)
+  }
+
+  async presignDownloadUrl(
+    key: string,
+    ttlSeconds: number,
+    options: {
+      expectedContentSha256?: string
+      response: { contentType?: string; contentDisposition?: string }
+    },
+  ): Promise<string> {
+    const canonicalKey = canonicalizeStorageKey(key)
+    if (options.expectedContentSha256 !== undefined) {
+      const metadata = await this.remote.getObjectMetadata(canonicalKey)
+      if (metadata?.['content-sha256'] !== options.expectedContentSha256) {
+        throw new Error('远端对象完整性校验失败')
+      }
+    }
+    return this.remote.presignGetUrl(canonicalKey, ttlSeconds, options.response)
   }
 
   async delete(key: string): Promise<void> {

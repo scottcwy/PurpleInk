@@ -5,7 +5,12 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3'
-import type { RemoteObjectStore } from './remote-store'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import type {
+  PresignGetResponseOverrides,
+  RemoteObjectStore,
+  RemotePutOptions,
+} from './remote-store'
 import { canonicalizeStorageKey } from './storage-key'
 
 export interface S3RemoteStoreConfig {
@@ -34,11 +39,16 @@ export class S3RemoteStore implements RemoteObjectStore {
     })
   }
 
-  async putObject(key: string, data: Buffer): Promise<void> {
+  async putObject(
+    key: string,
+    data: Buffer,
+    options?: RemotePutOptions,
+  ): Promise<void> {
     await this.client.send(new PutObjectCommand({
       Bucket: this.bucket,
       Key: canonicalizeStorageKey(key),
       Body: data,
+      Metadata: options?.metadata,
     }))
   }
 
@@ -57,16 +67,38 @@ export class S3RemoteStore implements RemoteObjectStore {
   }
 
   async hasObject(key: string): Promise<boolean> {
+    return (await this.getObjectMetadata(key)) !== null
+  }
+
+  async getObjectMetadata(key: string): Promise<Record<string, string> | null> {
     try {
-      await this.client.send(new HeadObjectCommand({
+      const response = await this.client.send(new HeadObjectCommand({
         Bucket: this.bucket,
         Key: canonicalizeStorageKey(key),
       }))
-      return true
+      return Object.fromEntries(
+        Object.entries(response.Metadata ?? {}).map(([name, value]) => [
+          name.toLowerCase(),
+          value,
+        ]),
+      )
     } catch (error) {
-      if (isNotFound(error)) return false
+      if (isNotFound(error)) return null
       throw error
     }
+  }
+
+  async presignGetUrl(
+    key: string,
+    ttlSeconds: number,
+    response?: PresignGetResponseOverrides,
+  ): Promise<string> {
+    return getSignedUrl(this.client, new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: canonicalizeStorageKey(key),
+      ResponseContentType: response?.contentType,
+      ResponseContentDisposition: response?.contentDisposition,
+    }), { expiresIn: ttlSeconds })
   }
 
   async deleteObject(key: string): Promise<void> {

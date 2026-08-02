@@ -7,6 +7,9 @@ import type { StorageAdapter } from './types'
 
 type StorageEnvironment = Record<string, string | undefined>
 
+/** Pre-signed download URLs are intentionally short-lived and private. */
+export const PRESIGN_TTL_SECONDS = 300
+
 export function createStorage(
   environment: StorageEnvironment = process.env,
   artifactsDirectory = ARTIFACTS_DIR,

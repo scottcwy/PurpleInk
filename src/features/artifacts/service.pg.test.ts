@@ -12,7 +12,11 @@ import {
   createPgTestDatabase,
   type PgTestDatabase,
 } from '@/lib/db/test/pg-test-database'
-import { getLatestArtifact, readArtifact } from './service'
+import {
+  getArtifactDownloadRedirect,
+  getLatestArtifact,
+  readArtifact,
+} from './service'
 
 /**
  * 跨 workspace 产物隔离（PLAN-002 §5.6 / §8.2 必测项）：
@@ -30,7 +34,10 @@ vi.mock('@/lib/db/client', () => ({
   getDb: getDbMock,
   LOCAL_WORKSPACE_ID: '00000000-0000-4000-8000-000000000001',
 }))
-vi.mock('@/lib/storage', () => ({ storage: { get: storageGetMock } }))
+vi.mock('@/lib/storage', () => ({
+  PRESIGN_TTL_SECONDS: 300,
+  storage: { get: storageGetMock },
+}))
 // 用例通过 contextRef 切换「当前登录者」的 workspace。
 vi.mock('@/lib/auth/workspace-context', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/auth/workspace-context')>()),
@@ -128,6 +135,18 @@ describe('artifacts 跨 workspace 隔离', () => {
     storageGetMock.mockClear()
     await expect(
       readArtifact(theirs.projectId, theirs.artifactId),
+    ).rejects.toThrow('产物不存在或不属于该项目')
+    expect(storageGetMock).not.toHaveBeenCalled()
+
+    await expect(
+      getArtifactDownloadRedirect(mine.projectId, mine.artifactId, {
+        attachment: false,
+      }),
+    ).resolves.toBeNull()
+    await expect(
+      getArtifactDownloadRedirect(theirs.projectId, theirs.artifactId, {
+        attachment: false,
+      }),
     ).rejects.toThrow('产物不存在或不属于该项目')
     expect(storageGetMock).not.toHaveBeenCalled()
 

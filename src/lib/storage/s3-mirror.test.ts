@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,17 +11,30 @@ vi.mock('server-only', () => ({}))
 
 class FakeRemoteStore implements RemoteObjectStore {
   readonly objects = new Map<string, Buffer>()
+  readonly metadata = new Map<string, Record<string, string>>()
   readonly putKeys: string[] = []
   readonly getKeys: string[] = []
   readonly hasKeys: string[] = []
+  readonly metadataKeys: string[] = []
   readonly deleteKeys: string[] = []
+  readonly presignCalls: Array<{
+    key: string
+    ttlSeconds: number
+    response?: { contentType?: string; contentDisposition?: string }
+  }> = []
+  readonly operationOrder: string[] = []
   putError: Error | undefined
   deleteError: Error | undefined
 
-  async putObject(key: string, data: Buffer): Promise<void> {
+  async putObject(
+    key: string,
+    data: Buffer,
+    options?: { metadata?: Record<string, string> },
+  ): Promise<void> {
     this.putKeys.push(key)
     if (this.putError) throw this.putError
     this.objects.set(key, Buffer.from(data))
+    this.metadata.set(key, { ...(options?.metadata ?? {}) })
   }
 
   async getObject(key: string): Promise<Buffer | null> {
@@ -34,10 +48,27 @@ class FakeRemoteStore implements RemoteObjectStore {
     return this.objects.has(key)
   }
 
+  async getObjectMetadata(key: string): Promise<Record<string, string> | null> {
+    this.metadataKeys.push(key)
+    this.operationOrder.push(`head:${key}`)
+    if (!this.objects.has(key)) return null
+    return { ...(this.metadata.get(key) ?? {}) }
+  }
+
   async deleteObject(key: string): Promise<void> {
     this.deleteKeys.push(key)
     if (this.deleteError) throw this.deleteError
     this.objects.delete(key)
+  }
+
+  async presignGetUrl(
+    key: string,
+    ttlSeconds: number,
+    response?: { contentType?: string; contentDisposition?: string },
+  ): Promise<string> {
+    this.operationOrder.push(`sign:${key}`)
+    this.presignCalls.push({ key, ttlSeconds, response })
+    return `https://r2.example.test/${key}`
   }
 }
 
@@ -95,6 +126,68 @@ describe('S3MirrorStorage', () => {
     expect(remote.hasKeys).toEqual(['nested/artifact.bin'])
     await mirror.delete(key)
     expect(remote.deleteKeys).toEqual(['nested/artifact.bin'])
+  })
+
+  it('stores the exact uploaded-byte SHA-256 as remote object metadata', async () => {
+    const bytes = Buffer.from('metadata bytes')
+    const digest = createHash('sha256').update(bytes).digest('hex')
+
+    await mirror.put('durable.bin', bytes)
+
+    expect(remote.metadata.get('durable.bin')).toEqual({
+      'content-sha256': digest,
+    })
+  })
+
+  it.each([
+    ['missing object', null],
+    ['missing metadata', {}],
+    ['mismatched metadata', { 'content-sha256': 'b'.repeat(64) }],
+  ])('fails presigning before URL generation for %s', async (_name, metadata) => {
+    remote.objects.set('durable.bin', Buffer.from('bytes'))
+    if (metadata) remote.metadata.set('durable.bin', metadata)
+    if (metadata === null) remote.objects.delete('durable.bin')
+
+    await expect(mirror.presignDownloadUrl('durable.bin', 300, {
+      expectedContentSha256: 'a'.repeat(64),
+      response: { contentType: 'video/mp4' },
+    })).rejects.toThrow()
+
+    expect(remote.metadataKeys).toEqual(['durable.bin'])
+    expect(remote.presignCalls).toEqual([])
+  })
+
+  it('heads protected bytes before signing with the same response overrides', async () => {
+    const digest = 'a'.repeat(64)
+    remote.objects.set('durable.bin', Buffer.from('bytes'))
+    remote.metadata.set('durable.bin', { 'content-sha256': digest })
+    const response = {
+      contentType: 'video/mp4',
+      contentDisposition: 'attachment; filename="final.mp4"',
+    }
+
+    await expect(mirror.presignDownloadUrl('durable.bin', 300, {
+      expectedContentSha256: digest,
+      response,
+    })).resolves.toBe('https://r2.example.test/durable.bin')
+
+    expect(remote.operationOrder).toEqual([
+      'head:durable.bin',
+      'sign:durable.bin',
+    ])
+    expect(remote.presignCalls).toEqual([{
+      key: 'durable.bin',
+      ttlSeconds: 300,
+      response,
+    }])
+  })
+
+  it('signs unprotected bytes without a metadata head', async () => {
+    await expect(mirror.presignDownloadUrl('spec.json', 300, {
+      response: { contentType: 'application/json' },
+    })).resolves.toBe('https://r2.example.test/spec.json')
+
+    expect(remote.operationOrder).toEqual(['sign:spec.json'])
   })
 
   it('rejects unsafe keys before either store is touched', async () => {

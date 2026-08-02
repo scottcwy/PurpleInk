@@ -4,7 +4,8 @@ import { and, desc, eq } from 'drizzle-orm'
 import { currentWorkspaceId } from '@/lib/auth/workspace-context'
 import { getDb } from '@/lib/db/client'
 import { artifacts } from '@/lib/db/schema/index'
-import { storage } from '@/lib/storage'
+import { PRESIGN_TTL_SECONDS, storage } from '@/lib/storage'
+import { presignArtifactDownload } from './presign'
 
 export interface ArtifactDescriptor {
   id: string
@@ -76,10 +77,7 @@ export async function getArtifactDescriptor(
   }
 }
 
-export async function readArtifact(
-  projectId: string,
-  artifactId: string
-): Promise<{ descriptor: ArtifactDescriptor; bytes: Buffer }> {
+async function findArtifactRow(projectId: string, artifactId: string) {
   const database = await getDb()
   const [row] = await database
     .select()
@@ -92,6 +90,14 @@ export async function readArtifact(
       )
     )
     .limit(1)
+  return row ?? null
+}
+
+export async function readArtifact(
+  projectId: string,
+  artifactId: string
+): Promise<{ descriptor: ArtifactDescriptor; bytes: Buffer }> {
+  const row = await findArtifactRow(projectId, artifactId)
   if (!row) throw new Error('产物不存在或不属于该项目')
   return {
     descriptor: {
@@ -105,4 +111,19 @@ export async function readArtifact(
   }
 }
 
+export async function getArtifactDownloadRedirect(
+  projectId: string,
+  artifactId: string,
+  options: { attachment: boolean },
+): Promise<string | null> {
+  const row = await findArtifactRow(projectId, artifactId)
+  if (!row) throw new Error('产物不存在或不属于该项目')
+  return presignArtifactDownload(storage, {
+    storageKey: row.storageKey,
+    kind: row.kind,
+    contentHash: row.contentHash,
+    attachment: options.attachment,
+    ttlSeconds: PRESIGN_TTL_SECONDS,
+  })
+}
 

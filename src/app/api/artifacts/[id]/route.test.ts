@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 
 const mocks = vi.hoisted(() => ({
   getArtifactDescriptor: vi.fn(),
+  getArtifactDownloadRedirect: vi.fn(),
   getExportReadiness: vi.fn(),
   getProjectExecutionSnapshot: vi.fn(),
   readArtifact: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock('@/features/artifacts', async () => {
   ])
   return {
     getArtifactDescriptor: mocks.getArtifactDescriptor,
+    getArtifactDownloadRedirect: mocks.getArtifactDownloadRedirect,
     readArtifact: mocks.readArtifact,
     artifactContentType: contentType.artifactContentType,
     artifactDownloadFilename: download.artifactDownloadFilename,
@@ -63,6 +65,7 @@ describe('GET /api/artifacts/[id]', () => {
       finalArtifactId: 'artifact-1',
       artifactDownloadable: true,
     })
+    mocks.getArtifactDownloadRedirect.mockResolvedValue(null)
   })
 
   it('serves the artifact inline by default', async () => {
@@ -100,6 +103,7 @@ describe('GET /api/artifacts/[id]', () => {
 
     expect(response.status).toBe(400)
     expect(mocks.readArtifact).not.toHaveBeenCalled()
+    expect(mocks.getArtifactDownloadRedirect).not.toHaveBeenCalled()
   })
 
   it('maps an ownership failure to 404 without leaking internals', async () => {
@@ -113,6 +117,7 @@ describe('GET /api/artifacts/[id]', () => {
     expect(response.status).toBe(404)
     await expect(response.text()).resolves.toBe('产物不存在')
     expect(response.headers.get('content-disposition')).toBeNull()
+    expect(mocks.getArtifactDownloadRedirect).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -134,6 +139,7 @@ describe('GET /api/artifacts/[id]', () => {
 
     expect(response.status).toBe(404)
     expect(mocks.readArtifact).not.toHaveBeenCalled()
+    expect(mocks.getArtifactDownloadRedirect).not.toHaveBeenCalled()
   })
 
   it('does not expose a blocked or rejected website video', async () => {
@@ -160,6 +166,71 @@ describe('GET /api/artifacts/[id]', () => {
     )
 
     expect(response.status).toBe(404)
+    expect(mocks.readArtifact).not.toHaveBeenCalled()
+    expect(mocks.getArtifactDownloadRedirect).not.toHaveBeenCalled()
+  })
+
+  it('redirects a ready final video only after the protected hash gate', async () => {
+    mocks.getArtifactDownloadRedirect.mockResolvedValue(
+      'https://r2.example.test/final-signed',
+    )
+
+    const response = await GET(
+      new Request(
+        'https://app.test/api/artifacts/artifact-1?projectId=project-1&download=true',
+      ),
+      { params: Promise.resolve({ id: 'artifact-1' }) },
+    )
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get('location')).toBe(
+      'https://r2.example.test/final-signed',
+    )
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    expect(response.headers.get('x-content-sha256')).toBe(HASH)
+    expect(mocks.getArtifactDownloadRedirect).toHaveBeenCalledWith(
+      'project-1',
+      'artifact-1',
+      { attachment: true },
+    )
+    expect(mocks.readArtifact).not.toHaveBeenCalled()
+  })
+
+  it('rejects a protected candidate without a DB hash before redirect or byte read', async () => {
+    mocks.getArtifactDescriptor.mockResolvedValue({
+      id: 'artifact-1',
+      projectId: 'project-1',
+      nodeId: null,
+      kind: 'final-mp4',
+      contentHash: null,
+    })
+
+    const response = await GET(
+      new Request('https://app.test/api/artifacts/artifact-1?projectId=project-1'),
+      { params: Promise.resolve({ id: 'artifact-1' }) },
+    )
+
+    expect(response.status).toBe(404)
+    expect(response.headers.get('location')).toBeNull()
+    expect(response.headers.get('x-content-sha256')).toBeNull()
+    expect(mocks.getArtifactDownloadRedirect).not.toHaveBeenCalled()
+    expect(mocks.readArtifact).not.toHaveBeenCalled()
+  })
+
+  it('maps remote metadata or signing failures to the same opaque 404', async () => {
+    mocks.getArtifactDownloadRedirect.mockRejectedValue(
+      new Error('remote content hash mismatch'),
+    )
+
+    const response = await GET(
+      new Request('https://app.test/api/artifacts/artifact-1?projectId=project-1'),
+      { params: Promise.resolve({ id: 'artifact-1' }) },
+    )
+
+    expect(response.status).toBe(404)
+    await expect(response.text()).resolves.toBe('产物不存在')
+    expect(response.headers.get('location')).toBeNull()
+    expect(response.headers.get('x-content-sha256')).toBeNull()
     expect(mocks.readArtifact).not.toHaveBeenCalled()
   })
 
@@ -205,6 +276,42 @@ describe('GET /api/artifacts/[id]', () => {
     expect(response.headers.get('content-type')).toBe('video/mp4')
     expect(response.headers.get('x-content-sha256')).toBe(contentHash)
     expect(response.headers.get('content-disposition')).toContain('attachment')
+  })
+
+  it('redirects only the current succeeded approved website delivery', async () => {
+    mocks.getArtifactDescriptor.mockResolvedValue({
+      id: 'website-artifact',
+      projectId: 'project-1',
+      nodeId: null,
+      kind: 'website-video-mp4',
+      contentHash: HASH,
+    })
+    mocks.getProjectExecutionSnapshot.mockResolvedValue({
+      state: 'succeeded',
+      delivery: {
+        artifactId: 'website-artifact',
+        lifecycle: 'approved',
+        downloadUrl:
+          '/api/artifacts/website-artifact?projectId=project-1',
+      },
+    })
+    mocks.getArtifactDownloadRedirect.mockResolvedValue(
+      'https://r2.example.test/website-signed',
+    )
+
+    const response = await GET(
+      new Request(
+        'https://app.test/api/artifacts/website-artifact?projectId=project-1',
+      ),
+      { params: Promise.resolve({ id: 'website-artifact' }) },
+    )
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get('location')).toBe(
+      'https://r2.example.test/website-signed',
+    )
+    expect(response.headers.get('x-content-sha256')).toBe(HASH)
+    expect(mocks.readArtifact).not.toHaveBeenCalled()
   })
 
   it('fails closed when website video bytes no longer match the registered hash', async () => {
