@@ -100,6 +100,7 @@ export function createStageRunner(
     let closed = false
     let closeAttempted = false
     let sessionPointerAttempted = false
+    let streamLogAttempted = false
     try {
       signal?.throwIfAborted()
       await transitionStageNode(
@@ -169,6 +170,7 @@ export function createStageRunner(
       signal?.throwIfAborted()
       await dependencies.runStageEffect(executionContext, signal)
       signal?.throwIfAborted()
+      streamLogAttempted = true
       await dependencies.repository.persistStreamLog({
         projectId,
         nodeId,
@@ -218,7 +220,19 @@ export function createStageRunner(
         signal,
       )
     } catch (error) {
+      if (signal?.aborted) {
+        if (session && !closeAttempted) {
+          closeAttempted = true
+          try {
+            await session.close({ mode: 'discard' })
+          } catch {
+            // 中止原因是调用方真值；discard 失败不能把它替换掉。
+          }
+        }
+        throw signal.reason ?? error
+      }
       const cleanupErrors: unknown[] = []
+      let effectiveError = error
       if (session && !closeAttempted) {
         closeAttempted = true
         try {
@@ -227,9 +241,6 @@ export function createStageRunner(
         } catch (closeError) {
           cleanupErrors.push(closeError)
         }
-      }
-      if (signal?.aborted) {
-        throw signal.reason ?? error
       }
       if (session && closed && !sessionPointerAttempted) {
         try {
@@ -247,22 +258,30 @@ export function createStageRunner(
         }
       }
       if (error instanceof ProviderQueueDeferral) {
-        try {
-          await dependencies.repository.persistStreamLog({
-            projectId,
-            nodeId,
-            stage,
-            text: streamBus.getSnapshot(streamKey).text,
-            ...(attemptId ? { attemptId } : {}),
-            ...(signal ? { signal } : {}),
-          })
-        } catch (cleanupError) {
-          cleanupErrors.push(cleanupError)
+        if (!streamLogAttempted) {
+          streamLogAttempted = true
+          try {
+            await dependencies.repository.persistStreamLog({
+              projectId,
+              nodeId,
+              stage,
+              text: streamBus.getSnapshot(streamKey).text,
+              ...(attemptId ? { attemptId } : {}),
+              ...(signal ? { signal } : {}),
+            })
+          } catch (cleanupError) {
+            cleanupErrors.push(cleanupError)
+          }
         }
         if (cleanupErrors.length === 0) {
           streamBus.markDone(streamKey)
           throw error
         }
+        effectiveError = new AggregateError(
+          [error, ...cleanupErrors],
+          `Provider 等待已排队但阶段清理不完整：${stage}`,
+        )
+        cleanupErrors.length = 0
       }
       try {
         await transitionStageNode(
@@ -277,35 +296,42 @@ export function createStageRunner(
         cleanupErrors.push(cleanupError)
       }
       try {
-        await dependencies.repository.recordStageError(nodeId, stage, error)
+        await dependencies.repository.recordStageError(
+          nodeId,
+          stage,
+          effectiveError,
+        )
       } catch (cleanupError) {
         cleanupErrors.push(cleanupError)
       }
       // 落已流出的部分文本（可能为空）；持久化失败不掩盖主错误，并入清理链。
-      try {
-        await dependencies.repository.persistStreamLog({
-          projectId,
-          nodeId,
-          stage,
-          text: streamBus.getSnapshot(streamKey).text,
-          ...(attemptId ? { attemptId } : {}),
-          ...(signal ? { signal } : {}),
-        })
-      } catch (cleanupError) {
-        cleanupErrors.push(cleanupError)
+      if (!streamLogAttempted) {
+        streamLogAttempted = true
+        try {
+          await dependencies.repository.persistStreamLog({
+            projectId,
+            nodeId,
+            stage,
+            text: streamBus.getSnapshot(streamKey).text,
+            ...(attemptId ? { attemptId } : {}),
+            ...(signal ? { signal } : {}),
+          })
+        } catch (cleanupError) {
+          cleanupErrors.push(cleanupError)
+        }
       }
-      const projected = classifyWorkflowError(error, { stage })
+      const projected = classifyWorkflowError(effectiveError, { stage })
       streamBus.markError(streamKey, {
         stage,
         message: projected.message,
       })
       if (cleanupErrors.length > 0) {
         throw new AggregateError(
-          [error, ...cleanupErrors],
+          [effectiveError, ...cleanupErrors],
           `Director 阶段失败且清理不完整：${stage}`
         )
       }
-      throw error
+      throw effectiveError
     }
   }
 }

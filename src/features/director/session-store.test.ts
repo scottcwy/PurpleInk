@@ -134,6 +134,34 @@ describe('DirectorSessionStore', () => {
     expect(removeTempDirMock).toHaveBeenCalledOnce()
   })
 
+  it('keeps persisted session bytes unchanged when resumed staging is discarded', async () => {
+    const firstStore = new DirectorSessionStore(storage)
+    const created = await firstStore.create({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      stage: 'DIRECT',
+    })
+    await created.session.appendMessage({
+      role: 'user',
+      content: [{ type: 'text', text: '已持久化的历史' }],
+      timestamp: 1,
+    })
+    await firstStore.close()
+    const persistedBytes = await storage.get(created.storageKey)
+
+    const resumedStore = new DirectorSessionStore(storage)
+    const resumed = await resumedStore.resume(created.storageKey)
+    await resumed.session.appendMessage({
+      role: 'user',
+      content: [{ type: 'text', text: '不应写回的追加内容' }],
+      timestamp: 2,
+    })
+    await resumedStore.discard()
+
+    await expect(storage.get(created.storageKey)).resolves.toEqual(persistedBytes)
+    expect(putMock).toHaveBeenCalledOnce()
+  })
+
   it('uploads to remote and resumes through a fresh mirror cache', async () => {
     const firstRoot = await mkdtemp(path.join(tmpdir(), 'pi-session-cache-a-'))
     const secondRoot = await mkdtemp(path.join(tmpdir(), 'pi-session-cache-b-'))

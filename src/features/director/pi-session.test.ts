@@ -302,6 +302,19 @@ describe('createDirectorSession', () => {
     expect(mocks.closeStore).toHaveBeenCalledOnce()
   })
 
+  it('discards session staging when close is called in discard mode', async () => {
+    const session = await createDirectorSession({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      stage: 'INGEST',
+    })
+
+    await session.close({ mode: 'discard' })
+
+    expect(mocks.discardStore).toHaveBeenCalledOnce()
+    expect(mocks.closeStore).not.toHaveBeenCalled()
+  })
+
   it('preserves assembly and discard failures when session setup fails', async () => {
     const assemblyFailure = new Error('session context failed')
     const discardFailure = new Error('session cleanup failed')

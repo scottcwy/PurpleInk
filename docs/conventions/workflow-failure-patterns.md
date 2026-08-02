@@ -217,11 +217,12 @@ FINALIZE `export` 节点从 `idle` 到 `succeeded`，最终 MP4 的数据库哈�
 
 - 可追加文件、临时文件和仍由外部进程持有的文件不得提前登记为 artifact。
 - `size_bytes` 与 `content_hash` 必须在生产者关闭/完成后从实际字节计算。
-- 失败会话也要先关闭再登记，保证诊断证据完整；登记失败作为清理错误加入原始失败链，
-  不得悄悄吞掉。
+- 普通失败会话要先关闭再登记，保证诊断证据完整；登记失败作为清理错误加入原始失败链，
+  不得悄悄吞掉。若调用方已 abort，则丢弃 staging，不上传或登记无指针的会话字节。
 
-**已落地护栏**：`stage-runner.ts` 在成功与失败路径都先关闭 Pi 会话，再调用
-`registerArtifactPointer`；`stage-runner.test.ts` 断言 `close → pointer` 顺序。
+**已落地护栏**：`stage-runner.ts` 在成功与普通失败路径都先关闭 Pi 会话，再调用
+`registerArtifactPointer`；abort 路径改为 discard；`stage-runner.test.ts` 断言
+`close → pointer` 顺序及取消时的 discard。
 真实 FINALIZE 重生成后，新 `pi-session` 的大小 26,173 字节，数据库与磁盘 SHA-256
 完全一致。历史 802 条均为本地 draft，保留为事故证据，未伪造回写旧哈希。
 
@@ -603,8 +604,9 @@ UI 投影为 `STAGE_FAILED`（阶段兜底），且同一进程的 dev log 可�
 
 **规则**：
 
-- `ProviderQueueDeferral` 是队列控制信号而非上游失败，不得经过错误分类、
-  `managedUpstreamError`、普通重试或熔断。
+- 纯 `ProviderQueueDeferral` 是队列控制信号而非上游失败，不得经过错误分类、
+  `managedUpstreamError`、普通重试或熔断；若会话、日志或其他 durable cleanup 同时失败，
+  必须把等待与清理错误聚合后按真实阶段失败处理。
 - 调度许可必须早于计费 invocation；发送前等待期间不得存在计费预留。
 - 禁止用 worker 固定错峰承担 pacing 正确性；所有 TTS / ASR 出网由数据库票据分配
   唯一时间槽。
@@ -645,8 +647,10 @@ Stage Runner 先记为 `failed + directorError`，队列随后再改回
   cooldown、并发租约和队列可见时间禁止混入应用墙钟。
 - Provider 等待写入 `visible_at` 时必须由数据库保证它严格晚于当前数据库时间，
   防止时钟漂移、过期 `Retry-After` 或事务耗时制造立即重领空转。
-- `ProviderQueueDeferral` 不得经过阶段失败投影。节点应从 `running` 原子转为
-  `pending + executionNotice`，同时清理旧 `directorError` / `renderError`。
+- 纯 `ProviderQueueDeferral` 不得经过阶段失败投影。节点应从 `running` 原子转为
+  `pending + executionNotice`，同时清理旧 `directorError` / `renderError`；若 durable
+  cleanup 失败，则以包含等待与 cleanup 错误的 `AggregateError` 投影为真实阶段失败，
+  不得伪装成可恢复 waiting。
 - 复合阶段在文本产物已提交、媒体副作用未完成时必须留下可恢复检查点。恢复只重试
   未完成副作用，不得再次调用已经成功并提交的文本模型。
 - 校准主机时钟只是运维缓解，不能替代代码的单时钟正确性。

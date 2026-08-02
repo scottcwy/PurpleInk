@@ -1,5 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs'
-import { stat, writeFile } from 'node:fs/promises'
+import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -46,6 +46,14 @@ describe('LocalFsStorage', () => {
       path.join(root, 'x/y.mp4'),
     )
     await expect(storage.materializeLocalPath('missing.mp4')).rejects.toThrow()
+  })
+
+  it('rejects a directory when materializing an object path', async () => {
+    await mkdir(path.join(root, 'not-an-object'), { recursive: true })
+
+    await expect(storage.materializeLocalPath('not-an-object')).rejects.toThrow(
+      'storage object is not a file',
+    )
   })
 
   it('tempDir creates a unique existing directory each call', async () => {

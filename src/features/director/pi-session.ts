@@ -54,7 +54,7 @@ export interface DirectorSession {
   id: string
   storageKey: string
   run(input: DirectorRunInput): Promise<DirectorRunResult>
-  close(): Promise<void>
+  close(options?: { mode?: 'persist' | 'discard' }): Promise<void>
 }
 
 export interface DirectorSessionInput {
@@ -216,11 +216,15 @@ export async function createDirectorSession(
           runInput.signal?.removeEventListener('abort', abortRun)
         }
       },
-      close: async () => {
+      close: async ({ mode = 'persist' } = {}) => {
         if (closed) return
         closed = true
         agent.abort()
         unsubscribe()
+        if (mode === 'discard') {
+          await store.discard()
+          return
+        }
         await store.close()
       },
     }

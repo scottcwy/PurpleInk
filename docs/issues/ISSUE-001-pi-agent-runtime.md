@@ -289,8 +289,9 @@ ISSUE-002（`shot-codegen` 接缝）。两者串起来才有第一个单镜 MP4�
   持久化并始终清理临时目录，上传失败向上抛出；`resume()` 先校验并规范化
   key，再通过 `storage.get()` 拉取到新的临时目录后恢复；会话装配失败则
   `discard()` staging，只清理临时字节，不上传无指针的 durable 对象
-- `stage-runner.ts` — 仅在 `session.close()` 成功、会话字节已持久化后登记
-  `pi-session` 指针；持久化失败不重试 `close()`，也不登记失真的指针
+- `stage-runner.ts` — 普通失败仅在 `session.close()` 成功、会话字节已持久化后登记
+  `pi-session` 指针；持久化失败不重试 `close()`，也不登记失真的指针。若执行已
+  abort，则使用 `close({ mode: 'discard' })` 丢弃 staging，不上传或登记无指针字节
 
 删除：`tests/stage-a-unavailable.test.ts`；`vitest.config.ts` / `tsconfig.json`
 中锁定本 issue 的 4 条 exclude。

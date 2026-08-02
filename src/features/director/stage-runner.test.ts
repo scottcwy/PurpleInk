@@ -341,7 +341,7 @@ describe('createStageRunner', () => {
     expect(harness.advancePipeline).not.toHaveBeenCalled()
   })
 
-  it('does not let a timed-out attempt write artifacts or node terminal state after its provider returns late', async () => {
+  it('discards an uncommitted session when a timed-out provider returns late', async () => {
     let releaseProvider: () => void = () => undefined
     const providerGate = new Promise<void>((resolve) => {
       releaseProvider = resolve
@@ -369,7 +369,7 @@ describe('createStageRunner', () => {
     releaseProvider()
 
     await expect(pending).rejects.toBe(timeout)
-    expect(harness.session.close).toHaveBeenCalledOnce()
+    expect(harness.session.close).toHaveBeenCalledWith({ mode: 'discard' })
     expect(harness.writeArtifact).not.toHaveBeenCalled()
     expect(harness.commitResult).not.toHaveBeenCalled()
     expect(harness.repository.registerArtifactPointer).not.toHaveBeenCalled()
@@ -592,6 +592,12 @@ describe('createStageRunner', () => {
 
     expect(failure).toBeInstanceOf(AggregateError)
     expect((failure as AggregateError).errors).toEqual([wait, uploadError])
+    expect(harness.repository.persistStreamLog).toHaveBeenCalledOnce()
+    expect(harness.repository.recordStageError).toHaveBeenCalledWith(
+      nodeId,
+      'ASSEMBLE',
+      expect.any(AggregateError),
+    )
     expect(eventTypes).not.toContain('done')
     expect(eventTypes.at(-1)).toBe('error')
     expect(harness.transitionNodeStatus.mock.calls.map((call) => call[1])).toEqual([

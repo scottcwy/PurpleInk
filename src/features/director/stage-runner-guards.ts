@@ -1,4 +1,3 @@
-import type { DirectorSession } from './pi-session'
 import type { StageRunnerDependencies } from './stage-runner-contract'
 
 export async function scheduleMediaWithoutMasking(
@@ -66,14 +65,4 @@ export async function transitionStageNode(
       : undefined,
   )
   signal?.throwIfAborted()
-}
-
-export async function closeWithoutMasking(
-  session: DirectorSession,
-): Promise<void> {
-  try {
-    await session.close()
-  } catch {
-    // 主失败原因已由 stage runner 捕获；close 错误不覆盖它。
-  }
 }

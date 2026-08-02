@@ -47,7 +47,10 @@ export class LocalFsStorage implements StorageAdapter {
 
   async materializeLocalPath(key: string): Promise<string> {
     const file = this.resolve(key)
-    await stat(file)
+    const stats = await stat(file)
+    if (!stats.isFile()) {
+      throw new Error(`storage object is not a file: ${key}`)
+    }
     return file
   }
 
