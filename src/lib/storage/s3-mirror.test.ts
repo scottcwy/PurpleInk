@@ -159,6 +159,36 @@ describe('S3MirrorStorage', () => {
     expect(remote.objects.get('durable.bin')).toEqual(Buffer.from('bytes'))
   })
 
+  it('bypasses an uncleaned failed cache write until remote refill succeeds', async () => {
+    local.putError = new Error('local write sentinel')
+    local.deleteError = new Error('local delete sentinel')
+    await expect(mirror.put('durable.bin', 'stale')).rejects.toBeInstanceOf(
+      AggregateError,
+    )
+    expect(await local.get('durable.bin')).toEqual(Buffer.from('stale'))
+    remote.objects.set('durable.bin', Buffer.from('fresh'))
+    local.putError = undefined
+    local.deleteError = undefined
+
+    await expect(mirror.get('durable.bin')).resolves.toEqual(
+      Buffer.from('fresh'),
+    )
+
+    expect(remote.getKeys).toEqual(['durable.bin'])
+    expect(await local.get('durable.bin')).toEqual(Buffer.from('fresh'))
+    expect(mirror.localPath('durable.bin')).toBe(local.localPath('durable.bin'))
+  })
+
+  it('fails localPath closed while a cache key is untrusted', async () => {
+    local.putError = new Error('local write sentinel')
+    local.deleteError = new Error('local delete sentinel')
+    await expect(mirror.put('durable.bin', 'stale')).rejects.toBeInstanceOf(
+      AggregateError,
+    )
+
+    expect(() => mirror.localPath('durable.bin')).toThrow(/untrusted/i)
+  })
+
   it('reads locally first and refills a missing cache from remote', async () => {
     remote.objects.set('remote-only.bin', Buffer.from('remote'))
     await local.put('local.bin', 'local')
@@ -197,6 +227,23 @@ describe('S3MirrorStorage', () => {
     await expect(operation).rejects.toThrow('存储对象删除失败')
     await expect(operation).rejects.not.toThrow('local path sentinel')
     expect(remote.objects.has('artifact.bin')).toBe(false)
+  })
+
+  it('quarantines a failed local delete until a later local delete succeeds', async () => {
+    await mirror.put('artifact.bin', 'bytes')
+    local.deleteError = new Error('local path sentinel')
+
+    await expect(mirror.delete('artifact.bin')).rejects.toThrow(
+      '存储对象删除失败',
+    )
+
+    await expect(mirror.exists('artifact.bin')).resolves.toBe(false)
+    expect(remote.hasKeys).toEqual(['artifact.bin'])
+    expect(() => mirror.localPath('artifact.bin')).toThrow(/untrusted/i)
+
+    local.deleteError = undefined
+    await expect(mirror.delete('artifact.bin')).resolves.toBeUndefined()
+    expect(mirror.localPath('artifact.bin')).toBe(local.localPath('artifact.bin'))
   })
 
   it('still deletes local when remote delete fails and returns a safe error', async () => {
