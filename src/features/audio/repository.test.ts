@@ -18,6 +18,7 @@ function storage(): StorageAdapter {
     get: vi.fn(),
     exists: vi.fn(),
     localPath: vi.fn(),
+    materializeLocalPath: vi.fn(),
     delete: vi.fn(),
     tempDir: vi.fn(),
     readLocalFile: vi.fn(),

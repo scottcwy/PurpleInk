@@ -12,6 +12,7 @@ import {
   type Result,
 } from '@earendil-works/pi-agent-core'
 import type { StorageAdapter } from '@/lib/storage'
+import { canonicalizeStorageKey } from '@/lib/storage/storage-key'
 import type { PipelineStage } from './types'
 
 export interface SessionStoreInput {
@@ -37,16 +38,14 @@ type SessionFileSystem = Pick<
   'readTextFile' | 'readTextLines' | 'writeFile' | 'appendFile'
 >
 
-/**
- * Pi 会话的 JSONL 持久化。
- *
- * 会话文件必须留在 `storage.localPath('pi-sessions')` 之内：`storageKey` 对外
- * 始终是相对路径（与 artifact 指针同一口径），resume 时先校验前缀再落到绝对路径。
- * 这里直接用 node:fs 读写绝对路径，是因为 pi 的会话存储以本机文件为契约，
- * 与渲染层用 `localPath()` 交给 ffmpeg 的做法一致。
- */
+/** Pi 会话在隔离临时目录内追加 JSONL，close 时持久化到 storageKey。 */
 export class DirectorSessionStore {
   private readonly fs: SessionFileSystem = createSessionFileSystem()
+  private active: {
+    storageKey: string
+    filePath: string
+    tempDirectory: string
+  } | undefined
 
   constructor(private readonly storage: StorageAdapter) {}
 
@@ -66,51 +65,104 @@ export class DirectorSessionStore {
       safeSegment(input.projectId),
       `${safeSegment(input.nodeId)}-${sessionId}.jsonl`,
     ].join('/')
-    const root = this.root()
-    const filePath = this.resolveInsideRoot(root, storageKey)
-    const sessionStorage = await JsonlSessionStorage.create(this.fs, filePath, {
-      cwd: root,
-      sessionId,
-    })
-    return { id: sessionId, storageKey, session: new Session(sessionStorage) }
+    const tempDirectory = await this.storage.tempDir('pi-session-')
+    const filePath = path.join(tempDirectory, path.posix.basename(storageKey))
+    try {
+      const sessionStorage = await JsonlSessionStorage.create(
+        this.fs,
+        filePath,
+        { cwd: tempDirectory, sessionId },
+      )
+      this.active = { storageKey, filePath, tempDirectory }
+      return { id: sessionId, storageKey, session: new Session(sessionStorage) }
+    } catch (error) {
+      return this.failConstruction(tempDirectory, error)
+    }
   }
 
   async resume(storageKey: string): Promise<StoredDirectorSession> {
-    const root = this.root()
-    const filePath = this.resolveInsideRoot(root, storageKey)
-    const sessionStorage = await JsonlSessionStorage.open(this.fs, filePath)
-    const metadata = await sessionStorage.getMetadata()
-    return {
-      id: metadata.id,
-      storageKey: normalizeKey(storageKey),
-      session: new Session(sessionStorage),
+    const key = validateSessionKey(storageKey)
+    const bytes = await this.storage.get(key)
+    const tempDirectory = await this.storage.tempDir('pi-session-')
+    const filePath = path.join(tempDirectory, path.posix.basename(key))
+    try {
+      await writeFile(filePath, bytes)
+      const sessionStorage = await JsonlSessionStorage.open(this.fs, filePath)
+      const metadata = await sessionStorage.getMetadata()
+      this.active = { storageKey: key, filePath, tempDirectory }
+      return {
+        id: metadata.id,
+        storageKey: key,
+        session: new Session(sessionStorage),
+      }
+    } catch (error) {
+      return this.failConstruction(tempDirectory, error)
     }
   }
 
-  /** JSONL 是逐条 append，没有需要 flush 的句柄；保留方法以固定调用方生命周期。 */
-  async close(): Promise<void> {}
-
-  private root(): string {
-    return this.storage.localPath(SESSION_ROOT)
+  async close(): Promise<void> {
+    const active = this.active
+    if (!active) return
+    this.active = undefined
+    let persistenceFailed = false
+    let persistenceError: unknown
+    try {
+      const bytes = await this.storage.readLocalFile(active.filePath)
+      await this.storage.put(active.storageKey, bytes)
+    } catch (error) {
+      persistenceFailed = true
+      persistenceError = error
+    }
+    try {
+      await this.storage.removeTempDir(active.tempDirectory)
+    } catch (cleanupError) {
+      if (persistenceFailed) {
+        throw new AggregateError(
+          [persistenceError, cleanupError],
+          'Pi 会话持久化失败且临时目录清理失败',
+        )
+      }
+      throw cleanupError
+    }
+    if (persistenceFailed) throw persistenceError
   }
 
-  private resolveInsideRoot(root: string, storageKey: string): string {
-    const key = normalizeKey(storageKey)
-    const prefix = `${SESSION_ROOT}/`
-    if (!key.startsWith(prefix) || key.length === prefix.length) {
-      throw new Error(`非法 Pi 会话 storageKey：${storageKey}`)
+  /** 放弃未提交的 staging，只清理本地临时目录。 */
+  async discard(): Promise<void> {
+    const active = this.active
+    if (!active) return
+    this.active = undefined
+    await this.storage.removeTempDir(active.tempDirectory)
+  }
+
+  private async failConstruction(
+    tempDirectory: string,
+    failure: unknown,
+  ): Promise<never> {
+    try {
+      await this.storage.removeTempDir(tempDirectory)
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [failure, cleanupError],
+        'Pi 会话构造失败且临时目录清理失败',
+      )
     }
-    const resolvedRoot = path.resolve(root)
-    const resolved = path.resolve(resolvedRoot, key.slice(prefix.length))
-    if (!resolved.startsWith(resolvedRoot + path.sep)) {
-      throw new Error(`非法 Pi 会话 storageKey：${storageKey}`)
-    }
-    return resolved
+    throw failure
   }
 }
 
-function normalizeKey(storageKey: string): string {
-  return storageKey.replaceAll('\\', '/')
+function validateSessionKey(storageKey: string): string {
+  let key: string
+  try {
+    key = canonicalizeStorageKey(storageKey)
+  } catch {
+    throw new Error(`非法 Pi 会话 storageKey：${storageKey}`)
+  }
+  const prefix = `${SESSION_ROOT}/`
+  if (!key.startsWith(prefix) || key.length === prefix.length) {
+    throw new Error(`非法 Pi 会话 storageKey：${storageKey}`)
+  }
+  return key
 }
 
 /** storageKey 只允许安全字符，避免 DB 里的标识符污染路径。 */

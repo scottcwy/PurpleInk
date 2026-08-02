@@ -43,6 +43,7 @@ function createStorage(files: Map<string, Buffer>): StorageAdapter {
     }),
     exists: vi.fn(async (key) => files.has(key)),
     localPath: vi.fn((key) => key),
+    materializeLocalPath: vi.fn(async (key) => key),
     delete: vi.fn(async (key) => {
       files.delete(key)
     }),

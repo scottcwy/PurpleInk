@@ -39,6 +39,15 @@ describe('LocalFsStorage', () => {
     expect(storage.localPath('x/y.mp4')).toBe(path.join(root, 'x/y.mp4'))
   })
 
+  it('materializes an existing object path and rejects a missing object', async () => {
+    await storage.put('x/y.mp4', 'video')
+
+    await expect(storage.materializeLocalPath('x/y.mp4')).resolves.toBe(
+      path.join(root, 'x/y.mp4'),
+    )
+    await expect(storage.materializeLocalPath('missing.mp4')).rejects.toThrow()
+  })
+
   it('tempDir creates a unique existing directory each call', async () => {
     const first = await storage.tempDir('cvc-unit-')
     const second = await storage.tempDir('cvc-unit-')

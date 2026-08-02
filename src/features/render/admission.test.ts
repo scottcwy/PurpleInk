@@ -27,7 +27,10 @@ function storageOf(source: string): StorageAdapter {
     put: vi.fn(),
     get: vi.fn(async () => Buffer.from(source)),
     exists: vi.fn(),
-    localPath: vi.fn(() => 'trusted-shot.html'),
+    localPath: vi.fn(() => {
+      throw new Error('direct localPath must not be used')
+    }),
+    materializeLocalPath: vi.fn(async () => 'trusted-shot.html'),
     delete: vi.fn(),
     tempDir: vi.fn(),
     readLocalFile: vi.fn(),

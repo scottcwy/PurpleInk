@@ -175,17 +175,10 @@ export async function exportDegradedProject(
   const workDirectory = await storage.tempDir('cvc-export-')
   try {
     const temporaryOutput = path.join(workDirectory, 'final.mp4')
+    const paths = await materializeAssemblyPaths(assembly, storage)
     const concatResult = await concat(
       assembly,
-      {
-        videoPaths: assembly.shots.map((shot) =>
-          storage.localPath(shot.video.storageKey)
-        ),
-        narrationPaths: assembly.shots.map((shot) =>
-          storage.localPath(shot.narration.artifact.storageKey)
-        ),
-        musicPath: assembly.musicKey ? storage.localPath(assembly.musicKey) : null,
-      },
+      paths,
       subtitleAss,
       temporaryOutput
     )
@@ -210,6 +203,26 @@ export async function exportDegradedProject(
   } finally {
     await storage.removeTempDir(workDirectory)
   }
+}
+
+async function materializeAssemblyPaths(
+  assembly: MediaAssemblyPlan,
+  storage: StorageAdapter,
+) {
+  const videoPaths = await Promise.all(
+    assembly.shots.map((shot) =>
+      storage.materializeLocalPath(shot.video.storageKey)
+    ),
+  )
+  const narrationPaths = await Promise.all(
+    assembly.shots.map((shot) =>
+      storage.materializeLocalPath(shot.narration.artifact.storageKey)
+    ),
+  )
+  const musicPath = assembly.musicKey
+    ? await storage.materializeLocalPath(assembly.musicKey)
+    : null
+  return { videoPaths, narrationPaths, musicPath }
 }
 
 /** 提交 final-mp4 与占位清单；任一失败都清理已落盘字节，不留孤儿产物指针。 */

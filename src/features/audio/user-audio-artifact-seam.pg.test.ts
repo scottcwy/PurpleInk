@@ -458,6 +458,7 @@ function memoryStorage(memory: Map<string, Buffer>): StorageAdapter {
     },
     exists: async (key) => memory.has(key),
     localPath: (key) => key,
+    materializeLocalPath: async (key) => key,
     delete: async (key) => {
       memory.delete(key)
     },

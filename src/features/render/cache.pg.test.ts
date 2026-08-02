@@ -186,6 +186,7 @@ function createStorage(bytes: Buffer, exists: boolean): StorageAdapter {
     get: vi.fn(async () => bytes),
     exists: vi.fn(async () => exists),
     localPath: vi.fn(),
+    materializeLocalPath: vi.fn(),
     delete: vi.fn(),
     tempDir: vi.fn(),
     readLocalFile: vi.fn(),

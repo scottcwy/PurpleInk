@@ -5,7 +5,7 @@ import { assertDeterministicSource } from './source-contract'
 import type { RenderJob } from './types'
 
 export interface RenderAdmissionDependencies {
-  storage: Pick<StorageAdapter, 'get' | 'localPath'>
+  storage: Pick<StorageAdapter, 'get' | 'materializeLocalPath'>
   openFrameCapture(
     htmlPath: string,
     options: { width: number; height: number }
@@ -43,7 +43,7 @@ async function openRuntime(
 ): Promise<FrameCaptureSession> {
   try {
     return await dependencies.openFrameCapture(
-      dependencies.storage.localPath(job.htmlKey),
+      await dependencies.storage.materializeLocalPath(job.htmlKey),
       {
         width: job.frames.width,
         height: job.frames.height,

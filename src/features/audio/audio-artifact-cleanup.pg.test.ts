@@ -108,6 +108,7 @@ function cleanupStorage(
     get: vi.fn(),
     exists: async (key) => stored.has(key),
     localPath: (key) => key,
+    materializeLocalPath: async (key) => key,
     delete: async (key) => {
       await beforeDelete()
       stored.delete(key)

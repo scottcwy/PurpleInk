@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { StorageAdapter } from '@/lib/storage'
 import type { MediaAssemblyPlan } from './media-assembly'
-import type { ConcatExportResult } from './concat'
+import type { ConcatExportResult, LocalMediaPaths } from './concat'
 import type { RenderExportPlan } from './repository'
 import {
   exportDegradedProject,
@@ -125,8 +125,12 @@ describe('resolveDegradedPlan', () => {
 
 describe('exportDegradedProject', () => {
   it('concats the degraded plan and registers final + manifest with matching hash', async () => {
+    const mediaAssembly = {
+      ...assemblyPlan(),
+      musicKey: 'music/degraded.mp3',
+    }
     const assembled = plan({
-      mediaAssemblyPlan: assemblyPlan(),
+      mediaAssemblyPlan: mediaAssembly,
       placeholderLaneKeys: ['S007'],
     })
     const getExportPlan = vi
@@ -150,12 +154,17 @@ describe('exportDegradedProject', () => {
       return key
     })
     vi.mocked(storage.readLocalFile).mockResolvedValue(Buffer.from('final-mp4-bytes'))
-    const concat = vi.fn(async () => successfulConcat('/tmp/final.mp4'))
+    const concat = vi.fn(async (
+      _plan: MediaAssemblyPlan,
+      _paths: LocalMediaPaths,
+      _subtitleAss: string | null,
+      _outputPath: string,
+    ) => successfulConcat('/tmp/final.mp4'))
 
     const result = await exportDegradedProject('p1', ATTEMPT_ID, {
       repository: { getExportPlan, registerFinalDelivery },
       storage,
-      concat: concat as never,
+      concat,
     })
 
     expect(result).toMatchObject({
@@ -163,6 +172,19 @@ describe('exportDegradedProject', () => {
       placeholderLanes: ['S007'],
       waivedQaLanes: ['S004'],
     })
+    expect(concat.mock.calls[0]?.[1]).toEqual({
+      videoPaths: ['/local/ph/S007.mp4'],
+      narrationPaths: ['/local/audio/U007.mp3'],
+      musicPath: '/local/music/degraded.mp3',
+    })
+    expect(
+      vi.mocked(storage.materializeLocalPath).mock.calls.map(([key]) => key),
+    ).toEqual([
+      'ph/S007.mp4',
+      'ph/S007.mp4',
+      'audio/U007.mp3',
+      'music/degraded.mp3',
+    ])
     expect(registerFinalDelivery).toHaveBeenCalledOnce()
     expect(registerFinalDelivery).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -332,7 +354,10 @@ function createStorage(): StorageAdapter {
     put: vi.fn(async (key: string) => key),
     get: vi.fn(),
     exists: vi.fn(),
-    localPath: vi.fn((key: string) => `/local/${key}`),
+    localPath: vi.fn(() => {
+      throw new Error('direct localPath must not be used')
+    }),
+    materializeLocalPath: vi.fn(async (key: string) => `/local/${key}`),
     delete: vi.fn(async () => {}),
     tempDir: vi.fn(async () => '/tmp/work'),
     readLocalFile: vi.fn(),

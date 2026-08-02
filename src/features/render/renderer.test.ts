@@ -124,6 +124,7 @@ describe('HyperframesRenderer', () => {
 
     const result = await renderer.render(job)
 
+    expect(storage.materializeLocalPath).toHaveBeenCalledWith(job.htmlKey)
     expect(result.outputKey).toMatch(/^render\/project-1\/node-1\/[a-f0-9]{64}\.mp4$/)
     expect(result.contentHash).toBe(
       createHash('sha256').update(Buffer.from('mp4')).digest('hex')
@@ -155,7 +156,10 @@ function createStorage(html: string): StorageAdapter {
     put: vi.fn(),
     get: vi.fn(async () => Buffer.from(html)),
     exists: vi.fn(),
-    localPath: vi.fn(() => 'shot.html'),
+    localPath: vi.fn(() => {
+      throw new Error('direct localPath must not be used')
+    }),
+    materializeLocalPath: vi.fn(async () => 'shot.html'),
     delete: vi.fn(),
     tempDir: vi.fn(),
     readLocalFile: vi.fn(),

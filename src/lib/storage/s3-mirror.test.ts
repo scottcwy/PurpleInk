@@ -44,11 +44,13 @@ class FakeRemoteStore implements RemoteObjectStore {
 class FailingLocalStorage extends LocalFsStorage {
   putError: Error | undefined
   deleteError: Error | undefined
+  beforePut: (() => Promise<void>) | undefined
 
   override async put(
     key: string,
     data: Buffer | Uint8Array | string,
   ): Promise<string> {
+    await this.beforePut?.()
     const storedKey = await super.put(key, data)
     if (this.putError) throw this.putError
     return storedKey
@@ -189,6 +191,37 @@ describe('S3MirrorStorage', () => {
     expect(() => mirror.localPath('durable.bin')).toThrow(/untrusted/i)
   })
 
+  it('revokes trust before rewriting an already trusted cache entry', async () => {
+    await mirror.put('durable.bin', 'old')
+    expect(mirror.localPath('durable.bin')).toBe(local.localPath('durable.bin'))
+    let markWriteStarted!: () => void
+    const writeStarted = new Promise<void>((resolve) => {
+      markWriteStarted = resolve
+    })
+    let releaseWrite!: () => void
+    const writeReleased = new Promise<void>((resolve) => {
+      releaseWrite = resolve
+    })
+    local.beforePut = async () => {
+      markWriteStarted()
+      await writeReleased
+    }
+
+    const rewrite = mirror.put('durable.bin', 'new')
+    await writeStarted
+    let trustAssertionFailure: unknown
+    try {
+      expect(() => mirror.localPath('durable.bin')).toThrow(/untrusted/i)
+    } catch (error) {
+      trustAssertionFailure = error
+    } finally {
+      releaseWrite()
+    }
+
+    await expect(rewrite).resolves.toBe('durable.bin')
+    if (trustAssertionFailure) throw trustAssertionFailure
+  })
+
   it('does not trust residual local bytes after adapter recreation', async () => {
     local.putError = new Error('local write sentinel')
     local.deleteError = new Error('local delete sentinel')
@@ -215,6 +248,25 @@ describe('S3MirrorStorage', () => {
     expect(recreated.localPath('durable.bin')).toBe(
       local.localPath('durable.bin'),
     )
+  })
+
+  it('materializes a remote object over stale local bytes and then stays local', async () => {
+    await local.put('artifact.bin', 'stale')
+    remote.objects.set('artifact.bin', Buffer.from('fresh'))
+    const recreated = new S3MirrorStorage(local, remote)
+
+    expect(() => recreated.localPath('artifact.bin')).toThrow(/untrusted/i)
+    await expect(recreated.materializeLocalPath('artifact.bin')).resolves.toBe(
+      local.localPath('artifact.bin'),
+    )
+    expect(await local.get('artifact.bin')).toEqual(Buffer.from('fresh'))
+    expect(remote.getKeys).toEqual(['artifact.bin'])
+
+    await expect(recreated.materializeLocalPath('artifact.bin')).resolves.toBe(
+      local.localPath('artifact.bin'),
+    )
+    expect(remote.getKeys).toEqual(['artifact.bin'])
+    expect(recreated.localPath('artifact.bin')).toBe(local.localPath('artifact.bin'))
   })
 
   it('reads locally first and refills a missing cache from remote', async () => {

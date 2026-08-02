@@ -225,7 +225,14 @@ export async function createDirectorSession(
       },
     }
   } catch (error) {
-    await store.close()
+    try {
+      await store.discard()
+    } catch (discardError) {
+      throw new AggregateError(
+        [error, discardError],
+        'Director 会话装配失败且临时会话清理失败',
+      )
+    }
     throw error
   }
 }

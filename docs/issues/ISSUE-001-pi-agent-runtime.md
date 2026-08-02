@@ -160,6 +160,10 @@ exclude: [
 2. **会话存储**：`JsonlSessionStorage` 位于 `dist/harness/session/jsonl-storage`，
    需要包一层把绝对路径约束在 `storage.localPath('pi-sessions')` 之内。
 
+> 上述 `localPath('pi-sessions')` 是 ISSUE-001 初次落地时的本地存储约束。
+> R2 镜像接入后的当前持久化生命周期以 §10.2 为准；这里保留原始规格背景，
+> 不再把 durable storage key 当作可直接追加的本地工作路径。
+
 ## 6. 版本选择：必须用 0.80.10，不是 latest
 
 `npm view @earendil-works/pi-agent-core` 的发布时间：
@@ -280,8 +284,13 @@ ISSUE-002（`shot-codegen` 接缝）。两者串起来才有第一个单镜 MP4�
 - `pi-stream-bridge.ts` — `message_update` 增量前缀 diff → `streamBus`；
   `message_end` → `appendMessage`
 - `session-store.ts` — 改为 `constructor(storage: StorageAdapter)`；
-  `storageKey` 恒为 `pi-sessions/` 前缀相对路径；`resume()` 校验前缀且解析
-  后仍在 root 内才放行
+  `storageKey` 恒为 `pi-sessions/` 前缀相对路径；JSONL 在
+  `storage.tempDir('pi-session-')` 中追加；`close()` 尝试通过 `storage.put()`
+  持久化并始终清理临时目录，上传失败向上抛出；`resume()` 先校验并规范化
+  key，再通过 `storage.get()` 拉取到新的临时目录后恢复；会话装配失败则
+  `discard()` staging，只清理临时字节，不上传无指针的 durable 对象
+- `stage-runner.ts` — 仅在 `session.close()` 成功、会话字节已持久化后登记
+  `pi-session` 指针；持久化失败不重试 `close()`，也不登记失真的指针
 
 删除：`tests/stage-a-unavailable.test.ts`；`vitest.config.ts` / `tsconfig.json`
 中锁定本 issue 的 4 条 exclude。

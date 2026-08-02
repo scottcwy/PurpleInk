@@ -74,24 +74,15 @@ export async function exportProject(
   )
   try {
     const temporaryOutput = path.join(workDirectory, 'final.mp4')
-    const concatResult = await exportPhase('concat', () =>
-      concat(
+    const concatResult = await exportPhase('concat', async () => {
+      const paths = await materializeAssemblyPaths(assembly, storage)
+      return concat(
         assembly,
-        {
-          videoPaths: assembly.shots.map((shot) =>
-            storage.localPath(shot.video.storageKey)
-          ),
-          narrationPaths: assembly.shots.map((shot) =>
-            storage.localPath(shot.narration.artifact.storageKey)
-          ),
-          musicPath: assembly.musicKey
-            ? storage.localPath(assembly.musicKey)
-            : null,
-        },
+        paths,
         subtitleAss,
         temporaryOutput
       )
-    )
+    })
     const bytes = await exportPhase('read-output', () =>
       storage.readLocalFile(temporaryOutput)
     )
@@ -144,6 +135,26 @@ export async function exportProject(
   }
 }
 
+async function materializeAssemblyPaths(
+  assembly: NonNullable<RenderExportPlan['mediaAssemblyPlan']>,
+  storage: StorageAdapter,
+) {
+  const videoPaths = await Promise.all(
+    assembly.shots.map((shot) =>
+      storage.materializeLocalPath(shot.video.storageKey)
+    ),
+  )
+  const narrationPaths = await Promise.all(
+    assembly.shots.map((shot) =>
+      storage.materializeLocalPath(shot.narration.artifact.storageKey)
+    ),
+  )
+  const musicPath = assembly.musicKey
+    ? await storage.materializeLocalPath(assembly.musicKey)
+    : null
+  return { videoPaths, narrationPaths, musicPath }
+}
+
 export class ExportExecutionError extends Error {
   override readonly name = 'ExportExecutionError'
 
@@ -181,4 +192,3 @@ export async function ensureShotQaChecked(projectId: string): Promise<void> {
 function incomplete(nodeIds: string[]): ExportProjectResult {
   return { ok: false, incompleteNodeIds: [...new Set(nodeIds)].sort() }
 }
-

@@ -27,7 +27,6 @@ import type {
 } from './stage-runner-contract'
 import {
   advanceWithoutMasking,
-  closeWithoutMasking,
   scheduleMediaWithoutMasking,
   transitionStageNode,
 } from './stage-runner-guards'
@@ -99,6 +98,7 @@ export function createStageRunner(
     const streamKey = `${projectId}:${nodeId}`
     let session: DirectorSession | undefined
     let closed = false
+    let closeAttempted = false
     let sessionPointerAttempted = false
     try {
       signal?.throwIfAborted()
@@ -178,7 +178,7 @@ export function createStageRunner(
         ...(signal ? { signal } : {}),
       })
       signal?.throwIfAborted()
-      streamBus.markDone(streamKey)
+      closeAttempted = true
       await session.close()
       closed = true
       signal?.throwIfAborted()
@@ -201,6 +201,7 @@ export function createStageRunner(
         signal,
       )
       signal?.throwIfAborted()
+      streamBus.markDone(streamKey)
       if (stage === 'INGEST' && dependencies.scheduleMediaNarration) {
         await scheduleMediaWithoutMasking(dependencies.scheduleMediaNarration, {
           projectId,
@@ -217,12 +218,20 @@ export function createStageRunner(
         signal,
       )
     } catch (error) {
-      if (session && !closed) await closeWithoutMasking(session)
+      const cleanupErrors: unknown[] = []
+      if (session && !closeAttempted) {
+        closeAttempted = true
+        try {
+          await session.close()
+          closed = true
+        } catch (closeError) {
+          cleanupErrors.push(closeError)
+        }
+      }
       if (signal?.aborted) {
         throw signal.reason ?? error
       }
-      const cleanupErrors: unknown[] = []
-      if (session && !sessionPointerAttempted) {
+      if (session && closed && !sessionPointerAttempted) {
         try {
           sessionPointerAttempted = true
           await dependencies.repository.registerArtifactPointer({
@@ -250,14 +259,10 @@ export function createStageRunner(
         } catch (cleanupError) {
           cleanupErrors.push(cleanupError)
         }
-        streamBus.markDone(streamKey)
-        if (cleanupErrors.length > 0) {
-          throw new AggregateError(
-            [error, ...cleanupErrors],
-            `Provider 等待已排队但阶段清理不完整：${stage}`,
-          )
+        if (cleanupErrors.length === 0) {
+          streamBus.markDone(streamKey)
+          throw error
         }
-        throw error
       }
       try {
         await transitionStageNode(

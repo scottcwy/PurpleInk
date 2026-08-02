@@ -9,6 +9,7 @@ const assistantOutput = { kind: 'assistant-text' } as const
 const mocks = vi.hoisted(() => {
   const appendMessage = vi.fn()
   const closeStore = vi.fn()
+  const discardStore = vi.fn()
   const buildContext = vi.fn()
   const openStore = vi.fn()
   const publish = vi.fn()
@@ -123,6 +124,7 @@ const mocks = vi.hoisted(() => {
   return {
     appendMessage,
     closeStore,
+    discardStore,
     buildContext,
     openStore,
     publish,
@@ -195,6 +197,7 @@ vi.mock('./session-store', () => ({
   DirectorSessionStore: class {
     open = mocks.openStore
     close = mocks.closeStore
+    discard = mocks.discardStore
   },
 }))
 
@@ -297,6 +300,25 @@ describe('createDirectorSession', () => {
     })
     await session.close()
     expect(mocks.closeStore).toHaveBeenCalledOnce()
+  })
+
+  it('preserves assembly and discard failures when session setup fails', async () => {
+    const assemblyFailure = new Error('session context failed')
+    const discardFailure = new Error('session cleanup failed')
+    mocks.buildContext.mockRejectedValueOnce(assemblyFailure)
+    mocks.discardStore.mockRejectedValueOnce(discardFailure)
+
+    const failure = await createDirectorSession({
+      projectId: 'project-1',
+      nodeId: 'node-1',
+      stage: 'INGEST',
+    }).catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(AggregateError)
+    expect((failure as AggregateError).errors).toEqual([
+      assemblyFailure,
+      discardFailure,
+    ])
   })
 
   it.each(PIPELINE_STAGES)('returns the same project session surface for %s', async (stage) => {
@@ -514,7 +536,8 @@ describe('createDirectorSession', () => {
         stage: 'FABRICATE',
       })
     ).rejects.toThrow('Gemini API Key 未配置')
-    expect(mocks.closeStore).toHaveBeenCalledOnce()
+    expect(mocks.discardStore).toHaveBeenCalledOnce()
+    expect(mocks.closeStore).not.toHaveBeenCalled()
   })
 
   /**

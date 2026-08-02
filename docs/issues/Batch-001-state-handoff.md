@@ -90,7 +90,11 @@
 ### 给下一位执行者
 
 1. **下一块骨牌是 ISSUE-002**（`fabricate-render-seam`）。README §9 明确写着"ISSUE-001 交付后应立即解锁 ISSUE-002"：`fabricateShot()` 目前全仓库零调用方，即使 001 修好了，`shot-codegen` 阶段仍会在渲染队列入队时因缺 `director-fabricate` 产物失败。两者串起来才有第一个单镜 MP4。
-2. **pi-session 相关文件已是最终态**，不要再拆分或改动导出面——`pi-session.ts`/`session-store.ts` 保持了原有对外契约，`pi-output.ts`/`stage-runner.ts`/`prompts/**`/`schemas/**`/`tools/**` 全程未动，禁区仍然有效。
+2. `pi-session.ts` 的对外导出面保持不变；后续 R2 镜像适配已将
+   `session-store.ts` 改为临时目录 staging + `storage.get()` / `put()` /
+   `discard()` 生命周期，
+   并调整 `stage-runner.ts` 为仅在 durable close 成功后登记 `pi-session`
+   指针。`pi-output.ts` / `prompts/**` / `schemas/**` / `tools/**` 仍未改动。
 3. **门禁共享文件已按行分配完毕**：`vitest.config.ts` 第 14–16 行、`tsconfig.json` 第 49 行的 `src/features/pipeline/contracts/**` exclude 归 ISSUE-006，不属于本次改动范围，勿误删。
 4. **凭据写入面已验证可用**：`POST /api/settings` 写 Gemini Key 走真实 API 校验 + 加密存储，后续 issue 如需真实运行证据可复用同一路径，不必再单独打通。
 5. **若需复验**：`git show 847722d`（实现）、`git show 4b621fe`（文档+证据）；grep `NOT_AVAILABLE_STAGE_A` 应全仓库零命中。

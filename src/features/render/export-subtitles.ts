@@ -43,7 +43,7 @@ export async function buildSubtitleAss(
     plan.shots.map(async (shot) => {
       // 明暗判定对占位镜头也要做：占位是黑场，探针会稳定落到 on-dark。
       const contrast = await probeContrast(
-        storage.localPath(shot.video.storageKey)
+        await storage.materializeLocalPath(shot.video.storageKey)
       )
       if (!shot.subtitle) return placeholderAssShot(shot, plan.fps, contrast)
       let parsed: z.infer<typeof subtitleTrackSchema>

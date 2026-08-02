@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { streamBus } from '@/lib/stream/stream-bus'
 import { createStageRunner } from './stage-runner'
 import type { DirectorRunResult } from './pi-session'
 import type { DirectorStageContext } from './runtime-repository'
@@ -197,6 +198,40 @@ describe('createStageRunner', () => {
       projectId: 'project-1',
       nodeId: 'node-1',
     })
+  })
+
+  it('does not register a session pointer when durable close fails', async () => {
+    const harness = createHarness()
+    const uploadError = new Error('session upload failed')
+    const projectId = 'project-stream-close-failure'
+    const nodeId = 'node-stream-close-failure'
+    const streamKey = `${projectId}:${nodeId}`
+    const eventTypes: string[] = []
+    const unsubscribe = streamBus.subscribe(streamKey, (event) => {
+      eventTypes.push(event.type)
+    })
+    harness.session.close.mockImplementationOnce(async () => {
+      harness.calls.push('close')
+      throw uploadError
+    })
+
+    try {
+      await expect(
+        harness.runner(projectId, nodeId, 'INGEST'),
+      ).rejects.toBe(uploadError)
+    } finally {
+      unsubscribe()
+    }
+
+    expect(harness.session.close).toHaveBeenCalledOnce()
+    expect(harness.repository.registerArtifactPointer).not.toHaveBeenCalled()
+    expect(eventTypes).not.toContain('done')
+    expect(eventTypes.at(-1)).toBe('error')
+    expect(harness.transitionNodeStatus).toHaveBeenCalledWith(
+      nodeId,
+      'failed',
+      undefined,
+    )
   })
 
   it('passes the queue attempt id into the Director session', async () => {
@@ -519,6 +554,51 @@ describe('createStageRunner', () => {
       'running',
     ])
     expect(harness.repository.recordStageError).not.toHaveBeenCalled()
+  })
+
+  it('fails a provider wait when durable session close also fails', async () => {
+    const harness = createHarness()
+    const wait = new ProviderQueueDeferral({
+      providerId: 'stepfun',
+      providerLabel: '阶跃星辰',
+      retryAt: new Date('2026-07-30T05:02:41.400Z'),
+      scopeKey: 'managed:stepfun',
+      waitReason: 'pacing',
+    })
+    const uploadError = new Error('session upload failed')
+    const projectId = 'project-deferral-close-failure'
+    const nodeId = 'node-deferral-close-failure'
+    const eventTypes: string[] = []
+    const unsubscribe = streamBus.subscribe(`${projectId}:${nodeId}`, (event) => {
+      eventTypes.push(event.type)
+    })
+    harness.runStageEffect.mockRejectedValueOnce(wait)
+    harness.session.close.mockImplementationOnce(async () => {
+      harness.calls.push('close')
+      throw uploadError
+    })
+
+    let failure: unknown
+    try {
+      failure = await harness.runner(
+        projectId,
+        nodeId,
+        'ASSEMBLE',
+        'attempt-1',
+      ).catch((error: unknown) => error)
+    } finally {
+      unsubscribe()
+    }
+
+    expect(failure).toBeInstanceOf(AggregateError)
+    expect((failure as AggregateError).errors).toEqual([wait, uploadError])
+    expect(eventTypes).not.toContain('done')
+    expect(eventTypes.at(-1)).toBe('error')
+    expect(harness.transitionNodeStatus.mock.calls.map((call) => call[1])).toEqual([
+      'running',
+      'failed',
+    ])
+    expect(harness.repository.registerArtifactPointer).not.toHaveBeenCalled()
   })
 
   it('resumes only the committed subtitle side effect after a provider wait', async () => {

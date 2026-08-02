@@ -45,6 +45,12 @@ export class LocalFsStorage implements StorageAdapter {
     return this.resolve(key)
   }
 
+  async materializeLocalPath(key: string): Promise<string> {
+    const file = this.resolve(key)
+    await stat(file)
+    return file
+  }
+
   async delete(key: string): Promise<void> {
     await rm(this.resolve(key), { force: true })
   }

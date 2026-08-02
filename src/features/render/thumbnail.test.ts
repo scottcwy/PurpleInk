@@ -128,6 +128,7 @@ describe('captureThumbnails', () => {
     )
 
     expect(openCapture).toHaveBeenCalledTimes(1)
+    expect(storage.materializeLocalPath).toHaveBeenCalledWith(context.htmlKey)
     expect(captureOrder).toEqual([0, 35, 56])
     expect(session.close).toHaveBeenCalledTimes(1)
     expect(results.map((result) => result.frame)).toEqual([56, 0, 35])
@@ -239,7 +240,10 @@ function createStorage(overrides: { exists: () => Promise<boolean> }) {
     put: vi.fn(async (key: string) => key),
     get: vi.fn(async () => Buffer.from('<html>deterministic</html>')),
     exists: vi.fn(overrides.exists),
-    localPath: vi.fn((key: string) => key),
+    localPath: vi.fn(() => {
+      throw new Error('direct localPath must not be used')
+    }),
+    materializeLocalPath: vi.fn(async (key: string) => key),
     delete: vi.fn(async () => {}),
     tempDir: vi.fn(async (prefix: string) => prefix),
     readLocalFile: vi.fn(async () => Buffer.from('')),

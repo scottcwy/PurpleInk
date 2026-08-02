@@ -92,7 +92,9 @@ describe('exportProject', () => {
     const tempRoot = await createTempRoot()
     const storage = createStorage()
     vi.mocked(storage.exists).mockResolvedValue(true)
-    vi.mocked(storage.localPath).mockImplementation((key) => path.join(tempRoot, key))
+    vi.mocked(storage.materializeLocalPath).mockImplementation(async (key) =>
+      path.join(tempRoot, key)
+    )
     vi.mocked(storage.put).mockImplementation(async (key) => key)
     vi.mocked(storage.tempDir).mockImplementation((prefix) =>
       mkdtemp(path.join(tempRoot, prefix))
@@ -115,6 +117,10 @@ describe('exportProject', () => {
       await writeFile(outputPath, Buffer.from('deterministic-final-mp4'))
       return successfulConcat(outputPath)
     })
+    const assembly = {
+      ...completeMediaPlan(),
+      musicKey: 'audio/music.mp3',
+    }
 
     const result = await exportProject('project-1', ATTEMPT_ID, {
       repository: {
@@ -124,12 +130,12 @@ describe('exportProject', () => {
             { nodeId: 'node-2', laneKey: 'S002', outputKey: 'render/S002.mp4' },
             { nodeId: 'node-1', laneKey: 'S001', outputKey: 'render/S001.mp4' },
           ],
-          musicKey: null,
+          musicKey: assembly.musicKey,
           subtitles: 'burn-in' as const,
           targetResolution: { width: 1920, height: 1080 },
           resolutionPreset: '1920x1080' as const,
           shotQa: {},
-          ...mediaFields(completeMediaPlan()),
+          ...mediaFields(assembly),
         })),
         registerFinalDelivery,
       },
@@ -147,7 +153,19 @@ describe('exportProject', () => {
         path.join(tempRoot, 'audio/U001.mp3'),
         path.join(tempRoot, 'audio/U002.mp3'),
       ],
+      musicPath: path.join(tempRoot, 'audio/music.mp3'),
     })
+    expect(
+      vi.mocked(storage.materializeLocalPath).mock.calls.map(([key]) => key),
+    ).toEqual([
+      'render/S001.mp4',
+      'render/S002.mp4',
+      'render/S001.mp4',
+      'render/S002.mp4',
+      'audio/U001.mp3',
+      'audio/U002.mp3',
+      'audio/music.mp3',
+    ])
     expect(concat.mock.calls[0]?.[2]).toContain('Dialogue:')
     expect(registerFinalDelivery.mock.calls[0]?.[0]).toMatchObject({
       subtitles: 'burn-in',
@@ -162,7 +180,9 @@ describe('exportProject', () => {
     const tempRoot = await createTempRoot()
     const storage = createStorage()
     vi.mocked(storage.exists).mockResolvedValue(true)
-    vi.mocked(storage.localPath).mockImplementation((key) => path.join(tempRoot, key))
+    vi.mocked(storage.materializeLocalPath).mockImplementation(async (key) =>
+      path.join(tempRoot, key)
+    )
     vi.mocked(storage.tempDir).mockImplementation((prefix) =>
       mkdtemp(path.join(tempRoot, prefix))
     )
@@ -224,7 +244,9 @@ describe('exportProject', () => {
     const tempRoot = await createTempRoot()
     const storage = createStorage()
     vi.mocked(storage.exists).mockResolvedValue(true)
-    vi.mocked(storage.localPath).mockImplementation((key) => path.join(tempRoot, key))
+    vi.mocked(storage.materializeLocalPath).mockImplementation(async (key) =>
+      path.join(tempRoot, key)
+    )
     vi.mocked(storage.tempDir).mockImplementation((prefix) =>
       mkdtemp(path.join(tempRoot, prefix))
     )
@@ -519,7 +541,9 @@ describe('getExportReadiness', () => {
     const tempRoot = await createTempRoot()
     const storage = createStorage()
     const puts: Array<{ key: string; bytes: Buffer }> = []
-    vi.mocked(storage.localPath).mockImplementation((key) => path.join(tempRoot, key))
+    vi.mocked(storage.materializeLocalPath).mockImplementation(async (key) =>
+      path.join(tempRoot, key)
+    )
     vi.mocked(storage.put).mockImplementation(async (key, data) => {
       puts.push({ key, bytes: Buffer.from(data) })
       return key
@@ -760,7 +784,10 @@ function createStorage(): StorageAdapter {
       )
     }),
     exists: vi.fn(),
-    localPath: vi.fn(),
+    localPath: vi.fn(() => {
+      throw new Error('direct localPath must not be used')
+    }),
+    materializeLocalPath: vi.fn(async (key: string) => key),
     delete: vi.fn(),
     tempDir: vi.fn(),
     readLocalFile: vi.fn(),

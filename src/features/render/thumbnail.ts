@@ -146,7 +146,8 @@ async function captureMissingFrames(
 ): Promise<Map<number, { artifactId: string; contentHash: string }>> {
   const orderedFrames = [...new Set(frames)].sort((left, right) => left - right)
   const results = new Map<number, { artifactId: string; contentHash: string }>()
-  const session = await deps.openCapture(deps.storage.localPath(context.htmlKey), {
+  const htmlPath = await deps.storage.materializeLocalPath(context.htmlKey)
+  const session = await deps.openCapture(htmlPath, {
     width: context.frames.width,
     height: context.frames.height,
   })

@@ -77,8 +77,11 @@ export class HyperframesRenderer implements Renderer {
     let sequence: FrameSequence | undefined
     let workDirectory: string | undefined
     try {
+      const htmlPath = await this.dependencies.storage.materializeLocalPath(
+        job.htmlKey,
+      )
       sequence = await this.dependencies.captureSequence(
-        this.dependencies.storage.localPath(job.htmlKey),
+        htmlPath,
         job.frames.durationInFrames,
         job.frames.fps,
         { width: job.frames.width, height: job.frames.height }

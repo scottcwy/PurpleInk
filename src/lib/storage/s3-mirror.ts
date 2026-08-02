@@ -20,6 +20,7 @@ export class S3MirrorStorage implements StorageAdapter {
   }
 
   private async writeLocalCache(key: string, bytes: Buffer): Promise<void> {
+    this.trustedLocalKeys.delete(key)
     try {
       await this.local.put(key, bytes)
       this.trustedLocalKeys.add(key)
@@ -67,6 +68,22 @@ export class S3MirrorStorage implements StorageAdapter {
     if (!this.trustedLocalKeys.has(canonicalKey)) {
       throw new Error('untrusted local cache entry')
     }
+    return this.local.localPath(canonicalKey)
+  }
+
+  async materializeLocalPath(key: string): Promise<string> {
+    const canonicalKey = canonicalizeStorageKey(key)
+    if (
+      this.trustedLocalKeys.has(canonicalKey)
+      && await this.local.exists(canonicalKey)
+    ) {
+      return this.local.localPath(canonicalKey)
+    }
+    const bytes = await this.remote.getObject(canonicalKey)
+    if (!bytes) {
+      throw new Error(`存储对象缺失: ${canonicalKey}`)
+    }
+    await this.writeLocalCache(canonicalKey, bytes)
     return this.local.localPath(canonicalKey)
   }
 
