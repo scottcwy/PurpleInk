@@ -5,7 +5,9 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { runCli } from './cli'
+import { readEffectiveCliConfig } from './config'
 import type { SecretProtector } from './dpapi'
+import { LocalConfigStore, resolveLocalConfigPaths } from './local-config'
 
 const roots: string[] = []
 
@@ -14,6 +16,61 @@ afterEach(async () => {
 })
 
 describe('lazy local secret loading', () => {
+  it('does not parse a corrupt local config for help', async () => {
+    const root = await corruptedRoot()
+    const lines: string[] = []
+
+    const code = await runCli(
+      ['help', '--json'],
+      { LOCALAPPDATA: root },
+      { writeLine: (line) => lines.push(line) },
+      { localAppData: root },
+    )
+
+    expect(code).toBe(0)
+    expect(JSON.parse(lines[0]!)).toMatchObject({ ok: true, command: 'help' })
+  })
+
+  it('does not parse a corrupt local config for a fixture plan', async () => {
+    const root = await corruptedRoot()
+    const scriptPath = join(root, 'script.md')
+    await writeFile(scriptPath, '# Fixture\n\n## One\nFixture-only plan.', 'utf8')
+    const lines: string[] = []
+
+    const code = await runCli(
+      ['plan', scriptPath, '--provider', 'fixture', '--output', join(root, 'runs'), '--json'],
+      { LOCALAPPDATA: root },
+      { writeLine: (line) => lines.push(line) },
+      { localAppData: root },
+    )
+
+    expect(code).toBe(0)
+    expect(JSON.parse(lines[0]!)).toMatchObject({ ok: true, command: 'plan' })
+  })
+
+  it('does not parse a corrupt local config when the environment has a complete text profile', async () => {
+    const root = await corruptedRoot()
+    const store = new LocalConfigStore(resolveLocalConfigPaths({ LOCALAPPDATA: root }, root), throwingProtector())
+
+    const config = await readEffectiveCliConfig(
+      {
+        LOCALAPPDATA: root,
+        SCRIPT_VIDEO_AI_BASE_URL: 'https://api.example.test/v1',
+        SCRIPT_VIDEO_AI_API_KEY: 'synthetic-environment-token',
+        SCRIPT_VIDEO_AI_MODEL: 'environment-model',
+      },
+      process.cwd(),
+      store,
+      { loadTextSecret: true },
+    )
+
+    expect(config.ai).toMatchObject({
+      baseUrl: 'https://api.example.test/v1',
+      apiKey: 'synthetic-environment-token',
+      textModel: 'environment-model',
+    })
+  })
+
   it.each([
     ['help', ['help', '--json'], 0, undefined],
     ['status', ['status', '--json'], 1, 'RUN_NOT_FOUND'],
@@ -76,6 +133,15 @@ async function configuredRoot(): Promise<string> {
     })}\n`,
     'utf8',
   )
+  return root
+}
+
+async function corruptedRoot(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'purpleink-corrupt-config-'))
+  roots.push(root)
+  const purpleInk = join(root, 'PurpleInk')
+  await mkdir(purpleInk, { recursive: true })
+  await writeFile(join(purpleInk, 'config.json'), '{not valid JSON', 'utf8')
   return root
 }
 

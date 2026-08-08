@@ -71,14 +71,18 @@ export async function readEffectiveCliConfig(
 ): Promise<CliConfig> {
   const configured = readCliConfig(env, cwd)
   const base = options.provider ? { ...configured, provider: options.provider } : configured
-  if (!localStore) return base
+  if (
+    !localStore ||
+    options.loadTextSecret === false ||
+    base.provider === 'fixture' ||
+    hasCompleteEnvironmentTextProfile(env)
+  ) {
+    return base
+  }
   const local = await localStore.read()
   const concurrency = env.SCRIPT_VIDEO_CONCURRENCY?.trim()
     ? base.concurrency
     : (local?.concurrency.text ?? base.concurrency)
-  if (options.loadTextSecret === false || base.provider === 'fixture' || hasEnvironmentTextProfile(env)) {
-    return { ...base, concurrency }
-  }
   if (!local?.text) return { ...base, concurrency }
   const localAi = await localStore.loadTextProvider()
   return {
@@ -125,8 +129,8 @@ function boundedInteger(value: string | undefined, fallback: number, min: number
   return Math.min(max, Math.max(min, parsed))
 }
 
-function hasEnvironmentTextProfile(env: NodeJS.ProcessEnv): boolean {
-  return [env.SCRIPT_VIDEO_AI_BASE_URL, env.SCRIPT_VIDEO_AI_API_KEY, env.SCRIPT_VIDEO_AI_MODEL].some((value) =>
+function hasCompleteEnvironmentTextProfile(env: NodeJS.ProcessEnv): boolean {
+  return [env.SCRIPT_VIDEO_AI_BASE_URL, env.SCRIPT_VIDEO_AI_API_KEY, env.SCRIPT_VIDEO_AI_MODEL].every((value) =>
     Boolean(value?.trim()),
   )
 }
