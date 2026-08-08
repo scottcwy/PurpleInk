@@ -1,7 +1,9 @@
 import type { NarrationMode } from './contracts'
 import type { CliProvider } from './config'
+import { SafeCliError } from './safe-error'
 
-export type CliCommand = 'run' | 'plan' | 'status' | 'doctor' | 'help'
+export type CliCommand = 'run' | 'plan' | 'status' | 'doctor' | 'help' | 'config'
+export type ConfigAction = 'set' | 'show' | 'verify'
 
 export interface CliArgs {
   command: CliCommand
@@ -13,10 +15,16 @@ export interface CliArgs {
   json: boolean
   skipBrowserGate: boolean
   provider: CliProvider | undefined
+  configAction?: ConfigAction
+  configTarget?: 'text'
+  configUrl?: string
+  configModel?: string
+  keyStdin?: boolean
 }
 
 export function parseCliArgs(argv: readonly string[]): CliArgs {
   const [first, ...rest] = argv
+  if (first === 'config') return parseConfigArgs(rest)
   const command = parseCommand(first)
   const result: CliArgs = {
     command,
@@ -83,10 +91,68 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
   return result
 }
 
+function parseConfigArgs(args: readonly string[]): CliArgs {
+  const action = parseConfigAction(args[0])
+  const target = action === 'show' ? undefined : parseConfigTarget(args[1])
+  const result: CliArgs = {
+    command: 'config',
+    inputPath: undefined,
+    outputDir: undefined,
+    resumeDir: undefined,
+    concurrency: undefined,
+    narration: undefined,
+    json: false,
+    skipBrowserGate: false,
+    provider: undefined,
+    configAction: action,
+    ...(target ? { configTarget: target } : {}),
+    keyStdin: false,
+  }
+  const flagStart = action === 'show' ? 1 : 2
+  for (let index = flagStart; index < args.length; index += 1) {
+    const flag = args[index]
+    if (!flag) continue
+    if (flag === '--json') {
+      result.json = true
+      continue
+    }
+    if (flag === '--api-key') {
+      throw new SafeCliError('KEY_ARGUMENT_FORBIDDEN', '禁止通过 --api-key 传递密钥；请使用 --key-stdin。', false, 400)
+    }
+    if (flag === '--key-stdin' && action === 'set') {
+      result.keyStdin = true
+      continue
+    }
+    if (flag === '--url' && action === 'set') {
+      result.configUrl = takeValue(args, ++index, flag)
+      continue
+    }
+    if (flag === '--model' && action === 'set') {
+      result.configModel = takeValue(args, ++index, flag)
+      continue
+    }
+    throw new SafeCliError('CLI_ARGUMENT_INVALID', 'config 命令参数无效。', false, 400)
+  }
+  if (action === 'set' && (!result.configUrl || !result.configModel)) {
+    throw new SafeCliError('CLI_ARGUMENT_INVALID', 'config set text 需要 --url 和 --model。', false, 400)
+  }
+  return result
+}
+
 function parseCommand(value: string | undefined): CliCommand {
   if (!value || value === '--help' || value === '-h') return 'help'
   if (value === 'run' || value === 'plan' || value === 'status' || value === 'doctor' || value === 'help') return value
   throw new Error(`未知 CLI 命令: ${value}`)
+}
+
+function parseConfigAction(value: string | undefined): ConfigAction {
+  if (value === 'set' || value === 'show' || value === 'verify') return value
+  throw new SafeCliError('CONFIG_ACTION_INVALID', 'config 只支持 set、show、verify。', false, 400)
+}
+
+function parseConfigTarget(value: string | undefined): 'text' {
+  if (value === 'text') return value
+  throw new SafeCliError('CONFIG_TARGET_INVALID', '当前 config 目标只支持 text。', false, 400)
 }
 
 function takeValue(args: readonly string[], index: number, flag: string): string {

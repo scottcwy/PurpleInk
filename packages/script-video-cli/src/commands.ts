@@ -41,7 +41,8 @@ export async function executeCliCommand(args: CliArgs, config: CliConfig): Promi
   if (args.command === 'doctor') return runDoctor(effectiveConfig)
   if (args.command === 'status') return runStatus(args, effectiveConfig)
   if (args.command === 'plan') return runPlan(args, effectiveConfig)
-  return runVideo(args, effectiveConfig)
+  if (args.command === 'run') return runVideo(args, effectiveConfig)
+  throw new Error('config 命令必须由 CLI 配置边界处理')
 }
 
 async function runPlan(args: CliArgs, config: CliConfig): Promise<unknown> {
@@ -303,6 +304,9 @@ function errorCode(error: unknown): string {
 }
 function helpText(): string {
   return [
+    'purpleink-video config set text --url <url> --model <id> --key-stdin',
+    'purpleink-video config show --json',
+    'purpleink-video config verify text --json',
     'purpleink-video run <script.json|script.md> [--concurrency N] [--narration off|auto|required]',
     'purpleink-video plan <script.json|script.md> [--provider fixture|openai-compatible]',
     'purpleink-video status [--run <run-directory>]',

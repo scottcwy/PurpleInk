@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 
 import { createOpenAiCompatibleClient, type AiClient, type OpenAiCompatibleConfig } from './ai/openai-compatible'
 import { createFixtureAiClient } from './ai/fixture'
+import type { LocalConfigStore } from './local-config'
 
 export const WORKFLOW_VERSION = 'script-video-cli-v1' as const
 export type CliProvider = 'openai-compatible' | 'fixture'
@@ -62,6 +63,31 @@ export function readCliConfig(env: NodeJS.ProcessEnv = process.env, cwd = proces
   }
 }
 
+export async function readEffectiveCliConfig(
+  env: NodeJS.ProcessEnv = process.env,
+  cwd = process.cwd(),
+  localStore?: LocalConfigStore,
+): Promise<CliConfig> {
+  const base = readCliConfig(env, cwd)
+  if (!localStore) return base
+  const local = await localStore.read()
+  const concurrency = env.SCRIPT_VIDEO_CONCURRENCY?.trim()
+    ? base.concurrency
+    : (local?.concurrency.text ?? base.concurrency)
+  if (base.provider === 'fixture' || hasEnvironmentTextProfile(env)) return { ...base, concurrency }
+  if (!local?.text) return { ...base, concurrency }
+  const localAi = await localStore.loadTextProvider()
+  return {
+    ...base,
+    concurrency,
+    ai: {
+      ...base.ai,
+      ...localAi,
+      visionModel: base.ai.visionModel,
+    },
+  }
+}
+
 export function createConfiguredAiClient(config: CliConfig): AiClient {
   return config.provider === 'fixture' ? createFixtureAiClient() : createOpenAiCompatibleClient(config.ai)
 }
@@ -93,4 +119,10 @@ function boundedInteger(value: string | undefined, fallback: number, min: number
   const parsed = Number(value)
   if (!Number.isInteger(parsed)) throw new Error('环境变量中的整数配置无效')
   return Math.min(max, Math.max(min, parsed))
+}
+
+function hasEnvironmentTextProfile(env: NodeJS.ProcessEnv): boolean {
+  return [env.SCRIPT_VIDEO_AI_BASE_URL, env.SCRIPT_VIDEO_AI_API_KEY, env.SCRIPT_VIDEO_AI_MODEL].some((value) =>
+    Boolean(value?.trim()),
+  )
 }

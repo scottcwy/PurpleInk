@@ -1,6 +1,11 @@
 import { parseCliArgs, type CliArgs } from './args'
 import { executeCliCommand } from './commands'
-import { loadLocalEnvFile, readCliConfig } from './config'
+import { executeConfigCommand, type TextProviderVerifier } from './config-command'
+import { loadLocalEnvFile, readEffectiveCliConfig } from './config'
+import { WindowsCurrentUserDpapiProtector, type SecretProtector } from './dpapi'
+import { LocalConfigStore, resolveLocalConfigPaths, type LocalConfigIo } from './local-config'
+import { projectSafeError } from './safe-error'
+import { createProcessSecretInput, type SecretInput } from './secret-input'
 
 export { parseCliArgs }
 export type { CliArgs }
@@ -9,27 +14,59 @@ export interface CliOutput {
   writeLine(line: string): void
 }
 
+export interface CliRuntimeOptions {
+  localAppData?: string
+  now?: () => Date
+  configIo?: LocalConfigIo
+  secretProtector?: SecretProtector
+  secretInput?: SecretInput
+  stdinIsTty?: boolean
+  verifyTextProvider?: TextProviderVerifier
+}
+
 export async function runCli(
   argv: readonly string[] = process.argv.slice(2),
   env: NodeJS.ProcessEnv = process.env,
   output: CliOutput = { writeLine: (line) => console.log(line) },
+  runtime: CliRuntimeOptions = {},
 ): Promise<number> {
   let args: CliArgs | undefined
+  const jsonRequested = argv.includes('--json')
+  let command = inferCommandKey(argv)
   try {
     loadLocalEnvFile(env)
     args = parseCliArgs(argv)
-    const config = readCliConfig(env)
-    const result = await executeCliCommand(args, config)
-    output.writeLine(args.json ? JSON.stringify({ ok: true, result }) : formatHumanResult(result))
+    command = commandKey(args)
+    const store = createLocalStore(env, runtime)
+    const result =
+      args.command === 'config'
+        ? await executeConfigCommand(args, {
+            store,
+            secretInput: runtime.secretInput ?? createProcessSecretInput(),
+            stdinIsTty: runtime.stdinIsTty ?? process.stdin.isTTY === true,
+            verifyTextProvider: runtime.verifyTextProvider,
+          })
+        : await executeCliCommand(args, await readEffectiveCliConfig(env, process.cwd(), store))
+    const runId = isRecord(result) && typeof result.runId === 'string' ? result.runId : undefined
+    const envelope = { ok: true, command, ...(runId ? { runId } : {}), data: result }
+    output.writeLine(args.json ? JSON.stringify(envelope) : formatHumanResult(result))
     return 0
   } catch (error) {
-    const code = errorCode(error)
-    const payload = { ok: false, error: { code } }
+    const safeError = projectSafeError(error)
+    const payload = { ok: false, command, error: safeError }
     output.writeLine(
-      args?.json ? JSON.stringify(payload) : `失败（${code}）。请运行 purpleink-video doctor 检查本地依赖。`,
+      args?.json || jsonRequested ? JSON.stringify(payload) : `失败（${safeError.code}）：${safeError.message}`,
     )
     return 1
   }
+}
+
+function createLocalStore(env: NodeJS.ProcessEnv, runtime: CliRuntimeOptions): LocalConfigStore {
+  return new LocalConfigStore(
+    resolveLocalConfigPaths(env, runtime.localAppData),
+    runtime.secretProtector ?? new WindowsCurrentUserDpapiProtector(),
+    { io: runtime.configIo, now: runtime.now },
+  )
 }
 
 function formatHumanResult(value: unknown): string {
@@ -47,8 +84,23 @@ function formatHumanResult(value: unknown): string {
   return JSON.stringify(value, null, 2)
 }
 
-function errorCode(error: unknown): string {
-  return isRecord(error) && typeof error.code === 'string' ? error.code : 'CLI_FAILED'
+function commandKey(args: CliArgs): string {
+  if (args.command !== 'config') return args.command
+  if (args.configAction === 'set') return 'config.set.text'
+  if (args.configAction === 'verify') return 'config.verify.text'
+  return 'config.show'
+}
+
+function inferCommandKey(argv: readonly string[]): string {
+  if (argv[0] !== 'config') {
+    return argv[0] === 'run' || argv[0] === 'plan' || argv[0] === 'status' || argv[0] === 'doctor' || argv[0] === 'help'
+      ? argv[0]
+      : 'help'
+  }
+  if (argv[1] === 'set') return 'config.set.text'
+  if (argv[1] === 'verify') return 'config.verify.text'
+  if (argv[1] === 'show') return 'config.show'
+  return 'config'
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
