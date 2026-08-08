@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "title": "并发生成脚本视频",
+  "language": "zh-CN",
+  "durationSec": 14,
+  "visualStyle": "technical editorial",
+  "narration": "off",
+  "units": [
+    {
+      "id": "U001",
+      "text": "先把事实拆成可以验证的文稿单元。",
+      "visualIntent": "show"
+    },
+    {
+      "id": "U002",
+      "text": "再让多个镜头并发生成，而不是等待单条线性时间轴。",
+      "visualIntent": "compare"
+    }
+  ]
+}

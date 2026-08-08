@@ -1,4 +1,4 @@
-import { copyFile, mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { resolve, relative, join, dirname, isAbsolute, sep } from 'node:path'
 
 import type { NarrationMode, ScriptVideoInput, ShotPlan } from '../contracts'
@@ -64,7 +64,8 @@ export async function assembleProject(
     if (!shot?.relativeHtmlPath) throw new AssemblyError('SHOT_GATE_REQUIRED', `镜头 ${plan.id} 缺少已通过 gate 的 HTML`)
     const sourcePath = resolveInside(resolve(options.outputDir), shot.relativeHtmlPath)
     const compositionPath = join(compositionDir, `${plan.id}.html`)
-    await copyFile(sourcePath, compositionPath)
+    const sourceHtml = await readFile(sourcePath, 'utf8')
+    await writeFile(compositionPath, createShotCompositionHtml(plan, sourceHtml), 'utf8')
     compositionPaths.push(`compositions/${plan.id}.html`)
   }
 
@@ -131,7 +132,7 @@ function createIndexHtml(
 ): string {
   let start = 0
   const hosts = plans.map((plan, index) => {
-    const host = `    <div data-composition-id="host-${plan.id}" data-composition-src="${compositionPaths[index]}" data-start="${round(start)}" data-duration="${round(plan.durationSec)}" data-width="1920" data-height="1080"></div>`
+    const host = `    <div id="host-${plan.id}" data-composition-id="host-${plan.id}" data-composition-src="${compositionPaths[index]}" data-start="${round(start)}" data-duration="${round(plan.durationSec)}" data-width="1920" data-height="1080"></div>`
     start += plan.durationSec
     return host
   }).join('\n')
@@ -148,8 +149,30 @@ function createIndexHtml(
 ${hosts}
   </div>
 </body>
+<script>
+${createTimelineScript('main', durationSec)}
+</script>
 </html>
 `
+}
+
+function createShotCompositionHtml(plan: ShotPlan, source: string): string {
+  const styles = [...source.matchAll(/<style\b[^>]*>[\s\S]*?<\/style>/giu)].map((match) => match[0]).join('\n')
+  const scripts = [...source.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/giu)].map((match) => match[0]).join('\n')
+  const body = source.match(/<body\b[^>]*>([\s\S]*?)<\/body>/iu)?.[1] ?? ''
+  return `<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">${styles}</head><body>
+<div id="shot-${plan.id}" data-composition-id="${plan.id}" data-width="1920" data-height="1080" data-start="0" data-duration="${round(plan.durationSec)}">
+${body.replace(/<script\b[^>]*>[\s\S]*?<\/script>/giu, '')}
+</div>
+${scripts}
+<script>${createTimelineScript(plan.id, plan.durationSec)}</script>
+</body></html>
+`
+}
+
+function createTimelineScript(id: string, durationSec: number): string {
+  return `window.__timelines=window.__timelines||{};window.__timelines[${JSON.stringify(id)}]=(function(){var current=0;return{duration:function(){return ${round(durationSec)}},time:function(value){if(value===undefined)return current;current=Number(value)||0;var render=window.__PURPLEINK_RENDER__;if(render&&typeof render.seek==='function')render.seek(current/${round(durationSec)});return this},seek:function(value){return this.time(value)},pause:function(){return this},play:function(){return this}}})();`
 }
 
 function createSubtitles(input: ScriptVideoInput, plans: readonly ShotPlan[]): string {

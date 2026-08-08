@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "hyperframes": "0.7.70",
     "playwright": "1.62.0",
     "zod": "^4.4.3"
   }

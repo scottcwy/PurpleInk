@@ -1,6 +1,9 @@
 import { spawn } from 'node:child_process'
 import { access, readdir, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
+
+const require = createRequire(import.meta.url)
 
 export interface CommandOptions {
   cwd: string
@@ -43,14 +46,16 @@ export async function renderHyperframesProject(
   options: HyperframesRenderOptions = {},
 ): Promise<HyperframesRenderResult> {
   const runner = options.runner ?? runCommand
-  const cliPath = options.cliPath ?? defaultCliPath()
+  const invocation = options.cliPath
+    ? { command: options.cliPath, prefix: [] as string[] }
+    : defaultCliInvocation()
   const commandOptions = { cwd: projectDir, signal: options.signal, timeoutMs: options.timeoutMs ?? 20 * 60 * 1000 }
   options.signal?.throwIfAborted()
-  const check = await runner(cliPath, ['check'], commandOptions)
+  const check = await runner(invocation.command, [...invocation.prefix, 'check'], commandOptions)
   if (check.code !== 0) throw new HyperframesError('HYPERFRAMES_CHECK_FAILED', 'HyperFrames composition check failed')
   const renderArgs = ['render', '--quality', options.quality ?? 'standard']
   if (options.fps !== undefined) renderArgs.push('--fps', String(options.fps))
-  const render = await runner(cliPath, renderArgs, commandOptions)
+  const render = await runner(invocation.command, [...invocation.prefix, ...renderArgs], commandOptions)
   if (render.code !== 0) throw new HyperframesError('HYPERFRAMES_RENDER_FAILED', 'HyperFrames render failed')
   const videoPath = await findLatestVideo(join(projectDir, 'renders'))
   if (!videoPath) throw new HyperframesError('VIDEO_NOT_FOUND', 'HyperFrames 没有产生 MP4 产物')
@@ -66,14 +71,19 @@ async function findLatestVideo(rendersDir: string): Promise<string | null> {
   return files.sort((a, b) => b.modified - a.modified)[0]?.path ?? null
 }
 
-function defaultCliPath(): string {
-  return process.platform === 'win32' ? 'hyperframes.cmd' : 'hyperframes'
+function defaultCliInvocation(): { command: string; prefix: string[] } {
+  try {
+    const packageJson = require.resolve('hyperframes/package.json')
+    return { command: process.execPath, prefix: [join(dirname(packageJson), 'bin', 'hyperframes.mjs')] }
+  } catch {
+    return { command: 'hyperframes', prefix: [] }
+  }
 }
 
 const runCommand: CommandRunner = (command, args, options) => new Promise((resolve, reject) => {
   const child = spawn(command, [...args], {
     cwd: options.cwd,
-    shell: process.platform === 'win32' && command.toLowerCase().endsWith('.cmd'),
+    shell: false,
     windowsHide: true,
   })
   let stdout = ''

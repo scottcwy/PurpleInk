@@ -16,6 +16,7 @@
 /.playwright-cli/
 /.data/
 /.trigger/
+/.purpleink/
 
 # next.js
 /.next/
