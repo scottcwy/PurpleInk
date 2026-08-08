@@ -58,6 +58,16 @@ export function hashSourceBytes(sourceBytes: Uint8Array): string {
   return createHash('sha256').update(sourceBytes).digest('hex')
 }
 
+export function extractMarkdownNarrative(text: string): string {
+  return text
+    .replace(/\r\n?/gu, '\n')
+    .split('\n')
+    .map((line) => (/^\s*#{1,6}\s+\S/u.test(line) ? '' : line))
+    .join('\n')
+    .replace(/\n{3,}/gu, '\n\n')
+    .trim()
+}
+
 function parseMarkdown(text: string, fileName: string): ScriptVideoInput {
   const lines = text.replace(/\r\n?/gu, '\n').split('\n')
   const titleLine = lines.find((line) => /^#\s+\S/u.test(line.trim()))

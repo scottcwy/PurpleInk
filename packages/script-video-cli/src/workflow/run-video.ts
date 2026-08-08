@@ -42,8 +42,8 @@ export async function executePlanWorkflow(
   const store = new FileStateStore(resolveOutputDir(args, config))
   try {
     await store.updateRun(prepared.run.runDir, { status: 'running' })
-    const input = await resolveWorkflowInput(prepared, runtime, store)
     const ai = runtime.channels.wrapAi(createConfiguredAiClient(config))
+    const input = await resolveWorkflowInput(prepared, runtime, store, ai)
     const plan = await createPlan(input, ai, {
       store,
       runDir: prepared.run.runDir,
@@ -106,8 +106,8 @@ export async function executeVideoWorkflow(
     await store.updateRun(runDir, { status: 'running' })
     await store.appendEvent(runDir, { type: 'run.started', data: { workflowVersion: WORKFLOW_VERSION } })
     await assertNotCancelled(runDir)
-    const input = await resolveWorkflowInput(prepared, runtime, store)
     const ai = runtime.channels.wrapAi(createConfiguredAiClient(config))
+    const input = await resolveWorkflowInput(prepared, runtime, store, ai)
     const plan = await createPlan(input, ai, {
       store,
       runDir,

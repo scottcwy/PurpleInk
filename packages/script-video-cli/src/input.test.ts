@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { hashSourceBytes, parseScriptText, parseScriptValue } from './input'
+import { extractMarkdownNarrative, hashSourceBytes, parseScriptText, parseScriptValue } from './input'
 
 describe('script-video.v1 input', () => {
   it('normalizes markdown headings into ordered script units', () => {
@@ -11,6 +11,12 @@ describe('script-video.v1 input', () => {
       { id: 'U001', text: '真实事实。', visualIntent: 'show' },
       { id: 'U002', text: '第二个事实。', visualIntent: 'show' },
     ])
+  })
+
+  it('keeps narrative before and after headings for semantic ingest', () => {
+    expect(extractMarkdownNarrative('# 标题\n\n开场事实。\n\n## 证明\n\n第二个事实。')).toBe(
+      '开场事实。\n\n第二个事实。',
+    )
   })
 
   it('accepts strict JSON and rejects duplicate or empty units', () => {

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import type { DirectorPlan, ScriptUnit, ScriptVideoInput, ShotPlan } from '../contracts'
 
 export const PROMPT_ASSET_NAMES = [
+  'semantic-ingest',
   'direct',
   'shot-spec',
   'fabricate',
@@ -68,6 +69,10 @@ export function buildDirectPrompt(input: ScriptVideoInput): { system: string; us
       unitsJson: JSON.stringify(input.units),
     }),
   )
+}
+
+export function buildSemanticIngestPrompt(sourceText: string): { system: string; user: string } {
+  return pickPrompt(renderPromptAsset('semantic-ingest', { sourceJson: JSON.stringify(sourceText) }))
 }
 
 export function buildShotSpecPrompt(

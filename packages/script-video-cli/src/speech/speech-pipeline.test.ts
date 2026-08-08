@@ -11,7 +11,7 @@ import { FileStateStore } from '../state/file-store'
 import { VoiceStore } from '../voice/voice-store'
 import type { MimoSpeechClient } from './mimo-client'
 import { synthesizeShotNarrations } from './narration'
-import { transcribeAudio } from './transcription'
+import { bindTranscriptGroups, transcribeAudio } from './transcription'
 
 const roots: string[] = []
 
@@ -44,9 +44,7 @@ describe('local speech pipeline', () => {
         units: [
           {
             id: 'U001',
-            text: '这是一段真实边界的测试语音。',
-            startMs: 9999,
-            endMs: 10000,
+            sourceSegmentIds: ['U001'],
             visualIntent: 'show',
           },
         ],
@@ -91,6 +89,27 @@ describe('local speech pipeline', () => {
     expect(narration.shots[0]?.durationSec).toBeCloseTo(1, 1)
     expect(narration.effectivePlans[0]?.durationSec).toBeCloseTo(1.35, 1)
   }, 20_000)
+
+  it('merges only adjacent ASR segments and inherits their real outer timestamps', () => {
+    const segments = [
+      { id: 'U001', startMs: 100, endMs: 900, text: '第一句。', audioPath: '1.wav' },
+      { id: 'U002', startMs: 1_000, endMs: 1_900, text: '第二句。', audioPath: '2.wav' },
+      { id: 'U003', startMs: 2_000, endMs: 2_800, text: '新观点。', audioPath: '3.wav' },
+    ]
+
+    expect(
+      bindTranscriptGroups(
+        [
+          { id: 'U001', sourceSegmentIds: ['U001', 'U002'], visualIntent: 'show' },
+          { id: 'U002', sourceSegmentIds: ['U003'], visualIntent: 'contrast' },
+        ],
+        segments,
+      ),
+    ).toEqual([
+      { id: 'U001', text: '第一句。 第二句。', startMs: 100, endMs: 1_900, visualIntent: 'show' },
+      { id: 'U002', text: '新观点。', startMs: 2_000, endMs: 2_800, visualIntent: 'contrast' },
+    ])
+  })
 })
 
 function createToneWav(durationSec: number): Buffer {

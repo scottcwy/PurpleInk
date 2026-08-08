@@ -30,6 +30,8 @@
 
 - TypeScript strict，禁止 `any`。保持单一职责和短文件。
 - Prompt 只放在 `prompts/*.md`，其 SHA-256 必须参与阶段 fingerprint。
+- Markdown 必须先经过 `INGEST_SEMANTIC`：按语义而不是标题、字数、标点或时长拆分，完整保留原文并维持“一 unit 一核心判断一分镜”。
+- 音频语义整理只能合并相邻 ASR 段；文稿文本和首尾时间由程序从真实分段确定，模型不得猜测、跳段、重排或重复。
 - 默认旁白必须真实存在；只有显式 `--narration off` 才允许无音频最终视频。
 - 浏览器镜头必须本地、自包含、可 seek；禁止外部网络资源、任意文件读取和 credential-like 内容。
 - 每完成一个可验证版块，只 stage 本版块文件并做本地 Conventional Commit；不 push、不创建 PR。

@@ -6,7 +6,7 @@ import { createFixtureAiClient } from './ai/fixture'
 import type { LocalConfigStore } from './local-config'
 import { concurrencyDefaults, type ConcurrencyConfig } from './local-config'
 
-export const WORKFLOW_VERSION = 'script-video-cli-v1' as const
+export const WORKFLOW_VERSION = 'script-video-cli-v2-semantic-ingest' as const
 export type CliProvider = 'openai-compatible' | 'fixture'
 
 export interface CliConfig {

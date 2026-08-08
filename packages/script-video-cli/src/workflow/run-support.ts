@@ -2,12 +2,12 @@ import { createHash } from 'node:crypto'
 import { access, copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { basename, extname, join, resolve } from 'node:path'
 
-import { createOpenAiCompatibleClient } from '../ai/openai-compatible'
+import { createOpenAiCompatibleClient, type AiClient } from '../ai/openai-compatible'
 import type { CliArgs } from '../args'
 import type { CliConfig } from '../config'
 import { WORKFLOW_VERSION } from '../config'
 import type { ScriptVideoInput, ShotPlan } from '../contracts'
-import { readScriptFile } from '../input'
+import { extractMarkdownNarrative, readScriptFile } from '../input'
 import { concatShotAudio } from '../media/ffmpeg'
 import type { MediaQaResult } from '../qa/media'
 import { ConcurrencyChannels } from '../runtime/channels'
@@ -21,6 +21,7 @@ import type { RunRecord, StateStore } from '../state/store'
 import type { LocalConfigStore } from '../local-config'
 import type { VoiceStore } from '../voice/voice-store'
 import type { PlanResult } from './plan'
+import { semanticIngestMarkdown } from './semantic-ingest'
 
 export interface WorkflowRuntime {
   localStore: LocalConfigStore
@@ -35,6 +36,7 @@ export interface PreparedRun {
   sourcePath: string
   sourceHash: string
   input?: ScriptVideoInput
+  semanticSourceText?: string
   audio: boolean
 }
 
@@ -43,10 +45,12 @@ export async function prepareRun(args: CliArgs, config: CliConfig, requireAudio 
   const sourcePath = resolveUserPath(args.inputPath)
   const bytes = await readFile(sourcePath)
   const sourceHash = createHash('sha256').update(bytes).digest('hex')
-  const audio = ['.wav', '.mp3'].includes(extname(sourcePath).toLowerCase())
+  const extension = extname(sourcePath).toLowerCase()
+  const audio = ['.wav', '.mp3'].includes(extension)
   if (requireAudio && !audio)
     throw new SafeCliError('AUDIO_INPUT_REQUIRED', 'transcribe 只接受 WAV 或 MP3。', false, 400)
   const input = audio ? undefined : (await readScriptFile(sourcePath)).input
+  const semanticSourceText = extension === '.md' ? extractMarkdownNarrative(bytes.toString('utf8')) : undefined
   const store = new FileStateStore(resolveOutputDir(args, config))
   let run: RunRecord
   if (args.resumeDir) {
@@ -75,15 +79,24 @@ export async function prepareRun(args: CliArgs, config: CliConfig, requireAudio 
     artifactIds: ['source-input'],
     payload: { sourcePath: sourceCopy, audio },
   })
-  return { run, sourcePath: sourceCopy, sourceHash, input, audio }
+  return { run, sourcePath: sourceCopy, sourceHash, input, semanticSourceText, audio }
 }
 
 export async function resolveWorkflowInput(
   prepared: PreparedRun,
   runtime: WorkflowRuntime,
   store: StateStore,
+  ai?: AiClient,
 ): Promise<ScriptVideoInput> {
-  if (prepared.input) return prepared.input
+  if (prepared.input) {
+    if (!prepared.semanticSourceText) return prepared.input
+    if (!ai) throw new SafeCliError('TEXT_PROVIDER_REQUIRED', 'Markdown 语义拆稿需要文本模型配置。', false, 422)
+    return semanticIngestMarkdown(prepared.input, prepared.semanticSourceText, ai, {
+      store,
+      runDir: prepared.run.runDir,
+      signal: runtime.signal,
+    })
+  }
   return (await transcribePrepared(prepared, runtime, store)).input
 }
 

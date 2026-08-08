@@ -53,7 +53,7 @@
     <article class="page">
       <div class="hero"><span class="eyebrow">Agent-first local workflow</span><h1>文稿进来，<br>成片出去。</h1><p class="lead">把导演、分镜代码、浏览器检查、配音与渲染压缩成一个本地 CLI。每一步留下可读文件，AI 能定位路径，人能打开浏览器，失败只重做出问题的镜头。</p><div class="hero-actions"><a class="button" href="#quick-start">开始配置 →</a><a class="button secondary" href="#workflow">查看工作流</a></div></div>
       <div class="grid">
-        <section class="card wide"><span class="tag">INPUT</span><h2>四种输入，一条链路</h2><p>Markdown 与 JSON 直接进入 DIRECT；WAV 与 MP3 先由 FFmpeg 切出真实时间边界，再经 MiMo ASR 形成规范文稿。后续流程完全一致。</p><div class="flow"><span class="node">Markdown</span><span class="node">JSON</span><span class="node">WAV</span><span class="node">MP3</span><span class="arrow">→</span><span class="node">DIRECT</span></div></section>
+        <section class="card wide"><span class="tag">INPUT</span><h2>四种输入，一条语义链路</h2><p>Markdown 先按语义拆成“一单元一核心判断”；JSON 保留调用方明确给出的单元；WAV 与 MP3 先由 FFmpeg 切出真实时间边界，再把相邻 ASR 段按语义归组。后续统一进入 DIRECT。</p><div class="flow"><span class="node">Markdown</span><span class="node">JSON</span><span class="node">WAV</span><span class="node">MP3</span><span class="arrow">→</span><span class="node">SEMANTIC UNITS</span><span class="arrow">→</span><span class="node">DIRECT</span></div></section>
         <section class="card"><span class="tag">LOCAL</span><div class="metric">0</div><h3>SaaS 业务依赖</h3><p>没有账号、计费、套餐、云项目或远程存储。</p></section>
         <section class="card"><span class="tag">PARALLEL</span><div class="metric">6</div><h3>默认文本并发</h3><p>浏览器、TTS、ASR 与最终渲染各自限流。</p></section>
         <section class="card"><span class="tag">VISIBLE</span><h2>每个阶段都能打开</h2><p>镜头 HTML、三点截图、诊断、旁白、字幕和最终 MP4 都登记在 Artifact Index。observer 只读取这份白名单。</p></section>
@@ -114,7 +114,7 @@ doctor [--live] --json</pre></section>
   </template>
   <template data-route="workflow" data-title="Workflow">
     <article class="page"><span class="eyebrow">Workflow</span><h1>并行做镜头，串行收成片。</h1><p class="lead">DIRECT 完成全片设计后，分镜之间并发；同一分镜里的 HTML/Browser QA 与 TTS 也并发。全部就绪后，合成与渲染保持单通道。</p>
-      <div class="flow"><span class="node">INGEST</span><span class="arrow">→</span><span class="node">ASR · 可选</span><span class="arrow">→</span><span class="node">DIRECT</span><span class="arrow">→</span><span class="node">SHOT-SPEC × N</span></div>
+      <div class="flow"><span class="node">SOURCE</span><span class="arrow">→</span><span class="node">SEMANTIC INGEST / ASR</span><span class="arrow">→</span><span class="node">DIRECT</span><span class="arrow">→</span><span class="node">SHOT-SPEC × N</span></div>
       <div class="grid">
         <section class="card"><span class="tag">SHOT S001</span><h2>FABRICATE</h2><p>生成可 seek、自包含的 HTML。静态 gate 或浏览器 gate 失败时，只做一次定向修复。</p></section>
         <section class="card"><span class="tag">SHOT S001</span><h2>Browser QA</h2><p>Chromium 在 0%、50%、100% 取三张真实 PNG，并保存脱敏 console/page diagnostics。</p></section>
@@ -142,7 +142,7 @@ doctor [--live] --json</pre></section>
   final/frames/{000,001,002}.png
   artifacts/index.json           # observer 唯一白名单
   logs/</pre></section>
-      <section><h2>阶段语义</h2><table><thead><tr><th>阶段</th><th>证明什么</th></tr></thead><tbody><tr><td>INGEST / ASR</td><td>输入字节与真实音频时间边界已固定</td></tr><tr><td>DIRECT / SHOT_SPEC</td><td>AI JSON 合同已通过</td></tr><tr><td>FABRICATE / BROWSER_QA / TTS</td><td>镜头代码、三点画面和旁白就绪</td></tr><tr><td>ASSEMBLE / RENDER / AUDIO_MUX</td><td>时间线、视觉 MP4 和 AAC 音轨完成</td></tr><tr><td>MEDIA_QA / FINALIZE</td><td>媒体参数、hash、大小与抽帧验收完成</td></tr></tbody></table></section>
+      <section><h2>阶段语义</h2><table><thead><tr><th>阶段</th><th>证明什么</th></tr></thead><tbody><tr><td>INGEST / ASR</td><td>原文已连续完整地按语义拆稿，或音频已在真实时间段上完成相邻语义归组</td></tr><tr><td>DIRECT / SHOT_SPEC</td><td>一单元一核心判断一分镜，且相邻镜头的拓扑、视角与信息角色有变化</td></tr><tr><td>FABRICATE / BROWSER_QA / TTS</td><td>镜头代码、三点画面和旁白就绪</td></tr><tr><td>ASSEMBLE / RENDER / AUDIO_MUX</td><td>时间线、视觉 MP4 和 AAC 音轨完成</td></tr><tr><td>MEDIA_QA / FINALIZE</td><td>媒体参数、hash、大小与抽帧验收完成</td></tr></tbody></table></section>
       <section><h2>Artifact Index</h2><p>每条记录包含 id、kind、relativePath、absolutePath、sizeBytes、SHA-256 和可选 metadata。observer 不接受任意文件路径，只按 artifact id 返回已登记文件。</p></section>
     </article>
   </template>

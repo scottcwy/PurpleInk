@@ -13,18 +13,24 @@ export interface CompleteJsonWithRepairOptions<T> {
   schema: ContractSchema<T>
   stage: string
   prompt: AiCompletionInput
+  preserveFullPromptOnRepair?: boolean
 }
 
 export async function completeJsonWithRepair<T>(options: CompleteJsonWithRepairOptions<T>): Promise<T> {
   const first = await attemptContract(options.ai, options.prompt, options.schema)
   if (first.ok) return first.data
 
-  const repair = renderPromptAsset('json-repair', {
-    stage: compactText(options.stage, 120),
-    errorSummary: first.summary,
-    originalSystem: compactText(options.prompt.system, 1_500),
-    originalUser: compactText(options.prompt.user, 2_000),
-  })
+  const repair = options.preserveFullPromptOnRepair
+    ? {
+        system: options.prompt.system,
+        user: `${options.prompt.user}\n\n上一版未通过 ${compactText(options.stage, 120)} 合同（${first.summary}）。请根据完整原始输入重新执行，只返回修复后的严格 JSON。`,
+      }
+    : renderPromptAsset('json-repair', {
+        stage: compactText(options.stage, 120),
+        errorSummary: first.summary,
+        originalSystem: compactText(options.prompt.system, 1_500),
+        originalUser: compactText(options.prompt.user, 2_000),
+      })
   const second = await attemptContract(
     options.ai,
     { system: repair.system, user: repair.user, signal: options.prompt.signal },

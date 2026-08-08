@@ -59,4 +59,26 @@ describe('completeJsonWithRepair', () => {
     )
     expect(calls).toBe(2)
   })
+
+  it('can retain the complete source prompt for semantic repair', async () => {
+    const calls: AiCompletionInput[] = []
+    const sourceTail = '必须保留的原文结尾'
+    const ai: AiClient = {
+      completeText: async () => 'unused',
+      completeJson: async (input) => {
+        calls.push(input)
+        return calls.length === 1 ? { ok: false } : { ok: true, title: '完整修复' }
+      },
+    }
+
+    await completeJsonWithRepair({
+      ai,
+      schema: resultSchema,
+      stage: 'SEMANTIC_INGEST',
+      prompt: { system: '只返回 JSON', user: `${'长文稿'.repeat(1_000)}${sourceTail}` },
+      preserveFullPromptOnRepair: true,
+    })
+
+    expect(calls[1]?.user).toContain(sourceTail)
+  })
 })

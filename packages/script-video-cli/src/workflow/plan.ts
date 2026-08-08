@@ -99,6 +99,7 @@ async function runDirectorStage(
       schema: directorPlanSchema,
       stage: 'DIRECT',
       prompt: { ...buildDirectPrompt(input), signal },
+      preserveFullPromptOnRepair: true,
     })
     await writeStageState(state, 'DIRECT', 'succeeded', 1, stageFingerprint, parsed)
     return parsed
@@ -136,6 +137,7 @@ async function runShotStage(
       schema: shotPlanSchema,
       stage: key,
       prompt: { ...buildShotSpecPrompt(input, director, unit, id), signal },
+      preserveFullPromptOnRepair: true,
     })
     const validated = validateShotBinding(parsed, unit, id)
     await writeStageState(state, key, 'succeeded', 1, stageFingerprint, validated)

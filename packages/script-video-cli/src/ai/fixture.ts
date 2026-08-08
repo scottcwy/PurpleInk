@@ -3,6 +3,10 @@ import type { AiClient, AiCompletionInput } from './openai-compatible'
 export function createFixtureAiClient(): AiClient {
   return {
     completeJson: async (input) => {
+      if (input.user.includes('阶段：SEMANTIC_INGEST')) {
+        const source = parseJsonAfter(input.user, '原始文稿 JSON 字符串：') as string
+        return { units: [{ id: 'U001', text: source, order: 0 }] }
+      }
       if (input.user.includes('阶段：DIRECT'))
         return { masterPlan: '按来源事实建立镜头节奏。', styleBible: '本地、确定性、无外部资源。' }
       const unit = parseJsonAfter(input.user, '当前来源单元：') as { id: string; text: string; visualIntent?: string }

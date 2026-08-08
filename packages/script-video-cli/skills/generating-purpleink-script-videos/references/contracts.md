@@ -2,9 +2,9 @@
 
 ## Inputs
 
-- Markdown: first H1 is the title; H2+ sections become ordered units.
+- Markdown: the first H1 supplies the title, but unit boundaries come from semantic INGEST rather than headings, character counts, punctuation counts, or fixed duration. Units continuously cover the source in order; each carries one core judgment and maps to one shot.
 - JSON: schema version 1 with title, language, durationSec, visualStyle, narration, and ordered `U###` units.
-- WAV/MP3: FFmpeg supplies real segment boundaries; MiMo only transcribes text. The CLI writes `input/transcript.json`, `input/transcript.md`, and `input/script.json` before continuing.
+- WAV/MP3: FFmpeg supplies real segment boundaries; MiMo only transcribes text. AI may group adjacent segments semantically, while the program deterministically inherits their text and outer timestamps. The CLI writes `input/transcript.json`, `input/transcript.md`, and `input/script.json` before continuing.
 
 ## Run status
 

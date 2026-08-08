@@ -16,21 +16,19 @@ import type { StateStore } from '../state/store'
 import { buildTranscriptStructurePrompt, hashPromptAssets } from '../workflow/prompts'
 import type { MimoSpeechClient, SpeechAudioMimeType } from './mimo-client'
 
-const transcriptUnitSchema = z
+const transcriptUnitProposalSchema = z
   .object({
     id: z.string().regex(/^U\d{3}$/u),
-    text: z.string().trim().min(1),
-    startMs: z.number().int().nonnegative(),
-    endMs: z.number().int().positive(),
+    sourceSegmentIds: z.array(z.string().regex(/^U\d{3}$/u)).min(1),
     visualIntent: z.string().trim().min(1).max(48),
   })
   .strict()
 
-const structuredTranscriptSchema = z
+const structuredTranscriptBaseSchema = z
   .object({
     title: z.string().trim().min(1).max(200),
     language: z.string().trim().min(2).max(24),
-    units: z.array(transcriptUnitSchema).min(1),
+    units: z.array(transcriptUnitProposalSchema).min(1),
   })
   .strict()
 
@@ -103,11 +101,12 @@ export async function transcribeAudio(sourcePath: string, options: Transcription
     const prompt = buildTranscriptStructurePrompt(segments)
     const structured = await completeJsonWithRepair({
       ai: options.ai,
-      schema: structuredTranscriptSchema,
+      schema: structuredTranscriptSchema(segments),
       stage: 'TRANSCRIPT_STRUCTURE',
       prompt: { ...prompt, signal: options.signal },
+      preserveFullPromptOnRepair: true,
     })
-    const units = bindRealTimestamps(structured.units, segments)
+    const units = bindTranscriptGroups(structured.units, segments)
     const durationSec = Math.max(5, Math.min(600, Math.ceil((segments.at(-1)?.endMs ?? 5_000) / 1000)))
     const input = scriptVideoInputSchema.parse({
       schemaVersion: SCRIPT_VIDEO_SCHEMA_VERSION,
@@ -208,16 +207,45 @@ function parseTranscriptSegment(value: unknown): TranscriptSegment | null {
   return { id: value.id, startMs: value.startMs, endMs: value.endMs, text: value.text, audioPath: value.audioPath }
 }
 
-function bindRealTimestamps(
-  proposed: z.infer<typeof transcriptUnitSchema>[],
+export function bindTranscriptGroups(
+  proposed: z.infer<typeof transcriptUnitProposalSchema>[],
   segments: TranscriptSegment[],
-): z.infer<typeof transcriptUnitSchema>[] {
-  if (proposed.length !== segments.length)
-    throw new SafeCliError('AI_OUTPUT_INVALID', '整理后的文稿分段数量不匹配。', true, 422)
-  return proposed.map((unit, index) => {
-    const source = segments[index]!
-    if (unit.id !== source.id) throw new SafeCliError('AI_OUTPUT_INVALID', '整理后的文稿分段 ID 不匹配。', true, 422)
-    return { ...unit, startMs: source.startMs, endMs: source.endMs }
+): Array<{ id: string; text: string; startMs: number; endMs: number; visualIntent: string }> {
+  let cursor = 0
+  const result = proposed.map((unit, index) => {
+    const expectedId = `U${String(index + 1).padStart(3, '0')}`
+    if (unit.id !== expectedId) throw new SafeCliError('AI_OUTPUT_INVALID', '语义文稿单元 ID 不连续。', true, 422)
+    const sources = segments.slice(cursor, cursor + unit.sourceSegmentIds.length)
+    if (
+      sources.length !== unit.sourceSegmentIds.length ||
+      sources.some((source, sourceIndex) => source.id !== unit.sourceSegmentIds[sourceIndex])
+    ) {
+      throw new SafeCliError('AI_OUTPUT_INVALID', '语义文稿必须按顺序绑定连续 ASR 分段。', true, 422)
+    }
+    cursor += sources.length
+    return {
+      id: unit.id,
+      text: sources
+        .map((source) => source.text)
+        .join(' ')
+        .trim(),
+      startMs: sources[0]!.startMs,
+      endMs: sources.at(-1)!.endMs,
+      visualIntent: unit.visualIntent,
+    }
+  })
+  if (cursor !== segments.length)
+    throw new SafeCliError('AI_OUTPUT_INVALID', '语义文稿没有覆盖全部 ASR 分段。', true, 422)
+  return result
+}
+
+function structuredTranscriptSchema(segments: TranscriptSegment[]) {
+  return structuredTranscriptBaseSchema.superRefine((value, context) => {
+    try {
+      bindTranscriptGroups(value.units, segments)
+    } catch {
+      context.addIssue({ code: 'custom', path: ['units'], message: '必须连续且完整覆盖全部 ASR 分段' })
+    }
   })
 }
 

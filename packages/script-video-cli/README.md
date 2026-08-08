@@ -1,6 +1,6 @@
 # PurpleInk 本地文稿视频 CLI
 
-PurpleInk 把 Markdown、JSON、WAV 或 MP3 变成本地文稿视频。DIRECT 先确定全片设计，随后分镜规划、HTML 生成、Chromium QA 和 MiMo 配音并发执行；全部镜头就绪后，HyperFrames 串行渲染视觉，FFmpeg 封装 AAC，最后用 ffprobe 与抽帧验收。
+PurpleInk 把 Markdown、JSON、WAV 或 MP3 变成本地文稿视频。Markdown 先由语义 INGEST 逐句分析并形成“一单元一核心判断”的文稿单元；音频则在真实 FFmpeg 时间段上做相邻语义归组。随后 DIRECT 确定全片设计，分镜规划、HTML 生成、Chromium QA 和 MiMo 配音并发执行；全部镜头就绪后，HyperFrames 串行渲染视觉，FFmpeg 封装 AAC，最后用 ffprobe 与抽帧验收。
 
 它面向 AI Agent，也允许人类直接敲命令。账号、计费、会员、工作区、云项目、云存储、Redis 和旧 SaaS 数据库都不在范围内。
 
@@ -57,6 +57,12 @@ pnpm cli run .\script.md --narration off --json
 
 `--provider fixture` 和 `--no-browser-gate` 只用于开发冒烟；后者会令 run 成为 `degraded`。
 
+### 语义拆稿
+
+Markdown 不按标题数、字数、标点数或固定时长硬拆。INGEST 保留原文事实、限定语、疑问和顺序，平均每 1–2 句话形成一个 unit，但语义完整性优先；一个 unit 只承载一个核心判断并直接对应一个分镜。应用会校验所有 unit 连续、不重叠且完整覆盖原文，规范结果保存为 `input/semantic-script.json`。
+
+JSON 输入视为调用方已经明确给出的 `U###` 单元合同，不再自动改写边界。WAV/MP3 只允许 AI 合并相邻 ASR 段，文本与首尾时间都继承真实分段，禁止猜测时间、跳段、重排或重复。
+
 ## 声音克隆
 
 ```powershell
@@ -98,7 +104,7 @@ pnpm cli serve --run <run-id-or-path> --port 0 --json
 
 ## 音频输入
 
-FFmpeg 先转为 16 kHz 单声道 WAV，通过静音检测形成真实 `startMs/endMs`，最长分段约 45 秒。MiMo 只转写每段文字；文本模型整理标题和文稿单元，但时间范围强制继承 FFmpeg。输出：
+FFmpeg 先转为 16 kHz 单声道 WAV，通过静音检测形成真实 `startMs/endMs`，最长分段约 45 秒。MiMo 只转写每段文字；文本模型按语义把相邻 ASR 段归为文稿单元，但不能改写段落文本或时间范围。程序按分组确定性拼接文字，并继承首段开始和末段结束时间。输出：
 
 ```text
 input/normalized.wav
@@ -114,6 +120,7 @@ input/script.json
 ```text
 runs/<run-id>/
   input/
+    semantic-script.json        # Markdown 语义拆稿结果
   state/run.json
   state/stages/
   state/events.jsonl
