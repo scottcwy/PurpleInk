@@ -1,2 +1,0 @@
-ALTER TABLE "projects" ADD COLUMN "workflow_kind" text DEFAULT 'script' NOT NULL;--> statement-breakpoint
-ALTER TABLE "projects" ADD CONSTRAINT "projects_workflow_kind_check" CHECK ("projects"."workflow_kind" in ('script', 'audio', 'website'));

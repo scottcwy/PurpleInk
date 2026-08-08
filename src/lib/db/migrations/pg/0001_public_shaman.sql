@@ -1,1 +1,0 @@
-ALTER TABLE "provider_credentials" ALTER COLUMN "verified_at" DROP NOT NULL;

@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: web_app/lib/storage
-title: 二进制产物存储适配器（本地文件系统实现）
-scope:
-    - src/lib/storage/
-source_files: []
-depends_on: []
-related_to:
-    - path: web_app/features/render

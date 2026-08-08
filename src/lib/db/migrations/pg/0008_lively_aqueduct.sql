@@ -1,2 +1,0 @@
-ALTER TABLE "redemption_batches" DROP CONSTRAINT "redemption_batches_duration_check";--> statement-breakpoint
-ALTER TABLE "redemption_batches" ADD CONSTRAINT "redemption_batches_duration_check" CHECK ("redemption_batches"."duration_days" = 30);

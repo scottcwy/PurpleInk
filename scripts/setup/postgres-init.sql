@@ -1,1 +1,0 @@
-CREATE DATABASE cvc_test OWNER cvc;

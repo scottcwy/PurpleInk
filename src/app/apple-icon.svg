@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180">
-  <title>PurpleInk</title>
-  <rect width="180" height="180" rx="40" fill="#7D3DF3"/>
-  <path fill-rule="evenodd" clip-rule="evenodd" d="M45 39H92C121 39 139 54 139 79C139 104 121 119 92 119H70V145H45V39ZM70 61V97H90C105 97 114 91 114 79C114 67 105 61 90 61H70Z" fill="white"/>
-  <circle cx="140" cy="39" r="14" fill="#00C37A"/>
-</svg>
