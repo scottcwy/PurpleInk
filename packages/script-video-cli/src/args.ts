@@ -2,8 +2,10 @@ import type { NarrationMode } from './contracts'
 import type { CliProvider } from './config'
 import { SafeCliError } from './safe-error'
 
-export type CliCommand = 'run' | 'plan' | 'status' | 'doctor' | 'help' | 'config'
+export type CliCommand = 'run' | 'plan' | 'status' | 'doctor' | 'help' | 'config' | 'voice'
 export type ConfigAction = 'set' | 'show' | 'verify'
+export type ConfigTarget = 'text' | 'speech' | 'all'
+export type VoiceAction = 'import' | 'use' | 'list'
 
 export interface CliArgs {
   command: CliCommand
@@ -16,15 +18,21 @@ export interface CliArgs {
   skipBrowserGate: boolean
   provider: CliProvider | undefined
   configAction?: ConfigAction
-  configTarget?: 'text'
+  configTarget?: ConfigTarget
   configUrl?: string
   configModel?: string
+  configTtsModel?: string
+  configAsrModel?: string
   keyStdin?: boolean
+  voiceAction?: VoiceAction
+  voiceName?: string
+  voiceSamplePath?: string
 }
 
 export function parseCliArgs(argv: readonly string[]): CliArgs {
   const [first, ...rest] = argv
   if (first === 'config') return parseConfigArgs(rest)
+  if (first === 'voice') return parseVoiceArgs(rest)
   const command = parseCommand(first)
   const result: CliArgs = {
     command,
@@ -93,7 +101,7 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
 
 function parseConfigArgs(args: readonly string[]): CliArgs {
   const action = parseConfigAction(args[0])
-  const target = action === 'show' ? undefined : parseConfigTarget(args[1])
+  const target = action === 'show' ? undefined : parseConfigTarget(args[1], action)
   const result: CliArgs = {
     command: 'config',
     inputPath: undefined,
@@ -131,10 +139,70 @@ function parseConfigArgs(args: readonly string[]): CliArgs {
       result.configModel = takeValue(args, ++index, flag)
       continue
     }
+    if (flag === '--tts-model' && action === 'set') {
+      result.configTtsModel = takeValue(args, ++index, flag)
+      continue
+    }
+    if (flag === '--asr-model' && action === 'set') {
+      result.configAsrModel = takeValue(args, ++index, flag)
+      continue
+    }
     throw new SafeCliError('CLI_ARGUMENT_INVALID', 'config 命令参数无效。', false, 400)
   }
-  if (action === 'set' && (!result.configUrl || !result.configModel)) {
+  if (action === 'set' && target === 'text' && (!result.configUrl || !result.configModel)) {
     throw new SafeCliError('CLI_ARGUMENT_INVALID', 'config set text 需要 --url 和 --model。', false, 400)
+  }
+  if (
+    action === 'set' &&
+    target === 'speech' &&
+    (!result.configUrl || !result.configTtsModel || !result.configAsrModel)
+  ) {
+    throw new SafeCliError(
+      'CLI_ARGUMENT_INVALID',
+      'config set speech 需要 --url、--tts-model 和 --asr-model。',
+      false,
+      400,
+    )
+  }
+  return result
+}
+
+function parseVoiceArgs(args: readonly string[]): CliArgs {
+  const action = parseVoiceAction(args[0])
+  const result: CliArgs = {
+    command: 'voice',
+    inputPath: undefined,
+    outputDir: undefined,
+    resumeDir: undefined,
+    concurrency: undefined,
+    narration: undefined,
+    json: false,
+    skipBrowserGate: false,
+    provider: undefined,
+    voiceAction: action,
+  }
+  let flagStart = 1
+  if (action === 'import') {
+    result.voiceSamplePath = requirePositional(args[1], 'voice import 需要样音路径。')
+    flagStart = 2
+  } else if (action === 'use') {
+    result.voiceName = requirePositional(args[1], 'voice use 需要 voice id。')
+    flagStart = 2
+  }
+  for (let index = flagStart; index < args.length; index += 1) {
+    const flag = args[index]
+    if (flag === '--json') {
+      result.json = true
+      continue
+    }
+    if (flag === '--name' && action === 'import') {
+      result.voiceName = takeValue(args, ++index, flag)
+      continue
+    }
+    throw new SafeCliError('CLI_ARGUMENT_INVALID', 'voice 命令参数无效。', false, 400)
+  }
+  if (action === 'import' && !result.voiceName) {
+    throw new SafeCliError('CLI_ARGUMENT_INVALID', 'voice import 需要 --name。', false, 400)
   }
   return result
 }
@@ -150,9 +218,20 @@ function parseConfigAction(value: string | undefined): ConfigAction {
   throw new SafeCliError('CONFIG_ACTION_INVALID', 'config 只支持 set、show、verify。', false, 400)
 }
 
-function parseConfigTarget(value: string | undefined): 'text' {
-  if (value === 'text') return value
-  throw new SafeCliError('CONFIG_TARGET_INVALID', '当前 config 目标只支持 text。', false, 400)
+function parseConfigTarget(value: string | undefined, action: ConfigAction): ConfigTarget {
+  if (value === 'text' || value === 'speech') return value
+  if (value === 'all' && action === 'verify') return value
+  throw new SafeCliError('CONFIG_TARGET_INVALID', 'config 目标无效。', false, 400)
+}
+
+function parseVoiceAction(value: string | undefined): VoiceAction {
+  if (value === 'import' || value === 'use' || value === 'list') return value
+  throw new SafeCliError('VOICE_ACTION_INVALID', 'voice 只支持 import、use、list。', false, 400)
+}
+
+function requirePositional(value: string | undefined, message: string): string {
+  if (!value || value.startsWith('--')) throw new SafeCliError('CLI_ARGUMENT_INVALID', message, false, 400)
+  return value
 }
 
 function takeValue(args: readonly string[], index: number, flag: string): string {

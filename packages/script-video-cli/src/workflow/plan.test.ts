@@ -51,6 +51,27 @@ describe('createPlan', () => {
       styleBible: '技术编辑风格。',
     })
     expect(result.fingerprint).toMatch(/^[a-f0-9]{64}$/u)
+    expect(result.promptFingerprint).toMatch(/^[a-f0-9]{64}$/u)
+  })
+
+  it('repairs one DIRECT schema failure and does not make a third request', async () => {
+    let directCalls = 0
+    const client = fakeClient()
+    const ai: AiClient = {
+      completeText: client.completeText,
+      completeJson: async (prompt) => {
+        if (prompt.user.includes('DIRECT')) {
+          directCalls += 1
+          return directCalls === 1 ? { masterPlan: '' } : { masterPlan: '修复总纲', styleBible: '修复风格' }
+        }
+        return client.completeJson(prompt)
+      },
+    }
+
+    const result = await createPlan(script, ai)
+
+    expect(result.director.masterPlan).toBe('修复总纲')
+    expect(directCalls).toBe(2)
   })
 
   it('rejects a shot that invents a fact outside its source unit', async () => {

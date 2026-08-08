@@ -1,16 +1,8 @@
-export type AiProviderErrorCode =
-  'AI_CONFIG_INVALID' | 'AI_TIMEOUT' | 'AI_RATE_LIMITED' | 'AI_PROVIDER_UNAVAILABLE' | 'AI_OUTPUT_INVALID'
+import { chatCompletionEndpoint, requestChatCompletion } from './chat-transport'
+import { AiProviderError } from './provider-error'
 
-export class AiProviderError extends Error {
-  constructor(
-    readonly code: AiProviderErrorCode,
-    message: string,
-    options?: { cause?: unknown },
-  ) {
-    super(message, options)
-    this.name = 'AiProviderError'
-  }
-}
+export { AiProviderError } from './provider-error'
+export type { AiProviderErrorCode } from './provider-error'
 
 export interface OpenAiCompatibleConfig {
   baseUrl: string
@@ -57,7 +49,7 @@ export function createOpenAiCompatibleClient(config: OpenAiCompatibleConfig): Ai
 }
 
 interface NormalizedConfig {
-  endpoint: string
+  baseUrl: string
   apiKey: string
   textModel: string
   requestTimeoutMs: number
@@ -69,18 +61,7 @@ function normalizeConfig(config: OpenAiCompatibleConfig): NormalizedConfig {
   if (!config.apiKey.trim() || !config.textModel.trim()) {
     throw new AiProviderError('AI_CONFIG_INVALID', 'AI provider 配置不完整')
   }
-  let base: URL
-  try {
-    base = new URL(config.baseUrl)
-  } catch (error) {
-    throw new AiProviderError('AI_CONFIG_INVALID', 'AI provider URL 无效', {
-      cause: error,
-    })
-  }
-  if (!['http:', 'https:'].includes(base.protocol)) {
-    throw new AiProviderError('AI_CONFIG_INVALID', 'AI provider URL 协议无效')
-  }
-  if (base.hash) throw new AiProviderError('AI_CONFIG_INVALID', 'AI provider URL 不能包含 fragment')
+  chatCompletionEndpoint(config.baseUrl)
   const requestTimeoutMs = config.requestTimeoutMs ?? 120_000
   const maxRetries = config.maxRetries ?? 2
   const retryBaseDelayMs = config.retryBaseDelayMs ?? 250
@@ -96,7 +77,7 @@ function normalizeConfig(config: OpenAiCompatibleConfig): NormalizedConfig {
     throw new AiProviderError('AI_CONFIG_INVALID', 'AI provider 重试配置无效')
   }
   return {
-    endpoint: completionEndpoint(base),
+    baseUrl: config.baseUrl,
     apiKey: config.apiKey,
     textModel: config.textModel,
     requestTimeoutMs,
@@ -105,83 +86,27 @@ function normalizeConfig(config: OpenAiCompatibleConfig): NormalizedConfig {
   }
 }
 
-function completionEndpoint(base: URL): string {
-  const path = base.pathname.replace(/\/+$/u, '')
-  base.pathname = `${path}/chat/completions`
-  return base.toString()
-}
-
 async function requestCompletion(config: NormalizedConfig, input: AiCompletionInput, json: boolean): Promise<string> {
   const model = input.model?.trim() || config.textModel
   if (!model) {
     throw new AiProviderError('AI_CONFIG_INVALID', 'AI model 未配置')
   }
 
-  for (let attempt = 0; attempt <= config.maxRetries; attempt += 1) {
-    input.signal?.throwIfAborted()
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), config.requestTimeoutMs)
-    const onAbort = (): void => controller.abort(input.signal?.reason)
-    input.signal?.addEventListener('abort', onAbort, { once: true })
-    try {
-      const response = await fetch(config.endpoint, {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${config.apiKey}`,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: input.system },
-            { role: 'user', content: input.user },
-          ],
-          ...(json ? { response_format: { type: 'json_object' } } : {}),
-        }),
-        signal: controller.signal,
-      })
-      if (!response.ok) {
-        const retryable = response.status === 429 || response.status >= 500
-        if (retryable && attempt < config.maxRetries) {
-          await delay(backoffMs(config.retryBaseDelayMs, attempt))
-          continue
-        }
-        throw new AiProviderError(
-          response.status === 429 ? 'AI_RATE_LIMITED' : 'AI_PROVIDER_UNAVAILABLE',
-          response.status === 429 ? 'AI provider 请求受限' : 'AI provider 请求失败',
-        )
-      }
-      const payload = (await response.json()) as ChatCompletionResponse
-      const content = extractContent(payload)
-      if (!content) {
-        throw new AiProviderError('AI_OUTPUT_INVALID', 'AI provider 返回内容为空')
-      }
-      return content
-    } catch (error) {
-      if (error instanceof AiProviderError) throw error
-      if (input.signal?.aborted) throw input.signal.reason ?? error
-      if (controller.signal.aborted) {
-        if (attempt < config.maxRetries) {
-          await delay(backoffMs(config.retryBaseDelayMs, attempt))
-          continue
-        }
-        throw new AiProviderError('AI_TIMEOUT', 'AI provider 请求超时', {
-          cause: error,
-        })
-      }
-      if (attempt < config.maxRetries) {
-        await delay(backoffMs(config.retryBaseDelayMs, attempt))
-        continue
-      }
-      throw new AiProviderError('AI_PROVIDER_UNAVAILABLE', 'AI provider 暂时不可用', {
-        cause: error,
-      })
-    } finally {
-      clearTimeout(timeout)
-      input.signal?.removeEventListener('abort', onAbort)
-    }
-  }
-  throw new AiProviderError('AI_PROVIDER_UNAVAILABLE', 'AI provider 请求未完成')
+  const payload = (await requestChatCompletion(
+    config,
+    {
+      model,
+      messages: [
+        { role: 'system', content: input.system },
+        { role: 'user', content: input.user },
+      ],
+      ...(json ? { response_format: { type: 'json_object' } } : {}),
+    },
+    { signal: input.signal },
+  )) as ChatCompletionResponse
+  const content = extractContent(payload)
+  if (!content) throw new AiProviderError('AI_OUTPUT_INVALID', 'AI provider 返回内容为空')
+  return content
 }
 
 function extractContent(payload: ChatCompletionResponse): string | null {
@@ -203,14 +128,6 @@ function stripJsonFence(value: string): string {
     .replace(/^```(?:json)?\s*/iu, '')
     .replace(/\s*```$/u, '')
     .trim()
-}
-
-function backoffMs(base: number, attempt: number): number {
-  return Math.min(30_000, base * 2 ** attempt)
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

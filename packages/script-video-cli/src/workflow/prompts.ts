@@ -1,17 +1,73 @@
-import type { DirectorPlan, ScriptUnit, ScriptVideoInput } from '../contracts'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import type { DirectorPlan, ScriptUnit, ScriptVideoInput, ShotPlan } from '../contracts'
+
+export const PROMPT_ASSET_NAMES = [
+  'direct',
+  'shot-spec',
+  'fabricate',
+  'asr-segment',
+  'transcript-structure',
+  'tts-style',
+  'json-repair',
+  'html-repair',
+] as const
+
+export type PromptAssetName = (typeof PROMPT_ASSET_NAMES)[number]
+
+export interface PromptAsset {
+  system: string
+  user: string
+  sha256: string
+}
+
+export interface PromptAssetOptions {
+  rootDir?: string
+}
+
+export function loadPromptAsset(name: PromptAssetName, options: PromptAssetOptions = {}): PromptAsset {
+  const bytes = readFileSync(resolve(options.rootDir ?? defaultPromptRoot(), `${name}.md`))
+  const source = bytes.toString('utf8').replace(/\r\n?/gu, '\n')
+  if (source.includes('\uFFFD')) throw new Error(`PROMPT_ENCODING_INVALID:${name}`)
+  const sections = source.match(/^--- system ---\n([\s\S]*?)\n--- user ---\n([\s\S]*?)\s*$/u)
+  if (!sections?.[1]?.trim() || !sections[2]?.trim()) throw new Error(`PROMPT_ASSET_INVALID:${name}`)
+  return {
+    system: sections[1].trim(),
+    user: sections[2].trim(),
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+  }
+}
+
+export function hashPromptAssets(names: readonly PromptAssetName[], options: PromptAssetOptions = {}): string {
+  const hash = createHash('sha256')
+  for (const name of names) hash.update(`${name}:${loadPromptAsset(name, options).sha256}\n`, 'utf8')
+  return hash.digest('hex')
+}
+
+export function renderPromptAsset(
+  name: PromptAssetName,
+  variables: Readonly<Record<string, string>>,
+  options: PromptAssetOptions = {},
+): PromptAsset {
+  const asset = loadPromptAsset(name, options)
+  return {
+    ...asset,
+    system: interpolate(asset.system, variables, name),
+    user: interpolate(asset.user, variables, name),
+  }
+}
 
 export function buildDirectPrompt(input: ScriptVideoInput): { system: string; user: string } {
-  return {
-    system: '你是 script-first code video 的 DIRECT 导演。只返回 JSON，不输出 Markdown。不得新增文稿之外的事实。',
-    user: [
-      '阶段：DIRECT。请为下面的文稿建立全片 masterPlan 和 styleBible。',
-      '要求：一镜一个核心判断；视觉必须服务来源事实；不把原稿逐句变成卡片；不得新增数字、客户、功能或结果。',
-      `标题：${input.title}`,
-      `视觉风格：${input.visualStyle}`,
-      `文稿单元：${JSON.stringify(input.units)}`,
-      '只返回 {"masterPlan":"...","styleBible":"..."}。',
-    ].join('\n'),
-  }
+  return pickPrompt(
+    renderPromptAsset('direct', {
+      title: input.title,
+      visualStyle: input.visualStyle,
+      unitsJson: JSON.stringify(input.units),
+    }),
+  )
 }
 
 export function buildShotSpecPrompt(
@@ -20,16 +76,41 @@ export function buildShotSpecPrompt(
   unit: ScriptUnit,
   expectedId: string,
 ): { system: string; user: string } {
-  return {
-    system: '你是 script-first code video 的 SHOT-SPEC 导演。只返回 JSON。不得新增事实，facts 必须逐字摘自来源单元。',
-    user: [
-      `阶段：SHOT-SPEC。目标镜头：${expectedId}。`,
-      '只为当前来源单元规划一镜，sourceUnitId 必须保持不变，id 必须保持目标镜头 ID。',
-      'facts 数组只能包含来源原文中连续出现的短语；visualDescription 只描述构图、运动和代码表现，不写新的产品事实。',
-      `全片导演总纲：${JSON.stringify(director)}`,
-      `当前来源单元：${JSON.stringify(unit)}`,
-      `完整输入摘要：${JSON.stringify({ title: input.title, language: input.language })}`,
-      '返回字段：id、sourceUnitId、purpose、visualIntent、composition、visualDescription、facts、onScreenText、durationSec。',
-    ].join('\n'),
-  }
+  return pickPrompt(
+    renderPromptAsset('shot-spec', {
+      expectedId,
+      directorJson: JSON.stringify(director),
+      unitJson: JSON.stringify(unit),
+      inputSummaryJson: JSON.stringify({ title: input.title, language: input.language }),
+    }),
+  )
+}
+
+export function buildFabricatePrompt(
+  input: ScriptVideoInput,
+  unit: ScriptUnit,
+  shot: ShotPlan,
+): { system: string; user: string } {
+  return pickPrompt(
+    renderPromptAsset('fabricate', {
+      shotId: shot.id,
+      inputSummaryJson: JSON.stringify({ title: input.title, visualStyle: input.visualStyle }),
+      unitJson: JSON.stringify(unit),
+      shotJson: JSON.stringify(shot),
+    }),
+  )
+}
+
+function defaultPromptRoot(): string {
+  return resolve(dirname(fileURLToPath(import.meta.url)), '../../prompts')
+}
+
+function interpolate(source: string, variables: Readonly<Record<string, string>>, name: PromptAssetName): string {
+  const rendered = source.replace(/\{\{([a-zA-Z0-9]+)\}\}/gu, (_match, key: string) => variables[key] ?? '')
+  if (/\{\{[^}]+\}\}/u.test(rendered)) throw new Error(`PROMPT_VARIABLE_MISSING:${name}`)
+  return rendered
+}
+
+function pickPrompt(asset: PromptAsset): { system: string; user: string } {
+  return { system: asset.system, user: asset.user }
 }

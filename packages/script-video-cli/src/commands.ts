@@ -305,8 +305,12 @@ function errorCode(error: unknown): string {
 function helpText(): string {
   return [
     'purpleink-video config set text --url <url> --model <id> --key-stdin',
+    'purpleink-video config set speech --url <url> --tts-model <id> --asr-model <id> --key-stdin',
     'purpleink-video config show --json',
-    'purpleink-video config verify text --json',
+    'purpleink-video config verify all --json',
+    'purpleink-video voice import <sample.wav|sample.mp3> --name <id>',
+    'purpleink-video voice use <id|mimo_default>',
+    'purpleink-video voice list --json',
     'purpleink-video run <script.json|script.md> [--concurrency N] [--narration off|auto|required]',
     'purpleink-video plan <script.json|script.md> [--provider fixture|openai-compatible]',
     'purpleink-video status [--run <run-directory>]',

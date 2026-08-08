@@ -8,6 +8,7 @@ import { z } from 'zod'
 import type { OpenAiCompatibleConfig } from './ai/openai-compatible'
 import type { SecretProtector } from './dpapi'
 import { SafeCliError } from './safe-error'
+import { MIMO_VOICE_CLONE_MODEL, type MimoSpeechConfig } from './speech/mimo-client'
 
 export interface ConcurrencyConfig {
   run: number
@@ -108,6 +109,8 @@ export interface SaveTextProfileResult {
   secretCleanup: SecretCleanupStatus
 }
 
+export type SaveSpeechProfileResult = SaveTextProfileResult
+
 export class LocalConfigStore {
   private readonly io: LocalConfigIo
   private readonly now: () => Date
@@ -167,15 +170,7 @@ export class LocalConfigStore {
       ...(current?.speech ? { speech: current.speech } : {}),
       concurrency: current?.concurrency ?? concurrencyDefaults,
     })
-    const encrypted = await this.protector.protect(profile.apiKey)
-    await this.atomicWrite(secretPath, encrypted)
-    try {
-      await this.atomicWrite(this.paths.configPath, Buffer.from(`${JSON.stringify(next, null, 2)}\n`, 'utf8'))
-    } catch (error) {
-      await this.io.remove(secretPath).catch(() => undefined)
-      throw error
-    }
-    return { secretCleanup: await this.reclaimUnreferencedSecrets(next) }
+    return this.commitProfile(next, secretPath, profile.apiKey)
   }
 
   async loadTextProvider(): Promise<OpenAiCompatibleConfig> {
@@ -188,6 +183,61 @@ export class LocalConfigStore {
     const apiKey = await this.protector.unprotect(await this.io.read(secretPath))
     if (!apiKey.trim()) throw new SafeCliError('CONFIG_NOT_CONFIGURED', '文本模型密钥尚未配置。', false, 422)
     return { baseUrl: config.text.baseUrl, apiKey, textModel: config.text.model }
+  }
+
+  async saveSpeechProfile(profile: {
+    baseUrl: string
+    ttsModel: string
+    asrModel: string
+    apiKey: string
+  }): Promise<SaveSpeechProfileResult> {
+    const current = await this.read()
+    const now = this.now()
+    const secretRef = `speech-${now.toISOString().replace(/[^0-9A-Z]/giu, '')}-${randomUUID()}.dpapi`
+    const secretPath = join(this.paths.secretsDir, secretRef)
+    const next = localConfigSchema.parse({
+      schemaVersion: 1,
+      updatedAt: now.toISOString(),
+      ...(current?.text ? { text: current.text } : {}),
+      speech: {
+        baseUrl: profile.baseUrl,
+        ttsModel: profile.ttsModel,
+        asrModel: profile.asrModel,
+        secretRef,
+      },
+      concurrency: current?.concurrency ?? concurrencyDefaults,
+    })
+    return this.commitProfile(next, secretPath, profile.apiKey)
+  }
+
+  async loadSpeechProvider(): Promise<MimoSpeechConfig> {
+    const config = await this.read()
+    if (!config?.speech) throw new SafeCliError('CONFIG_NOT_CONFIGURED', '语音模型尚未配置。', false, 422)
+    const secretPath = join(this.paths.secretsDir, config.speech.secretRef)
+    if (!(await this.io.exists(secretPath))) {
+      throw new SafeCliError('CONFIG_NOT_CONFIGURED', '语音模型密钥尚未配置。', false, 422)
+    }
+    const apiKey = await this.protector.unprotect(await this.io.read(secretPath))
+    if (!apiKey.trim()) throw new SafeCliError('CONFIG_NOT_CONFIGURED', '语音模型密钥尚未配置。', false, 422)
+    return {
+      baseUrl: config.speech.baseUrl,
+      apiKey,
+      ttsModel: config.speech.ttsModel,
+      voiceCloneModel: MIMO_VOICE_CLONE_MODEL,
+      asrModel: config.speech.asrModel,
+    }
+  }
+
+  private async commitProfile(next: LocalConfig, secretPath: string, apiKey: string): Promise<SaveTextProfileResult> {
+    const encrypted = await this.protector.protect(apiKey)
+    await this.atomicWrite(secretPath, encrypted)
+    try {
+      await this.atomicWrite(this.paths.configPath, Buffer.from(`${JSON.stringify(next, null, 2)}\n`, 'utf8'))
+    } catch (error) {
+      await this.io.remove(secretPath).catch(() => undefined)
+      throw error
+    }
+    return { secretCleanup: await this.reclaimUnreferencedSecrets(next) }
   }
 
   private async atomicWrite(path: string, value: Uint8Array): Promise<void> {

@@ -9,8 +9,9 @@ import {
   type ShotPlan,
 } from '../contracts'
 import type { AiClient } from '../ai/openai-compatible'
+import { completeJsonWithRepair } from '../ai/structured-output'
 import type { StateStore, StageRecord } from '../state/store'
-import { buildDirectPrompt, buildShotSpecPrompt } from './prompts'
+import { buildDirectPrompt, buildShotSpecPrompt, hashPromptAssets } from './prompts'
 
 export interface PlanOptions {
   store?: StateStore
@@ -22,6 +23,7 @@ export interface PlanResult {
   director: DirectorPlan
   shots: ShotPlan[]
   fingerprint: string
+  promptFingerprint: string
 }
 
 export class PlanContractError extends Error {
@@ -39,14 +41,24 @@ export async function createPlan(
   options: PlanOptions = {},
 ): Promise<PlanResult> {
   const state = requireStatePair(options)
-  const directorFingerprint = fingerprint({ stage: 'DIRECT', input })
+  const directPromptFingerprint = hashPromptAssets(['direct'])
+  const shotPromptFingerprint = hashPromptAssets(['shot-spec'])
+  const promptFingerprint = hashPromptAssets(['direct', 'shot-spec'])
+  const directorFingerprint = fingerprint({ stage: 'DIRECT', input, promptFingerprint: directPromptFingerprint })
   const director = await runDirectorStage(input, ai, state, directorFingerprint, options.signal)
   const shots: ShotPlan[] = []
 
   for (const [index, unit] of input.units.entries()) {
     options.signal?.throwIfAborted()
     const id = `S${String(index + 1).padStart(3, '0')}`
-    const shotFingerprint = fingerprint({ stage: 'SHOT_SPEC', input, director, unit, id })
+    const shotFingerprint = fingerprint({
+      stage: 'SHOT_SPEC',
+      input,
+      director,
+      unit,
+      id,
+      promptFingerprint: shotPromptFingerprint,
+    })
     const shot = await runShotStage(input, director, unit, id, ai, state, shotFingerprint, options.signal)
     shots.push(shot)
   }
@@ -54,7 +66,8 @@ export async function createPlan(
   return {
     director,
     shots,
-    fingerprint: fingerprint({ input, director, shots }),
+    fingerprint: fingerprint({ input, director, shots, promptFingerprint }),
+    promptFingerprint,
   }
 }
 
@@ -78,8 +91,12 @@ async function runDirectorStage(
   if (stored) return stored
   await writeStageState(state, 'DIRECT', 'running', 1, stageFingerprint, {})
   try {
-    const raw = await ai.completeJson({ ...buildDirectPrompt(input), signal })
-    const parsed = parseContract(directorPlanSchema, raw, 'DIRECT')
+    const parsed = await completeJsonWithRepair({
+      ai,
+      schema: directorPlanSchema,
+      stage: 'DIRECT',
+      prompt: { ...buildDirectPrompt(input), signal },
+    })
     await writeStageState(state, 'DIRECT', 'succeeded', 1, stageFingerprint, parsed)
     return parsed
   } catch (error) {
@@ -105,11 +122,12 @@ async function runShotStage(
   if (stored) return validateShotBinding(stored, unit, id)
   await writeStageState(state, key, 'running', 1, stageFingerprint, {})
   try {
-    const raw = await ai.completeJson({
-      ...buildShotSpecPrompt(input, director, unit, id),
-      signal,
+    const parsed = await completeJsonWithRepair({
+      ai,
+      schema: shotPlanSchema,
+      stage: key,
+      prompt: { ...buildShotSpecPrompt(input, director, unit, id), signal },
     })
-    const parsed = parseContract(shotPlanSchema, raw, key)
     const validated = validateShotBinding(parsed, unit, id)
     await writeStageState(state, key, 'succeeded', 1, stageFingerprint, validated)
     return validated
@@ -133,14 +151,6 @@ function validateShotBinding(shot: ShotPlan, unit: ScriptUnit, expectedId: strin
     }
   }
   return shot
-}
-
-function parseContract<T>(schema: { parse(value: unknown): T }, value: unknown, stage: string): T {
-  try {
-    return schema.parse(value)
-  } catch (error) {
-    throw new PlanContractError(`${stage} schema 校验失败`, { cause: error })
-  }
 }
 
 async function readStoredStage<T>(

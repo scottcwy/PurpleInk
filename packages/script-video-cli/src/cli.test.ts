@@ -95,5 +95,7 @@ describe('runCli JSON envelope', () => {
       data: { command: 'help' },
     })
     expect(JSON.parse(lines[0]!)).not.toHaveProperty('result')
+    expect(lines[0]).toContain('config set speech')
+    expect(lines[0]).toContain('voice import')
   })
 })

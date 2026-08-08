@@ -42,6 +42,21 @@ describe('LocalConfigStore save transaction', () => {
     expect(await fixture.io.list(fixture.paths.secretsDir)).toEqual(beforeSecrets)
   })
 
+  it('keeps the previous speech profile and secret when the config rename fails', async () => {
+    const fixture = await createFixture()
+    await fixture.store.saveSpeechProfile(validSpeechProfile('first'))
+    const beforeConfig = await fixture.io.read(fixture.paths.configPath)
+    const beforeSecrets = await fixture.io.list(fixture.paths.secretsDir)
+    fixture.io.renameFailureTarget = fixture.paths.configPath
+
+    await expect(fixture.store.saveSpeechProfile(validSpeechProfile('second'))).rejects.toMatchObject({
+      code: 'CONFIG_WRITE_FAILED',
+    })
+
+    expect(await fixture.io.read(fixture.paths.configPath)).toEqual(beforeConfig)
+    expect(await fixture.io.list(fixture.paths.secretsDir)).toEqual(beforeSecrets)
+  })
+
   it('reports a failed old-secret cleanup without losing the new profile', async () => {
     const fixture = await createFixture()
     await fixture.store.saveTextProfile(validProfile('first'))
@@ -79,6 +94,20 @@ function validProfile(suffix: string): { baseUrl: string; model: string; apiKey:
     baseUrl: `https://api.example.test/${suffix}/`,
     model: `model-${suffix}`,
     apiKey: `synthetic-token-${suffix}`,
+  }
+}
+
+function validSpeechProfile(suffix: string): {
+  baseUrl: string
+  ttsModel: string
+  asrModel: string
+  apiKey: string
+} {
+  return {
+    baseUrl: `https://speech.example.test/${suffix}/`,
+    ttsModel: 'mimo-v2.5-tts',
+    asrModel: 'mimo-v2.5-asr',
+    apiKey: `synthetic-speech-token-${suffix}`,
   }
 }
 
