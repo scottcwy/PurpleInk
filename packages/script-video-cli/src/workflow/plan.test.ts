@@ -74,6 +74,42 @@ describe('createPlan', () => {
     expect(directCalls).toBe(2)
   })
 
+  it('preserves structured DIRECT sections as stable JSON text', async () => {
+    const client = fakeClient()
+    const ai: AiClient = {
+      completeText: client.completeText,
+      completeJson: async (prompt) =>
+        prompt.system.includes('DIRECT')
+          ? {
+              masterPlan: { rhythm: '快', sequence: ['开场', '证据'] },
+              styleBible: { palette: ['#111111', '#7c5cff'] },
+            }
+          : client.completeJson(prompt),
+    }
+
+    const result = await createPlan(script, ai)
+
+    expect(JSON.parse(result.director.masterPlan)).toEqual({ rhythm: '快', sequence: ['开场', '证据'] })
+    expect(JSON.parse(result.director.styleBible)).toEqual({ palette: ['#111111', '#7c5cff'] })
+  })
+
+  it('normalizes provider-specific composition labels at the contract boundary', async () => {
+    const client = fakeClient()
+    const ai: AiClient = {
+      completeText: client.completeText,
+      completeJson: async (prompt) => {
+        const value = await client.completeJson(prompt)
+        return prompt.system.includes('SHOT-SPEC') && typeof value === 'object' && value !== null
+          ? { ...value, composition: 'parallel-lanes' }
+          : value
+      },
+    }
+
+    const result = await createPlan(script, ai)
+
+    expect(result.shots.every((shot) => shot.composition === 'diagram')).toBe(true)
+  })
+
   it('rejects a shot that invents a fact outside its source unit', async () => {
     await expect(createPlan(script, fakeClient({ invalidFacts: true }))).rejects.toThrow(/AI_OUTPUT_INVALID/)
   })

@@ -54,6 +54,11 @@ async function handleRequest(
   options: { stateDir: string; runDir?: string },
 ): Promise<void> {
   const url = new URL(rawUrl, 'http://127.0.0.1')
+  if (url.pathname === '/favicon.ico') {
+    response.writeHead(204, { 'Cache-Control': 'public, max-age=86400' })
+    response.end()
+    return
+  }
   const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent)
   if (parts.length === 0) return renderHome(response, options)
   if (parts[0] === 'run' && parts[1]) {

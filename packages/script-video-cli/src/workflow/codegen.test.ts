@@ -123,7 +123,9 @@ describe('generateShots', () => {
     const ai: AiClient = {
       completeText: async () => {
         calls += 1
-        return calls === 1 ? '<html><body>missing render contract</body></html>' : validHtml
+        return calls === 1
+          ? '<html><body data-pi-seed="x">bad<script src="https://remote.example/x.js"></script></body></html>'
+          : validHtml
       },
       completeJson: async () => ({}),
     }
@@ -137,5 +139,35 @@ describe('generateShots', () => {
     expect(result.failed).toHaveLength(0)
     expect(result.succeeded[0]?.attempt).toBe(2)
     await access(join(root, 'shots', 'S001', 'attempt-002', 'source.html'))
+  })
+
+  it('adapts common model HTML to the deterministic HyperFrames contract', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'purpleink-codegen-adapter-'))
+    roots.push(root)
+    const ai: AiClient = {
+      completeText:
+        async () => `<!doctype html><html><head><style>body { font-family: "Microsoft YaHei", sans-serif; }</style></head>
+        <body data-pi-seed="x"><main>事实</main><script>
+        function renderFrame(time) { document.body.dataset.time = String(time); }
+        function loop() { requestAnimationFrame(loop); }
+        window.__PURPLEINK_RENDER__ = { duration: 7, seekTo: renderFrame };
+        </script></body></html>`,
+      completeJson: async () => ({}),
+    }
+
+    const result = await generateShots(input, plans.slice(0, 1), {
+      ai,
+      outputDir: root,
+      concurrency: 1,
+      runtimeGate: async () => ({ passed: true, errors: [], screenshotHashes: [] }),
+    })
+    const saved = await readFile(join(root, 'shots', 'S001', 'attempt-001', 'source.html'), 'utf8')
+
+    expect(result.failed).toHaveLength(0)
+    expect(saved).toContain('ready: true')
+    expect(saved).toContain('durationSec: durationSec')
+    expect(saved).not.toContain('requestAnimationFrame')
+    expect(saved).not.toContain('Microsoft YaHei')
+    expect(saved.indexOf('__purpleinkDisabledAnimationFrame =')).toBeLessThan(saved.indexOf('function loop'))
   })
 })

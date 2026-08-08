@@ -62,6 +62,39 @@ describe('OpenAI-compatible client', () => {
     })
   })
 
+  it('extracts a complete JSON object from incidental model reasoning', async () => {
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.end(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '<think>先确认合同。</think>\n结果如下：\n```json\n{"ok":true,"text":"花括号 { 保留"}\n```',
+              },
+            },
+          ],
+        }),
+      )
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()))
+    const address = server.address()
+    if (!address || typeof address === 'string') throw new Error('server did not bind')
+    const client = createOpenAiCompatibleClient({
+      baseUrl: `http://127.0.0.1:${address.port}/v1`,
+      apiKey: 'secret-token',
+      textModel: 'text-model',
+      requestTimeoutMs: 1_000,
+      maxRetries: 0,
+    })
+
+    await expect(client.completeJson({ system: 'system', user: 'user' })).resolves.toEqual({
+      ok: true,
+      text: '花括号 { 保留',
+    })
+  })
+
   it('rejects a base URL fragment before any request can be sent', () => {
     expect(() =>
       createOpenAiCompatibleClient({

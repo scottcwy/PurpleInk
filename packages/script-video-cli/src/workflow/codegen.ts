@@ -44,7 +44,7 @@ export async function generateShots(
   const results = await mapWithConcurrency(
     plans,
     options.concurrency,
-    async (shot) => generateOneShot(input, shot, options),
+    async (shot, _index, signal) => generateOneShot(input, shot, { ...options, signal }),
     { signal: options.signal },
   )
   return {
@@ -60,7 +60,7 @@ async function generateOneShot(
 ): Promise<CodegenShotResult> {
   const promptFingerprint = hashPromptAssets(['fabricate', 'html-repair'])
   const fingerprint = createHash('sha256')
-    .update(JSON.stringify({ input, shot, promptFingerprint }), 'utf8')
+    .update(JSON.stringify({ input, shot, promptFingerprint, htmlAdapterVersion: 2 }), 'utf8')
     .digest('hex')
   const key = `FABRICATE:${shot.id}`
   const previous = options.store && options.runDir ? await options.store.readStage(options.runDir, key) : null
@@ -86,7 +86,7 @@ async function generateOneShot(
       const prompt =
         offset === 0 ? buildFabricatePrompt(input, unit, shot) : buildHtmlRepairPrompt(shot, compactError(lastError))
       const raw = await options.ai.completeText({ ...prompt, signal: options.signal })
-      const html = normalizeHtml(raw)
+      const html = normalizeHtml(raw, shot.durationSec)
       const shotDir = join(options.outputDir, 'shots', shot.id, `attempt-${String(attempt).padStart(3, '0')}`)
       await mkdir(shotDir, { recursive: true })
       const htmlPath = join(shotDir, 'source.html')
@@ -94,6 +94,13 @@ async function generateOneShot(
       const staticGate = validateShotHtml(html)
       if (!staticGate.passed) {
         lastError = `SHOT_GATE_FAILED:${staticGate.errors.join(',')}`
+        const diagnosticsPath = join(shotDir, 'diagnostics.json')
+        await writeFile(
+          diagnosticsPath,
+          `${JSON.stringify({ schemaVersion: 1, diagnostics: staticGate.errors.map((message) => ({ type: 'static', message })) }, null, 2)}\n`,
+          'utf8',
+        )
+        await registerFailedAttemptArtifacts(options, shot.id, attempt, htmlPath, { diagnosticsPath })
         await writeStage(options, key, 'failed', attempt, fingerprint, { errorCode: 'SHOT_GATE_FAILED' })
         continue
       }
@@ -104,6 +111,7 @@ async function generateOneShot(
         : await runChromiumGate(htmlPath, { outputDir: shotDir })
       if (!runtime.passed) {
         lastError = runtime.errors[0] ?? 'BROWSER_GATE_FAILED'
+        await registerFailedAttemptArtifacts(options, shot.id, attempt, htmlPath, runtime)
         await writeStage(options, browserKey, 'failed', attempt, fingerprint, { errorCode: lastError })
         continue
       }
@@ -158,11 +166,56 @@ class CodegenFailure extends Error {
   }
 }
 
-function normalizeHtml(raw: string): string {
+function normalizeHtml(raw: string, durationSec: number): string {
   const fenced = raw.match(/^```(?:html)?\s*([\s\S]*?)\s*```$/iu)
   const html = (fenced?.[1] ?? raw).trim()
-  if (!/<html[\s>]/iu.test(html)) throw new CodegenFailure('SHOT_OUTPUT_INVALID')
-  return html
+  if (!/<html[\s>]/iu.test(html) || !/<\/body\s*>/iu.test(html) || !/<\/html\s*>/iu.test(html)) {
+    throw new CodegenFailure('SHOT_OUTPUT_INVALID')
+  }
+  const usesAnimationFrame = /\brequestAnimationFrame\b/u.test(html)
+  let normalized = html
+    .replace(/font-family\s*:\s*[^;}]+/giu, 'font-family: Inter, sans-serif')
+    .replace(/\brequestAnimationFrame\b/gu, 'window.__purpleinkDisabledAnimationFrame')
+  const previewShim = usesAnimationFrame
+    ? '<script>window.__purpleinkDisabledAnimationFrame = function () { return 0; };</script>'
+    : ''
+  if (previewShim) normalized = prependAfterBody(normalized, previewShim)
+  if (
+    /window\.__PURPLEINK_RENDER__/u.test(normalized) &&
+    /ready\s*:\s*true/u.test(normalized) &&
+    /durationSec\s*:/u.test(normalized)
+  ) {
+    return normalized
+  }
+  const adapter = `<script>
+(function () {
+  const original = window.__PURPLEINK_RENDER__;
+  const durationSec = ${Number(durationSec.toFixed(3))};
+  window.__PURPLEINK_RENDER__ = {
+    ready: true,
+    durationSec: durationSec,
+    seek: function (progress) {
+      const value = Math.max(0, Math.min(1, Number(progress) || 0));
+      if (typeof original === 'function') return original(value);
+      if (original && typeof original.seek === 'function') return original.seek(value * durationSec);
+      if (original && typeof original.seekTo === 'function') return original.seekTo(value * durationSec);
+      if (original && typeof original.render === 'function') return original.render(value * durationSec);
+      if (typeof window.renderAtProgress === 'function') return window.renderAtProgress(value);
+      if (typeof window.renderFrame === 'function') return window.renderFrame(value * durationSec);
+    }
+  };
+})();
+</script>`
+  normalized = appendBeforeBody(normalized, adapter)
+  return normalized
+}
+
+function prependAfterBody(html: string, content: string): string {
+  return html.replace(/<body\b[^>]*>/iu, (opening) => `${opening}\n${content}`)
+}
+
+function appendBeforeBody(html: string, content: string): string {
+  return content.trim() ? html.replace(/<\/body\s*>/iu, `${content}\n</body>`) : html
 }
 
 function parseStoredResult(value: unknown): CodegenShotResult | null {
@@ -221,6 +274,33 @@ async function registerShotArtifacts(
   }
   await Promise.all(artifacts.map((artifact) => registerFileArtifact(options.store!, options.runDir!, artifact)))
   return artifacts.map((artifact) => artifact.id)
+}
+
+async function registerFailedAttemptArtifacts(
+  options: CodegenOptions,
+  shotId: string,
+  attempt: number,
+  htmlPath: string,
+  runtime: Pick<RuntimeGateResult, 'screenshotPaths' | 'diagnosticsPath'>,
+): Promise<void> {
+  if (!options.store || !options.runDir) return
+  const suffix = `attempt-${String(attempt).padStart(3, '0')}`
+  const artifacts = [{ id: `shot-${shotId}-${suffix}-html`, kind: 'text/html', path: htmlPath }]
+  for (const [index, path] of (runtime.screenshotPaths ?? []).entries()) {
+    artifacts.push({
+      id: `shot-${shotId}-${suffix}-screenshot-${['000', '050', '100'][index] ?? index}`,
+      kind: 'image/png',
+      path,
+    })
+  }
+  if (runtime.diagnosticsPath) {
+    artifacts.push({
+      id: `shot-${shotId}-${suffix}-diagnostics`,
+      kind: 'application/json',
+      path: runtime.diagnosticsPath,
+    })
+  }
+  await Promise.all(artifacts.map((artifact) => registerFileArtifact(options.store!, options.runDir!, artifact)))
 }
 
 function failedResult(

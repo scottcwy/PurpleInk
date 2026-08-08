@@ -51,10 +51,20 @@ export const scriptVideoInputSchema = z
 export type ScriptVideoInput = z.output<typeof scriptVideoInputSchema>
 export type ScriptUnit = ScriptVideoInput['units'][number]
 
+const directorNarrativeSchema = z.preprocess(
+  (value) => (typeof value === 'string' ? value : isJsonContainer(value) ? JSON.stringify(value) : value),
+  z.string().trim().min(1).max(30_000),
+)
+
+const shotCompositionSchema = z.preprocess(
+  normalizeShotComposition,
+  z.enum(['full-bleed', 'split', 'diagram', 'code', 'timeline']),
+)
+
 export const directorPlanSchema = z
   .object({
-    masterPlan: z.string().trim().min(1).max(30_000),
-    styleBible: z.string().trim().min(1).max(30_000),
+    masterPlan: directorNarrativeSchema,
+    styleBible: directorNarrativeSchema,
   })
   .strict()
 export type DirectorPlan = z.output<typeof directorPlanSchema>
@@ -65,7 +75,7 @@ export const shotPlanSchema = z
     sourceUnitId: z.string().regex(/^U\d{3}$/u, 'sourceUnitId 必须匹配 U###'),
     purpose: z.string().trim().min(1).max(500),
     visualIntent: z.string().trim().min(1).max(500),
-    composition: z.enum(['full-bleed', 'split', 'diagram', 'code', 'timeline']),
+    composition: shotCompositionSchema,
     visualDescription: z.string().trim().min(1).max(4_000),
     facts: z.array(z.string().trim().min(1).max(500)).max(12),
     onScreenText: z.array(z.string().trim().min(1).max(200)).max(12),
@@ -73,6 +83,21 @@ export const shotPlanSchema = z
   })
   .strict()
 export type ShotPlan = z.output<typeof shotPlanSchema>
+
+function isJsonContainer(value: unknown): value is Record<string, unknown> | unknown[] {
+  return typeof value === 'object' && value !== null
+}
+
+function normalizeShotComposition(value: unknown): unknown {
+  if (typeof value !== 'string') return value
+  const normalized = value.trim().toLowerCase()
+  if (['full-bleed', 'split', 'diagram', 'code', 'timeline'].includes(normalized)) return normalized
+  if (/split|dual|compare|two-column|左右/u.test(normalized)) return 'split'
+  if (/code|terminal|editor|console|代码|终端/u.test(normalized)) return 'code'
+  if (/timeline|sequence|linear|pipeline|时间|流程/u.test(normalized)) return 'timeline'
+  if (/full|hero|cinematic|全屏/u.test(normalized)) return 'full-bleed'
+  return 'diagram'
+}
 
 export class InputContractError extends Error {
   readonly code = 'INPUT_INVALID' as const

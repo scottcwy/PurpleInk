@@ -102,7 +102,7 @@ export async function cancelQueuedJob(
 export async function queueSnapshot(env: NodeJS.ProcessEnv = process.env): Promise<Record<string, unknown>> {
   const boss = await connectSafely(env)
   try {
-    const queue = await boss.getQueue(RUN_QUEUE)
+    const [queue] = await boss.getQueueStats(RUN_QUEUE, { force: true, limit: 1 })
     return queue
       ? {
           queued: queue.queuedCount,

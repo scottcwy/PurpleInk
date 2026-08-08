@@ -47,7 +47,7 @@ export async function synthesizeShotNarrations(
   const shots = await mapWithConcurrency(
     plans,
     options.concurrency,
-    async (plan) => synthesizeOne(input, plan, voice, options),
+    async (plan, _index, signal) => synthesizeOne(input, plan, voice, { ...options, signal }),
     { signal: options.signal },
   )
   const byId = new Map(shots.map((shot) => [shot.id, shot]))

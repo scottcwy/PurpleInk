@@ -35,7 +35,7 @@ export interface HyperframesRenderOptions {
 }
 
 export interface HyperframesRenderResult {
-  checkPassed: true
+  checkPassed: boolean
   videoPath: string
   durationSec?: number
 }
@@ -64,14 +64,13 @@ export async function renderHyperframesProject(
   }
   options.signal?.throwIfAborted()
   const check = await runner(invocation.command, [...invocation.prefix, 'check'], commandOptions)
-  if (check.code !== 0) throw new HyperframesError('HYPERFRAMES_CHECK_FAILED', 'HyperFrames composition check failed')
   const renderArgs = ['render', '--quality', options.quality ?? 'standard']
   if (options.fps !== undefined) renderArgs.push('--fps', String(options.fps))
   const render = await runner(invocation.command, [...invocation.prefix, ...renderArgs], commandOptions)
   if (render.code !== 0) throw new HyperframesError('HYPERFRAMES_RENDER_FAILED', 'HyperFrames render failed')
   const videoPath = await findLatestVideo(join(projectDir, 'renders'))
   if (!videoPath) throw new HyperframesError('VIDEO_NOT_FOUND', 'HyperFrames 没有产生 MP4 产物')
-  return { checkPassed: true, videoPath }
+  return { checkPassed: check.code === 0, videoPath }
 }
 
 async function findLatestVideo(rendersDir: string): Promise<string | null> {

@@ -61,6 +61,8 @@ export async function runCli(
                 loadTextSecret:
                   args.command === 'run' ||
                   args.command === 'plan' ||
+                  args.command === 'transcribe' ||
+                  args.command === 'retry' ||
                   (args.command === 'daemon' && args.daemonAction === 'worker'),
               })
               return executeCliCommand(args, config, {

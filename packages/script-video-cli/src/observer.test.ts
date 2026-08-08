@@ -34,6 +34,7 @@ describe('observer', () => {
     try {
       const home = await fetch(observer.url)
       expect(await home.text()).toContain('观察页测试')
+      expect((await fetch(`${observer.url}favicon.ico`)).status).toBe(204)
       const artifact = await fetch(`${observer.url}artifact/run-observer/shot-S001-html`)
       expect(artifact.status).toBe(200)
       expect(artifact.headers.get('content-security-policy')).toContain("connect-src 'none'")

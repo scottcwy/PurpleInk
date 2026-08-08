@@ -218,9 +218,11 @@ export async function extractVideoFrames(
   const paths: string[] = []
   for (const [index, position] of positions.entries()) {
     const path = join(outputDir, `${String(index).padStart(3, '0')}.png`)
+    const inputArgs =
+      index === positions.length - 1 ? ['-sseof', '-0.1', '-i', videoPath] : ['-ss', decimal(position), '-i', videoPath]
     await requireSuccess(
       'ffmpeg',
-      ['-y', '-ss', decimal(position), '-i', videoPath, '-frames:v', '1', '-vf', 'scale=960:-2', path],
+      ['-y', ...inputArgs, '-frames:v', '1', '-update', '1', '-vf', 'scale=960:-2', path],
       options,
       'MEDIA_FRAME_FAILED',
     )

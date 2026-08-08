@@ -41,4 +41,29 @@ describe('mapWithConcurrency', () => {
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
     expect(started).toBeLessThanOrEqual(2)
   })
+
+  it('aborts sibling work and waits for it to settle after the first failure', async () => {
+    let siblingAborted = false
+    const startedAt = Date.now()
+
+    await expect(
+      mapWithConcurrency([0, 1], 2, async (value, _index, signal) => {
+        if (value === 0) throw new Error('first failure')
+        await new Promise<void>((resolve) => {
+          signal.addEventListener(
+            'abort',
+            () => {
+              siblingAborted = true
+              resolve()
+            },
+            { once: true },
+          )
+        })
+        return value
+      }),
+    ).rejects.toThrow('first failure')
+
+    expect(siblingAborted).toBe(true)
+    expect(Date.now() - startedAt).toBeLessThan(500)
+  })
 })

@@ -5,7 +5,7 @@ export interface MapWithConcurrencyOptions {
 export async function mapWithConcurrency<T, R>(
   items: readonly T[],
   limit: number,
-  worker: (item: T, index: number) => Promise<R>,
+  worker: (item: T, index: number, signal: AbortSignal) => Promise<R>,
   options: MapWithConcurrencyOptions = {},
 ): Promise<R[]> {
   if (!Number.isInteger(limit) || limit < 1 || limit > 32) {
@@ -17,6 +17,10 @@ export async function mapWithConcurrency<T, R>(
   const results = new Array<R>(items.length)
   let nextIndex = 0
   let stopped = false
+  let firstError: unknown
+  const controller = new AbortController()
+  const forwardAbort = () => controller.abort(options.signal?.reason)
+  options.signal?.addEventListener('abort', forwardAbort, { once: true })
 
   async function consume(): Promise<void> {
     while (true) {
@@ -26,16 +30,23 @@ export async function mapWithConcurrency<T, R>(
       nextIndex += 1
       if (index >= items.length) return
       try {
-        results[index] = await worker(items[index]!, index)
+        results[index] = await worker(items[index]!, index, controller.signal)
       } catch (error) {
         stopped = true
-        throw error
+        if (firstError === undefined) firstError = error
+        controller.abort(error)
+        return
       }
     }
   }
 
   const workers = Array.from({ length: Math.min(limit, items.length) }, () => consume())
-  await Promise.all(workers)
-  options.signal?.throwIfAborted()
-  return results
+  try {
+    await Promise.all(workers)
+    options.signal?.throwIfAborted()
+    if (firstError !== undefined) throw firstError
+    return results
+  } finally {
+    options.signal?.removeEventListener('abort', forwardAbort)
+  }
 }

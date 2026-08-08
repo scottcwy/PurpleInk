@@ -85,16 +85,16 @@ export async function transcribeAudio(sourcePath: string, options: Transcription
     const segments = await mapWithConcurrency(
       boundaries,
       options.concurrency,
-      async (boundary, index) => {
+      async (boundary, index, signal) => {
         const id = `U${String(index + 1).padStart(3, '0')}`
         const audioPath = join(segmentDir, `${id}.wav`)
-        await cutAudioSegment(normalizedAudioPath, audioPath, boundary, { logPath, signal: options.signal })
+        await cutAudioSegment(normalizedAudioPath, audioPath, boundary, { logPath, signal })
         const audio = await readFile(audioPath)
         const result = await options.speech.transcribe({
           audio,
           mimeType: audioMimeType(audioPath),
           language: 'auto',
-          signal: options.signal,
+          signal,
         })
         return { id, ...boundary, text: result.text.trim(), audioPath }
       },

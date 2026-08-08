@@ -151,7 +151,7 @@ async function startPostgres(logPath: string): Promise<void> {
   const result = await runLoggedProcess(
     'docker',
     ['compose', '--project-name', 'purpleink-video-cli', '-f', composePath, 'up', '-d', '--wait'],
-    { logPath, timeoutMs: 120_000 },
+    { logPath, timeoutMs: 10 * 60_000 },
   )
   if (result.code !== 0)
     throw new SafeCliError('DOCKER_POSTGRES_FAILED', '无法启动 PostgreSQL 17 持久队列。', true, 503)
@@ -164,7 +164,7 @@ function daemonChildArgs(serve: boolean): string[] {
   }
   const modulePath = fileURLToPath(import.meta.url)
   const extension = extname(modulePath) === '.ts' ? '.ts' : '.js'
-  const cliPath = resolve(dirname(modulePath), `../cli${extension}`)
+  const cliPath = resolve(dirname(modulePath), `cli${extension}`)
   return [...process.execArgv, cliPath, 'daemon', 'worker', ...(serve ? ['--serve'] : [])]
 }
 

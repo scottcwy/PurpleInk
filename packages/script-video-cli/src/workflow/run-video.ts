@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import type { CliArgs } from '../args'
@@ -252,26 +253,50 @@ async function renderVisual(
   projectDir: string,
   fingerprint: string,
   runtime: WorkflowRuntime,
-): Promise<{ videoPath: string }> {
+): Promise<{ videoPath: string; checkPassed: boolean }> {
   await assertNotCancelled(runDir)
+  const previous = await store.readStage(runDir, 'RENDER')
+  if (
+    previous?.status === 'succeeded' &&
+    previous.fingerprint === fingerprint &&
+    isRecord(previous.payload) &&
+    typeof previous.payload.videoPath === 'string' &&
+    (await pathExists(previous.payload.videoPath))
+  ) {
+    return {
+      videoPath: previous.payload.videoPath,
+      checkPassed: previous.payload.checkPassed === true,
+    }
+  }
   await store.writeStage(runDir, { key: 'RENDER', status: 'running', attempt: 1, fingerprint, payload: {} })
-  const rendered = await runtime.channels.run('render', () =>
-    renderHyperframesProject(projectDir, {
-      fps: 30,
-      logPath: join(runDir, 'logs', 'hyperframes.log'),
-      signal: runtime.signal,
-    }),
-  )
-  await registerFileArtifact(store, runDir, { id: 'visual-render', kind: 'video/mp4', path: rendered.videoPath })
-  await store.writeStage(runDir, {
-    key: 'RENDER',
-    status: 'succeeded',
-    attempt: 1,
-    fingerprint,
-    artifactIds: ['visual-render'],
-    payload: { videoPath: rendered.videoPath },
-  })
-  return rendered
+  try {
+    const rendered = await runtime.channels.run('render', () =>
+      renderHyperframesProject(projectDir, {
+        fps: 30,
+        logPath: join(runDir, 'logs', 'hyperframes.log'),
+        signal: runtime.signal,
+      }),
+    )
+    await registerFileArtifact(store, runDir, { id: 'visual-render', kind: 'video/mp4', path: rendered.videoPath })
+    await store.writeStage(runDir, {
+      key: 'RENDER',
+      status: 'succeeded',
+      attempt: 1,
+      fingerprint,
+      artifactIds: ['visual-render'],
+      payload: { videoPath: rendered.videoPath, checkPassed: rendered.checkPassed },
+    })
+    return rendered
+  } catch (error) {
+    await store.writeStage(runDir, {
+      key: 'RENDER',
+      status: 'failed',
+      attempt: 1,
+      fingerprint,
+      payload: { code: safeStageErrorCode(error, 'RENDER_FAILED') },
+    })
+    throw error
+  }
 }
 
 async function muxFinalVideo(
@@ -284,8 +309,23 @@ async function muxFinalVideo(
 ): Promise<string> {
   const fingerprint = hashJson({ visualPath, narrationMode })
   const finalPath = join(runDir, 'final', 'video.mp4')
+  const previous = await store.readStage(runDir, 'AUDIO_MUX')
+  if (previous?.status === 'succeeded' && previous.fingerprint === fingerprint && (await pathExists(finalPath))) {
+    return finalPath
+  }
   await store.writeStage(runDir, { key: 'AUDIO_MUX', status: 'running', attempt: 1, fingerprint, payload: {} })
-  await muxVideoAudio(visualPath, audioPath, finalPath, { logPath: join(runDir, 'logs', 'ffmpeg.log'), signal })
+  try {
+    await muxVideoAudio(visualPath, audioPath, finalPath, { logPath: join(runDir, 'logs', 'ffmpeg.log'), signal })
+  } catch (error) {
+    await store.writeStage(runDir, {
+      key: 'AUDIO_MUX',
+      status: 'failed',
+      attempt: 1,
+      fingerprint,
+      payload: { code: safeStageErrorCode(error, 'AUDIO_MUX_FAILED') },
+    })
+    throw error
+  }
   await store.writeStage(runDir, {
     key: 'AUDIO_MUX',
     status: 'succeeded',
@@ -316,8 +356,16 @@ async function verifyFinalVideo(
     requireAudio: narrationMode !== 'off',
     ...(narrationMode !== 'off' ? { expectedAudioCodec: 'aac' } : {}),
   })
-  if (!media.passed)
+  if (!media.passed) {
+    await store.writeStage(runDir, {
+      key: 'MEDIA_QA',
+      status: 'failed',
+      attempt: 1,
+      fingerprint,
+      payload: { code: 'MEDIA_QA_FAILED', errors: media.errors },
+    })
     throw new SafeCliError('MEDIA_QA_FAILED', '最终视频媒体 QA 未通过。', false, 422, { stageKey: 'MEDIA_QA' })
+  }
   const frames = await extractVideoFrames(videoPath, join(runDir, 'final', 'frames'), durationSec, {
     logPath: join(runDir, 'logs', 'ffmpeg.log'),
     signal,
@@ -336,4 +384,23 @@ async function verifyFinalVideo(
 
 function hashJson(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex')
+}
+
+function safeStageErrorCode(error: unknown, fallback: string): string {
+  return typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string'
+    ? error.code.slice(0, 80)
+    : fallback
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path)
+    return true
+  } catch {
+    return false
+  }
 }

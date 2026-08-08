@@ -31,7 +31,10 @@ export async function completeJsonWithRepair<T>(options: CompleteJsonWithRepairO
     options.schema,
   )
   if (second.ok) return second.data
-  throw new AiProviderError('AI_OUTPUT_INVALID', 'AI 输出在一次修复后仍不符合合同')
+  throw new AiProviderError(
+    'AI_OUTPUT_INVALID',
+    `AI 输出在一次修复后仍不符合合同（首次：${first.summary}；修复：${second.summary}）`,
+  )
 }
 
 type ContractAttempt<T> = { ok: true; data: T } | { ok: false; summary: string }

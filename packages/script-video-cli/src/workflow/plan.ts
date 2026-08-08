@@ -8,7 +8,7 @@ import {
   type ScriptVideoInput,
   type ShotPlan,
 } from '../contracts'
-import type { AiClient } from '../ai/openai-compatible'
+import { AiProviderError, type AiClient } from '../ai/openai-compatible'
 import { completeJsonWithRepair } from '../ai/structured-output'
 import { mapWithConcurrency } from '../ai/concurrency'
 import type { StateStore, StageRecord } from '../state/store'
@@ -51,7 +51,7 @@ export async function createPlan(
   const shots = await mapWithConcurrency(
     input.units,
     options.concurrency ?? 6,
-    async (unit, index) => {
+    async (unit, index, signal) => {
       const id = `S${String(index + 1).padStart(3, '0')}`
       const shotFingerprint = fingerprint({
         stage: 'SHOT_SPEC',
@@ -61,7 +61,7 @@ export async function createPlan(
         id,
         promptFingerprint: shotPromptFingerprint,
       })
-      return runShotStage(input, director, unit, id, ai, state, shotFingerprint, options.signal)
+      return runShotStage(input, director, unit, id, ai, state, shotFingerprint, signal)
     },
     { signal: options.signal },
   )
@@ -104,7 +104,13 @@ async function runDirectorStage(
     return parsed
   } catch (error) {
     await writeStageState(state, 'DIRECT', 'failed', 1, stageFingerprint, {
-      code: error instanceof PlanContractError ? error.code : 'AI_PROVIDER_ERROR',
+      code:
+        error instanceof PlanContractError
+          ? error.code
+          : error instanceof AiProviderError
+            ? error.code
+            : 'AI_PROVIDER_ERROR',
+      diagnostic: safePlanDiagnostic(error),
     })
     throw error
   }
@@ -136,10 +142,21 @@ async function runShotStage(
     return validated
   } catch (error) {
     await writeStageState(state, key, 'failed', 1, stageFingerprint, {
-      code: error instanceof PlanContractError ? error.code : 'AI_PROVIDER_ERROR',
+      code:
+        error instanceof PlanContractError
+          ? error.code
+          : error instanceof AiProviderError
+            ? error.code
+            : 'AI_PROVIDER_ERROR',
+      diagnostic: safePlanDiagnostic(error),
     })
     throw error
   }
+}
+
+function safePlanDiagnostic(error: unknown): string {
+  if (error instanceof PlanContractError || error instanceof AiProviderError) return error.message.slice(0, 1_000)
+  return '规划阶段失败'
 }
 
 function validateShotBinding(shot: ShotPlan, unit: ScriptUnit, expectedId: string): ShotPlan {

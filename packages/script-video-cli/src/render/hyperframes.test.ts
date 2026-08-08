@@ -35,19 +35,25 @@ describe('renderHyperframesProject', () => {
     expect(result.videoPath).toBe(join(root, 'renders', 'output.mp4'))
   })
 
-  it('stops before render when check fails', async () => {
+  it('keeps a failed check as advisory and still attempts best-effort render', async () => {
     const root = await mkdtemp(join(tmpdir(), 'purpleink-render-'))
     roots.push(root)
     await writeFile(join(root, 'index.html'), '<html></html>', 'utf8')
     const calls: string[][] = []
     const runner: CommandRunner = async (command, args) => {
       calls.push([command, ...args])
-      return { code: 1, stdout: '', stderr: 'invalid composition' }
+      if (args[0] === 'check') return { code: 1, stdout: '', stderr: 'composition warnings' }
+      await mkdir(join(root, 'renders'), { recursive: true })
+      await writeFile(join(root, 'renders', 'output.mp4'), Buffer.from('fake-video'))
+      return { code: 0, stdout: 'rendered', stderr: '' }
     }
 
-    await expect(renderHyperframesProject(root, { runner, cliPath: 'hyperframes' })).rejects.toMatchObject({
-      code: 'HYPERFRAMES_CHECK_FAILED',
-    })
-    expect(calls).toEqual([['hyperframes', 'check']])
+    const result = await renderHyperframesProject(root, { runner, cliPath: 'hyperframes' })
+
+    expect(result.checkPassed).toBe(false)
+    expect(calls).toEqual([
+      ['hyperframes', 'check'],
+      ['hyperframes', 'render', '--quality', 'standard'],
+    ])
   })
 })

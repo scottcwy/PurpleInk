@@ -32,7 +32,7 @@ export function validateShotHtml(html: string): StaticGateResult {
   else checks.push('render-duration')
   if (!/data-pi-seed\s*=/iu.test(html)) errors.push('deterministic seed is missing')
   else checks.push('deterministic-seed')
-  if (/https?:\/\//iu.test(html) || /url\(\s*['"]?data:/iu.test(html)) {
+  if (hasNetworkResource(html)) {
     errors.push('network or data URL resource is not allowed')
   } else checks.push('local-resources')
   if (/(?:api[_-]?key|authorization|bearer\s+[a-z0-9._-]{8,}|sk-[a-z0-9]{12,})/iu.test(html)) {
@@ -42,6 +42,15 @@ export function validateShotHtml(html: string): StaticGateResult {
     errors.push('dynamic code evaluation is not allowed')
   } else checks.push('dynamic-code-scan')
   return { passed: errors.length === 0, errors, checks }
+}
+
+function hasNetworkResource(html: string): boolean {
+  return [
+    /\b(?:src|href)\s*=\s*['"]\s*(?:https?:\/\/|data:)/iu,
+    /url\(\s*['"]?\s*(?:https?:\/\/|data:)/iu,
+    /@import\s+(?:url\(\s*)?['"]?\s*https?:\/\//iu,
+    /\b(?:fetch|WebSocket|EventSource)\s*\(\s*['"]\s*https?:\/\//u,
+  ].some((pattern) => pattern.test(html))
 }
 
 export interface RuntimePage {

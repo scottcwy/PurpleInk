@@ -38,7 +38,7 @@ export function createOpenAiCompatibleClient(config: OpenAiCompatibleConfig): Ai
     completeJson: async (input) => {
       const text = await requestCompletion(normalized, input, true)
       try {
-        return JSON.parse(stripJsonFence(text)) as unknown
+        return parseJsonResponse(text)
       } catch (error) {
         throw new AiProviderError('AI_OUTPUT_INVALID', 'AI 返回不是有效 JSON', {
           cause: error,
@@ -100,6 +100,7 @@ async function requestCompletion(config: NormalizedConfig, input: AiCompletionIn
         { role: 'system', content: input.system },
         { role: 'user', content: input.user },
       ],
+      max_tokens: json ? 4_096 : 16_384,
       ...(json ? { response_format: { type: 'json_object' } } : {}),
     },
     { signal: input.signal },
@@ -128,6 +129,54 @@ function stripJsonFence(value: string): string {
     .replace(/^```(?:json)?\s*/iu, '')
     .replace(/\s*```$/u, '')
     .trim()
+}
+
+function parseJsonResponse(value: string): unknown {
+  const normalized = stripJsonFence(value)
+  try {
+    return JSON.parse(normalized) as unknown
+  } catch {
+    for (const candidate of topLevelJsonCandidates(normalized)) {
+      try {
+        return JSON.parse(candidate) as unknown
+      } catch {
+        // Continue to the next complete object or array.
+      }
+    }
+    throw new SyntaxError('No valid JSON value found')
+  }
+}
+
+function topLevelJsonCandidates(value: string): string[] {
+  const candidates: string[] = []
+  for (let start = 0; start < value.length; start += 1) {
+    const opening = value[start]
+    if (opening !== '{' && opening !== '[') continue
+    const closing = opening === '{' ? '}' : ']'
+    let depth = 0
+    let inString = false
+    let escaped = false
+    for (let index = start; index < value.length; index += 1) {
+      const character = value[index]
+      if (inString) {
+        if (escaped) escaped = false
+        else if (character === '\\') escaped = true
+        else if (character === '"') inString = false
+        continue
+      }
+      if (character === '"') {
+        inString = true
+        continue
+      }
+      if (character === opening) depth += 1
+      else if (character === closing) depth -= 1
+      if (depth === 0) {
+        candidates.push(value.slice(start, index + 1))
+        break
+      }
+    }
+  }
+  return candidates
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
