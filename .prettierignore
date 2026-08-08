@@ -1,26 +1,7 @@
-# Dependencies
 node_modules
-
-# Build outputs
-.next
-out
-build
 dist
-
-# Cache
-.cache
-
-# Package manager
+.purpleink
 pnpm-lock.yaml
-package-lock.json
-yarn.lock
-
-# Generated files
-*.min.js
-*.min.css
-
-# Imported CodeVideoCanvas sources (Stage A)
-src/features/**
-src/lib/**
-src/components/ui/**
-src/components/icons/**
+*.mp4
+*.png
+*.webp

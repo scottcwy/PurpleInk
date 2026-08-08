@@ -1,123 +1,70 @@
-# PurpleInk
+# PurpleInk Script Video CLI
 
-## AdventureX 参赛说明（请先读）
+PurpleInk 现在只负责一条本地链路：**UTF-8 文稿文件 → AI 导演与镜头合同 → 并发生成本地 HTML 镜头 → Chromium/HyperFrames 校验与渲染 → ffprobe 媒体验收**。
 
-本仓库是 **AdventureX** 参赛项目 **PurpleInk**。
+它不是 SaaS 工作台，不包含账号、计费、会员额度、远程项目、URL 采集、Web API、队列 Worker 或平台托管 provider。AI agent 的直接操作合同见 [docs/cli/AI-AGENT.md](docs/cli/AI-AGENT.md)。
 
-比赛期间队员按两个方向同步推进，再合并到本仓库交付：
+## 快速开始
 
-| 方向 | 负责 | 说明 |
-| --- | --- | --- |
-| 工作流 / 节点画布 | 羽升 | 比赛开始后新建对照仓 [AIMFllyYS/code-video-canvas](https://github.com/AIMFllyYS/code-video-canvas)；评委如需对照独立演进过程可查看该仓 |
-| 前端设计 | 燕耳 Firenze | 产品界面与视觉设计 |
-| 后端 | DeepSuck | 服务端、采集与出片链路 |
-| 产品运营 | Annie.Y | 产品与运营 |
-
-**两板块合并后的交付分支是 `yusheng/two-part-merge`。**  
-请评委与协作者检出该分支查看合并结果。
-
-> **禁止直接合并到 `main` / `master`。**  
-> 云端协作与评审只通过 `yusheng/two-part-merge`（或基于它的 PR）进行，不得把本合并线强推/直合进默认主分支。
-
----
-
-## Stage A 概览
-
-PurpleInk 是一个本地优先的产品发布视频工作区。当前 Stage A 把营销出片链路、CodeVideoCanvas 过渡应用、组件 Playbook 和新 Product/Release 路由骨架合并在一个 Next.js 仓库中。
-
-## 当前可用入口
-
-| 入口 | 状态 | 说明 |
-| --- | --- | --- |
-| `/` | 已接线 | PurpleInk 营销页；可向本地 worker 发起出片任务 |
-| `/api/engine/*` | 已接线 | Next 同源反代到 `server/` worker |
-| `/legacy/*` | 过渡应用 | CVC 工作台、项目、画布、导出和设置，读取 Postgres |
-| `/playbook/*` | 过渡应用 | CVC 组件登记与展示 |
-| `/login`、`/signup`、`/dashboard` | 路由壳 | 明确标注 Stage B 未接线 |
-| `/products*`、`/releases*` | 路由壳 | Product/Release 新规范与六步导航，不含假数据 |
-
-完整路由、守卫和状态见 [routing.md](docs/conventions/routing.md)，迁移事实与验收证据见 [stage-a-report.md](docs/archive/migration/stage-a-report.md)（历史记录，只供追溯）。
-
-## 工作流排障
-
-Director / 渲染 / 音频 / 模型路由这条链路的复发失败模式、取证顺序与已落地护栏，
-统一记录在 [workflow-failure-patterns.md](docs/conventions/workflow-failure-patterns.md)。
-
-阶段失败时先看那份文件的 §1：画布弹窗里的文案是脱敏投影，原始报文在
-`task_attempts.failure.message`。改动阶段合同、错误分类或节点类型映射前，
-按 §8 的清单逐条自检；新发现的同类失败追加为新模式，不要另建文件。
-
-## 环境要求
-
-- Node.js 24
-- pnpm 10.30.0
-- Docker Desktop（用于本地 Postgres）
-- FFmpeg / ffprobe
-
-## 安装与启动
+要求：Node.js 22.11+、pnpm 10.30.0、ffprobe，以及本机可用的 Playwright Chromium 和 HyperFrames。
 
 ```powershell
 pnpm install
-docker compose -f docker-compose.dev.yml up -d
-pnpm db:migrate
-pnpm dev
+Copy-Item .env.example .env.local
+# 在 .env.local 或当前 PowerShell 会话中填写用户自己的 API
+pnpm cli doctor --json
+pnpm cli run examples/script-video/demo.json --json
 ```
 
-另开一个终端启动渲染 worker：
+默认 provider 是通用 OpenAI-compatible Chat Completions：
 
 ```powershell
-pnpm dev:worker
+$env:SCRIPT_VIDEO_AI_BASE_URL = "https://your-endpoint.example/v1"
+$env:SCRIPT_VIDEO_AI_API_KEY = "your-local-key"
+$env:SCRIPT_VIDEO_AI_MODEL = "your-text-model"
 ```
 
-默认地址：
+CLI 只使用这些配置访问用户自己的 API；不会把 key 写入状态、产物、日志或错误输出。
 
-- Web：`http://localhost:3000`
-- Worker：`http://localhost:8787`
-- Worker 同源健康检查：`http://localhost:3000/api/engine/health`
+## 命令
 
-本地配置写入被 Git 忽略的 `.env.local`。只复制 `.env.example` 中的变量名并在本机填写，禁止提交或回显 secret。
-
-## 常用命令
-
-| 命令 | 用途 |
-| --- | --- |
-| `pnpm lint` | ESLint |
-| `pnpm typecheck` | TypeScript 严格检查 |
-| `pnpm test` | 默认单元与契约测试 |
-| `pnpm test:pg` | 串行 Postgres 集成测试 |
-| `pnpm build` | Next 生产构建 |
-| `pnpm db:migrate` | 应用 Postgres migrations |
-| `pnpm verify:v3` | 过渡架构诊断；Stage A 不作为门禁 |
-
-## 目录结构
-
-```text
-src/
-  app/
-    (marketing)/          PurpleInk 营销首页
-    (product)/            Stage B 产品路由壳
-    legacy/(app)/         CVC 过渡页面
-    playbook/             组件登记页面
-    api/                  Next 自有 API
-  components/
-    marketing/            营销组件
-    ui/                   共享 UI 原语
-  features/               canvas、artifact、render、audio、AI 等领域能力
-  lib/                    DB、storage、queue、config 等基础设施
-server/                   PurpleInk 渲染 worker
-scripts/                  数据库与验证脚本
-tests/                    跨目录契约测试
-docs/                     路由规范、迁移报告和浏览器证据
+```powershell
+pnpm cli doctor --json
+pnpm cli plan <script.json|script.md> --json
+pnpm cli run <script.json|script.md> --concurrency 6 --json
+pnpm cli status --run .purpleink/runs/<run-id> --json
+pnpm cli run <script.json|script.md> --resume .purpleink/runs/<run-id> --json
 ```
 
-TypeScript 别名 `@/*` 映射到 `src/*`。仓库使用 pnpm workspace 管理根应用与 `server/`，不要生成 npm lockfile。
+`--provider fixture` 只用于本地确定性冒烟，不代表真实模型调用。`--no-browser-gate` 只适合缺少 Chromium 的开发诊断；结果会明确标记为 `degraded`。
 
-## Stage A 边界
+输入 JSON 示例见 [examples/script-video/demo.json](examples/script-video/demo.json)。支持 Markdown，但生产自动化建议使用 JSON，因为它能固定 schema、单元 ID 和视觉意图。
 
-- 新 Product/Release 页面只提供路由、导航、职责和未来数据来源，不做认证、审批、数据库或引擎接线。
-- `/legacy/*` 仍是 CVC 过渡域，不等于新 Product/Release 域模型。
-- 本地 mock 采集必须明确标注，不能宣称为真实外部网站采集。
-- UI 不得显示假统计、假进度、恒真成功或没有真实 Artifact 的下载入口。
-- Artifact 内容哈希来自实际字节；凭据只在服务端使用且不进入 Git。
+## 状态与产物
 
-详细开发纪律见 [AGENTS.md](AGENTS.md)。
+每次 run 默认写入 `.purpleink/runs/<run-id>/`：
+
+- `input/`：输入文件副本；
+- `state/run.json`、`state/stages/`、`state/events.jsonl`：可恢复状态与审计事件；
+- `shots/`：每个镜头的 attempt HTML；
+- `project/`：HyperFrames 项目、字幕、manifest 和 renders；
+- `artifacts/video.json`：最终 MP4 的相对路径、字节大小和 SHA-256。
+
+run 会校验输入源字节 SHA-256 与 workflow version。恢复不会复用不同输入的状态；已通过的镜头可以按指纹复用，未通过的镜头只会生成新的 attempt。
+
+## 数据库决策
+
+当前是单机单进程 CLI，不需要数据库。文件状态已经覆盖恢复、审计和产物登记，安装、备份和移动都更简单。只有未来需要多个独立 worker 共享抢占队列时，才增加同一 `StateStore` 接口的 PostgreSQL adapter；那时只保留 runs、shots、attempts、events、artifacts 五类表，不恢复旧 SaaS 的认证、计费或项目迁移。
+
+## 验证
+
+```powershell
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm verify:v3
+pnpm build
+git diff --check
+```
+
+真实交付还应检查 CLI JSON 中的 `videoPath`、`contentHash`、`sizeBytes` 与 ffprobe 元数据，并抽帧确认画面不是空白或错误页。

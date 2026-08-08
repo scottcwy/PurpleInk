@@ -55,17 +55,13 @@ async function generateOneShot(
   shot: ShotPlan,
   options: CodegenOptions,
 ): Promise<CodegenShotResult> {
-  const fingerprint = createHash('sha256')
-    .update(JSON.stringify({ input, shot }), 'utf8')
-    .digest('hex')
+  const fingerprint = createHash('sha256').update(JSON.stringify({ input, shot }), 'utf8').digest('hex')
   const key = `FABRICATE:${shot.id}`
-  const previous = options.store && options.runDir
-    ? await options.store.readStage(options.runDir, key)
-    : null
+  const previous = options.store && options.runDir ? await options.store.readStage(options.runDir, key) : null
   const previousResult = previous?.status === 'succeeded' ? parseStoredResult(previous.payload) : null
   if (previous && previous.fingerprint === fingerprint && previousResult?.status === 'succeeded') {
     const storedPath = resolve(options.outputDir, previousResult.relativeHtmlPath ?? '')
-    if (previousResult.relativeHtmlPath && await exists(storedPath)) return previousResult
+    if (previousResult.relativeHtmlPath && (await exists(storedPath))) return previousResult
   }
 
   const attempt = (previous?.attempt ?? 0) + 1
@@ -91,9 +87,7 @@ async function generateOneShot(
     await mkdir(shotDir, { recursive: true })
     const htmlPath = join(shotDir, 'source.html')
     await writeFile(htmlPath, `${html}\n`, 'utf8')
-    const runtime = options.runtimeGate
-      ? await options.runtimeGate(htmlPath)
-      : await runChromiumGate(htmlPath)
+    const runtime = options.runtimeGate ? await options.runtimeGate(htmlPath) : await runChromiumGate(htmlPath)
     if (!runtime.passed) {
       throw new CodegenFailure(runtime.errors[0] === 'BROWSER_GATE_FAILED' ? 'BROWSER_GATE_FAILED' : 'SHOT_GATE_FAILED')
     }
@@ -122,9 +116,7 @@ async function generateOneShot(
 }
 
 class CodegenFailure extends Error {
-  constructor(
-    readonly code: NonNullable<CodegenShotResult['errorCode']>,
-  ) {
+  constructor(readonly code: NonNullable<CodegenShotResult['errorCode']>) {
     super(code)
     this.name = 'CodegenFailure'
   }
@@ -139,7 +131,8 @@ function normalizeHtml(raw: string): string {
 
 function parseStoredResult(value: unknown): CodegenShotResult | null {
   if (!isRecord(value) || typeof value.id !== 'string' || typeof value.sourceUnitId !== 'string') return null
-  if (value.status !== 'succeeded' || typeof value.attempt !== 'number' || typeof value.relativeHtmlPath !== 'string') return null
+  if (value.status !== 'succeeded' || typeof value.attempt !== 'number' || typeof value.relativeHtmlPath !== 'string')
+    return null
   return {
     id: value.id,
     sourceUnitId: value.sourceUnitId,

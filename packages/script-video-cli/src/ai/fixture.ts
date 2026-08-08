@@ -3,7 +3,8 @@ import type { AiClient, AiCompletionInput } from './openai-compatible'
 export function createFixtureAiClient(): AiClient {
   return {
     completeJson: async (input) => {
-      if (input.user.includes('阶段：DIRECT')) return { masterPlan: '按来源事实建立镜头节奏。', styleBible: '本地、确定性、无外部资源。' }
+      if (input.user.includes('阶段：DIRECT'))
+        return { masterPlan: '按来源事实建立镜头节奏。', styleBible: '本地、确定性、无外部资源。' }
       const unit = parseJsonAfter(input.user, '当前来源单元：') as { id: string; text: string; visualIntent?: string }
       const shotId = input.user.match(/目标镜头：(S\d{3})/u)?.[1] ?? 'S001'
       return {
@@ -44,5 +45,10 @@ function parseJsonAfter(text: string, label: string): unknown {
 }
 
 function escapeHtml(value: string): string {
-  return value.replace(/&/gu, '&amp;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;').replace(/"/gu, '&quot;').replace(/'/gu, '&#39;')
+  return value
+    .replace(/&/gu, '&amp;')
+    .replace(/</gu, '&lt;')
+    .replace(/>/gu, '&gt;')
+    .replace(/"/gu, '&quot;')
+    .replace(/'/gu, '&#39;')
 }

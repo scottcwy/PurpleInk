@@ -1,9 +1,5 @@
 export type AiProviderErrorCode =
-  | 'AI_CONFIG_INVALID'
-  | 'AI_TIMEOUT'
-  | 'AI_RATE_LIMITED'
-  | 'AI_PROVIDER_UNAVAILABLE'
-  | 'AI_OUTPUT_INVALID'
+  'AI_CONFIG_INVALID' | 'AI_TIMEOUT' | 'AI_RATE_LIMITED' | 'AI_PROVIDER_UNAVAILABLE' | 'AI_OUTPUT_INVALID'
 
 export class AiProviderError extends Error {
   constructor(
@@ -42,9 +38,7 @@ interface ChatCompletionResponse {
   choices?: Array<{ message?: { content?: unknown } }>
 }
 
-export function createOpenAiCompatibleClient(
-  config: OpenAiCompatibleConfig,
-): AiClient {
+export function createOpenAiCompatibleClient(config: OpenAiCompatibleConfig): AiClient {
   const normalized = normalizeConfig(config)
 
   return {
@@ -90,13 +84,13 @@ function normalizeConfig(config: OpenAiCompatibleConfig): NormalizedConfig {
   const maxRetries = config.maxRetries ?? 2
   const retryBaseDelayMs = config.retryBaseDelayMs ?? 250
   if (
-    !Number.isInteger(requestTimeoutMs)
-    || requestTimeoutMs < 100
-    || !Number.isInteger(maxRetries)
-    || maxRetries < 0
-    || maxRetries > 5
-    || !Number.isInteger(retryBaseDelayMs)
-    || retryBaseDelayMs < 0
+    !Number.isInteger(requestTimeoutMs) ||
+    requestTimeoutMs < 100 ||
+    !Number.isInteger(maxRetries) ||
+    maxRetries < 0 ||
+    maxRetries > 5 ||
+    !Number.isInteger(retryBaseDelayMs) ||
+    retryBaseDelayMs < 0
   ) {
     throw new AiProviderError('AI_CONFIG_INVALID', 'AI provider 重试配置无效')
   }
@@ -110,11 +104,7 @@ function normalizeConfig(config: OpenAiCompatibleConfig): NormalizedConfig {
   }
 }
 
-async function requestCompletion(
-  config: NormalizedConfig,
-  input: AiCompletionInput,
-  json: boolean,
-): Promise<string> {
+async function requestCompletion(config: NormalizedConfig, input: AiCompletionInput, json: boolean): Promise<string> {
   const model = input.model?.trim() || config.textModel
   if (!model) {
     throw new AiProviderError('AI_CONFIG_INVALID', 'AI model 未配置')
@@ -150,9 +140,7 @@ async function requestCompletion(
           continue
         }
         throw new AiProviderError(
-          response.status === 429
-            ? 'AI_RATE_LIMITED'
-            : 'AI_PROVIDER_UNAVAILABLE',
+          response.status === 429 ? 'AI_RATE_LIMITED' : 'AI_PROVIDER_UNAVAILABLE',
           response.status === 429 ? 'AI provider 请求受限' : 'AI provider 请求失败',
         )
       }

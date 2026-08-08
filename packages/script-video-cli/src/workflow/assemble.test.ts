@@ -29,12 +29,26 @@ const input: ScriptVideoInput = {
 
 const plans: ShotPlan[] = [
   {
-    id: 'S001', sourceUnitId: 'U001', purpose: '开场', visualIntent: 'show', composition: 'full-bleed',
-    visualDescription: '展示第一条事实', facts: ['第一条事实。'], onScreenText: ['第一条事实。'], durationSec: 7,
+    id: 'S001',
+    sourceUnitId: 'U001',
+    purpose: '开场',
+    visualIntent: 'show',
+    composition: 'full-bleed',
+    visualDescription: '展示第一条事实',
+    facts: ['第一条事实。'],
+    onScreenText: ['第一条事实。'],
+    durationSec: 7,
   },
   {
-    id: 'S002', sourceUnitId: 'U002', purpose: '承接', visualIntent: 'show', composition: 'split',
-    visualDescription: '展示第二条事实', facts: ['第二条事实。'], onScreenText: ['第二条事实。'], durationSec: 7,
+    id: 'S002',
+    sourceUnitId: 'U002',
+    purpose: '承接',
+    visualIntent: 'show',
+    composition: 'split',
+    visualDescription: '展示第二条事实',
+    facts: ['第二条事实。'],
+    onScreenText: ['第二条事实。'],
+    durationSec: 7,
   },
 ]
 
@@ -83,7 +97,10 @@ describe('assembleProject', () => {
     roots.push(root)
     await createShots(root)
 
-    const result = await assembleProject(input, plans, codegenResult(), { outputDir: root, narration: { mode: 'auto' } })
+    const result = await assembleProject(input, plans, codegenResult(), {
+      outputDir: root,
+      narration: { mode: 'auto' },
+    })
 
     expect(result.narration).toMatchObject({ mode: 'auto', status: 'degraded' })
   })

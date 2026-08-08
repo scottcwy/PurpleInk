@@ -47,16 +47,7 @@ export async function createPlan(
     options.signal?.throwIfAborted()
     const id = `S${String(index + 1).padStart(3, '0')}`
     const shotFingerprint = fingerprint({ stage: 'SHOT_SPEC', input, director, unit, id })
-    const shot = await runShotStage(
-      input,
-      director,
-      unit,
-      id,
-      ai,
-      state,
-      shotFingerprint,
-      options.signal,
-    )
+    const shot = await runShotStage(input, director, unit, id, ai, state, shotFingerprint, options.signal)
     shots.push(shot)
   }
 
@@ -70,12 +61,10 @@ export async function createPlan(
 type StatePair = { store: StateStore; runDir: string } | null
 
 function requireStatePair(options: PlanOptions): StatePair {
-  if (options.store && !options.runDir || !options.store && options.runDir) {
+  if ((options.store && !options.runDir) || (!options.store && options.runDir)) {
     throw new Error('StateStore 和 runDir 必须同时提供')
   }
-  return options.store && options.runDir
-    ? { store: options.store, runDir: options.runDir }
-    : null
+  return options.store && options.runDir ? { store: options.store, runDir: options.runDir } : null
 }
 
 async function runDirectorStage(

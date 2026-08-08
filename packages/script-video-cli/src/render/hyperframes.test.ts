@@ -45,7 +45,9 @@ describe('renderHyperframesProject', () => {
       return { code: 1, stdout: '', stderr: 'invalid composition' }
     }
 
-    await expect(renderHyperframesProject(root, { runner, cliPath: 'hyperframes' })).rejects.toMatchObject({ code: 'HYPERFRAMES_CHECK_FAILED' })
+    await expect(renderHyperframesProject(root, { runner, cliPath: 'hyperframes' })).rejects.toMatchObject({
+      code: 'HYPERFRAMES_CHECK_FAILED',
+    })
     expect(calls).toEqual([['hyperframes', 'check']])
   })
 })

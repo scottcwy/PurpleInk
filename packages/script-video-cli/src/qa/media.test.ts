@@ -18,10 +18,13 @@ describe('inspectVideoArtifact', () => {
     roots.push(root)
     const path = join(root, 'video.mp4')
     await writeFile(path, Buffer.from('video-bytes'))
-    const runner: FfprobeRunner = async () => JSON.stringify({
-      streams: [{ codec_type: 'video', codec_name: 'h264', width: 1920, height: 1080, r_frame_rate: '30/1', duration: '14' }],
-      format: { format_name: 'mov,mp4,m4a,3gp,3g2,mj2', duration: '14' },
-    })
+    const runner: FfprobeRunner = async () =>
+      JSON.stringify({
+        streams: [
+          { codec_type: 'video', codec_name: 'h264', width: 1920, height: 1080, r_frame_rate: '30/1', duration: '14' },
+        ],
+        format: { format_name: 'mov,mp4,m4a,3gp,3g2,mj2', duration: '14' },
+      })
 
     const result = await inspectVideoArtifact(path, { expectedDurationSec: 14, runner })
 
@@ -36,7 +39,8 @@ describe('inspectVideoArtifact', () => {
     roots.push(root)
     const path = join(root, 'video.mp4')
     await writeFile(path, Buffer.from('video-bytes'))
-    const runner: FfprobeRunner = async () => JSON.stringify({ streams: [{ codec_type: 'audio' }], format: { duration: '2' } })
+    const runner: FfprobeRunner = async () =>
+      JSON.stringify({ streams: [{ codec_type: 'audio' }], format: { duration: '2' } })
 
     const result = await inspectVideoArtifact(path, { expectedDurationSec: 14, runner })
 

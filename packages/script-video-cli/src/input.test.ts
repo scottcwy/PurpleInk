@@ -1,17 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  hashSourceBytes,
-  parseScriptText,
-  parseScriptValue,
-} from './input'
+import { hashSourceBytes, parseScriptText, parseScriptValue } from './input'
 
 describe('script-video.v1 input', () => {
   it('normalizes markdown headings into ordered script units', () => {
-    const result = parseScriptText(
-      '# Demo\n\n## Opening\n真实事实。\n\n## Proof\n第二个事实。',
-      'script.md',
-    )
+    const result = parseScriptText('# Demo\n\n## Opening\n真实事实。\n\n## Proof\n第二个事实。', 'script.md')
 
     expect(result.title).toBe('Demo')
     expect(result.units).toEqual([
@@ -41,9 +34,7 @@ describe('script-video.v1 input', () => {
         ],
       }),
     ).toThrow(/重复/)
-    expect(() =>
-      parseScriptValue({ ...valid, units: [{ id: 'U001', text: '', visualIntent: 'show' }] }),
-    ).toThrow()
+    expect(() => parseScriptValue({ ...valid, units: [{ id: 'U001', text: '', visualIntent: 'show' }] })).toThrow()
     expect(() => parseScriptValue({ ...valid, unexpected: true })).toThrow()
   })
 

@@ -77,7 +77,8 @@ function parseFfprobe(value: unknown): VideoMetadata {
   const width = numberFrom(video.width)
   const height = numberFrom(video.height)
   const duration = numberFrom(video.duration) ?? numberFrom(isRecord(value.format) ? value.format.duration : undefined)
-  if (width === undefined || height === undefined || duration === undefined) throw new Error('incomplete media metadata')
+  if (width === undefined || height === undefined || duration === undefined)
+    throw new Error('incomplete media metadata')
   return {
     durationSec: duration,
     width,
@@ -95,7 +96,8 @@ function validateMetadata(metadata: VideoMetadata, options: MediaQaOptions): str
     if (Math.abs(metadata.durationSec - options.expectedDurationSec) > tolerance) errors.push('duration 不符合预期')
   }
   if (options.expectedWidth !== undefined && metadata.width !== options.expectedWidth) errors.push('width 不符合预期')
-  if (options.expectedHeight !== undefined && metadata.height !== options.expectedHeight) errors.push('height 不符合预期')
+  if (options.expectedHeight !== undefined && metadata.height !== options.expectedHeight)
+    errors.push('height 不符合预期')
   return errors
 }
 
@@ -111,12 +113,18 @@ function numberFrom(value: unknown): number | undefined {
   return Number.isFinite(result) ? result : undefined
 }
 
-function stringFrom(value: unknown): string | undefined { return typeof value === 'string' ? value : undefined }
-function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
+function stringFrom(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined
+}
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
 
 const runFfprobe: FfprobeRunner = async (path) => {
-  const result = await execFileAsync('ffprobe', [
-    '-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', path,
-  ], { windowsHide: true, maxBuffer: 2 * 1024 * 1024 })
+  const result = await execFileAsync(
+    'ffprobe',
+    ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', path],
+    { windowsHide: true, maxBuffer: 2 * 1024 * 1024 },
+  )
   return result.stdout
 }

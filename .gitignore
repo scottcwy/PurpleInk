@@ -1,71 +1,32 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
+# Dependencies
+/node_modules/
 /packages/*/node_modules/
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+.pnpm-debug.log*
 
-# testing
-/coverage
-/.playwright-cli/
-/.data/
-/.trigger/
+# Local configuration and runtime state
+.env*
+!/.env.example
 /.purpleink/
+/.data/
+/.cache/
 
-# next.js
+# Build and media outputs
+/dist/
+/packages/*/dist/
 /.next/
 /out/
 /output/
-/.turbo/
-
-# production
-/build
-/packages/*/dist/
-
-# misc
-.DS_Store
-*.pem
-.vscode/
-.claude/worktrees/
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-/logs/
-
-# env files (can opt-in for committing if needed)
-.env*
-!/.env.example
-!/server/.env.example
-
-# vercel
-.vercel
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-# Video output
-server/out/
-
-# Capture output
-server/capture/
-
-# Video files
 *.mp4
-!public/videos/community/*.mp4
+*.wav
+*.mp3
+*.png
 
-# Archive (historical records, not tracked)
-docs/archive/
+# Tool caches
+/.playwright-cli/
+/.trigger/
+*.tsbuildinfo
 
-# Reverse-proxy Basic Auth 凭据（真实值），示例文件 *.example 保留入库
-deploy/reverse-proxy/secrets/*
-!deploy/reverse-proxy/secrets/*.example
+# OS/editor files
+.DS_Store
+Thumbs.db
+*.pem

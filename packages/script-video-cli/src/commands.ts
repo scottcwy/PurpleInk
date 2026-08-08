@@ -26,7 +26,10 @@ export interface CommandIo {
 }
 
 export class CliCommandError extends Error {
-  constructor(readonly code: 'INPUT_REQUIRED' | 'RUN_NOT_FOUND' | 'MEDIA_QA_FAILED', message: string) {
+  constructor(
+    readonly code: 'INPUT_REQUIRED' | 'RUN_NOT_FOUND' | 'MEDIA_QA_FAILED',
+    message: string,
+  ) {
     super(message)
     this.name = 'CliCommandError'
   }
@@ -50,7 +53,14 @@ async function runPlan(args: CliArgs, config: CliConfig): Promise<unknown> {
     const plan = await createPlan(source.input, createConfiguredAiClient(config), { store, runDir: run.runDir })
     await store.updateRun(run.runDir, { status: 'degraded' })
     await store.appendEvent(run.runDir, { type: 'plan.succeeded', data: { shotCount: plan.shots.length } })
-    return { command: 'plan', runId: run.runId, runDir: run.runDir, fingerprint: plan.fingerprint, director: plan.director, shots: plan.shots }
+    return {
+      command: 'plan',
+      runId: run.runId,
+      runDir: run.runDir,
+      fingerprint: plan.fingerprint,
+      director: plan.director,
+      shots: plan.shots,
+    }
   } catch (error) {
     await markRunFailed(store, run.runDir, error)
     throw error
@@ -92,13 +102,21 @@ async function runVideo(args: CliArgs, config: CliConfig): Promise<unknown> {
   }
 }
 
-async function prepareRun(store: FileStateStore, source: Awaited<ReturnType<typeof readScriptFile>>, resumeDir: string | undefined) {
+async function prepareRun(
+  store: FileStateStore,
+  source: Awaited<ReturnType<typeof readScriptFile>>,
+  resumeDir: string | undefined,
+) {
   if (resumeDir) {
     const runDir = resolveUserPath(resumeDir)
     await store.assertResumeCompatible(runDir, { inputHash: source.inputHash, workflowVersion: WORKFLOW_VERSION })
     return store.readRun(runDir)
   }
-  const run = await store.createRun({ inputHash: source.inputHash, title: source.input.title, workflowVersion: WORKFLOW_VERSION })
+  const run = await store.createRun({
+    inputHash: source.inputHash,
+    title: source.input.title,
+    workflowVersion: WORKFLOW_VERSION,
+  })
   await copyFile(source.sourcePath, join(run.runDir, 'input', basename(source.sourcePath)))
   return run
 }
@@ -121,7 +139,12 @@ async function runDoctor(config: CliConfig): Promise<unknown> {
   const [ffprobe, hyperframes] = await Promise.all([checkCommand('ffprobe', ['-version']), checkHyperframes()])
   const chromiumPath = chromium.executablePath()
   let chromiumAvailable = false
-  try { await stat(chromiumPath); chromiumAvailable = true } catch { chromiumAvailable = false }
+  try {
+    await stat(chromiumPath)
+    chromiumAvailable = true
+  } catch {
+    chromiumAvailable = false
+  }
   return {
     command: 'doctor',
     config: getConfigSummary(config),
@@ -160,8 +183,14 @@ function createRunSummary(
   degraded: boolean,
 ): Record<string, unknown> {
   return {
-    command: 'run', runId, runDir, shotCount,
-    shots: { succeeded: codegen.succeeded.length, failed: codegen.failed.map((shot) => ({ id: shot.id, errorCode: shot.errorCode })) },
+    command: 'run',
+    runId,
+    runDir,
+    shotCount,
+    shots: {
+      succeeded: codegen.succeeded.length,
+      failed: codegen.failed.map((shot) => ({ id: shot.id, errorCode: shot.errorCode })),
+    },
     projectDir: assembly.projectDir,
     videoPath: rendered.videoPath,
     durationSec: media.metadata?.durationSec ?? assembly.durationSec,
@@ -175,31 +204,57 @@ async function markRunFailed(store: FileStateStore, runDir: string, error: unkno
   try {
     await store.updateRun(runDir, { status: 'failed' })
     await store.appendEvent(runDir, { type: 'run.failed', data: { code: errorCode(error) } })
-  } catch { /* preserve the original workflow failure */ }
+  } catch {
+    /* preserve the original workflow failure */
+  }
 }
 
 async function findLatestRun(root: string): Promise<string | null> {
-  try { await stat(root) } catch { return null }
+  try {
+    await stat(root)
+  } catch {
+    return null
+  }
   const names = await readdir(root)
-  const candidates = await Promise.all(names.map(async (name) => {
-    const path = join(root, name)
-    try { return { path, modified: (await stat(join(path, 'state', 'run.json'))).mtimeMs } } catch { return null }
-  }))
-  return candidates.filter((value): value is { path: string; modified: number } => value !== null)
-    .sort((a, b) => b.modified - a.modified)[0]?.path ?? null
+  const candidates = await Promise.all(
+    names.map(async (name) => {
+      const path = join(root, name)
+      try {
+        return { path, modified: (await stat(join(path, 'state', 'run.json'))).mtimeMs }
+      } catch {
+        return null
+      }
+    }),
+  )
+  return (
+    candidates
+      .filter((value): value is { path: string; modified: number } => value !== null)
+      .sort((a, b) => b.modified - a.modified)[0]?.path ?? null
+  )
 }
 
 async function readStageSummaries(directory: string): Promise<Array<{ key: string; status: string; attempt: number }>> {
-  try { await stat(directory) } catch { return [] }
+  try {
+    await stat(directory)
+  } catch {
+    return []
+  }
   const files = (await readdir(directory)).filter((name) => name.endsWith('.json'))
   const summaries: Array<{ key: string; status: string; attempt: number }> = []
   for (const file of files) {
     try {
       const value = JSON.parse(await readFile(join(directory, file), 'utf8')) as unknown
-      if (isRecord(value) && typeof value.key === 'string' && typeof value.status === 'string' && typeof value.attempt === 'number') {
+      if (
+        isRecord(value) &&
+        typeof value.key === 'string' &&
+        typeof value.status === 'string' &&
+        typeof value.attempt === 'number'
+      ) {
         summaries.push({ key: value.key, status: value.status, attempt: value.attempt })
       }
-    } catch { /* ignore malformed diagnostics; run.json remains authoritative */ }
+    } catch {
+      /* ignore malformed diagnostics; run.json remains authoritative */
+    }
   }
   return summaries.sort((a, b) => a.key.localeCompare(b.key))
 }
@@ -208,25 +263,44 @@ async function checkCommand(command: string, args: string[]): Promise<{ ok: bool
   try {
     await execFileAsync(command, args, { windowsHide: true, timeout: 5_000 })
     return { ok: true }
-  } catch { return { ok: false } }
+  } catch {
+    return { ok: false }
+  }
 }
 
 async function checkHyperframes(): Promise<{ ok: boolean }> {
   try {
     const packageJson = require.resolve('hyperframes/package.json')
-    await execFileAsync(process.execPath, [join(dirname(packageJson), 'bin', 'hyperframes.mjs'), '--version'], { windowsHide: true, timeout: 5_000 })
+    await execFileAsync(process.execPath, [join(dirname(packageJson), 'bin', 'hyperframes.mjs'), '--version'], {
+      windowsHide: true,
+      timeout: 5_000,
+    })
     return { ok: true }
-  } catch { return checkCommand(hyperframesCommand(), ['--version']) }
+  } catch {
+    return checkCommand(hyperframesCommand(), ['--version'])
+  }
 }
 
 function resolveOutputDir(args: CliArgs, config: CliConfig): string {
   return args.outputDir ? resolveUserPath(args.outputDir) : config.stateDir
 }
-function resolveUserPath(path: string): string { return resolve(process.env.INIT_CWD?.trim() || process.cwd(), path) }
-function toPortableRelative(root: string, path: string): string { return relative(root, path).split(/[\\/]+/u).join('/') }
-function hyperframesCommand(): string { return process.platform === 'win32' ? 'hyperframes.cmd' : 'hyperframes' }
-function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
-function errorCode(error: unknown): string { return isRecord(error) && typeof error.code === 'string' ? error.code : 'CLI_FAILED' }
+function resolveUserPath(path: string): string {
+  return resolve(process.env.INIT_CWD?.trim() || process.cwd(), path)
+}
+function toPortableRelative(root: string, path: string): string {
+  return relative(root, path)
+    .split(/[\\/]+/u)
+    .join('/')
+}
+function hyperframesCommand(): string {
+  return process.platform === 'win32' ? 'hyperframes.cmd' : 'hyperframes'
+}
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+function errorCode(error: unknown): string {
+  return isRecord(error) && typeof error.code === 'string' ? error.code : 'CLI_FAILED'
+}
 function helpText(): string {
   return [
     'purpleink-video run <script.json|script.md> [--concurrency N] [--narration off|auto|required]',

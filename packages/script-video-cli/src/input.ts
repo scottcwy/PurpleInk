@@ -22,9 +22,7 @@ export function parseScriptValue(value: unknown): ScriptVideoInput {
     return scriptVideoInputSchema.parse(value)
   } catch (error) {
     if (error instanceof ZodError) {
-      const detail = error.issues
-        .map((issue) => `${issue.path.join('.')} ${issue.message}`)
-        .join('; ')
+      const detail = error.issues.map((issue) => `${issue.path.join('.')} ${issue.message}`).join('; ')
       throw new InputContractError(`文稿输入无效: ${detail}`, { cause: error })
     }
     throw error

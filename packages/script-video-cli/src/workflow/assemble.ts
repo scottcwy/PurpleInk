@@ -37,7 +37,10 @@ export interface AssemblyResult {
 }
 
 export class AssemblyError extends Error {
-  constructor(readonly code: 'SHOT_GATE_REQUIRED' | 'TTS_CONFIG_INVALID' | 'TTS_PROVIDER_ERROR', message: string) {
+  constructor(
+    readonly code: 'SHOT_GATE_REQUIRED' | 'TTS_CONFIG_INVALID' | 'TTS_PROVIDER_ERROR',
+    message: string,
+  ) {
     super(message)
     this.name = 'AssemblyError'
   }
@@ -61,7 +64,8 @@ export async function assembleProject(
 
   for (const plan of plans) {
     const shot = resultById.get(plan.id)
-    if (!shot?.relativeHtmlPath) throw new AssemblyError('SHOT_GATE_REQUIRED', `镜头 ${plan.id} 缺少已通过 gate 的 HTML`)
+    if (!shot?.relativeHtmlPath)
+      throw new AssemblyError('SHOT_GATE_REQUIRED', `镜头 ${plan.id} 缺少已通过 gate 的 HTML`)
     const sourcePath = resolveInside(resolve(options.outputDir), shot.relativeHtmlPath)
     const compositionPath = join(compositionDir, `${plan.id}.html`)
     const sourceHtml = await readFile(sourcePath, 'utf8')
@@ -75,20 +79,28 @@ export async function assembleProject(
   const subtitlePath = join(projectDir, 'subtitles.srt')
   await writeFile(indexPath, createIndexHtml(input, plans, compositionPaths, durationSec), 'utf8')
   await writeFile(subtitlePath, createSubtitles(input, plans), 'utf8')
-  await writeFile(manifestPath, JSON.stringify({
-    schemaVersion: 1,
-    kind: 'purpleink-script-video-project',
-    title: input.title,
-    language: input.language,
-    durationSec,
-    narration,
-    shots: plans.map((plan, index) => ({
-      id: plan.id,
-      sourceUnitId: plan.sourceUnitId,
-      durationSec: plan.durationSec,
-      compositionPath: compositionPaths[index],
-    })),
-  }, null, 2) + '\n', 'utf8')
+  await writeFile(
+    manifestPath,
+    JSON.stringify(
+      {
+        schemaVersion: 1,
+        kind: 'purpleink-script-video-project',
+        title: input.title,
+        language: input.language,
+        durationSec,
+        narration,
+        shots: plans.map((plan, index) => ({
+          id: plan.id,
+          sourceUnitId: plan.sourceUnitId,
+          durationSec: plan.durationSec,
+          compositionPath: compositionPaths[index],
+        })),
+      },
+      null,
+      2,
+    ) + '\n',
+    'utf8',
+  )
 
   return { projectDir, indexPath, manifestPath, subtitlePath, durationSec, narration }
 }
@@ -101,7 +113,8 @@ async function prepareNarration(
 ): Promise<NarrationResult> {
   if (options.mode === 'off') return { mode: 'off', status: 'off' }
   if (!options.tts) {
-    if (options.mode === 'required') throw new AssemblyError('TTS_CONFIG_INVALID', 'required narration 没有配置用户自有 TTS adapter')
+    if (options.mode === 'required')
+      throw new AssemblyError('TTS_CONFIG_INVALID', 'required narration 没有配置用户自有 TTS adapter')
     return { mode: options.mode, status: 'degraded', reason: 'TTS_NOT_CONFIGURED' }
   }
   try {
@@ -131,11 +144,13 @@ function createIndexHtml(
   durationSec: number,
 ): string {
   let start = 0
-  const hosts = plans.map((plan, index) => {
-    const host = `    <div id="host-${plan.id}" data-composition-id="host-${plan.id}" data-composition-src="${compositionPaths[index]}" data-start="${round(start)}" data-duration="${round(plan.durationSec)}" data-width="1920" data-height="1080"></div>`
-    start += plan.durationSec
-    return host
-  }).join('\n')
+  const hosts = plans
+    .map((plan, index) => {
+      const host = `    <div id="host-${plan.id}" data-composition-id="host-${plan.id}" data-composition-src="${compositionPaths[index]}" data-start="${round(start)}" data-duration="${round(plan.durationSec)}" data-width="1920" data-height="1080"></div>`
+      start += plan.durationSec
+      return host
+    })
+    .join('\n')
   return `<!doctype html>
 <html lang="${escapeAttribute(input.language)}" data-resolution="landscape">
 <head>
@@ -177,12 +192,14 @@ function createTimelineScript(id: string, durationSec: number): string {
 
 function createSubtitles(input: ScriptVideoInput, plans: readonly ShotPlan[]): string {
   let start = 0
-  return plans.map((plan, index) => {
-    const unit = input.units.find((candidate) => candidate.id === plan.sourceUnitId)
-    const block = `${index + 1}\n${formatSrtTime(start)} --> ${formatSrtTime(start + plan.durationSec)}\n${unit?.text ?? plan.onScreenText.join(' ')}\n`
-    start += plan.durationSec
-    return block
-  }).join('\n')
+  return plans
+    .map((plan, index) => {
+      const unit = input.units.find((candidate) => candidate.id === plan.sourceUnitId)
+      const block = `${index + 1}\n${formatSrtTime(start)} --> ${formatSrtTime(start + plan.durationSec)}\n${unit?.text ?? plan.onScreenText.join(' ')}\n`
+      start += plan.durationSec
+      return block
+    })
+    .join('\n')
 }
 
 function formatSrtTime(seconds: number): string {
@@ -194,14 +211,28 @@ function formatSrtTime(seconds: number): string {
   return `${pad(hours)}:${pad(minutes)}:${pad(secs)},${String(remainder).padStart(3, '0')}`
 }
 
-function pad(value: number): string { return String(value).padStart(2, '0') }
-function round(value: number): number { return Math.round(value * 1000) / 1000 }
-function escapeAttribute(value: string): string { return escapeHtml(value).replace(/"/gu, '&quot;') }
-function escapeHtml(value: string): string { return value.replace(/&/gu, '&amp;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;').replace(/"/gu, '&quot;').replace(/'/gu, '&#39;') }
+function pad(value: number): string {
+  return String(value).padStart(2, '0')
+}
+function round(value: number): number {
+  return Math.round(value * 1000) / 1000
+}
+function escapeAttribute(value: string): string {
+  return escapeHtml(value).replace(/"/gu, '&quot;')
+}
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/gu, '&amp;')
+    .replace(/</gu, '&lt;')
+    .replace(/>/gu, '&gt;')
+    .replace(/"/gu, '&quot;')
+    .replace(/'/gu, '&#39;')
+}
 
 function resolveInside(root: string, child: string): string {
   const resolved = resolve(root, child)
   const rootWithSep = root.endsWith(sep) ? root : `${root}${sep}`
-  if (resolved !== root && !resolved.startsWith(rootWithSep)) throw new AssemblyError('SHOT_GATE_REQUIRED', '镜头路径越过运行目录')
+  if (resolved !== root && !resolved.startsWith(rootWithSep))
+    throw new AssemblyError('SHOT_GATE_REQUIRED', '镜头路径越过运行目录')
   return resolved
 }

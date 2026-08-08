@@ -54,8 +54,8 @@ describe('validateShotHtml', () => {
 
   it('rejects network resources and credential-like content', () => {
     const result = validateShotHtml(
-      '<html><body><script src="https://evil.example/x.js"></script>'
-        + '<script>const apiKey = "secret"</script></body></html>',
+      '<html><body><script src="https://evil.example/x.js"></script>' +
+        '<script>const apiKey = "secret"</script></body></html>',
     )
     expect(result.passed).toBe(false)
     expect(result.errors.join(' ')).toMatch(/network|credential|metadata/i)

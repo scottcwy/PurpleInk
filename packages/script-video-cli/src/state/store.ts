@@ -1,22 +1,9 @@
 import { z } from 'zod'
 
-export const runStatusSchema = z.enum([
-  'created',
-  'running',
-  'succeeded',
-  'failed',
-  'cancelled',
-  'degraded',
-])
+export const runStatusSchema = z.enum(['created', 'running', 'succeeded', 'failed', 'cancelled', 'degraded'])
 export type RunStatus = z.infer<typeof runStatusSchema>
 
-export const stageStatusSchema = z.enum([
-  'queued',
-  'running',
-  'succeeded',
-  'failed',
-  'degraded',
-])
+export const stageStatusSchema = z.enum(['queued', 'running', 'succeeded', 'failed', 'degraded'])
 export type StageStatus = z.infer<typeof stageStatusSchema>
 
 export const runRecordSchema = z

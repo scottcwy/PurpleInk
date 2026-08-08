@@ -38,15 +38,42 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
       positionalInput = true
       continue
     }
-    if (flag === '--json') { result.json = true; continue }
-    if (flag === '--no-browser-gate') { result.skipBrowserGate = true; continue }
-    if (flag === '--input') { result.inputPath = takeValue(rest, ++index, flag); continue }
-    if (flag === '--output') { result.outputDir = takeValue(rest, ++index, flag); continue }
-    if (flag === '--resume' || flag === '--run') { result.resumeDir = takeValue(rest, ++index, flag); continue }
-    if (flag === '--concurrency') { result.concurrency = parseInteger(takeValue(rest, ++index, flag), flag, 1, 32); continue }
-    if (flag === '--narration') { result.narration = parseNarration(takeValue(rest, ++index, flag)); continue }
-    if (flag === '--provider') { result.provider = parseProvider(takeValue(rest, ++index, flag)); continue }
-    if (flag === '--help' || flag === '-h') { result.command = 'help'; continue }
+    if (flag === '--json') {
+      result.json = true
+      continue
+    }
+    if (flag === '--no-browser-gate') {
+      result.skipBrowserGate = true
+      continue
+    }
+    if (flag === '--input') {
+      result.inputPath = takeValue(rest, ++index, flag)
+      continue
+    }
+    if (flag === '--output') {
+      result.outputDir = takeValue(rest, ++index, flag)
+      continue
+    }
+    if (flag === '--resume' || flag === '--run') {
+      result.resumeDir = takeValue(rest, ++index, flag)
+      continue
+    }
+    if (flag === '--concurrency') {
+      result.concurrency = parseInteger(takeValue(rest, ++index, flag), flag, 1, 32)
+      continue
+    }
+    if (flag === '--narration') {
+      result.narration = parseNarration(takeValue(rest, ++index, flag))
+      continue
+    }
+    if (flag === '--provider') {
+      result.provider = parseProvider(takeValue(rest, ++index, flag))
+      continue
+    }
+    if (flag === '--help' || flag === '-h') {
+      result.command = 'help'
+      continue
+    }
     throw new Error(`未知 CLI 参数: ${flag}`)
   }
   if (result.command === 'status' && result.inputPath && !result.resumeDir) {

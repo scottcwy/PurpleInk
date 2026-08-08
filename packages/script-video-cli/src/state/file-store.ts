@@ -62,10 +62,7 @@ export class FileStateStore implements StateStore {
     return next
   }
 
-  async writeStage(
-    runDir: string,
-    stage: Omit<StageRecord, 'schemaVersion' | 'updatedAt'>,
-  ): Promise<void> {
+  async writeStage(runDir: string, stage: Omit<StageRecord, 'schemaVersion' | 'updatedAt'>): Promise<void> {
     const value = stageRecordSchema.parse({
       schemaVersion: 1,
       ...stage,
@@ -92,14 +89,14 @@ export class FileStateStore implements StateStore {
       await mkdir(dirname(path), { recursive: true })
       await appendFile(path, `${JSON.stringify(value)}\n`, 'utf8')
     })
-    this.eventWrites.set(path, current.catch(() => undefined))
+    this.eventWrites.set(
+      path,
+      current.catch(() => undefined),
+    )
     await current
   }
 
-  async writeArtifact(
-    runDir: string,
-    artifact: Omit<ArtifactRecord, 'schemaVersion' | 'createdAt'>,
-  ): Promise<void> {
+  async writeArtifact(runDir: string, artifact: Omit<ArtifactRecord, 'schemaVersion' | 'createdAt'>): Promise<void> {
     const value = artifactRecordSchema.parse({
       schemaVersion: 1,
       ...artifact,

@@ -75,10 +75,9 @@ export async function runChromiumGate(
   const screenshotHashes: string[] = []
   try {
     await page.goto(pathToFileURL(htmlPath).href, { waitUntil: 'load' })
-    await page.waitForFunction(
-      'window.__PURPLEINK_RENDER__ && window.__PURPLEINK_RENDER__.ready === true',
-      { timeout: timeoutMs },
-    )
+    await page.waitForFunction('window.__PURPLEINK_RENDER__ && window.__PURPLEINK_RENDER__.ready === true', {
+      timeout: timeoutMs,
+    })
     for (const progress of [0, 0.5, 1]) {
       await page.evaluate(
         '(progress) => { const r = window.__PURPLEINK_RENDER__; if (r && typeof r.seek === "function") r.seek(progress); document.documentElement.dataset.renderProgress = String(progress); }',

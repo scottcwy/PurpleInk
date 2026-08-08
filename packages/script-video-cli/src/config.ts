@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { createOpenAiCompatibleClient, type AiClient, type OpenAiCompatibleConfig } from './ai/openai-compatible'
@@ -23,6 +24,20 @@ export interface ConfigSummary {
   baseUrlConfigured: boolean
   textModel: string | null
   visionModel: string | null
+}
+
+export function loadLocalEnvFile(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): void {
+  if (env !== process.env) return
+  const baseDir = env.INIT_CWD?.trim() || cwd
+  const envPath = resolve(baseDir, '.env.local')
+  if (!existsSync(envPath)) return
+  try {
+    process.loadEnvFile(envPath)
+  } catch {
+    const error = new Error('ENV_FILE_INVALID') as Error & { code?: string }
+    error.code = 'ENV_FILE_INVALID'
+    throw error
+  }
 }
 
 export function readCliConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): CliConfig {
@@ -59,7 +74,8 @@ export function getConfigSummary(config: CliConfig): ConfigSummary {
     stateDir: config.stateDir,
     concurrency: config.concurrency,
     browserGate: config.browserGate,
-    aiConfigured: config.provider === 'fixture' || (baseUrlConfigured && config.ai.apiKey.length > 0 && textModelConfigured),
+    aiConfigured:
+      config.provider === 'fixture' || (baseUrlConfigured && config.ai.apiKey.length > 0 && textModelConfigured),
     baseUrlConfigured,
     textModel: textModelConfigured ? config.ai.textModel : null,
     visionModel: config.ai.visionModel ?? null,

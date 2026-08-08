@@ -2,10 +2,7 @@ import { createServer, type Server } from 'node:http'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import {
-  AiProviderError,
-  createOpenAiCompatibleClient,
-} from './openai-compatible'
+import { AiProviderError, createOpenAiCompatibleClient } from './openai-compatible'
 
 const servers: Server[] = []
 
@@ -51,9 +48,7 @@ describe('OpenAI-compatible client', () => {
       maxRetries: 0,
     })
 
-    await expect(
-      client.completeJson({ system: 'system', user: 'user' }),
-    ).resolves.toEqual({ ok: true })
+    await expect(client.completeJson({ system: 'system', user: 'user' })).resolves.toEqual({ ok: true })
     expect(receivedAuthorization).toBe('Bearer secret-token')
     expect(JSON.parse(receivedBody)).toMatchObject({
       model: 'text-model',
@@ -111,9 +106,9 @@ describe('OpenAI-compatible client', () => {
 
     await expect(failedClient.completeText({ system: 's', user: 'u' })).rejects.toSatisfy(
       (error: unknown) =>
-        error instanceof AiProviderError
-        && error.code === 'AI_PROVIDER_UNAVAILABLE'
-        && !error.message.includes('secret'),
+        error instanceof AiProviderError &&
+        error.code === 'AI_PROVIDER_UNAVAILABLE' &&
+        !error.message.includes('secret'),
     )
   })
 })

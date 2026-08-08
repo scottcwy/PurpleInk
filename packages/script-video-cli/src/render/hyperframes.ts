@@ -17,7 +17,11 @@ export interface CommandResult {
   stderr: string
 }
 
-export type CommandRunner = (command: string, args: readonly string[], options: CommandOptions) => Promise<CommandResult>
+export type CommandRunner = (
+  command: string,
+  args: readonly string[],
+  options: CommandOptions,
+) => Promise<CommandResult>
 
 export interface HyperframesRenderOptions {
   cliPath?: string
@@ -35,7 +39,10 @@ export interface HyperframesRenderResult {
 }
 
 export class HyperframesError extends Error {
-  constructor(readonly code: 'HYPERFRAMES_CHECK_FAILED' | 'HYPERFRAMES_RENDER_FAILED' | 'VIDEO_NOT_FOUND', message: string) {
+  constructor(
+    readonly code: 'HYPERFRAMES_CHECK_FAILED' | 'HYPERFRAMES_RENDER_FAILED' | 'VIDEO_NOT_FOUND',
+    message: string,
+  ) {
     super(message)
     this.name = 'HyperframesError'
   }
@@ -46,9 +53,7 @@ export async function renderHyperframesProject(
   options: HyperframesRenderOptions = {},
 ): Promise<HyperframesRenderResult> {
   const runner = options.runner ?? runCommand
-  const invocation = options.cliPath
-    ? { command: options.cliPath, prefix: [] as string[] }
-    : defaultCliInvocation()
+  const invocation = options.cliPath ? { command: options.cliPath, prefix: [] as string[] } : defaultCliInvocation()
   const commandOptions = { cwd: projectDir, signal: options.signal, timeoutMs: options.timeoutMs ?? 20 * 60 * 1000 }
   options.signal?.throwIfAborted()
   const check = await runner(invocation.command, [...invocation.prefix, 'check'], commandOptions)
@@ -63,7 +68,11 @@ export async function renderHyperframesProject(
 }
 
 async function findLatestVideo(rendersDir: string): Promise<string | null> {
-  try { await access(rendersDir) } catch { return null }
+  try {
+    await access(rendersDir)
+  } catch {
+    return null
+  }
   const candidates = (await readdir(rendersDir))
     .filter((name) => name.toLowerCase().endsWith('.mp4'))
     .map((name) => join(rendersDir, name))
@@ -80,23 +89,28 @@ function defaultCliInvocation(): { command: string; prefix: string[] } {
   }
 }
 
-const runCommand: CommandRunner = (command, args, options) => new Promise((resolve, reject) => {
-  const child = spawn(command, [...args], {
-    cwd: options.cwd,
-    shell: false,
-    windowsHide: true,
+const runCommand: CommandRunner = (command, args, options) =>
+  new Promise((resolve, reject) => {
+    const child = spawn(command, [...args], {
+      cwd: options.cwd,
+      shell: false,
+      windowsHide: true,
+    })
+    let stdout = ''
+    let stderr = ''
+    child.stdout?.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString('utf8')
+    })
+    child.stderr?.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf8')
+    })
+    const timer = options.timeoutMs === undefined ? undefined : setTimeout(() => child.kill(), options.timeoutMs)
+    const abort = () => child.kill()
+    options.signal?.addEventListener('abort', abort, { once: true })
+    child.on('error', reject)
+    child.on('close', (code) => {
+      if (timer) clearTimeout(timer)
+      options.signal?.removeEventListener('abort', abort)
+      resolve({ code: code ?? 1, stdout, stderr })
+    })
   })
-  let stdout = ''
-  let stderr = ''
-  child.stdout?.on('data', (chunk: Buffer) => { stdout += chunk.toString('utf8') })
-  child.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8') })
-  const timer = options.timeoutMs === undefined ? undefined : setTimeout(() => child.kill(), options.timeoutMs)
-  const abort = () => child.kill()
-  options.signal?.addEventListener('abort', abort, { once: true })
-  child.on('error', reject)
-  child.on('close', (code) => {
-    if (timer) clearTimeout(timer)
-    options.signal?.removeEventListener('abort', abort)
-    resolve({ code: code ?? 1, stdout, stderr })
-  })
-})

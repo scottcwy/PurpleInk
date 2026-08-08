@@ -54,8 +54,6 @@ describe('createPlan', () => {
   })
 
   it('rejects a shot that invents a fact outside its source unit', async () => {
-    await expect(createPlan(script, fakeClient({ invalidFacts: true }))).rejects.toThrow(
-      /AI_OUTPUT_INVALID/,
-    )
+    await expect(createPlan(script, fakeClient({ invalidFacts: true }))).rejects.toThrow(/AI_OUTPUT_INVALID/)
   })
 })
