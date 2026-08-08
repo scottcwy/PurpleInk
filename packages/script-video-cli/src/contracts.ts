@@ -41,6 +41,29 @@ export const scriptVideoInputSchema = z
 export type ScriptVideoInput = z.output<typeof scriptVideoInputSchema>
 export type ScriptUnit = ScriptVideoInput['units'][number]
 
+export const directorPlanSchema = z
+  .object({
+    masterPlan: z.string().trim().min(1).max(30_000),
+    styleBible: z.string().trim().min(1).max(30_000),
+  })
+  .strict()
+export type DirectorPlan = z.output<typeof directorPlanSchema>
+
+export const shotPlanSchema = z
+  .object({
+    id: z.string().regex(/^S\d{3}$/u, 'shot id 必须匹配 S###'),
+    sourceUnitId: z.string().regex(/^U\d{3}$/u, 'sourceUnitId 必须匹配 U###'),
+    purpose: z.string().trim().min(1).max(500),
+    visualIntent: z.string().trim().min(1).max(500),
+    composition: z.enum(['full-bleed', 'split', 'diagram', 'code', 'timeline']),
+    visualDescription: z.string().trim().min(1).max(4_000),
+    facts: z.array(z.string().trim().min(1).max(500)).max(12),
+    onScreenText: z.array(z.string().trim().min(1).max(200)).max(12),
+    durationSec: z.number().positive().max(120),
+  })
+  .strict()
+export type ShotPlan = z.output<typeof shotPlanSchema>
+
 export class InputContractError extends Error {
   readonly code = 'INPUT_INVALID' as const
 
