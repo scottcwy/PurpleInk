@@ -143,6 +143,12 @@ importers:
 
   packages/procedural-sfx: {}
 
+  packages/script-video-cli:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
   server:
     dependencies:
       '@purpleink/procedural-sfx':
