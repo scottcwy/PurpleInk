@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { resolve, relative, join, dirname, isAbsolute, sep } from 'node:path'
 
 import type { NarrationMode, ScriptVideoInput, ShotPlan } from '../contracts'
@@ -13,6 +13,7 @@ export interface NarrationOptions {
   tts?: TtsAdapter
   format?: 'wav' | 'mp3'
   signal?: AbortSignal
+  preparedAudioPath?: string
 }
 
 export interface AssemblyOptions {
@@ -112,6 +113,13 @@ async function prepareNarration(
   options: NarrationOptions,
 ): Promise<NarrationResult> {
   if (options.mode === 'off') return { mode: 'off', status: 'off' }
+  if (options.preparedAudioPath) {
+    const relativeAudioPath = 'assets/narration.wav'
+    const audioPath = join(projectDir, relativeAudioPath)
+    await mkdir(dirname(audioPath), { recursive: true })
+    await copyFile(options.preparedAudioPath, audioPath)
+    return { mode: options.mode, status: 'ready', relativeAudioPath }
+  }
   if (!options.tts) {
     if (options.mode === 'required')
       throw new AssemblyError('TTS_CONFIG_INVALID', 'required narration 没有配置用户自有 TTS adapter')

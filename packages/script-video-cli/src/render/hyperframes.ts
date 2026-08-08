@@ -1,7 +1,7 @@
-import { spawn } from 'node:child_process'
 import { access, readdir, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
+import { runLoggedProcess } from '../media/ffmpeg'
 
 const require = createRequire(import.meta.url)
 
@@ -9,6 +9,7 @@ export interface CommandOptions {
   cwd: string
   signal?: AbortSignal
   timeoutMs?: number
+  logPath?: string
 }
 
 export interface CommandResult {
@@ -30,6 +31,7 @@ export interface HyperframesRenderOptions {
   timeoutMs?: number
   signal?: AbortSignal
   runner?: CommandRunner
+  logPath?: string
 }
 
 export interface HyperframesRenderResult {
@@ -54,7 +56,12 @@ export async function renderHyperframesProject(
 ): Promise<HyperframesRenderResult> {
   const runner = options.runner ?? runCommand
   const invocation = options.cliPath ? { command: options.cliPath, prefix: [] as string[] } : defaultCliInvocation()
-  const commandOptions = { cwd: projectDir, signal: options.signal, timeoutMs: options.timeoutMs ?? 20 * 60 * 1000 }
+  const commandOptions = {
+    cwd: projectDir,
+    signal: options.signal,
+    timeoutMs: options.timeoutMs ?? 20 * 60 * 1000,
+    logPath: options.logPath,
+  }
   options.signal?.throwIfAborted()
   const check = await runner(invocation.command, [...invocation.prefix, 'check'], commandOptions)
   if (check.code !== 0) throw new HyperframesError('HYPERFRAMES_CHECK_FAILED', 'HyperFrames composition check failed')
@@ -89,28 +96,4 @@ function defaultCliInvocation(): { command: string; prefix: string[] } {
   }
 }
 
-const runCommand: CommandRunner = (command, args, options) =>
-  new Promise((resolve, reject) => {
-    const child = spawn(command, [...args], {
-      cwd: options.cwd,
-      shell: false,
-      windowsHide: true,
-    })
-    let stdout = ''
-    let stderr = ''
-    child.stdout?.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString('utf8')
-    })
-    child.stderr?.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString('utf8')
-    })
-    const timer = options.timeoutMs === undefined ? undefined : setTimeout(() => child.kill(), options.timeoutMs)
-    const abort = () => child.kill()
-    options.signal?.addEventListener('abort', abort, { once: true })
-    child.on('error', reject)
-    child.on('close', (code) => {
-      if (timer) clearTimeout(timer)
-      options.signal?.removeEventListener('abort', abort)
-      resolve({ code: code ?? 1, stdout, stderr })
-    })
-  })
+const runCommand: CommandRunner = (command, args, options) => runLoggedProcess(command, args, options)

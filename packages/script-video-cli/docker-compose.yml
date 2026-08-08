@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: purpleink
+      POSTGRES_PASSWORD: purpleink
+      POSTGRES_DB: purpleink
+    ports:
+      - "127.0.0.1:54329:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U purpleink -d purpleink"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - purpleink_queue_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  purpleink_queue_data:

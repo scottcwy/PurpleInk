@@ -115,4 +115,27 @@ describe('generateShots', () => {
     expect(result.failed.map((shot) => shot.id)).toEqual(['S002'])
     expect(result.failed[0]?.errorCode).toBe('SHOT_GATE_FAILED')
   })
+
+  it('uses one HTML repair request after a gate failure', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'purpleink-codegen-repair-'))
+    roots.push(root)
+    let calls = 0
+    const ai: AiClient = {
+      completeText: async () => {
+        calls += 1
+        return calls === 1 ? '<html><body>missing render contract</body></html>' : validHtml
+      },
+      completeJson: async () => ({}),
+    }
+    const result = await generateShots(input, plans.slice(0, 1), {
+      ai,
+      outputDir: root,
+      concurrency: 1,
+      runtimeGate: async () => ({ passed: true, errors: [], screenshotHashes: [] }),
+    })
+    expect(calls).toBe(2)
+    expect(result.failed).toHaveLength(0)
+    expect(result.succeeded[0]?.attempt).toBe(2)
+    await access(join(root, 'shots', 'S001', 'attempt-002', 'source.html'))
+  })
 })

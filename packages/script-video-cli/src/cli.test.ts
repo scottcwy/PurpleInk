@@ -73,6 +73,33 @@ describe('parseCliArgs', () => {
       ]),
     ).toThrow(/禁止|key-stdin/u)
   })
+
+  it('parses batch, daemon, watch, inspect, and retry commands', () => {
+    expect(parseCliArgs(['submit', 'a.md', 'b.json', '--json'])).toMatchObject({
+      command: 'submit',
+      inputPaths: ['a.md', 'b.json'],
+      json: true,
+    })
+    expect(parseCliArgs(['daemon', 'start', '--serve', '--json'])).toMatchObject({
+      command: 'daemon',
+      daemonAction: 'start',
+      serveWithDaemon: true,
+    })
+    expect(parseCliArgs(['status', '--run', 'run-1', '--watch'])).toMatchObject({
+      command: 'status',
+      resumeDir: 'run-1',
+      watch: true,
+    })
+    expect(parseCliArgs(['inspect', '--run', 'run-1', '--shot', 'S003'])).toMatchObject({
+      command: 'inspect',
+      resumeDir: 'run-1',
+      shotId: 'S003',
+    })
+    expect(parseCliArgs(['retry', '--run', 'run-1', '--failed'])).toMatchObject({
+      command: 'retry',
+      retryFailed: true,
+    })
+  })
 })
 
 describe('runCli JSON envelope', () => {

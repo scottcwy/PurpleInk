@@ -17,6 +17,7 @@ export interface VideoMetadata {
   fps?: number
   videoCodec?: string
   audioPresent: boolean
+  audioCodec?: string
 }
 
 export interface MediaQaResult {
@@ -33,6 +34,10 @@ export interface MediaQaOptions {
   durationToleranceSec?: number
   expectedWidth?: number
   expectedHeight?: number
+  expectedFps?: number
+  expectedVideoCodec?: string
+  expectedAudioCodec?: string
+  requireAudio?: boolean
   runner?: FfprobeRunner
 }
 
@@ -73,6 +78,7 @@ function parseFfprobe(value: unknown): VideoMetadata {
   if (!isRecord(value)) throw new Error('invalid ffprobe')
   const streams = Array.isArray(value.streams) ? value.streams.filter(isRecord) : []
   const video = streams.find((stream) => stream.codec_type === 'video')
+  const audio = streams.find((stream) => stream.codec_type === 'audio')
   if (!video) throw new Error('no video stream')
   const width = numberFrom(video.width)
   const height = numberFrom(video.height)
@@ -86,6 +92,7 @@ function parseFfprobe(value: unknown): VideoMetadata {
     fps: parseFps(video.r_frame_rate),
     videoCodec: stringFrom(video.codec_name),
     audioPresent: streams.some((stream) => stream.codec_type === 'audio'),
+    audioCodec: audio ? stringFrom(audio.codec_name) : undefined,
   }
 }
 
@@ -98,6 +105,13 @@ function validateMetadata(metadata: VideoMetadata, options: MediaQaOptions): str
   if (options.expectedWidth !== undefined && metadata.width !== options.expectedWidth) errors.push('width 不符合预期')
   if (options.expectedHeight !== undefined && metadata.height !== options.expectedHeight)
     errors.push('height 不符合预期')
+  if (options.expectedFps !== undefined && Math.abs((metadata.fps ?? 0) - options.expectedFps) > 0.01)
+    errors.push('fps 不符合预期')
+  if (options.expectedVideoCodec && metadata.videoCodec !== options.expectedVideoCodec)
+    errors.push('video codec 不符合预期')
+  if (options.requireAudio && !metadata.audioPresent) errors.push('缺少音频流')
+  if (options.expectedAudioCodec && metadata.audioCodec !== options.expectedAudioCodec)
+    errors.push('audio codec 不符合预期')
   return errors
 }
 

@@ -2,10 +2,25 @@ import type { NarrationMode } from './contracts'
 import type { CliProvider } from './config'
 import { SafeCliError } from './safe-error'
 
-export type CliCommand = 'run' | 'plan' | 'status' | 'doctor' | 'help' | 'config' | 'voice'
+export type CliCommand =
+  | 'run'
+  | 'plan'
+  | 'transcribe'
+  | 'submit'
+  | 'daemon'
+  | 'status'
+  | 'inspect'
+  | 'retry'
+  | 'cancel'
+  | 'serve'
+  | 'doctor'
+  | 'help'
+  | 'config'
+  | 'voice'
 export type ConfigAction = 'set' | 'show' | 'verify'
 export type ConfigTarget = 'text' | 'speech' | 'all'
 export type VoiceAction = 'import' | 'use' | 'list'
+export type DaemonAction = 'start' | 'status' | 'stop' | 'worker'
 
 export interface CliArgs {
   command: CliCommand
@@ -27,12 +42,21 @@ export interface CliArgs {
   voiceAction?: VoiceAction
   voiceName?: string
   voiceSamplePath?: string
+  inputPaths?: string[]
+  watch?: boolean
+  shotId?: string
+  retryFailed?: boolean
+  daemonAction?: DaemonAction
+  serveWithDaemon?: boolean
+  port?: number
+  live?: boolean
 }
 
 export function parseCliArgs(argv: readonly string[]): CliArgs {
   const [first, ...rest] = argv
   if (first === 'config') return parseConfigArgs(rest)
   if (first === 'voice') return parseVoiceArgs(rest)
+  if (first === 'daemon') return parseDaemonArgs(rest)
   const command = parseCommand(first)
   const result: CliArgs = {
     command,
@@ -49,6 +73,10 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
   for (let index = 0; index < rest.length; index += 1) {
     const flag = rest[index]
     if (!flag) continue
+    if (!flag.startsWith('--') && command === 'submit') {
+      result.inputPaths = [...(result.inputPaths ?? []), flag]
+      continue
+    }
     if (!flag.startsWith('--') && !positionalInput) {
       result.inputPath = flag
       positionalInput = true
@@ -86,6 +114,26 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
       result.provider = parseProvider(takeValue(rest, ++index, flag))
       continue
     }
+    if (flag === '--watch' && command === 'status') {
+      result.watch = true
+      continue
+    }
+    if (flag === '--shot' && (command === 'inspect' || command === 'retry')) {
+      result.shotId = parseShotId(takeValue(rest, ++index, flag))
+      continue
+    }
+    if (flag === '--failed' && command === 'retry') {
+      result.retryFailed = true
+      continue
+    }
+    if (flag === '--port' && command === 'serve') {
+      result.port = parseInteger(takeValue(rest, ++index, flag), flag, 0, 65_535)
+      continue
+    }
+    if (flag === '--live' && command === 'doctor') {
+      result.live = true
+      continue
+    }
     if (flag === '--help' || flag === '-h') {
       result.command = 'help'
       continue
@@ -95,6 +143,45 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
   if (result.command === 'status' && result.inputPath && !result.resumeDir) {
     result.resumeDir = result.inputPath
     result.inputPath = undefined
+  }
+  if (
+    (result.command === 'inspect' ||
+      result.command === 'retry' ||
+      result.command === 'cancel' ||
+      result.command === 'serve') &&
+    result.inputPath &&
+    !result.resumeDir
+  ) {
+    result.resumeDir = result.inputPath
+    result.inputPath = undefined
+  }
+  if (result.command === 'submit' && !result.inputPaths?.length) {
+    throw new SafeCliError('INPUT_REQUIRED', 'submit 至少需要一个输入文件。', false, 400)
+  }
+  if (result.command === 'retry' && result.shotId && result.retryFailed) {
+    throw new SafeCliError('CLI_ARGUMENT_INVALID', 'retry 的 --shot 与 --failed 不能同时使用。', false, 400)
+  }
+  return result
+}
+
+function parseDaemonArgs(args: readonly string[]): CliArgs {
+  const action = parseDaemonAction(args[0])
+  const result: CliArgs = {
+    command: 'daemon',
+    inputPath: undefined,
+    outputDir: undefined,
+    resumeDir: undefined,
+    concurrency: undefined,
+    narration: undefined,
+    json: false,
+    skipBrowserGate: false,
+    provider: undefined,
+    daemonAction: action,
+  }
+  for (const flag of args.slice(1)) {
+    if (flag === '--json') result.json = true
+    else if (flag === '--serve' && (action === 'start' || action === 'worker')) result.serveWithDaemon = true
+    else throw new SafeCliError('CLI_ARGUMENT_INVALID', 'daemon 命令参数无效。', false, 400)
   }
   return result
 }
@@ -209,7 +296,20 @@ function parseVoiceArgs(args: readonly string[]): CliArgs {
 
 function parseCommand(value: string | undefined): CliCommand {
   if (!value || value === '--help' || value === '-h') return 'help'
-  if (value === 'run' || value === 'plan' || value === 'status' || value === 'doctor' || value === 'help') return value
+  if (
+    value === 'run' ||
+    value === 'plan' ||
+    value === 'transcribe' ||
+    value === 'submit' ||
+    value === 'status' ||
+    value === 'inspect' ||
+    value === 'retry' ||
+    value === 'cancel' ||
+    value === 'serve' ||
+    value === 'doctor' ||
+    value === 'help'
+  )
+    return value
   throw new Error(`未知 CLI 命令: ${value}`)
 }
 
@@ -227,6 +327,16 @@ function parseConfigTarget(value: string | undefined, action: ConfigAction): Con
 function parseVoiceAction(value: string | undefined): VoiceAction {
   if (value === 'import' || value === 'use' || value === 'list') return value
   throw new SafeCliError('VOICE_ACTION_INVALID', 'voice 只支持 import、use、list。', false, 400)
+}
+
+function parseDaemonAction(value: string | undefined): DaemonAction {
+  if (value === 'start' || value === 'status' || value === 'stop' || value === 'worker') return value
+  throw new SafeCliError('DAEMON_ACTION_INVALID', 'daemon 只支持 start、status、stop。', false, 400)
+}
+
+function parseShotId(value: string): string {
+  if (!/^S\d{3}$/u.test(value)) throw new SafeCliError('CLI_ARGUMENT_INVALID', 'shot id 必须匹配 S###。', false, 400)
+  return value
 }
 
 function requirePositional(value: string | undefined, message: string): string {

@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { createOpenAiCompatibleClient, type AiClient, type OpenAiCompatibleConfig } from './ai/openai-compatible'
 import { createFixtureAiClient } from './ai/fixture'
 import type { LocalConfigStore } from './local-config'
+import { concurrencyDefaults, type ConcurrencyConfig } from './local-config'
 
 export const WORKFLOW_VERSION = 'script-video-cli-v1' as const
 export type CliProvider = 'openai-compatible' | 'fixture'
@@ -12,6 +13,7 @@ export interface CliConfig {
   provider: CliProvider
   stateDir: string
   concurrency: number
+  channels: ConcurrencyConfig
   browserGate: boolean
   ai: OpenAiCompatibleConfig
 }
@@ -20,6 +22,7 @@ export interface ConfigSummary {
   provider: CliProvider
   stateDir: string
   concurrency: number
+  channels: ConcurrencyConfig
   browserGate: boolean
   aiConfigured: boolean
   baseUrlConfigured: boolean
@@ -46,10 +49,12 @@ export function readCliConfig(env: NodeJS.ProcessEnv = process.env, cwd = proces
   const baseDir = env.INIT_CWD?.trim() || cwd
   const stateDir = resolve(baseDir, env.SCRIPT_VIDEO_STATE_DIR?.trim() || '.purpleink/runs')
   const concurrency = boundedInteger(env.SCRIPT_VIDEO_CONCURRENCY, 4, 1, 32)
+  const channels = { ...concurrencyDefaults, text: concurrency }
   return {
     provider,
     stateDir,
     concurrency,
+    channels,
     browserGate: env.SCRIPT_VIDEO_BROWSER_GATE !== 'false',
     ai: {
       baseUrl: env.SCRIPT_VIDEO_AI_BASE_URL?.trim() ?? '',
@@ -83,11 +88,15 @@ export async function readEffectiveCliConfig(
   const concurrency = env.SCRIPT_VIDEO_CONCURRENCY?.trim()
     ? base.concurrency
     : (local?.concurrency.text ?? base.concurrency)
-  if (!local?.text) return { ...base, concurrency }
+  const channels = env.SCRIPT_VIDEO_CONCURRENCY?.trim()
+    ? { ...(local?.concurrency ?? base.channels), text: concurrency }
+    : (local?.concurrency ?? base.channels)
+  if (!local?.text) return { ...base, concurrency, channels }
   const localAi = await localStore.loadTextProvider()
   return {
     ...base,
     concurrency,
+    channels,
     ai: {
       ...base.ai,
       ...localAi,
@@ -107,6 +116,7 @@ export function getConfigSummary(config: CliConfig): ConfigSummary {
     provider: config.provider,
     stateDir: config.stateDir,
     concurrency: config.concurrency,
+    channels: config.channels,
     browserGate: config.browserGate,
     aiConfigured:
       config.provider === 'fixture' || (baseUrlConfigured && config.ai.apiKey.length > 0 && textModelConfigured),

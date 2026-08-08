@@ -10,6 +10,7 @@ import {
 } from '../contracts'
 import type { AiClient } from '../ai/openai-compatible'
 import { completeJsonWithRepair } from '../ai/structured-output'
+import { mapWithConcurrency } from '../ai/concurrency'
 import type { StateStore, StageRecord } from '../state/store'
 import { buildDirectPrompt, buildShotSpecPrompt, hashPromptAssets } from './prompts'
 
@@ -17,6 +18,7 @@ export interface PlanOptions {
   store?: StateStore
   runDir?: string
   signal?: AbortSignal
+  concurrency?: number
 }
 
 export interface PlanResult {
@@ -46,22 +48,23 @@ export async function createPlan(
   const promptFingerprint = hashPromptAssets(['direct', 'shot-spec'])
   const directorFingerprint = fingerprint({ stage: 'DIRECT', input, promptFingerprint: directPromptFingerprint })
   const director = await runDirectorStage(input, ai, state, directorFingerprint, options.signal)
-  const shots: ShotPlan[] = []
-
-  for (const [index, unit] of input.units.entries()) {
-    options.signal?.throwIfAborted()
-    const id = `S${String(index + 1).padStart(3, '0')}`
-    const shotFingerprint = fingerprint({
-      stage: 'SHOT_SPEC',
-      input,
-      director,
-      unit,
-      id,
-      promptFingerprint: shotPromptFingerprint,
-    })
-    const shot = await runShotStage(input, director, unit, id, ai, state, shotFingerprint, options.signal)
-    shots.push(shot)
-  }
+  const shots = await mapWithConcurrency(
+    input.units,
+    options.concurrency ?? 6,
+    async (unit, index) => {
+      const id = `S${String(index + 1).padStart(3, '0')}`
+      const shotFingerprint = fingerprint({
+        stage: 'SHOT_SPEC',
+        input,
+        director,
+        unit,
+        id,
+        promptFingerprint: shotPromptFingerprint,
+      })
+      return runShotStage(input, director, unit, id, ai, state, shotFingerprint, options.signal)
+    },
+    { signal: options.signal },
+  )
 
   return {
     director,

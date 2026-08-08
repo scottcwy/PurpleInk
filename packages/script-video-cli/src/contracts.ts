@@ -10,8 +10,18 @@ export const scriptUnitSchema = z
     id: z.string().regex(/^U\d{3}$/u, 'unit id 必须匹配 U###'),
     text: z.string().trim().min(1).max(20_000),
     visualIntent: z.string().trim().min(1).max(48).default('show'),
+    startMs: z.number().int().nonnegative().optional(),
+    endMs: z.number().int().positive().optional(),
   })
   .strict()
+  .superRefine((value, context) => {
+    if ((value.startMs === undefined) !== (value.endMs === undefined)) {
+      context.addIssue({ code: 'custom', message: 'startMs/endMs 必须同时存在' })
+    }
+    if (value.startMs !== undefined && value.endMs !== undefined && value.endMs <= value.startMs) {
+      context.addIssue({ code: 'custom', message: 'endMs 必须晚于 startMs' })
+    }
+  })
 
 export const scriptVideoInputSchema = z
   .object({

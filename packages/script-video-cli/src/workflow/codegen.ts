@@ -6,17 +6,19 @@ import type { AiClient } from '../ai/openai-compatible'
 import { mapWithConcurrency } from '../ai/concurrency'
 import type { ScriptVideoInput, ShotPlan } from '../contracts'
 import type { StateStore } from '../state/store'
+import { registerFileArtifact } from '../state/artifacts'
 import { runChromiumGate, validateShotHtml, type RuntimeGateResult } from './gates'
-import { buildFabricatePrompt, hashPromptAssets } from './prompts'
+import { buildFabricatePrompt, buildHtmlRepairPrompt, hashPromptAssets } from './prompts'
 
 export interface CodegenOptions {
   ai: AiClient
   outputDir: string
   concurrency: number
-  runtimeGate?: (htmlPath: string) => Promise<RuntimeGateResult>
+  runtimeGate?: (htmlPath: string, attemptDir?: string) => Promise<RuntimeGateResult>
   store?: StateStore
   runDir?: string
   signal?: AbortSignal
+  forceShotIds?: ReadonlySet<string>
 }
 
 export interface CodegenShotResult {
@@ -56,57 +58,97 @@ async function generateOneShot(
   shot: ShotPlan,
   options: CodegenOptions,
 ): Promise<CodegenShotResult> {
-  const promptFingerprint = hashPromptAssets(['fabricate'])
+  const promptFingerprint = hashPromptAssets(['fabricate', 'html-repair'])
   const fingerprint = createHash('sha256')
     .update(JSON.stringify({ input, shot, promptFingerprint }), 'utf8')
     .digest('hex')
   const key = `FABRICATE:${shot.id}`
   const previous = options.store && options.runDir ? await options.store.readStage(options.runDir, key) : null
   const previousResult = previous?.status === 'succeeded' ? parseStoredResult(previous.payload) : null
-  if (previous && previous.fingerprint === fingerprint && previousResult?.status === 'succeeded') {
+  if (
+    !options.forceShotIds?.has(shot.id) &&
+    previous &&
+    previous.fingerprint === fingerprint &&
+    previousResult?.status === 'succeeded'
+  ) {
     const storedPath = resolve(options.outputDir, previousResult.relativeHtmlPath ?? '')
     if (previousResult.relativeHtmlPath && (await exists(storedPath))) return previousResult
   }
 
-  const attempt = (previous?.attempt ?? 0) + 1
-  await writeStage(options, key, 'running', attempt, fingerprint, {})
-  try {
-    const unit = input.units.find((candidate) => candidate.id === shot.sourceUnitId)
-    if (!unit) throw new CodegenFailure('SHOT_OUTPUT_INVALID')
-    const raw = await options.ai.completeText({ ...buildFabricatePrompt(input, unit, shot), signal: options.signal })
-    const html = normalizeHtml(raw)
-    const staticGate = validateShotHtml(html)
-    if (!staticGate.passed) throw new CodegenFailure('SHOT_GATE_FAILED')
-    const shotDir = join(options.outputDir, 'shots', shot.id, `attempt-${String(attempt).padStart(3, '0')}`)
-    await mkdir(shotDir, { recursive: true })
-    const htmlPath = join(shotDir, 'source.html')
-    await writeFile(htmlPath, `${html}\n`, 'utf8')
-    const runtime = options.runtimeGate ? await options.runtimeGate(htmlPath) : await runChromiumGate(htmlPath)
-    if (!runtime.passed) {
-      throw new CodegenFailure(runtime.errors[0] === 'BROWSER_GATE_FAILED' ? 'BROWSER_GATE_FAILED' : 'SHOT_GATE_FAILED')
+  const firstAttempt = (previous?.attempt ?? 0) + 1
+  const unit = input.units.find((candidate) => candidate.id === shot.sourceUnitId)
+  if (!unit) return failedResult(shot, firstAttempt, 'SHOT_OUTPUT_INVALID')
+  let lastError = 'SHOT_OUTPUT_INVALID'
+  for (let offset = 0; offset < 2; offset += 1) {
+    const attempt = firstAttempt + offset
+    await writeStage(options, key, 'running', attempt, fingerprint, {})
+    try {
+      const prompt =
+        offset === 0 ? buildFabricatePrompt(input, unit, shot) : buildHtmlRepairPrompt(shot, compactError(lastError))
+      const raw = await options.ai.completeText({ ...prompt, signal: options.signal })
+      const html = normalizeHtml(raw)
+      const shotDir = join(options.outputDir, 'shots', shot.id, `attempt-${String(attempt).padStart(3, '0')}`)
+      await mkdir(shotDir, { recursive: true })
+      const htmlPath = join(shotDir, 'source.html')
+      await writeFile(htmlPath, `${html}\n`, 'utf8')
+      const staticGate = validateShotHtml(html)
+      if (!staticGate.passed) {
+        lastError = `SHOT_GATE_FAILED:${staticGate.errors.join(',')}`
+        await writeStage(options, key, 'failed', attempt, fingerprint, { errorCode: 'SHOT_GATE_FAILED' })
+        continue
+      }
+      const browserKey = `BROWSER_QA:${shot.id}`
+      await writeStage(options, browserKey, 'running', attempt, fingerprint, {})
+      const runtime = options.runtimeGate
+        ? await options.runtimeGate(htmlPath, shotDir)
+        : await runChromiumGate(htmlPath, { outputDir: shotDir })
+      if (!runtime.passed) {
+        lastError = runtime.errors[0] ?? 'BROWSER_GATE_FAILED'
+        await writeStage(options, browserKey, 'failed', attempt, fingerprint, { errorCode: lastError })
+        continue
+      }
+      const artifactIds = await registerShotArtifacts(options, shot.id, htmlPath, runtime)
+      const result: CodegenShotResult = {
+        id: shot.id,
+        sourceUnitId: shot.sourceUnitId,
+        status: 'succeeded',
+        attempt,
+        relativeHtmlPath: relative(options.outputDir, htmlPath),
+        screenshotHashes: runtime.screenshotHashes,
+      }
+      await writeStage(
+        options,
+        key,
+        'succeeded',
+        attempt,
+        fingerprint,
+        result,
+        artifactIds.filter((id) => id.endsWith('-html')),
+      )
+      await writeStage(
+        options,
+        browserKey,
+        'succeeded',
+        attempt,
+        fingerprint,
+        { screenshotHashes: runtime.screenshotHashes },
+        artifactIds.filter((id) => !id.endsWith('-html')),
+      )
+      return result
+    } catch (error) {
+      if (options.signal?.aborted) throw error
+      if (!(error instanceof CodegenFailure) || error.code === 'AI_PROVIDER_ERROR') {
+        const result = failedResult(shot, attempt, 'AI_PROVIDER_ERROR')
+        await writeStage(options, key, 'failed', attempt, fingerprint, result)
+        return result
+      }
+      lastError = error.code
     }
-    const result: CodegenShotResult = {
-      id: shot.id,
-      sourceUnitId: shot.sourceUnitId,
-      status: 'succeeded',
-      attempt,
-      relativeHtmlPath: relative(options.outputDir, htmlPath),
-      screenshotHashes: runtime.screenshotHashes,
-    }
-    await writeStage(options, key, 'succeeded', attempt, fingerprint, result)
-    return result
-  } catch (error) {
-    const errorCode = error instanceof CodegenFailure ? error.code : 'AI_PROVIDER_ERROR'
-    const result: CodegenShotResult = {
-      id: shot.id,
-      sourceUnitId: shot.sourceUnitId,
-      status: 'failed',
-      attempt,
-      errorCode,
-    }
-    await writeStage(options, key, 'failed', attempt, fingerprint, { errorCode })
-    return result
   }
+  const errorCode = lastError.startsWith('BROWSER_') ? 'BROWSER_GATE_FAILED' : 'SHOT_GATE_FAILED'
+  const result = failedResult(shot, firstAttempt + 1, errorCode)
+  await writeStage(options, key, 'failed', result.attempt, fingerprint, result)
+  return result
 }
 
 class CodegenFailure extends Error {
@@ -146,9 +188,51 @@ async function writeStage(
   attempt: number,
   fingerprint: string,
   payload: unknown,
+  artifactIds?: string[],
 ): Promise<void> {
   if (!options.store || !options.runDir) return
-  await options.store.writeStage(options.runDir, { key, status, attempt, fingerprint, payload })
+  await options.store.writeStage(options.runDir, {
+    key,
+    status,
+    attempt,
+    fingerprint,
+    payload,
+    ...(artifactIds?.length ? { artifactIds } : {}),
+  })
+}
+
+async function registerShotArtifacts(
+  options: CodegenOptions,
+  shotId: string,
+  htmlPath: string,
+  runtime: RuntimeGateResult,
+): Promise<string[]> {
+  if (!options.store || !options.runDir) return []
+  const artifacts = [{ id: `shot-${shotId}-html`, kind: 'text/html', path: htmlPath }]
+  for (const [index, path] of (runtime.screenshotPaths ?? []).entries()) {
+    artifacts.push({
+      id: `shot-${shotId}-screenshot-${['000', '050', '100'][index] ?? index}`,
+      kind: 'image/png',
+      path,
+    })
+  }
+  if (runtime.diagnosticsPath) {
+    artifacts.push({ id: `shot-${shotId}-diagnostics`, kind: 'application/json', path: runtime.diagnosticsPath })
+  }
+  await Promise.all(artifacts.map((artifact) => registerFileArtifact(options.store!, options.runDir!, artifact)))
+  return artifacts.map((artifact) => artifact.id)
+}
+
+function failedResult(
+  shot: ShotPlan,
+  attempt: number,
+  errorCode: NonNullable<CodegenShotResult['errorCode']>,
+): CodegenShotResult {
+  return { id: shot.id, sourceUnitId: shot.sourceUnitId, status: 'failed', attempt, errorCode }
+}
+
+function compactError(value: string): string {
+  return value.replace(/[\u0000-\u001f\u007f]/gu, ' ').slice(0, 500)
 }
 
 async function exists(path: string): Promise<boolean> {

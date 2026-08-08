@@ -101,6 +101,34 @@ export function buildFabricatePrompt(
   )
 }
 
+export function buildTranscriptStructurePrompt(
+  segments: readonly { id: string; startMs: number; endMs: number; text: string }[],
+): { system: string; user: string } {
+  return pickPrompt(renderPromptAsset('transcript-structure', { segmentsJson: JSON.stringify(segments) }))
+}
+
+export function buildTtsStylePrompt(
+  input: Pick<ScriptVideoInput, 'language' | 'visualStyle'>,
+  shot: Pick<ShotPlan, 'purpose'>,
+): string {
+  const prompt = renderPromptAsset('tts-style', {
+    language: input.language,
+    visualStyle: input.visualStyle,
+    purpose: shot.purpose,
+  })
+  return `${prompt.system}\n${prompt.user}`.trim()
+}
+
+export function buildHtmlRepairPrompt(shot: ShotPlan, errorSummary: string): { system: string; user: string } {
+  return pickPrompt(
+    renderPromptAsset('html-repair', {
+      shotId: shot.id,
+      errorSummary,
+      shotJson: JSON.stringify(shot),
+    }),
+  )
+}
+
 function defaultPromptRoot(): string {
   return resolve(dirname(fileURLToPath(import.meta.url)), '../../prompts')
 }

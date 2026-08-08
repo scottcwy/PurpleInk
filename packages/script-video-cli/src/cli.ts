@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { parseCliArgs, type CliArgs } from './args'
 import { executeCliCommand } from './commands'
 import { executeConfigCommand, type SpeechProviderVerifier, type TextProviderVerifier } from './config-command'
@@ -8,6 +9,7 @@ import { projectSafeError } from './safe-error'
 import { createProcessSecretInput, type SecretInput } from './secret-input'
 import { executeVoiceCommand } from './voice/voice-command'
 import { resolveVoiceStorePaths, VoiceStore } from './voice/voice-store'
+import { ConcurrencyChannels } from './runtime/channels'
 
 export { parseCliArgs }
 export type { CliArgs }
@@ -41,6 +43,7 @@ export async function runCli(
     args = parseCliArgs(argv)
     command = commandKey(args)
     const store = createLocalStore(env, runtime)
+    const voiceStore = new VoiceStore(resolveVoiceStorePaths(env, runtime.localAppData))
     const result =
       args.command === 'config'
         ? await executeConfigCommand(args, {
@@ -51,14 +54,22 @@ export async function runCli(
             verifySpeechProvider: runtime.verifySpeechProvider,
           })
         : args.command === 'voice'
-          ? await executeVoiceCommand(args, new VoiceStore(resolveVoiceStorePaths(env, runtime.localAppData)))
-          : await executeCliCommand(
-              args,
-              await readEffectiveCliConfig(env, process.cwd(), store, {
+          ? await executeVoiceCommand(args, voiceStore)
+          : await (async () => {
+              const config = await readEffectiveCliConfig(env, process.cwd(), store, {
                 provider: args.provider,
-                loadTextSecret: args.command === 'run' || args.command === 'plan',
-              }),
-            )
+                loadTextSecret:
+                  args.command === 'run' ||
+                  args.command === 'plan' ||
+                  (args.command === 'daemon' && args.daemonAction === 'worker'),
+              })
+              return executeCliCommand(args, config, {
+                localStore: store,
+                voiceStore,
+                channels: new ConcurrencyChannels(config.channels),
+                output,
+              })
+            })()
     const runId = isRecord(result) && typeof result.runId === 'string' ? result.runId : undefined
     const envelope = { ok: true, command, ...(runId ? { runId } : {}), data: result }
     output.writeLine(args.json ? JSON.stringify(envelope) : formatHumanResult(result))
@@ -98,6 +109,7 @@ function formatHumanResult(value: unknown): string {
 
 function commandKey(args: CliArgs): string {
   if (args.command === 'voice') return `voice.${args.voiceAction ?? 'unknown'}`
+  if (args.command === 'daemon') return `daemon.${args.daemonAction ?? 'unknown'}`
   if (args.command !== 'config') return args.command
   if (args.configAction === 'set') return `config.set.${args.configTarget ?? 'unknown'}`
   if (args.configAction === 'verify') return `config.verify.${args.configTarget ?? 'unknown'}`
@@ -108,8 +120,20 @@ function inferCommandKey(argv: readonly string[]): string {
   if (argv[0] === 'voice') {
     return argv[1] === 'import' || argv[1] === 'use' || argv[1] === 'list' ? `voice.${argv[1]}` : 'voice'
   }
+  if (argv[0] === 'daemon') return `daemon.${argv[1] ?? 'unknown'}`
   if (argv[0] !== 'config') {
-    return argv[0] === 'run' || argv[0] === 'plan' || argv[0] === 'status' || argv[0] === 'doctor' || argv[0] === 'help'
+    return argv[0] === 'run' ||
+      argv[0] === 'plan' ||
+      argv[0] === 'transcribe' ||
+      argv[0] === 'submit' ||
+      argv[0] === 'daemon' ||
+      argv[0] === 'status' ||
+      argv[0] === 'inspect' ||
+      argv[0] === 'retry' ||
+      argv[0] === 'cancel' ||
+      argv[0] === 'serve' ||
+      argv[0] === 'doctor' ||
+      argv[0] === 'help'
       ? argv[0]
       : 'help'
   }
@@ -124,7 +148,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 const directCliExecution =
-  process.argv.some((value) => /(?:^|[\\/])src[\\/]cli\.ts$/u.test(value)) && process.env.VITEST !== 'true'
+  process.argv.some((value) => /(?:^|[\\/])(?:src|dist)[\\/]cli\.(?:ts|js)$/u.test(value)) &&
+  process.env.VITEST !== 'true'
 if (directCliExecution) {
   void runCli().then((code) => {
     process.exitCode = code

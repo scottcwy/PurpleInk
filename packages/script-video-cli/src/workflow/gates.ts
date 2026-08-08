@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 export interface StaticGateResult {
@@ -11,6 +13,8 @@ export interface RuntimeGateResult {
   passed: boolean
   errors: string[]
   screenshotHashes: string[]
+  screenshotPaths?: string[]
+  diagnosticsPath?: string
 }
 
 export function validateShotHtml(html: string): StaticGateResult {
@@ -46,7 +50,7 @@ export interface RuntimePage {
   evaluate(expression: string, value: number): Promise<void>
   waitForTimeout(milliseconds: number): Promise<void>
   screenshot(options: { type: 'png' }): Promise<Buffer>
-  on(event: 'console' | 'pageerror', listener: () => void): void
+  on(event: 'console' | 'pageerror', listener: (value?: unknown) => void): void
   close(): Promise<void>
 }
 
@@ -59,26 +63,28 @@ export type RuntimeBrowserLauncher = () => Promise<RuntimeBrowser>
 
 export async function runChromiumGate(
   htmlPath: string,
-  options: { launch?: RuntimeBrowserLauncher; timeoutMs?: number } = {},
+  options: { launch?: RuntimeBrowserLauncher; timeoutMs?: number; outputDir?: string } = {},
 ): Promise<RuntimeGateResult> {
   const launch = options.launch ?? defaultBrowserLauncher
   const timeoutMs = options.timeoutMs ?? 30_000
   const browser = await launch()
   const page = await browser.newPage()
-  let browserError = false
-  page.on('console', () => {
-    browserError = true
+  const diagnostics: Array<{ type: 'console' | 'pageerror'; message: string }> = []
+  page.on('console', (value) => {
+    if (consoleEntryIsError(value)) diagnostics.push({ type: 'console', message: 'browser console error' })
   })
   page.on('pageerror', () => {
-    browserError = true
+    diagnostics.push({ type: 'pageerror', message: 'browser page error' })
   })
   const screenshotHashes: string[] = []
+  const screenshotPaths: string[] = []
+  let diagnosticsPath: string | undefined
   try {
     await page.goto(pathToFileURL(htmlPath).href, { waitUntil: 'load' })
     await page.waitForFunction('window.__PURPLEINK_RENDER__ && window.__PURPLEINK_RENDER__.ready === true', {
       timeout: timeoutMs,
     })
-    for (const progress of [0, 0.5, 1]) {
+    for (const [index, progress] of [0, 0.5, 1].entries()) {
       await page.evaluate(
         '(progress) => { const r = window.__PURPLEINK_RENDER__; if (r && typeof r.seek === "function") r.seek(progress); document.documentElement.dataset.renderProgress = String(progress); }',
         progress,
@@ -86,21 +92,42 @@ export async function runChromiumGate(
       await page.waitForTimeout(50)
       const screenshot = await page.screenshot({ type: 'png' })
       screenshotHashes.push(createHash('sha256').update(screenshot).digest('hex'))
+      if (options.outputDir) {
+        const screenshotsDir = join(options.outputDir, 'screenshots')
+        await mkdir(screenshotsDir, { recursive: true })
+        const screenshotPath = join(screenshotsDir, ['000.png', '050.png', '100.png'][index]!)
+        await writeFile(screenshotPath, screenshot)
+        screenshotPaths.push(screenshotPath)
+      }
     }
   } catch {
-    return { passed: false, errors: ['BROWSER_GATE_FAILED'], screenshotHashes }
+    diagnostics.push({ type: 'pageerror', message: 'browser gate failed' })
   } finally {
     await page.close().catch(() => undefined)
     await browser.close().catch(() => undefined)
   }
+  if (options.outputDir) {
+    diagnosticsPath = join(options.outputDir, 'diagnostics.json')
+    await writeFile(diagnosticsPath, `${JSON.stringify({ schemaVersion: 1, diagnostics }, null, 2)}\n`, 'utf8')
+  }
+  const browserError = diagnostics.length > 0
   return {
     passed: !browserError,
-    errors: browserError ? ['BROWSER_CONSOLE_ERROR'] : [],
+    errors: browserError ? [screenshotHashes.length === 3 ? 'BROWSER_CONSOLE_ERROR' : 'BROWSER_GATE_FAILED'] : [],
     screenshotHashes,
+    ...(screenshotPaths.length > 0 ? { screenshotPaths } : {}),
+    ...(diagnosticsPath ? { diagnosticsPath } : {}),
   }
 }
 
 async function defaultBrowserLauncher(): Promise<RuntimeBrowser> {
   const playwright = await import('playwright')
   return (await playwright.chromium.launch({ headless: true })) as unknown as RuntimeBrowser
+}
+
+function consoleEntryIsError(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || !('type' in value)) return true
+  const type = value.type
+  if (typeof type === 'function') return type.call(value) === 'error'
+  return type === 'error'
 }
