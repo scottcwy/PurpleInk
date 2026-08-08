@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>PurpleInk · 本地文稿视频 CLI</title>
+  <style>
+    :root{--ink:#19191b;--muted:#68686e;--line:rgba(16,16,20,.09);--paper:#f4f3ef;--glass:rgba(255,255,255,.7);--card:rgba(255,255,255,.76);--accent:#6257e8;--accent-soft:#e9e6ff;--shadow:0 28px 70px rgba(29,27,42,.12);--radius:22px}
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;min-height:100vh;color:var(--ink);background:radial-gradient(circle at 82% 8%,rgba(113,99,255,.18),transparent 31%),radial-gradient(circle at 18% 90%,rgba(248,168,103,.16),transparent 28%),var(--paper);font-family:"Aptos","SF Pro Text","Segoe UI",sans-serif}
+    body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.26;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.08'/%3E%3C/svg%3E")}
+    .shell{display:grid;grid-template-columns:282px minmax(0,1fr);min-height:100vh}
+    aside{position:sticky;top:0;height:100vh;padding:22px;border-right:1px solid var(--line);background:rgba(247,247,244,.68);backdrop-filter:blur(28px) saturate(1.3);z-index:3}
+    .traffic{display:flex;gap:8px;margin:2px 0 28px}.traffic i{width:12px;height:12px;border-radius:50%;background:#ff5f57;box-shadow:20px 0 #febc2e,40px 0 #28c840}
+    .brand{display:flex;align-items:center;gap:12px;margin:0 4px 25px}.mark{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;color:white;background:linear-gradient(145deg,#15141a,#7167f5);box-shadow:0 10px 24px rgba(80,67,213,.24);font-family:"Iowan Old Style",Georgia,serif;font-size:24px}.brand strong{display:block;font-size:15px}.brand span{font-size:11px;color:var(--muted);letter-spacing:.04em}
+    nav{display:grid;gap:5px}nav a{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:12px;color:#55545a;text-decoration:none;font-size:13px;transition:.2s ease}nav a:hover{background:rgba(255,255,255,.62);transform:translateX(2px)}nav a.active{color:#2f2b72;background:var(--accent-soft);box-shadow:inset 0 0 0 1px rgba(98,87,232,.08)}nav a b{display:grid;place-items:center;width:22px;height:22px;border:1px solid rgba(0,0,0,.08);border-radius:7px;font-size:10px;font-weight:650;background:rgba(255,255,255,.6)}
+    .side-note{position:absolute;left:22px;right:22px;bottom:24px;padding:14px;border-radius:15px;border:1px solid var(--line);background:rgba(255,255,255,.46);font-size:11px;line-height:1.55;color:var(--muted)}
+    main{min-width:0;padding:56px clamp(28px,6vw,94px) 90px}.page{max-width:1120px;margin:auto;animation:arrive .42s cubic-bezier(.2,.8,.2,1)}@keyframes arrive{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+    .eyebrow{display:inline-flex;gap:8px;align-items:center;color:var(--accent);font-size:11px;font-weight:750;letter-spacing:.16em;text-transform:uppercase}.eyebrow:before{content:"";width:22px;height:1px;background:currentColor}
+    h1{max-width:860px;margin:18px 0 18px;font-family:"Iowan Old Style","Songti SC",Georgia,serif;font-size:clamp(44px,7vw,88px);font-weight:500;letter-spacing:-.055em;line-height:.94}h2{font-family:"Iowan Old Style","Songti SC",Georgia,serif;font-size:31px;font-weight:500;letter-spacing:-.025em;margin:0 0 14px}h3{font-size:15px;margin:0 0 10px}.lead{max-width:760px;color:var(--muted);font-size:18px;line-height:1.75}
+    .hero{padding:24px 0 50px}.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:27px}.button{display:inline-flex;align-items:center;gap:8px;padding:12px 16px;border-radius:13px;color:white;background:#1d1c21;text-decoration:none;font-size:13px;box-shadow:0 12px 28px rgba(0,0,0,.14)}.button.secondary{color:var(--ink);background:rgba(255,255,255,.64);border:1px solid var(--line);box-shadow:none}
+    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;margin:28px 0}.card{grid-column:span 4;min-height:170px;padding:22px;border-radius:var(--radius);border:1px solid var(--line);background:var(--card);box-shadow:0 12px 35px rgba(33,30,46,.055);backdrop-filter:blur(16px);transition:.22s ease}.card:hover{transform:translateY(-3px);box-shadow:var(--shadow)}.card.wide{grid-column:span 8}.card.full{grid-column:1/-1}.card p,.prose p,.prose li{color:var(--muted);font-size:14px;line-height:1.72}.metric{font-family:"Iowan Old Style",Georgia,serif;font-size:48px;letter-spacing:-.04em}.tag{display:inline-flex;padding:5px 9px;border-radius:999px;background:var(--accent-soft);color:#493fbe;font-size:10px;font-weight:750;letter-spacing:.05em}
+    .steps{counter-reset:step;display:grid;gap:12px;margin:24px 0}.step{position:relative;padding:20px 20px 20px 66px;border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.55)}.step:before{counter-increment:step;content:counter(step);position:absolute;left:20px;top:18px;display:grid;place-items:center;width:30px;height:30px;border-radius:9px;color:white;background:var(--accent);font:700 12px ui-monospace,monospace}.step h3{margin:0 0 5px}.step p{margin:0}
+    pre{position:relative;margin:16px 0;padding:19px 21px;overflow:auto;border-radius:17px;color:#ececf3;background:#1b1b20;border:1px solid rgba(255,255,255,.08);box-shadow:0 18px 36px rgba(16,15,22,.12);font:12px/1.72 "Cascadia Code","SFMono-Regular",Consolas,monospace;white-space:pre-wrap}.prose{max-width:900px}.prose section{margin:34px 0}.prose ul{padding-left:20px}.callout{padding:18px 20px;border-left:3px solid var(--accent);border-radius:0 16px 16px 0;background:rgba(236,233,255,.66);color:#4b4661;font-size:13px;line-height:1.7}.path{font-family:"Cascadia Code",Consolas,monospace;font-size:12px;overflow-wrap:anywhere}
+    .flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:22px 0}.node{padding:10px 13px;border-radius:12px;background:rgba(255,255,255,.75);border:1px solid var(--line);font-size:12px}.arrow{color:#999}
+    table{width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:rgba(255,255,255,.62);font-size:13px}th,td{text-align:left;padding:13px 15px;border-bottom:1px solid var(--line)}tr:last-child td{border-bottom:0}th{color:var(--muted);font-size:10px;letter-spacing:.08em;text-transform:uppercase;background:rgba(244,244,246,.7)}
+    @media(max-width:900px){.shell{grid-template-columns:1fr}aside{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line)}nav{display:flex;overflow:auto}.side-note{display:none}main{padding:40px 20px 70px}.card,.card.wide{grid-column:1/-1}h1{font-size:52px}}
+    @media(prefers-color-scheme:dark){:root{--ink:#f3f1f7;--muted:#aaa7b2;--line:rgba(255,255,255,.1);--paper:#111115;--glass:rgba(26,25,31,.76);--card:rgba(28,27,34,.74);--accent-soft:#2c2851}body{background:radial-gradient(circle at 82% 8%,rgba(99,81,240,.18),transparent 31%),#111115}aside{background:rgba(20,19,24,.74)}nav a{color:#aaa7b2}nav a.active{color:#ddd8ff}.button.secondary{background:rgba(255,255,255,.07)}.step,.node,table{background:rgba(255,255,255,.045)}th{background:rgba(255,255,255,.035)}.callout{background:rgba(85,73,167,.18)}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <div class="traffic"><i></i></div>
+      <div class="brand"><div class="mark">P</div><div><strong>PurpleInk</strong><span>LOCAL VIDEO CLI</span></div></div>
+      <nav id="nav">
+        <a href="#overview" data-route="overview"><b>01</b>Overview</a>
+        <a href="#quick-start" data-route="quick-start"><b>02</b>Quick Start</a>
+        <a href="#commands" data-route="commands"><b>03</b>Commands</a>
+        <a href="#workflow" data-route="workflow"><b>04</b>Workflow</a>
+        <a href="#artifacts" data-route="artifacts"><b>05</b>Artifacts</a>
+        <a href="#troubleshooting" data-route="troubleshooting"><b>06</b>Troubleshooting</a>
+        <a href="#agent-usage" data-route="agent-usage"><b>07</b>Agent Usage</a>
+      </nav>
+      <div class="side-note">纯本地 · 自有 API · 可恢复文件状态<br>批量模式才启用 PostgreSQL</div>
+    </aside>
+    <main id="app" aria-live="polite"></main>
+  </div>
+  <template data-route="overview" data-title="Overview">
+    <article class="page">
+      <div class="hero"><span class="eyebrow">Agent-first local workflow</span><h1>文稿进来，<br>成片出去。</h1><p class="lead">把导演、分镜代码、浏览器检查、配音与渲染压缩成一个本地 CLI。每一步留下可读文件，AI 能定位路径，人能打开浏览器，失败只重做出问题的镜头。</p><div class="hero-actions"><a class="button" href="#quick-start">开始配置 →</a><a class="button secondary" href="#workflow">查看工作流</a></div></div>
+      <div class="grid">
+        <section class="card wide"><span class="tag">INPUT</span><h2>四种输入，一条链路</h2><p>Markdown 与 JSON 直接进入 DIRECT；WAV 与 MP3 先由 FFmpeg 切出真实时间边界，再经 MiMo ASR 形成规范文稿。后续流程完全一致。</p><div class="flow"><span class="node">Markdown</span><span class="node">JSON</span><span class="node">WAV</span><span class="node">MP3</span><span class="arrow">→</span><span class="node">DIRECT</span></div></section>
+        <section class="card"><span class="tag">LOCAL</span><div class="metric">0</div><h3>SaaS 业务依赖</h3><p>没有账号、计费、套餐、云项目或远程存储。</p></section>
+        <section class="card"><span class="tag">PARALLEL</span><div class="metric">6</div><h3>默认文本并发</h3><p>浏览器、TTS、ASR 与最终渲染各自限流。</p></section>
+        <section class="card"><span class="tag">VISIBLE</span><h2>每个阶段都能打开</h2><p>镜头 HTML、三点截图、诊断、旁白、字幕和最终 MP4 都登记在 Artifact Index。observer 只读取这份白名单。</p></section>
+        <section class="card wide"><span class="tag">TWO MODES</span><h2>前台直接跑，批量交给 daemon</h2><p>一个视频不需要数据库；多个视频才启动 Docker PostgreSQL 17 与 pg-boss。数据库只保留队列，不保存业务数据与密钥。</p></section>
+      </div>
+      <div class="callout">真实完成的定义不是“API 返回成功”，而是最终 MP4 通过 H.264/AAC、1920×1080、30fps、时长、SHA-256 与抽帧验收。</div>
+    </article>
+  </template>
+  <template data-route="quick-start" data-title="Quick Start">
+    <article class="page prose"><span class="eyebrow">Quick Start</span><h1>五步完成首条视频。</h1><p class="lead">命令示例使用仓库内的 <code>pnpm cli</code>；安装 bin 后可替换成 <code>purpleink-video</code>。</p>
+      <div class="steps">
+        <section class="step"><h3>安装依赖</h3><p>准备 Node.js 22.11+、pnpm、FFmpeg/ffprobe、Playwright Chromium 与 HyperFrames。</p><pre>pnpm install
+pnpm build
+pnpm cli --help</pre></section>
+        <section class="step"><h3>配置文本模型</h3><p>Agent 把 Key 通过 stdin 注入；禁止写在参数中。</p><pre>$textKey | pnpm cli config set text `
+  --url https://api2.agentsnav.com/ `
+  --model gemini-3.6-flash-medium `
+  --key-stdin --json</pre></section>
+        <section class="step"><h3>配置 MiMo 语音</h3><pre>$speechKey | pnpm cli config set speech `
+  --url https://api.xiaomimimo.com/v1 `
+  --tts-model mimo-v2.5-tts `
+  --asr-model mimo-v2.5-asr `
+  --key-stdin --json</pre></section>
+        <section class="step"><h3>验证真实连通性</h3><pre>pnpm cli config verify all --json
+pnpm cli doctor --live --json</pre></section>
+        <section class="step"><h3>生成并定位视频</h3><pre>pnpm cli run .\script.md --json
+pnpm cli inspect --run &lt;run-id&gt; --json
+pnpm cli serve --run &lt;run-id&gt; --port 0 --json</pre></section>
+      </div>
+      <div class="callout">默认要求真实旁白。只有明确需要无声视频时才添加 <code>--narration off</code>。</div>
+    </article>
+  </template>
+  <template data-route="commands" data-title="Commands">
+    <article class="page prose"><span class="eyebrow">Command map</span><h1>少量命令，覆盖完整生命周期。</h1><p class="lead">实时参数以 <code>purpleink-video --help</code> 为准。自动化使用 <code>--json</code>；<code>status --watch</code> 输出逐行 NDJSON。</p>
+      <section><h2>配置与声音</h2><pre>config set text --url &lt;url&gt; --model &lt;id&gt; --key-stdin
+config set speech --url &lt;url&gt; --tts-model &lt;id&gt; --asr-model &lt;id&gt; --key-stdin
+config show --json
+config verify all --json
+
+voice import &lt;sample.wav|sample.mp3&gt; --name &lt;id&gt;
+voice use &lt;id|mimo_default&gt;
+voice list --json</pre></section>
+      <section><h2>前台工作流</h2><pre>plan &lt;input&gt; --json
+transcribe &lt;audio&gt; --json
+run &lt;input&gt; [--concurrency N] [--narration off] --json</pre></section>
+      <section><h2>批量与守护进程</h2><pre>daemon start [--serve] --json
+submit &lt;input...&gt; --json
+daemon status --json
+daemon stop --json</pre></section>
+      <section><h2>观察、恢复与控制</h2><pre>status [--run &lt;id|path&gt;] [--watch]
+inspect --run &lt;id|path&gt; [--shot S001] --json
+retry --run &lt;id|path&gt; [--shot S001|--failed] --json
+cancel --run &lt;id|path&gt; --json
+serve [--run &lt;id|path&gt;] [--port 0]
+doctor [--live] --json</pre></section>
+      <table><thead><tr><th>模式</th><th>数据库</th><th>适合</th></tr></thead><tbody><tr><td>run</td><td>不需要</td><td>一个视频、直接看日志</td></tr><tr><td>submit + daemon</td><td>PostgreSQL 17</td><td>多个视频、崩溃恢复</td></tr></tbody></table>
+    </article>
+  </template>
+  <template data-route="workflow" data-title="Workflow">
+    <article class="page"><span class="eyebrow">Workflow</span><h1>并行做镜头，串行收成片。</h1><p class="lead">DIRECT 完成全片设计后，分镜之间并发；同一分镜里的 HTML/Browser QA 与 TTS 也并发。全部就绪后，合成与渲染保持单通道。</p>
+      <div class="flow"><span class="node">INGEST</span><span class="arrow">→</span><span class="node">ASR · 可选</span><span class="arrow">→</span><span class="node">DIRECT</span><span class="arrow">→</span><span class="node">SHOT-SPEC × N</span></div>
+      <div class="grid">
+        <section class="card"><span class="tag">SHOT S001</span><h2>FABRICATE</h2><p>生成可 seek、自包含的 HTML。静态 gate 或浏览器 gate 失败时，只做一次定向修复。</p></section>
+        <section class="card"><span class="tag">SHOT S001</span><h2>Browser QA</h2><p>Chromium 在 0%、50%、100% 取三张真实 PNG，并保存脱敏 console/page diagnostics。</p></section>
+        <section class="card"><span class="tag">SHOT S001</span><h2>MiMo TTS</h2><p>每个镜头独立配音。真实音频时长加尾部缓冲，成为该镜头最终时间线长度。</p></section>
+        <section class="card full"><span class="tag">FINAL LANE</span><div class="flow"><span class="node">ASSEMBLE</span><span class="arrow">→</span><span class="node">HyperFrames RENDER</span><span class="arrow">→</span><span class="node">AAC MUX</span><span class="arrow">→</span><span class="node">MEDIA QA</span><span class="arrow">→</span><span class="node">FINALIZE</span></div><p>最终渲染全局并发为 1，避免多个视频同时占满 CPU/GPU。pg-boss 只调度 run；镜头并发仍由轻量共享 semaphore 控制。</p></section>
+      </div>
+      <div class="callout">某个镜头自动修复耗尽后，run 进入 <strong>needs_attention</strong>。其他镜头继续完成，但系统不会生成伪成功最终视频。</div>
+    </article>
+  </template>
+  <template data-route="artifacts" data-title="Artifacts">
+    <article class="page prose"><span class="eyebrow">Artifacts</span><h1>文件系统就是可解释的工作台。</h1><p class="lead">每个 run 都是一个可移动、可恢复、可审计的目录。AI 返回绝对路径，人类通过 observer 直接预览。</p>
+      <section><pre>runs/&lt;run-id&gt;/
+  input/                         # 原始输入、转写与规范 script
+  state/run.json                 # run 真值
+  state/stages/                  # 每阶段 fingerprint / attempt / status
+  state/events.jsonl             # NDJSON 事件
+  state/metrics.json             # 并发峰值与时间跨度
+  shots/S001/plan.json
+  shots/S001/attempt-001/source.html
+  shots/S001/attempt-001/screenshots/{000,050,100}.png
+  shots/S001/attempt-001/diagnostics.json
+  shots/S001/narration.wav
+  project/                       # HyperFrames composition
+  final/video.mp4
+  final/frames/{000,001,002}.png
+  artifacts/index.json           # observer 唯一白名单
+  logs/</pre></section>
+      <section><h2>阶段语义</h2><table><thead><tr><th>阶段</th><th>证明什么</th></tr></thead><tbody><tr><td>INGEST / ASR</td><td>输入字节与真实音频时间边界已固定</td></tr><tr><td>DIRECT / SHOT_SPEC</td><td>AI JSON 合同已通过</td></tr><tr><td>FABRICATE / BROWSER_QA / TTS</td><td>镜头代码、三点画面和旁白就绪</td></tr><tr><td>ASSEMBLE / RENDER / AUDIO_MUX</td><td>时间线、视觉 MP4 和 AAC 音轨完成</td></tr><tr><td>MEDIA_QA / FINALIZE</td><td>媒体参数、hash、大小与抽帧验收完成</td></tr></tbody></table></section>
+      <section><h2>Artifact Index</h2><p>每条记录包含 id、kind、relativePath、absolutePath、sizeBytes、SHA-256 和可选 metadata。observer 不接受任意文件路径，只按 artifact id 返回已登记文件。</p></section>
+    </article>
+  </template>
+  <template data-route="troubleshooting" data-title="Troubleshooting">
+    <article class="page prose"><span class="eyebrow">Troubleshooting</span><h1>先看状态，再只修坏掉的部分。</h1>
+      <div class="grid">
+        <section class="card wide"><span class="tag">CONFIG</span><h2>连通性验证失败</h2><p>运行 <code>config show --json</code> 核对非敏感 URL 与 Model ID。检查网络、余额和模型权限；失败不会覆盖旧密钥。</p></section>
+        <section class="card"><span class="tag">ASR</span><h2>没有语音</h2><p><code>ASR_NO_SPEECH</code> 表示 FFmpeg 未检测到有效语音，系统不会生成虚假文稿。</p></section>
+        <section class="card"><span class="tag">SHOT</span><h2>needs_attention</h2><p>用 inspect 查看 HTML、三点截图和 diagnostics，再定向 retry。</p></section>
+        <section class="card"><span class="tag">QUEUE</span><h2>数据库不可用</h2><p>确认 Docker Desktop 已启动，重新执行 <code>daemon start</code>。停止 daemon 不会删除卷。</p></section>
+        <section class="card wide"><span class="tag">MEDIA</span><h2>最终 QA 失败</h2><p>检查 <code>logs/hyperframes.log</code> 与 <code>logs/ffmpeg.log</code>。最终文件必须是 1920×1080、30fps、H.264；旁白开启时还必须存在 AAC 音轨。</p></section>
+      </div>
+      <section><h2>推荐诊断顺序</h2><div class="steps"><div class="step"><h3>status</h3><p>确认 run 是 running、needs_attention、failed 还是 cancelled。</p></div><div class="step"><h3>inspect</h3><p>取得阶段与 Artifact 的绝对路径，不猜测文件位置。</p></div><div class="step"><h3>serve</h3><p>需要人工观察时打开临时 loopback 页面。</p></div><div class="step"><h3>retry</h3><p>只重跑 failed 或指定的 S###，保留成功阶段。</p></div></div></section>
+    </article>
+  </template>
+  <template data-route="agent-usage" data-title="Agent Usage">
+    <article class="page prose"><span class="eyebrow">Agent Usage</span><h1>给 AI 一个稳定、可验证的机器合同。</h1><p class="lead">Agent 不需要模拟人类点击软件。它调用 CLI、读取 JSON 状态、定位绝对路径，并在出错时只重做对应镜头。</p>
+      <section><h2>安装 Skill</h2><pre>pnpm skill:install</pre><p>安装目标：<span class="path">%USERPROFILE%\.agents\skills\generating-purpleink-script-videos\</span></p></section>
+      <section><h2>Agent 决策顺序</h2><div class="steps"><div class="step"><h3>获取实时命令</h3><p>运行 <code>purpleink-video --help</code>，不要从记忆拼参数。</p></div><div class="step"><h3>确认配置</h3><p>使用 <code>config show --json</code>；Key 只能隐藏输入或通过 stdin。</p></div><div class="step"><h3>选择前台或批量</h3><p>一个输入用 run；多个输入用 daemon + submit。</p></div><div class="step"><h3>解释失败</h3><p>needs_attention 时返回坏镜头 Artifact 的绝对路径，再 retry。</p></div><div class="step"><h3>证明交付</h3><p>最终回复包含 MP4 绝对路径、媒体参数、大小与 SHA-256。</p></div></div></section>
+      <section><h2>机器友好示例</h2><pre># 单任务
+purpleink-video run .\brief.md --json
+
+# 读取最终路径
+purpleink-video inspect --run &lt;run-id&gt; --json
+
+# 只修坏镜头
+purpleink-video inspect --run &lt;run-id&gt; --shot S004 --json
+purpleink-video retry --run &lt;run-id&gt; --shot S004 --json
+
+# 多任务
+purpleink-video daemon start --serve --json
+purpleink-video submit .\a.md .\b.json .\c.mp3 --json</pre></section>
+      <div class="callout"><strong>禁止伪成功：</strong>API 200、job completed、fixture 输出或视觉 MP4 单独存在，都不足以证明带旁白的最终视频完成。</div>
+    </article>
+  </template>
+  <script>
+    const routes=new Map([...document.querySelectorAll('template[data-route]')].map(node=>[node.dataset.route,node]));
+    const render=()=>{const key=location.hash.slice(1)||'overview';const route=routes.has(key)?key:'overview';document.getElementById('app').replaceChildren(routes.get(route).content.cloneNode(true));document.querySelectorAll('#nav a').forEach(link=>link.classList.toggle('active',link.dataset.route===route));document.title=`PurpleInk · ${routes.get(route).dataset.title}`;scrollTo({top:0,behavior:'instant'});};
+    addEventListener('hashchange',render);render();
+  </script>
+</body>
+</html>

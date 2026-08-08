@@ -1,0 +1,4 @@
+interface:
+  display_name: "PurpleInk ÎÄ¸åÊÓÆµ"
+  short_description: "Generate and inspect local narrated script videos"
+  default_prompt: "Use $generating-purpleink-script-videos to generate and verify a local script video."

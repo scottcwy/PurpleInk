@@ -13,7 +13,8 @@
     "test": "pnpm --filter @purpleink/script-video-cli test",
     "typecheck": "pnpm --filter @purpleink/script-video-cli typecheck",
     "verify:v3": "pnpm lint && pnpm typecheck && pnpm test",
-    "verify:e2e": "pnpm cli run examples/script-video/demo.json --provider fixture --json"
+    "verify:e2e": "pnpm cli run examples/script-video/demo.json --provider fixture --json",
+    "skill:install": "pnpm --filter @purpleink/script-video-cli skill:install"
   },
   "devDependencies": {
     "@types/node": "^22.11.0",
