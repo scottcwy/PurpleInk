@@ -1,3 +1,5 @@
+import { AiProviderError, type AiProviderErrorCode } from './ai/openai-compatible'
+
 export interface SafeErrorProjection {
   code: string
   message: string
@@ -29,6 +31,10 @@ export function projectSafeError(error: unknown): SafeErrorProjection {
       shotId: error.context.shotId,
     })
   }
+  if (error instanceof AiProviderError) {
+    const safe = aiProviderSafeErrors[error.code]
+    return { code: error.code, message: safe.message, retryable: safe.retryable }
+  }
   if (isRecord(error) && typeof error.code === 'string' && knownCommandCode(error.code)) {
     return {
       code: error.code,
@@ -37,6 +43,14 @@ export function projectSafeError(error: unknown): SafeErrorProjection {
     }
   }
   return { code: 'CLI_FAILED', message: 'CLI 命令执行失败。', retryable: false }
+}
+
+const aiProviderSafeErrors: Record<AiProviderErrorCode, { message: string; retryable: boolean }> = {
+  AI_CONFIG_INVALID: { message: 'AI provider 配置无效。', retryable: false },
+  AI_TIMEOUT: { message: 'AI provider 请求超时。', retryable: true },
+  AI_RATE_LIMITED: { message: 'AI provider 请求受限。', retryable: true },
+  AI_PROVIDER_UNAVAILABLE: { message: 'AI provider 暂时不可用。', retryable: true },
+  AI_OUTPUT_INVALID: { message: 'AI provider 返回内容无效。', retryable: false },
 }
 
 function compactProjection(value: SafeErrorProjection): SafeErrorProjection {

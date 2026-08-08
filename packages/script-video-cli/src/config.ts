@@ -67,14 +67,18 @@ export async function readEffectiveCliConfig(
   env: NodeJS.ProcessEnv = process.env,
   cwd = process.cwd(),
   localStore?: LocalConfigStore,
+  options: { provider?: CliProvider; loadTextSecret?: boolean } = {},
 ): Promise<CliConfig> {
-  const base = readCliConfig(env, cwd)
+  const configured = readCliConfig(env, cwd)
+  const base = options.provider ? { ...configured, provider: options.provider } : configured
   if (!localStore) return base
   const local = await localStore.read()
   const concurrency = env.SCRIPT_VIDEO_CONCURRENCY?.trim()
     ? base.concurrency
     : (local?.concurrency.text ?? base.concurrency)
-  if (base.provider === 'fixture' || hasEnvironmentTextProfile(env)) return { ...base, concurrency }
+  if (options.loadTextSecret === false || base.provider === 'fixture' || hasEnvironmentTextProfile(env)) {
+    return { ...base, concurrency }
+  }
   if (!local?.text) return { ...base, concurrency }
   const localAi = await localStore.loadTextProvider()
   return {

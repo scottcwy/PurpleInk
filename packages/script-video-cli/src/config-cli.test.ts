@@ -52,6 +52,9 @@ describe('local provider profiles', () => {
     )
 
     expect(result.code).toBe(0)
+    expect(result.payload).toMatchObject({
+      data: { maintenance: { secretCleanup: { status: 'clean', pendingCount: 0 } } },
+    })
     expect(provider.requests).toHaveLength(1)
     expect(provider.requests[0]).toMatchObject({
       authorization: `Bearer ${token}`,
@@ -99,7 +102,7 @@ describe('local provider profiles', () => {
         'set',
         'text',
         '--url',
-        'https://api.example.test/custom/path/?mode=fast#anchor',
+        'https://api.example.test/custom/path/?mode=fast',
         '--model',
         'model-b',
         '--key-stdin',
@@ -108,7 +111,7 @@ describe('local provider profiles', () => {
       { protector, stdinSecret: 'second-test-token', verifyTextProvider },
     )
     expect(JSON.parse(await readFile(join(root, 'PurpleInk', 'config.json'), 'utf8'))).toMatchObject({
-      text: { baseUrl: 'https://api.example.test/custom/path/?mode=fast#anchor', model: 'model-b' },
+      text: { baseUrl: 'https://api.example.test/custom/path/?mode=fast', model: 'model-b' },
     })
 
     await invoke(
@@ -118,7 +121,7 @@ describe('local provider profiles', () => {
         'set',
         'text',
         '--url',
-        'https://api2.agentsnav.com/?mode=fast#anchor',
+        'https://api2.agentsnav.com/?mode=fast',
         '--model',
         'model-c',
         '--key-stdin',
@@ -127,8 +130,41 @@ describe('local provider profiles', () => {
       { protector, stdinSecret: 'third-test-token', verifyTextProvider },
     )
     expect(JSON.parse(await readFile(join(root, 'PurpleInk', 'config.json'), 'utf8'))).toMatchObject({
-      text: { baseUrl: 'https://api2.agentsnav.com/?mode=fast#anchor', model: 'model-c' },
+      text: { baseUrl: 'https://api2.agentsnav.com/?mode=fast', model: 'model-c' },
     })
+  })
+
+  it('rejects URL fragments before verification or local writes', async () => {
+    const root = await createRoot()
+    let verificationCalls = 0
+    const result = await invoke(
+      root,
+      [
+        'config',
+        'set',
+        'text',
+        '--url',
+        'https://api.example.test/v1/#private-fragment',
+        '--model',
+        'text-model',
+        '--key-stdin',
+        '--json',
+      ],
+      {
+        stdinSecret: 'fragment-test-token',
+        verifyTextProvider: async () => {
+          verificationCalls += 1
+        },
+      },
+    )
+
+    expect(result.code).toBe(1)
+    expect(result.raw).not.toContain('private-fragment')
+    expect(result.payload).toMatchObject({
+      error: { code: 'CONFIG_URL_FRAGMENT_FORBIDDEN', retryable: false },
+    })
+    expect(verificationCalls).toBe(0)
+    await expect(readdir(join(root, 'PurpleInk'))).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
   it('does not overwrite a working profile when verification fails and projects only a safe error', async () => {

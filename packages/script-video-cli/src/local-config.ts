@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 
@@ -80,6 +80,7 @@ export interface LocalConfigIo {
   rename(from: string, to: string): Promise<void>
   remove(path: string): Promise<void>
   exists(path: string): Promise<boolean>
+  list(directory: string): Promise<string[]>
 }
 
 export interface LocalConfigStoreOptions {
@@ -96,6 +97,15 @@ export interface LocalConfigSummary {
     asrModel: string | null
   }
   concurrency: ConcurrencyConfig
+}
+
+export interface SecretCleanupStatus {
+  status: 'clean' | 'pending'
+  pendingCount: number
+}
+
+export interface SaveTextProfileResult {
+  secretCleanup: SecretCleanupStatus
 }
 
 export class LocalConfigStore {
@@ -145,30 +155,27 @@ export class LocalConfigStore {
     }
   }
 
-  async saveTextProfile(profile: { baseUrl: string; model: string; apiKey: string }): Promise<void> {
+  async saveTextProfile(profile: { baseUrl: string; model: string; apiKey: string }): Promise<SaveTextProfileResult> {
     const current = await this.read()
-    const secretRef = `text-${this.now()
-      .toISOString()
-      .replace(/[^0-9A-Z]/giu, '')}-${randomUUID()}.dpapi`
+    const now = this.now()
+    const secretRef = `text-${now.toISOString().replace(/[^0-9A-Z]/giu, '')}-${randomUUID()}.dpapi`
     const secretPath = join(this.paths.secretsDir, secretRef)
-    const encrypted = await this.protector.protect(profile.apiKey)
-    await this.atomicWrite(secretPath, encrypted)
     const next = localConfigSchema.parse({
       schemaVersion: 1,
-      updatedAt: this.now().toISOString(),
+      updatedAt: now.toISOString(),
       text: { baseUrl: profile.baseUrl, model: profile.model, secretRef },
       ...(current?.speech ? { speech: current.speech } : {}),
       concurrency: current?.concurrency ?? concurrencyDefaults,
     })
+    const encrypted = await this.protector.protect(profile.apiKey)
+    await this.atomicWrite(secretPath, encrypted)
     try {
       await this.atomicWrite(this.paths.configPath, Buffer.from(`${JSON.stringify(next, null, 2)}\n`, 'utf8'))
     } catch (error) {
       await this.io.remove(secretPath).catch(() => undefined)
       throw error
     }
-    if (current?.text?.secretRef && current.text.secretRef !== secretRef) {
-      await this.io.remove(join(this.paths.secretsDir, current.text.secretRef)).catch(() => undefined)
-    }
+    return { secretCleanup: await this.reclaimUnreferencedSecrets(next) }
   }
 
   async loadTextProvider(): Promise<OpenAiCompatibleConfig> {
@@ -194,6 +201,25 @@ export class LocalConfigStore {
       throw new SafeCliError('CONFIG_WRITE_FAILED', '无法原子写入本地配置。', false, 500)
     }
   }
+
+  private async reclaimUnreferencedSecrets(config: LocalConfig): Promise<SecretCleanupStatus> {
+    const referenced = new Set([
+      ...(config.text ? [config.text.secretRef] : []),
+      ...(config.speech ? [config.speech.secretRef] : []),
+    ])
+    const candidates = (await this.io.list(this.paths.secretsDir)).filter(
+      (name) => /^(?:text|speech)-[a-zA-Z0-9._-]+\.dpapi$/u.test(name) && !referenced.has(name),
+    )
+    let pendingCount = 0
+    for (const candidate of candidates) {
+      try {
+        await this.io.remove(join(this.paths.secretsDir, candidate))
+      } catch {
+        pendingCount += 1
+      }
+    }
+    return { status: pendingCount === 0 ? 'clean' : 'pending', pendingCount }
+  }
 }
 
 export function resolveLocalConfigPaths(env: NodeJS.ProcessEnv = process.env, localAppData?: string): LocalConfigPaths {
@@ -212,6 +238,9 @@ export function normalizeProviderBaseUrl(value: string): string {
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new SafeCliError('CONFIG_URL_INVALID', '文本模型 URL 协议无效。', false, 400)
+  }
+  if (parsed.hash) {
+    throw new SafeCliError('CONFIG_URL_FRAGMENT_FORBIDDEN', '文本模型 URL 不能包含 fragment。', false, 400)
   }
   const designatedRoot =
     parsed.protocol === 'https:' &&
@@ -243,4 +272,16 @@ const nodeConfigIo: LocalConfigIo = {
       return false
     }
   },
+  list: async (directory) => {
+    try {
+      return await readdir(directory)
+    } catch (error) {
+      if (isRecord(error) && error.code === 'ENOENT') return []
+      throw error
+    }
+  },
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
 }

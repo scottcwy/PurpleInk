@@ -46,7 +46,13 @@ export async function runCli(
             stdinIsTty: runtime.stdinIsTty ?? process.stdin.isTTY === true,
             verifyTextProvider: runtime.verifyTextProvider,
           })
-        : await executeCliCommand(args, await readEffectiveCliConfig(env, process.cwd(), store))
+        : await executeCliCommand(
+            args,
+            await readEffectiveCliConfig(env, process.cwd(), store, {
+              provider: args.provider,
+              loadTextSecret: args.command === 'run' || args.command === 'plan',
+            }),
+          )
     const runId = isRecord(result) && typeof result.runId === 'string' ? result.runId : undefined
     const envelope = { ok: true, command, ...(runId ? { runId } : {}), data: result }
     output.writeLine(args.json ? JSON.stringify(envelope) : formatHumanResult(result))

@@ -80,6 +80,7 @@ function normalizeConfig(config: OpenAiCompatibleConfig): NormalizedConfig {
   if (!['http:', 'https:'].includes(base.protocol)) {
     throw new AiProviderError('AI_CONFIG_INVALID', 'AI provider URL 协议无效')
   }
+  if (base.hash) throw new AiProviderError('AI_CONFIG_INVALID', 'AI provider URL 不能包含 fragment')
   const requestTimeoutMs = config.requestTimeoutMs ?? 120_000
   const maxRetries = config.maxRetries ?? 2
   const retryBaseDelayMs = config.retryBaseDelayMs ?? 250
@@ -95,13 +96,19 @@ function normalizeConfig(config: OpenAiCompatibleConfig): NormalizedConfig {
     throw new AiProviderError('AI_CONFIG_INVALID', 'AI provider 重试配置无效')
   }
   return {
-    endpoint: `${config.baseUrl.replace(/\/+$/u, '')}/chat/completions`,
+    endpoint: completionEndpoint(base),
     apiKey: config.apiKey,
     textModel: config.textModel,
     requestTimeoutMs,
     maxRetries,
     retryBaseDelayMs,
   }
+}
+
+function completionEndpoint(base: URL): string {
+  const path = base.pathname.replace(/\/+$/u, '')
+  base.pathname = `${path}/chat/completions`
+  return base.toString()
 }
 
 async function requestCompletion(config: NormalizedConfig, input: AiCompletionInput, json: boolean): Promise<string> {

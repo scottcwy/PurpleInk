@@ -27,8 +27,8 @@ export async function executeConfigCommand(args: CliArgs, dependencies: ConfigCo
     const apiKey = await readKey(args, dependencies)
     const config = { baseUrl, apiKey, textModel }
     await verifySafely(config, dependencies.verifyTextProvider)
-    await dependencies.store.saveTextProfile({ baseUrl, model: textModel, apiKey })
-    return dependencies.store.summary()
+    const maintenance = await dependencies.store.saveTextProfile({ baseUrl, model: textModel, apiKey })
+    return { ...(await dependencies.store.summary()), maintenance }
   }
   throw new SafeCliError('CONFIG_ACTION_INVALID', 'config 子命令无效。', false, 400)
 }

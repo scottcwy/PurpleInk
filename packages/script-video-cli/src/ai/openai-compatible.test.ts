@@ -21,8 +21,10 @@ describe('OpenAI-compatible client', () => {
   it('sends chat completions and parses fenced JSON', async () => {
     let receivedBody = ''
     let receivedAuthorization = ''
+    let receivedUrl = ''
     const server = createServer((request, response) => {
       receivedAuthorization = request.headers.authorization ?? ''
+      receivedUrl = request.url ?? ''
       request.on('data', (chunk) => {
         receivedBody += chunk.toString()
       })
@@ -41,7 +43,7 @@ describe('OpenAI-compatible client', () => {
     if (!address || typeof address === 'string') throw new Error('server did not bind')
 
     const client = createOpenAiCompatibleClient({
-      baseUrl: `http://127.0.0.1:${address.port}/v1`,
+      baseUrl: `http://127.0.0.1:${address.port}/v1/?tenant=alpha`,
       apiKey: 'secret-token',
       textModel: 'text-model',
       requestTimeoutMs: 1_000,
@@ -49,6 +51,7 @@ describe('OpenAI-compatible client', () => {
     })
 
     await expect(client.completeJson({ system: 'system', user: 'user' })).resolves.toEqual({ ok: true })
+    expect(receivedUrl).toBe('/v1/chat/completions?tenant=alpha')
     expect(receivedAuthorization).toBe('Bearer secret-token')
     expect(JSON.parse(receivedBody)).toMatchObject({
       model: 'text-model',
@@ -57,6 +60,16 @@ describe('OpenAI-compatible client', () => {
         { role: 'user', content: 'user' },
       ],
     })
+  })
+
+  it('rejects a base URL fragment before any request can be sent', () => {
+    expect(() =>
+      createOpenAiCompatibleClient({
+        baseUrl: 'https://api.example.test/v1/#fragment',
+        apiKey: 'synthetic-token',
+        textModel: 'text-model',
+      }),
+    ).toThrow(expect.objectContaining({ code: 'AI_CONFIG_INVALID' }))
   })
 
   it('retries a rate limit and hides provider response details', async () => {
