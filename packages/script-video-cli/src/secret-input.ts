@@ -1,4 +1,4 @@
-import type { ReadStream, WriteStream } from 'node:tty'
+import type { ReadStream } from 'node:tty'
 
 import { SafeCliError } from './safe-error'
 
@@ -13,7 +13,7 @@ export function createProcessSecretInput(
 ): SecretInput {
   return {
     readStdin: () => readAll(input),
-    readHidden: () => readHidden(input as ReadStream, output as WriteStream),
+    readHidden: () => readHidden(input as ReadStream, output),
   }
 }
 
@@ -23,16 +23,22 @@ async function readAll(input: NodeJS.ReadableStream): Promise<string> {
   return normalizeSecret(value)
 }
 
-function readHidden(input: ReadStream, output: WriteStream): Promise<string> {
+function readHidden(input: ReadStream, output: NodeJS.WritableStream): Promise<string> {
   if (!input.isTTY || typeof input.setRawMode !== 'function') {
     throw new SafeCliError('KEY_INPUT_REQUIRED', '非交互环境必须使用 --key-stdin。', false, 400)
   }
   return new Promise<string>((resolve, reject) => {
     let value = ''
-    const wasRaw = input.isRaw
+    let settled = false
+    const wasRaw = Boolean(input.isRaw)
+    const wasFlowing = input.readableFlowing
+    const startedFlow = wasFlowing !== true
     const finish = (error?: Error): void => {
+      if (settled) return
+      settled = true
       input.off('data', onData)
-      input.setRawMode(Boolean(wasRaw))
+      input.setRawMode(wasRaw)
+      if (startedFlow) input.pause()
       output.write('\n')
       if (error) reject(error)
       else {
@@ -60,8 +66,8 @@ function readHidden(input: ReadStream, output: WriteStream): Promise<string> {
     }
     output.write('API Key: ')
     input.setRawMode(true)
-    input.resume()
     input.on('data', onData)
+    if (startedFlow) input.resume()
   })
 }
 

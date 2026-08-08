@@ -88,7 +88,6 @@ export interface LocalConfigStoreOptions {
 }
 
 export interface LocalConfigSummary {
-  configPath: string
   text: { configured: boolean; baseUrl: string | null; model: string | null }
   speech: {
     configured: boolean
@@ -97,7 +96,6 @@ export interface LocalConfigSummary {
     asrModel: string | null
   }
   concurrency: ConcurrencyConfig
-  updatedAt: string | null
 }
 
 export class LocalConfigStore {
@@ -132,7 +130,6 @@ export class LocalConfigStore {
       config?.speech && (await this.io.exists(join(this.paths.secretsDir, config.speech.secretRef))),
     )
     return {
-      configPath: this.paths.configPath,
       text: {
         configured: textConfigured,
         baseUrl: config?.text?.baseUrl ?? null,
@@ -145,7 +142,6 @@ export class LocalConfigStore {
         asrModel: config?.speech?.asrModel ?? null,
       },
       concurrency: config?.concurrency ?? concurrencyDefaults,
-      updatedAt: config?.updatedAt ?? null,
     }
   }
 
@@ -207,24 +203,26 @@ export function resolveLocalConfigPaths(env: NodeJS.ProcessEnv = process.env, lo
 }
 
 export function normalizeProviderBaseUrl(value: string): string {
+  const original = value.trim()
   let parsed: URL
   try {
-    parsed = new URL(value.trim())
+    parsed = new URL(original)
   } catch {
     throw new SafeCliError('CONFIG_URL_INVALID', '文本模型 URL 无效。', false, 400)
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new SafeCliError('CONFIG_URL_INVALID', '文本模型 URL 协议无效。', false, 400)
   }
-  parsed.hash = ''
-  parsed.search = ''
-  const rootPath = parsed.pathname.replace(/\/+$/u, '')
-  if (parsed.protocol === 'https:' && parsed.hostname.toLowerCase() === 'api2.agentsnav.com' && rootPath === '') {
-    parsed.pathname = '/v1'
-  } else {
-    parsed.pathname = rootPath || '/'
-  }
-  return parsed.toString().replace(/\/+$/u, '')
+  const designatedRoot =
+    parsed.protocol === 'https:' &&
+    parsed.hostname.toLowerCase() === 'api2.agentsnav.com' &&
+    parsed.port === '' &&
+    parsed.pathname === '/' &&
+    parsed.search === '' &&
+    parsed.hash === '' &&
+    parsed.username === '' &&
+    parsed.password === ''
+  return designatedRoot ? 'https://api2.agentsnav.com/v1' : original
 }
 
 const nodeConfigIo: LocalConfigIo = {

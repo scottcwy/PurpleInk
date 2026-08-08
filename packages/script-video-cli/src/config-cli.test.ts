@@ -33,11 +33,9 @@ describe('local provider profiles', () => {
       ok: true,
       command: 'config.show',
       data: {
-        configPath: join(root, 'PurpleInk', 'config.json'),
         text: { configured: false, baseUrl: null, model: null },
         speech: { configured: false, baseUrl: null, ttsModel: null, asrModel: null },
         concurrency: { run: 2, text: 6, browser: 3, tts: 3, asr: 2, render: 1 },
-        updatedAt: null,
       },
     })
   })
@@ -65,7 +63,7 @@ describe('local provider profiles', () => {
     expect(saved).toMatchObject({
       schemaVersion: 1,
       updatedAt: fixedNow.toISOString(),
-      text: { baseUrl: provider.baseUrl, model: 'text-model' },
+      text: { baseUrl: `${provider.baseUrl}/`, model: 'text-model' },
       concurrency: { run: 2, text: 6, browser: 3, tts: 3, asr: 2, render: 1 },
     })
     expect(JSON.stringify(saved)).not.toContain(token)
@@ -80,7 +78,7 @@ describe('local provider profiles', () => {
     expect(secretFiles.some((name) => name.includes('.tmp-'))).toBe(false)
   })
 
-  it('normalizes only the designated legacy root URL and preserves other URL paths', async () => {
+  it('normalizes only the designated legacy root URL and preserves every other valid URL verbatim', async () => {
     const root = await createRoot()
     const protector = reversibleProtector()
     const verifyTextProvider = async (): Promise<void> => undefined
@@ -101,7 +99,7 @@ describe('local provider profiles', () => {
         'set',
         'text',
         '--url',
-        'https://api.example.test/custom/path/',
+        'https://api.example.test/custom/path/?mode=fast#anchor',
         '--model',
         'model-b',
         '--key-stdin',
@@ -110,7 +108,26 @@ describe('local provider profiles', () => {
       { protector, stdinSecret: 'second-test-token', verifyTextProvider },
     )
     expect(JSON.parse(await readFile(join(root, 'PurpleInk', 'config.json'), 'utf8'))).toMatchObject({
-      text: { baseUrl: 'https://api.example.test/custom/path', model: 'model-b' },
+      text: { baseUrl: 'https://api.example.test/custom/path/?mode=fast#anchor', model: 'model-b' },
+    })
+
+    await invoke(
+      root,
+      [
+        'config',
+        'set',
+        'text',
+        '--url',
+        'https://api2.agentsnav.com/?mode=fast#anchor',
+        '--model',
+        'model-c',
+        '--key-stdin',
+        '--json',
+      ],
+      { protector, stdinSecret: 'third-test-token', verifyTextProvider },
+    )
+    expect(JSON.parse(await readFile(join(root, 'PurpleInk', 'config.json'), 'utf8'))).toMatchObject({
+      text: { baseUrl: 'https://api2.agentsnav.com/?mode=fast#anchor', model: 'model-c' },
     })
   })
 
@@ -203,6 +220,8 @@ describe('local provider profiles', () => {
       command: 'config.show',
       data: { text: { configured: true, baseUrl: 'https://api.example.test/v1', model: 'text-model' } },
     })
+    expect(shown.payload).not.toHaveProperty('data.configPath')
+    expect(shown.payload).not.toHaveProperty('data.updatedAt')
 
     let verifiedKey = ''
     const verified = await invoke(root, ['config', 'verify', 'text', '--json'], {

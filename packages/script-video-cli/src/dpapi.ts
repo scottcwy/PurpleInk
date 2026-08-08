@@ -8,18 +8,22 @@ export interface SecretProtector {
 }
 
 const protectScript = [
+  "$ErrorActionPreference = 'Stop'",
+  'Add-Type -AssemblyName System.Security',
   '$plain = [Console]::In.ReadToEnd()',
   '$bytes = [Text.Encoding]::UTF8.GetBytes($plain)',
-  '$scope = [Security.Cryptography.DataProtectionScope]::CurrentUser',
-  '$sealed = [Security.Cryptography.ProtectedData]::Protect($bytes, $null, $scope)',
+  '$scope = [System.Security.Cryptography.DataProtectionScope]::CurrentUser',
+  '$sealed = [System.Security.Cryptography.ProtectedData]::Protect($bytes, $null, $scope)',
   '[Console]::Out.Write([Convert]::ToBase64String($sealed))',
 ].join('; ')
 
 const unprotectScript = [
+  "$ErrorActionPreference = 'Stop'",
+  'Add-Type -AssemblyName System.Security',
   '$encoded = [Console]::In.ReadToEnd()',
   '$sealed = [Convert]::FromBase64String($encoded)',
-  '$scope = [Security.Cryptography.DataProtectionScope]::CurrentUser',
-  '$bytes = [Security.Cryptography.ProtectedData]::Unprotect($sealed, $null, $scope)',
+  '$scope = [System.Security.Cryptography.DataProtectionScope]::CurrentUser',
+  '$bytes = [System.Security.Cryptography.ProtectedData]::Unprotect($sealed, $null, $scope)',
   '[Console]::Out.Write([Text.Encoding]::UTF8.GetString($bytes))',
 ].join('; ')
 
