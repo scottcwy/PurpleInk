@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { mkdir, access, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { join, relative, resolve } from 'node:path'
 
 import type { AiClient } from '../ai/openai-compatible'
@@ -9,6 +11,9 @@ import type { StateStore } from '../state/store'
 import { registerFileArtifact } from '../state/artifacts'
 import { runChromiumGate, validateShotHtml, type RuntimeGateResult } from './gates'
 import { buildFabricatePrompt, buildHtmlRepairPrompt, hashPromptAssets } from './prompts'
+
+const require = createRequire(import.meta.url)
+const localGsapSource = readFileSync(require.resolve('gsap/dist/gsap.min.js'), 'utf8')
 
 export interface CodegenOptions {
   ai: AiClient
@@ -60,7 +65,7 @@ async function generateOneShot(
 ): Promise<CodegenShotResult> {
   const promptFingerprint = hashPromptAssets(['fabricate', 'html-repair'])
   const fingerprint = createHash('sha256')
-    .update(JSON.stringify({ input, shot, promptFingerprint, htmlAdapterVersion: 2 }), 'utf8')
+    .update(JSON.stringify({ input, shot, promptFingerprint, htmlAdapterVersion: 3 }), 'utf8')
     .digest('hex')
   const key = `FABRICATE:${shot.id}`
   const previous = options.store && options.runDir ? await options.store.readStage(options.runDir, key) : null
@@ -172,14 +177,9 @@ function normalizeHtml(raw: string, durationSec: number): string {
   if (!/<html[\s>]/iu.test(html) || !/<\/body\s*>/iu.test(html) || !/<\/html\s*>/iu.test(html)) {
     throw new CodegenFailure('SHOT_OUTPUT_INVALID')
   }
-  const usesAnimationFrame = /\brequestAnimationFrame\b/u.test(html)
   let normalized = html
     .replace(/font-family\s*:\s*[^;}]+/giu, 'font-family: Inter, sans-serif')
-    .replace(/\brequestAnimationFrame\b/gu, 'window.__purpleinkDisabledAnimationFrame')
-  const previewShim = usesAnimationFrame
-    ? '<script>window.__purpleinkDisabledAnimationFrame = function () { return 0; };</script>'
-    : ''
-  if (previewShim) normalized = prependAfterBody(normalized, previewShim)
+  normalized = injectLocalGsap(normalized)
   if (
     /window\.__PURPLEINK_RENDER__/u.test(normalized) &&
     /ready\s*:\s*true/u.test(normalized) &&
@@ -210,8 +210,11 @@ function normalizeHtml(raw: string, durationSec: number): string {
   return normalized
 }
 
-function prependAfterBody(html: string, content: string): string {
-  return html.replace(/<body\b[^>]*>/iu, (opening) => `${opening}\n${content}`)
+function injectLocalGsap(html: string): string {
+  if (/data-purpleink-runtime=["']gsap["']/iu.test(html)) return html
+  const script = `<script data-purpleink-runtime="gsap">${localGsapSource}</script>`
+  if (/<head\b[^>]*>/iu.test(html)) return html.replace(/<head\b[^>]*>/iu, (opening) => `${opening}\n${script}`)
+  return html.replace(/<html\b[^>]*>/iu, (opening) => `${opening}\n<head>${script}</head>`)
 }
 
 function appendBeforeBody(html: string, content: string): string {

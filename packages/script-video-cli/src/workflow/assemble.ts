@@ -154,7 +154,7 @@ function createIndexHtml(
   let start = 0
   const hosts = plans
     .map((plan, index) => {
-      const host = `    <div id="host-${plan.id}" data-composition-id="host-${plan.id}" data-composition-src="${compositionPaths[index]}" data-start="${round(start)}" data-duration="${round(plan.durationSec)}" data-width="1920" data-height="1080"></div>`
+      const host = `    <div id="host-${plan.id}" data-composition-id="${plan.id}" data-composition-src="${compositionPaths[index]}" data-start="${round(start)}" data-duration="${round(plan.durationSec)}" data-track-index="1" data-width="1920" data-height="1080"></div>`
       start += plan.durationSec
       return host
     })
@@ -184,13 +184,14 @@ function createShotCompositionHtml(plan: ShotPlan, source: string): string {
   const scripts = [...source.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/giu)].map((match) => match[0]).join('\n')
   const body = source.match(/<body\b[^>]*>([\s\S]*?)<\/body>/iu)?.[1] ?? ''
   return `<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8">${styles}</head><body>
-<div id="shot-${plan.id}" data-composition-id="${plan.id}" data-width="1920" data-height="1080" data-start="0" data-duration="${round(plan.durationSec)}">
+<html lang="zh-CN"><head><meta charset="utf-8"></head><body><template>
+<style>#root{position:absolute;inset:0;width:1920px;height:1080px;overflow:hidden}</style>
+${styles}
+<div id="root" data-composition-id="${plan.id}" data-width="1920" data-height="1080">
 ${body.replace(/<script\b[^>]*>[\s\S]*?<\/script>/giu, '')}
 </div>
 ${scripts}
-<script>${createTimelineScript(plan.id, plan.durationSec)}</script>
-</body></html>
+</template></body></html>
 `
 }
 

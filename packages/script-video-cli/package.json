@@ -13,6 +13,7 @@
     "skill:install": "node scripts/install-skill.mjs"
   },
   "dependencies": {
+    "gsap": "3.14.2",
     "hyperframes": "0.7.70",
     "pg-boss": "12.27.0",
     "playwright": "1.62.0",

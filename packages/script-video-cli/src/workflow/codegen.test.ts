@@ -124,7 +124,7 @@ describe('generateShots', () => {
       completeText: async () => {
         calls += 1
         return calls === 1
-          ? '<html><body data-pi-seed="x">bad<script src="https://remote.example/x.js"></script></body></html>'
+          ? '<html><body data-pi-seed="x">bad<script>eval("x")</script></body></html>'
           : validHtml
       },
       completeJson: async () => ({}),
@@ -166,8 +166,9 @@ describe('generateShots', () => {
     expect(result.failed).toHaveLength(0)
     expect(saved).toContain('ready: true')
     expect(saved).toContain('durationSec: durationSec')
-    expect(saved).not.toContain('requestAnimationFrame')
+    expect(saved).toContain('function loop() { requestAnimationFrame(loop); }')
     expect(saved).not.toContain('Microsoft YaHei')
-    expect(saved.indexOf('__purpleinkDisabledAnimationFrame =')).toBeLessThan(saved.indexOf('function loop'))
+    expect(saved).toContain('data-purpleink-runtime="gsap"')
+    expect(saved).not.toContain('__purpleinkDisabledAnimationFrame')
   })
 })

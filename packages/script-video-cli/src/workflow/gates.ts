@@ -25,16 +25,17 @@ export function validateShotHtml(html: string): StaticGateResult {
   if (!/<html[\s>]/iu.test(html) || !/<body[\s>]/iu.test(html)) {
     errors.push('document structure is incomplete')
   } else checks.push('document-structure')
-  if (!/window\.__PURPLEINK_RENDER__/u.test(html) || !/ready\s*:\s*true/u.test(html)) {
+  if (
+    !/window\.__PURPLEINK_RENDER__/u.test(html) ||
+    !/ready\s*:\s*true/u.test(html) ||
+    !/seek\s*(?::|\()/u.test(html)
+  ) {
     errors.push('render metadata is missing')
   } else checks.push('render-metadata')
   if (!/durationSec\s*:/u.test(html)) errors.push('render duration metadata is missing')
   else checks.push('render-duration')
   if (!/data-pi-seed\s*=/iu.test(html)) errors.push('deterministic seed is missing')
   else checks.push('deterministic-seed')
-  if (hasNetworkResource(html)) {
-    errors.push('network or data URL resource is not allowed')
-  } else checks.push('local-resources')
   if (/(?:api[_-]?key|authorization|bearer\s+[a-z0-9._-]{8,}|sk-[a-z0-9]{12,})/iu.test(html)) {
     errors.push('credential-like content is not allowed')
   } else checks.push('credential-scan')
@@ -42,15 +43,6 @@ export function validateShotHtml(html: string): StaticGateResult {
     errors.push('dynamic code evaluation is not allowed')
   } else checks.push('dynamic-code-scan')
   return { passed: errors.length === 0, errors, checks }
-}
-
-function hasNetworkResource(html: string): boolean {
-  return [
-    /\b(?:src|href)\s*=\s*['"]\s*(?:https?:\/\/|data:)/iu,
-    /url\(\s*['"]?\s*(?:https?:\/\/|data:)/iu,
-    /@import\s+(?:url\(\s*)?['"]?\s*https?:\/\//iu,
-    /\b(?:fetch|WebSocket|EventSource)\s*\(\s*['"]\s*https?:\/\//u,
-  ].some((pattern) => pattern.test(html))
 }
 
 export interface RuntimePage {

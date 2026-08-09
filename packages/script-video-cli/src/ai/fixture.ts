@@ -36,8 +36,12 @@ function createFixtureHtml(input: AiCompletionInput): string {
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#0b1020;color:#f5f7ff;font-family:Arial,sans-serif}
 main{box-sizing:border-box;width:1920px;height:1080px;padding:140px;display:grid;place-items:center;background:linear-gradient(135deg,#0b1020,#1d2950)}
 .card{max-width:1400px;padding:72px;border:2px solid #7dd3fc;border-radius:28px;background:#13203d;box-shadow:0 30px 90px #0008;font-size:56px;line-height:1.35}
-</style></head><body><main data-pi-seed="${shotId}"><div class="card">${text}</div></main><script>
-window.__PURPLEINK_RENDER__={ready:true,durationSec:7,seek:function(progress){document.documentElement.dataset.renderProgress=String(progress)}};
+</style></head><body><main id="shot-root" data-pi-seed="${shotId}"><div class="card">${text}</div></main><script>
+const fixtureTimeline=gsap.timeline({paused:true});
+fixtureTimeline.fromTo('.card',{x:-420,rotationY:-35,opacity:0},{x:0,rotationY:0,opacity:1,duration:2,ease:'power3.out'},0)
+  .to('.card',{y:-40,scale:1.05,duration:2,ease:'sine.inOut'},2)
+  .to('.card',{x:360,rotationY:28,opacity:.2,duration:3,ease:'power2.inOut'},4);
+window.__PURPLEINK_RENDER__={ready:true,durationSec:7,seek:function(progress){fixtureTimeline.progress(Math.max(0,Math.min(1,progress))).pause()}};
 </script></body></html>`
 }
 
