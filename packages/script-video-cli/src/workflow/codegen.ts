@@ -9,7 +9,7 @@ import { mapWithConcurrency } from '../ai/concurrency'
 import type { ScriptVideoInput, ShotPlan } from '../contracts'
 import type { StateStore } from '../state/store'
 import { registerFileArtifact } from '../state/artifacts'
-import { runChromiumGate, validateShotHtml, type RuntimeGateResult } from './gates'
+import { validateShotHtml, type RuntimeGateResult } from './gates'
 import { buildFabricatePrompt, buildHtmlRepairPrompt, hashPromptAssetsWithGlobal } from './prompts'
 
 const require = createRequire(import.meta.url)
@@ -112,15 +112,16 @@ async function generateOneShot(
         continue
       }
       const browserKey = `BROWSER_QA:${shot.id}`
-      await writeStage(options, browserKey, 'running', attempt, fingerprint, {})
-      const runtime = options.runtimeGate
-        ? await options.runtimeGate(htmlPath, shotDir)
-        : await runChromiumGate(htmlPath, { outputDir: shotDir })
-      if (!runtime.passed) {
-        lastError = runtime.errors[0] ?? 'BROWSER_GATE_FAILED'
-        await registerFailedAttemptArtifacts(options, shot.id, attempt, htmlPath, runtime)
-        await writeStage(options, browserKey, 'failed', attempt, fingerprint, { errorCode: lastError })
-        continue
+      const runtime: RuntimeGateResult = { passed: true, errors: [], screenshotHashes: [] }
+      if (options.runtimeGate) {
+        await writeStage(options, browserKey, 'running', attempt, fingerprint, {})
+        Object.assign(runtime, await options.runtimeGate(htmlPath, shotDir))
+        if (!runtime.passed) {
+          lastError = runtime.errors[0] ?? 'BROWSER_GATE_FAILED'
+          await registerFailedAttemptArtifacts(options, shot.id, attempt, htmlPath, runtime)
+          await writeStage(options, browserKey, 'failed', attempt, fingerprint, { errorCode: lastError })
+          continue
+        }
       }
       const artifactIds = await registerShotArtifacts(options, shot.id, htmlPath, runtime)
       const result: CodegenShotResult = {
@@ -140,15 +141,17 @@ async function generateOneShot(
         result,
         artifactIds.filter((id) => id.endsWith('-html')),
       )
-      await writeStage(
-        options,
-        browserKey,
-        'succeeded',
-        attempt,
-        fingerprint,
-        { screenshotHashes: runtime.screenshotHashes },
-        artifactIds.filter((id) => !id.endsWith('-html')),
-      )
+      if (options.runtimeGate) {
+        await writeStage(
+          options,
+          browserKey,
+          'succeeded',
+          attempt,
+          fingerprint,
+          { screenshotHashes: runtime.screenshotHashes },
+          artifactIds.filter((id) => !id.endsWith('-html')),
+        )
+      }
       return result
     } catch (error) {
       if (options.signal?.aborted) throw error

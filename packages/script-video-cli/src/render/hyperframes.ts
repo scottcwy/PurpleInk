@@ -35,14 +35,13 @@ export interface HyperframesRenderOptions {
 }
 
 export interface HyperframesRenderResult {
-  checkPassed: boolean
   videoPath: string
   durationSec?: number
 }
 
 export class HyperframesError extends Error {
   constructor(
-    readonly code: 'HYPERFRAMES_CHECK_FAILED' | 'HYPERFRAMES_RENDER_FAILED' | 'VIDEO_NOT_FOUND',
+    readonly code: 'HYPERFRAMES_RENDER_FAILED' | 'VIDEO_NOT_FOUND',
     message: string,
   ) {
     super(message)
@@ -63,14 +62,13 @@ export async function renderHyperframesProject(
     logPath: options.logPath,
   }
   options.signal?.throwIfAborted()
-  const check = await runner(invocation.command, [...invocation.prefix, 'check'], commandOptions)
   const renderArgs = ['render', '--quality', options.quality ?? 'standard']
   if (options.fps !== undefined) renderArgs.push('--fps', String(options.fps))
   const render = await runner(invocation.command, [...invocation.prefix, ...renderArgs], commandOptions)
   if (render.code !== 0) throw new HyperframesError('HYPERFRAMES_RENDER_FAILED', 'HyperFrames render failed')
   const videoPath = await findLatestVideo(join(projectDir, 'renders'))
   if (!videoPath) throw new HyperframesError('VIDEO_NOT_FOUND', 'HyperFrames 没有产生 MP4 产物')
-  return { checkPassed: check.code === 0, videoPath }
+  return { videoPath }
 }
 
 async function findLatestVideo(rendersDir: string): Promise<string | null> {

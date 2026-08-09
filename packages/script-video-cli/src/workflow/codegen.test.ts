@@ -84,12 +84,12 @@ describe('generateShots', () => {
       ai,
       outputDir: root,
       concurrency: 2,
-      runtimeGate: async () => ({ passed: true, errors: [], screenshotHashes: [] }),
     })
 
     expect(maximum).toBe(2)
     expect(result.failed).toHaveLength(0)
     expect(result.succeeded).toHaveLength(4)
+    expect(result.succeeded.every((shot) => shot.screenshotHashes?.length === 0)).toBe(true)
     await access(join(root, 'shots', 'S001', 'attempt-001', 'source.html'))
     expect(await readFile(join(root, 'shots', 'S001', 'attempt-001', 'source.html'), 'utf8')).toContain(
       'PURPLEINK_RENDER',
