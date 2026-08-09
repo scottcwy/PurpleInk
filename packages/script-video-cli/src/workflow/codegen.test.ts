@@ -146,7 +146,9 @@ describe('generateShots', () => {
     roots.push(root)
     const ai: AiClient = {
       completeText:
-        async () => `<!doctype html><html><head><style>body { font-family: "Microsoft YaHei", sans-serif; }</style></head>
+        async () => `<!doctype html><html><head><style>body { font-family: "Microsoft YaHei", sans-serif; }</style>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script></head>
         <body data-pi-seed="x"><main>事实</main><script>
         function renderFrame(time) { document.body.dataset.time = String(time); }
         function loop() { requestAnimationFrame(loop); }
@@ -169,6 +171,8 @@ describe('generateShots', () => {
     expect(saved).toContain('function loop() { requestAnimationFrame(loop); }')
     expect(saved).not.toContain('Microsoft YaHei')
     expect(saved).toContain('data-purpleink-runtime="gsap"')
+    expect(saved).not.toContain('cdnjs.cloudflare.com/ajax/libs/gsap')
+    expect(saved).toContain('chart.umd.min.js')
     expect(saved).not.toContain('__purpleinkDisabledAnimationFrame')
   })
 })

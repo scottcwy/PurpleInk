@@ -92,6 +92,7 @@ describe('assembleProject', () => {
     const shot = await readFile(join(result.projectDir, 'compositions', 'S001.html'), 'utf8')
     expect(shot).toContain('<template>')
     expect(shot).toContain('data-composition-id="S001"')
+    expect(shot).toContain('window.__timelines["S001"]')
     expect(shot.indexOf('<style>')).toBeGreaterThan(shot.indexOf('<template>'))
     await access(join(result.projectDir, 'compositions', 'S001.html'))
     await access(result.manifestPath)

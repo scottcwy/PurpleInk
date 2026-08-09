@@ -48,7 +48,7 @@ export function validateShotHtml(html: string): StaticGateResult {
 export interface RuntimePage {
   goto(url: string, options: { waitUntil: 'load' }): Promise<void>
   waitForFunction(expression: string, options: { timeout: number }): Promise<void>
-  evaluate(expression: string, value: number): Promise<void>
+  evaluate(pageFunction: (value: number) => void, value: number): Promise<void>
   waitForTimeout(milliseconds: number): Promise<void>
   screenshot(options: { type: 'png' }): Promise<Buffer>
   on(event: 'console' | 'pageerror', listener: (value?: unknown) => void): void
@@ -87,7 +87,12 @@ export async function runChromiumGate(
     })
     for (const [index, progress] of [0, 0.5, 1].entries()) {
       await page.evaluate(
-        '(progress) => { const r = window.__PURPLEINK_RENDER__; if (r && typeof r.seek === "function") r.seek(progress); document.documentElement.dataset.renderProgress = String(progress); }',
+        (progress) => {
+          const render = (window as unknown as { __PURPLEINK_RENDER__?: { seek?: (value: number) => void } })
+            .__PURPLEINK_RENDER__
+          if (render && typeof render.seek === 'function') render.seek(progress)
+          document.documentElement.dataset.renderProgress = String(progress)
+        },
         progress,
       )
       await page.waitForTimeout(50)

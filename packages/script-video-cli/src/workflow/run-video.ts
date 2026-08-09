@@ -147,7 +147,17 @@ export async function executeVideoWorkflow(
       narrationMode === 'off'
         ? null
         : await combineNarration(runDir, narration, runtime.channels, store, runtime.signal)
-    const assemblyFingerprint = hashJson({ input, plans: narration.effectivePlans, audio: Boolean(combinedAudioPath) })
+    const assemblyFingerprint = hashJson({
+      assemblyVersion: 4,
+      input,
+      plans: narration.effectivePlans,
+      audio: Boolean(combinedAudioPath),
+      shots: codegen.succeeded.map((shot) => ({
+        id: shot.id,
+        attempt: shot.attempt,
+        html: shot.relativeHtmlPath,
+      })),
+    })
     await store.writeStage(runDir, {
       key: 'ASSEMBLE',
       status: 'running',

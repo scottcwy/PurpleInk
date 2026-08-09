@@ -191,12 +191,13 @@ ${styles}
 ${body.replace(/<script\b[^>]*>[\s\S]*?<\/script>/giu, '')}
 </div>
 ${scripts}
+<script>${createTimelineScript(plan.id, plan.durationSec)}</script>
 </template></body></html>
 `
 }
 
 function createTimelineScript(id: string, durationSec: number): string {
-  return `window.__timelines=window.__timelines||{};window.__timelines[${JSON.stringify(id)}]=(function(){var current=0;return{duration:function(){return ${round(durationSec)}},time:function(value){if(value===undefined)return current;current=Number(value)||0;var render=window.__PURPLEINK_RENDER__;if(render&&typeof render.seek==='function')render.seek(current/${round(durationSec)});return this},seek:function(value){return this.time(value)},pause:function(){return this},play:function(){return this}}})();`
+  return `window.__timelines=window.__timelines||{};(function(render){var state={progress:0};var timeline=gsap.timeline({paused:true});timeline.to(state,{progress:1,duration:${round(durationSec)},ease:"none",onUpdate:function(){if(render&&typeof render.seek==="function")render.seek(state.progress)}});window.__timelines[${JSON.stringify(id)}]=timeline})(window.__PURPLEINK_RENDER__);`
 }
 
 function createSubtitles(input: ScriptVideoInput, plans: readonly ShotPlan[]): string {

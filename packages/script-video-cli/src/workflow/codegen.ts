@@ -211,10 +211,15 @@ function normalizeHtml(raw: string, durationSec: number): string {
 }
 
 function injectLocalGsap(html: string): string {
-  if (/data-purpleink-runtime=["']gsap["']/iu.test(html)) return html
+  const withoutRemoteGsapCore = html.replace(
+    /<script\b[^>]*\bsrc=["'][^"']*\/gsap(?:\.min)?\.js(?:\?[^"']*)?["'][^>]*>\s*<\/script>/giu,
+    '',
+  )
+  if (/data-purpleink-runtime=["']gsap["']/iu.test(withoutRemoteGsapCore)) return withoutRemoteGsapCore
   const script = `<script data-purpleink-runtime="gsap">${localGsapSource}</script>`
-  if (/<head\b[^>]*>/iu.test(html)) return html.replace(/<head\b[^>]*>/iu, (opening) => `${opening}\n${script}`)
-  return html.replace(/<html\b[^>]*>/iu, (opening) => `${opening}\n<head>${script}</head>`)
+  if (/<head\b[^>]*>/iu.test(withoutRemoteGsapCore))
+    return withoutRemoteGsapCore.replace(/<head\b[^>]*>/iu, (opening) => `${opening}\n${script}`)
+  return withoutRemoteGsapCore.replace(/<html\b[^>]*>/iu, (opening) => `${opening}\n<head>${script}</head>`)
 }
 
 function appendBeforeBody(html: string, content: string): string {
