@@ -10,7 +10,7 @@
 4. WAV/MP3 可直接交给 `run`；需要先看转写时使用 `transcribe`。
 5. `needs_attention` 不是成功。先 `inspect --run ... [--shot S001] --json`，再 `retry --failed` 或 `retry --shot S001`。
 6. 用户要浏览器观察时运行 `serve --run ... --port 0`，返回仅绑定 `127.0.0.1` 的临时 URL。
-7. 只有 `inspect` 返回最终 MP4 绝对路径，且媒体元数据、字节数、SHA-256 与三点抽帧都存在时，才能报告真实视频完成。
+7. CLI `succeeded` 只表示执行链走到末尾。只有按 Skill 从最终 MP4 完成 ffprobe、全片连续抽帧、每镜头中点和可疑区间复查后，才能报告真实视频完成。
 
 ## 密钥
 
@@ -25,6 +25,7 @@
 - 保留整个 run 目录。恢复依赖输入 SHA-256、workflow version 和阶段 fingerprint。
 - `artifacts/index.json` 是 observer 唯一文件白名单。向用户返回其中的 `absolutePath`，不要自行猜路径。
 - 一个镜头失败时，其他镜头继续；不要删除成功 attempt，也不要把缺少最终视频的 run 描述成成功。
+- HyperFrames、Composition、ffprobe 和三点抽帧信息是诊断现场，不是 CLI 内部验收 Gate；最终验收和回退由 Skill 驱动 Agent 完成。
 
 ## 开发边界
 
@@ -33,9 +34,9 @@
 - Markdown 必须先经过 `INGEST_SEMANTIC`：按语义而不是标题、字数、标点或时长拆分，完整保留原文并维持“一 unit 一核心判断一分镜”。
 - 音频语义整理只能合并相邻 ASR 段；文稿文本和首尾时间由程序从真实分段确定，模型不得猜测、跳段、重排或重复。
 - 默认旁白必须真实存在；只有显式 `--narration off` 才允许无音频最终视频。
-- 浏览器镜头必须本地、自包含、可 seek；禁止外部网络资源、任意文件读取和 credential-like 内容。
+- 浏览器镜头必须本地、自包含、可 seek；禁止外部网络资源、任意文件读取和 credential-like 内容。每个镜头只暴露一条真实 paused master timeline。
 - 每完成一个可验证版块，只 stage 本版块文件并做本地 Conventional Commit。只有用户明确授权时，才允许推送 `standalone/local-script-video-cli` 或发布 `local-cli/*` 标签；任何情况下都禁止向 `main` 创建 PR 或合并本分支。
 
 ## 最终验收
 
-集中在功能接齐后执行：配置连通性、TTS→ASR、真实文本模型镜头、至少 3×6 分镜并发、daemon 重启恢复、注入坏分镜后定向重试、observer Chromium 验收、ffprobe H.264/AAC 1920×1080 30fps、SHA-256、凭据扫描与 U+FFFD 扫描。fixture 只用于冒烟，不能替代真实交付。
+集中在功能接齐后执行：配置连通性、TTS→ASR、真实文本模型镜头、至少 3×6 分镜并发、daemon 重启恢复、注入坏分镜后定向重试、observer Chromium 验收，以及 Skill 对最终 MP4 的 ffprobe、SHA-256、全片联系表、镜头中点和可疑区间复查。fixture 只用于冒烟，不能替代真实交付。

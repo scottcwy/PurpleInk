@@ -11,17 +11,19 @@
 
 - `created` / `queued` / `running`: work is not complete.
 - `needs_attention`: one or more shots or narrations failed; inspect and retry without discarding successful stages.
-- `succeeded`: final media QA passed.
-- `degraded`: a diagnostic bypass such as `--no-browser-gate` was used; do not present it as full visual acceptance.
+- `succeeded`: the CLI execution chain reached its end and produced its available artifacts. It is not delivery acceptance.
+- `degraded`: retained for compatibility with older runs; it is not delivery acceptance.
 - `failed` / `cancelled`: no successful final delivery.
+
+HyperFrames findings, composition errors, ffprobe differences, and final-frame extraction are advisory observations in the CLI. The Agent Skill decides whether the final MP4 is acceptable and owns diagnosis and retry.
 
 ## Artifacts
 
 The authoritative allow-list is `<runDir>/artifacts/index.json`. Important IDs include:
 
-- `shot-S001-plan`, `shot-S001-html`, three `shot-S001-screenshot-*` entries, diagnostics, and narration;
+- `shot-S001-plan`, `shot-S001-html`, optional legacy screenshots, diagnostics, and narration;
 - transcript and normalized-input artifacts for audio sources;
 - `project-manifest`, `subtitles`, and `visual-render`;
-- `video` and three `final-frame-*` artifacts.
+- `video` and optional advisory `final-frame-*` artifacts.
 
-Return `absolutePath` values from this index or from `inspect --json`. The final `video` entry must include real byte size, SHA-256, and media metadata.
+Return `absolutePath` values from this index or from `inspect --json`. Final acceptance evidence belongs under `final/qa/<video-sha256>/` and must be regenerated from the current final MP4 after every repair.

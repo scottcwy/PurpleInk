@@ -152,6 +152,6 @@ function helpText(): string {
     'purpleink-video cancel --run <id|path>',
     'purpleink-video serve [--run <id|path>] [--port 0]',
     'purpleink-video doctor [--live]',
-    '通用参数：--json、--output <state-root>、--resume <run-directory>、--no-browser-gate。',
+    '通用参数：--json、--output <state-root>、--resume <run-directory>。',
   ].join('\n')
 }

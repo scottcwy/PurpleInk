@@ -1,6 +1,6 @@
 # PurpleInk 本地文稿视频 CLI
 
-PurpleInk 把 Markdown、JSON、WAV 或 MP3 变成本地文稿视频。Markdown 先由语义 INGEST 逐句分析并形成“一单元一核心判断”的文稿单元；音频则在真实 FFmpeg 时间段上做相邻语义归组。随后 DIRECT 确定全片设计，分镜规划、HTML 生成、Chromium QA 和 MiMo 配音并发执行；全部镜头就绪后，HyperFrames 串行渲染视觉，FFmpeg 封装 AAC，最后用 ffprobe 与抽帧验收。
+PurpleInk 把 Markdown、JSON、WAV 或 MP3 变成本地文稿视频。Markdown 先由语义 INGEST 逐句分析并形成“一单元一核心判断”的文稿单元；音频则在真实 FFmpeg 时间段上做相邻语义归组。随后 DIRECT 确定全片设计，分镜规划、HTML 生成和 MiMo 配音并发执行；全部镜头就绪后，HyperFrames 串行渲染视觉，FFmpeg 封装 AAC。CLI 尽量保留完整产物和日志，最终 MP4 的视觉与媒体交付验收统一由 Agent Skill 完成。
 
 它面向 AI Agent，也允许人类直接敲命令。账号、计费、会员、工作区、云项目、云存储、Redis 和旧 SaaS 数据库都不在范围内。
 
@@ -64,7 +64,7 @@ Prompt 会复制为当前 run 的 `input/global-prompt.txt`，因此 daemon 重�
 pnpm cli run .\script.md --narration off --json
 ```
 
-`--provider fixture` 和 `--no-browser-gate` 只用于开发冒烟；后者会令 run 成为 `degraded`。
+`--provider fixture` 只用于开发冒烟。`--no-browser-gate` 为旧命令兼容参数；默认执行链已经不使用 Browser QA 阻断。
 
 ### 语义拆稿
 
@@ -109,7 +109,7 @@ pnpm cli cancel --run <run-id-or-path> --json
 pnpm cli serve --run <run-id-or-path> --port 0 --json
 ```
 
-`inspect` 返回阶段、镜头 HTML、三点 PNG、旁白、诊断、日志和最终视频的绝对路径。observer 只绑定 `127.0.0.1`，只允许读取 `artifacts/index.json` 已登记的文件；镜头 HTML 在禁止网络和本地路径访问的 sandbox iframe 中显示。
+`inspect` 返回阶段、镜头 HTML、旁白、可用诊断、日志和最终视频的绝对路径。旧 run 可能同时包含三点 PNG。observer 只绑定 `127.0.0.1`，只允许读取 `artifacts/index.json` 已登记的文件；镜头 HTML 在禁止网络和本地路径访问的 sandbox iframe 中显示。
 
 ## 音频输入
 
@@ -137,8 +137,7 @@ runs/<run-id>/
   state/metrics.json
   shots/S001/plan.json
   shots/S001/attempt-001/source.html
-  shots/S001/attempt-001/screenshots/{000,050,100}.png
-  shots/S001/attempt-001/diagnostics.json
+  shots/S001/attempt-001/diagnostics.json  # 可选诊断
   shots/S001/narration.wav
   project/
   final/video.mp4
@@ -146,7 +145,7 @@ runs/<run-id>/
   logs/
 ```
 
-阶段 fingerprint 允许 daemon 崩溃或手动重试后跳过成功工作。`needs_attention` 表示仍有坏镜头，不会产生伪成功最终视频。
+阶段 fingerprint 允许 daemon 崩溃或手动重试后跳过成功工作。`needs_attention` 表示执行链无法继续完成。CLI `succeeded` 只表示执行链走到末尾，不代表最终 MP4 已通过交付验收。
 
 ## 故障处理
 
@@ -154,7 +153,7 @@ runs/<run-id>/
 - `ASR_NO_SPEECH`：确认输入不是静音，并检查 FFmpeg 日志。
 - `needs_attention`：先 inspect 分镜截图/HTML/诊断，再定向 retry。
 - `QUEUE_DATABASE_UNAVAILABLE`：确认 Docker Desktop 正常，再执行 `daemon start`。
-- `MEDIA_QA_FAILED`：查看 `logs/ffmpeg.log`、`logs/hyperframes.log` 与最终 ffprobe 元数据。
+- 最终 MP4 异常：查看 `logs/ffmpeg.log`、`logs/hyperframes.log` 与 CLI 记录的媒体观察，再按 Skill 抽帧定位和定向重试。
 
 ## Agent Skill
 
@@ -163,3 +162,5 @@ pnpm skill:install
 ```
 
 Skill 安装到 `%USERPROFILE%\.agents\skills\generating-purpleink-script-videos\`。Agent 应从 `purpleink-video --help` 获取命令，不复制本 README 的整份参数表。
+
+CLI 的状态不是最终验收。Agent 每次运行后都必须从最终 `video` MP4 执行 ffprobe，并按视频长度连续抽帧生成带绝对时间戳的联系表；每个镜头至少补一张中点帧。发现白屏、黑屏、冻结、重复或布局异常时，对可疑区间按每 0.2～0.5 秒加密抽帧，根据 manifest 映射到镜头，再使用 `retry --shot`。验收证据保存到 `final/qa/<video-sha256>/`，修复后必须对新 MP4 重新生成。
