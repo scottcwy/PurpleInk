@@ -41,7 +41,7 @@ const fixtureTimeline=gsap.timeline({paused:true});
 fixtureTimeline.fromTo('.card',{x:-420,rotationY:-35,opacity:0},{x:0,rotationY:0,opacity:1,duration:2,ease:'power3.out'},0)
   .to('.card',{y:-40,scale:1.05,duration:2,ease:'sine.inOut'},2)
   .to('.card',{x:360,rotationY:28,opacity:.2,duration:3,ease:'power2.inOut'},4);
-window.__PURPLEINK_RENDER__={ready:true,durationSec:7,seek:function(progress){fixtureTimeline.progress(Math.max(0,Math.min(1,progress))).pause()}};
+window.__PURPLEINK_RENDER__={ready:true,durationSec:7,timeline:fixtureTimeline,seek:function(progress){fixtureTimeline.progress(Math.max(0,Math.min(1,progress))).pause()}};
 </script></body></html>`
 }
 
