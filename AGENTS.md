@@ -8,6 +8,6 @@
 - 默认需要真实旁白；只有显式 `--narration off` 才允许无音频。
 - 不引入账号、计费、套餐、权限、云存储、Redis、Next.js 工作台或通用工作流编辑器。
 - Key 不得出现在参数、源码、测试、日志、状态、HTML、截图、commit 或回复中。
-- 每完成一个可验证版块，只 stage 本版块文件并做本地 Conventional Commit；不 push、不创建 PR。
+- 每完成一个可验证版块，只 stage 本版块文件并做本地 Conventional Commit。只有用户明确授权时，才允许推送 `standalone/local-script-video-cli` 或发布 `local-cli/*` 标签；任何情况下都禁止向 `main` 创建 PR 或合并本分支。
 
 最终交付不能以 API 成功、queue succeeded 或 fixture 冒充。必须检查真实 MP4、ffprobe、SHA-256、三点截图、observer 和绝对路径。
