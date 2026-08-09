@@ -1,188 +1,463 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="light dark">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="PurpleInk Local CLI — Agent-first 本地文稿视频工作流可视化指南">
   <link rel="icon" href="data:,">
-  <title>PurpleInk · 本地文稿视频 CLI</title>
+  <title>PurpleInk Local CLI · Overview</title>
   <style>
-    :root{--ink:#19191b;--muted:#68686e;--line:rgba(16,16,20,.09);--paper:#f4f3ef;--glass:rgba(255,255,255,.7);--card:rgba(255,255,255,.76);--accent:#6257e8;--accent-soft:#e9e6ff;--shadow:0 28px 70px rgba(29,27,42,.12);--radius:22px}
+    :root{
+      --void:#070807;--panel:#0d0f0e;--panel-2:#121512;--panel-3:#171b18;
+      --ink:#f2f4ed;--muted:#92998f;--faint:#5d655d;--line:rgba(220,255,225,.11);
+      --signal:#c9ff3d;--signal-2:#57e7ff;--hot:#ff7257;--gold:#ffc15c;--purple:#a88cff;
+      --glass:rgba(15,18,15,.78);--shadow:0 28px 90px rgba(0,0,0,.46);
+      --display:"Bahnschrift","Arial Narrow","Microsoft YaHei UI",sans-serif;
+      --text:"Microsoft YaHei UI","PingFang SC","Noto Sans CJK SC",sans-serif;
+      --serif:"Iowan Old Style","Songti SC","STSong",Georgia,serif;
+      --mono:"Cascadia Code","SFMono-Regular",Consolas,monospace;
+    }
+    html[data-theme="light"]{
+      --void:#e9ebe4;--panel:#f7f8f2;--panel-2:#eef1e8;--panel-3:#e3e8dc;
+      --ink:#11140f;--muted:#5c6459;--faint:#7f877b;--line:rgba(20,36,18,.13);
+      --signal:#638f00;--signal-2:#007c92;--hot:#d5422d;--gold:#9b6500;--purple:#6844d3;
+      --glass:rgba(245,248,239,.82);--shadow:0 30px 80px rgba(36,46,31,.15);
+    }
     *{box-sizing:border-box}
-    html{scroll-behavior:smooth}
-    body{margin:0;min-height:100vh;color:var(--ink);background:radial-gradient(circle at 82% 8%,rgba(113,99,255,.18),transparent 31%),radial-gradient(circle at 18% 90%,rgba(248,168,103,.16),transparent 28%),var(--paper);font-family:"Aptos","SF Pro Text","Segoe UI",sans-serif}
-    body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.26;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.08'/%3E%3C/svg%3E")}
-    .shell{display:grid;grid-template-columns:282px minmax(0,1fr);min-height:100vh}
-    aside{position:sticky;top:0;height:100vh;padding:22px;border-right:1px solid var(--line);background:rgba(247,247,244,.68);backdrop-filter:blur(28px) saturate(1.3);z-index:3}
-    .traffic{display:flex;gap:8px;margin:2px 0 28px}.traffic i{width:12px;height:12px;border-radius:50%;background:#ff5f57;box-shadow:20px 0 #febc2e,40px 0 #28c840}
-    .brand{display:flex;align-items:center;gap:12px;margin:0 4px 25px}.mark{display:grid;place-items:center;width:42px;height:42px;border-radius:13px;color:white;background:linear-gradient(145deg,#15141a,#7167f5);box-shadow:0 10px 24px rgba(80,67,213,.24);font-family:"Iowan Old Style",Georgia,serif;font-size:24px}.brand strong{display:block;font-size:15px}.brand span{font-size:11px;color:var(--muted);letter-spacing:.04em}
-    nav{display:grid;gap:5px}nav a{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:12px;color:#55545a;text-decoration:none;font-size:13px;transition:.2s ease}nav a:hover{background:rgba(255,255,255,.62);transform:translateX(2px)}nav a.active{color:#2f2b72;background:var(--accent-soft);box-shadow:inset 0 0 0 1px rgba(98,87,232,.08)}nav a b{display:grid;place-items:center;width:22px;height:22px;border:1px solid rgba(0,0,0,.08);border-radius:7px;font-size:10px;font-weight:650;background:rgba(255,255,255,.6)}
-    .side-note{position:absolute;left:22px;right:22px;bottom:24px;padding:14px;border-radius:15px;border:1px solid var(--line);background:rgba(255,255,255,.46);font-size:11px;line-height:1.55;color:var(--muted)}
-    main{min-width:0;padding:56px clamp(28px,6vw,94px) 90px}.page{max-width:1120px;margin:auto;animation:arrive .42s cubic-bezier(.2,.8,.2,1)}@keyframes arrive{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
-    .eyebrow{display:inline-flex;gap:8px;align-items:center;color:var(--accent);font-size:11px;font-weight:750;letter-spacing:.16em;text-transform:uppercase}.eyebrow:before{content:"";width:22px;height:1px;background:currentColor}
-    h1{max-width:860px;margin:18px 0 18px;font-family:"Iowan Old Style","Songti SC",Georgia,serif;font-size:clamp(44px,7vw,88px);font-weight:500;letter-spacing:-.055em;line-height:.94}h2{font-family:"Iowan Old Style","Songti SC",Georgia,serif;font-size:31px;font-weight:500;letter-spacing:-.025em;margin:0 0 14px}h3{font-size:15px;margin:0 0 10px}.lead{max-width:760px;color:var(--muted);font-size:18px;line-height:1.75}
-    .hero{padding:24px 0 50px}.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:27px}.button{display:inline-flex;align-items:center;gap:8px;padding:12px 16px;border-radius:13px;color:white;background:#1d1c21;text-decoration:none;font-size:13px;box-shadow:0 12px 28px rgba(0,0,0,.14)}.button.secondary{color:var(--ink);background:rgba(255,255,255,.64);border:1px solid var(--line);box-shadow:none}
-    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;margin:28px 0}.card{grid-column:span 4;min-height:170px;padding:22px;border-radius:var(--radius);border:1px solid var(--line);background:var(--card);box-shadow:0 12px 35px rgba(33,30,46,.055);backdrop-filter:blur(16px);transition:.22s ease}.card:hover{transform:translateY(-3px);box-shadow:var(--shadow)}.card.wide{grid-column:span 8}.card.full{grid-column:1/-1}.card p,.prose p,.prose li{color:var(--muted);font-size:14px;line-height:1.72}.metric{font-family:"Iowan Old Style",Georgia,serif;font-size:48px;letter-spacing:-.04em}.tag{display:inline-flex;padding:5px 9px;border-radius:999px;background:var(--accent-soft);color:#493fbe;font-size:10px;font-weight:750;letter-spacing:.05em}
-    .steps{counter-reset:step;display:grid;gap:12px;margin:24px 0}.step{position:relative;padding:20px 20px 20px 66px;border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.55)}.step:before{counter-increment:step;content:counter(step);position:absolute;left:20px;top:18px;display:grid;place-items:center;width:30px;height:30px;border-radius:9px;color:white;background:var(--accent);font:700 12px ui-monospace,monospace}.step h3{margin:0 0 5px}.step p{margin:0}
-    pre{position:relative;margin:16px 0;padding:19px 21px;overflow:auto;border-radius:17px;color:#ececf3;background:#1b1b20;border:1px solid rgba(255,255,255,.08);box-shadow:0 18px 36px rgba(16,15,22,.12);font:12px/1.72 "Cascadia Code","SFMono-Regular",Consolas,monospace;white-space:pre-wrap}.prose{max-width:900px}.prose section{margin:34px 0}.prose ul{padding-left:20px}.callout{padding:18px 20px;border-left:3px solid var(--accent);border-radius:0 16px 16px 0;background:rgba(236,233,255,.66);color:#4b4661;font-size:13px;line-height:1.7}.path{font-family:"Cascadia Code",Consolas,monospace;font-size:12px;overflow-wrap:anywhere}
-    .flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:22px 0}.node{padding:10px 13px;border-radius:12px;background:rgba(255,255,255,.75);border:1px solid var(--line);font-size:12px}.arrow{color:#999}
-    table{width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:rgba(255,255,255,.62);font-size:13px}th,td{text-align:left;padding:13px 15px;border-bottom:1px solid var(--line)}tr:last-child td{border-bottom:0}th{color:var(--muted);font-size:10px;letter-spacing:.08em;text-transform:uppercase;background:rgba(244,244,246,.7)}
-    @media(max-width:900px){.shell{grid-template-columns:1fr}aside{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line)}nav{display:flex;overflow:auto}.side-note{display:none}main{padding:40px 20px 70px}.card,.card.wide{grid-column:1/-1}h1{font-size:52px}}
-    @media(prefers-color-scheme:dark){:root{--ink:#f3f1f7;--muted:#aaa7b2;--line:rgba(255,255,255,.1);--paper:#111115;--glass:rgba(26,25,31,.76);--card:rgba(28,27,34,.74);--accent-soft:#2c2851}body{background:radial-gradient(circle at 82% 8%,rgba(99,81,240,.18),transparent 31%),#111115}aside{background:rgba(20,19,24,.74)}nav a{color:#aaa7b2}nav a.active{color:#ddd8ff}.button.secondary{background:rgba(255,255,255,.07)}.step,.node,table{background:rgba(255,255,255,.045)}th{background:rgba(255,255,255,.035)}.callout{background:rgba(85,73,167,.18)}}
+    html{scroll-behavior:smooth;background:var(--void)}
+    body{margin:0;min-height:100vh;color:var(--ink);background:var(--void);font-family:var(--text);overflow-x:hidden}
+    button,input,select{font:inherit}
+    button,a{ -webkit-tap-highlight-color:transparent }
+    a{color:inherit}
+    ::selection{color:#071006;background:var(--signal)}
+    :focus-visible{outline:2px solid var(--signal);outline-offset:4px}
+    .atmosphere{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+    .atmosphere:before{content:"";position:absolute;inset:-20%;background:
+      radial-gradient(circle at var(--mx,72%) var(--my,16%),color-mix(in srgb,var(--signal-2) 16%,transparent),transparent 19%),
+      radial-gradient(circle at 83% 84%,color-mix(in srgb,var(--purple) 11%,transparent),transparent 26%),
+      linear-gradient(115deg,transparent 0 46%,color-mix(in srgb,var(--signal) 5%,transparent) 47%,transparent 49%)}
+    .atmosphere:after{content:"";position:absolute;inset:0;opacity:.19;background-image:
+      linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+      background-size:64px 64px;mask-image:linear-gradient(to bottom,black,transparent 78%)}
+    .noise{position:fixed;inset:0;z-index:20;pointer-events:none;opacity:.14;mix-blend-mode:soft-light;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.38'/%3E%3C/svg%3E")}
+    .shell{position:relative;display:grid;grid-template-columns:258px minmax(0,1fr);min-height:100vh}
+    .rail{position:sticky;top:0;height:100vh;padding:24px 18px 18px;border-right:1px solid var(--line);background:var(--glass);backdrop-filter:blur(30px) saturate(1.25);display:flex;flex-direction:column;z-index:8}
+    .brand{display:flex;align-items:center;gap:13px;padding:4px 8px 25px}
+    .brand-mark{position:relative;display:grid;place-items:center;width:44px;height:44px;border:1px solid color-mix(in srgb,var(--signal) 55%,transparent);border-radius:50%;font:700 18px var(--serif);color:var(--signal);box-shadow:inset 0 0 24px color-mix(in srgb,var(--signal) 12%,transparent),0 0 30px color-mix(in srgb,var(--signal) 8%,transparent)}
+    .brand-mark:after{content:"";position:absolute;right:-4px;top:3px;width:8px;height:8px;border-radius:50%;background:var(--hot);box-shadow:0 0 14px var(--hot)}
+    .brand-copy strong{display:block;font:650 15px var(--display);letter-spacing:.03em}.brand-copy span{display:block;margin-top:3px;color:var(--faint);font:10px var(--mono);letter-spacing:.16em}
+    .rail-label{margin:8px 10px 10px;color:var(--faint);font:9px var(--mono);letter-spacing:.2em;text-transform:uppercase}
+    nav{display:grid;gap:3px}
+    nav a{position:relative;display:grid;grid-template-columns:27px 1fr auto;align-items:center;gap:9px;padding:10px 11px;border-radius:10px;color:var(--muted);text-decoration:none;font-size:12px;transition:color .2s,background .2s,transform .2s}
+    nav a:before{content:"";position:absolute;left:-18px;width:2px;height:0;border-radius:2px;background:var(--signal);box-shadow:0 0 12px var(--signal);transition:.25s}
+    nav a:hover{color:var(--ink);background:color-mix(in srgb,var(--panel-3) 72%,transparent);transform:translateX(2px)}
+    nav a.active{color:var(--ink);background:color-mix(in srgb,var(--signal) 9%,var(--panel))}nav a.active:before{height:20px}
+    .nav-index{font:10px var(--mono);color:var(--faint)}nav a.active .nav-index{color:var(--signal)}
+    .nav-pulse{width:5px;height:5px;border-radius:50%;background:transparent}nav a.active .nav-pulse{background:var(--signal);box-shadow:0 0 9px var(--signal)}
+    .rail-bottom{margin-top:auto;padding:16px 10px 4px}
+    .local-state{display:flex;align-items:center;gap:8px;margin-bottom:12px;color:var(--muted);font:10px var(--mono)}.local-state i{width:7px;height:7px;border-radius:50%;background:var(--signal);box-shadow:0 0 12px var(--signal);animation:breathe 2s ease-in-out infinite}
+    .rail-meta{padding-top:12px;border-top:1px solid var(--line);color:var(--faint);font:9px/1.8 var(--mono)}
+    .stage{min-width:0;padding:0 clamp(22px,4.5vw,78px) 88px}
+    .topbar{position:sticky;top:0;z-index:7;display:flex;align-items:center;justify-content:space-between;height:68px;margin:0 calc(clamp(22px,4.5vw,78px) * -1);padding:0 clamp(22px,4.5vw,78px);border-bottom:1px solid transparent;background:linear-gradient(to bottom,var(--void),color-mix(in srgb,var(--void) 84%,transparent));backdrop-filter:blur(16px)}
+    .crumb{display:flex;align-items:center;gap:10px;color:var(--faint);font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase}.crumb b{color:var(--ink);font-weight:500}.crumb i{width:24px;height:1px;background:var(--line)}
+    .top-actions{display:flex;align-items:center;gap:8px}.icon-button{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--line);border-radius:50%;color:var(--muted);background:color-mix(in srgb,var(--panel) 65%,transparent);cursor:pointer;transition:.2s}.icon-button:hover{color:var(--ink);border-color:color-mix(in srgb,var(--signal) 35%,var(--line));transform:translateY(-1px)}
+    .menu-button{display:none}
+    #app{max-width:1440px;margin:0 auto}
+    .page{padding-top:56px;animation:page-in .52s cubic-bezier(.2,.8,.2,1)}
+    .route-kicker{display:flex;align-items:center;gap:10px;color:var(--signal);font:10px var(--mono);letter-spacing:.19em;text-transform:uppercase}.route-kicker:before{content:"";width:32px;height:1px;background:currentColor;box-shadow:0 0 8px currentColor}
+    h1,h2,h3,p{margin-top:0}
+    h1{margin:19px 0 22px;max-width:980px;font:620 clamp(48px,7.4vw,108px)/.91 var(--display);letter-spacing:-.065em}
+    h1 .outline{color:transparent;-webkit-text-stroke:1px color-mix(in srgb,var(--ink) 58%,transparent)}
+    h1 .signal{color:var(--signal);text-shadow:0 0 28px color-mix(in srgb,var(--signal) 23%,transparent)}
+    h2{font:580 clamp(27px,3vw,44px)/1.02 var(--display);letter-spacing:-.035em}h3{font:650 15px/1.25 var(--display);letter-spacing:-.015em}
+    .lead{max-width:790px;color:var(--muted);font-size:17px;line-height:1.82}.micro{color:var(--faint);font:10px/1.7 var(--mono);letter-spacing:.04em}
+    .hero-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(440px,.95fr);gap:clamp(34px,5vw,86px);align-items:center;min-height:calc(100vh - 152px);padding-bottom:72px}
+    .hero-copy{padding-top:16px}.hero-copy .lead{max-width:650px}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:30px}.button{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:44px;padding:0 17px;border:1px solid var(--line);border-radius:4px;color:var(--ink);background:var(--panel-2);text-decoration:none;font:600 11px var(--mono);letter-spacing:.06em;cursor:pointer;transition:.22s}.button:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--signal) 44%,var(--line));box-shadow:0 12px 34px rgba(0,0,0,.22)}.button.primary{color:#0d1305;background:var(--signal);border-color:var(--signal);box-shadow:0 0 30px color-mix(in srgb,var(--signal) 17%,transparent)}.button.ghost{background:transparent}
+    .proof-line{display:flex;gap:20px;flex-wrap:wrap;margin-top:38px;padding-top:18px;border-top:1px solid var(--line)}.proof-line span{color:var(--muted);font:10px var(--mono)}.proof-line b{margin-right:6px;color:var(--ink);font-size:12px}
+    .console{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:18px;background:linear-gradient(145deg,color-mix(in srgb,var(--panel-2) 94%,transparent),color-mix(in srgb,var(--panel) 87%,transparent));box-shadow:var(--shadow)}
+    .console:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(105deg,transparent 0 45%,color-mix(in srgb,var(--signal-2) 5%,transparent) 50%,transparent 58%);transform:translateX(-100%);animation:scan 7s ease-in-out infinite}
+    .console-head{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)}
+    .window-dots{display:flex;gap:6px}.window-dots i{width:7px;height:7px;border-radius:50%;background:var(--faint)}.window-dots i:first-child{background:var(--hot)}.window-dots i:nth-child(2){background:var(--gold)}.window-dots i:nth-child(3){background:var(--signal)}
+    .console-title{font:9px var(--mono);color:var(--faint);letter-spacing:.1em}.live-badge{display:flex;align-items:center;gap:6px;color:var(--signal);font:9px var(--mono)}.live-badge:before{content:"";width:5px;height:5px;border-radius:50%;background:var(--signal);box-shadow:0 0 9px var(--signal);animation:breathe 1.6s infinite}
+    .console-body{position:relative;z-index:1;padding:20px}.run-id{display:flex;align-items:start;justify-content:space-between;gap:18px;margin-bottom:22px}.run-id h3{margin:0;font-size:18px}.run-id p{margin:5px 0 0;color:var(--faint);font:9px var(--mono)}
+    .run-percent{font:600 34px var(--display);color:var(--signal)}
+    .stage-track{position:relative;display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin:18px 0 23px}.stage-track:before{content:"";position:absolute;left:0;right:0;top:6px;height:1px;background:var(--line)}
+    .stage-dot{position:relative;padding-top:20px;color:var(--faint);font:8px var(--mono);text-align:center}.stage-dot:before{content:"";position:absolute;z-index:1;top:2px;left:50%;width:8px;height:8px;transform:translateX(-50%);border:2px solid var(--panel-2);border-radius:50%;background:var(--faint)}.stage-dot.done{color:var(--muted)}.stage-dot.done:before{background:var(--signal)}.stage-dot.current{color:var(--signal)}.stage-dot.current:before{background:var(--signal-2);box-shadow:0 0 13px var(--signal-2)}
+    .shot-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.shot-cell{padding:11px;border:1px solid var(--line);border-radius:9px;background:color-mix(in srgb,var(--panel-3) 60%,transparent)}.shot-top{display:flex;justify-content:space-between;color:var(--muted);font:9px var(--mono)}.shot-top i{width:5px;height:5px;border-radius:50%;background:var(--gold)}.shot-cell.done .shot-top i{background:var(--signal)}.mini-progress{height:2px;margin-top:10px;background:var(--line);overflow:hidden}.mini-progress i{display:block;width:var(--p,20%);height:100%;background:var(--signal-2);box-shadow:0 0 8px var(--signal-2);transition:width .7s ease}
+    .console-foot{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;border-top:1px solid var(--line);color:var(--faint);font:8px var(--mono)}.console-foot button{border:0;color:var(--signal);background:none;font:9px var(--mono);cursor:pointer}
+    .section{padding:88px 0;border-top:1px solid var(--line)}.section-head{display:grid;grid-template-columns:1fr minmax(280px,520px);gap:40px;align-items:end;margin-bottom:38px}.section-head p{margin:0;color:var(--muted);line-height:1.8}
+    .metric-grid{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);background:var(--line);gap:1px}.metric-card{min-height:210px;padding:24px;background:var(--panel);transition:.25s}.metric-card:hover{background:var(--panel-2)}.metric-number{margin:30px 0 6px;font:580 56px/.9 var(--display);letter-spacing:-.06em}.metric-number small{font-size:16px;color:var(--signal)}.metric-card p{color:var(--muted);font-size:12px;line-height:1.65}.label{display:inline-flex;align-items:center;gap:7px;color:var(--faint);font:9px var(--mono);letter-spacing:.12em;text-transform:uppercase}.label:before{content:"";width:6px;height:6px;border:1px solid currentColor;border-radius:50%}
+    .split-demo{display:grid;grid-template-columns:.82fr 1.18fr;gap:1px;border:1px solid var(--line);background:var(--line)}.manuscript,.semantic-output{padding:28px;background:var(--panel)}.manuscript p{color:var(--muted);font:15px/2 var(--serif)}.manuscript mark{padding:2px 3px;color:var(--ink);background:color-mix(in srgb,var(--signal) 20%,transparent)}.unit-stack{display:grid;gap:8px}.unit{display:grid;grid-template-columns:58px 1fr auto;gap:12px;align-items:center;padding:13px;border:1px solid var(--line);background:var(--panel-2);transition:.22s}.unit:hover{border-color:color-mix(in srgb,var(--signal) 35%,var(--line));transform:translateX(3px)}.unit-id{color:var(--signal);font:10px var(--mono)}.unit-copy strong{display:block;font-size:12px}.unit-copy span{color:var(--faint);font:9px var(--mono)}.unit-time{color:var(--muted);font:9px var(--mono)}
+    .page-header{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,.65fr);gap:50px;align-items:end;padding-bottom:52px}.page-header h1{font-size:clamp(48px,6vw,82px)}
+    .glass-note{padding:20px;border:1px solid var(--line);border-radius:12px;background:color-mix(in srgb,var(--panel-2) 70%,transparent);color:var(--muted);font-size:12px;line-height:1.7}.glass-note strong{color:var(--signal)}
+    .sequence{display:grid;grid-template-columns:minmax(300px,.72fr) minmax(420px,1.28fr);gap:28px}.step-list{display:grid;gap:6px}.step-button{display:grid;grid-template-columns:38px 1fr auto;align-items:center;gap:12px;width:100%;padding:16px;border:1px solid var(--line);border-radius:8px;color:var(--muted);background:var(--panel);text-align:left;cursor:pointer;transition:.2s}.step-button:hover,.step-button.active{color:var(--ink);background:var(--panel-2);border-color:color-mix(in srgb,var(--signal) 30%,var(--line))}.step-button.active{transform:translateX(6px)}.step-num{font:10px var(--mono);color:var(--signal)}.step-button b{font-size:13px}.step-button small{font:8px var(--mono);color:var(--faint)}
+    .terminal{position:sticky;top:96px;overflow:hidden;border:1px solid var(--line);border-radius:13px;background:#080a08;box-shadow:var(--shadow)}html[data-theme="light"] .terminal{background:#10130f;color:#f2f4ed}.terminal-head{display:flex;align-items:center;justify-content:space-between;padding:12px 15px;border-bottom:1px solid rgba(255,255,255,.09);color:#778075;font:9px var(--mono)}.terminal-screen{min-height:380px;padding:22px;color:#c9d1c5;font:12px/1.9 var(--mono);white-space:pre-wrap}.terminal-screen .prompt{color:#c9ff3d}.terminal-screen .comment{color:#687066}.terminal-screen .value{color:#57e7ff}.copy-button{border:1px solid rgba(255,255,255,.12);border-radius:5px;color:#aab3a7;background:transparent;padding:6px 9px;font:8px var(--mono);cursor:pointer}.copy-button:hover{color:#c9ff3d;border-color:#c9ff3d}
+    .command-tools{display:flex;gap:10px;margin:8px 0 26px}.search{position:relative;flex:1}.search input{width:100%;height:48px;padding:0 16px 0 45px;border:1px solid var(--line);border-radius:8px;color:var(--ink);background:var(--panel);outline:0}.search:before{content:"/";position:absolute;left:17px;top:14px;color:var(--signal);font:12px var(--mono)}.search input:focus{border-color:color-mix(in srgb,var(--signal) 45%,var(--line))}.command-count{display:grid;place-items:center;min-width:100px;border:1px solid var(--line);border-radius:8px;color:var(--faint);font:9px var(--mono);background:var(--panel)}
+    .command-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.command-card{position:relative;padding:19px;border:1px solid var(--line);border-radius:9px;background:var(--panel);transition:.2s}.command-card:hover{border-color:color-mix(in srgb,var(--signal) 25%,var(--line));background:var(--panel-2)}.command-card h3{padding-right:60px}.command-card p{margin:0;color:var(--muted);font-size:11px;line-height:1.6}.command-card code{display:block;margin-top:14px;padding-top:13px;border-top:1px solid var(--line);color:var(--signal-2);font:10px/1.7 var(--mono);white-space:pre-wrap}.command-card .copy-mini{position:absolute;right:13px;top:13px;border:0;color:var(--faint);background:transparent;font:8px var(--mono);cursor:pointer}.command-card.hidden{display:none}
+    .workflow-board{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(300px,.55fr);gap:16px}.pipeline-map{padding:24px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.lane-label{display:flex;justify-content:space-between;margin:5px 0 12px;color:var(--faint);font:9px var(--mono)}.pipeline-row{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;align-items:center}.pipeline-node{position:relative;min-height:94px;padding:13px;border:1px solid var(--line);border-radius:8px;color:var(--muted);background:var(--panel-2);text-align:left;cursor:pointer;transition:.22s}.pipeline-node:after{content:"";position:absolute;top:50%;right:-9px;width:9px;height:1px;background:var(--line)}.pipeline-node:last-child:after{display:none}.pipeline-node:hover,.pipeline-node.active{color:var(--ink);border-color:var(--signal);transform:translateY(-3px);box-shadow:0 0 24px color-mix(in srgb,var(--signal) 8%,transparent)}.pipeline-node small{display:block;margin-bottom:18px;color:var(--signal);font:8px var(--mono)}.pipeline-node b{font:600 11px var(--display)}
+    .parallel-lanes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:24px 0}.parallel-lane{padding:16px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2)}.parallel-lane .lane-bars{display:grid;gap:5px;margin-top:16px}.lane-bars i{height:3px;border-radius:2px;background:linear-gradient(90deg,var(--signal-2) var(--w),var(--line) var(--w))}.pipeline-detail{padding:24px;border:1px solid var(--line);border-radius:12px;background:var(--panel-2)}.pipeline-detail .big-index{color:var(--signal);font:500 58px var(--display)}.pipeline-detail p{color:var(--muted);font-size:12px;line-height:1.8}.detail-proof{margin-top:24px;padding-top:17px;border-top:1px solid var(--line);color:var(--faint);font:9px/1.8 var(--mono)}
+    .observer-shell{overflow:hidden;border:1px solid var(--line);border-radius:16px;background:var(--panel);box-shadow:var(--shadow)}.observer-top{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line)}.observer-url{display:flex;align-items:center;gap:8px;color:var(--muted);font:9px var(--mono)}.observer-url i{width:6px;height:6px;border-radius:50%;background:var(--signal);box-shadow:0 0 9px var(--signal)}.observer-layout{display:grid;grid-template-columns:220px 1fr}.observer-side{padding:18px;border-right:1px solid var(--line);background:var(--panel-2)}.observer-side h3{font-size:12px}.run-card{margin-top:12px;padding:12px;border:1px solid color-mix(in srgb,var(--signal) 32%,var(--line));border-radius:8px;background:color-mix(in srgb,var(--signal) 7%,var(--panel))}.run-card b{display:block;font-size:10px}.run-card span{display:flex;align-items:center;gap:6px;margin-top:9px;color:var(--signal);font:8px var(--mono)}.observer-main{padding:22px}.observer-summary{display:grid;grid-template-columns:1fr auto;gap:20px;align-items:start}.observer-summary h3{font-size:20px}.observer-summary p{color:var(--faint);font:9px var(--mono)}.observer-progress{font:600 42px var(--display);color:var(--signal)}.timeline-list{display:grid;gap:5px;margin:20px 0}.timeline-item{display:grid;grid-template-columns:18px 1fr 70px;align-items:center;gap:9px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;color:var(--muted);font:9px var(--mono)}.timeline-item i{width:7px;height:7px;border-radius:50%;background:var(--faint)}.timeline-item.done i{background:var(--signal)}.timeline-item.running{color:var(--ink);border-color:color-mix(in srgb,var(--signal-2) 32%,var(--line))}.timeline-item.running i{background:var(--signal-2);box-shadow:0 0 10px var(--signal-2)}.timeline-item em{font-style:normal;text-align:right;color:var(--faint)}.observer-shots{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.shot-preview{aspect-ratio:16/10;padding:10px;border:1px solid var(--line);border-radius:7px;background:linear-gradient(140deg,var(--panel-3),var(--panel));display:flex;flex-direction:column;justify-content:space-between}.shot-preview .visual{position:relative;height:65%;overflow:hidden;border-radius:4px;background:linear-gradient(125deg,color-mix(in srgb,var(--signal-2) 18%,transparent),transparent),repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px 18px)}.shot-preview .visual:after{content:"";position:absolute;left:12%;right:18%;top:42%;height:2px;background:var(--signal);box-shadow:0 8px var(--signal-2),0 -8px var(--purple)}.shot-preview span{font:8px var(--mono);color:var(--faint)}
+    .artifact-browser{display:grid;grid-template-columns:300px 1fr;min-height:560px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--panel)}.artifact-tree{padding:18px;border-right:1px solid var(--line);background:var(--panel-2)}.tree-title{margin-bottom:15px;color:var(--faint);font:9px var(--mono)}.tree-group{margin:9px 0}.tree-group>span{display:block;margin:13px 7px 6px;color:var(--faint);font:8px var(--mono);text-transform:uppercase}.tree-item{display:grid;grid-template-columns:18px 1fr auto;gap:8px;align-items:center;width:100%;padding:8px;border:0;border-radius:5px;color:var(--muted);background:transparent;text-align:left;font:9px var(--mono);cursor:pointer}.tree-item:hover,.tree-item.active{color:var(--ink);background:color-mix(in srgb,var(--signal) 9%,transparent)}.tree-item b{color:var(--signal);font-weight:400}.tree-item em{color:var(--faint);font-style:normal;font-size:7px}.artifact-view{padding:26px}.preview-frame{position:relative;display:grid;place-items:center;min-height:330px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:radial-gradient(circle at 70% 30%,color-mix(in srgb,var(--signal-2) 12%,transparent),transparent 30%),#090b09}.preview-frame:before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 19px,rgba(255,255,255,.025) 20px)}.preview-graphic{position:relative;width:68%;aspect-ratio:16/9;border:1px solid rgba(255,255,255,.14);background:linear-gradient(140deg,#121a16,#090b09);box-shadow:0 30px 80px rgba(0,0,0,.7);display:grid;place-items:center;color:#c9ff3d;font:600 clamp(24px,4vw,58px) var(--display);letter-spacing:-.05em}.preview-graphic:after{content:"SEMANTIC SHOT / 50%";position:absolute;left:14px;bottom:12px;color:#7f8a7c;font:8px var(--mono);letter-spacing:.12em}.artifact-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.meta-cell{padding:12px;border:1px solid var(--line);border-radius:6px}.meta-cell span{display:block;color:var(--faint);font:8px var(--mono)}.meta-cell b{display:block;margin-top:6px;font:500 10px var(--mono);overflow-wrap:anywhere}
+    .symptom-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.symptom{min-height:160px;padding:19px;border:1px solid var(--line);border-radius:9px;color:var(--muted);background:var(--panel);text-align:left;cursor:pointer;transition:.22s}.symptom:hover,.symptom.active{color:var(--ink);border-color:var(--hot);transform:translateY(-3px)}.symptom code{display:inline-block;margin-bottom:28px;color:var(--hot);font:8px var(--mono)}.symptom h3{font-size:14px}.diagnosis{display:grid;grid-template-columns:80px 1fr;gap:20px;margin-top:14px;padding:25px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2)}.diagnosis-index{color:var(--hot);font:500 56px var(--display)}.diagnosis p{color:var(--muted);font-size:12px;line-height:1.8}.diagnosis pre{margin:15px 0 0;padding:14px;border:1px solid var(--line);border-radius:6px;color:var(--signal-2);background:#080a08;font:10px/1.8 var(--mono);white-space:pre-wrap}
+    .agent-layout{display:grid;grid-template-columns:minmax(320px,.74fr) minmax(480px,1.26fr);gap:18px}.agent-panel{padding:24px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.choice-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin:18px 0}.field label{display:block;margin-bottom:7px;color:var(--faint);font:8px var(--mono);letter-spacing:.08em;text-transform:uppercase}.field select,.field input{width:100%;height:42px;padding:0 11px;border:1px solid var(--line);border-radius:6px;color:var(--ink);background:var(--panel-2);outline:0}.field.full{grid-column:1/-1}.prompt-box{position:relative;min-height:420px;padding:22px;border:1px solid var(--line);border-radius:10px;color:#c8d0c4;background:#080a08;font:10px/1.85 var(--mono);white-space:pre-wrap}.prompt-box .copy-button{position:absolute;right:12px;top:12px}.skill-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px}.skill-option{padding:13px;border:1px solid var(--line);border-radius:7px;background:var(--panel-2)}.skill-option span{display:block;color:var(--signal);font:9px var(--mono)}.skill-option code{display:block;margin-top:9px;color:var(--muted);font:8px/1.6 var(--mono);overflow-wrap:anywhere}
+    .callout{display:grid;grid-template-columns:auto 1fr;gap:14px;margin:30px 0;padding:18px;border:1px solid color-mix(in srgb,var(--signal) 26%,var(--line));border-radius:8px;background:color-mix(in srgb,var(--signal) 6%,var(--panel))}.callout b{color:var(--signal);font:10px var(--mono)}.callout p{margin:0;color:var(--muted);font-size:12px;line-height:1.7}
+    .toast{position:fixed;z-index:30;right:22px;bottom:22px;padding:11px 14px;border:1px solid color-mix(in srgb,var(--signal) 40%,var(--line));border-radius:6px;color:var(--signal);background:var(--panel);box-shadow:var(--shadow);font:9px var(--mono);opacity:0;transform:translateY(10px);pointer-events:none;transition:.25s}.toast.show{opacity:1;transform:none}
+    .mobile-overlay{display:none}
+    @keyframes page-in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+    @keyframes breathe{50%{opacity:.38;transform:scale(.8)}}
+    @keyframes scan{0%,15%{transform:translateX(-100%)}65%,100%{transform:translateX(120%)}}
+    @media(max-width:1120px){.hero-grid{grid-template-columns:1fr;min-height:auto;padding-top:40px}.console{max-width:760px}.metric-grid{grid-template-columns:repeat(2,1fr)}.section-head,.page-header{grid-template-columns:1fr}.workflow-board{grid-template-columns:1fr}.agent-layout{grid-template-columns:1fr}.observer-layout{grid-template-columns:180px 1fr}}
+    @media(max-width:820px){.shell{grid-template-columns:1fr}.rail{position:fixed;left:0;top:0;width:min(84vw,300px);transform:translateX(-102%);transition:.28s;box-shadow:var(--shadow)}body.menu-open .rail{transform:none}.mobile-overlay{display:block;position:fixed;inset:0;z-index:7;background:rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:.25s}body.menu-open .mobile-overlay{opacity:1;pointer-events:auto}.stage{padding:0 18px 70px}.topbar{margin:0 -18px;padding:0 18px}.menu-button{display:grid}.page{padding-top:38px}.hero-grid{gap:28px}.sequence,.split-demo,.artifact-browser{grid-template-columns:1fr}.terminal{position:relative;top:auto}.artifact-tree{border-right:0;border-bottom:1px solid var(--line)}.command-grid{grid-template-columns:1fr}.observer-layout{grid-template-columns:1fr}.observer-side{border-right:0;border-bottom:1px solid var(--line)}.pipeline-row{grid-template-columns:1fr 1fr}.pipeline-node:after{display:none}.symptom-grid{grid-template-columns:1fr 1fr}}
+    @media(max-width:560px){h1{font-size:46px}.hero-grid{padding-bottom:50px}.console-body{padding:15px}.shot-grid,.observer-shots,.parallel-lanes,.artifact-meta,.choice-grid,.skill-switch,.symptom-grid,.metric-grid{grid-template-columns:1fr}.metric-card{min-height:160px}.section{padding:60px 0}.page-header{padding-bottom:38px}.stage-track{grid-template-columns:repeat(5,58px);overflow:auto}.pipeline-row{grid-template-columns:1fr}.observer-top{align-items:flex-start;gap:12px}.observer-url{overflow-wrap:anywhere}.diagnosis{grid-template-columns:1fr}.command-tools{flex-direction:column}.command-count{min-height:40px}}
+    @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
   </style>
 </head>
 <body>
+  <div class="atmosphere"></div><div class="noise"></div><div class="mobile-overlay" data-action="close-menu"></div>
   <div class="shell">
-    <aside>
-      <div class="traffic"><i></i></div>
-      <div class="brand"><div class="mark">P</div><div><strong>PurpleInk</strong><span>LOCAL VIDEO CLI</span></div></div>
+    <aside class="rail" aria-label="主导航">
+      <div class="brand"><div class="brand-mark">P</div><div class="brand-copy"><strong>PurpleInk</strong><span>LOCAL CINEMA SYSTEM</span></div></div>
+      <div class="rail-label">Field manual / 01</div>
       <nav id="nav">
-        <a href="#overview" data-route="overview"><b>01</b>Overview</a>
-        <a href="#quick-start" data-route="quick-start"><b>02</b>Quick Start</a>
-        <a href="#commands" data-route="commands"><b>03</b>Commands</a>
-        <a href="#workflow" data-route="workflow"><b>04</b>Workflow</a>
-        <a href="#artifacts" data-route="artifacts"><b>05</b>Artifacts</a>
-        <a href="#troubleshooting" data-route="troubleshooting"><b>06</b>Troubleshooting</a>
-        <a href="#agent-usage" data-route="agent-usage"><b>07</b>Agent Usage</a>
+        <a href="#overview" data-route="overview"><span class="nav-index">01</span><span>Overview</span><i class="nav-pulse"></i></a>
+        <a href="#quick-start" data-route="quick-start"><span class="nav-index">02</span><span>Quick Start</span><i class="nav-pulse"></i></a>
+        <a href="#commands" data-route="commands"><span class="nav-index">03</span><span>Commands</span><i class="nav-pulse"></i></a>
+        <a href="#workflow" data-route="workflow"><span class="nav-index">04</span><span>Workflow</span><i class="nav-pulse"></i></a>
+        <a href="#observer" data-route="observer"><span class="nav-index">05</span><span>Live Observer</span><i class="nav-pulse"></i></a>
+        <a href="#artifacts" data-route="artifacts"><span class="nav-index">06</span><span>Artifacts</span><i class="nav-pulse"></i></a>
+        <a href="#troubleshooting" data-route="troubleshooting"><span class="nav-index">07</span><span>Recovery</span><i class="nav-pulse"></i></a>
+        <a href="#agent-usage" data-route="agent-usage"><span class="nav-index">08</span><span>Agent Usage</span><i class="nav-pulse"></i></a>
       </nav>
-      <div class="side-note">纯本地 · 自有 API · 可恢复文件状态<br>批量模式才启用 PostgreSQL</div>
+      <div class="rail-bottom"><div class="local-state"><i></i>LOCAL RUNTIME READY</div><div class="rail-meta">NO ACCOUNT · NO BILLING<br>OWN API · OWN FILES · OWN MACHINE</div></div>
     </aside>
-    <main id="app" aria-live="polite"></main>
+    <section class="stage">
+      <header class="topbar">
+        <div class="crumb"><button class="icon-button menu-button" data-action="open-menu" aria-label="打开导航">≡</button><span>LOCAL CLI</span><i></i><b id="route-name">OVERVIEW</b></div>
+        <div class="top-actions"><button class="icon-button" data-action="theme" aria-label="切换深浅主题" title="切换主题">◐</button></div>
+      </header>
+      <main id="app" aria-live="polite"></main>
+    </section>
   </div>
+  <div class="toast" id="toast" role="status">COPIED TO CLIPBOARD</div>
+
   <template data-route="overview" data-title="Overview">
     <article class="page">
-      <div class="hero"><span class="eyebrow">Agent-first local workflow</span><h1>文稿进来，<br>成片出去。</h1><p class="lead">把导演、分镜代码、浏览器检查、配音与渲染压缩成一个本地 CLI。每一步留下可读文件，AI 能定位路径，人能打开浏览器，失败只重做出问题的镜头。</p><div class="hero-actions"><a class="button" href="#quick-start">开始配置 →</a><a class="button secondary" href="#workflow">查看工作流</a></div></div>
-      <div class="grid">
-        <section class="card wide"><span class="tag">INPUT</span><h2>四种输入，一条语义链路</h2><p>Markdown 先按语义拆成“一单元一核心判断”；JSON 保留调用方明确给出的单元；WAV 与 MP3 先由 FFmpeg 切出真实时间边界，再把相邻 ASR 段按语义归组。后续统一进入 DIRECT。</p><div class="flow"><span class="node">Markdown</span><span class="node">JSON</span><span class="node">WAV</span><span class="node">MP3</span><span class="arrow">→</span><span class="node">SEMANTIC UNITS</span><span class="arrow">→</span><span class="node">DIRECT</span></div></section>
-        <section class="card"><span class="tag">LOCAL</span><div class="metric">0</div><h3>SaaS 业务依赖</h3><p>没有账号、计费、套餐、云项目或远程存储。</p></section>
-        <section class="card"><span class="tag">PARALLEL</span><div class="metric">6</div><h3>默认文本并发</h3><p>浏览器、TTS、ASR 与最终渲染各自限流。</p></section>
-        <section class="card"><span class="tag">VISIBLE</span><h2>每个阶段都能打开</h2><p>镜头 HTML、三点截图、诊断、旁白、字幕和最终 MP4 都登记在 Artifact Index。observer 只读取这份白名单。</p></section>
-        <section class="card wide"><span class="tag">TWO MODES</span><h2>前台直接跑，批量交给 daemon</h2><p>一个视频不需要数据库；多个视频才启动 Docker PostgreSQL 17 与 pg-boss。数据库只保留队列，不保存业务数据与密钥。</p></section>
-      </div>
-      <div class="callout">真实完成的定义不是“API 返回成功”，而是最终 MP4 通过 H.264/AAC、1920×1080、30fps、时长、SHA-256 与抽帧验收。</div>
+      <section class="hero-grid">
+        <div class="hero-copy">
+          <div class="route-kicker">Agent-first / Local-only / Parallel</div>
+          <h1>把一篇文稿<br><span class="outline">拆成</span><br>一支<span class="signal">电影。</span></h1>
+          <p class="lead">不是再造一个剪辑软件。PurpleInk 把导演、语义分镜、动画代码、浏览器检查、配音与渲染收束为一个本地 CLI，让 AI 同时生产多个镜头，让你随时看见每一步。</p>
+          <div class="actions"><a class="button primary" href="#quick-start">生成第一条视频 <span>↗</span></a><a class="button ghost" href="#workflow">进入并行引擎</a></div>
+          <div class="proof-line"><span><b>4</b> INPUT TYPES</span><span><b>6×</b> TEXT LANES</span><span><b>1</b> FINAL RENDER</span><span><b>0</b> SAAS DEPENDENCY</span></div>
+        </div>
+        <div class="console" data-observer-demo>
+          <div class="console-head"><div class="window-dots"><i></i><i></i><i></i></div><div class="console-title">PURPLEINK / LIVE RUN</div><div class="live-badge">PROCESSING</div></div>
+          <div class="console-body">
+            <div class="run-id"><div><h3>AI 不该线性等待。</h3><p>RUN / cinematic-intelligence-001</p></div><div class="run-percent" data-run-percent>64%</div></div>
+            <div class="stage-track"><span class="stage-dot done">INGEST</span><span class="stage-dot done">DIRECT</span><span class="stage-dot current">SHOTS</span><span class="stage-dot">RENDER</span><span class="stage-dot">FINAL</span></div>
+            <div class="shot-grid">
+              <div class="shot-cell done"><div class="shot-top">S001<i></i></div><div class="mini-progress"><i style="--p:100%"></i></div></div>
+              <div class="shot-cell done"><div class="shot-top">S002<i></i></div><div class="mini-progress"><i style="--p:100%"></i></div></div>
+              <div class="shot-cell"><div class="shot-top">S003<i></i></div><div class="mini-progress"><i style="--p:76%"></i></div></div>
+              <div class="shot-cell"><div class="shot-top">S004<i></i></div><div class="mini-progress"><i style="--p:64%"></i></div></div>
+              <div class="shot-cell"><div class="shot-top">S005<i></i></div><div class="mini-progress"><i style="--p:81%"></i></div></div>
+              <div class="shot-cell"><div class="shot-top">S006<i></i></div><div class="mini-progress"><i style="--p:42%"></i></div></div>
+            </div>
+          </div>
+          <div class="console-foot"><span>127.0.0.1 · ARTIFACTS WHITELISTED</span><button data-action="replay-demo">REPLAY SIGNAL ↻</button></div>
+        </div>
+      </section>
+      <section class="section">
+        <div class="section-head"><div><div class="route-kicker">The difference</div><h2>把复杂留给引擎，<br>把控制权还给人。</h2></div><p>输入不是被塞进黑盒。每个镜头都有计划、代码、截图、音频与诊断；任何一步出问题，AI 都能指出绝对路径，只重做坏掉的部分。</p></div>
+        <div class="metric-grid">
+          <div class="metric-card"><span class="label">Semantic</span><div class="metric-number">1–2<small> 句</small></div><h3>一个完整镜头判断</h3><p>按语义切分，不按字数、标点或固定秒数粗暴硬拆。</p></div>
+          <div class="metric-card"><span class="label">Parallel</span><div class="metric-number">N<small> shots</small></div><h3>镜头并发生产</h3><p>代码、Browser QA 与 TTS 分通道并行，最终渲染保持单通道。</p></div>
+          <div class="metric-card"><span class="label">Inspectable</span><div class="metric-number">3<small> frames</small></div><h3>每镜头三点快照</h3><p>0%、50%、100% 真实截图，让“有动画”成为可见证据。</p></div>
+          <div class="metric-card"><span class="label">Local</span><div class="metric-number">0<small> cloud</small></div><h3>没有 SaaS 业务依赖</h3><p>自己的 API、自己的密钥、自己的文件、自己的机器。</p></div>
+        </div>
+      </section>
+      <section class="section">
+        <div class="section-head"><div><div class="route-kicker">Semantic cinema</div><h2>不是切段。<br>是在判断哪里该换镜头。</h2></div><p>语义 INGEST 保留原文事实、限定语、疑问与顺序，形成“一单元、一核心判断、一分镜”的稳定输入。</p></div>
+        <div class="split-demo">
+          <div class="manuscript"><span class="label">Original manuscript</span><p>传统视频软件把生成过程排成一条队列。<mark>但代码视频真正昂贵的不是时间线，而是每个镜头的理解与表达。</mark> 当镜头可以独立执行，AI 就能并发地思考、编码、检查和配音。</p></div>
+          <div class="semantic-output"><span class="label">Semantic units</span><div class="unit-stack">
+            <div class="unit"><span class="unit-id">U001</span><span class="unit-copy"><strong>传统路径为什么慢</strong><span>一个核心判断 · 对比镜头</span></span><span class="unit-time">S001</span></div>
+            <div class="unit"><span class="unit-id">U002</span><span class="unit-copy"><strong>真正昂贵的是表达决策</strong><span>一个核心判断 · 结构镜头</span></span><span class="unit-time">S002</span></div>
+            <div class="unit"><span class="unit-id">U003</span><span class="unit-copy"><strong>独立镜头带来并行生产</strong><span>一个核心判断 · 爆发镜头</span></span><span class="unit-time">S003</span></div>
+          </div></div>
+        </div>
+      </section>
+      <div class="callout"><b>DONE ≠ API 200</b><p>真正完成意味着最终 MP4 具有真实 H.264 视频流与 AAC 音频流，分辨率、帧率、时长、SHA-256 和抽帧都通过验收。</p></div>
     </article>
   </template>
+
   <template data-route="quick-start" data-title="Quick Start">
-    <article class="page prose"><span class="eyebrow">Quick Start</span><h1>五步完成首条视频。</h1><p class="lead">命令示例使用仓库内的 <code>pnpm cli</code>；安装 bin 后可替换成 <code>purpleink-video</code>。</p>
-      <div class="steps">
-        <section class="step"><h3>安装依赖</h3><p>准备 Node.js 22.11+、pnpm、FFmpeg/ffprobe、Playwright Chromium 与 HyperFrames。</p><pre>pnpm install
-pnpm build
-pnpm cli --help</pre></section>
-        <section class="step"><h3>配置文本模型</h3><p>Agent 把 Key 通过 stdin 注入；禁止写在参数中。</p><pre>$textKey | pnpm cli config set text `
-  --url https://api2.agentsnav.com/ `
-  --model gemini-3.6-flash-medium `
-  --key-stdin --json</pre></section>
-        <section class="step"><h3>配置 MiMo 语音</h3><pre>$speechKey | pnpm cli config set speech `
-  --url https://api.xiaomimimo.com/v1 `
-  --tts-model mimo-v2.5-tts `
-  --asr-model mimo-v2.5-asr `
-  --key-stdin --json</pre></section>
-        <section class="step"><h3>验证真实连通性</h3><pre>pnpm cli config verify all --json
-pnpm cli doctor --live --json</pre></section>
-        <section class="step"><h3>确认风格并生成</h3><p>先确认全局深浅色、平面/立体和参考风格；需要硬锁时写入一个 UTF-8 Prompt 文件。</p><pre>pnpm cli run .\script.md `
-  --global-prompt-file .\visual-constraints.md --json
-pnpm cli inspect --run &lt;run-id&gt; --json
-pnpm cli serve --run &lt;run-id&gt; --port 0 --json</pre></section>
+    <article class="page">
+      <header class="page-header"><div><div class="route-kicker">Launch sequence</div><h1>从空目录到<br><span class="signal">第一条成片。</span></h1></div><div class="glass-note"><strong>推荐：</strong>让 Codex 或 Claude Code 执行整套初始化。你只提供 API 占位信息与文稿，不需要记住全部命令。</div></header>
+      <div class="sequence">
+        <div class="step-list" data-step-list>
+          <button class="step-button active" data-step="0"><span class="step-num">01</span><b>检查本机环境</b><small>RUNTIME</small></button>
+          <button class="step-button" data-step="1"><span class="step-num">02</span><b>安装与构建 CLI</b><small>BUILD</small></button>
+          <button class="step-button" data-step="2"><span class="step-num">03</span><b>安全配置 Provider</b><small>SECRETS</small></button>
+          <button class="step-button" data-step="3"><span class="step-num">04</span><b>安装 Agent Skill</b><small>AGENT</small></button>
+          <button class="step-button" data-step="4"><span class="step-num">05</span><b>确认全局视觉方向</b><small>STYLE</small></button>
+          <button class="step-button" data-step="5"><span class="step-num">06</span><b>启动面板并生成</b><small>RUN</small></button>
+        </div>
+        <div class="terminal"><div class="terminal-head"><span data-terminal-title>01 / ENVIRONMENT</span><button class="copy-button" data-copy-target="quick-terminal">COPY</button></div><div class="terminal-screen" id="quick-terminal" data-terminal-screen><span class="comment"># Windows-first prerequisites</span>
+<span class="prompt">›</span> node --version      <span class="value">22.11+</span>
+<span class="prompt">›</span> pnpm --version      <span class="value">10.30.0</span>
+<span class="prompt">›</span> ffmpeg -version
+<span class="prompt">›</span> ffprobe -version
+
+<span class="comment"># Docker Desktop 仅批量 daemon 需要</span></div></div>
       </div>
-      <div class="callout">默认要求真实旁白。只有明确需要无声视频时才添加 <code>--narration off</code>。</div>
+      <div class="callout"><b>SECRET RULE</b><p>API Key 只通过隐藏输入或 <code>--key-stdin</code> 交给 CLI。禁止把 Key 写进参数、源码、Prompt 文件、日志、截图或 Git。</p></div>
     </article>
   </template>
+
   <template data-route="commands" data-title="Commands">
-    <article class="page prose"><span class="eyebrow">Command map</span><h1>少量命令，覆盖完整生命周期。</h1><p class="lead">实时参数以 <code>purpleink-video --help</code> 为准。自动化使用 <code>--json</code>；<code>status --watch</code> 输出逐行 NDJSON。</p>
-      <section><h2>配置与声音</h2><pre>config set text --url &lt;url&gt; --model &lt;id&gt; --key-stdin
-config set speech --url &lt;url&gt; --tts-model &lt;id&gt; --asr-model &lt;id&gt; --key-stdin
-config show --json
-config verify all --json
-
-voice import &lt;sample.wav|sample.mp3&gt; --name &lt;id&gt;
-voice use &lt;id|mimo_default&gt;
-voice list --json</pre></section>
-      <section><h2>前台工作流</h2><pre>plan &lt;input&gt; [--global-prompt-file &lt;path&gt;] --json
-transcribe &lt;audio&gt; --json
-run &lt;input&gt; [--global-prompt-file &lt;path&gt;] [--concurrency N] [--narration off] --json</pre></section>
-      <section><h2>批量与守护进程</h2><pre>daemon start [--serve] --json
-submit &lt;input...&gt; [--global-prompt-file &lt;path&gt;] --json
-daemon status --json
-daemon stop --json</pre></section>
-      <section><h2>观察、恢复与控制</h2><pre>status [--run &lt;id|path&gt;] [--watch]
-inspect --run &lt;id|path&gt; [--shot S001] --json
-retry --run &lt;id|path&gt; [--shot S001|--failed] --json
-cancel --run &lt;id|path&gt; --json
-serve [--run &lt;id|path&gt;] [--port 0]
-doctor [--live] --json</pre></section>
-      <table><thead><tr><th>模式</th><th>数据库</th><th>适合</th></tr></thead><tbody><tr><td>run</td><td>不需要</td><td>一个视频、直接看日志</td></tr><tr><td>submit + daemon</td><td>PostgreSQL 17</td><td>多个视频、崩溃恢复</td></tr></tbody></table>
+    <article class="page">
+      <header class="page-header"><div><div class="route-kicker">Command surface</div><h1>少量命令。<br><span class="outline">完整生命周期。</span></h1></div><p class="lead">输入关键词筛选命令。所有自动化优先使用 <code>--json</code>；实时参数永远以 <code>pnpm cli --help</code> 为准。</p></header>
+      <div class="command-tools"><label class="search"><input id="command-search" placeholder="搜索 run、voice、retry、observer…" autocomplete="off" aria-label="搜索命令"></label><div class="command-count"><span id="command-count">12 COMMANDS</span></div></div>
+      <div class="command-grid" id="command-grid">
+        <article class="command-card" data-keywords="config text provider key"><button class="copy-mini" data-copy-target="cmd-config-text">COPY</button><h3>配置文本模型</h3><p>OpenAI-compatible URL、Model ID 与隐藏 Key。</p><code id="cmd-config-text">pnpm cli config set text --url &lt;URL&gt; --model &lt;MODEL_ID&gt; --key-stdin</code></article>
+        <article class="command-card" data-keywords="config speech tts asr voice"><button class="copy-mini" data-copy-target="cmd-config-speech">COPY</button><h3>配置语音模型</h3><p>TTS 与 ASR 共用安全 Provider 配置。</p><code id="cmd-config-speech">pnpm cli config set speech --url &lt;URL&gt; --tts-model &lt;TTS_ID&gt; --asr-model &lt;ASR_ID&gt; --key-stdin</code></article>
+        <article class="command-card" data-keywords="verify doctor live connectivity"><button class="copy-mini" data-copy-target="cmd-verify">COPY</button><h3>验证真实连通性</h3><p>文本、TTS、ASR 分别探测，只返回脱敏结果。</p><code id="cmd-verify">pnpm cli config verify all --json
+pnpm cli doctor --live --json</code></article>
+        <article class="command-card" data-keywords="plan storyboard global prompt style"><button class="copy-mini" data-copy-target="cmd-plan">COPY</button><h3>只做规划</h3><p>先检查语义拆稿与全片视觉方向。</p><code id="cmd-plan">pnpm cli plan .\script.md --global-prompt-file .\visual-constraints.md --json</code></article>
+        <article class="command-card" data-keywords="run generate foreground video"><button class="copy-mini" data-copy-target="cmd-run">COPY</button><h3>前台生成</h3><p>单条视频，不需要 PostgreSQL。</p><code id="cmd-run">pnpm cli run .\script.md --global-prompt-file .\visual-constraints.md --json</code></article>
+        <article class="command-card" data-keywords="transcribe audio wav mp3 asr"><button class="copy-mini" data-copy-target="cmd-transcribe">COPY</button><h3>音频转文稿</h3><p>FFmpeg 真实切段，ASR 只负责转写。</p><code id="cmd-transcribe">pnpm cli transcribe .\speech.mp3 --json</code></article>
+        <article class="command-card" data-keywords="daemon batch submit queue postgres"><button class="copy-mini" data-copy-target="cmd-daemon">COPY</button><h3>持久批量队列</h3><p>多个输入交给 daemon 与 pg-boss。</p><code id="cmd-daemon">pnpm cli daemon start --serve --json
+pnpm cli submit .\a.md .\b.json .\c.mp3 --json</code></article>
+        <article class="command-card" data-keywords="status watch progress ndjson"><button class="copy-mini" data-copy-target="cmd-status">COPY</button><h3>观察状态流</h3><p>watch 模式持续输出 NDJSON 阶段事件。</p><code id="cmd-status">pnpm cli status --run &lt;RUN_ID&gt; --watch</code></article>
+        <article class="command-card" data-keywords="inspect shot paths artifacts"><button class="copy-mini" data-copy-target="cmd-inspect">COPY</button><h3>定位产物</h3><p>返回阶段、镜头和最终视频绝对路径。</p><code id="cmd-inspect">pnpm cli inspect --run &lt;RUN_ID&gt; --shot S001 --json</code></article>
+        <article class="command-card" data-keywords="retry failed shot recovery"><button class="copy-mini" data-copy-target="cmd-retry">COPY</button><h3>只修失败镜头</h3><p>保留所有成功阶段和缓存。</p><code id="cmd-retry">pnpm cli retry --run &lt;RUN_ID&gt; --failed --json</code></article>
+        <article class="command-card" data-keywords="serve observer panel port browser"><button class="copy-mini" data-copy-target="cmd-serve">COPY</button><h3>启动观察面板</h3><p>只绑定 loopback，端口由系统分配。</p><code id="cmd-serve">pnpm cli serve --run &lt;RUN_ID&gt; --port 0 --json</code></article>
+        <article class="command-card" data-keywords="voice import clone mimo"><button class="copy-mini" data-copy-target="cmd-voice">COPY</button><h3>导入克隆声音</h3><p>样音保存在本机 voices 目录。</p><code id="cmd-voice">pnpm cli voice import .\sample.wav --name my-voice --json
+pnpm cli voice use my-voice --json</code></article>
+      </div>
     </article>
   </template>
+
   <template data-route="workflow" data-title="Workflow">
-    <article class="page"><span class="eyebrow">Workflow</span><h1>并行做镜头，串行收成片。</h1><p class="lead">DIRECT 完成全片设计后，分镜之间并发；同一分镜里的 HTML/Browser QA 与 TTS 也并发。全部就绪后，合成与渲染保持单通道。</p>
-      <div class="flow"><span class="node">SOURCE</span><span class="arrow">→</span><span class="node">SEMANTIC INGEST / ASR</span><span class="arrow">→</span><span class="node">DIRECT</span><span class="arrow">→</span><span class="node">SHOT-SPEC × N</span></div>
-      <div class="grid">
-        <section class="card"><span class="tag">SHOT S001</span><h2>FABRICATE</h2><p>生成可 seek、自包含的 HTML。静态 gate 或浏览器 gate 失败时，只做一次定向修复。</p></section>
-        <section class="card"><span class="tag">SHOT S001</span><h2>Browser QA</h2><p>Chromium 在 0%、50%、100% 取三张真实 PNG，并保存脱敏 console/page diagnostics。</p></section>
-        <section class="card"><span class="tag">SHOT S001</span><h2>MiMo TTS</h2><p>每个镜头独立配音。真实音频时长加尾部缓冲，成为该镜头最终时间线长度。</p></section>
-        <section class="card full"><span class="tag">FINAL LANE</span><div class="flow"><span class="node">ASSEMBLE</span><span class="arrow">→</span><span class="node">HyperFrames RENDER</span><span class="arrow">→</span><span class="node">AAC MUX</span><span class="arrow">→</span><span class="node">MEDIA QA</span><span class="arrow">→</span><span class="node">FINALIZE</span></div><p>最终渲染全局并发为 1，避免多个视频同时占满 CPU/GPU。pg-boss 只调度 run；镜头并发仍由轻量共享 semaphore 控制。</p></section>
+    <article class="page">
+      <header class="page-header"><div><div class="route-kicker">Execution topology</div><h1>并行做镜头，<br><span class="signal">串行收成片。</span></h1></div><p class="lead">点击节点查看它负责什么、留下什么证据。复杂度集中在每个清晰节点，而不是堆叠数据库、合同和无意义查询。</p></header>
+      <div class="workflow-board">
+        <div class="pipeline-map">
+          <div class="lane-label"><span>STORY LANE / SERIAL</span><span>01—05</span></div>
+          <div class="pipeline-row">
+            <button class="pipeline-node active" data-pipeline="ingest"><small>01</small><b>INGEST / ASR</b></button>
+            <button class="pipeline-node" data-pipeline="direct"><small>02</small><b>DIRECT</b></button>
+            <button class="pipeline-node" data-pipeline="shots"><small>03</small><b>SHOT-SPEC × N</b></button>
+            <button class="pipeline-node" data-pipeline="assemble"><small>04</small><b>ASSEMBLE</b></button>
+            <button class="pipeline-node" data-pipeline="final"><small>05</small><b>FINALIZE</b></button>
+          </div>
+          <div class="lane-label" style="margin-top:28px"><span>SHOT FACTORY / PARALLEL</span><span>SHARED SEMAPHORES</span></div>
+          <div class="parallel-lanes">
+            <div class="parallel-lane"><span class="label">FABRICATE</span><div class="lane-bars"><i style="--w:94%"></i><i style="--w:72%"></i><i style="--w:86%"></i><i style="--w:57%"></i></div></div>
+            <div class="parallel-lane"><span class="label">BROWSER QA</span><div class="lane-bars"><i style="--w:100%"></i><i style="--w:64%"></i><i style="--w:81%"></i><i style="--w:48%"></i></div></div>
+            <div class="parallel-lane"><span class="label">TTS</span><div class="lane-bars"><i style="--w:88%"></i><i style="--w:91%"></i><i style="--w:68%"></i><i style="--w:75%"></i></div></div>
+          </div>
+          <div class="callout"><b>ONE BAD SHOT</b><p>自动修复耗尽后只把对应镜头标记为 <code>needs_attention</code>；其他镜头继续，系统不会生成伪成功最终视频。</p></div>
+        </div>
+        <aside class="pipeline-detail" id="pipeline-detail"><div class="big-index">01</div><span class="label">INGEST / ASR</span><h2>先理解，再拆镜。</h2><p>Markdown 按语义形成连续、无重叠的单元；音频只在 FFmpeg 真实时间段上合并相邻 ASR 文本。</p><div class="detail-proof">OUTPUT<br>input/semantic-script.json<br>input/transcript.json</div></aside>
       </div>
-      <div class="callout">某个镜头自动修复耗尽后，run 进入 <strong>needs_attention</strong>。其他镜头继续完成，但系统不会生成伪成功最终视频。</div>
     </article>
   </template>
+
+  <template data-route="observer" data-title="Live Observer">
+    <article class="page">
+      <header class="page-header"><div><div class="route-kicker">Local control room</div><h1>每一步，<br><span class="outline">都在眼前。</span></h1></div><div class="glass-note"><strong>端口不是固定值。</strong> <code>--port 0</code> 让 Windows 分配一个空闲端口，CLI 返回类似 <code>127.0.0.1:53142</code> 的实际地址。</div></header>
+      <div class="observer-shell">
+        <div class="observer-top"><div class="window-dots"><i></i><i></i><i></i></div><div class="observer-url"><i></i>http://127.0.0.1:53142/run/cinematic-intelligence-001</div><span class="micro">LOCAL ONLY</span></div>
+        <div class="observer-layout">
+          <aside class="observer-side"><span class="label">All runs</span><div class="run-card"><b>AI 不该线性等待</b><span>● RUNNING · 64%</span></div><div class="run-card" style="opacity:.55"><b>代码成为镜头</b><span style="color:var(--gold)">● NEEDS ATTENTION</span></div></aside>
+          <div class="observer-main">
+            <div class="observer-summary"><div><h3>AI 不该线性等待</h3><p>run-2026-08-10-cinematic-001 · updated 2s ago</p></div><div class="observer-progress" data-observer-percent>64%</div></div>
+            <div class="timeline-list" data-live-timeline>
+              <div class="timeline-item done"><i></i><span>INGEST</span><em>DONE #1</em></div>
+              <div class="timeline-item done"><i></i><span>DIRECT</span><em>DONE #1</em></div>
+              <div class="timeline-item running"><i></i><span>FABRICATE:S004</span><em>RUNNING</em></div>
+              <div class="timeline-item"><i></i><span>RENDER</span><em>WAITING</em></div>
+              <div class="timeline-item"><i></i><span>MEDIA_QA</span><em>WAITING</em></div>
+            </div>
+            <div class="observer-shots"><div class="shot-preview"><div class="visual"></div><span>S001 · READY</span></div><div class="shot-preview"><div class="visual" style="filter:hue-rotate(60deg)"></div><span>S002 · READY</span></div><div class="shot-preview"><div class="visual" style="filter:hue-rotate(140deg)"></div><span>S003 · QA</span></div></div>
+          </div>
+        </div>
+      </div>
+      <section class="section">
+        <div class="section-head"><div><div class="route-kicker">Start it by default</div><h2>Agent 启动面板，<br>人只需要打开链接。</h2></div><p>推荐 Agent 在伴随进程启动 observer，再执行实际生成；批量模式用 <code>daemon start --serve</code> 自动托管。</p></div>
+        <div class="command-grid">
+          <article class="command-card"><button class="copy-mini" data-copy-target="observer-single">COPY</button><h3>单任务总览</h3><p>先启动面板，再在另一终端执行 run。</p><code id="observer-single">pnpm cli serve --port 0 --json</code></article>
+          <article class="command-card"><button class="copy-mini" data-copy-target="observer-batch">COPY</button><h3>批量自动托管</h3><p>observerUrl 会写入 daemon 状态。</p><code id="observer-batch">pnpm cli daemon start --serve --json
+pnpm cli daemon status --json</code></article>
+        </div>
+        <div class="callout"><b>SAFE VIEW</b><p>Observer 只绑定 <code>127.0.0.1</code>，只读取 Artifact Index 白名单。HTML 在 sandbox iframe 中展示，禁止网络和任意本地路径访问。执行中刷新页面即可读取最新状态。</p></div>
+      </section>
+    </article>
+  </template>
+
   <template data-route="artifacts" data-title="Artifacts">
-    <article class="page prose"><span class="eyebrow">Artifacts</span><h1>文件系统就是可解释的工作台。</h1><p class="lead">每个 run 都是一个可移动、可恢复、可审计的目录。AI 返回绝对路径，人类通过 observer 直接预览。</p>
-      <section><pre>runs/&lt;run-id&gt;/
-  input/                         # 原始输入、转写与规范 script
-    global-prompt.txt            # 可选；所有创作阶段共享的视觉硬约束
-  state/run.json                 # run 真值
-  state/stages/                  # 每阶段 fingerprint / attempt / status
-  state/events.jsonl             # NDJSON 事件
-  state/metrics.json             # 并发峰值与时间跨度
-  shots/S001/plan.json
-  shots/S001/attempt-001/source.html
-  shots/S001/attempt-001/screenshots/{000,050,100}.png
-  shots/S001/attempt-001/diagnostics.json
-  shots/S001/narration.wav
-  project/                       # HyperFrames composition
-  final/video.mp4
-  final/frames/{000,001,002}.png
-  artifacts/index.json           # observer 唯一白名单
-  logs/</pre></section>
-      <section><h2>阶段语义</h2><table><thead><tr><th>阶段</th><th>证明什么</th></tr></thead><tbody><tr><td>INGEST / ASR</td><td>原文已连续完整地按语义拆稿，或音频已在真实时间段上完成相邻语义归组</td></tr><tr><td>DIRECT / SHOT_SPEC</td><td>一单元一核心判断一分镜，且相邻镜头的拓扑、视角与信息角色有变化</td></tr><tr><td>FABRICATE / BROWSER_QA / TTS</td><td>镜头代码、三点画面和旁白就绪</td></tr><tr><td>ASSEMBLE / RENDER / AUDIO_MUX</td><td>时间线、视觉 MP4 和 AAC 音轨完成</td></tr><tr><td>MEDIA_QA / FINALIZE</td><td>媒体参数、hash、大小与抽帧验收完成</td></tr></tbody></table></section>
-      <section><h2>Artifact Index</h2><p>每条记录包含 id、kind、relativePath、absolutePath、sizeBytes、SHA-256 和可选 metadata。observer 不接受任意文件路径，只按 artifact id 返回已登记文件。</p></section>
-    </article>
-  </template>
-  <template data-route="troubleshooting" data-title="Troubleshooting">
-    <article class="page prose"><span class="eyebrow">Troubleshooting</span><h1>先看状态，再只修坏掉的部分。</h1>
-      <div class="grid">
-        <section class="card wide"><span class="tag">CONFIG</span><h2>连通性验证失败</h2><p>运行 <code>config show --json</code> 核对非敏感 URL 与 Model ID。检查网络、余额和模型权限；失败不会覆盖旧密钥。</p></section>
-        <section class="card"><span class="tag">ASR</span><h2>没有语音</h2><p><code>ASR_NO_SPEECH</code> 表示 FFmpeg 未检测到有效语音，系统不会生成虚假文稿。</p></section>
-        <section class="card"><span class="tag">SHOT</span><h2>needs_attention</h2><p>用 inspect 查看 HTML、三点截图和 diagnostics，再定向 retry。</p></section>
-        <section class="card"><span class="tag">QUEUE</span><h2>数据库不可用</h2><p>确认 Docker Desktop 已启动，重新执行 <code>daemon start</code>。停止 daemon 不会删除卷。</p></section>
-        <section class="card wide"><span class="tag">MEDIA</span><h2>最终 QA 失败</h2><p>检查 <code>logs/hyperframes.log</code> 与 <code>logs/ffmpeg.log</code>。最终文件必须是 1920×1080、30fps、H.264；旁白开启时还必须存在 AAC 音轨。</p></section>
+    <article class="page">
+      <header class="page-header"><div><div class="route-kicker">Filesystem as truth</div><h1>每个结果，<br><span class="signal">都有证据。</span></h1></div><p class="lead">点击左侧文件模拟查看不同阶段产物。真实运行中，AI 会通过 <code>inspect --json</code> 返回这些文件的绝对路径。</p></header>
+      <div class="artifact-browser">
+        <aside class="artifact-tree">
+          <div class="tree-title">runs/cinematic-intelligence-001</div>
+          <div class="tree-group"><span>input</span><button class="tree-item" data-artifact="script"><b>◇</b><span>semantic-script.json</span><em>8 KB</em></button><button class="tree-item" data-artifact="prompt"><b>◇</b><span>global-prompt.txt</span><em>2 KB</em></button></div>
+          <div class="tree-group"><span>shots / S001</span><button class="tree-item" data-artifact="html"><b>◇</b><span>source.html</span><em>24 KB</em></button><button class="tree-item active" data-artifact="frame"><b>◇</b><span>screenshots/050.png</span><em>412 KB</em></button><button class="tree-item" data-artifact="audio"><b>◇</b><span>narration.wav</span><em>1.8 MB</em></button></div>
+          <div class="tree-group"><span>final</span><button class="tree-item" data-artifact="video"><b>◇</b><span>video.mp4</span><em>86 MB</em></button><button class="tree-item" data-artifact="index"><b>◇</b><span>artifacts/index.json</span><em>31 KB</em></button></div>
+        </aside>
+        <div class="artifact-view"><div class="preview-frame"><div class="preview-graphic" id="artifact-graphic">每一秒<br>都在表达</div></div><div class="artifact-meta"><div class="meta-cell"><span>KIND</span><b id="artifact-kind">image/png</b></div><div class="meta-cell"><span>STATUS</span><b id="artifact-status">REGISTERED</b></div><div class="meta-cell"><span>SHA-256</span><b id="artifact-hash">7dd5…b91a</b></div></div><p class="micro" id="artifact-path" style="margin-top:18px">C:\PurpleInk\runs\cinematic-intelligence-001\shots\S001\attempt-001\screenshots\050.png</p></div>
       </div>
-      <section><h2>推荐诊断顺序</h2><div class="steps"><div class="step"><h3>status</h3><p>确认 run 是 running、needs_attention、failed 还是 cancelled。</p></div><div class="step"><h3>inspect</h3><p>取得阶段与 Artifact 的绝对路径，不猜测文件位置。</p></div><div class="step"><h3>serve</h3><p>需要人工观察时打开临时 loopback 页面。</p></div><div class="step"><h3>retry</h3><p>只重跑 failed 或指定的 S###，保留成功阶段。</p></div></div></section>
+      <div class="callout"><b>RECOVERABLE</b><p>阶段 fingerprint 会跳过已经成功的工作。进程崩溃、daemon 重启或定向 retry，都不需要从头重新生成全部镜头。</p></div>
     </article>
   </template>
+
+  <template data-route="troubleshooting" data-title="Recovery">
+    <article class="page">
+      <header class="page-header"><div><div class="route-kicker">Failure is addressable</div><h1>不要重来。<br><span class="outline">只修坏掉的。</span></h1></div><p class="lead">选择一个症状，查看最短诊断路径。原则始终是：先读状态与产物，再定向恢复。</p></header>
+      <div class="symptom-grid">
+        <button class="symptom active" data-symptom="config"><code>CONFIG</code><h3>Provider 连通失败</h3><p>URL、模型、权限或余额问题。</p></button>
+        <button class="symptom" data-symptom="shot"><code>SHOT</code><h3>needs_attention</h3><p>某个镜头修复耗尽。</p></button>
+        <button class="symptom" data-symptom="speech"><code>ASR</code><h3>没有有效语音</h3><p>真实切段未检测到人声。</p></button>
+        <button class="symptom" data-symptom="queue"><code>QUEUE</code><h3>批量队列不可用</h3><p>Docker 或 PostgreSQL 未就绪。</p></button>
+        <button class="symptom" data-symptom="media"><code>MEDIA</code><h3>最终媒体验收失败</h3><p>视频流、音轨或参数不合格。</p></button>
+        <button class="symptom" data-symptom="observer"><code>VIEW</code><h3>观察页面打不开</h3><p>伴随进程退出或端口变化。</p></button>
+      </div>
+      <div class="diagnosis" id="diagnosis"><div class="diagnosis-index">01</div><div><span class="label">CONFIG_VERIFICATION_FAILED</span><h2>旧配置仍然安全保留。</h2><p>先用 <code>config show --json</code> 核对脱敏 URL 与 Model ID，再检查网络、模型权限和余额。只有新配置验证成功后才覆盖旧配置。</p><pre>pnpm cli config show --json
+pnpm cli config verify all --json
+pnpm cli doctor --live --json</pre></div></div>
+    </article>
+  </template>
+
   <template data-route="agent-usage" data-title="Agent Usage">
-    <article class="page prose"><span class="eyebrow">Agent Usage</span><h1>给 AI 一个稳定、可验证的机器合同。</h1><p class="lead">Agent 不需要模拟人类点击软件。它调用 CLI、读取 JSON 状态、定位绝对路径，并在出错时只重做对应镜头。</p>
-      <section><h2>安装 Skill</h2><pre>pnpm skill:install</pre><p>安装目标：<span class="path">%USERPROFILE%\.agents\skills\generating-purpleink-script-videos\</span></p></section>
-      <section><h2>Agent 决策顺序</h2><div class="steps"><div class="step"><h3>确认视觉方向</h3><p>开始前确认全局深浅色、平面/立体和参考风格；其他 Skill 只提炼视觉部分。</p></div><div class="step"><h3>获取实时命令</h3><p>运行 <code>purpleink-video --help</code>，不要从记忆拼参数。</p></div><div class="step"><h3>确认配置</h3><p>使用 <code>config show --json</code>；Key 只能隐藏输入或通过 stdin。</p></div><div class="step"><h3>选择前台或批量</h3><p>一个输入用 run；多个输入用 daemon + submit。</p></div><div class="step"><h3>解释失败</h3><p>needs_attention 时返回坏镜头 Artifact 的绝对路径，再 retry。</p></div><div class="step"><h3>证明交付</h3><p>最终回复包含 MP4 绝对路径、媒体参数、大小与 SHA-256。</p></div></div></section>
-      <section><h2>机器友好示例</h2><pre># 单任务
-purpleink-video run .\brief.md --global-prompt-file .\visual-constraints.md --json
-
-# 读取最终路径
-purpleink-video inspect --run &lt;run-id&gt; --json
-
-# 只修坏镜头
-purpleink-video inspect --run &lt;run-id&gt; --shot S004 --json
-purpleink-video retry --run &lt;run-id&gt; --shot S004 --json
-
-# 多任务
-purpleink-video daemon start --serve --json
-purpleink-video submit .\a.md .\b.json .\c.mp3 --json</pre></section>
-      <div class="callout"><strong>禁止伪成功：</strong>API 200、job completed、fixture 输出或视觉 MP4 单独存在，都不足以证明带旁白的最终视频完成。</div>
+    <article class="page">
+      <header class="page-header"><div><div class="route-kicker">Human intent → Machine contract</div><h1>你说想要什么。<br><span class="signal">Agent 负责证明完成。</span></h1></div><p class="lead">先选择视觉方向，右侧会生成一段可直接交给 Codex 或 Claude Code 的提示词。它不会立刻运行，而是先补齐缺失选择。</p></header>
+      <div class="skill-switch"><div class="skill-option"><span>CODEX / AGENT SKILLS</span><code>pnpm skill:install<br>%USERPROFILE%\.agents\skills\</code></div><div class="skill-option"><span>CLAUDE CODE</span><code>复制完整 Skill 到<br>%USERPROFILE%\.claude\skills\</code></div></div>
+      <div class="agent-layout">
+        <section class="agent-panel"><span class="label">Prompt composer</span><h2 style="margin-top:18px">定义全片视觉宪法。</h2><div class="choice-grid">
+          <div class="field"><label for="palette-choice">全局色系</label><select id="palette-choice"><option value="深色、高对比的电影控制台">深色电影感</option><option value="浅色、克制的编辑设计">浅色编辑感</option><option value="由 AI 依据文稿语义决定，但全片保持统一">交给 AI</option></select></div>
+          <div class="field"><label for="dimension-choice">空间维度</label><select id="dimension-choice"><option value="以 3D/立体空间、真实景深与镜头运动为主">3D / 立体</option><option value="只使用高质量平面图形与排版动画">纯平面</option><option value="允许 AI 按每个分镜语义选择平面或立体">逐镜决定</option></select></div>
+          <div class="field full"><label for="style-choice">命名风格 / 参考</label><input id="style-choice" value="未来电影级产品发布会，精密、克制但持续运动"></div>
+          <div class="field full"><label for="input-choice">输入文件绝对路径</label><input id="input-choice" value="C:\Videos\script.md"></div>
+        </div><div class="callout"><b>STYLE MERGE</b><p>同时启用其他视觉 Skill 时，只提炼配色、排版、构图、材质、镜头、运动与禁忌，不复制它的框架、命令或发布流程。</p></div></section>
+        <section class="prompt-box" id="agent-prompt"><button class="copy-button" data-copy-target="agent-prompt">COPY PROMPT</button><span data-prompt-content></span></section>
+      </div>
+      <div class="callout"><b>NO FAKE SUCCESS</b><p>Agent 只有在 <code>inspect --json</code> 返回最终 MP4 绝对路径，且真实视频流、音频流与媒体验收通过后，才能报告完成。</p></div>
     </article>
   </template>
+
   <script>
     const routes=new Map([...document.querySelectorAll('template[data-route]')].map(node=>[node.dataset.route,node]));
-    const render=()=>{const key=location.hash.slice(1)||'overview';const route=routes.has(key)?key:'overview';document.getElementById('app').replaceChildren(routes.get(route).content.cloneNode(true));document.querySelectorAll('#nav a').forEach(link=>link.classList.toggle('active',link.dataset.route===route));document.title=`PurpleInk · ${routes.get(route).dataset.title}`;scrollTo({top:0,behavior:'instant'});};
+    const app=document.getElementById('app');
+    const toast=document.getElementById('toast');
+    let pageTimers=[];
+    const terminalSteps=[
+      {title:'01 / ENVIRONMENT',html:'<span class="comment"># Windows-first prerequisites</span>\n<span class="prompt">›</span> node --version      <span class="value">22.11+</span>\n<span class="prompt">›</span> pnpm --version      <span class="value">10.30.0</span>\n<span class="prompt">›</span> ffmpeg -version\n<span class="prompt">›</span> ffprobe -version\n\n<span class="comment"># Docker Desktop 仅批量 daemon 需要</span>'},
+      {title:'02 / BUILD',html:'<span class="prompt">›</span> pnpm install\n<span class="prompt">›</span> pnpm build\n<span class="prompt">›</span> pnpm cli --help\n\n<span class="value">✓ CLI contract loaded</span>'},
+      {title:'03 / PROVIDERS',html:'<span class="comment"># Key 从 stdin 进入，不出现在参数中</span>\n<span class="prompt">›</span> $textKey | pnpm cli config set text `\n    --url &lt;TEXT_URL&gt; --model &lt;MODEL_ID&gt; `\n    --key-stdin --json\n\n<span class="prompt">›</span> pnpm cli config verify all --json'},
+      {title:'04 / AGENT SKILL',html:'<span class="comment"># Codex / Agent Skills</span>\n<span class="prompt">›</span> pnpm skill:install\n\n<span class="value">%USERPROFILE%\\.agents\\skills\\\n  generating-purpleink-script-videos\\</span>\n\n<span class="comment"># Claude Code 使用 .claude\\skills</span>'},
+      {title:'05 / VISUAL CONSTITUTION',html:'<span class="comment"># Agent 开始前先问一个紧凑问题</span>\n<span class="value">Palette:</span> dark / light\n<span class="value">Dimension:</span> flat / 3D / per-shot\n<span class="value">Style:</span> named style / references\n<span class="value">Rules:</span> must-use / prohibited\n\n<span class="prompt">→</span> visual-constraints.md'},
+      {title:'06 / RUN + OBSERVER',html:'<span class="comment"># Terminal A — 默认观察面板</span>\n<span class="prompt">›</span> pnpm cli serve --port 0 --json\n<span class="value">http://127.0.0.1:53142/</span>\n\n<span class="comment"># Terminal B — 真实生成</span>\n<span class="prompt">›</span> pnpm cli run .\\script.md `\n    --global-prompt-file .\\visual-constraints.md --json'}
+    ];
+    const pipelineData={
+      ingest:{index:'01',label:'INGEST / ASR',title:'先理解，再拆镜。',body:'Markdown 按语义形成连续、无重叠的单元；音频只在 FFmpeg 真实时间段上合并相邻 ASR 文本。',proof:'OUTPUT<br>input/semantic-script.json<br>input/transcript.json'},
+      direct:{index:'02',label:'DIRECT',title:'先设计全片，再派发镜头。',body:'确定整片叙事、视觉语言、构图节奏与镜头差异。全局 Prompt 在这里成为整片硬约束。',proof:'OUTPUT<br>state/stages/DIRECT.json<br>input/global-prompt.txt'},
+      shots:{index:'03',label:'SHOT-SPEC × N',title:'每个镜头独立生产。',body:'每个语义单元进入独立分镜。FABRICATE、Browser QA 与 TTS 在共享并发通道中执行并汇合为 SHOT_READY。',proof:'OUTPUT<br>shots/S###/plan.json<br>source.html · PNG · WAV'},
+      assemble:{index:'04',label:'ASSEMBLE',title:'把真实音频变成时间线。',body:'镜头时长以真实 TTS 音频加尾部缓冲为准。全部镜头就绪后，组装 HyperFrames composition。',proof:'OUTPUT<br>project/<br>state/stages/ASSEMBLE.json'},
+      final:{index:'05',label:'FINALIZE',title:'只有证据齐全才算完成。',body:'视觉渲染、AAC 封装、ffprobe、抽帧与 SHA-256 顺序完成；任何媒体验收失败都不会伪装成成功。',proof:'OUTPUT<br>final/video.mp4<br>artifacts/index.json'}
+    };
+    const diagnoses={
+      config:{index:'01',label:'CONFIG_VERIFICATION_FAILED',title:'旧配置仍然安全保留。',body:'先用 config show --json 核对脱敏 URL 与 Model ID，再检查网络、模型权限和余额。只有新配置验证成功后才覆盖旧配置。',cmd:'pnpm cli config show --json\npnpm cli config verify all --json\npnpm cli doctor --live --json'},
+      shot:{index:'02',label:'NEEDS_ATTENTION',title:'找到镜头，不要重跑全片。',body:'先查看对应 S### 的 HTML、三点截图与 diagnostics，确认是布局、动画还是浏览器错误，再只重试该镜头或全部失败镜头。',cmd:'pnpm cli inspect --run <RUN_ID> --shot S004 --json\npnpm cli retry --run <RUN_ID> --shot S004 --json'},
+      speech:{index:'03',label:'ASR_NO_SPEECH',title:'系统拒绝伪造文稿。',body:'FFmpeg 没有在规范化音频中检测到有效语音。确认文件不是静音、声道可读，并查看音频处理日志。',cmd:'pnpm cli transcribe .\\speech.wav --json'},
+      queue:{index:'04',label:'QUEUE_DATABASE_UNAVAILABLE',title:'只修批量运行环境。',body:'单任务不受影响。启动 Docker Desktop，再重新启动 daemon；停止 daemon 不会删除 PostgreSQL 卷。',cmd:'pnpm cli daemon start --serve --json\npnpm cli daemon status --json'},
+      media:{index:'05',label:'MEDIA_QA_FAILED',title:'检查真正的最终媒体。',body:'查看 HyperFrames 与 FFmpeg 日志。最终文件必须具有 H.264 视频流；旁白开启时还必须存在 AAC 音轨。',cmd:'pnpm cli inspect --run <RUN_ID> --json\nffprobe <ABSOLUTE_VIDEO_PATH>'},
+      observer:{index:'06',label:'OBSERVER_START_FAILED',title:'重新获取实际临时端口。',body:'port 0 每次由系统重新分配。确认 serve 或 daemon 进程仍在运行，并以最新 JSON 返回的 url/observerUrl 为准。',cmd:'pnpm cli serve --run <RUN_ID> --port 0 --json\npnpm cli daemon status --json'}
+    };
+    const artifacts={
+      script:{graphic:'U001 → S001',kind:'application/json',status:'NORMALIZED',hash:'1a72…0f4c',path:'C:\\PurpleInk\\runs\\cinematic-intelligence-001\\input\\semantic-script.json'},
+      prompt:{graphic:'VISUAL\nCONSTITUTION',kind:'text/plain',status:'INJECTED × N',hash:'c447…82e1',path:'C:\\PurpleInk\\runs\\cinematic-intelligence-001\\input\\global-prompt.txt'},
+      html:{graphic:'SEEK-SAFE\nHTML',kind:'text/html',status:'BROWSER QA',hash:'829f…11ac',path:'C:\\PurpleInk\\runs\\cinematic-intelligence-001\\shots\\S001\\attempt-001\\source.html'},
+      frame:{graphic:'每一秒\n都在表达',kind:'image/png',status:'REGISTERED',hash:'7dd5…b91a',path:'C:\\PurpleInk\\runs\\cinematic-intelligence-001\\shots\\S001\\attempt-001\\screenshots\\050.png'},
+      audio:{graphic:'VOICE / 08.4s',kind:'audio/wav',status:'DURATION LOCKED',hash:'33ac…d92e',path:'C:\\PurpleInk\\runs\\cinematic-intelligence-001\\shots\\S001\\narration.wav'},
+      video:{graphic:'FINAL\nMP4 ▶',kind:'video/mp4',status:'H.264 + AAC',hash:'f02e…774d',path:'C:\\PurpleInk\\runs\\cinematic-intelligence-001\\final\\video.mp4'},
+      index:{graphic:'110\nARTIFACTS',kind:'application/json',status:'WHITELIST',hash:'99e4…a021',path:'C:\\PurpleInk\\runs\\cinematic-intelligence-001\\artifacts\\index.json'}
+    };
+    function clearPageTimers(){pageTimers.forEach(clearInterval);pageTimers=[]}
+    function render(){
+      clearPageTimers();
+      const requested=location.hash.slice(1)||'overview';
+      const route=routes.has(requested)?requested:'overview';
+      app.replaceChildren(routes.get(route).content.cloneNode(true));
+      document.querySelectorAll('#nav a').forEach(link=>link.classList.toggle('active',link.dataset.route===route));
+      document.getElementById('route-name').textContent=routes.get(route).dataset.title;
+      document.title=`PurpleInk Local CLI · ${routes.get(route).dataset.title}`;
+      document.body.classList.remove('menu-open');
+      scrollTo({top:0,behavior:'instant'});
+      initRoute(route);
+    }
+    function initRoute(route){
+      bindCopyButtons();
+      if(route==='overview') startDemo();
+      if(route==='quick-start') initQuickStart();
+      if(route==='commands') initCommandSearch();
+      if(route==='workflow') initPipeline();
+      if(route==='observer') startObserverPulse();
+      if(route==='artifacts') initArtifacts();
+      if(route==='troubleshooting') initDiagnosis();
+      if(route==='agent-usage') initPromptComposer();
+    }
+    function startDemo(){
+      const percent=app.querySelector('[data-run-percent]');
+      const bars=[...app.querySelectorAll('.shot-cell .mini-progress i')];
+      let value=42;
+      const tick=()=>{value=value>=94?42:value+7;percent.textContent=`${value}%`;bars.forEach((bar,index)=>bar.style.setProperty('--p',`${Math.min(100,value+index*8-16)}%`))};
+      pageTimers.push(setInterval(tick,1300));
+      app.querySelector('[data-action="replay-demo"]')?.addEventListener('click',()=>{value=35;tick()});
+    }
+    function initQuickStart(){
+      const screen=app.querySelector('[data-terminal-screen]');
+      const title=app.querySelector('[data-terminal-title]');
+      app.querySelectorAll('[data-step]').forEach(button=>button.addEventListener('click',()=>{
+        app.querySelectorAll('[data-step]').forEach(item=>item.classList.remove('active'));
+        button.classList.add('active');
+        const step=terminalSteps[Number(button.dataset.step)];title.textContent=step.title;screen.innerHTML=step.html;
+      }));
+    }
+    function initCommandSearch(){
+      const input=app.querySelector('#command-search');const cards=[...app.querySelectorAll('.command-card')];const count=app.querySelector('#command-count');
+      input.addEventListener('input',()=>{const query=input.value.trim().toLowerCase();let visible=0;cards.forEach(card=>{const hit=!query||`${card.dataset.keywords} ${card.textContent}`.toLowerCase().includes(query);card.classList.toggle('hidden',!hit);if(hit)visible++});count.textContent=`${visible} COMMANDS`});
+    }
+    function initPipeline(){
+      const detail=app.querySelector('#pipeline-detail');app.querySelectorAll('[data-pipeline]').forEach(button=>button.addEventListener('click',()=>{app.querySelectorAll('[data-pipeline]').forEach(node=>node.classList.remove('active'));button.classList.add('active');const data=pipelineData[button.dataset.pipeline];detail.innerHTML=`<div class="big-index">${data.index}</div><span class="label">${data.label}</span><h2>${data.title}</h2><p>${data.body}</p><div class="detail-proof">${data.proof}</div>`}));
+    }
+    function startObserverPulse(){
+      const percent=app.querySelector('[data-observer-percent]');const timeline=app.querySelector('[data-live-timeline]');let value=64;
+      pageTimers.push(setInterval(()=>{value=Math.min(92,value+3);percent.textContent=`${value}%`;if(value>=76){const items=timeline.children;items[2].className='timeline-item done';items[2].lastElementChild.textContent='DONE #1';items[3].className='timeline-item running';items[3].lastElementChild.textContent='RUNNING'}if(value>=92)value=64},1500));
+    }
+    function initArtifacts(){
+      const graphic=app.querySelector('#artifact-graphic'),kind=app.querySelector('#artifact-kind'),status=app.querySelector('#artifact-status'),hash=app.querySelector('#artifact-hash'),path=app.querySelector('#artifact-path');
+      app.querySelectorAll('[data-artifact]').forEach(button=>button.addEventListener('click',()=>{app.querySelectorAll('[data-artifact]').forEach(item=>item.classList.remove('active'));button.classList.add('active');const data=artifacts[button.dataset.artifact];graphic.innerText=data.graphic;kind.textContent=data.kind;status.textContent=data.status;hash.textContent=data.hash;path.textContent=data.path}));
+    }
+    function initDiagnosis(){
+      const panel=app.querySelector('#diagnosis');app.querySelectorAll('[data-symptom]').forEach(button=>button.addEventListener('click',()=>{app.querySelectorAll('[data-symptom]').forEach(item=>item.classList.remove('active'));button.classList.add('active');const data=diagnoses[button.dataset.symptom];panel.innerHTML=`<div class="diagnosis-index">${data.index}</div><div><span class="label">${data.label}</span><h2>${data.title}</h2><p>${data.body}</p><pre>${escapeHtml(data.cmd)}</pre></div>`}));
+    }
+    function initPromptComposer(){
+      const palette=app.querySelector('#palette-choice'),dimension=app.querySelector('#dimension-choice'),style=app.querySelector('#style-choice'),input=app.querySelector('#input-choice'),output=app.querySelector('[data-prompt-content]');
+      const update=()=>{output.textContent=`请使用 generating-purpleink-script-videos Skill，把下面文件生成一条真实的带旁白文稿视频：\n\n输入文件：${input.value}\n\n全局视觉硬约束：\n- 色系：${palette.value}\n- 空间：${dimension.value}\n- 风格：${style.value}\n\n开始前不要立即运行。先结合当前对话，用一个紧凑问题补齐仍缺失的视觉选择。如果还有其他视觉 Skill，只提炼它的配色、排版、构图、材质、镜头、运动、特效和视觉禁忌。\n\n把确认结果写入 UTF-8 global Prompt，并通过 --global-prompt-file 注入 DIRECT、每个 SHOT-SPEC、每个 FABRICATE 和 HTML repair。默认先启动 pnpm cli serve --port 0 --json 并返回 observer URL，再执行真实 Provider 工作流。\n\n若镜头失败，先返回对应 HTML、三点截图、音频和诊断的绝对路径，只重试失败镜头。只有 inspect 返回最终 MP4 路径，且 H.264、AAC、分辨率、帧率、时长和抽帧验收通过后，才报告完成。`};
+      [palette,dimension,style,input].forEach(control=>control.addEventListener('input',update));update();
+    }
+    function bindCopyButtons(){app.querySelectorAll('[data-copy-target]').forEach(button=>button.addEventListener('click',()=>{const target=document.getElementById(button.dataset.copyTarget);copyText(target?.innerText||target?.textContent||'')}))}
+    async function copyText(text){try{await navigator.clipboard.writeText(text)}catch{const area=document.createElement('textarea');area.value=text;area.style.position='fixed';area.style.opacity='0';document.body.append(area);area.select();document.execCommand('copy');area.remove()}toast.classList.add('show');clearTimeout(copyText.timer);copyText.timer=setTimeout(()=>toast.classList.remove('show'),1600)}
+    function escapeHtml(value){return value.replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]))}
+    function setTheme(theme){document.documentElement.dataset.theme=theme;try{localStorage.setItem('purpleink-intro-theme',theme)}catch{}}
+    document.addEventListener('click',event=>{const action=event.target.closest('[data-action]')?.dataset.action;if(action==='theme')setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');if(action==='open-menu')document.body.classList.add('menu-open');if(action==='close-menu')document.body.classList.remove('menu-open')});
+    document.addEventListener('keydown',event=>{if(event.key==='Escape')document.body.classList.remove('menu-open');if(event.key==='t'&&!/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName))setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');if(event.key==='/'&&location.hash==='#commands'&&!/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)){event.preventDefault();document.getElementById('command-search')?.focus()}});
+    document.addEventListener('pointermove',event=>{document.documentElement.style.setProperty('--mx',`${event.clientX/window.innerWidth*100}%`);document.documentElement.style.setProperty('--my',`${event.clientY/window.innerHeight*100}%`)});
+    try{setTheme(localStorage.getItem('purpleink-intro-theme')||'dark')}catch{}
     addEventListener('hashchange',render);render();
   </script>
 </body>
