@@ -93,10 +93,38 @@ describe('assembleProject', () => {
     expect(shot).toContain('<template>')
     expect(shot).toContain('data-composition-id="S001"')
     expect(shot).toContain('window.__timelines["S001"]')
+    expect(shot).toContain('var timeline=render.timeline')
+    expect(shot).toContain('<script src="../runtime/gsap.min.js"></script>')
+    expect(shot).not.toContain('onUpdate:function(){if(render')
     expect(shot.indexOf('<style>')).toBeGreaterThan(shot.indexOf('<template>'))
     await access(join(result.projectDir, 'compositions', 'S001.html'))
+    await access(join(result.projectDir, 'runtime', 'gsap.min.js'))
     await access(result.manifestPath)
     await access(result.subtitlePath)
+  })
+
+  it('registers the source master timeline and scales it to the effective narration duration', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'purpleink-assemble-'))
+    roots.push(root)
+    await createShots(root)
+    const sourcePath = join(root, 'shots', 'S001', 'attempt-001', 'source.html')
+    await writeFile(
+      sourcePath,
+      '<!doctype html><html><body><main>S001</main><script>const timeline=gsap.timeline({paused:true});window.__PURPLEINK_RENDER__={ready:true,durationSec:5,timeline,seek(progress){timeline.progress(progress).pause()}}</script></body></html>',
+      'utf8',
+    )
+    const effectivePlans = [{ ...plans[0]!, durationSec: 9 }, plans[1]!]
+
+    const result = await assembleProject(input, effectivePlans, codegenResult(), {
+      outputDir: root,
+      narration: { mode: 'off' },
+    })
+    const shot = await readFile(join(result.projectDir, 'compositions', 'S001.html'), 'utf8')
+
+    expect(shot).toContain('var timeline=render.timeline')
+    expect(shot).toContain('timeline.duration(9)')
+    expect(shot).toContain('render.durationSec=9')
+    expect(shot).not.toContain('render.seek')
   })
 
   it('marks auto narration degraded when no user-owned TTS adapter is configured', async () => {

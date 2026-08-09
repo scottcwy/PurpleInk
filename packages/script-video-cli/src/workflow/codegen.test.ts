@@ -141,7 +141,7 @@ describe('generateShots', () => {
     await access(join(root, 'shots', 'S001', 'attempt-002', 'source.html'))
   })
 
-  it('adapts common model HTML to the deterministic HyperFrames contract', async () => {
+  it('normalizes local runtime dependencies without inventing a proxy render contract', async () => {
     const root = await mkdtemp(join(tmpdir(), 'purpleink-codegen-adapter-'))
     roots.push(root)
     const ai: AiClient = {
@@ -152,7 +152,7 @@ describe('generateShots', () => {
         <body data-pi-seed="x"><main>事实</main><script>
         function renderFrame(time) { document.body.dataset.time = String(time); }
         function loop() { requestAnimationFrame(loop); }
-        window.__PURPLEINK_RENDER__ = { duration: 7, seekTo: renderFrame };
+        window.__PURPLEINK_RENDER__ = { ready: true, durationSec: 7, seekTo: renderFrame };
         </script></body></html>`,
       completeJson: async () => ({}),
     }
@@ -167,7 +167,8 @@ describe('generateShots', () => {
 
     expect(result.failed).toHaveLength(0)
     expect(saved).toContain('ready: true')
-    expect(saved).toContain('durationSec: durationSec')
+    expect(saved).not.toContain('durationSec: durationSec')
+    expect(saved).not.toContain('value * durationSec')
     expect(saved).toContain('function loop() { requestAnimationFrame(loop); }')
     expect(saved).not.toContain('Microsoft YaHei')
     expect(saved).toContain('data-purpleink-runtime="gsap"')

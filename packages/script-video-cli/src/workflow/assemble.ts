@@ -1,8 +1,12 @@
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { resolve, relative, join, dirname, isAbsolute, sep } from 'node:path'
 
 import type { NarrationMode, ScriptVideoInput, ShotPlan } from '../contracts'
 import type { CodegenResult, CodegenShotResult } from './codegen'
+
+const require = createRequire(import.meta.url)
+const localGsapPath = require.resolve('gsap/dist/gsap.min.js')
 
 export interface TtsAdapter {
   synthesize(request: { text: string; language: string; title: string; signal?: AbortSignal }): Promise<Uint8Array>
@@ -59,7 +63,10 @@ export async function assembleProject(
   const resultById = new Map(codegen.succeeded.map((shot) => [shot.id, shot]))
   const projectDir = join(resolve(options.outputDir), 'project')
   const compositionDir = join(projectDir, 'compositions')
+  const runtimeDir = join(projectDir, 'runtime')
   await mkdir(compositionDir, { recursive: true })
+  await mkdir(runtimeDir, { recursive: true })
+  await copyFile(localGsapPath, join(runtimeDir, 'gsap.min.js'))
   const durationSec = round(plans.reduce((total, plan) => total + plan.durationSec, 0))
   const compositionPaths: string[] = []
 
@@ -172,8 +179,9 @@ function createIndexHtml(
 ${hosts}
   </div>
 </body>
+<script src="runtime/gsap.min.js"></script>
 <script>
-${createTimelineScript('main', durationSec)}
+${createMainTimelineScript(durationSec)}
 </script>
 </html>
 `
@@ -181,7 +189,10 @@ ${createTimelineScript('main', durationSec)}
 
 function createShotCompositionHtml(plan: ShotPlan, source: string): string {
   const styles = [...source.matchAll(/<style\b[^>]*>[\s\S]*?<\/style>/giu)].map((match) => match[0]).join('\n')
-  const scripts = [...source.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/giu)].map((match) => match[0]).join('\n')
+  const scripts = [...source.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/giu)]
+    .map((match) => match[0])
+    .filter((script) => !/data-purpleink-runtime=["']gsap["']/iu.test(script))
+    .join('\n')
   const body = source.match(/<body\b[^>]*>([\s\S]*?)<\/body>/iu)?.[1] ?? ''
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"></head><body><template>
@@ -190,14 +201,19 @@ ${styles}
 <div id="root" data-composition-id="${plan.id}" data-width="1920" data-height="1080">
 ${body.replace(/<script\b[^>]*>[\s\S]*?<\/script>/giu, '')}
 </div>
+<script src="../runtime/gsap.min.js"></script>
 ${scripts}
-<script>${createTimelineScript(plan.id, plan.durationSec)}</script>
+<script>${createShotTimelineRegistration(plan.id, plan.durationSec)}</script>
 </template></body></html>
 `
 }
 
-function createTimelineScript(id: string, durationSec: number): string {
-  return `window.__timelines=window.__timelines||{};(function(render){var state={progress:0};var timeline=gsap.timeline({paused:true});timeline.to(state,{progress:1,duration:${round(durationSec)},ease:"none",onUpdate:function(){if(render&&typeof render.seek==="function")render.seek(state.progress)}});window.__timelines[${JSON.stringify(id)}]=timeline})(window.__PURPLEINK_RENDER__);`
+function createMainTimelineScript(durationSec: number): string {
+  return `window.__timelines=window.__timelines||{};(function(){var state={progress:0};var timeline=gsap.timeline({paused:true});timeline.to(state,{progress:1,duration:${round(durationSec)},ease:"none"});window.__timelines.main=timeline})();`
+}
+
+function createShotTimelineRegistration(id: string, durationSec: number): string {
+  return `window.__timelines=window.__timelines||{};(function(render){if(!render||!render.timeline){console.warn("[PurpleInk] shot timeline missing",${JSON.stringify(id)});return}var timeline=render.timeline;if(typeof timeline.duration==="function")timeline.duration(${round(durationSec)});if(typeof timeline.pause==="function")timeline.pause();render.durationSec=${round(durationSec)};window.__timelines[${JSON.stringify(id)}]=timeline})(window.__PURPLEINK_RENDER__);`
 }
 
 function createSubtitles(input: ScriptVideoInput, plans: readonly ShotPlan[]): string {

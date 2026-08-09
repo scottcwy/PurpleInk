@@ -65,7 +65,7 @@ async function generateOneShot(
 ): Promise<CodegenShotResult> {
   const promptFingerprint = hashPromptAssetsWithGlobal(['fabricate', 'html-repair'], input.globalPrompt)
   const fingerprint = createHash('sha256')
-    .update(JSON.stringify({ input, shot, promptFingerprint, htmlAdapterVersion: 3 }), 'utf8')
+    .update(JSON.stringify({ input, shot, promptFingerprint, htmlNormalizationVersion: 4 }), 'utf8')
     .digest('hex')
   const key = `FABRICATE:${shot.id}`
   const previous = options.store && options.runDir ? await options.store.readStage(options.runDir, key) : null
@@ -93,7 +93,7 @@ async function generateOneShot(
           ? buildFabricatePrompt(input, unit, shot)
           : buildHtmlRepairPrompt(shot, compactError(lastError), input.globalPrompt)
       const raw = await options.ai.completeText({ ...prompt, signal: options.signal })
-      const html = normalizeHtml(raw, shot.durationSec)
+      const html = normalizeHtml(raw)
       const shotDir = join(options.outputDir, 'shots', shot.id, `attempt-${String(attempt).padStart(3, '0')}`)
       await mkdir(shotDir, { recursive: true })
       const htmlPath = join(shotDir, 'source.html')
@@ -173,7 +173,7 @@ class CodegenFailure extends Error {
   }
 }
 
-function normalizeHtml(raw: string, durationSec: number): string {
+function normalizeHtml(raw: string): string {
   const fenced = raw.match(/^```(?:html)?\s*([\s\S]*?)\s*```$/iu)
   const html = (fenced?.[1] ?? raw).trim()
   if (!/<html[\s>]/iu.test(html) || !/<\/body\s*>/iu.test(html) || !/<\/html\s*>/iu.test(html)) {
@@ -181,33 +181,6 @@ function normalizeHtml(raw: string, durationSec: number): string {
   }
   let normalized = html.replace(/font-family\s*:\s*[^;}]+/giu, 'font-family: Inter, sans-serif')
   normalized = injectLocalGsap(normalized)
-  if (
-    /window\.__PURPLEINK_RENDER__/u.test(normalized) &&
-    /ready\s*:\s*true/u.test(normalized) &&
-    /durationSec\s*:/u.test(normalized)
-  ) {
-    return normalized
-  }
-  const adapter = `<script>
-(function () {
-  const original = window.__PURPLEINK_RENDER__;
-  const durationSec = ${Number(durationSec.toFixed(3))};
-  window.__PURPLEINK_RENDER__ = {
-    ready: true,
-    durationSec: durationSec,
-    seek: function (progress) {
-      const value = Math.max(0, Math.min(1, Number(progress) || 0));
-      if (typeof original === 'function') return original(value);
-      if (original && typeof original.seek === 'function') return original.seek(value * durationSec);
-      if (original && typeof original.seekTo === 'function') return original.seekTo(value * durationSec);
-      if (original && typeof original.render === 'function') return original.render(value * durationSec);
-      if (typeof window.renderAtProgress === 'function') return window.renderAtProgress(value);
-      if (typeof window.renderFrame === 'function') return window.renderFrame(value * durationSec);
-    }
-  };
-})();
-</script>`
-  normalized = appendBeforeBody(normalized, adapter)
   return normalized
 }
 
@@ -221,10 +194,6 @@ function injectLocalGsap(html: string): string {
   if (/<head\b[^>]*>/iu.test(withoutRemoteGsapCore))
     return withoutRemoteGsapCore.replace(/<head\b[^>]*>/iu, (opening) => `${opening}\n${script}`)
   return withoutRemoteGsapCore.replace(/<html\b[^>]*>/iu, (opening) => `${opening}\n<head>${script}</head>`)
-}
-
-function appendBeforeBody(html: string, content: string): string {
-  return content.trim() ? html.replace(/<\/body\s*>/iu, `${content}\n</body>`) : html
 }
 
 function parseStoredResult(value: unknown): CodegenShotResult | null {
