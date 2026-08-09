@@ -12,7 +12,7 @@ import { AiProviderError, type AiClient } from '../ai/openai-compatible'
 import { completeJsonWithRepair } from '../ai/structured-output'
 import { mapWithConcurrency } from '../ai/concurrency'
 import type { StateStore, StageRecord } from '../state/store'
-import { buildDirectPrompt, buildShotSpecPrompt, hashPromptAssets } from './prompts'
+import { buildDirectPrompt, buildShotSpecPrompt, hashPromptAssetsWithGlobal } from './prompts'
 
 export interface PlanOptions {
   store?: StateStore
@@ -43,9 +43,9 @@ export async function createPlan(
   options: PlanOptions = {},
 ): Promise<PlanResult> {
   const state = requireStatePair(options)
-  const directPromptFingerprint = hashPromptAssets(['direct'])
-  const shotPromptFingerprint = hashPromptAssets(['shot-spec'])
-  const promptFingerprint = hashPromptAssets(['direct', 'shot-spec'])
+  const directPromptFingerprint = hashPromptAssetsWithGlobal(['direct'], input.globalPrompt)
+  const shotPromptFingerprint = hashPromptAssetsWithGlobal(['shot-spec'], input.globalPrompt)
+  const promptFingerprint = hashPromptAssetsWithGlobal(['direct', 'shot-spec'], input.globalPrompt)
   const directorFingerprint = fingerprint({ stage: 'DIRECT', input, promptFingerprint: directPromptFingerprint })
   const director = await runDirectorStage(input, ai, state, directorFingerprint, options.signal)
   const shots = await mapWithConcurrency(

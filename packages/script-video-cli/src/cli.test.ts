@@ -28,12 +28,22 @@ describe('parseCliArgs', () => {
   })
 
   it('accepts an explicit fixture provider and browser-gate opt out', () => {
-    const args = parseCliArgs(['plan', '--input', 'script.md', '--provider', 'fixture', '--no-browser-gate'])
+    const args = parseCliArgs([
+      'plan',
+      '--input',
+      'script.md',
+      '--global-prompt-file',
+      'style.md',
+      '--provider',
+      'fixture',
+      '--no-browser-gate',
+    ])
 
     expect(args).toMatchObject({
       command: 'plan',
       inputPath: 'script.md',
       provider: 'fixture',
+      globalPromptPath: 'style.md',
       skipBrowserGate: true,
     })
   })

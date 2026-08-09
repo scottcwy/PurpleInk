@@ -6,7 +6,7 @@ import { createOpenAiCompatibleClient, type AiClient } from '../ai/openai-compat
 import type { CliArgs } from '../args'
 import type { CliConfig } from '../config'
 import { WORKFLOW_VERSION } from '../config'
-import type { ScriptVideoInput, ShotPlan } from '../contracts'
+import { scriptVideoInputSchema, type ScriptVideoInput, type ShotPlan } from '../contracts'
 import { extractMarkdownNarrative, readScriptFile } from '../input'
 import { concatShotAudio } from '../media/ffmpeg'
 import type { MediaQaResult } from '../qa/media'
@@ -37,8 +37,11 @@ export interface PreparedRun {
   sourceHash: string
   input?: ScriptVideoInput
   semanticSourceText?: string
+  globalPrompt?: string
   audio: boolean
 }
+
+const GLOBAL_PROMPT_FILE = 'global-prompt.txt'
 
 export async function prepareRun(args: CliArgs, config: CliConfig, requireAudio = false): Promise<PreparedRun> {
   if (!args.inputPath) throw new SafeCliError('INPUT_REQUIRED', '命令需要输入文件。', false, 400)
@@ -49,7 +52,10 @@ export async function prepareRun(args: CliArgs, config: CliConfig, requireAudio 
   const audio = ['.wav', '.mp3'].includes(extension)
   if (requireAudio && !audio)
     throw new SafeCliError('AUDIO_INPUT_REQUIRED', 'transcribe 只接受 WAV 或 MP3。', false, 400)
-  const input = audio ? undefined : (await readScriptFile(sourcePath)).input
+  const baseInput = audio ? undefined : (await readScriptFile(sourcePath)).input
+  const explicitGlobalPrompt = args.globalPromptPath
+    ? await readGlobalPrompt(resolveUserPath(args.globalPromptPath))
+    : undefined
   const semanticSourceText = extension === '.md' ? extractMarkdownNarrative(bytes.toString('utf8')) : undefined
   const store = new FileStateStore(resolveOutputDir(args, config))
   let run: RunRecord
@@ -60,10 +66,15 @@ export async function prepareRun(args: CliArgs, config: CliConfig, requireAudio 
   } else {
     run = await store.createRun({
       inputHash: sourceHash,
-      title: input?.title ?? basename(sourcePath, extname(sourcePath)),
+      title: baseInput?.title ?? basename(sourcePath, extname(sourcePath)),
       workflowVersion: WORKFLOW_VERSION,
     })
     await copyFile(sourcePath, join(run.runDir, 'input', basename(sourcePath)))
+  }
+  const storedGlobalPrompt = await readStoredGlobalPrompt(run.runDir)
+  const globalPrompt = explicitGlobalPrompt ?? storedGlobalPrompt ?? baseInput?.globalPrompt
+  if (globalPrompt && (explicitGlobalPrompt || !storedGlobalPrompt)) {
+    await writeFile(join(run.runDir, 'input', GLOBAL_PROMPT_FILE), `${globalPrompt}\n`, 'utf8')
   }
   const sourceCopy = join(run.runDir, 'input', basename(sourcePath))
   await registerFileArtifact(store, run.runDir, {
@@ -79,7 +90,7 @@ export async function prepareRun(args: CliArgs, config: CliConfig, requireAudio 
     artifactIds: ['source-input'],
     payload: { sourcePath: sourceCopy, audio },
   })
-  return { run, sourcePath: sourceCopy, sourceHash, input, semanticSourceText, audio }
+  return { run, sourcePath: sourceCopy, sourceHash, input: baseInput, semanticSourceText, globalPrompt, audio }
 }
 
 export async function resolveWorkflowInput(
@@ -89,15 +100,45 @@ export async function resolveWorkflowInput(
   ai?: AiClient,
 ): Promise<ScriptVideoInput> {
   if (prepared.input) {
-    if (!prepared.semanticSourceText) return prepared.input
+    const baseInput = withoutGlobalPrompt(prepared.input)
+    if (!prepared.semanticSourceText) return applyGlobalPrompt(baseInput, prepared.globalPrompt)
     if (!ai) throw new SafeCliError('TEXT_PROVIDER_REQUIRED', 'Markdown 语义拆稿需要文本模型配置。', false, 422)
-    return semanticIngestMarkdown(prepared.input, prepared.semanticSourceText, ai, {
+    const input = await semanticIngestMarkdown(baseInput, prepared.semanticSourceText, ai, {
       store,
       runDir: prepared.run.runDir,
       signal: runtime.signal,
     })
+    return applyGlobalPrompt(input, prepared.globalPrompt)
   }
-  return (await transcribePrepared(prepared, runtime, store)).input
+  const input = (await transcribePrepared(prepared, runtime, store)).input
+  return applyGlobalPrompt(input, prepared.globalPrompt)
+}
+
+function applyGlobalPrompt(input: ScriptVideoInput, globalPrompt?: string): ScriptVideoInput {
+  return globalPrompt ? scriptVideoInputSchema.parse({ ...input, globalPrompt }) : input
+}
+
+function withoutGlobalPrompt(input: ScriptVideoInput): ScriptVideoInput {
+  if (!input.globalPrompt) return input
+  const { globalPrompt: _globalPrompt, ...baseInput } = input
+  return scriptVideoInputSchema.parse(baseInput)
+}
+
+async function readGlobalPrompt(path: string): Promise<string> {
+  const value = (await readFile(path, 'utf8')).replace(/\r\n?/gu, '\n').trim()
+  if (!value || value.includes('\uFFFD') || value.length > 20_000) {
+    throw new SafeCliError('GLOBAL_PROMPT_INVALID', '全局 Prompt 必须是 1–20000 字的有效 UTF-8 文本。', false, 400)
+  }
+  return value
+}
+
+async function readStoredGlobalPrompt(runDir: string): Promise<string | undefined> {
+  try {
+    return await readGlobalPrompt(join(runDir, 'input', GLOBAL_PROMPT_FILE))
+  } catch (error) {
+    if (error instanceof SafeCliError && error.code === 'GLOBAL_PROMPT_INVALID') throw error
+    return undefined
+  }
 }
 
 export async function transcribePrepared(

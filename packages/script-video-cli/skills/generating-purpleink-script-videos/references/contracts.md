@@ -3,8 +3,9 @@
 ## Inputs
 
 - Markdown: the first H1 supplies the title, but unit boundaries come from semantic INGEST rather than headings, character counts, punctuation counts, or fixed duration. Units continuously cover the source in order; each carries one core judgment and maps to one shot.
-- JSON: schema version 1 with title, language, durationSec, visualStyle, narration, and ordered `U###` units.
+- JSON: schema version 1 with title, language, durationSec, visualStyle, optional globalPrompt, narration, and ordered `U###` units.
 - WAV/MP3: FFmpeg supplies real segment boundaries; MiMo only transcribes text. AI may group adjacent segments semantically, while the program deterministically inherits their text and outer timestamps. The CLI writes `input/transcript.json`, `input/transcript.md`, and `input/script.json` before continuing.
+- A run/plan/submit global Prompt file is copied into the run and appended only to DIRECT, SHOT-SPEC, FABRICATE, and HTML repair. It does not alter semantic ingest, ASR, transcript structure, or TTS.
 
 ## Run status
 

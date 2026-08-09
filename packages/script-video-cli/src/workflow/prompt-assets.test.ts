@@ -9,8 +9,10 @@ import {
   PROMPT_ASSET_NAMES,
   buildDirectPrompt,
   buildFabricatePrompt,
+  buildHtmlRepairPrompt,
   buildSemanticIngestPrompt,
   buildShotSpecPrompt,
+  buildTtsStylePrompt,
   hashPromptAssets,
   loadPromptAsset,
 } from './prompts'
@@ -25,6 +27,7 @@ describe('prompt assets', () => {
   it('loads every UTF-8 template without replacement characters', () => {
     expect(PROMPT_ASSET_NAMES).toEqual([
       'semantic-ingest',
+      'global-constraints',
       'direct',
       'shot-spec',
       'fabricate',
@@ -65,6 +68,7 @@ describe('prompt assets', () => {
       language: 'zh-CN',
       durationSec: 12,
       visualStyle: '技术编辑风格',
+      globalPrompt: 'GLOBAL_STYLE_SENTINEL：全片必须使用浅色立体视觉。',
       narration: 'off',
       units: [{ id: 'U001', text: '唯一来源事实。', visualIntent: 'show' }],
     })
@@ -82,11 +86,17 @@ describe('prompt assets', () => {
     }
 
     expect(buildDirectPrompt(input).user).toContain('中文标题')
+    expect(buildDirectPrompt(input).user).toContain('GLOBAL_STYLE_SENTINEL')
     expect(buildDirectPrompt(input).user).toContain('一个 source unit 必须对应一个镜头和一个核心判断')
     expect(buildDirectPrompt(input).user).toContain('相邻镜头必须改变拓扑、视角、运动方式或信息职责')
     expect(buildSemanticIngestPrompt('第一句。第二句。').user).toContain('禁止按字数、标点数或固定时长硬切')
     expect(buildShotSpecPrompt(input, director, input.units[0]!, 'S001').user).toContain('S001')
     expect(buildShotSpecPrompt(input, director, input.units[0]!, 'S001').user).toContain('0%、25%、60%、95%')
+    expect(buildShotSpecPrompt(input, director, input.units[0]!, 'S001').user).toContain('GLOBAL_STYLE_SENTINEL')
     expect(buildFabricatePrompt(input, input.units[0]!, shot).user).toContain('data-pi-seed')
+    expect(buildFabricatePrompt(input, input.units[0]!, shot).user).toContain('GLOBAL_STYLE_SENTINEL')
+    expect(buildHtmlRepairPrompt(shot, 'gate failed', input.globalPrompt).user).toContain('GLOBAL_STYLE_SENTINEL')
+    expect(buildSemanticIngestPrompt('第一句。第二句。').user).not.toContain('GLOBAL_STYLE_SENTINEL')
+    expect(buildTtsStylePrompt(input, shot)).not.toContain('GLOBAL_STYLE_SENTINEL')
   })
 })

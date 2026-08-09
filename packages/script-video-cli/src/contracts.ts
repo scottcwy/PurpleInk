@@ -30,6 +30,7 @@ export const scriptVideoInputSchema = z
     language: z.string().trim().min(2).max(24).default('zh-CN'),
     durationSec: z.number().int().min(5).max(600),
     visualStyle: z.string().trim().min(1).max(500).default('editorial technical'),
+    globalPrompt: z.string().trim().min(1).max(20_000).optional(),
     narration: narrationModeSchema.default('auto'),
     units: z.array(scriptUnitSchema).min(1).max(128),
   })

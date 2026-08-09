@@ -79,7 +79,8 @@ pnpm cli --help</pre></section>
   --key-stdin --json</pre></section>
         <section class="step"><h3>验证真实连通性</h3><pre>pnpm cli config verify all --json
 pnpm cli doctor --live --json</pre></section>
-        <section class="step"><h3>生成并定位视频</h3><pre>pnpm cli run .\script.md --json
+        <section class="step"><h3>确认风格并生成</h3><p>先确认全局深浅色、平面/立体和参考风格；需要硬锁时写入一个 UTF-8 Prompt 文件。</p><pre>pnpm cli run .\script.md `
+  --global-prompt-file .\visual-constraints.md --json
 pnpm cli inspect --run &lt;run-id&gt; --json
 pnpm cli serve --run &lt;run-id&gt; --port 0 --json</pre></section>
       </div>
@@ -96,11 +97,11 @@ config verify all --json
 voice import &lt;sample.wav|sample.mp3&gt; --name &lt;id&gt;
 voice use &lt;id|mimo_default&gt;
 voice list --json</pre></section>
-      <section><h2>前台工作流</h2><pre>plan &lt;input&gt; --json
+      <section><h2>前台工作流</h2><pre>plan &lt;input&gt; [--global-prompt-file &lt;path&gt;] --json
 transcribe &lt;audio&gt; --json
-run &lt;input&gt; [--concurrency N] [--narration off] --json</pre></section>
+run &lt;input&gt; [--global-prompt-file &lt;path&gt;] [--concurrency N] [--narration off] --json</pre></section>
       <section><h2>批量与守护进程</h2><pre>daemon start [--serve] --json
-submit &lt;input...&gt; --json
+submit &lt;input...&gt; [--global-prompt-file &lt;path&gt;] --json
 daemon status --json
 daemon stop --json</pre></section>
       <section><h2>观察、恢复与控制</h2><pre>status [--run &lt;id|path&gt;] [--watch]
@@ -128,6 +129,7 @@ doctor [--live] --json</pre></section>
     <article class="page prose"><span class="eyebrow">Artifacts</span><h1>文件系统就是可解释的工作台。</h1><p class="lead">每个 run 都是一个可移动、可恢复、可审计的目录。AI 返回绝对路径，人类通过 observer 直接预览。</p>
       <section><pre>runs/&lt;run-id&gt;/
   input/                         # 原始输入、转写与规范 script
+    global-prompt.txt            # 可选；所有创作阶段共享的视觉硬约束
   state/run.json                 # run 真值
   state/stages/                  # 每阶段 fingerprint / attempt / status
   state/events.jsonl             # NDJSON 事件
@@ -161,9 +163,9 @@ doctor [--live] --json</pre></section>
   <template data-route="agent-usage" data-title="Agent Usage">
     <article class="page prose"><span class="eyebrow">Agent Usage</span><h1>给 AI 一个稳定、可验证的机器合同。</h1><p class="lead">Agent 不需要模拟人类点击软件。它调用 CLI、读取 JSON 状态、定位绝对路径，并在出错时只重做对应镜头。</p>
       <section><h2>安装 Skill</h2><pre>pnpm skill:install</pre><p>安装目标：<span class="path">%USERPROFILE%\.agents\skills\generating-purpleink-script-videos\</span></p></section>
-      <section><h2>Agent 决策顺序</h2><div class="steps"><div class="step"><h3>获取实时命令</h3><p>运行 <code>purpleink-video --help</code>，不要从记忆拼参数。</p></div><div class="step"><h3>确认配置</h3><p>使用 <code>config show --json</code>；Key 只能隐藏输入或通过 stdin。</p></div><div class="step"><h3>选择前台或批量</h3><p>一个输入用 run；多个输入用 daemon + submit。</p></div><div class="step"><h3>解释失败</h3><p>needs_attention 时返回坏镜头 Artifact 的绝对路径，再 retry。</p></div><div class="step"><h3>证明交付</h3><p>最终回复包含 MP4 绝对路径、媒体参数、大小与 SHA-256。</p></div></div></section>
+      <section><h2>Agent 决策顺序</h2><div class="steps"><div class="step"><h3>确认视觉方向</h3><p>开始前确认全局深浅色、平面/立体和参考风格；其他 Skill 只提炼视觉部分。</p></div><div class="step"><h3>获取实时命令</h3><p>运行 <code>purpleink-video --help</code>，不要从记忆拼参数。</p></div><div class="step"><h3>确认配置</h3><p>使用 <code>config show --json</code>；Key 只能隐藏输入或通过 stdin。</p></div><div class="step"><h3>选择前台或批量</h3><p>一个输入用 run；多个输入用 daemon + submit。</p></div><div class="step"><h3>解释失败</h3><p>needs_attention 时返回坏镜头 Artifact 的绝对路径，再 retry。</p></div><div class="step"><h3>证明交付</h3><p>最终回复包含 MP4 绝对路径、媒体参数、大小与 SHA-256。</p></div></div></section>
       <section><h2>机器友好示例</h2><pre># 单任务
-purpleink-video run .\brief.md --json
+purpleink-video run .\brief.md --global-prompt-file .\visual-constraints.md --json
 
 # 读取最终路径
 purpleink-video inspect --run &lt;run-id&gt; --json

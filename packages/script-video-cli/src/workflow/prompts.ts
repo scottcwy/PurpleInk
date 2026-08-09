@@ -7,6 +7,7 @@ import type { DirectorPlan, ScriptUnit, ScriptVideoInput, ShotPlan } from '../co
 
 export const PROMPT_ASSET_NAMES = [
   'semantic-ingest',
+  'global-constraints',
   'direct',
   'shot-spec',
   'fabricate',
@@ -48,6 +49,14 @@ export function hashPromptAssets(names: readonly PromptAssetName[], options: Pro
   return hash.digest('hex')
 }
 
+export function hashPromptAssetsWithGlobal(
+  names: readonly PromptAssetName[],
+  globalPrompt?: string,
+  options: PromptAssetOptions = {},
+): string {
+  return hashPromptAssets(globalPrompt?.trim() ? [...names, 'global-constraints'] : names, options)
+}
+
 export function renderPromptAsset(
   name: PromptAssetName,
   variables: Readonly<Record<string, string>>,
@@ -62,12 +71,15 @@ export function renderPromptAsset(
 }
 
 export function buildDirectPrompt(input: ScriptVideoInput): { system: string; user: string } {
-  return pickPrompt(
-    renderPromptAsset('direct', {
-      title: input.title,
-      visualStyle: input.visualStyle,
-      unitsJson: JSON.stringify(input.units),
-    }),
+  return appendGlobalPrompt(
+    pickPrompt(
+      renderPromptAsset('direct', {
+        title: input.title,
+        visualStyle: input.visualStyle,
+        unitsJson: JSON.stringify(input.units),
+      }),
+    ),
+    input.globalPrompt,
   )
 }
 
@@ -81,13 +93,16 @@ export function buildShotSpecPrompt(
   unit: ScriptUnit,
   expectedId: string,
 ): { system: string; user: string } {
-  return pickPrompt(
-    renderPromptAsset('shot-spec', {
-      expectedId,
-      directorJson: JSON.stringify(director),
-      unitJson: JSON.stringify(unit),
-      inputSummaryJson: JSON.stringify({ title: input.title, language: input.language }),
-    }),
+  return appendGlobalPrompt(
+    pickPrompt(
+      renderPromptAsset('shot-spec', {
+        expectedId,
+        directorJson: JSON.stringify(director),
+        unitJson: JSON.stringify(unit),
+        inputSummaryJson: JSON.stringify({ title: input.title, language: input.language }),
+      }),
+    ),
+    input.globalPrompt,
   )
 }
 
@@ -96,13 +111,16 @@ export function buildFabricatePrompt(
   unit: ScriptUnit,
   shot: ShotPlan,
 ): { system: string; user: string } {
-  return pickPrompt(
-    renderPromptAsset('fabricate', {
-      shotId: shot.id,
-      inputSummaryJson: JSON.stringify({ title: input.title, visualStyle: input.visualStyle }),
-      unitJson: JSON.stringify(unit),
-      shotJson: JSON.stringify(shot),
-    }),
+  return appendGlobalPrompt(
+    pickPrompt(
+      renderPromptAsset('fabricate', {
+        shotId: shot.id,
+        inputSummaryJson: JSON.stringify({ title: input.title, visualStyle: input.visualStyle }),
+        unitJson: JSON.stringify(unit),
+        shotJson: JSON.stringify(shot),
+      }),
+    ),
+    input.globalPrompt,
   )
 }
 
@@ -124,14 +142,33 @@ export function buildTtsStylePrompt(
   return `${prompt.system}\n${prompt.user}`.trim()
 }
 
-export function buildHtmlRepairPrompt(shot: ShotPlan, errorSummary: string): { system: string; user: string } {
-  return pickPrompt(
-    renderPromptAsset('html-repair', {
-      shotId: shot.id,
-      errorSummary,
-      shotJson: JSON.stringify(shot),
-    }),
+export function buildHtmlRepairPrompt(
+  shot: ShotPlan,
+  errorSummary: string,
+  globalPrompt?: string,
+): { system: string; user: string } {
+  return appendGlobalPrompt(
+    pickPrompt(
+      renderPromptAsset('html-repair', {
+        shotId: shot.id,
+        errorSummary,
+        shotJson: JSON.stringify(shot),
+      }),
+    ),
+    globalPrompt,
   )
+}
+
+function appendGlobalPrompt(
+  prompt: { system: string; user: string },
+  globalPrompt?: string,
+): { system: string; user: string } {
+  if (!globalPrompt?.trim()) return prompt
+  const constraints = renderPromptAsset('global-constraints', { globalPrompt: globalPrompt.trim() })
+  return {
+    system: `${prompt.system}\n\n${constraints.system}`,
+    user: `${prompt.user}\n\n${constraints.user}`,
+  }
 }
 
 function defaultPromptRoot(): string {

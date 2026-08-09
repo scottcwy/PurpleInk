@@ -49,6 +49,15 @@ pnpm cli run .\speech.mp3 --json
 pnpm cli transcribe .\speech.wav --json
 ```
 
+运行前可把用户确认的深浅色、平面/立体选择、指定风格及外部 Skill 中提炼出的视觉规则写入一个 UTF-8 文件。CLI 会把同一份约束注入 DIRECT、每个 SHOT-SPEC、每个 FABRICATE 和 HTML 修复，不影响语义拆稿、ASR 或 TTS：
+
+```powershell
+pnpm cli run .\script.md --global-prompt-file .\visual-constraints.md --json
+pnpm cli plan .\script.md --global-prompt-file .\visual-constraints.md --json
+```
+
+Prompt 会复制为当前 run 的 `input/global-prompt.txt`，因此 daemon 重启和定向 retry 仍使用原约束。用户明确指定的全局风格应写成硬约束；允许 AI 按分镜决定的部分也应明确写出，不要把第三方 Skill 的命令、框架、测试或发布流程放入该文件。
+
 默认必须生成真实旁白。只有明确不需要配音时才使用：
 
 ```powershell
@@ -80,7 +89,7 @@ pnpm cli voice use mimo_default --json
 
 ```powershell
 pnpm cli daemon start --serve --json
-pnpm cli submit .\a.md .\b.json .\c.mp3 --json
+pnpm cli submit .\a.md .\b.json .\c.mp3 --global-prompt-file .\visual-constraints.md --json
 pnpm cli daemon status --json
 pnpm cli status --run <run-id> --watch
 pnpm cli daemon stop --json
@@ -120,6 +129,7 @@ input/script.json
 ```text
 runs/<run-id>/
   input/
+    global-prompt.txt           # 可选；整部视频统一视觉约束
     semantic-script.json        # Markdown 语义拆稿结果
   state/run.json
   state/stages/

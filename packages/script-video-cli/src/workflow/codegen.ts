@@ -10,7 +10,7 @@ import type { ScriptVideoInput, ShotPlan } from '../contracts'
 import type { StateStore } from '../state/store'
 import { registerFileArtifact } from '../state/artifacts'
 import { runChromiumGate, validateShotHtml, type RuntimeGateResult } from './gates'
-import { buildFabricatePrompt, buildHtmlRepairPrompt, hashPromptAssets } from './prompts'
+import { buildFabricatePrompt, buildHtmlRepairPrompt, hashPromptAssetsWithGlobal } from './prompts'
 
 const require = createRequire(import.meta.url)
 const localGsapSource = readFileSync(require.resolve('gsap/dist/gsap.min.js'), 'utf8')
@@ -63,7 +63,7 @@ async function generateOneShot(
   shot: ShotPlan,
   options: CodegenOptions,
 ): Promise<CodegenShotResult> {
-  const promptFingerprint = hashPromptAssets(['fabricate', 'html-repair'])
+  const promptFingerprint = hashPromptAssetsWithGlobal(['fabricate', 'html-repair'], input.globalPrompt)
   const fingerprint = createHash('sha256')
     .update(JSON.stringify({ input, shot, promptFingerprint, htmlAdapterVersion: 3 }), 'utf8')
     .digest('hex')
@@ -89,7 +89,9 @@ async function generateOneShot(
     await writeStage(options, key, 'running', attempt, fingerprint, {})
     try {
       const prompt =
-        offset === 0 ? buildFabricatePrompt(input, unit, shot) : buildHtmlRepairPrompt(shot, compactError(lastError))
+        offset === 0
+          ? buildFabricatePrompt(input, unit, shot)
+          : buildHtmlRepairPrompt(shot, compactError(lastError), input.globalPrompt)
       const raw = await options.ai.completeText({ ...prompt, signal: options.signal })
       const html = normalizeHtml(raw, shot.durationSec)
       const shotDir = join(options.outputDir, 'shots', shot.id, `attempt-${String(attempt).padStart(3, '0')}`)
@@ -177,8 +179,7 @@ function normalizeHtml(raw: string, durationSec: number): string {
   if (!/<html[\s>]/iu.test(html) || !/<\/body\s*>/iu.test(html) || !/<\/html\s*>/iu.test(html)) {
     throw new CodegenFailure('SHOT_OUTPUT_INVALID')
   }
-  let normalized = html
-    .replace(/font-family\s*:\s*[^;}]+/giu, 'font-family: Inter, sans-serif')
+  let normalized = html.replace(/font-family\s*:\s*[^;}]+/giu, 'font-family: Inter, sans-serif')
   normalized = injectLocalGsap(normalized)
   if (
     /window\.__PURPLEINK_RENDER__/u.test(normalized) &&

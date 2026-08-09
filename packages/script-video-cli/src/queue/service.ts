@@ -47,7 +47,9 @@ export async function submitCommand(
   const receipts: Array<{ runId: string; runDir: string; jobId: string }> = []
   try {
     for (const input of inputs) {
-      const runArgs = parseCliArgs(['run', input, '--output', config.stateDir])
+      const runArgv = ['run', input, '--output', config.stateDir]
+      if (args.globalPromptPath) runArgv.push('--global-prompt-file', args.globalPromptPath)
+      const runArgs = parseCliArgs(runArgv)
       const prepared = await prepareRun(runArgs, config)
       const jobId = await boss.send(
         RUN_QUEUE,

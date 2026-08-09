@@ -29,6 +29,7 @@ export interface CliArgs {
   resumeDir: string | undefined
   concurrency: number | undefined
   narration: NarrationMode | undefined
+  globalPromptPath?: string
   json: boolean
   skipBrowserGate: boolean
   provider: CliProvider | undefined
@@ -108,6 +109,10 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
     }
     if (flag === '--narration') {
       result.narration = parseNarration(takeValue(rest, ++index, flag))
+      continue
+    }
+    if (flag === '--global-prompt-file' && (command === 'run' || command === 'plan' || command === 'submit')) {
+      result.globalPromptPath = takeValue(rest, ++index, flag)
       continue
     }
     if (flag === '--provider') {
