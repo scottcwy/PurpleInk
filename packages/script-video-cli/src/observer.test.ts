@@ -28,7 +28,11 @@ describe('observer', () => {
     })
     const htmlPath = join(run.runDir, 'shots', 'S001', 'attempt-001', 'source.html')
     await mkdir(join(run.runDir, 'shots', 'S001', 'attempt-001'), { recursive: true })
-    await writeFile(htmlPath, '<!doctype html><html><body>shot</body></html>', 'utf8')
+    await writeFile(
+      htmlPath,
+      '<!doctype html><html><body>shot<script>window.__PURPLEINK_RENDER__={seek(value){window.preview=value}}</script></body></html>',
+      'utf8',
+    )
     await registerFileArtifact(store, run.runDir, { id: 'shot-S001-html', kind: 'text/html', path: htmlPath })
     const observer = await startObserver({ stateDir: root, port: 0 })
     try {
@@ -39,6 +43,10 @@ describe('observer', () => {
       expect(artifact.status).toBe(200)
       expect(artifact.headers.get('content-security-policy')).toContain("connect-src 'none'")
       expect(await artifact.text()).toContain('shot')
+      const preview = await fetch(`${observer.url}artifact/run-observer/shot-S001-html?preview=midpoint`)
+      const previewSource = await preview.text()
+      expect(previewSource).toContain('render.seek(0.5)')
+      expect(previewSource).toContain('Math.min(innerWidth/1920,innerHeight/1080)')
       const missing = await fetch(`${observer.url}artifact/run-observer/not-registered`)
       expect(missing.status).toBe(404)
     } finally {

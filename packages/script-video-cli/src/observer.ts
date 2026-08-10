@@ -67,7 +67,12 @@ async function handleRequest(
     return renderRun(response, runDir)
   }
   if (parts[0] === 'artifact' && parts[1] && parts[2]) {
-    return streamArtifact(response, await resolveRunDir(parts[1], options.stateDir), parts[2])
+    return streamArtifact(
+      response,
+      await resolveRunDir(parts[1], options.stateDir),
+      parts[2],
+      url.searchParams.get('preview') === 'midpoint',
+    )
   }
   sendText(response, 404, 'Not found')
 }
@@ -135,20 +140,26 @@ async function renderShot(response: ServerResponse, runDir: string, shotId: stri
   const gallery = images
     .map((artifact) => `<img src="${artifactUrl(run.runId, artifact.id)}" alt="${escapeHtml(artifact.id)}">`)
     .join('')
+  const snapshots = gallery ? `<section><h2>镜头快照</h2><div class="gallery">${gallery}</div></section>` : ''
   sendHtml(
     response,
     page(
       shotId,
       `<nav><a href="/run/${encodeURIComponent(run.runId)}">← 返回 run</a></nav><header><h1>${shotId}</h1><p>${escapeHtml(run.title)}</p></header><main>
-      <section><h2>三点快照</h2><div class="gallery">${gallery || '暂无快照'}</div></section>
-      ${html ? `<section><h2>HTML 预览</h2><iframe sandbox="allow-scripts" src="${artifactUrl(run.runId, html.id)}"></iframe><p class="path">${escapeHtml(html.absolutePath)}</p></section>` : ''}
+      ${snapshots}
+      ${html ? `<section><h2>HTML 中点预览</h2><p>仅用于镜头诊断；最终验收以 MP4 抽帧为准。</p><iframe sandbox="allow-scripts" src="${artifactUrl(run.runId, html.id)}?preview=midpoint"></iframe><p class="path">${escapeHtml(html.absolutePath)}</p></section>` : ''}
       ${audio ? `<section><h2>旁白</h2><audio controls src="${artifactUrl(run.runId, audio.id)}"></audio><p class="path">${escapeHtml(audio.absolutePath)}</p></section>` : ''}
       </main>`,
     ),
   )
 }
 
-async function streamArtifact(response: ServerResponse, runDir: string, artifactId: string): Promise<void> {
+async function streamArtifact(
+  response: ServerResponse,
+  runDir: string,
+  artifactId: string,
+  midpointPreview = false,
+): Promise<void> {
   const artifact = (await readArtifacts(runDir)).find((candidate) => candidate.id === artifactId)
   if (!artifact || !safeArtifactPath(runDir, artifact.absolutePath))
     return sendText(response, 404, 'Artifact not found')
@@ -169,7 +180,17 @@ async function streamArtifact(response: ServerResponse, runDir: string, artifact
         }
       : {}),
   })
+  if (artifact.kind === 'text/html' && midpointPreview) {
+    const source = await readFile(artifact.absolutePath, 'utf8')
+    response.end(injectMidpointPreview(source))
+    return
+  }
   createReadStream(artifact.absolutePath).pipe(response)
+}
+
+function injectMidpointPreview(source: string): string {
+  const previewScript = `<script>(()=>{const render=window.__PURPLEINK_RENDER__;if(!render)return;if(typeof render.seek==='function')render.seek(0.5);else if(render.timeline&&typeof render.timeline.progress==='function')render.timeline.progress(0.5).pause();const root=document.querySelector('[data-pi-seed]');if(!root)return;const fit=()=>{const scale=Math.min(innerWidth/1920,innerHeight/1080);document.documentElement.style.cssText+=';width:100%;height:100%;overflow:hidden';document.body.style.cssText+=';width:100%;height:100%;overflow:hidden';root.style.transformOrigin='top left';root.style.transform='scale('+scale+')'};fit();addEventListener('resize',fit)})()</script>`
+  return source.includes('</body>') ? source.replace('</body>', `${previewScript}</body>`) : `${source}${previewScript}`
 }
 
 async function readArtifacts(runDir: string): Promise<ArtifactRecord[]> {
