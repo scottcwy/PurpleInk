@@ -30,6 +30,11 @@ export interface PromptAssetOptions {
   rootDir?: string
 }
 
+export interface SemanticSourceAtomPrompt {
+  id: string
+  text: string
+}
+
 export function loadPromptAsset(name: PromptAssetName, options: PromptAssetOptions = {}): PromptAsset {
   const bytes = readFileSync(resolve(options.rootDir ?? defaultPromptRoot(), `${name}.md`))
   const source = bytes.toString('utf8').replace(/\r\n?/gu, '\n')
@@ -83,8 +88,11 @@ export function buildDirectPrompt(input: ScriptVideoInput): { system: string; us
   )
 }
 
-export function buildSemanticIngestPrompt(sourceText: string): { system: string; user: string } {
-  return pickPrompt(renderPromptAsset('semantic-ingest', { sourceJson: JSON.stringify(sourceText) }))
+export function buildSemanticIngestPrompt(atoms: readonly SemanticSourceAtomPrompt[]): {
+  system: string
+  user: string
+} {
+  return pickPrompt(renderPromptAsset('semantic-ingest', { atomsJson: JSON.stringify(atoms) }))
 }
 
 export function buildShotSpecPrompt(

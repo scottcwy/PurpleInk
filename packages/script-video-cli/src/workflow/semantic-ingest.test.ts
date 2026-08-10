@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { AiClient } from '../ai/openai-compatible'
 import { parseScriptValue } from '../input'
 import { FileStateStore } from '../state/file-store'
-import { semanticIngestMarkdown, semanticResultSchema } from './semantic-ingest'
+import { atomizeSemanticSource, semanticIngestMarkdown, semanticResultSchema } from './semantic-ingest'
 
 const roots: string[] = []
 
@@ -23,12 +23,30 @@ describe('semantic ingest', () => {
     expect(
       schema.parse({
         units: [
-          { id: 'U001', text: '第一句说明问题。\n\n第二句继续解释。', order: 0 },
-          { id: 'U002', text: '但是这里转向新结论。', order: 1 },
+          { id: 'U001', from: 'A001', to: 'A002', order: 0 },
+          { id: 'U002', from: 'A003', to: 'A003', order: 1 },
         ],
       }).units,
     ).toHaveLength(2)
-    expect(schema.safeParse({ units: [{ id: 'U001', text: '第一句说明问题。', order: 0 }] }).success).toBe(false)
+    expect(schema.safeParse({ units: [{ id: 'U001', from: 'A001', to: 'A001', order: 0 }] }).success).toBe(false)
+    expect(
+      schema.safeParse({
+        units: [
+          { id: 'U001', from: 'A001', to: 'A002', order: 0 },
+          { id: 'U002', from: 'A002', to: 'A003', order: 1 },
+        ],
+      }).success,
+    ).toBe(false)
+  })
+
+  it('keeps emoji and Chinese source text intact while creating addressable atoms', () => {
+    const source = '给大家同步一下后续安排🥰：\n我们的课程分享人招募在明天确定下来。\n以上，大家收到请回复！🥳'
+    const atoms = atomizeSemanticSource(source)
+
+    expect(atoms.map((atom) => atom.id)).toEqual(['A001', 'A002', 'A003', 'A004', 'A005'])
+    expect(atoms.map((atom) => atom.text).join('')).toContain('🥰')
+    expect(atoms.map((atom) => atom.text).join('')).toContain('🥳')
+    expect(atoms.some((atom) => atom.text.includes('\uFFFD'))).toBe(false)
   })
 
   it('repairs one invalid split and persists the normalized semantic script', async () => {
@@ -42,11 +60,11 @@ describe('semantic ingest', () => {
       completeJson: async () => {
         calls += 1
         return calls === 1
-          ? { units: [{ id: 'U001', text: '第一句说明问题。', order: 0 }] }
+          ? { units: [{ id: 'U001', from: 'A001', to: 'A001', order: 0 }] }
           : {
               units: [
-                { id: 'U001', text: '第一句说明问题。\n\n第二句继续解释。', order: 0 },
-                { id: 'U002', text: '但是这里转向新结论。', order: 1 },
+                { id: 'U001', from: 'A001', to: 'A002', order: 0 },
+                { id: 'U002', from: 'A003', to: 'A003', order: 1 },
               ],
             }
       },

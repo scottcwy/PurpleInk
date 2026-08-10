@@ -4,8 +4,20 @@ export function createFixtureAiClient(): AiClient {
   return {
     completeJson: async (input) => {
       if (input.user.includes('阶段：SEMANTIC_INGEST')) {
-        const source = parseJsonAfter(input.user, '原始文稿 JSON 字符串：') as string
-        return { units: [{ id: 'U001', text: source, order: 0 }] }
+        const atoms = parseJsonAfter(input.user, '原文原子 JSON：') as Array<{ id: string }>
+        const groupSize = Math.max(1, Math.ceil(atoms.length / 128))
+        const units: Array<{ id: string; from: string; to: string; order: number }> = []
+        for (let start = 0; start < atoms.length; start += groupSize) {
+          const group = atoms.slice(start, start + groupSize)
+          const index = units.length
+          units.push({
+            id: `U${String(index + 1).padStart(3, '0')}`,
+            from: group[0]!.id,
+            to: group[group.length - 1]!.id,
+            order: index,
+          })
+        }
+        return { units }
       }
       if (input.user.includes('阶段：DIRECT'))
         return { masterPlan: '按来源事实建立镜头节奏。', styleBible: '本地、确定性、无外部资源。' }
