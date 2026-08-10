@@ -26,11 +26,13 @@
 - 允许从 jsDelivr 引用上述库；不要请求远程业务数据、图片、字体或媒体素材。
 
 统一导出格式只有以下最小要求：
-- 完整 HTML，固定 1920×1080，html/body/唯一根画布无滚动；根画布使用 id="shot-root" 和 data-pi-seed="{{shotId}}"。
+- 完整 HTML，固定 1920×1080，html/body/唯一根画布无滚动；根画布使用 id="pi-{{shotId}}-root" 和 data-pi-seed="{{shotId}}"。
 - 动画可以使用 GSAP、SVG、Canvas、WebGL 或组合，但必须能从任意进度直接得到正确画面，不依赖先播放前面的帧。
 - 暴露 window.__PURPLEINK_RENDER__={ready:true,durationSec,seek(progress)}；progress 是 0–1，seek 后立即显示该时刻。
 - 创建唯一的 gsap.timeline({paused:true}) master timeline，让所有动画归属于它并覆盖完整 durationSec；同时将这条真实 timeline 暴露为 window.__PURPLEINK_RENDER__.timeline，在 seek(progress) 中执行 timeline.progress(progress).pause()。
 - 不使用 CSS transition 作为主要运动，不用 setTimeout/setInterval 编排镜头。预览自动播放不是必需的，seek 才是导出真值。
+
+组合隔离硬约束：当前 HTML 会与其他镜头挂载到同一个 document。所有自定义 id、class、CSS keyframes 名称和选择器必须以 `pi-{{shotId}}-` 开头，禁止 `main-title`、`card`、`item`、`container` 等未加镜头前缀的通用命名；每条 CSS 规则必须限定在 `[data-pi-seed="{{shotId}}"]` 根节点下。脚本先同步取得该根节点，所有 DOM 查询从根节点开始，GSAP 文本选择器必须使用 `gsap.context(..., root)` 或直接传入根节点内的元素。脚本加载时立即同步创建并导出 timeline，禁止包裹在 `DOMContentLoaded`、`load`、Promise、事件回调或其他延迟初始化中。
 
 确定性硬约束：禁止依赖连续播放、前一次 seek 状态、resize、requestAnimationFrame、定时器、无限 repeat、Date.now 或未固定随机数；禁止同一属性的相对值多写者。timeline callback 不得读取布局或累积修改历史 DOM 状态。Canvas、SVG、WebGL、Three.js 可以根据绝对 progress 做纯渲染。任意进度必须支持乱序和重复 seek，并得到相同画面。
 

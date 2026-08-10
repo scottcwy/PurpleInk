@@ -94,6 +94,8 @@ describe('prompt assets', () => {
     expect(buildShotSpecPrompt(input, director, input.units[0]!, 'S001').user).toContain('0%、25%、60%、95%')
     expect(buildShotSpecPrompt(input, director, input.units[0]!, 'S001').user).toContain('GLOBAL_STYLE_SENTINEL')
     expect(buildFabricatePrompt(input, input.units[0]!, shot).user).toContain('data-pi-seed')
+    expect(buildFabricatePrompt(input, input.units[0]!, shot).user).toContain('pi-S001-root')
+    expect(buildFabricatePrompt(input, input.units[0]!, shot).user).toContain('禁止包裹在 `DOMContentLoaded`')
     expect(buildFabricatePrompt(input, input.units[0]!, shot).user).toContain('GLOBAL_STYLE_SENTINEL')
     expect(buildHtmlRepairPrompt(shot, 'gate failed', input.globalPrompt).user).toContain('GLOBAL_STYLE_SENTINEL')
     expect(buildSemanticIngestPrompt('第一句。第二句。').user).not.toContain('GLOBAL_STYLE_SENTINEL')
