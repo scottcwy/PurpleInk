@@ -93,10 +93,26 @@ async function generateOneShot(
           ? buildFabricatePrompt(input, unit, shot)
           : buildHtmlRepairPrompt(shot, compactError(lastError), input.globalPrompt)
       const raw = await options.ai.completeText({ ...prompt, signal: options.signal })
-      const html = normalizeHtml(raw)
       const shotDir = join(options.outputDir, 'shots', shot.id, `attempt-${String(attempt).padStart(3, '0')}`)
       await mkdir(shotDir, { recursive: true })
       const htmlPath = join(shotDir, 'source.html')
+      let html: string
+      try {
+        html = normalizeHtml(raw)
+      } catch (error) {
+        if (!(error instanceof CodegenFailure) || error.code !== 'SHOT_OUTPUT_INVALID') throw error
+        await writeFile(htmlPath, `${raw.trim()}\n`, 'utf8')
+        const diagnosticsPath = join(shotDir, 'diagnostics.json')
+        await writeFile(
+          diagnosticsPath,
+          `${JSON.stringify({ schemaVersion: 1, diagnostics: [{ type: 'static', message: error.code }] }, null, 2)}\n`,
+          'utf8',
+        )
+        await registerFailedAttemptArtifacts(options, shot.id, attempt, htmlPath, { diagnosticsPath })
+        await writeStage(options, key, 'failed', attempt, fingerprint, { errorCode: error.code })
+        lastError = error.code
+        continue
+      }
       await writeFile(htmlPath, `${html}\n`, 'utf8')
       const staticGate = validateShotHtml(html)
       if (!staticGate.passed) {
@@ -163,7 +179,11 @@ async function generateOneShot(
       lastError = error.code
     }
   }
-  const errorCode = lastError.startsWith('BROWSER_') ? 'BROWSER_GATE_FAILED' : 'SHOT_GATE_FAILED'
+  const errorCode = lastError.startsWith('BROWSER_')
+    ? 'BROWSER_GATE_FAILED'
+    : lastError === 'SHOT_OUTPUT_INVALID'
+      ? 'SHOT_OUTPUT_INVALID'
+      : 'SHOT_GATE_FAILED'
   const result = failedResult(shot, firstAttempt + 1, errorCode)
   await writeStage(options, key, 'failed', result.attempt, fingerprint, result)
   return result
@@ -177,8 +197,14 @@ class CodegenFailure extends Error {
 }
 
 function normalizeHtml(raw: string): string {
-  const fenced = raw.match(/^```(?:html)?\s*([\s\S]*?)\s*```$/iu)
-  const html = (fenced?.[1] ?? raw).trim()
+  const fenced = [...raw.matchAll(/```(?:html)?\s*([\s\S]*?)```/giu)].find((match) => /<html[\s>]/iu.test(match[1]!))
+  let html = (fenced?.[1] ?? raw).trim()
+  const start = html.search(/(?:<!doctype\s+html[^>]*>\s*)?<html[\s>]/iu)
+  const closingTags = [...html.matchAll(/<\/html\s*>/giu)]
+  const closing = closingTags.at(-1)
+  if (start >= 0 && closing?.index !== undefined && closing.index >= start) {
+    html = html.slice(start, closing.index + closing[0].length).trim()
+  }
   if (!/<html[\s>]/iu.test(html) || !/<\/body\s*>/iu.test(html) || !/<\/html\s*>/iu.test(html)) {
     throw new CodegenFailure('SHOT_OUTPUT_INVALID')
   }
