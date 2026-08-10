@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "presets": [
+    {
+      "id": "click-soft",
+      "file": "click-soft.ogg",
+      "durationSec": 0.056,
+      "volume": 0.2,
+      "description": "轻柔点击，适合低调选择、轻触和小型控件出现。",
+      "source": "kenney-ui-audio"
+    },
+    {
+      "id": "click",
+      "file": "click.ogg",
+      "durationSec": 0.1,
+      "volume": 0.24,
+      "description": "清晰点击，适合按钮、开关和明确选择动作。",
+      "source": "kenney-interface-sounds"
+    },
+    {
+      "id": "toggle",
+      "file": "toggle.ogg",
+      "durationSec": 0.35,
+      "volume": 0.22,
+      "description": "机械切换，适合模式切换、状态翻转和开关变化。",
+      "source": "kenney-ui-audio"
+    },
+    {
+      "id": "tick",
+      "file": "tick.ogg",
+      "durationSec": 0.057,
+      "volume": 0.18,
+      "description": "短促刻度音，适合节点、步骤、刻度或游标移动。",
+      "source": "kenney-ui-audio"
+    },
+    {
+      "id": "pop",
+      "file": "pop.ogg",
+      "durationSec": 0.383,
+      "volume": 0.22,
+      "description": "轻快弹出，适合标签、徽标、圆点或小元素生成。",
+      "source": "kenney-interface-sounds"
+    },
+    {
+      "id": "confirm-chime",
+      "file": "confirm-chime.ogg",
+      "durationSec": 0.29,
+      "volume": 0.22,
+      "description": "确认提示音，适合结论成立、步骤完成或正向反馈。",
+      "source": "kenney-interface-sounds"
+    },
+    {
+      "id": "notification",
+      "file": "notification.ogg",
+      "durationSec": 0.123,
+      "volume": 0.2,
+      "description": "通知提示音，适合消息、提醒或新信息进入。",
+      "source": "kenney-interface-sounds"
+    },
+    {
+      "id": "error",
+      "file": "error.ogg",
+      "durationSec": 0.165,
+      "volume": 0.2,
+      "description": "错误提示音，适合失败、阻断、错误路径或否定状态。",
+      "source": "kenney-interface-sounds"
+    },
+    {
+      "id": "question",
+      "file": "question.ogg",
+      "durationSec": 0.491,
+      "volume": 0.2,
+      "description": "疑问提示音，适合不确定性、选择题或观点转折。",
+      "source": "kenney-interface-sounds"
+    },
+    {
+      "id": "whoosh-soft",
+      "file": "whoosh-soft.ogg",
+      "durationSec": 0.126,
+      "volume": 0.24,
+      "description": "轻柔掠过，适合文字滑入、轻微横移和柔和转场。",
+      "source": "opengameart-swishes"
+    },
+    {
+      "id": "whoosh-fast",
+      "file": "whoosh-fast.ogg",
+      "durationSec": 0.096,
+      "volume": 0.26,
+      "description": "快速掠过，适合高速移动、遮罩切换和短促转场。",
+      "source": "opengameart-swishes"
+    },
+    {
+      "id": "whoosh-heavy",
+      "file": "whoosh-heavy.ogg",
+      "durationSec": 0.197,
+      "volume": 0.24,
+      "description": "厚重掠过，适合大尺度推进、主视觉切换和强转场。",
+      "source": "opengameart-swishes"
+    },
+    {
+      "id": "sweep-up",
+      "file": "sweep-up.ogg",
+      "durationSec": 0.521,
+      "volume": 0.2,
+      "description": "上升扫频，适合能量累积、视角抬升和答案浮现。",
+      "source": "kenney-digital-audio"
+    },
+    {
+      "id": "sweep-down",
+      "file": "sweep-down.ogg",
+      "durationSec": 0.47,
+      "volume": 0.2,
+      "description": "下降扫频，适合收束、坠落、压力加重或场景退出。",
+      "source": "kenney-digital-audio"
+    },
+    {
+      "id": "impact-soft",
+      "file": "impact-soft.ogg",
+      "durationSec": 0.164,
+      "volume": 0.22,
+      "description": "轻型落点，适合小结、节点吸附和温和强调。",
+      "source": "kenney-impact-sounds"
+    },
+    {
+      "id": "impact-deep",
+      "file": "impact-deep.ogg",
+      "durationSec": 1.48,
+      "volume": 0.18,
+      "description": "深沉冲击，适合核心观点落定、主标题或重大转折。",
+      "source": "kenney-impact-sounds"
+    },
+    {
+      "id": "glitch",
+      "file": "glitch.ogg",
+      "durationSec": 1.451,
+      "volume": 0.16,
+      "description": "数字故障质感，适合信息失真、混乱、异常和硬切。",
+      "source": "kenney-digital-audio"
+    },
+    {
+      "id": "sparkle",
+      "file": "sparkle.ogg",
+      "durationSec": 1.149,
+      "volume": 0.18,
+      "description": "明亮闪烁，适合灵感、发现、希望和精致高光。",
+      "source": "kenney-digital-audio"
+    },
+    {
+      "id": "riser",
+      "file": "riser.ogg",
+      "durationSec": 1.202,
+      "volume": 0.18,
+      "description": "短上升铺垫，适合高潮前蓄力、揭晓和空间推进。",
+      "source": "kenney-digital-audio"
+    },
+    {
+      "id": "typing",
+      "file": "typing.ogg",
+      "durationSec": 1.5,
+      "volume": 0.18,
+      "description": "自然键盘输入，适合代码、终端和逐字输入动画。",
+      "source": "opengameart-keyboard"
+    }
+  ]
+}

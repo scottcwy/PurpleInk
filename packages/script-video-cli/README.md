@@ -1,6 +1,6 @@
 # PurpleInk 本地文稿视频 CLI
 
-PurpleInk 把 Markdown、JSON、WAV 或 MP3 变成本地文稿视频。Markdown 先由语义 INGEST 逐句分析并形成“一单元一核心判断”的文稿单元；音频则在真实 FFmpeg 时间段上做相邻语义归组。随后 DIRECT 确定全片设计，分镜规划、HTML 生成和 MiMo 配音并发执行；全部镜头就绪后，HyperFrames 串行渲染视觉，FFmpeg 封装 AAC。CLI 尽量保留完整产物和日志，最终 MP4 的视觉与媒体交付验收统一由 Agent Skill 完成。
+PurpleInk 把 Markdown、JSON、WAV 或 MP3 变成本地文稿视频。Markdown 先由语义 INGEST 逐句分析并形成“一单元一核心判断”的文稿单元；音频则在真实 FFmpeg 时间段上做相邻语义归组。随后 DIRECT 确定全片设计，分镜规划、HTML 生成和 MiMo 配音并发执行；全部镜头就绪后，HyperFrames 串行渲染视觉，FFmpeg 将旁白与本地音效母带封装为 AAC。CLI 尽量保留完整产物和日志，最终 MP4 的视觉与媒体交付验收统一由 Agent Skill 完成。
 
 它面向 AI Agent，也允许人类直接敲命令。账号、计费、会员、工作区、云项目、云存储、Redis 和旧 SaaS 数据库都不在范围内。
 
@@ -64,6 +64,14 @@ Prompt 会复制为当前 run 的 `input/global-prompt.txt`，因此 daemon 重�
 pnpm cli run .\script.md --narration off --json
 ```
 
+默认 `--sfx auto`：SHOT-SPEC 每镜最多选择两个与真实动画事件绑定的音效，CLI 根据最终 TTS 镜头时长换算绝对时间，再使用 FFmpeg 本地混音。20 个内置预设覆盖点击、切换、提示、错误、whoosh、扫频、冲击、glitch、sparkle、riser 和 typing；全部是冻结的 CC0 文件，运行时不访问网络。明确不需要音效时使用：
+
+```powershell
+pnpm cli run .\script.md --sfx off --json
+```
+
+原始旁白、音效轨和最终母带分别保存在 `audio/narration.wav`、`audio/sfx.wav` 和 `audio/master.wav`。无法识别的预设或本地音效处理失败只记录安全诊断并回退到原旁白，不阻断视频渲染。资源来源和授权见 `assets/sfx/CREDITS.md`。
+
 `--provider fixture` 只用于开发冒烟。`--no-browser-gate` 为旧命令兼容参数；默认执行链已经不使用 Browser QA 阻断。
 
 ### 语义拆稿
@@ -89,7 +97,7 @@ pnpm cli voice use mimo_default --json
 
 ```powershell
 pnpm cli daemon start --serve --json
-pnpm cli submit .\a.md .\b.json .\c.mp3 --global-prompt-file .\visual-constraints.md --json
+pnpm cli submit .\a.md .\b.json .\c.mp3 --global-prompt-file .\visual-constraints.md --sfx auto --json
 pnpm cli daemon status --json
 pnpm cli status --run <run-id> --watch
 pnpm cli daemon stop --json
@@ -139,6 +147,10 @@ runs/<run-id>/
   shots/S001/attempt-001/source.html
   shots/S001/attempt-001/diagnostics.json  # 可选诊断
   shots/S001/narration.wav
+  audio/narration.wav
+  audio/sfx-cues.json
+  audio/sfx.wav
+  audio/master.wav
   project/
   final/video.mp4
   artifacts/index.json

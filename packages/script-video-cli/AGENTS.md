@@ -35,6 +35,7 @@
 - Markdown 必须先经过 `INGEST_SEMANTIC`：按语义而不是标题、字数、标点或时长拆分，完整保留原文并维持“一 unit 一核心判断一分镜”。
 - 音频语义整理只能合并相邻 ASR 段；文稿文本和首尾时间由程序从真实分段确定，模型不得猜测、跳段、重排或重复。
 - 默认旁白必须真实存在；只有显式 `--narration off` 才允许无音频最终视频。
+- 音效默认使用本地 `--sfx auto`：每镜最多两个预设并按最终镜头时长换算时间；`--sfx off` 显式关闭。未知预设或音效混合失败只记录并回退到原旁白，不得阻断主渲染链。
 - 浏览器镜头必须本地、自包含、可 seek；禁止外部网络资源、任意文件读取和 credential-like 内容。每个镜头只暴露一条真实 paused master timeline。
 - 每完成一个可验证版块，只 stage 本版块文件并做本地 Conventional Commit。只有用户明确授权时，才允许推送 `standalone/local-script-video-cli` 或发布 `local-cli/*` 标签；任何情况下都禁止向 `main` 创建 PR 或合并本分支。
 

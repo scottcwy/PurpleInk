@@ -6,9 +6,10 @@ import { createOpenAiCompatibleClient, type AiClient } from '../ai/openai-compat
 import type { CliArgs } from '../args'
 import type { CliConfig } from '../config'
 import { WORKFLOW_VERSION } from '../config'
-import { scriptVideoInputSchema, type ScriptVideoInput, type ShotPlan } from '../contracts'
+import { scriptVideoInputSchema, type ScriptVideoInput, type ShotPlan, type SoundEffectsMode } from '../contracts'
 import { extractMarkdownNarrative, readScriptFile } from '../input'
 import { concatShotAudio } from '../media/ffmpeg'
+import { buildSoundEffectMix, type SoundEffectMixResult } from '../media/sound-effects'
 import type { MediaQaResult } from '../qa/media'
 import { ConcurrencyChannels } from '../runtime/channels'
 import { SafeCliError } from '../safe-error'
@@ -38,10 +39,12 @@ export interface PreparedRun {
   input?: ScriptVideoInput
   semanticSourceText?: string
   globalPrompt?: string
+  soundEffectsMode: SoundEffectsMode
   audio: boolean
 }
 
 const GLOBAL_PROMPT_FILE = 'global-prompt.txt'
+const SOUND_EFFECTS_MODE_FILE = 'sfx-mode.txt'
 
 export async function prepareRun(args: CliArgs, config: CliConfig, requireAudio = false): Promise<PreparedRun> {
   if (!args.inputPath) throw new SafeCliError('INPUT_REQUIRED', '命令需要输入文件。', false, 400)
@@ -76,6 +79,11 @@ export async function prepareRun(args: CliArgs, config: CliConfig, requireAudio 
   if (globalPrompt && (explicitGlobalPrompt || !storedGlobalPrompt)) {
     await writeFile(join(run.runDir, 'input', GLOBAL_PROMPT_FILE), `${globalPrompt}\n`, 'utf8')
   }
+  const storedSoundEffectsMode = await readStoredSoundEffectsMode(run.runDir)
+  const soundEffectsMode = args.soundEffects ?? storedSoundEffectsMode ?? 'auto'
+  if (args.soundEffects || !storedSoundEffectsMode) {
+    await writeFile(join(run.runDir, 'input', SOUND_EFFECTS_MODE_FILE), `${soundEffectsMode}\n`, 'utf8')
+  }
   const sourceCopy = join(run.runDir, 'input', basename(sourcePath))
   await registerFileArtifact(store, run.runDir, {
     id: 'source-input',
@@ -90,7 +98,16 @@ export async function prepareRun(args: CliArgs, config: CliConfig, requireAudio 
     artifactIds: ['source-input'],
     payload: { sourcePath: sourceCopy, audio },
   })
-  return { run, sourcePath: sourceCopy, sourceHash, input: baseInput, semanticSourceText, globalPrompt, audio }
+  return {
+    run,
+    sourcePath: sourceCopy,
+    sourceHash,
+    input: baseInput,
+    semanticSourceText,
+    globalPrompt,
+    soundEffectsMode,
+    audio,
+  }
 }
 
 export async function resolveWorkflowInput(
@@ -137,6 +154,17 @@ async function readStoredGlobalPrompt(runDir: string): Promise<string | undefine
     return await readGlobalPrompt(join(runDir, 'input', GLOBAL_PROMPT_FILE))
   } catch (error) {
     if (error instanceof SafeCliError && error.code === 'GLOBAL_PROMPT_INVALID') throw error
+    return undefined
+  }
+}
+
+async function readStoredSoundEffectsMode(runDir: string): Promise<SoundEffectsMode | undefined> {
+  try {
+    const value = (await readFile(join(runDir, 'input', SOUND_EFFECTS_MODE_FILE), 'utf8')).trim()
+    if (value === 'auto' || value === 'off') return value
+    throw new SafeCliError('SFX_MODE_INVALID', '保存的音效模式无效。', false, 422)
+  } catch (error) {
+    if (error instanceof SafeCliError) throw error
     return undefined
   }
 }
@@ -193,6 +221,59 @@ export async function combineNarration(
   )
   await registerFileArtifact(store, runDir, { id: 'narration', kind: 'audio/wav', path })
   return path
+}
+
+export async function prepareSoundEffects(
+  runDir: string,
+  plans: readonly ShotPlan[],
+  narrationPath: string | null,
+  mode: SoundEffectsMode,
+  channels: ConcurrencyChannels,
+  store: StateStore,
+  signal?: AbortSignal,
+): Promise<SoundEffectMixResult> {
+  const result = await channels.run('render', () =>
+    buildSoundEffectMix({
+      mode,
+      plans,
+      narrationPath,
+      outputDir: runDir,
+      logPath: join(runDir, 'logs', 'ffmpeg.log'),
+      signal,
+    }),
+  )
+  const registrations: Promise<unknown>[] = []
+  if (result.cuePlanPath) {
+    registrations.push(
+      registerFileArtifact(store, runDir, {
+        id: 'sound-effect-plan',
+        kind: 'application/json',
+        path: result.cuePlanPath,
+      }),
+    )
+  }
+  if (result.sfxPath) {
+    registrations.push(
+      registerFileArtifact(store, runDir, { id: 'sound-effects', kind: 'audio/wav', path: result.sfxPath }),
+    )
+  }
+  if (result.masterPath) {
+    registrations.push(
+      registerFileArtifact(store, runDir, { id: 'master-audio', kind: 'audio/wav', path: result.masterPath }),
+    )
+  }
+  await Promise.all(registrations)
+  await store.appendEvent(runDir, {
+    type: 'audio.sound_effects',
+    data: {
+      mode,
+      status: result.status,
+      cueCount: result.cueCount,
+      skippedPresetCount: result.skippedPresetCount,
+      ...(result.errorCode ? { code: result.errorCode } : {}),
+    },
+  })
+  return result
 }
 
 export async function persistPlan(store: StateStore, runDir: string, plan: PlanResult): Promise<void> {

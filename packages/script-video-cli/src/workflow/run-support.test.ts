@@ -43,4 +43,26 @@ describe('global Prompt persistence', () => {
     )
     expect(resumed.globalPrompt).toBe('全片必须使用浅色立体视觉。')
   })
+
+  it('persists the sound-effects mode across queue and retry style resumes', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'purpleink-sfx-mode-'))
+    roots.push(root)
+    const sourcePath = join(root, 'script.md')
+    const stateDir = join(root, 'runs')
+    await writeFile(sourcePath, '# 标题\n\n音效模式测试。\n', 'utf8')
+    const config = readCliConfig(
+      { SCRIPT_VIDEO_PROVIDER: 'fixture', SCRIPT_VIDEO_STATE_DIR: stateDir, INIT_CWD: root },
+      root,
+    )
+
+    const first = await prepareRun(parseCliArgs(['run', sourcePath, '--sfx', 'off', '--output', stateDir]), config)
+    expect(first.soundEffectsMode).toBe('off')
+    expect(await readFile(join(first.run.runDir, 'input', 'sfx-mode.txt'), 'utf8')).toBe('off\n')
+
+    const resumed = await prepareRun(
+      parseCliArgs(['run', first.sourcePath, '--resume', first.run.runDir, '--output', stateDir]),
+      config,
+    )
+    expect(resumed.soundEffectsMode).toBe('off')
+  })
 })

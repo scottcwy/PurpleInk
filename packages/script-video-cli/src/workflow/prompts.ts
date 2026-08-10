@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import type { DirectorPlan, ScriptUnit, ScriptVideoInput, ShotPlan } from '../contracts'
+import { hashSoundEffectCatalog, soundEffectPromptCatalog } from '../media/sound-effects'
 
 export const PROMPT_ASSET_NAMES = [
   'semantic-ingest',
@@ -50,7 +51,10 @@ export function loadPromptAsset(name: PromptAssetName, options: PromptAssetOptio
 
 export function hashPromptAssets(names: readonly PromptAssetName[], options: PromptAssetOptions = {}): string {
   const hash = createHash('sha256')
-  for (const name of names) hash.update(`${name}:${loadPromptAsset(name, options).sha256}\n`, 'utf8')
+  for (const name of names) {
+    hash.update(`${name}:${loadPromptAsset(name, options).sha256}\n`, 'utf8')
+    if (name === 'shot-spec') hash.update(`sfx-catalog:${hashSoundEffectCatalog()}\n`, 'utf8')
+  }
   return hash.digest('hex')
 }
 
@@ -108,6 +112,7 @@ export function buildShotSpecPrompt(
         directorJson: JSON.stringify(director),
         unitJson: JSON.stringify(unit),
         inputSummaryJson: JSON.stringify({ title: input.title, language: input.language }),
+        sfxPresetList: soundEffectPromptCatalog(),
       }),
     ),
     input.globalPrompt,

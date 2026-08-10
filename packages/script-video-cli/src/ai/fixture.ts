@@ -32,6 +32,10 @@ export function createFixtureAiClient(): AiClient {
         visualDescription: '左侧原文事实，右侧用几何关系进行解释。',
         facts: [unit.text],
         onScreenText: [unit.text],
+        soundEffects: [
+          { at: 0.18, preset: 'whoosh-soft' },
+          { at: 0.62, preset: 'impact-soft' },
+        ],
         durationSec: 7,
       }
     },

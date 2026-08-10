@@ -5,6 +5,17 @@ export const SCRIPT_VIDEO_SCHEMA_VERSION = 1 as const
 export const narrationModeSchema = z.enum(['off', 'auto', 'required'])
 export type NarrationMode = z.infer<typeof narrationModeSchema>
 
+export const soundEffectsModeSchema = z.enum(['off', 'auto'])
+export type SoundEffectsMode = z.infer<typeof soundEffectsModeSchema>
+
+export const soundEffectCueSchema = z
+  .object({
+    at: z.number().min(0).max(1),
+    preset: z.string().trim().min(1).max(64),
+  })
+  .strict()
+export type SoundEffectCue = z.infer<typeof soundEffectCueSchema>
+
 export const scriptUnitSchema = z
   .object({
     id: z.string().regex(/^U\d{3}$/u, 'unit id 必须匹配 U###'),
@@ -80,6 +91,7 @@ export const shotPlanSchema = z
     visualDescription: z.string().trim().min(1).max(4_000),
     facts: z.array(z.string().trim().min(1).max(500)).max(12),
     onScreenText: z.array(z.string().trim().min(1).max(200)).max(12),
+    soundEffects: z.array(soundEffectCueSchema).max(2).optional(),
     durationSec: z.number().positive().max(120),
   })
   .strict()

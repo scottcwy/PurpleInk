@@ -49,6 +49,7 @@ export async function submitCommand(
     for (const input of inputs) {
       const runArgv = ['run', input, '--output', config.stateDir]
       if (args.globalPromptPath) runArgv.push('--global-prompt-file', args.globalPromptPath)
+      if (args.soundEffects) runArgv.push('--sfx', args.soundEffects)
       const runArgs = parseCliArgs(runArgv)
       const prepared = await prepareRun(runArgs, config)
       const jobId = await boss.send(

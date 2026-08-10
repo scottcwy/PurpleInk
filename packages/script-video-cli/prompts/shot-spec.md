@@ -26,9 +26,12 @@
    - zdog/three：只有 2D 无法清楚表达结构、深度或空间关系时使用。
 9. 默认至少包含背景环境层、主视觉层、信息层、前景强调层中的三层；主视觉必须大、完整、有材质和承托，不得退化成网页卡片阵列。
 10. durationSec 根据当前语义和旁白容量决定，不按固定句数或统一模板硬设时长。
+11. soundEffects 只允许 0–2 个，每个对象严格为 {"at":0到1之间的小数,"preset":"预设名"}。at 表示镜头内部归一化进度，必须绑定该进度真实发生的可见动画事件；没有必要时返回空数组，禁止为了热闹而连续堆叠音效。旁白优先，冲击类音效应克制。
+
+可用音效预设：{{sfxPresetList}}
 
 全片导演总纲：{{directorJson}}
 当前来源单元：{{unitJson}}
 完整输入摘要：{{inputSummaryJson}}
 
-返回字段：id、sourceUnitId、purpose、visualIntent、composition、visualDescription、facts、onScreenText、durationSec。不得添加其他字段。
+返回字段：id、sourceUnitId、purpose、visualIntent、composition、visualDescription、facts、onScreenText、soundEffects、durationSec。不得添加其他字段。

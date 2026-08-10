@@ -1,4 +1,4 @@
-import type { NarrationMode } from './contracts'
+import type { NarrationMode, SoundEffectsMode } from './contracts'
 import type { CliProvider } from './config'
 import { SafeCliError } from './safe-error'
 
@@ -29,6 +29,7 @@ export interface CliArgs {
   resumeDir: string | undefined
   concurrency: number | undefined
   narration: NarrationMode | undefined
+  soundEffects: SoundEffectsMode | undefined
   globalPromptPath?: string
   json: boolean
   skipBrowserGate: boolean
@@ -66,6 +67,7 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
     resumeDir: undefined,
     concurrency: undefined,
     narration: undefined,
+    soundEffects: undefined,
     json: false,
     skipBrowserGate: false,
     provider: undefined,
@@ -109,6 +111,10 @@ export function parseCliArgs(argv: readonly string[]): CliArgs {
     }
     if (flag === '--narration') {
       result.narration = parseNarration(takeValue(rest, ++index, flag))
+      continue
+    }
+    if (flag === '--sfx' && (command === 'run' || command === 'submit' || command === 'retry')) {
+      result.soundEffects = parseSoundEffects(takeValue(rest, ++index, flag))
       continue
     }
     if (flag === '--global-prompt-file' && (command === 'run' || command === 'plan' || command === 'submit')) {
@@ -178,6 +184,7 @@ function parseDaemonArgs(args: readonly string[]): CliArgs {
     resumeDir: undefined,
     concurrency: undefined,
     narration: undefined,
+    soundEffects: undefined,
     json: false,
     skipBrowserGate: false,
     provider: undefined,
@@ -201,6 +208,7 @@ function parseConfigArgs(args: readonly string[]): CliArgs {
     resumeDir: undefined,
     concurrency: undefined,
     narration: undefined,
+    soundEffects: undefined,
     json: false,
     skipBrowserGate: false,
     provider: undefined,
@@ -268,6 +276,7 @@ function parseVoiceArgs(args: readonly string[]): CliArgs {
     resumeDir: undefined,
     concurrency: undefined,
     narration: undefined,
+    soundEffects: undefined,
     json: false,
     skipBrowserGate: false,
     provider: undefined,
@@ -364,6 +373,11 @@ function parseInteger(value: string, flag: string, min: number, max: number): nu
 function parseNarration(value: string): NarrationMode {
   if (value === 'off' || value === 'auto' || value === 'required') return value
   throw new Error('--narration 只支持 off、auto、required')
+}
+
+function parseSoundEffects(value: string): SoundEffectsMode {
+  if (value === 'off' || value === 'auto') return value
+  throw new Error('--sfx 只支持 off、auto')
 }
 
 function parseProvider(value: string): CliProvider {

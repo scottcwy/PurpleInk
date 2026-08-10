@@ -19,12 +19,21 @@ describe('parseCliArgs', () => {
       inputPath: 'script.json',
       concurrency: 5,
       narration: 'auto',
+      soundEffects: undefined,
       json: true,
       skipBrowserGate: false,
       provider: undefined,
       outputDir: undefined,
       resumeDir: undefined,
     })
+  })
+
+  it('parses the local sound-effects switch for runs and retries', () => {
+    expect(parseCliArgs(['run', 'script.md', '--sfx', 'auto'])).toMatchObject({ soundEffects: 'auto' })
+    expect(parseCliArgs(['retry', '--run', 'run-1', '--failed', '--sfx', 'off'])).toMatchObject({
+      soundEffects: 'off',
+    })
+    expect(() => parseCliArgs(['run', 'script.md', '--sfx', 'loud'])).toThrow(/auto/u)
   })
 
   it('accepts an explicit fixture provider and browser-gate opt out', () => {

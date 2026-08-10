@@ -19,6 +19,7 @@ import {
   markRunFailed,
   persistPlan,
   prepareRun,
+  prepareSoundEffects,
   registerAssemblyArtifacts,
   registerFinalArtifacts,
   resolveOutputDir,
@@ -141,6 +142,15 @@ export async function executeVideoWorkflow(
       narrationMode === 'off'
         ? null
         : await combineNarration(runDir, narration, runtime.channels, store, runtime.signal)
+    const soundEffectMix = await prepareSoundEffects(
+      runDir,
+      narration.effectivePlans,
+      combinedAudioPath,
+      prepared.soundEffectsMode,
+      runtime.channels,
+      store,
+      runtime.signal,
+    )
     const assemblyFingerprint = hashJson({
       assemblyVersion: 5,
       input,
@@ -178,7 +188,7 @@ export async function executeVideoWorkflow(
       store,
       runDir,
       rendered.videoPath,
-      combinedAudioPath,
+      soundEffectMix.audioPath,
       narrationMode,
       runtime.signal,
     )
@@ -187,7 +197,7 @@ export async function executeVideoWorkflow(
       runDir,
       finalVideoPath,
       assembly.durationSec,
-      narrationMode,
+      soundEffectMix.audioPath !== null,
       runtime.signal,
     )
     await store.writeStage(runDir, {
@@ -217,6 +227,12 @@ export async function executeVideoWorkflow(
       shotCount: plan.shots.length,
       videoPath: finalVideoPath,
       durationSec: media.metadata?.durationSec ?? assembly.durationSec,
+      soundEffects: {
+        mode: prepared.soundEffectsMode,
+        status: soundEffectMix.status,
+        cueCount: soundEffectMix.cueCount,
+        skippedPresetCount: soundEffectMix.skippedPresetCount,
+      },
       media: {
         observed: true,
         passed: media.passed,
@@ -354,10 +370,10 @@ async function observeFinalVideo(
   runDir: string,
   videoPath: string,
   durationSec: number,
-  narrationMode: string,
+  requireAudio: boolean,
   signal?: AbortSignal,
 ) {
-  const fingerprint = hashJson({ videoPath, durationSec, narrationMode })
+  const fingerprint = hashJson({ videoPath, durationSec, requireAudio })
   await store.writeStage(runDir, { key: 'MEDIA_QA', status: 'running', attempt: 1, fingerprint, payload: {} })
   const media = await inspectVideoArtifact(videoPath, {
     expectedDurationSec: durationSec,
@@ -366,8 +382,8 @@ async function observeFinalVideo(
     expectedHeight: 1080,
     expectedFps: 30,
     expectedVideoCodec: 'h264',
-    requireAudio: narrationMode !== 'off',
-    ...(narrationMode !== 'off' ? { expectedAudioCodec: 'aac' } : {}),
+    requireAudio,
+    ...(requireAudio ? { expectedAudioCodec: 'aac' } : {}),
   })
   const frames = await extractVideoFrames(videoPath, join(runDir, 'final', 'frames'), durationSec, {
     logPath: join(runDir, 'logs', 'ffmpeg.log'),
