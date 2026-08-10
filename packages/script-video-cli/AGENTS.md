@@ -10,7 +10,7 @@
 4. WAV/MP3 可直接交给 `run`；需要先看转写时使用 `transcribe`。
 5. `needs_attention` 不是成功。先 `inspect --run ... [--shot S001] --json`，再 `retry --failed` 或 `retry --shot S001`。
 6. 用户要浏览器观察时运行 `serve --run ... --port 0`，返回仅绑定 `127.0.0.1` 的临时 URL。
-7. CLI `succeeded` 只表示执行链走到末尾。只有按 Skill 从最终 MP4 完成 ffprobe、全片连续抽帧、每镜头中点和可疑区间复查后，才能报告真实视频完成。
+7. 视频链生成 MP4 后进入 `awaiting_agent_review`，不是成功或失败结论。先把最终 MP4 绝对路径告诉用户，再由 Skill 完成 ffprobe、全片连续抽帧、每镜头中点、主体动画、可见事实和可疑区间复查；只有通过后才能报告真实视频完成。`succeeded` 仅用于非视频命令或兼容旧 run。
 
 ## 密钥
 
@@ -22,6 +22,7 @@
 ## 状态与产物
 
 - 文件状态是 run 的业务真值；PostgreSQL 只保存 pg-boss 队列表。
+- Agent 收到文稿后先主动分析并推荐一个全片视觉方向，再向用户做一次紧凑确认；确认结果写入 global Prompt。用户明确要求无需确认或完全由 Agent 决定时不重复打断。
 - 保留整个 run 目录。恢复依赖输入 SHA-256、workflow version 和阶段 fingerprint。
 - `artifacts/index.json` 是 observer 唯一文件白名单。向用户返回其中的 `absolutePath`，不要自行猜路径。
 - 一个镜头失败时，其他镜头继续；不要删除成功 attempt，也不要把缺少最终视频的 run 描述成成功。

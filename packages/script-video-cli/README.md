@@ -49,7 +49,7 @@ pnpm cli run .\speech.mp3 --json
 pnpm cli transcribe .\speech.wav --json
 ```
 
-运行前可把用户确认的深浅色、平面/立体选择、指定风格及外部 Skill 中提炼出的视觉规则写入一个 UTF-8 文件。CLI 会把同一份约束注入 DIRECT、每个 SHOT-SPEC、每个 FABRICATE 和 HTML 修复，不影响语义拆稿、ASR 或 TTS：
+Agent 收到文稿后应先分析主题、受众、情绪、信息密度和叙事节奏，给出一个包含深浅色、平面/立体、命名风格、主要运动和视觉禁忌的全片建议，并让用户一次确认；用户明确要求直接执行或完全交给 Agent 时可跳过等待。把确认结果及来源事实边界写入一个 UTF-8 文件。CLI 会把同一份约束注入 DIRECT、每个 SHOT-SPEC、每个 FABRICATE 和 HTML 修复，不影响语义拆稿、ASR 或 TTS：
 
 ```powershell
 pnpm cli run .\script.md --global-prompt-file .\visual-constraints.md --json
@@ -145,13 +145,14 @@ runs/<run-id>/
   logs/
 ```
 
-阶段 fingerprint 允许 daemon 崩溃或手动重试后跳过成功工作。`needs_attention` 表示执行链无法继续完成。CLI `succeeded` 只表示执行链走到末尾，不代表最终 MP4 已通过交付验收。
+阶段 fingerprint 允许 daemon 崩溃或手动重试后跳过成功工作。`needs_attention` 表示执行链无法继续完成。视频执行链生成最终 MP4 后进入 `awaiting_agent_review`：文件已经可以预览，但尚未通过 Agent 的最终媒体与视觉验收。`succeeded` 只用于非视频命令或兼容旧 run，同样不能作为视频交付结论。
 
 ## 故障处理
 
 - `CONFIG_VERIFICATION_FAILED`：检查 URL、Model ID、余额或网络；旧配置仍保留。
 - `ASR_NO_SPEECH`：确认输入不是静音，并检查 FFmpeg 日志。
 - `needs_attention`：先 inspect 分镜截图/HTML/诊断，再定向 retry。
+- `awaiting_agent_review`：MP4 已生成；先把绝对路径告诉用户，再继续执行 Skill 验收，不需要等待用户回复。
 - `QUEUE_DATABASE_UNAVAILABLE`：确认 Docker Desktop 正常，再执行 `daemon start`。
 - 最终 MP4 异常：查看 `logs/ffmpeg.log`、`logs/hyperframes.log` 与 CLI 记录的媒体观察，再按 Skill 抽帧定位和定向重试。
 
@@ -163,4 +164,4 @@ pnpm skill:install
 
 Skill 安装到 `%USERPROFILE%\.agents\skills\generating-purpleink-script-videos\`。Agent 应从 `purpleink-video --help` 获取命令，不复制本 README 的整份参数表。
 
-CLI 的状态不是最终验收。Agent 每次运行后都必须从最终 `video` MP4 执行 ffprobe，并按视频长度连续抽帧生成带绝对时间戳的联系表；每个镜头至少补一张中点帧。发现白屏、黑屏、冻结、重复或布局异常时，对可疑区间按每 0.2～0.5 秒加密抽帧，根据 manifest 映射到镜头，再使用 `retry --shot`。验收证据保存到 `final/qa/<video-sha256>/`，修复后必须对新 MP4 重新生成。
+CLI 的状态不是最终验收。Agent 看到最终 `video` MP4 后，先向用户发送它的绝对路径和“等待 Agent 验收”说明，再继续执行 ffprobe，并按视频长度连续抽帧生成带绝对时间戳的联系表；每个镜头至少补一张中点帧。除白屏、黑屏、冻结、重复和布局异常外，还要核对主体动画是否真正推进，以及可见姓名、数字、时间、指标、文件大小、人数和结果声明是否来自原文。可疑区间按每 0.2～0.5 秒加密抽帧，根据 manifest 映射到镜头，再使用 `retry --shot`。验收证据保存到 `final/qa/<video-sha256>/`，修复后必须对新 MP4 重新生成。
