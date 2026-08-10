@@ -166,7 +166,6 @@ export async function synthesizeNarration(
   runtime: WorkflowRuntime,
   store: StateStore,
   runDir: string,
-  retryShot?: string,
 ): Promise<NarrationBatchResult> {
   const speech = limitSpeech(createMimoSpeechClient(await runtime.localStore.loadSpeechProvider()), runtime.channels)
   return synthesizeShotNarrations(input, plans, {
@@ -176,7 +175,6 @@ export async function synthesizeNarration(
     concurrency: runtime.channels.limits.tts,
     store,
     runDir,
-    ...(retryShot ? { forceShotIds: new Set([retryShot]) } : {}),
     signal: runtime.signal,
   })
 }

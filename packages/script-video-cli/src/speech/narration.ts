@@ -33,7 +33,6 @@ export interface ShotNarrationOptions {
   concurrency: number
   store: StateStore
   runDir: string
-  forceShotIds?: ReadonlySet<string>
   tailBufferSec?: number
   signal?: AbortSignal
 }
@@ -75,12 +74,7 @@ async function synthesizeOne(
     .digest('hex')
   const previous = await options.store.readStage(options.runDir, key)
   const stored = previous?.status === 'succeeded' ? parseStored(previous.payload) : null
-  if (
-    !options.forceShotIds?.has(plan.id) &&
-    previous?.fingerprint === fingerprint &&
-    stored?.path &&
-    (await exists(stored.path))
-  ) {
+  if (previous?.fingerprint === fingerprint && stored?.path && (await exists(stored.path))) {
     return stored
   }
   const attempt = (previous?.attempt ?? 0) + 1

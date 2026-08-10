@@ -119,7 +119,7 @@ export async function executeVideoWorkflow(
     const narrationPromise =
       narrationMode === 'off'
         ? Promise.resolve<NarrationBatchResult>({ shots: [], effectivePlans: [...plan.shots], failed: [] })
-        : synthesizeNarration(input, plan.shots, runtime, store, runDir, args.shotId)
+        : synthesizeNarration(input, plan.shots, runtime, store, runDir)
     const [codegen, narration] = await Promise.all([
       generateShots(input, plan.shots, {
         ai,

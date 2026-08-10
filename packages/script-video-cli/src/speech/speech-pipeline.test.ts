@@ -32,9 +32,13 @@ describe('local speech pipeline', () => {
       title: '语音测试',
       workflowVersion: 'test-v1',
     })
+    let synthesizeCalls = 0
     const speech: MimoSpeechClient = {
       transcribe: async () => ({ text: '这是一段真实边界的测试语音。' }),
-      synthesize: async () => ({ audio: wav, mimeType: 'audio/wav' }),
+      synthesize: async () => {
+        synthesizeCalls += 1
+        return { audio: wav, mimeType: 'audio/wav' }
+      },
     }
     const ai: AiClient = {
       completeText: async () => '',
@@ -73,14 +77,15 @@ describe('local speech pipeline', () => {
       onScreenText: ['语音测试'],
       durationSec: 5,
     }
+    const voiceStore = new VoiceStore({
+      rootDir: join(root, 'voices'),
+      indexPath: join(root, 'voices', 'index.json'),
+      samplesDir: join(root, 'voices', 'samples'),
+    })
     const narration = await synthesizeShotNarrations(transcript.input, [plan], {
       outputDir: run.runDir,
       speech,
-      voiceStore: new VoiceStore({
-        rootDir: join(root, 'voices'),
-        indexPath: join(root, 'voices', 'index.json'),
-        samplesDir: join(root, 'voices', 'samples'),
-      }),
+      voiceStore,
       concurrency: 2,
       store,
       runDir: run.runDir,
@@ -88,6 +93,17 @@ describe('local speech pipeline', () => {
     expect(narration.failed).toHaveLength(0)
     expect(narration.shots[0]?.durationSec).toBeCloseTo(1, 1)
     expect(narration.effectivePlans[0]?.durationSec).toBeCloseTo(1.35, 1)
+
+    const cached = await synthesizeShotNarrations(transcript.input, [plan], {
+      outputDir: run.runDir,
+      speech,
+      voiceStore,
+      concurrency: 2,
+      store,
+      runDir: run.runDir,
+    })
+    expect(cached.failed).toHaveLength(0)
+    expect(synthesizeCalls).toBe(1)
   }, 20_000)
 
   it('merges only adjacent ASR segments and inherits their real outer timestamps', () => {
