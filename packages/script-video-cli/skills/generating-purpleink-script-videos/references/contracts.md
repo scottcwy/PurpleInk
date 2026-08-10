@@ -11,7 +11,8 @@
 
 - `created` / `queued` / `running`: work is not complete.
 - `needs_attention`: one or more shots or narrations failed; inspect and retry without discarding successful stages.
-- `succeeded`: the CLI execution chain reached its end and produced its available artifacts. It is not delivery acceptance.
+- `awaiting_agent_review`: the video execution chain reached its end and produced a final MP4; tell the user its absolute path, then continue Agent acceptance.
+- `succeeded`: a non-video command completed, or an older video run reached the end of its execution chain. It is not video delivery acceptance.
 - `degraded`: retained for compatibility with older runs; it is not delivery acceptance.
 - `failed` / `cancelled`: no successful final delivery.
 
