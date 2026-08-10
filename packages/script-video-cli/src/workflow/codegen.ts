@@ -69,7 +69,12 @@ async function generateOneShot(
     .digest('hex')
   const key = `FABRICATE:${shot.id}`
   const previous = options.store && options.runDir ? await options.store.readStage(options.runDir, key) : null
-  const previousResult = previous?.status === 'succeeded' ? parseStoredResult(previous.payload) : null
+  const previousResult = previous ? parseStoredResult(previous.payload) : null
+  if (options.forceShotIds && !options.forceShotIds.has(shot.id) && previousResult) {
+    if (previousResult.status === 'failed') return previousResult
+    const storedPath = resolve(options.outputDir, previousResult.relativeHtmlPath ?? '')
+    if (previousResult.relativeHtmlPath && (await exists(storedPath))) return previousResult
+  }
   if (
     !options.forceShotIds?.has(shot.id) &&
     previous &&
@@ -227,8 +232,17 @@ function injectLocalGsap(html: string): string {
 
 function parseStoredResult(value: unknown): CodegenShotResult | null {
   if (!isRecord(value) || typeof value.id !== 'string' || typeof value.sourceUnitId !== 'string') return null
-  if (value.status !== 'succeeded' || typeof value.attempt !== 'number' || typeof value.relativeHtmlPath !== 'string')
-    return null
+  if (typeof value.attempt !== 'number') return null
+  if (value.status === 'failed' && isErrorCode(value.errorCode)) {
+    return {
+      id: value.id,
+      sourceUnitId: value.sourceUnitId,
+      status: 'failed',
+      attempt: value.attempt,
+      errorCode: value.errorCode,
+    }
+  }
+  if (value.status !== 'succeeded' || typeof value.relativeHtmlPath !== 'string') return null
   return {
     id: value.id,
     sourceUnitId: value.sourceUnitId,
@@ -239,6 +253,15 @@ function parseStoredResult(value: unknown): CodegenShotResult | null {
       ? value.screenshotHashes.filter((hash): hash is string => typeof hash === 'string')
       : [],
   }
+}
+
+function isErrorCode(value: unknown): value is NonNullable<CodegenShotResult['errorCode']> {
+  return (
+    value === 'SHOT_OUTPUT_INVALID' ||
+    value === 'SHOT_GATE_FAILED' ||
+    value === 'BROWSER_GATE_FAILED' ||
+    value === 'AI_PROVIDER_ERROR'
+  )
 }
 
 async function writeStage(

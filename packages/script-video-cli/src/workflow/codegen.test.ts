@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { AiClient } from '../ai/openai-compatible'
 import type { ScriptVideoInput, ShotPlan } from '../contracts'
+import { FileStateStore } from '../state/file-store'
 import { generateShots } from './codegen'
 import { validateShotHtml } from './gates'
 
@@ -140,6 +141,49 @@ describe('generateShots', () => {
     expect(result.failed).toHaveLength(0)
     expect(result.succeeded[0]?.attempt).toBe(2)
     await access(join(root, 'shots', 'S001', 'attempt-002', 'source.html'))
+  })
+
+  it('retries only the named shot and preserves other successes across Prompt changes', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'purpleink-codegen-targeted-'))
+    roots.push(root)
+    const store = new FileStateStore(root)
+    const run = await store.createRun({
+      inputHash: 'a'.repeat(64),
+      title: 'Targeted retry',
+      workflowVersion: 'test',
+    })
+    let calls = 0
+    const ai: AiClient = {
+      completeText: async () => {
+        calls += 1
+        return validHtml
+      },
+      completeJson: async () => ({}),
+    }
+    await generateShots(input, plans.slice(0, 2), {
+      ai,
+      outputDir: run.runDir,
+      concurrency: 2,
+      store,
+      runDir: run.runDir,
+    })
+    calls = 0
+
+    const retried = await generateShots({ ...input, globalPrompt: '新的全局约束。' }, plans.slice(0, 2), {
+      ai,
+      outputDir: run.runDir,
+      concurrency: 2,
+      store,
+      runDir: run.runDir,
+      forceShotIds: new Set(['S002']),
+    })
+
+    expect(calls).toBe(1)
+    expect(retried.failed).toHaveLength(0)
+    expect(retried.succeeded.map((shot) => [shot.id, shot.attempt])).toEqual([
+      ['S001', 1],
+      ['S002', 2],
+    ])
   })
 
   it('extracts a complete HTML document from unfenced explanatory text', async () => {
