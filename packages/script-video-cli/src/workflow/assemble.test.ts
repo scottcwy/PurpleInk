@@ -122,8 +122,12 @@ describe('assembleProject', () => {
     const shot = await readFile(join(result.projectDir, 'compositions', 'S001.html'), 'utf8')
 
     expect(shot).toContain('var timeline=render.timeline')
-    expect(shot).toContain('timeline.duration(9)')
-    expect(shot).toContain('render.durationSec=9')
+    expect(shot).toContain('targetDuration=9')
+    expect(shot).toContain('child.startTime(child.startTime()*ratio)')
+    expect(shot).toContain('animation.duration(animation.duration()*ratio)')
+    expect(shot).toContain('timeline.timeScale(1)')
+    expect(shot).not.toContain('timeline.duration(9)')
+    expect(shot).toContain('render.durationSec=targetDuration')
     expect(shot).not.toContain('render.seek')
   })
 

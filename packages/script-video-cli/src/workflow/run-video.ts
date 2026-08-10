@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { access } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import type { CliArgs } from '../args'
@@ -142,7 +142,7 @@ export async function executeVideoWorkflow(
         ? null
         : await combineNarration(runDir, narration, runtime.channels, store, runtime.signal)
     const assemblyFingerprint = hashJson({
-      assemblyVersion: 4,
+      assemblyVersion: 5,
       input,
       plans: narration.effectivePlans,
       audio: Boolean(combinedAudioPath),
@@ -315,7 +315,12 @@ async function muxFinalVideo(
   narrationMode: string,
   signal?: AbortSignal,
 ): Promise<string> {
-  const fingerprint = hashJson({ visualPath, narrationMode })
+  const fingerprint = hashJson({
+    muxVersion: 2,
+    narrationMode,
+    visualHash: await hashFile(visualPath),
+    audioHash: audioPath ? await hashFile(audioPath) : null,
+  })
   const finalPath = join(runDir, 'final', 'video.mp4')
   const previous = await store.readStage(runDir, 'AUDIO_MUX')
   if (previous?.status === 'succeeded' && previous.fingerprint === fingerprint && (await pathExists(finalPath))) {
@@ -391,6 +396,12 @@ async function observeFinalVideo(
 
 function hashJson(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex')
+}
+
+async function hashFile(path: string): Promise<string> {
+  return createHash('sha256')
+    .update(await readFile(path))
+    .digest('hex')
 }
 
 function safeStageErrorCode(error: unknown, fallback: string): string {
