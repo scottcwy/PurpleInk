@@ -4,6 +4,7 @@ export const runStatusSchema = z.enum([
   'created',
   'queued',
   'running',
+  'awaiting_agent_review',
   'succeeded',
   'failed',
   'cancelled',

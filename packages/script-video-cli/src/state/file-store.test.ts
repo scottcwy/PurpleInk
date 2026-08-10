@@ -26,6 +26,9 @@ describe('FileStateStore', () => {
     expect(run.runId).toMatch(/^\d{8}T\d{6}Z-a{12}$/u)
     expect((await store.readRun(run.runDir)).inputHash).toBe('a'.repeat(64))
 
+    await store.updateRun(run.runDir, { status: 'awaiting_agent_review' })
+    expect((await store.readRun(run.runDir)).status).toBe('awaiting_agent_review')
+
     await store.appendEvent(run.runDir, { type: 'run.started', data: { stage: 'INGEST' } })
     await store.appendEvent(run.runDir, { type: 'stage.succeeded', data: { stage: 'INGEST' } })
     const rawEvents = await readFile(join(run.runDir, 'state', 'events.jsonl'), 'utf8')

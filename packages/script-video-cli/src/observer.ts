@@ -84,7 +84,7 @@ async function renderHome(response: ServerResponse, options: { stateDir: string;
   const cards = runs
     .map(
       (run) => `<a class="card" href="/run/${encodeURIComponent(run.runId)}">
-        <strong>${escapeHtml(run.title)}</strong><span class="status">${escapeHtml(run.status)}</span>
+        <strong>${escapeHtml(run.title)}</strong>${renderRunStatus(run.status)}
         <small>${escapeHtml(run.updatedAt)}</small>
       </a>`,
     )
@@ -120,12 +120,16 @@ async function renderRun(response: ServerResponse, runDir: string): Promise<void
   const player = video
     ? `<section><h2>最终视频</h2><video controls src="${artifactUrl(run.runId, video.id)}"></video><p class="path">${escapeHtml(video.absolutePath)}</p></section>`
     : '<section><h2>最终视频</h2><p>尚未生成</p></section>'
+  const reviewNotice =
+    video && awaitsAgentReview(run.status)
+      ? '<aside class="review-notice"><span class="review-icon" aria-hidden="true">◷</span><div><strong>MP4 已生成，等待 Agent 最终验收</strong><p>可以立即预览；最终交付仍需完成媒体检查、全片抽帧和分镜复核。</p></div></aside>'
+      : ''
   sendHtml(
     response,
     page(
       run.title,
-      `<nav><a href="/">← 所有运行</a></nav><header><h1>${escapeHtml(run.title)}</h1><p>${escapeHtml(run.status)} · ${escapeHtml(run.runId)}</p></header>
-      <main>${player}<section><h2>分镜</h2><div class="pills">${shotLinks || '暂无'}</div></section><section><h2>阶段时间线</h2><ol class="timeline">${timeline}</ol></section></main>`,
+      `<nav><a href="/">← 所有运行</a></nav><header><h1>${escapeHtml(run.title)}</h1><div class="run-meta">${renderRunStatus(run.status, Boolean(video))}<code>${escapeHtml(run.runId)}</code></div></header>
+      <main>${reviewNotice}${player}<section><h2>分镜</h2><div class="pills">${shotLinks || '暂无'}</div></section><section><h2>阶段时间线</h2><ol class="timeline">${timeline}</ol></section></main>`,
     ),
   )
 }
@@ -263,6 +267,19 @@ function unique(values: string[]): string[] {
   return [...new Set(values)].sort()
 }
 
+function renderRunStatus(status: RunRecord['status'], hasFinalVideo = false): string {
+  if (status === 'awaiting_agent_review')
+    return '<span class="status status-review" data-status="awaiting_agent_review"><span aria-hidden="true">◷</span>等待 Agent 验收</span>'
+  if (status === 'succeeded' && hasFinalVideo)
+    return '<span class="status status-review" data-status="succeeded"><span aria-hidden="true">◷</span>执行完成（旧状态，待 Agent 验收）</span>'
+  if (status === 'succeeded') return '<span class="status" data-status="succeeded">执行完成</span>'
+  return `<span class="status" data-status="${escapeHtml(status)}">${escapeHtml(status)}</span>`
+}
+
+function awaitsAgentReview(status: RunRecord['status']): boolean {
+  return status === 'awaiting_agent_review' || status === 'succeeded'
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/gu, '&amp;')
@@ -276,4 +293,4 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-const styles = `:root{font-family:Inter,"Segoe UI",sans-serif;color:#17181a;background:#f4f5f7}*{box-sizing:border-box}body{margin:0;padding:32px;max-width:1400px;margin:auto}a{color:#5f5ce6;text-decoration:none}header,section,.card{background:rgba(255,255,255,.86);border:1px solid rgba(0,0,0,.08);border-radius:20px;box-shadow:0 18px 50px rgba(22,24,29,.08)}header,section{padding:24px;margin:18px 0}h1,h2,p{margin-top:0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}.card{padding:20px;display:grid;gap:10px}.status,.pill{display:inline-flex;width:max-content;padding:6px 10px;border-radius:999px;background:#ebeaff}.pills{display:flex;gap:8px;flex-wrap:wrap}.timeline{list-style:none;padding:0}.timeline li{display:grid;grid-template-columns:1fr auto auto;gap:12px;padding:12px 0;border-bottom:1px solid #e8e8eb}video,iframe{width:100%;aspect-ratio:16/9;border:0;border-radius:14px;background:#0d0e12}audio{width:100%}.gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.gallery img{width:100%;border-radius:12px;background:#111}.path{font-family:Consolas,monospace;overflow-wrap:anywhere;color:#666;font-size:12px}@media(max-width:760px){body{padding:14px}.gallery{grid-template-columns:1fr}}`
+const styles = `:root{font-family:Inter,"Segoe UI",sans-serif;color:#17181a;background:#f4f5f7}*{box-sizing:border-box}body{margin:0;padding:32px;max-width:1400px;margin:auto}a{color:#5f5ce6;text-decoration:none}header,section,.card{background:rgba(255,255,255,.86);border:1px solid rgba(0,0,0,.08);border-radius:20px;box-shadow:0 18px 50px rgba(22,24,29,.08)}header,section{padding:24px;margin:18px 0}h1,h2,p{margin-top:0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}.card{padding:20px;display:grid;gap:10px}.status,.pill{display:inline-flex;align-items:center;gap:6px;width:max-content;padding:6px 10px;border-radius:999px;background:#ebeaff}.status-review{color:#805600;background:#fff0bf;border:1px solid #f0d274}.run-meta{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.run-meta code{color:#666}.review-notice{display:flex;gap:14px;align-items:flex-start;padding:18px 20px;margin:18px 0;border:1px solid #efd06c;border-radius:18px;background:#fff8dc;color:#5d4600}.review-notice p{margin:4px 0 0}.review-icon{display:grid;place-items:center;width:34px;height:34px;flex:0 0 34px;border-radius:50%;background:#f5c84c;font-size:22px}.pills{display:flex;gap:8px;flex-wrap:wrap}.timeline{list-style:none;padding:0}.timeline li{display:grid;grid-template-columns:1fr auto auto;gap:12px;padding:12px 0;border-bottom:1px solid #e8e8eb}video,iframe{width:100%;aspect-ratio:16/9;border:0;border-radius:14px;background:#0d0e12}audio{width:100%}.gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.gallery img{width:100%;border-radius:12px;background:#111}.path{font-family:Consolas,monospace;overflow-wrap:anywhere;color:#666;font-size:12px}@media(max-width:760px){body{padding:14px}.gallery{grid-template-columns:1fr}}`

@@ -142,6 +142,29 @@ describe('generateShots', () => {
     await access(join(root, 'shots', 'S001', 'attempt-002', 'source.html'))
   })
 
+  it('extracts a complete HTML document from unfenced explanatory text', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'purpleink-codegen-unfenced-'))
+    roots.push(root)
+    const ai: AiClient = {
+      completeText: async () => `下面是结果：\n${validHtml}\n以上是完整镜头。`,
+      completeJson: async () => ({}),
+    }
+
+    const result = await generateShots(input, plans.slice(0, 1), {
+      ai,
+      outputDir: root,
+      concurrency: 1,
+      runtimeGate: async () => ({ passed: true, errors: [], screenshotHashes: [] }),
+    })
+    const saved = await readFile(join(root, 'shots', 'S001', 'attempt-001', 'source.html'), 'utf8')
+
+    expect(result.failed).toHaveLength(0)
+    expect(saved.startsWith('<!doctype html>')).toBe(true)
+    expect(saved.trimEnd().endsWith('</html>')).toBe(true)
+    expect(saved).not.toContain('下面是结果')
+    expect(saved).not.toContain('以上是完整镜头')
+  })
+
   it('normalizes local runtime dependencies without inventing a proxy render contract', async () => {
     const root = await mkdtemp(join(tmpdir(), 'purpleink-codegen-adapter-'))
     roots.push(root)

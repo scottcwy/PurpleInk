@@ -205,7 +205,7 @@ export async function executeVideoWorkflow(
       artifactIds: ['video'],
       payload: { videoPath: finalVideoPath },
     })
-    const finalStatus = 'succeeded'
+    const finalStatus = 'awaiting_agent_review' as const
     await store.updateRun(runDir, { status: finalStatus })
     await store.appendEvent(runDir, { type: `run.${finalStatus}`, data: { videoPath: finalVideoPath } })
     await writeMetrics(runDir, runtime.channels)

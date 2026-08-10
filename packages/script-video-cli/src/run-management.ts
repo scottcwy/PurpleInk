@@ -103,7 +103,7 @@ async function watchEvents(runDir: string, output?: { writeLine(line: string): v
       delivered = lines.length
     }
     const run = await new FileStateStore(resolve(runDir, '..')).readRun(runDir)
-    if (terminal(run.status)) return
+    if (isTerminalRunStatus(run.status)) return
     await new Promise<void>((done) => setTimeout(done, 500))
   }
 }
@@ -142,8 +142,8 @@ async function findLatestRun(stateDir: string): Promise<string | null> {
   return (await listRuns(stateDir))[0]?.runDir ?? null
 }
 
-function terminal(status: RunRecord['status']): boolean {
-  return ['succeeded', 'failed', 'cancelled', 'degraded', 'needs_attention'].includes(status)
+export function isTerminalRunStatus(status: RunRecord['status']): boolean {
+  return ['awaiting_agent_review', 'succeeded', 'failed', 'cancelled', 'degraded', 'needs_attention'].includes(status)
 }
 
 function stageKey(value: unknown): string {
